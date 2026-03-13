@@ -1,0 +1,5 @@
+command: "bypass login as"
+method: "probe.plugin.auth_bypass"
+description: "Authenticate directly using a dev token — no UI interaction"
+params:
+  token: "${1}"

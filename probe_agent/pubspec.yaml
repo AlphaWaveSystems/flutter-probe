@@ -1,0 +1,23 @@
+name: probe_agent
+description: >
+  FlutterProbe on-device agent. Connects to the probe CLI via WebSocket
+  and executes test commands against the live Flutter widget tree.
+  Add as a dev dependency only — stripped from release builds.
+
+version: 0.1.0
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  web_socket_channel: ^3.0.0
+  shelf: ^1.4.2
+  shelf_web_socket: ^2.0.0
+  http: ^1.2.2

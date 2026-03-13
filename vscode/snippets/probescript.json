@@ -1,0 +1,141 @@
+{
+  "New Test": {
+    "prefix": "test",
+    "body": [
+      "test \"${1:test name}\"",
+      "  open the app",
+      "  wait until \"${2:element}\" appears",
+      "  $0"
+    ],
+    "description": "Create a new ProbeScript test"
+  },
+  "Tap": {
+    "prefix": "tap",
+    "body": "tap on \"${1:element}\"",
+    "description": "Tap on an element"
+  },
+  "Type": {
+    "prefix": "type",
+    "body": "type \"${1:text}\" into the \"${2:field}\" field",
+    "description": "Type text into a field"
+  },
+  "See": {
+    "prefix": "see",
+    "body": "see \"${1:element}\"",
+    "description": "Assert element is visible"
+  },
+  "Don't see": {
+    "prefix": "dontSee",
+    "body": "don't see \"${1:element}\"",
+    "description": "Assert element is NOT visible"
+  },
+  "Wait until appears": {
+    "prefix": "wait",
+    "body": "wait until \"${1:element}\" appears",
+    "description": "Wait until an element appears"
+  },
+  "Wait until disappears": {
+    "prefix": "waitd",
+    "body": "wait until \"${1:element}\" disappears",
+    "description": "Wait until an element disappears"
+  },
+  "If conditional": {
+    "prefix": "if",
+    "body": [
+      "if \"${1:element}\" appears",
+      "  ${2:tap on \"$1\"}",
+      "$0"
+    ],
+    "description": "Conditional step"
+  },
+  "Repeat loop": {
+    "prefix": "repeat",
+    "body": [
+      "repeat ${1:3} times",
+      "  $0"
+    ],
+    "description": "Repeat steps N times"
+  },
+  "Recipe definition": {
+    "prefix": "recipe",
+    "body": [
+      "recipe \"${1:recipe name}\" (${2:param1, param2})",
+      "  $0"
+    ],
+    "description": "Define a reusable recipe"
+  },
+  "Use recipe file": {
+    "prefix": "use",
+    "body": "use \"${1:recipes/login.probe}\"",
+    "description": "Import a recipe file"
+  },
+  "Data-driven test": {
+    "prefix": "testdd",
+    "body": [
+      "test \"${1:test name}\"",
+      "  open the app",
+      "  type <${2:email}> into the \"Email\" field",
+      "  tap \"Continue\"",
+      "  see <${3:expected}>",
+      "",
+      "with examples:",
+      "  $2         $3",
+      "  \"${4:value1}\"  \"${5:result1}\"",
+      "  \"${6:value2}\"  \"${7:result2}\"",
+      "$0"
+    ],
+    "description": "Data-driven test with examples"
+  },
+  "Run Dart": {
+    "prefix": "dart",
+    "body": [
+      "run dart:",
+      "  ${1:// your Dart code here}",
+      "$0"
+    ],
+    "description": "Embedded Dart block"
+  },
+  "HTTP Mock": {
+    "prefix": "mock",
+    "body": [
+      "when the app calls GET \"${1:/api/endpoint}\"",
+      "  respond with ${2:200} and body \"${3:{\\\"key\\\": \\\"value\\\"}}\"",
+      "$0"
+    ],
+    "description": "HTTP mock response"
+  },
+  "Before each test hook": {
+    "prefix": "before",
+    "body": [
+      "before each test",
+      "  open the app",
+      "  $0"
+    ],
+    "description": "Before each test hook"
+  },
+  "On failure hook": {
+    "prefix": "onfail",
+    "body": [
+      "on failure",
+      "  take a screenshot called \"failure\"",
+      "  dump the widget tree",
+      "$0"
+    ],
+    "description": "On failure hook"
+  },
+  "Swipe": {
+    "prefix": "swipe",
+    "body": "swipe ${1|up,down,left,right|}",
+    "description": "Swipe gesture"
+  },
+  "Scroll until visible": {
+    "prefix": "scroll",
+    "body": "scroll down until \"${1:element}\" appears",
+    "description": "Scroll until element appears"
+  },
+  "Take screenshot": {
+    "prefix": "screenshot",
+    "body": "take a screenshot called \"${1:name}\"",
+    "description": "Capture a screenshot"
+  }
+}

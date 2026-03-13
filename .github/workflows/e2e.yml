@@ -1,0 +1,201 @@
+name: FlutterProbe E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---- Build probe CLI ----
+  build-cli:
+    name: Build probe CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+      - name: Build
+        run: make build
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-linux-amd64
+          path: bin/probe
+
+  # ---- Unit tests ----
+  unit-tests:
+    name: Go unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+      - name: Run tests
+        run: go test ./... -v -race -coverprofile=coverage.out
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.out
+
+  # ---- Android E2E ----
+  e2e-android:
+    name: Android E2E (${{ matrix.api-level }})
+    runs-on: macos-latest  # KVM not required on macOS runners
+    needs: build-cli
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [31, 34]
+        shard: [1, 2, 3]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download probe CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-linux-amd64
+          path: /usr/local/bin/
+      - run: chmod +x /usr/local/bin/probe
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+          cache: true
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}-${{ runner.os }}
+
+      - name: Create AVD
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: false
+          script: echo "AVD created"
+
+      - name: Build Flutter app with ProbeAgent
+        run: |
+          flutter build apk --debug \
+            --dart-define=PROBE_AGENT=true
+
+      - name: Run E2E tests (shard ${{ matrix.shard }}/3)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            adb install -r build/app/outputs/flutter-apk/app-debug.apk
+            adb shell am start -n com.example.app/.MainActivity
+            probe test tests/ \
+              --shard ${{ matrix.shard }}/3 \
+              --format junit \
+              --output reports/results-${{ matrix.api-level }}-${{ matrix.shard }}.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.api-level }}-${{ matrix.shard }}
+          path: reports/results-*.xml
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: E2E Results (API ${{ matrix.api-level }}, Shard ${{ matrix.shard }})
+          path: reports/results-*.xml
+          reporter: java-junit
+
+  # ---- iOS E2E (macOS only) ----
+  e2e-ios:
+    name: iOS E2E
+    runs-on: macos-latest
+    needs: build-cli
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download probe CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-linux-amd64
+          path: /usr/local/bin/
+      - run: chmod +x /usr/local/bin/probe
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+
+      - name: Boot iOS simulator
+        run: |
+          xcrun simctl boot "iPhone 15" || true
+          probe device list
+
+      - name: Build & run E2E tests
+        run: |
+          flutter build ios --debug --simulator \
+            --dart-define=PROBE_AGENT=true
+          probe test tests/ --format junit --output reports/ios-results.xml
+
+      - name: Upload iOS results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: reports/ios-results.xml
+
+  # ---- Report ----
+  report:
+    name: Generate HTML Report
+    runs-on: ubuntu-latest
+    needs: [e2e-android, e2e-ios]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
+      - name: Download probe CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-linux-amd64
+          path: /usr/local/bin/
+      - run: chmod +x /usr/local/bin/probe
+      - name: Generate HTML report
+        run: probe report --format html --output reports/report.html
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-report
+          path: reports/report.html

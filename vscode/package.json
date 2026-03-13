@@ -1,0 +1,126 @@
+{
+  "name": "flutterprobe",
+  "displayName": "FlutterProbe",
+  "description": "ProbeScript language support, test runner, and Studio integration for FlutterProbe",
+  "version": "0.1.0",
+  "publisher": "flutterprobe",
+  "icon": "images/icon.png",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Testing", "Languages", "Snippets"],
+  "keywords": ["flutter", "testing", "e2e", "probe", "probescript"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flutterprobe/flutterprobe"
+  },
+  "activationEvents": [
+    "onLanguage:probescript",
+    "workspaceContains:**/*.probe",
+    "workspaceContains:probe.yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "probescript",
+        "aliases": ["ProbeScript", "probe"],
+        "extensions": [".probe"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "probescript",
+        "scopeName": "source.probe",
+        "path": "./syntaxes/probe.tmGrammar.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "probescript",
+        "path": "./snippets/probescript.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "flutterprobe.runTest",
+        "title": "FlutterProbe: Run Test",
+        "icon": "$(play)"
+      },
+      {
+        "command": "flutterprobe.runFile",
+        "title": "FlutterProbe: Run File",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "flutterprobe.openStudio",
+        "title": "FlutterProbe: Open Studio",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "flutterprobe.lintFile",
+        "title": "FlutterProbe: Lint File"
+      },
+      {
+        "command": "flutterprobe.record",
+        "title": "FlutterProbe: Start Recording"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceExtname == .probe",
+          "command": "flutterprobe.runFile",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "resourceExtname == .probe",
+          "command": "flutterprobe.runTest",
+          "group": "flutterprobe"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "FlutterProbe",
+      "properties": {
+        "flutterprobe.probePath": {
+          "type": "string",
+          "default": "probe",
+          "description": "Path to the probe CLI binary"
+        },
+        "flutterprobe.autoLint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Lint .probe files on save"
+        },
+        "flutterprobe.studioPort": {
+          "type": "number",
+          "default": 9191,
+          "description": "Port for probe studio"
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "flutterprobe",
+        "properties": {
+          "file": { "type": "string" },
+          "tag": { "type": "string" }
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.24.0"
+  }
+}

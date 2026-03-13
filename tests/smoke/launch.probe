@@ -1,0 +1,9 @@
+# Smoke test: verifies the app starts and shows a home screen.
+# This is the fastest sanity check — run on every commit.
+
+test "the app launches successfully"
+  open the app
+  wait until "Welcome" appears
+  see "Welcome"
+  don't see "Error"
+  don't see "Crash"
