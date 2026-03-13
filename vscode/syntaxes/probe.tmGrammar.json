@@ -1,0 +1,77 @@
+{
+  "name": "ProbeScript",
+  "scopeName": "source.probe",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#test-definition" },
+    { "include": "#recipe-definition" },
+    { "include": "#hook" },
+    { "include": "#action-keyword" },
+    { "include": "#assert-keyword" },
+    { "include": "#control-flow" },
+    { "include": "#string" },
+    { "include": "#selector-id" },
+    { "include": "#ordinal" },
+    { "include": "#number" },
+    { "include": "#dart-block" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.probe"
+    },
+    "test-definition": {
+      "match": "^(test)\\s+(\"[^\"]+\")",
+      "captures": {
+        "1": { "name": "keyword.control.test.probe" },
+        "2": { "name": "string.quoted.double.probe" }
+      }
+    },
+    "recipe-definition": {
+      "match": "^(recipe)\\s+(\"[^\"]+\")",
+      "captures": {
+        "1": { "name": "keyword.control.recipe.probe" },
+        "2": { "name": "string.quoted.double.probe" }
+      }
+    },
+    "hook": {
+      "match": "^(before each test|after each test|on failure)",
+      "name": "keyword.control.hook.probe"
+    },
+    "action-keyword": {
+      "match": "\\b(open|tap|type|swipe|scroll|go back|long press|double tap|clear|close|drag|rotate|toggle|shake|press|take|dump|save|pause|log)\\b",
+      "name": "keyword.operator.action.probe"
+    },
+    "assert-keyword": {
+      "match": "\\b(see|don't see|wait|wait until|wait for)\\b",
+      "name": "keyword.operator.assert.probe"
+    },
+    "control-flow": {
+      "match": "\\b(if|otherwise|repeat|times|for each|use|with examples|run dart|when the app calls|respond with)\\b",
+      "name": "keyword.control.probe"
+    },
+    "string": {
+      "match": "\"[^\"]*\"",
+      "name": "string.quoted.double.probe"
+    },
+    "selector-id": {
+      "match": "#[a-zA-Z_][a-zA-Z0-9_]*",
+      "name": "entity.name.function.probe"
+    },
+    "ordinal": {
+      "match": "\\b[0-9]+(st|nd|rd|th)\\b",
+      "name": "constant.numeric.ordinal.probe"
+    },
+    "number": {
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.probe"
+    },
+    "dart-block": {
+      "begin": "run dart:",
+      "end": "^(?!\\s)",
+      "beginCaptures": { "0": { "name": "keyword.control.dart.probe" } },
+      "contentName": "source.dart",
+      "patterns": [{ "include": "source.dart" }]
+    }
+  }
+}

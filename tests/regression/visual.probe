@@ -1,0 +1,51 @@
+# Visual regression test suite
+# Each test captures a screenshot and compares against a baseline.
+# Run: probe test tests/regression/visual.probe --visual-regression
+
+use "tests/recipes/login.probe"
+
+before each test
+  log in as "visual@test.com" with password "visual123"
+  wait for the page to load
+
+test "home screen visual regression"
+  tap "Home"
+  wait for the page to load
+  wait 1 seconds
+  take a screenshot called "home_screen"
+
+test "product listing visual regression"
+  tap "Products"
+  wait for the page to load
+  wait 1 seconds
+  take a screenshot called "product_listing"
+
+test "product detail visual regression"
+  tap "Products"
+  wait for the page to load
+  tap the 1st "Product" card
+  wait for the page to load
+  take a screenshot called "product_detail"
+
+test "cart empty state visual regression"
+  tap "Cart"
+  wait for the page to load
+  take a screenshot called "cart_empty"
+
+test "profile page visual regression"
+  tap "Profile"
+  wait for the page to load
+  take a screenshot called "profile_page"
+
+test "settings page visual regression"
+  tap "Settings"
+  wait for the page to load
+  take a screenshot called "settings_page"
+
+test "dark mode visual regression"
+  toggle dark mode
+  wait 1 seconds
+  tap "Home"
+  wait for the page to load
+  take a screenshot called "home_dark_mode"
+  toggle dark mode

@@ -1,0 +1,61 @@
+# Shopping cart E2E tests
+use "tests/recipes/login.probe"
+
+before each test
+  log in as "shopper@test.com" with password "shop123"
+
+after each test
+  take a screenshot
+
+on failure
+  take a screenshot called "cart_failure"
+  dump the widget tree
+
+test "user can add a single item to the cart"
+  tap "Products"
+  wait for the page to load
+  tap the 1st "Add to Cart" button
+  see "Added to Wishlist" toast
+  wait until "Added to Wishlist" disappears
+  tap "View Cart"
+  see "1 item"
+  see "Checkout" button is enabled
+
+test "user can add multiple items and see correct count"
+  tap "Browse"
+  repeat 3 times
+    tap the next "Add to Cart" button
+    wait until "Added to Cart" disappears
+  tap "My Cart"
+  see exactly 3 product cards
+  see "Checkout"
+
+test "user can remove an item from the cart"
+  tap "Products"
+  tap the 1st "Add to Cart" button
+  wait for the page to load
+  tap "View Cart"
+  see "1 item"
+  swipe left on the 1st product card
+  tap "Remove"
+  see "Cart is empty"
+  don't see "Checkout"
+
+test "cart shows correct total price"
+  run dart:
+    // Seed cart with two known items
+    final cart = GetIt.I<CartService>();
+    await cart.addItem('item_001', quantity: 2);
+    await cart.addItem('item_002', quantity: 1);
+  tap "My Cart"
+  wait for the page to load
+  see "3 items"
+  see text matching "Total: \\$[0-9]+\\.[0-9]{2}"
+
+test "app handles out-of-stock gracefully"
+  when the app calls POST "/api/cart/add"
+    respond with 409 and body "{ \"error\": \"Out of stock\" }"
+  tap "Products"
+  tap the 1st "Add to Cart" button
+  see "Out of stock"
+  don't see "1 item"

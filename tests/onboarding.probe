@@ -1,0 +1,59 @@
+# Onboarding flow — handles optional dialogs and permission prompts
+
+test "new user completes onboarding"
+  open the app
+  wait until "Welcome" appears
+  see "Welcome"
+
+  # Handle optional permission dialogs
+  if "Allow Notifications" appears
+    tap "Not Now"
+  if "What's New" appears
+    tap "Dismiss"
+  if "Complete Your Profile" appears
+    tap "Skip for Now"
+  if "Enable Location" appears
+    tap "Not Now"
+
+  # Main onboarding flow
+  see "Get Started"
+  tap "Get Started"
+  wait until "Create Account" appears
+  see "Create Account"
+
+  type "Alex" into the "Name" field
+  type "alex@example.com" into the "Email" field
+  type "StrongPass1!" into the "Password" field
+  tap "Create Account"
+
+  wait until "Verify Email" appears
+  see "Verify Email"
+  see "We sent a code to alex@example.com"
+
+  run dart:
+    // Simulate email verification in test env
+    final auth = GetIt.I<AuthService>();
+    await auth.verifyEmailWithCode('123456');
+
+  wait until "Welcome, Alex" appears
+  see "Welcome, Alex"
+  see "Home"
+
+test "returning user skips onboarding"
+  run dart:
+    // Mark onboarding as complete
+    final prefs = GetIt.I<SharedPreferences>();
+    await prefs.setBool('onboarding_complete', true);
+  open the app
+  wait until "Sign In" appears
+  see "Sign In"
+  don't see "Get Started"
+  don't see "Welcome"
+
+test "onboarding works on multiple screen sizes"
+  rotate to landscape
+  open the app
+  wait until "Welcome" appears
+  see "Get Started"
+  rotate to portrait
+  see "Get Started"

@@ -1,0 +1,71 @@
+# Full login test suite covering happy path + validation + error states
+
+test "a user can sign in with valid credentials"
+  open the app
+  wait until "Sign In" appears
+  tap on "Sign In"
+  type "user@example.com" into the "Email" field
+  type "mypassword" into the "Password" field
+  tap on "Continue"
+  see "Dashboard"
+  see "Hello" in the greeting area
+
+test "login validation works correctly"
+  open the app
+  tap "Sign In"
+  type <email> into the "Email" field
+  type <password> into the "Password" field
+  tap "Continue"
+  see <expected>
+
+with examples:
+  email                 password    expected
+  "valid@test.com"      "pass123"   "Dashboard"
+  ""                    "pass123"   "Email is required"
+  "valid@test.com"      ""          "Password is required"
+  "wrong@test.com"      "badpass"   "Invalid credentials"
+  "not-an-email"        "pass123"   "Invalid email format"
+
+test "user can reset their password"
+  open the app
+  tap "Sign In"
+  tap "Forgot Password?"
+  see "Reset Password"
+  type "user@example.com" into the "Email" field
+  tap "Send Reset Link"
+  see "Check your email"
+  don't see "Password" field
+
+test "app handles network error during login gracefully"
+  when the app calls POST "/api/auth/login"
+    respond with 503 and body "{ \"error\": \"Service Unavailable\" }"
+  open the app
+  tap "Sign In"
+  type "user@example.com" into the "Email" field
+  type "pass123" into the "Password" field
+  tap "Continue"
+  see "Something went wrong"
+  see "Retry" button
+  don't see "Dashboard"
+
+test "user stays logged in after app restart"
+  open the app
+  tap "Sign In"
+  type "user@example.com" into the "Email" field
+  type "mypassword" into the "Password" field
+  tap "Continue"
+  see "Dashboard"
+  close the app
+  open the app
+  wait until "Dashboard" appears
+  see "Dashboard"
+  don't see "Sign In"
+
+test "user can log out"
+  use "tests/recipes/login.probe"
+  log in as "user@example.com" with password "mypassword"
+  tap "Profile"
+  tap "Log Out"
+  wait until "Sign In" appears
+  see "Sign In"
+  don't see "Dashboard"

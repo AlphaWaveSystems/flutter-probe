@@ -1,0 +1,38 @@
+# Smoke test: core navigation paths
+use "tests/recipes/login.probe"
+
+before each test
+  open the app
+  wait until "Welcome" appears
+
+after each test
+  take a screenshot
+
+on failure
+  take a screenshot called "failure"
+  dump the widget tree
+  save device logs
+
+test "bottom navigation tabs are all accessible"
+  log in as "user@test.com" with password "pass123"
+  tap "Home"
+  see "Home"
+  tap "Search"
+  see "Search"
+  tap "Profile"
+  see "Profile"
+  tap "Settings"
+  see "Settings"
+
+test "back navigation works"
+  log in as "user@test.com" with password "pass123"
+  tap "Profile"
+  see "Account Settings"
+  go back
+  see "Dashboard"
+
+test "deep link navigation"
+  open "myapp://profile/settings"
+  wait until "Settings" appears
+  see "Settings"
+  see "Notifications"
