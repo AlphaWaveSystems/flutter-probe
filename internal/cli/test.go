@@ -71,34 +71,47 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var client *probelink.Client
 	if !dryRun {
 		dm := device.NewManager()
-		// Pick device
+		// Pick device and detect platform
+		platform := device.Platform(cfg.Defaults.Platform)
 		if deviceSerial == "" {
 			devices, err := dm.List(ctx)
 			if err != nil || len(devices) == 0 {
 				return fmt.Errorf("no connected devices found. Run 'probe device list' to check.")
 			}
 			deviceSerial = devices[0].ID
+			platform = devices[0].Platform
 		}
 
-		// Forward port
-		if err := dm.ForwardPort(ctx, deviceSerial, 8686, 8686); err != nil {
-			return fmt.Errorf("port forward: %w", err)
-		}
-		defer dm.RemoveForward(ctx, deviceSerial, 8686) //nolint:errcheck
+		if platform == device.PlatformIOS {
+			// iOS: simulators share host loopback — no port forwarding needed
+			fmt.Println("  Waiting for ProbeAgent token (iOS)...")
+			token, err := dm.ReadTokenIOS(ctx, deviceSerial, 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+			}
+			client, err = probelink.Dial(ctx, "127.0.0.1", 8686, token)
+			if err != nil {
+				return fmt.Errorf("connecting to ProbeAgent: %w", err)
+			}
+			defer client.Close()
+		} else {
+			// Android: forward port via ADB
+			if err := dm.ForwardPort(ctx, deviceSerial, 8686, 8686); err != nil {
+				return fmt.Errorf("port forward: %w", err)
+			}
+			defer dm.RemoveForward(ctx, deviceSerial, 8686) //nolint:errcheck
 
-		// Read agent token (30s timeout)
-		fmt.Println("  Waiting for ProbeAgent token...")
-		token, err := dm.ReadToken(ctx, deviceSerial, 30*time.Second)
-		if err != nil {
-			return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+			fmt.Println("  Waiting for ProbeAgent token...")
+			token, err := dm.ReadToken(ctx, deviceSerial, 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+			}
+			client, err = probelink.Dial(ctx, "127.0.0.1", 8686, token)
+			if err != nil {
+				return fmt.Errorf("connecting to ProbeAgent: %w", err)
+			}
+			defer client.Close()
 		}
-
-		// Connect
-		client, err = probelink.Dial(ctx, "127.0.0.1", 8686, token)
-		if err != nil {
-			return fmt.Errorf("connecting to ProbeAgent: %w", err)
-		}
-		defer client.Close()
 
 		if err := client.Ping(ctx); err != nil {
 			return fmt.Errorf("agent ping failed: %w", err)
