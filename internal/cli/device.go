@@ -65,7 +65,13 @@ var deviceStartCmd = &cobra.Command{
 			}
 			fmt.Printf("  \033[32m✓\033[0m  Emulator %s (%s) is online\n", d.Name, d.ID)
 		case "ios":
-			return fmt.Errorf("iOS simulator support is in Phase 2 (Q3 2026)")
+			udid, _ := cmd.Flags().GetString("udid")
+			fmt.Println("  Booting iOS simulator...")
+			d, err := dm.StartIOS(ctx, udid)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("  \033[32m✓\033[0m  Simulator %s (%s) is booted\n", d.Name, d.ID)
 		default:
 			return fmt.Errorf("unknown platform %q — use android or ios", platform)
 		}
@@ -76,6 +82,7 @@ var deviceStartCmd = &cobra.Command{
 func init() {
 	deviceStartCmd.Flags().StringP("platform", "p", "android", "platform: android | ios")
 	deviceStartCmd.Flags().String("avd", "", "AVD name to start (default: first available)")
+	deviceStartCmd.Flags().String("udid", "", "iOS simulator UDID to boot (default: auto-select)")
 	deviceCmd.AddCommand(deviceListCmd)
 	deviceCmd.AddCommand(deviceStartCmd)
 }

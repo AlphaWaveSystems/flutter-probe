@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/flutterprobe/probe/internal/ios"
 )
 
 // Platform indicates the target platform.
@@ -27,22 +29,84 @@ type Device struct {
 
 // Manager handles device discovery and lifecycle.
 type Manager struct {
-	adb *ADB
+	adb    *ADB
+	simctl *ios.SimCtl
 }
 
 // NewManager creates a Manager using the ADB binary found in PATH.
 func NewManager() *Manager {
-	return &Manager{adb: NewADB()}
+	return &Manager{adb: NewADB(), simctl: ios.New()}
 }
 
-// List returns all connected Android emulators/devices.
+// List returns all connected Android emulators/devices and iOS simulators.
 func (m *Manager) List(ctx context.Context) ([]Device, error) {
-	return m.adb.Devices(ctx)
+	var all []Device
+
+	// Android devices
+	androids, err := m.adb.Devices(ctx)
+	if err == nil {
+		all = append(all, androids...)
+	}
+
+	// iOS simulators
+	sims, err := m.simctl.List(ctx)
+	if err == nil {
+		for _, s := range sims {
+			all = append(all, Device{
+				ID:       s.UDID,
+				Name:     s.Name,
+				Platform: PlatformIOS,
+				State:    strings.ToLower(s.State),
+			})
+		}
+	}
+
+	return all, nil
 }
 
 // Start boots an Android emulator identified by avdName.
 func (m *Manager) Start(ctx context.Context, avdName string) (*Device, error) {
 	return m.adb.StartEmulator(ctx, avdName)
+}
+
+// StartIOS boots an iOS simulator by UDID. If udid is empty, auto-selects one.
+func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
+	if udid == "" {
+		sim, err := m.simctl.AutoSelect(ctx)
+		if err != nil {
+			return nil, err
+		}
+		udid = sim.UDID
+	}
+
+	if err := m.simctl.Boot(ctx, udid); err != nil {
+		return nil, err
+	}
+	if err := m.simctl.WaitForBoot(ctx, udid, 60*time.Second); err != nil {
+		return nil, err
+	}
+
+	// Resolve name
+	sims, _ := m.simctl.List(ctx)
+	name := udid
+	for _, s := range sims {
+		if s.UDID == udid {
+			name = s.Name
+			break
+		}
+	}
+
+	return &Device{
+		ID:       udid,
+		Name:     name,
+		Platform: PlatformIOS,
+		State:    "booted",
+	}, nil
+}
+
+// SimCtl returns the underlying SimCtl for direct access.
+func (m *Manager) SimCtl() *ios.SimCtl {
+	return m.simctl
 }
 
 // WaitForBoot polls until a device is online or the context is cancelled.
@@ -75,6 +139,11 @@ func (m *Manager) ForwardPort(ctx context.Context, serial string, hostPort, devi
 // RemoveForward cleans up an adb port forward.
 func (m *Manager) RemoveForward(ctx context.Context, serial string, hostPort int) error {
 	return m.adb.RemoveForward(ctx, serial, hostPort)
+}
+
+// ReadTokenIOS reads the ProbeAgent token from the iOS simulator's syslog.
+func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Duration) (string, error) {
+	return m.simctl.ReadToken(ctx, udid, timeout)
 }
 
 // ReadToken scans the device logcat output for the ProbeAgent one-time token.
