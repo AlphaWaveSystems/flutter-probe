@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/flutterprobe/probe/internal/config"
 	"github.com/flutterprobe/probe/internal/device"
 	"github.com/flutterprobe/probe/internal/probelink"
 	"github.com/spf13/cobra"
@@ -16,17 +17,23 @@ import (
 var studioCmd = &cobra.Command{
 	Use:   "studio",
 	Short: "Interactive widget inspector with live element picker",
-	Long: `probe studio opens a local web UI at http://localhost:9191 that lets you:
-  • Click on any widget to inspect its properties and generate selectors
-  • See the live widget tree
-  • Run individual ProbeScript steps interactively
-  • Copy-paste generated selectors into your .probe files`,
+	Long: `Open a local web UI that connects to the running Flutter app for
+interactive widget inspection and ProbeScript step authoring.
+
+The Studio UI lets you:
+  - Click on any widget to inspect its properties and generate selectors
+  - See the live widget tree
+  - Run individual ProbeScript steps interactively
+  - Copy-paste generated selectors into your .probe files`,
 	RunE: runStudio,
 }
 
 func init() {
-	studioCmd.Flags().Int("port", 9191, "local HTTP port for the Studio UI")
-	studioCmd.Flags().String("device", "", "target device serial")
+	f := studioCmd.Flags()
+	f.Int("port", 9191, "local HTTP port for the Studio UI")
+	f.Int("agent-port", 0, "ProbeAgent WebSocket port (default: 48686)")
+	f.String("device", "", "target device serial or UDID (default: first available)")
+	f.Duration("token-timeout", 0, "max time to wait for agent auth token (default: 30s)")
 	rootCmd.AddCommand(studioCmd)
 }
 
@@ -34,28 +41,76 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	port, _ := cmd.Flags().GetInt("port")
 	deviceSerial, _ := cmd.Flags().GetString("device")
+	agentPortFlag, _ := cmd.Flags().GetInt("agent-port")
+	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
+
+	// Load config
+	cfgDir, _ := os.Getwd()
+	cfg, err := config.Load(cfgDir)
+	if err != nil {
+		return err
+	}
+
+	// Apply CLI overrides
+	if agentPortFlag != 0 {
+		cfg.Agent.Port = agentPortFlag
+	}
+	if tokenTimeout != 0 {
+		cfg.Agent.TokenReadTimeout = tokenTimeout
+	}
 
 	// Connect to agent
 	dm := device.NewManager()
+	platform := device.Platform(cfg.Defaults.Platform)
 	if deviceSerial == "" {
 		devices, err := dm.List(ctx)
 		if err != nil || len(devices) == 0 {
 			return fmt.Errorf("no connected devices — start an emulator first")
 		}
 		deviceSerial = devices[0].ID
+		platform = devices[0].Platform
+	} else {
+		// Detect platform from device list
+		devices, _ := dm.List(ctx)
+		for _, d := range devices {
+			if d.ID == deviceSerial {
+				platform = d.Platform
+				break
+			}
+		}
 	}
 
-	if err := dm.ForwardPort(ctx, deviceSerial, 8686, 8686); err != nil {
-		return fmt.Errorf("port forward: %w", err)
-	}
-	defer dm.RemoveForward(ctx, deviceSerial, 8686) //nolint:errcheck
-
-	token, err := dm.ReadToken(ctx, deviceSerial, 15*time.Second)
-	if err != nil {
-		return fmt.Errorf("agent token: %w", err)
+	agentPort := cfg.Agent.Port
+	dialOpts := probelink.DialOptions{
+		Host:        "127.0.0.1",
+		Port:        agentPort,
+		DialTimeout: cfg.Agent.DialTimeout,
 	}
 
-	client, err := probelink.Dial(ctx, "127.0.0.1", 8686, token)
+	if platform == device.PlatformIOS {
+		// iOS: simulators share host loopback — no port forwarding needed
+		fmt.Println("  Waiting for ProbeAgent token (iOS)...")
+		token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+		if err != nil {
+			return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+		}
+		dialOpts.Token = token
+	} else {
+		// Android: forward port via ADB
+		if err := dm.ForwardPort(ctx, deviceSerial, agentPort, agentPort); err != nil {
+			return fmt.Errorf("port forward: %w", err)
+		}
+		defer dm.RemoveForward(ctx, deviceSerial, agentPort) //nolint:errcheck
+
+		fmt.Println("  Waiting for ProbeAgent token...")
+		token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+		if err != nil {
+			return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+		}
+		dialOpts.Token = token
+	}
+
+	client, err := probelink.DialWithOptions(ctx, dialOpts)
 	if err != nil {
 		return fmt.Errorf("connecting to agent: %w", err)
 	}
@@ -127,7 +182,7 @@ func runStudio(cmd *cobra.Command, args []string) error {
 			return
 		}
 		var body struct {
-			Text string `json:"text"`
+			Text string  `json:"text"`
 			X    float64 `json:"x"`
 			Y    float64 `json:"y"`
 		}

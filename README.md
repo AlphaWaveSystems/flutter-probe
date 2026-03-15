@@ -17,12 +17,12 @@ test "user can log in"
 FlutterProbe has two components:
 
 1. **`probe` CLI** (Go) — parses `.probe` test files, manages devices, orchestrates runs, generates reports
-2. **`probe_agent`** (Dart) — embedded in your Flutter app as a dev dependency; runs a WebSocket server on port 8686 and executes commands directly against the live widget tree
+2. **`probe_agent`** (Dart) — embedded in your Flutter app as a dev dependency; runs a WebSocket server on port 48686 and executes commands directly against the live widget tree
 
 ```
 ┌──────────────┐     WebSocket / JSON-RPC 2.0      ┌─────────────────┐
 │  probe CLI   │ ──────────────────────────────────▶│  ProbeAgent     │
-│  (your Mac)  │   localhost:8686                   │  (in Flutter app│
+│  (your Mac)  │   localhost:48686                   │  (in Flutter app│
 │              │   • tap, type, see, wait, swipe    │   on device)    │
 │  parses .probe│   • screenshot, dump_tree         │                 │
 │  manages devices│  • one-time token auth          │  walks widget   │
@@ -30,8 +30,8 @@ FlutterProbe has two components:
 └──────────────┘                                    └─────────────────┘
 ```
 
-**Android**: CLI → `adb forward tcp:8686 tcp:8686` → WebSocket → ProbeAgent
-**iOS Simulator**: CLI → `localhost:8686` directly (simulator shares host network)
+**Android**: CLI → `adb forward tcp:48686 tcp:48686` → WebSocket → ProbeAgent
+**iOS Simulator**: CLI → `localhost:48686` directly (simulator shares host network)
 
 ## Quick Start
 
@@ -394,7 +394,7 @@ pause                              # 1-second pause
 
 ## Android Emulator Setup Notes
 
-- The CLI uses `adb forward tcp:8686 tcp:8686` to bridge the host and emulator network
+- The CLI uses `adb forward tcp:48686 tcp:48686` to bridge the host and emulator network
 - Token is extracted from `adb logcat` output matching `PROBE_TOKEN=`
 - Use `probe device list` to see connected devices
 - Use `probe device start --platform android` to launch an emulator
@@ -416,10 +416,42 @@ pause                              # 1-second pause
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
 | `probe device list` | List connected devices/simulators |
 | `probe device start` | Start an emulator/simulator |
-| `probe record` | Record interactions as ProbeScript |
+| `probe record` | Record user interactions as ProbeScript (tap, type, swipe) |
+| `probe record -o tests/flow.probe` | Record to a specific output file |
 | `probe report` | Generate HTML report from test results |
 | `probe migrate` | Convert Maestro YAML flows to ProbeScript |
 | `probe generate` | AI-assisted test generation |
+
+## Recording Tests
+
+FlutterProbe can generate `.probe` files by recording your interactions on a real device or simulator:
+
+```bash
+# Start recording (interact with your app, then Ctrl+C to stop)
+probe record --device <UDID-or-serial> --output tests/my_flow.probe
+
+# Record with a timeout (auto-stops after 60s)
+probe record --timeout 60s -o tests/my_flow.probe
+```
+
+The recorder intercepts real touch events on the running app:
+- **Taps** are captured with widget selectors (text, key, or type)
+- **Swipes** are detected with direction (up/down/left/right)
+- **Long presses** are distinguished from taps by hold duration
+- **Text input** is tracked via controller listeners with debounce
+- **Wait steps** are auto-inserted when gaps between actions exceed 2 seconds
+
+Real-time feedback is printed as you interact:
+```
+  ● Recording on 909F49AD... — interact with your app
+  ✓ tap "Sign In"
+  ✓ type "user@test.com" into "Email"
+  ✓ swipe up
+  ✓ tap "Submit"
+  ✓ Recorded 4 events → tests/my_flow.probe
+```
+
+> **Note**: The recorder identifies widgets by walking up from the touch target looking for Text content, ValueKey, or Semantics labels. Icon-only buttons may resolve to framework widget types and need manual cleanup.
 
 ## Custom Plugins
 
@@ -436,15 +468,172 @@ params:
 
 These dispatch to corresponding Dart handlers in the ProbeAgent.
 
+## Reports & Artifacts
+
+FlutterProbe supports three output formats for CI/CD integration:
+
+```bash
+# Terminal output (default)
+probe test tests/
+
+# JUnit XML (GitHub Actions, Jenkins, CircleCI)
+probe test tests/ --format junit -o reports/results.xml
+
+# JSON with artifacts (for HTML report generation)
+probe test tests/ --format json -o reports/results.json --video
+
+# Generate interactive HTML report from JSON
+probe report --input reports/results.json -o reports/report.html --open
+```
+
+The `reports/` folder is **fully self-contained and portable**:
+
+```
+reports/
+├── results.json           # Test results with relative artifact paths
+├── report.html            # Interactive HTML dashboard
+├── screenshots/           # Failure & on-demand screenshots (PNG)
+│   ├── failure_login_1234.png
+│   └── main_menu_5678.png
+└── videos/                # Per-test screen recordings (H.264 MOV/MP4)
+    ├── login_test.mov
+    └── navigation_test.mov
+```
+
+All artifact paths in `results.json` are **relative** to the JSON file — the entire folder can be uploaded to CI artifact storage, S3, or shared without breaking references.
+
+The `reports_folder` setting in `probe.yaml` controls the default output directory:
+
+```yaml
+reports_folder: reports    # default; change to "ci/output" etc.
+```
+
+### Viewing the HTML Report
+
+The HTML report embeds screenshots and videos using relative paths. To view it with media:
+
+```bash
+# Serve locally (required for video/screenshot playback)
+cd reports && python3 -m http.server 8080
+# Then open http://localhost:8080/report.html
+
+# Or use probe report --open (opens file directly, media may not load in some browsers)
+probe report --input reports/results.json -o reports/report.html --open
+```
+
 ## CI / GitHub Actions
 
-The repo includes a GitHub Actions workflow (`.github/workflows/e2e.yml`) that:
+### Example Workflow
 
-1. Builds the `probe` CLI
-2. Runs Go unit tests with coverage
-3. Runs Android E2E tests across API levels 31 and 34, sharded 3 ways
-4. Runs iOS E2E tests on macOS runners
-5. Generates an HTML report
+```yaml
+name: E2E Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+
+      - name: Build probe CLI
+        run: make build
+
+      - name: Run Go unit tests
+        run: go test -v -race ./...
+
+      - name: Boot iOS simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries[] | .value[] | select(.name | contains("iPhone")) | .udid' | head -1)
+          xcrun simctl boot "$DEVICE"
+          echo "DEVICE_UDID=$DEVICE" >> $GITHUB_ENV
+
+      - name: Build & launch app with ProbeAgent
+        run: |
+          cd your-flutter-app
+          flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
+          xcrun simctl install $DEVICE_UDID build/ios/iphonesimulator/YourApp.app
+          xcrun simctl launch $DEVICE_UDID com.example.yourapp
+
+      - name: Run E2E tests
+        run: |
+          bin/probe test tests/ \
+            --device $DEVICE_UDID \
+            --timeout 60s -v -y \
+            --video \
+            --format json -o reports/results.json
+
+      - name: Generate HTML report
+        if: always()
+        run: bin/probe report --input reports/results.json -o reports/report.html
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+
+      # Optional: also produce JUnit for GitHub's test summary
+      - name: Run tests (JUnit)
+        if: always()
+        run: |
+          bin/probe test tests/ \
+            --device $DEVICE_UDID \
+            --timeout 60s -y \
+            --format junit -o reports/results.xml
+        continue-on-error: true
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: E2E Test Results
+          path: reports/results.xml
+          reporter: java-junit
+```
+
+### Android CI (Self-hosted or Docker)
+
+```yaml
+  android-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Build probe CLI
+        run: make build
+
+      - name: Start Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          script: |
+            adb install -r your-app-debug.apk
+            adb shell am start -n com.example.yourapp/.MainActivity
+            sleep 10
+            bin/probe test tests/ \
+              --device emulator-5554 \
+              --timeout 60s -v -y \
+              --video \
+              --format json -o reports/results.json
+            bin/probe report --input reports/results.json -o reports/report.html
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-reports
+          path: reports/
+```
 
 A Docker setup is also available in `docker/` for self-hosted CI with Android emulators.
 
@@ -483,6 +672,7 @@ FlutterProbe/
 │       ├── finder.dart   # Widget selector engine (text, key, type, ordinal, positional)
 │       ├── sync.dart     # Triple-signal sync (frames + animations + microtasks)
 │       ├── gestures.dart # Gesture handlers
+│       ├── recorder.dart # Gesture recording engine (for probe record)
 │       └── protocol.dart # JSON-RPC types
 ├── plugins/              # Custom command definitions (YAML)
 ├── tests/                # Example .probe test files

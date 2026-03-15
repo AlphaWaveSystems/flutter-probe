@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/flutterprobe/probe/internal/config"
 	"github.com/flutterprobe/probe/internal/device"
@@ -19,29 +18,68 @@ import (
 var testCmd = &cobra.Command{
 	Use:   "test [file|dir]...",
 	Short: "Run .probe test files against the connected Flutter app",
-	Example: `  probe test                         # run all tests in ./tests/
-  probe test tests/login.probe       # run one file
-  probe test --tag smoke             # run tests tagged @smoke
-  probe test --watch                 # re-run on file changes
-  probe test --format junit -o results.xml`,
+	Long: `Run ProbeScript (.probe) test files against a running Flutter app.
+
+Tests are executed via WebSocket connection to the on-device ProbeAgent. The CLI
+handles device discovery, port forwarding, token authentication, and test
+orchestration automatically.
+
+Connection settings, timeouts, and recording options can be configured via CLI
+flags (override everything), probe.yaml (project defaults), or built-in defaults.
+Resolution order: CLI flag > probe.yaml > built-in default.`,
+	Example: `  probe test                                # run all tests in ./tests/
+  probe test tests/login.probe              # run one file
+  probe test --tag smoke                    # run tests tagged @smoke
+  probe test --watch                        # re-run on file changes
+  probe test --format junit -o results.xml  # JUnit output
+  probe test --port 9999                    # custom agent port
+  probe test --token-timeout 60s            # longer token wait (slow CI)
+  probe test --dial-timeout 45s             # longer connection timeout`,
 	RunE: runTests,
 }
 
 func init() {
-	testCmd.Flags().StringP("tag", "t", "", "run only tests matching this tag")
-	testCmd.Flags().BoolP("watch", "w", false, "watch mode — re-run on file changes")
-	testCmd.Flags().Int("shard", 0, "split tests across N devices in parallel")
-	testCmd.Flags().String("format", "terminal", "output format: terminal | junit | json")
-	testCmd.Flags().StringP("output", "o", "", "write report to file (default: stdout)")
-	testCmd.Flags().String("device", "", "target device serial (default: first available)")
-	testCmd.Flags().Duration("timeout", 30*time.Second, "per-step timeout")
-	testCmd.Flags().Bool("dry-run", false, "parse .probe files without executing")
-	testCmd.Flags().String("adb", "", "path to adb binary (overrides probe.yaml and PATH)")
-	testCmd.Flags().String("flutter", "", "path to flutter binary (overrides probe.yaml and PATH)")
-	testCmd.Flags().BoolP("yes", "y", false, "auto-confirm destructive operations (clear app data, etc.)")
-	testCmd.Flags().String("app-path", "", "path to APK (.apk) or iOS app bundle (.app) to install before testing")
-	testCmd.Flags().Bool("video", false, "enable video recording (overrides probe.yaml)")
-	testCmd.Flags().Bool("no-video", false, "disable video recording (overrides probe.yaml)")
+	f := testCmd.Flags()
+
+	// Test selection & output
+	f.StringP("tag", "t", "", "run only tests matching this tag (e.g. @smoke, @critical)")
+	f.BoolP("watch", "w", false, "watch mode — re-run tests automatically on file changes")
+	f.Int("shard", 0, "split tests across N devices in parallel (0 = no sharding)")
+	f.String("format", "terminal", "output format: terminal | junit | json")
+	f.StringP("output", "o", "", "write report to file instead of stdout")
+	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
+
+	// Device selection
+	f.String("device", "", "target device serial or UDID (default: first available)")
+
+	// Per-step timeout
+	f.Duration("timeout", 0, "per-step timeout; 0 uses probe.yaml or default 30s")
+
+	// Agent connection
+	f.Int("port", 0, "ProbeAgent WebSocket port (default: 48686)")
+	f.Duration("dial-timeout", 0, "max time to establish WebSocket connection (default: 30s)")
+	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
+	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
+
+	// Tool paths
+	f.String("adb", "", "path to adb binary (overrides probe.yaml and PATH)")
+	f.String("flutter", "", "path to flutter binary (overrides probe.yaml and PATH)")
+
+	// Destructive operations
+	f.BoolP("yes", "y", false, "auto-confirm destructive operations (clear app data, permissions)")
+
+	// App installation
+	f.String("app-path", "", "path to .apk or .app bundle to install before testing")
+
+	// Video recording
+	f.Bool("video", false, "enable video recording (overrides probe.yaml)")
+	f.Bool("no-video", false, "disable video recording (overrides probe.yaml)")
+	f.String("video-resolution", "", `Android screenrecord resolution, e.g. "720x1280" (default: "720x1280")`)
+	f.Int("video-framerate", 0, "FPS for screencap-based video stitching (default: 2)")
+
+	// Visual regression
+	f.Float64("visual-threshold", 0, "max allowed pixel diff percentage, e.g. 0.5 (default: 0.5)")
+	f.Int("visual-pixel-delta", 0, "per-pixel color distance threshold 0–255 (default: 8)")
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
@@ -67,6 +105,51 @@ func runTests(cmd *cobra.Command, args []string) error {
 	appPath, _ := cmd.Flags().GetString("app-path")
 	videoFlag, _ := cmd.Flags().GetBool("video")
 	noVideoFlag, _ := cmd.Flags().GetBool("no-video")
+
+	// Agent connection overrides: CLI flag > probe.yaml (already loaded)
+	agentPort, _ := cmd.Flags().GetInt("port")
+	dialTimeout, _ := cmd.Flags().GetDuration("dial-timeout")
+	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
+	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
+
+	// Video overrides
+	videoResolution, _ := cmd.Flags().GetString("video-resolution")
+	videoFramerate, _ := cmd.Flags().GetInt("video-framerate")
+
+	// Visual regression overrides
+	visualThreshold, _ := cmd.Flags().GetFloat64("visual-threshold")
+	visualPixelDelta, _ := cmd.Flags().GetInt("visual-pixel-delta")
+
+	// Apply CLI overrides to config
+	if agentPort != 0 {
+		cfg.Agent.Port = agentPort
+	}
+	if dialTimeout != 0 {
+		cfg.Agent.DialTimeout = dialTimeout
+	}
+	if tokenTimeout != 0 {
+		cfg.Agent.TokenReadTimeout = tokenTimeout
+	}
+	if reconnectDelay != 0 {
+		cfg.Agent.ReconnectDelay = reconnectDelay
+	}
+	if videoResolution != "" {
+		cfg.Video.Resolution = videoResolution
+	}
+	if videoFramerate != 0 {
+		cfg.Video.Framerate = videoFramerate
+	}
+	if visualThreshold != 0 {
+		cfg.Visual.Threshold = visualThreshold
+	}
+	if visualPixelDelta != 0 {
+		cfg.Visual.PixelDelta = visualPixelDelta
+	}
+
+	// Per-step timeout: CLI flag > probe.yaml
+	if timeout == 0 {
+		timeout = cfg.Defaults.Timeout
+	}
 
 	// Collect test files
 	searchPaths := args
@@ -108,6 +191,15 @@ func runTests(cmd *cobra.Command, args []string) error {
 			}
 			deviceSerial = devices[0].ID
 			platform = devices[0].Platform
+		} else {
+			// Detect platform from device list when serial is specified manually
+			devices, _ := dm.List(ctx)
+			for _, d := range devices {
+				if d.ID == deviceSerial {
+					platform = d.Platform
+					break
+				}
+			}
 		}
 
 		// Install app if --app-path provided
@@ -141,31 +233,39 @@ func runTests(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  \033[32m✓\033[0m  App installed and launched\n")
 		}
 
+		dialOpts := probelink.DialOptions{
+			Host:        "127.0.0.1",
+			Port:        cfg.Agent.Port,
+			DialTimeout: cfg.Agent.DialTimeout,
+		}
+
 		if platform == device.PlatformIOS {
 			// iOS: simulators share host loopback — no port forwarding needed
 			fmt.Println("  Waiting for ProbeAgent token (iOS)...")
-			token, err := dm.ReadTokenIOS(ctx, deviceSerial, 30*time.Second)
+			token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
 			if err != nil {
 				return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 			}
-			client, err = probelink.Dial(ctx, "127.0.0.1", 8686, token)
+			dialOpts.Token = token
+			client, err = probelink.DialWithOptions(ctx, dialOpts)
 			if err != nil {
 				return fmt.Errorf("connecting to ProbeAgent: %w", err)
 			}
 			defer client.Close()
 		} else {
 			// Android: forward port via ADB
-			if err := dm.ForwardPort(ctx, deviceSerial, 8686, 8686); err != nil {
+			if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.Port); err != nil {
 				return fmt.Errorf("port forward: %w", err)
 			}
-			defer dm.RemoveForward(ctx, deviceSerial, 8686) //nolint:errcheck
+			defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
 
 			fmt.Println("  Waiting for ProbeAgent token...")
-			token, err := dm.ReadToken(ctx, deviceSerial, 30*time.Second)
+			token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
 			if err != nil {
 				return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 			}
-			client, err = probelink.Dial(ctx, "127.0.0.1", 8686, token)
+			dialOpts.Token = token
+			client, err = probelink.DialWithOptions(ctx, dialOpts)
 			if err != nil {
 				return fmt.Errorf("connecting to ProbeAgent: %w", err)
 			}
@@ -203,22 +303,27 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Serial:                  deviceSerial,
 			Platform:                platform,
 			AppID:                   cfg.Project.App,
-			Port:                    8686,
+			Port:                    cfg.Agent.Port,
 			AllowClearData:          autoYes,
 			Confirm:                 promptUserConfirm,
 			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,
+			ReconnectDelay:          cfg.Agent.ReconnectDelay,
+			RestartDelay:            cfg.Device.RestartDelay,
+			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,
+			DialTimeout:             cfg.Agent.DialTimeout,
 		}
 	}
 
 	// Resolve video setting: CLI flags > probe.yaml
-	videoEnabled := cfg.Defaults.Video
+	videoEnabled := cfg.Defaults.VideoEnabled
 	if videoFlag {
 		videoEnabled = true
 	}
 	if noVideoFlag {
 		videoEnabled = false
 	}
-	videoDir := "reports/videos"
+	reportsBase := cfg.Reports // from probe.yaml reports_folder (default: "reports")
+	videoDir := filepath.Join(reportsBase, "videos")
 	if outFile != "" {
 		videoDir = filepath.Join(filepath.Dir(outFile), "videos")
 	}
@@ -244,7 +349,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Pull screenshots from device to local reports/screenshots/ folder
 	if devCtx != nil {
-		screenshotDir := "reports/screenshots"
+		screenshotDir := filepath.Join(reportsBase, "screenshots")
 		if outFile != "" {
 			screenshotDir = filepath.Join(filepath.Dir(outFile), "screenshots")
 		}

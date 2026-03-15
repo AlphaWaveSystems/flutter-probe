@@ -174,7 +174,7 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 		if videoDir == "" {
 			videoDir = "reports/videos"
 		}
-		recorder = NewVideoRecorder(r.deviceCtx.Manager, r.deviceCtx.Serial, r.deviceCtx.Platform, videoDir)
+		recorder = NewVideoRecorder(r.deviceCtx.Manager, r.deviceCtx.Serial, r.deviceCtx.Platform, videoDir, r.cfg.Video)
 		if err := recorder.Start(ctx, t.Name); err != nil {
 			fmt.Printf("    \033[33m⚠\033[0m  video recording failed to start: %v\n", err)
 			recorder = nil
@@ -361,13 +361,17 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 	for i := range results {
 		var localPaths []string
 		for _, remotePath := range results[i].Artifacts {
-			// Skip artifacts that are already local files (e.g. video recordings)
+			// Skip video files that are already in the output directory
 			if filepath.IsAbs(remotePath) {
 				if _, err := os.Stat(remotePath); err == nil {
-					localPaths = append(localPaths, remotePath)
-					continue
+					ext := filepath.Ext(remotePath)
+					if ext == ".mov" || ext == ".mp4" || ext == ".webm" {
+						localPaths = append(localPaths, remotePath)
+						continue
+					}
 				}
 			}
+			// Copy screenshots to the local reports directory
 			localPath := filepath.Join(localDir, filepath.Base(remotePath))
 			var pullErr error
 			if dc.Platform == device.PlatformIOS {

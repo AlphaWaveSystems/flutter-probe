@@ -33,6 +33,9 @@ bin/probe test <test-path>/ --device <UDID-or-serial> --timeout 60s -v -y
 bin/probe test tests/ --device emulator-5554 --timeout 60s -v -y \
   --format json -o reports/results.json --adb /path/to/adb
 
+# Run with custom agent port and extended timeouts (CI/CD)
+bin/probe test tests/ --port 48686 --dial-timeout 45s --token-timeout 60s -v -y
+
 # Generate HTML report from JSON results
 bin/probe report --input reports/results.json -o reports/report.html --open
 ```
@@ -42,26 +45,27 @@ bin/probe report --input reports/results.json -o reports/report.html --open
 The system has two main components that communicate via WebSocket + JSON-RPC 2.0:
 
 1. **Go CLI (`cmd/probe/`)**: Parses `.probe` files, manages devices, orchestrates test runs, generates reports
-2. **Dart ProbeAgent (`probe_agent/`)**: Runs on-device as a WebSocket server (port 8686), executes commands against the live Flutter widget tree
+2. **Dart ProbeAgent (`probe_agent/`)**: Runs on-device as a WebSocket server (port 48686), executes commands against the live Flutter widget tree
 
 ### Connection Flow
 
-- **Android**: CLI → `adb forward tcp:8686 tcp:8686` → WebSocket connect → authenticate via one-time token (extracted from `adb logcat` matching `PROBE_TOKEN=...`) → dispatch JSON-RPC commands
-- **iOS Simulator**: CLI → `localhost:8686` directly (simulator shares host loopback) → authenticate via token file at `~/Library/Developer/CoreSimulator/Devices/<UDID>/data/tmp/probe/token` (fast path) or log stream (fallback)
+- **Android**: CLI → `adb forward tcp:48686 tcp:48686` → WebSocket connect → authenticate via one-time token (extracted from `adb logcat` matching `PROBE_TOKEN=...`) → dispatch JSON-RPC commands
+- **iOS Simulator**: CLI → `localhost:48686` directly (simulator shares host loopback) → authenticate via token file at `~/Library/Developer/CoreSimulator/Devices/<UDID>/data/tmp/probe/token` (fast path) or log stream (fallback)
 
 ### Go CLI internals (`internal/`)
 
-- **`cli/`** — Cobra command definitions (`probe test`, `probe init`, `probe lint`, `probe device`, `probe record`, `probe report`, `probe migrate`, `probe generate`)
+- **`cli/`** — Cobra command definitions (`probe test`, `probe init`, `probe lint`, `probe device`, `probe record`, `probe report`, `probe migrate`, `probe generate`, `probe studio`)
 - **`parser/`** — Indent-aware lexer + recursive-descent parser producing an AST. ProbeScript is Python-like with indent-based blocks. Key types: `Program → UseStmt | RecipeDef | HookDef | TestDef`, each containing `Step` nodes
 - **`runner/`** — Test orchestration: `runner.go` loads recipes/files/tags, `executor.go` walks AST steps and dispatches to ProbeLink, `reporter.go` outputs Terminal/JUnit/JSON, `device_context.go` handles platform-level operations (restart, clear data, permissions, reconnection)
-- **`probelink/`** — JSON-RPC 2.0 WebSocket client. Methods like `probe.tap`, `probe.type`, `probe.see`, `probe.wait`, `probe.screenshot`, etc.
+- **`probelink/`** — JSON-RPC 2.0 WebSocket client. `DialWithOptions()` for full config control. Methods like `probe.tap`, `probe.type`, `probe.see`, `probe.wait`, `probe.screenshot`, etc.
 - **`device/`** — ADB integration for Android emulator management, port forwarding, token extraction, permission grant/revoke. `permissions.go` maps human-readable names to platform constants.
 - **`ios/`** — iOS simulator management via `xcrun simctl`: boot, install, launch, log streaming, token reading
-- **`config/`** — `probe.yaml` parsing (project name, app ID, platform, timeouts, device list, environment vars)
+- **`config/`** — `probe.yaml` parsing with sections: `project`, `defaults`, `agent`, `device`, `video`, `visual`, `tools`, `devices`, `environment`. All timeouts and tuning constants are configurable.
 - **`ai/`** — Self-healing selectors via fuzzy matching against widget tree (strategies: text_fuzzy, key_partial, type_position, semantic)
 - **`migrate/`** — Converts Maestro YAML test flows to ProbeScript
+- **`report/`** — HTML report generation with relative artifact paths for portability
 - **`plugin/`** — YAML-based custom command system; plugins define new ProbeScript commands that dispatch to Dart handlers
-- **`visual/`** — Screenshot-based visual regression testing with configurable threshold
+- **`visual/`** — Screenshot-based visual regression testing with configurable threshold and pixel delta
 
 ### Dart Agent internals (`probe_agent/lib/src/`)
 
@@ -70,6 +74,29 @@ The system has two main components that communicate via WebSocket + JSON-RPC 2.0
 - **`finder.dart`** — Widget selector engine walking the live widget tree via `WidgetsBinding.instance.rootElement`. Supports text, `#id` (ValueKey), type, ordinal (`1st "Item"`), positional (`"text" in "Container"`)
 - **`sync.dart`** — Triple-signal synchronization (frames + animations + microtasks) for flake prevention
 - **`gestures.dart`** — Tap, swipe, scroll, drag, pinch, rotate handlers
+- **`recorder.dart`** — Recording engine for `probe record`: intercepts pointer events via `GestureBinding.pointerRouter.addGlobalRoute()`, classifies gestures (tap/swipe/long_press), identifies widgets from touch coordinates via hit-testing, tracks text input via controller listeners, streams events back to CLI as JSON-RPC notifications
+
+## Configuration
+
+All settings follow the resolution order: **CLI flag > probe.yaml > built-in default**.
+
+### probe.yaml sections
+
+- **`agent:`** — WebSocket port (`48686`), dial timeout (`30s`), ping interval (`5s`), token read timeout (`30s`), reconnect delay (`2s`)
+- **`device:`** — Emulator boot timeout (`120s`), simulator boot timeout (`60s`), boot poll interval (`2s`), token file retries (`5`), restart delay (`500ms`)
+- **`video:`** — Resolution (`720x1280`), framerate (`2` fps), screenrecord cycle (`170s`)
+- **`visual:`** — Threshold (`0.5`%), pixel delta (`8`)
+- **`defaults:`** — Platform, per-step timeout, screenshots, video, retry count, permission auto-grant
+- **`tools:`** — Custom paths for `adb` and `flutter` binaries
+
+### Key CLI flags (probe test)
+
+- `--port` — Agent WebSocket port
+- `--dial-timeout` — WebSocket connection timeout
+- `--token-timeout` — Agent token wait timeout
+- `--reconnect-delay` — Post-restart reconnect delay
+- `--video-resolution` / `--video-framerate` — Video recording settings
+- `--visual-threshold` / `--visual-pixel-delta` — Visual regression tuning
 
 ## Critical Implementation Details
 
@@ -113,6 +140,34 @@ ProbeAgent can only interact with **Flutter widgets**, not native OS permission 
 - **`clear app data`** — wipes all data via `pm clear` (Android) / container subdirectory deletion (iOS), relaunches, reconnects. Requires `-y` flag or interactive confirmation.
 - Both operations are handled by `DeviceContext` in `internal/runner/device_context.go` and transparently reconnect the WebSocket client after the app restarts.
 - iOS data clearing uses path validation (`validateIOSDataPath`) to prevent accidental deletion of non-container paths.
+- Restart delay and reconnect delay are configurable via `device.restart_delay` and `agent.reconnect_delay` in probe.yaml.
+
+### Test recording (`probe record`)
+
+The recording feature captures user interactions and generates ProbeScript:
+
+1. CLI sends `probe.start_recording` RPC to the Dart agent
+2. Agent's `ProbeRecorder` installs a global pointer route via `GestureBinding.instance.pointerRouter.addGlobalRoute()`
+3. Each `PointerDownEvent`/`PointerUpEvent` is classified: displacement < 20px = tap/long_press, >= 20px = swipe
+4. Widget identification: hit-tests at touch position, walks hit test entries looking for user-meaningful selectors (ValueKey > Text > Semantics > type), skips framework internals like `NotificationListener`, `Padding`, `Container`
+5. Text input: periodically scans for `EditableText` elements, attaches controller listeners, debounces (300ms), emits `type` events
+6. Events are streamed as `probe.recorded_event` JSON-RPC notifications
+7. CLI collects events, prints real-time feedback, and on stop generates a `.probe` file with auto-inserted `wait N seconds` for gaps > 2s
+
+**Platform detection**: `record.go` detects iOS vs Android from the device list (same pattern as `test.go`) — uses `ReadTokenIOS()` without port forwarding for iOS, `ForwardPort()` + `ReadToken()` for Android.
+
+### Report output paths
+
+The `reports_folder` setting in `probe.yaml` (default: `"reports"`) controls where screenshots and videos are saved. Resolution order:
+- `-o` flag directory takes precedence (video/screenshot subdirs created relative to it)
+- Otherwise uses `cfg.Reports` from probe.yaml
+- Fallback: `"reports"`
+
+Both JSON and HTML reports use **relative paths** for artifacts (videos, screenshots) so the `reports/` directory is fully portable — upload to CI artifact storage, S3, or share without breaking references. The JSON reporter relativizes paths against its output file location; the HTML reporter does the same against the HTML file location.
+
+### Video recording codec
+
+iOS simulator videos use `--codec=h264` (not HEVC) for browser compatibility in HTML reports. Android videos are MP4 (H.264 by default).
 
 ### Configurable tool paths
 
@@ -138,7 +193,28 @@ test "user can log in"
   see "Dashboard"
 ```
 
-Key constructs: `test`, `recipe` (reusable steps with params), `before each`/`after each` hooks, `on failure` hooks, `if`/`else` conditionals, `repeat N times` loops, `Examples:` blocks for data-driven tests with `<var>` substitution, `dart:` blocks for escape-hatch Dart code, `when ... respond with` for HTTP mocking, `clear app data` / `restart the app` for lifecycle control, `allow permission` / `deny permission` / `grant all permissions` for OS permission management.
+### Recipes and reuse
+
+Recipes define reusable step sequences. Use `use` statements to import recipes from other files:
+```
+# tests/recipes/common.probe
+recipe "sign in with" (email, password)
+  open the app
+  wait until "Sign In" appears
+  tap on "Sign In"
+  type <email> into the "Email" field
+  type <password> into the "Password" field
+  tap "Continue"
+
+# tests/login.probe
+use "tests/recipes/common.probe"
+
+test "a user can sign in"
+  sign in with "user@example.com" and "mypassword"
+  see "Dashboard"
+```
+
+Key constructs: `test`, `recipe` (reusable steps with params), `use` (import recipes), `before each`/`after each` hooks, `on failure` hooks, `if`/`else` conditionals, `repeat N times` loops, `Examples:` blocks for data-driven tests with `<var>` substitution, `dart:` blocks for escape-hatch Dart code, `when ... respond with` for HTTP mocking, `clear app data` / `restart the app` for lifecycle control, `allow permission` / `deny permission` / `grant all permissions` for OS permission management.
 
 ## Key Dependencies
 

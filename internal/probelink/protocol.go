@@ -172,7 +172,9 @@ const (
 	MethodRunDart      = "probe.run_dart"
 	MethodMock         = "probe.mock"
 	MethodDeviceAction = "probe.device_action"
-	MethodPing         = "probe.ping"
-	MethodSettled      = "probe.settled"   // wait for triple-signal sync
-	MethodSaveLogs     = "probe.save_logs"
+	MethodPing           = "probe.ping"
+	MethodSettled        = "probe.settled"   // wait for triple-signal sync
+	MethodSaveLogs       = "probe.save_logs"
+	MethodStartRecording = "probe.start_recording"
+	MethodStopRecording  = "probe.stop_recording"
 )

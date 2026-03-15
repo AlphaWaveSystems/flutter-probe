@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 
 import 'finder.dart';
 import 'protocol.dart';
+import 'recorder.dart';
 import 'sync.dart';
 
 typedef SendFn = void Function(String message);
@@ -19,6 +20,7 @@ class ProbeExecutor {
   final SendFn _send;
   final ProbeFinder _finder = ProbeFinder.instance;
   final ProbeSync _sync = ProbeSync.instance;
+  final ProbeRecorder _recorder = ProbeRecorder();
 
   // Mock registry: method+path -> {status, body}
   final Map<String, Map<String, dynamic>> _mocks = {};
@@ -159,6 +161,15 @@ class ProbeExecutor {
         final code = req.params['code'] as String;
         _send(ProbeNotification('probe.exec_dart', {'code': code}).encode());
         return {'ok': true, 'note': 'dart execution delegated to app'};
+
+      // ---- Recording ----
+      case 'probe.start_recording':
+        _recorder.start(_send);
+        return {'ok': true};
+
+      case 'probe.stop_recording':
+        _recorder.stop();
+        return {'ok': true};
 
       // ---- HTTP mocking ----
       case 'probe.mock':

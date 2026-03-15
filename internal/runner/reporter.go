@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -21,9 +22,10 @@ const (
 
 // Reporter writes test results to various output formats.
 type Reporter struct {
-	format  Format
-	out     io.Writer
-	verbose bool
+	format    Format
+	out       io.Writer
+	verbose   bool
+	outputDir string // directory of the output file, used to relativize artifact paths
 }
 
 // NewReporter creates a reporter writing to the given writer.
@@ -33,11 +35,15 @@ func NewReporter(format Format, out io.Writer, verbose bool) *Reporter {
 
 // NewFileReporter creates a reporter writing to a file.
 func NewFileReporter(format Format, path string, verbose bool) (*Reporter, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return nil, err
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return nil, err
 	}
-	return NewReporter(format, f, verbose), nil
+	absDir, _ := filepath.Abs(filepath.Dir(path))
+	return &Reporter{format: format, out: f, verbose: verbose, outputDir: absDir}, nil
 }
 
 // Report writes results to the output.
@@ -205,13 +211,22 @@ func (r *Reporter) writeJSON(results []TestResult) error {
 	}
 	for _, res := range results {
 		jr := jsonResult{
-			Name:      res.TestName,
-			File:      res.File,
-			Passed:    res.Passed,
-			Skipped:   res.Skipped,
-			Duration:  float64(res.Duration.Milliseconds()),
-			Row:       res.Row,
-			Artifacts: res.Artifacts,
+			Name:     res.TestName,
+			File:     res.File,
+			Passed:   res.Passed,
+			Skipped:  res.Skipped,
+			Duration: float64(res.Duration.Milliseconds()),
+			Row:      res.Row,
+		}
+		// Convert artifact paths to relative paths for portability (CI/CD)
+		for _, art := range res.Artifacts {
+			if r.outputDir != "" && filepath.IsAbs(art) {
+				if rel, err := filepath.Rel(r.outputDir, art); err == nil {
+					jr.Artifacts = append(jr.Artifacts, rel)
+					continue
+				}
+			}
+			jr.Artifacts = append(jr.Artifacts, art)
 		}
 		if res.Error != nil {
 			jr.Error = res.Error.Error()

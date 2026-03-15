@@ -7,7 +7,7 @@
 ///
 /// void main() async {
 ///   WidgetsFlutterBinding.ensureInitialized();
-///   await ProbeAgent.start();   // starts WS server on localhost:8686
+///   await ProbeAgent.start();   // starts WS server on localhost:48686
 ///   runApp(const MyApp());
 /// }
 /// ```
@@ -18,4 +18,5 @@ export 'src/server.dart' show ProbeServer;
 export 'src/finder.dart' show ProbeFinder;
 export 'src/executor.dart' show ProbeExecutor;
 export 'src/sync.dart' show ProbeSync;
+export 'src/recorder.dart' show ProbeRecorder;
 export 'src/protocol.dart' show ProbeRequest, ProbeResponse, ProbeError;

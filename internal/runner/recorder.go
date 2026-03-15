@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flutterprobe/probe/internal/config"
 	"github.com/flutterprobe/probe/internal/device"
 )
 
@@ -20,6 +21,7 @@ type VideoRecorder struct {
 	serial     string
 	platform   device.Platform
 	outputDir  string
+	videoCfg   config.VideoConfig
 	backend    string    // "scrcpy" | "screenrecord" | "screencap" | "simctl"
 	cmd        *exec.Cmd // the recording process
 	remotePath string    // on-device path (Android screenrecord)
@@ -30,12 +32,13 @@ type VideoRecorder struct {
 }
 
 // NewVideoRecorder creates a VideoRecorder, auto-detecting the best backend.
-func NewVideoRecorder(manager *device.Manager, serial string, platform device.Platform, outputDir string) *VideoRecorder {
+func NewVideoRecorder(manager *device.Manager, serial string, platform device.Platform, outputDir string, videoCfg config.VideoConfig) *VideoRecorder {
 	vr := &VideoRecorder{
 		manager:   manager,
 		serial:    serial,
 		platform:  platform,
 		outputDir: outputDir,
+		videoCfg:  videoCfg,
 		stopCh:    make(chan struct{}),
 	}
 
@@ -130,7 +133,7 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 
 	adbBin := vr.manager.ADB().Bin()
 	vr.cmd = exec.Command(adbBin, "-s", vr.serial,
-		"shell", "screenrecord", "--size", "720x1280", vr.remotePath)
+		"shell", "screenrecord", "--size", vr.videoCfg.Resolution, vr.remotePath)
 	if err := vr.cmd.Start(); err != nil {
 		// Fall back to screencap
 		vr.backend = "screencap"
@@ -138,14 +141,15 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 		return vr.startScreencap(context.Background(), safeName)
 	}
 
-	// Start chaining goroutine: restart every 170s to avoid 180s limit
+	// Start chaining goroutine: restart periodically to avoid Android's 180s limit
+	cycleInterval := vr.videoCfg.ScreenrecordCycle
 	go func() {
 		segIdx := 0
 		for {
 			select {
 			case <-vr.stopCh:
 				return
-			case <-time.After(170 * time.Second):
+			case <-time.After(cycleInterval):
 				// Stop current recording
 				if vr.cmd != nil && vr.cmd.Process != nil {
 					_ = vr.cmd.Process.Signal(syscall.SIGINT)
@@ -160,7 +164,7 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 				newRemote := fmt.Sprintf("/sdcard/probe_recording_%d.mp4", segIdx)
 				vr.remotePath = newRemote
 				vr.cmd = exec.Command(adbBin, "-s", vr.serial,
-					"shell", "screenrecord", "--size", "720x1280", newRemote)
+					"shell", "screenrecord", "--size", vr.videoCfg.Resolution, newRemote)
 				_ = vr.cmd.Start()
 			}
 		}
@@ -227,6 +231,12 @@ func (vr *VideoRecorder) startScreencap(_ context.Context, safeName string) erro
 		return err
 	}
 
+	// Determine capture interval from configured framerate
+	captureInterval := time.Second
+	if vr.videoCfg.Framerate > 0 {
+		captureInterval = time.Second / time.Duration(vr.videoCfg.Framerate)
+	}
+
 	go func() {
 		adbBin := vr.manager.ADB().Bin()
 		for {
@@ -242,7 +252,7 @@ func (vr *VideoRecorder) startScreencap(_ context.Context, safeName string) erro
 					vr.segments = append(vr.segments, framePath)
 					vr.frameIdx++
 				}
-				time.Sleep(1 * time.Second)
+				time.Sleep(captureInterval)
 			}
 		}
 	}()
@@ -263,7 +273,7 @@ func (vr *VideoRecorder) stopScreencap(ctx context.Context) (string, error) {
 		framesDir := filepath.Join(vr.outputDir, "frames")
 		pattern := filepath.Join(framesDir, "frame_%04d.png")
 		cmd := exec.CommandContext(ctx, "ffmpeg", "-y",
-			"-framerate", "2",
+			"-framerate", fmt.Sprintf("%d", vr.videoCfg.Framerate),
 			"-i", pattern,
 			"-c:v", "libx264", "-pix_fmt", "yuv420p",
 			vr.localPath)
@@ -283,7 +293,7 @@ func (vr *VideoRecorder) stopScreencap(ctx context.Context) (string, error) {
 
 func (vr *VideoRecorder) startSimctl(_ context.Context, safeName string) error {
 	vr.localPath = filepath.Join(vr.outputDir, safeName+".mov")
-	vr.cmd = exec.Command("xcrun", "simctl", "io", vr.serial, "recordVideo", vr.localPath)
+	vr.cmd = exec.Command("xcrun", "simctl", "io", vr.serial, "recordVideo", "--codec=h264", "--force", vr.localPath)
 	if err := vr.cmd.Start(); err != nil {
 		return fmt.Errorf("video: simctl recordVideo: %w", err)
 	}

@@ -1,9 +1,8 @@
 # Smoke test: core navigation paths
-use "tests/recipes/login.probe"
+use "tests/recipes/common.probe"
 
 before each test
-  open the app
-  wait until "Welcome" appears
+  open and wait for the app
 
 after each test
   take a screenshot
@@ -13,26 +12,23 @@ on failure
   dump the widget tree
   save device logs
 
-test "bottom navigation tabs are all accessible"
-  log in as "user@test.com" with password "pass123"
-  tap "Home"
-  see "Home"
-  tap "Search"
-  see "Search"
-  tap "Profile"
-  see "Profile"
-  tap "Settings"
-  see "Settings"
+test "main menu options are accessible"
+  @smoke
+  see "Lector"
+  see "Dígita"
+  see "número"
 
-test "back navigation works"
-  log in as "user@test.com" with password "pass123"
-  tap "Profile"
-  see "Account Settings"
+test "navigate to keypad and back"
+  @smoke
+  navigate to keypad
+  see "Activar"
+  go back to main menu
+
+test "navigate to lector and back"
+  @smoke
+  tap "Lector"
+  wait 2 seconds
   go back
-  see "Dashboard"
-
-test "deep link navigation"
-  open "myapp://profile/settings"
-  wait until "Settings" appears
-  see "Settings"
-  see "Notifications"
+  wait 1 seconds
+  see "Lector"
+  see "Dígita"

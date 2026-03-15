@@ -27,6 +27,8 @@ func NewHTMLReport(outputPath, projectName string) *HTMLReport {
 }
 
 // Write renders the report to the output path.
+// Artifact paths are converted to relative paths from the report's directory
+// so that the HTML file and its assets remain portable together.
 func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]string) error {
 	if err := os.MkdirAll(filepath.Dir(h.OutputPath), 0755); err != nil {
 		return err
@@ -65,7 +67,19 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		if r.Error != nil {
 			rj.Error = r.Error.Error()
 		}
-		rj.Shots = artifacts[r.TestName]
+		// Convert absolute artifact paths to relative paths from the report directory
+		reportDir, _ := filepath.Abs(filepath.Dir(h.OutputPath))
+		for _, art := range artifacts[r.TestName] {
+			if filepath.IsAbs(art) {
+				if rel, err := filepath.Rel(reportDir, art); err == nil {
+					rj.Shots = append(rj.Shots, rel)
+				} else {
+					rj.Shots = append(rj.Shots, art)
+				}
+			} else {
+				rj.Shots = append(rj.Shots, art)
+			}
+		}
 		rows = append(rows, rj)
 	}
 
@@ -222,7 +236,7 @@ function render(results) {
     const cls = r.skipped ? 'skip' : r.passed ? 'pass' : 'fail';
     const dot = cls + '-dot';
     const shots = (r.shots||[]).map(s => {
-      const src = s.startsWith('/') ? 'file://'+s : s;
+      const src = s;
       const ext = s.split('.').pop().toLowerCase();
       if (ext === 'mp4' || ext === 'webm' || ext === 'mov') {
         return '<video controls src="'+src+'" loading="lazy"></video>';
