@@ -125,6 +125,16 @@ const (
 	TOKEN_BYPASS // custom recipe call placeholder
 	TOKEN_BACK
 	TOKEN_HOME
+	TOKEN_RESTART    // "restart the app"
+	TOKEN_CLEAR_DATA // "clear app data" (compound)
+
+	// Permission commands
+	TOKEN_ALLOW      // "allow"
+	TOKEN_DENY       // "deny"
+	TOKEN_GRANT      // "grant"
+	TOKEN_REVOKE     // "revoke"
+	TOKEN_PERMISSION // "permission"
+	TOKEN_ALL        // "all"
 )
 
 // Token is a single lexical unit.
@@ -228,6 +238,14 @@ var keywords = map[string]TokenType{
 	"back":         TOKEN_BACK,
 	"home":         TOKEN_HOME,
 	"failure":      TOKEN_FAILURE,
+	"restart":      TOKEN_RESTART,
+	"allow":        TOKEN_ALLOW,
+	"deny":         TOKEN_DENY,
+	"grant":        TOKEN_GRANT,
+	"revoke":       TOKEN_REVOKE,
+	"permission":   TOKEN_PERMISSION,
+	"permissions":  TOKEN_PERMISSION,
+	"all":          TOKEN_ALL,
 }
 
 // fillerWords are stripped by the forgiving parser.

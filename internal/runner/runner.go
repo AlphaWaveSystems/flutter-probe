@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/flutterprobe/probe/internal/config"
+	"github.com/flutterprobe/probe/internal/device"
 	"github.com/flutterprobe/probe/internal/parser"
 	"github.com/flutterprobe/probe/internal/probelink"
 )
@@ -27,33 +29,37 @@ type TestResult struct {
 
 // Runner coordinates parsing, connecting, and executing .probe files.
 type Runner struct {
-	cfg     *config.Config
-	client  *probelink.Client
-	opts    RunOptions
-	recipes map[string]parser.RecipeDef
+	cfg       *config.Config
+	client    *probelink.Client
+	deviceCtx *DeviceContext // nil in dry-run mode
+	opts      RunOptions
+	recipes   map[string]parser.RecipeDef
 }
 
 // RunOptions configures a test run.
 type RunOptions struct {
-	Files   []string // .probe files to run
-	Tags    []string // filter by tag
-	Watch   bool     // re-run on file change
-	Shard   int      // number of shards (0 = no sharding)
-	Timeout time.Duration
-	DryRun  bool // parse only
-	Verbose bool
+	Files        []string // .probe files to run
+	Tags         []string // filter by tag
+	Watch        bool     // re-run on file change
+	Shard        int      // number of shards (0 = no sharding)
+	Timeout      time.Duration
+	DryRun       bool   // parse only
+	Verbose      bool
+	VideoEnabled bool   // record device screen during tests
+	VideoDir     string // directory to store video recordings
 }
 
 // New creates a Runner.
-func New(cfg *config.Config, client *probelink.Client, opts RunOptions) *Runner {
+func New(cfg *config.Config, client *probelink.Client, deviceCtx *DeviceContext, opts RunOptions) *Runner {
 	if opts.Timeout == 0 {
 		opts.Timeout = cfg.Defaults.Timeout
 	}
 	return &Runner{
-		cfg:     cfg,
-		client:  client,
-		opts:    opts,
-		recipes: make(map[string]parser.RecipeDef),
+		cfg:       cfg,
+		client:    client,
+		deviceCtx: deviceCtx,
+		opts:      opts,
+		recipes:   make(map[string]parser.RecipeDef),
 	}
 }
 
@@ -148,7 +154,9 @@ func (r *Runner) runDataDriven(ctx context.Context, prog *parser.Program, t pars
 
 func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
 	start := time.Now()
-	exec := NewExecutor(r.client, r.opts.Timeout)
+	exec := NewExecutor(r.client, r.deviceCtx, func(newClient *probelink.Client) {
+		r.client = newClient
+	}, r.opts.Timeout, r.opts.Verbose)
 	for name, rec := range r.recipes {
 		exec.RegisterRecipe(rec)
 		_ = name
@@ -156,6 +164,20 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 	if vars != nil {
 		for k, v := range vars {
 			exec.SetVar(k, v)
+		}
+	}
+
+	// Start video recording if enabled
+	var recorder *VideoRecorder
+	if r.opts.VideoEnabled && r.deviceCtx != nil {
+		videoDir := r.opts.VideoDir
+		if videoDir == "" {
+			videoDir = "reports/videos"
+		}
+		recorder = NewVideoRecorder(r.deviceCtx.Manager, r.deviceCtx.Serial, r.deviceCtx.Platform, videoDir)
+		if err := recorder.Start(ctx, t.Name); err != nil {
+			fmt.Printf("    \033[33m⚠\033[0m  video recording failed to start: %v\n", err)
+			recorder = nil
 		}
 	}
 
@@ -176,6 +198,20 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 		runErr = exec.RunBody(ctx, t.Body)
 	}
 
+	// Auto-screenshot on failure
+	if runErr != nil && r.client != nil {
+		shotCtx, shotCancel := context.WithTimeout(ctx, 10*time.Second)
+		shotName := fmt.Sprintf("failure_%s", sanitizeName(t.Name))
+		path, shotErr := r.client.Screenshot(shotCtx, shotName)
+		shotCancel()
+		if shotErr != nil {
+			fmt.Printf("    \033[33m⚠\033[0m  failure screenshot: %v\n", shotErr)
+		} else if path != "" {
+			exec.AddArtifact(path)
+			fmt.Printf("    \033[36m📸\033[0m  failure screenshot saved: %s\n", path)
+		}
+	}
+
 	// Run on-failure hooks
 	if runErr != nil {
 		for _, hook := range prog.Hooks {
@@ -192,18 +228,35 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 		}
 	}
 
+	// Stop video recording and add as artifact
+	if recorder != nil {
+		videoPath, err := recorder.Stop(ctx)
+		if err != nil {
+			fmt.Printf("    \033[33m⚠\033[0m  video recording stop: %v\n", err)
+		} else if videoPath != "" {
+			absPath, _ := filepath.Abs(videoPath)
+			if absPath != "" {
+				exec.AddArtifact(absPath)
+			} else {
+				exec.AddArtifact(videoPath)
+			}
+			fmt.Printf("    \033[36m🎬\033[0m  video saved: %s\n", videoPath)
+		}
+	}
+
 	name := t.Name
 	if row >= 0 && t.Examples != nil {
 		name = fmt.Sprintf("%s [row %d]", t.Name, row+1)
 	}
 
 	return TestResult{
-		TestName: name,
-		File:     file,
-		Passed:   runErr == nil,
-		Duration: time.Since(start),
-		Error:    runErr,
-		Row:      row,
+		TestName:  name,
+		File:      file,
+		Passed:    runErr == nil,
+		Duration:  time.Since(start),
+		Error:     runErr,
+		Row:       row,
+		Artifacts: exec.Artifacts(),
 	}
 }
 
@@ -293,4 +346,73 @@ func CollectFiles(paths []string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// PullArtifacts copies on-device screenshot paths to localDir and rewrites
+// TestResult.Artifacts to local paths. For Android, uses `run-as` + cat to read
+// from the app's private cache. For iOS simulators, files are already on the host.
+func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext, localDir string) {
+	if dc == nil || dc.Manager == nil {
+		return
+	}
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		return
+	}
+	for i := range results {
+		var localPaths []string
+		for _, remotePath := range results[i].Artifacts {
+			// Skip artifacts that are already local files (e.g. video recordings)
+			if filepath.IsAbs(remotePath) {
+				if _, err := os.Stat(remotePath); err == nil {
+					localPaths = append(localPaths, remotePath)
+					continue
+				}
+			}
+			localPath := filepath.Join(localDir, filepath.Base(remotePath))
+			var pullErr error
+			if dc.Platform == device.PlatformIOS {
+				// iOS simulator: file is already on host, just copy it
+				pullErr = copyFile(remotePath, localPath)
+			} else {
+				// Android: screenshots are in the app's private cache dir,
+				// use run-as to read them since adb pull can't access private dirs
+				data, err := dc.Manager.ADB().Run(ctx, dc.Serial,
+					"exec-out", "run-as", dc.AppID, "cat", remotePath)
+				if err == nil && len(data) > 0 {
+					pullErr = os.WriteFile(localPath, data, 0644)
+				} else {
+					pullErr = err
+				}
+			}
+			if pullErr == nil {
+				absPath, _ := filepath.Abs(localPath)
+				if absPath != "" {
+					localPaths = append(localPaths, absPath)
+				} else {
+					localPaths = append(localPaths, localPath)
+				}
+			}
+		}
+		results[i].Artifacts = localPaths
+	}
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
+}
+
+var nonAlphaNum = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+
+// sanitizeName converts a test name into a safe filename component.
+func sanitizeName(name string) string {
+	s := nonAlphaNum.ReplaceAllString(name, "_")
+	s = strings.Trim(s, "_")
+	if len(s) > 60 {
+		s = s[:60]
+	}
+	return s
 }

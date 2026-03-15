@@ -282,6 +282,20 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseActionRotate()
 	case TOKEN_TOGGLE:
 		return p.parseActionToggle()
+	case TOKEN_RESTART:
+		return p.parseActionRestart()
+	case TOKEN_CLEAR_DATA:
+		p.advance()
+		p.consumeNewline()
+		return ActionStep{Verb: VerbClearAppData, Line: tok.Line}, nil
+	case TOKEN_ALLOW:
+		return p.parsePermissionAction(VerbAllowPermission)
+	case TOKEN_DENY:
+		return p.parsePermissionAction(VerbDenyPermission)
+	case TOKEN_GRANT:
+		return p.parseGrantRevokeAll(VerbGrantAllPerms)
+	case TOKEN_REVOKE:
+		return p.parseGrantRevokeAll(VerbRevokeAllPerms)
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -473,6 +487,59 @@ func (p *Parser) parseActionRotate() (Step, error) {
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbRotate, Name: name, Line: line}, nil
+}
+
+func (p *Parser) parseActionRestart() (Step, error) {
+	line := p.peek().Line
+	p.advance() // restart
+	p.skipFillers()
+	if p.peek().Type == TOKEN_APP || p.peekLiteral("app") {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbRestart, Line: line}, nil
+}
+
+// parsePermissionAction handles: allow permission "notifications" / deny permission "camera"
+func (p *Parser) parsePermissionAction(verb ActionVerb) (Step, error) {
+	line := p.peek().Line
+	p.advance() // allow/deny (compound already consumed "permission")
+	p.skipFillers()
+	// Optionally skip "permission" if it wasn't consumed by compound
+	if p.peek().Type == TOKEN_PERMISSION {
+		p.advance()
+	}
+	p.skipFillers()
+	// Read the permission name — must be a quoted string
+	if p.peek().Type != TOKEN_STRING {
+		return nil, fmt.Errorf("line %d: expected permission name (quoted string) after %s", line, verb)
+	}
+	name := p.peek().Literal
+	p.advance()
+	p.skipFillers()
+	// Skip trailing "permission" if present
+	if p.peek().Type == TOKEN_PERMISSION {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: verb, Name: name, Line: line}, nil
+}
+
+// parseGrantRevokeAll handles: grant all permissions / revoke all permissions
+func (p *Parser) parseGrantRevokeAll(verb ActionVerb) (Step, error) {
+	line := p.peek().Line
+	p.advance() // grant/revoke (compound already consumed "all permissions")
+	p.skipFillers()
+	// Skip "all" and "permissions" if not already consumed by compound
+	if p.peek().Type == TOKEN_ALL {
+		p.advance()
+	}
+	p.skipFillers()
+	if p.peek().Type == TOKEN_PERMISSION {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: verb, Line: line}, nil
 }
 
 func (p *Parser) parseActionToggle() (Step, error) {
@@ -963,13 +1030,17 @@ func (p *Parser) expect(tt TokenType) Token {
 }
 
 func (p *Parser) expectString(context string) string {
-	// Accept either a quoted string or a bare ident as a string value
+	// Accept either a quoted string, a bare ident, or a #id as a string value
 	tok := p.peek()
 	if tok.Type == TOKEN_STRING {
 		p.advance()
 		return tok.Literal
 	}
 	if tok.Type == TOKEN_IDENT {
+		p.advance()
+		return tok.Literal
+	}
+	if tok.Type == TOKEN_ID {
 		p.advance()
 		return tok.Literal
 	}

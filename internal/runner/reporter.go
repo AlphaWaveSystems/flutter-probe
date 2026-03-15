@@ -179,13 +179,14 @@ func (r *Reporter) writeJUnit(results []TestResult) error {
 // ---- JSON ----
 
 type jsonResult struct {
-	Name     string  `json:"name"`
-	File     string  `json:"file"`
-	Passed   bool    `json:"passed"`
-	Skipped  bool    `json:"skipped"`
-	Duration float64 `json:"duration_ms"`
-	Error    string  `json:"error,omitempty"`
-	Row      int     `json:"row,omitempty"`
+	Name      string   `json:"name"`
+	File      string   `json:"file"`
+	Passed    bool     `json:"passed"`
+	Skipped   bool     `json:"skipped"`
+	Duration  float64  `json:"duration_ms"`
+	Error     string   `json:"error,omitempty"`
+	Row       int      `json:"row,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty"`
 }
 
 type jsonReport struct {
@@ -204,12 +205,13 @@ func (r *Reporter) writeJSON(results []TestResult) error {
 	}
 	for _, res := range results {
 		jr := jsonResult{
-			Name:     res.TestName,
-			File:     res.File,
-			Passed:   res.Passed,
-			Skipped:  res.Skipped,
-			Duration: float64(res.Duration.Milliseconds()),
-			Row:      res.Row,
+			Name:      res.TestName,
+			File:      res.File,
+			Passed:    res.Passed,
+			Skipped:   res.Skipped,
+			Duration:  float64(res.Duration.Milliseconds()),
+			Row:       res.Row,
+			Artifacts: res.Artifacts,
 		}
 		if res.Error != nil {
 			jr.Error = res.Error.Error()

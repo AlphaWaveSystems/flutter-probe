@@ -10,12 +10,20 @@ import (
 
 // Config represents probe.yaml at the project root.
 type Config struct {
-	Project  ProjectConfig  `yaml:"project"`
-	Defaults DefaultsConfig `yaml:"defaults"`
-	Devices  []DeviceEntry  `yaml:"devices"`
-	Recipes  string         `yaml:"recipes_folder"`
-	Reports  string         `yaml:"reports_folder"`
+	Project  ProjectConfig     `yaml:"project"`
+	Defaults DefaultsConfig    `yaml:"defaults"`
+	Devices  []DeviceEntry     `yaml:"devices"`
+	Tools    ToolsConfig       `yaml:"tools"`
+	Recipes  string            `yaml:"recipes_folder"`
+	Reports  string            `yaml:"reports_folder"`
 	Env      map[string]string `yaml:"environment"`
+}
+
+// ToolsConfig holds paths to external tools. Empty means "find in PATH".
+// Useful for CI/CD pipelines or non-standard installations.
+type ToolsConfig struct {
+	ADB     string `yaml:"adb"`     // e.g. "/home/ci/android-sdk/platform-tools/adb"
+	Flutter string `yaml:"flutter"` // e.g. "/opt/flutter/bin/flutter"
 }
 
 type ProjectConfig struct {
@@ -24,11 +32,12 @@ type ProjectConfig struct {
 }
 
 type DefaultsConfig struct {
-	Platform        string        `yaml:"platform"`        // android | ios | both
-	Timeout         time.Duration `yaml:"timeout"`
-	Screenshots     string        `yaml:"screenshots"`     // always | on_failure | never
-	Video           bool          `yaml:"video"`
-	RetryFailedTests int          `yaml:"retry_failed_tests"`
+	Platform                string        `yaml:"platform"`                  // android | ios | both
+	Timeout                 time.Duration `yaml:"timeout"`
+	Screenshots             string        `yaml:"screenshots"`               // always | on_failure | never
+	Video                   bool          `yaml:"video"`
+	RetryFailedTests        int           `yaml:"retry_failed_tests"`
+	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
 }
 
 type DeviceEntry struct {

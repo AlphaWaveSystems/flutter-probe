@@ -27,15 +27,33 @@ type Device struct {
 	State    string // online | offline | booting
 }
 
+// ToolPaths holds configurable paths to external tools.
+// Empty strings mean "use the tool name from PATH".
+type ToolPaths struct {
+	ADB     string // path to adb binary
+	Flutter string // path to flutter binary
+}
+
 // Manager handles device discovery and lifecycle.
 type Manager struct {
 	adb    *ADB
 	simctl *ios.SimCtl
+	tools  ToolPaths
 }
 
-// NewManager creates a Manager using the ADB binary found in PATH.
+// NewManager creates a Manager using tools found in PATH.
 func NewManager() *Manager {
 	return &Manager{adb: NewADB(), simctl: ios.New()}
+}
+
+// NewManagerWithPaths creates a Manager with configurable tool paths.
+// This is useful for CI/CD environments or when tools are not in PATH.
+func NewManagerWithPaths(paths ToolPaths) *Manager {
+	return &Manager{
+		adb:    NewADBWithPath(paths.ADB),
+		simctl: ios.New(),
+		tools:  paths,
+	}
 }
 
 // List returns all connected Android emulators/devices and iOS simulators.
@@ -109,6 +127,56 @@ func (m *Manager) SimCtl() *ios.SimCtl {
 	return m.simctl
 }
 
+// ADB returns the underlying ADB wrapper for direct access.
+func (m *Manager) ADB() *ADB {
+	return m.adb
+}
+
+// InstallAndLaunchApp installs an app and launches it on the specified device.
+// For Android: installs APK, optionally grants all permissions, then launches.
+// For iOS: installs .app bundle, optionally grants all privacy services, then launches.
+func (m *Manager) InstallAndLaunchApp(ctx context.Context, serial string, platform Platform, appPath, appID string, grantPerms bool) error {
+	switch platform {
+	case PlatformAndroid:
+		fmt.Printf("  Installing %s on %s...\n", appPath, serial)
+		if err := m.adb.Install(ctx, serial, appPath); err != nil {
+			return fmt.Errorf("install: %w", err)
+		}
+		if grantPerms {
+			fmt.Printf("  Granting all permissions for %s...\n", appID)
+			for _, perms := range AndroidPermissions {
+				for _, perm := range perms {
+					_ = m.adb.GrantPermission(ctx, serial, appID, perm)
+				}
+			}
+		}
+		fmt.Printf("  Launching %s...\n", appID)
+		if err := m.adb.LaunchApp(ctx, serial, appID); err != nil {
+			return fmt.Errorf("launch: %w", err)
+		}
+
+	case PlatformIOS:
+		fmt.Printf("  Installing %s on %s...\n", appPath, serial)
+		if err := m.simctl.Install(ctx, serial, appPath); err != nil {
+			return fmt.Errorf("install: %w", err)
+		}
+		if grantPerms {
+			fmt.Printf("  Granting all permissions for %s...\n", appID)
+			for _, svc := range IOSPrivacyServices {
+				_ = m.simctl.GrantPrivacy(ctx, serial, appID, svc)
+			}
+		}
+		fmt.Printf("  Launching %s...\n", appID)
+		if err := m.simctl.Launch(ctx, serial, appID); err != nil {
+			return fmt.Errorf("launch: %w", err)
+		}
+
+	default:
+		return fmt.Errorf("unsupported platform: %s", platform)
+	}
+	return nil
+}
+
 // WaitForBoot polls until a device is online or the context is cancelled.
 func (m *Manager) WaitForBoot(ctx context.Context, serial string) error {
 	ticker := time.NewTicker(2 * time.Second)
@@ -152,7 +220,7 @@ func (m *Manager) ReadToken(ctx context.Context, serial string, timeout time.Dur
 	tCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(tCtx, "adb", "-s", serial, "logcat", "-s", "ProbeAgent:I")
+	cmd := exec.CommandContext(tCtx, m.adb.bin, "-s", serial, "logcat", "-s", "flutter:I")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", fmt.Errorf("device: logcat pipe: %w", err)
@@ -175,13 +243,17 @@ func (m *Manager) ReadToken(ctx context.Context, serial string, timeout time.Dur
 
 // RunFlutter launches flutter run with ProbeAgent in debug mode.
 func (m *Manager) RunFlutter(ctx context.Context, projectDir, serial string) (*exec.Cmd, error) {
+	flutterBin := "flutter"
+	if m.tools.Flutter != "" {
+		flutterBin = m.tools.Flutter
+	}
 	args := []string{
 		"run",
 		"--debug",
 		"-d", serial,
 		"--dart-define=PROBE_AGENT=true",
 	}
-	cmd := exec.CommandContext(ctx, "flutter", args...)
+	cmd := exec.CommandContext(ctx, flutterBin, args...)
 	cmd.Dir = projectDir
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("device: flutter run: %w", err)

@@ -262,6 +262,11 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		{[]string{"on", "failure"}, TOKEN_LIFECYCLE},
 		{[]string{"with", "examples"}, TOKEN_EXAMPLES},
 		{[]string{"go", "back"}, TOKEN_GO_BACK},
+		{[]string{"clear", "app", "data"}, TOKEN_CLEAR_DATA},
+		{[]string{"grant", "all", "permissions"}, TOKEN_GRANT},
+		{[]string{"revoke", "all", "permissions"}, TOKEN_REVOKE},
+		{[]string{"allow", "permission"}, TOKEN_ALLOW},
+		{[]string{"deny", "permission"}, TOKEN_DENY},
 	}
 
 	for _, c := range compounds {

@@ -1,97 +1,495 @@
 # FlutterProbe
 
-A high-performance local E2E testing system for Flutter mobile applications.
+A high-performance local E2E testing framework for Flutter mobile apps. Write tests in natural language, execute them with sub-50ms command round-trips via direct widget-tree access.
+
+```
+test "user can log in"
+  open the app
+  see "Email"
+  type "user@example.com" into "Email"
+  type "secret" into "Password"
+  tap "Sign In"
+  see "Dashboard"
+```
+
+## How It Works
+
+FlutterProbe has two components:
+
+1. **`probe` CLI** (Go) — parses `.probe` test files, manages devices, orchestrates runs, generates reports
+2. **`probe_agent`** (Dart) — embedded in your Flutter app as a dev dependency; runs a WebSocket server on port 8686 and executes commands directly against the live widget tree
+
+```
+┌──────────────┐     WebSocket / JSON-RPC 2.0      ┌─────────────────┐
+│  probe CLI   │ ──────────────────────────────────▶│  ProbeAgent     │
+│  (your Mac)  │   localhost:8686                   │  (in Flutter app│
+│              │   • tap, type, see, wait, swipe    │   on device)    │
+│  parses .probe│   • screenshot, dump_tree         │                 │
+│  manages devices│  • one-time token auth          │  walks widget   │
+│  generates reports│                               │  tree directly  │
+└──────────────┘                                    └─────────────────┘
+```
+
+**Android**: CLI → `adb forward tcp:8686 tcp:8686` → WebSocket → ProbeAgent
+**iOS Simulator**: CLI → `localhost:8686` directly (simulator shares host network)
 
 ## Quick Start
 
-```bash
-# 1. Build the CLI
-make build
+### 1. Build the CLI
 
-# 2. Scaffold a new Flutter project
+```bash
+git clone <this-repo>
+cd FlutterProbe
+make build          # outputs bin/probe
+# or: make install  # installs to $GOPATH/bin
+```
+
+### 2. Add ProbeAgent to your Flutter app
+
+In your app's `pubspec.yaml`:
+
+```yaml
+dev_dependencies:
+  probe_agent:
+    path: /path/to/FlutterProbe/probe_agent
+```
+
+Then in your `lib/main.dart`:
+
+```dart
+import 'package:probe_agent/probe_agent.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const probeEnabled = bool.fromEnvironment('PROBE_AGENT', defaultValue: false);
+  if (probeEnabled) {
+    await ProbeAgent.start();
+  }
+
+  runApp(const MyApp());
+}
+```
+
+> **Important**: The `PROBE_AGENT` flag is compiled into the binary via `--dart-define`. This means you must build the app with the flag — you cannot toggle it at runtime.
+
+### 3. Initialize your project
+
+```bash
 cd your-flutter-project
 probe init
-
-# 3. Add the ProbeAgent to your Flutter app (dev dependency)
-# In pubspec.yaml:
-#   dev_dependencies:
-#     probe_agent:
-#       path: /path/to/flutterprobe/probe_agent
-
-# 4. Wrap your main() in debug mode
-# lib/main_debug.dart:
-#   import 'package:probe_agent/probe_agent.dart';
-#   void main() async {
-#     WidgetsFlutterBinding.ensureInitialized();
-#     await ProbeAgent.start();
-#     runApp(const MyApp());
-#   }
-
-# 5. Start your app on an emulator
-flutter run --dart-define=PROBE_AGENT=true -d emulator-5554
-
-# 6. Run your tests
-probe test
 ```
 
-## Example Test
+This creates `probe.yaml` and a `tests/` directory with sample files.
+
+### 4. Configure `probe.yaml`
+
+```yaml
+project:
+  name: "My App"
+  app: com.example.myapp          # bundle ID (iOS) or package name (Android)
+
+defaults:
+  platform: ios                    # android | ios | both
+  timeout: 30s
+  screenshots: on_failure          # always | on_failure | never
+  video: false
+  retry_failed_tests: 1
+
+devices:
+  - name: iPhone 16 Pro
+    serial: <UDID>                 # from `xcrun simctl list devices`
+  - name: Pixel 7
+    serial: emulator-5554          # or `auto`
+
+recipes_folder: tests/recipes
+reports_folder: reports
+
+environment:
+  TEST_USER: "admin@test.com"
+  API_BASE: "http://localhost:8080"
+```
+
+### 5. Build and run your app with ProbeAgent
+
+**iOS Simulator:**
+
+```bash
+# Build for simulator with ProbeAgent enabled
+flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
+
+# Install and launch
+xcrun simctl install <UDID> build/ios/iphonesimulator/YourApp.app
+xcrun simctl launch <UDID> com.example.myapp
+```
+
+Or use `xcodebuild` for more control (e.g., when Xcode SDK and simulator iOS versions differ):
+
+```bash
+xcodebuild -workspace ios/Runner.xcworkspace \
+  -scheme Runner \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<UDID>' \
+  DART_DEFINES=$(echo 'PROBE_AGENT=true' | base64) \
+  -derivedDataPath build/ios \
+  build
+```
+
+**Android Emulator:**
+
+```bash
+flutter build apk --debug --dart-define=PROBE_AGENT=true
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+adb shell am start -n com.example.myapp/.MainActivity
+```
+
+### 6. Run tests
+
+```bash
+# Run all tests
+probe test tests/
+
+# Run a specific file
+probe test tests/smoke/login.probe
+
+# Run tests by tag
+probe test tests/ --tag smoke
+
+# Run against a specific device
+probe test tests/ --device <UDID-or-serial>
+
+# Specify timeout per step
+probe test tests/ --timeout 60s
+
+# JUnit output for CI
+probe test tests/ --format junit --output reports/results.xml
+
+# Watch mode (re-runs on file change)
+probe test tests/ --watch
+
+# Shard tests for parallel CI
+probe test tests/ --shard 1/3
+```
+
+## Writing Tests
+
+### ProbeScript Syntax
+
+ProbeScript uses natural language with indent-based blocks (like Python). Save files as `.probe`.
+
+#### Basic test
 
 ```
-test "a user can sign in"
+test "user sees welcome screen"
+  open the app
+  wait 3 seconds
+  see "Welcome"
+  don't see "Error"
+```
+
+#### Tags
+
+```
+test "critical login flow"
+  @smoke @critical
+  open the app
+  tap "Sign In"
+  see "Dashboard"
+```
+
+#### Text input
+
+```
+type "hello@world.com" into "Email"
+type "secret123" into the "Password" field
+```
+
+#### Selectors
+
+ProbeScript supports multiple selector strategies:
+
+| Selector | Syntax | Example |
+|----------|--------|---------|
+| Text match | `"text"` | `tap "Submit"` |
+| Widget key | `#keyName` | `tap #loginButton` |
+| Type | `<TypeName>` | `tap <ElevatedButton>` |
+| Ordinal | `1st "Item"`, `2nd "Item"` | `tap 2nd "Add"` |
+| Positional | `"text" in "Container"` | `tap "Edit" in "Settings"` |
+
+#### Assertions
+
+```
+see "Dashboard"                    # text is visible
+don't see "Error"                  # text is NOT visible
+see 3 "Item"                       # exactly 3 matches
+see "Submit" is enabled            # widget state check
+see "Terms" is checked
+see "Price" contains "$9.99"       # partial text match
+```
+
+#### Gestures
+
+```
+tap "Button"
+double tap "Image"
+long press "Item"
+swipe left
+swipe up on "Card"
+scroll down
+scroll up on "ListView"
+drag "Item A" to "Item B"
+```
+
+#### Wait commands
+
+```
+wait 5 seconds
+wait until "Dashboard" appears
+wait until "Loading" disappears
+wait for the page to load
+wait for network idle
+```
+
+#### Conditionals
+
+```
+if "Accept Cookies" appears
+  tap "Accept Cookies"
+```
+
+With else:
+
+```
+if "Welcome Back" appears
+  tap "Continue"
+else
+  tap "Sign In"
+```
+
+#### Loops
+
+```
+repeat 3 times
+  swipe left
+  wait 1 second
+```
+
+#### Recipes (reusable steps)
+
+Define in a separate file (e.g., `tests/recipes/auth.probe`):
+
+```
+recipe "log in as" (email, password)
   open the app
   wait until "Sign In" appears
-  tap on "Sign In"
-  type "user@example.com" into the "Email" field
-  type "mypassword" into the "Password" field
+  tap "Sign In"
+  type <email> into "Email"
+  type <password> into "Password"
   tap "Continue"
   see "Dashboard"
 ```
 
-## Commands
+Use in tests:
+
+```
+use "recipes/auth.probe"
+
+test "logged-in user can view profile"
+  log in as "user@test.com" with "secret123"
+  tap "Profile"
+  see "user@test.com"
+```
+
+#### Data-driven tests
+
+```
+test "login validation"
+  open the app
+  type <email> into "Email"
+  type <password> into "Password"
+  tap "Continue"
+  see <expected>
+
+with examples:
+  email              password     expected
+  "user@test.com"    "pass123"    "Dashboard"
+  ""                 "pass123"    "Email is required"
+  "user@test.com"    ""           "Password is required"
+```
+
+#### Hooks
+
+```
+before each
+  open the app
+  wait for the page to load
+
+after each
+  take screenshot "after_test"
+
+on failure
+  take screenshot "failure"
+  save logs
+  dump tree
+```
+
+#### HTTP mocking
+
+```
+when the app calls POST "/api/auth/login"
+  respond with 503 and body "{ \"error\": \"Service Unavailable\" }"
+```
+
+#### Dart escape hatch
+
+```
+dart:
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.clear();
+```
+
+#### App lifecycle commands
+
+```
+clear app data                     # wipe all app data (SharedPreferences, databases, files) and relaunch
+restart the app                    # force-stop and relaunch (preserves data)
+```
+
+`clear app data` uses `pm clear` on Android and container deletion on iOS. It requires the `-y` flag or interactive confirmation since it's a destructive operation. After clearing, the app is relaunched and the WebSocket connection is re-established automatically.
+
+#### Permission handling
+
+OS-level permission dialogs (notifications, camera, location) are outside the Flutter widget tree, so the Dart agent can't interact with them. FlutterProbe handles these at the platform level via ADB `pm grant`/`pm revoke` (Android) or `simctl privacy` (iOS):
+
+```
+allow permission "notifications"   # grant notification permission
+deny permission "camera"           # revoke camera permission
+grant all permissions              # grant all known runtime permissions
+revoke all permissions             # revoke all permissions
+```
+
+Available permission names: `notifications`, `camera`, `location`, `microphone`, `storage`, `contacts`, `phone`, `calendar`, `sms`, `bluetooth`
+
+When using `-y` flag (or `grant_permissions_on_clear: true` in `probe.yaml`), all permissions are automatically granted after `clear app data` to prevent permission dialogs from blocking tests.
+
+#### Other commands
+
+```
+take screenshot "checkout_page"    # saves PNG to screenshots folder
+dump tree                          # dumps widget tree (for debugging)
+save logs                          # saves app logs
+go back                            # device back button
+rotate landscape                   # rotate device
+log "checkpoint reached"           # print to test output
+pause                              # 1-second pause
+```
+
+## iOS Simulator Setup Notes
+
+- The iOS simulator shares `localhost` with the host Mac — no port forwarding needed
+- ProbeAgent writes a token file to `~/Library/Developer/CoreSimulator/Devices/<UDID>/data/tmp/probe/token` and also prints `PROBE_TOKEN=<token>` to stdout periodically
+- The CLI reads the token via the file (fast path) or by streaming simulator logs (fallback)
+- **Native permission dialogs** are handled via `simctl privacy` — use `allow permission "notifications"` in your test or `-y` flag to auto-grant all permissions after `clear app data`
+
+## Android Emulator Setup Notes
+
+- The CLI uses `adb forward tcp:8686 tcp:8686` to bridge the host and emulator network
+- Token is extracted from `adb logcat` output matching `PROBE_TOKEN=`
+- Use `probe device list` to see connected devices
+- Use `probe device start --platform android` to launch an emulator
+
+## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `probe init` | Scaffold probe.yaml and tests/ directory |
-| `probe test` | Run all .probe files |
-| `probe test <file>` | Run a specific file |
-| `probe test --tag smoke` | Run tests by tag |
-| `probe test --watch` | Watch mode |
-| `probe test --format junit -o results.xml` | JUnit output |
-| `probe lint tests/` | Validate .probe files |
-| `probe device list` | List connected devices |
-| `probe device start --platform android` | Start an emulator |
+| `probe init` | Scaffold `probe.yaml` and `tests/` directory |
+| `probe test [path]` | Run `.probe` test files |
+| `probe test --tag <tag>` | Run tests matching a tag |
+| `probe test --watch` | Watch mode — re-runs on file change |
+| `probe test --format junit -o results.xml` | JUnit XML output |
+| `probe test --format json -o results.json` | JSON output (for HTML reports) |
+| `probe test -y` | Auto-confirm destructive ops + auto-grant permissions |
+| `probe test --adb /path/to/adb` | Override ADB binary path |
+| `probe test --flutter /path/to/flutter` | Override Flutter binary path |
+| `probe test --shard N/M` | Run shard N of M (for parallel CI) |
+| `probe lint [path]` | Validate `.probe` files for syntax errors |
+| `probe device list` | List connected devices/simulators |
+| `probe device start` | Start an emulator/simulator |
+| `probe record` | Record interactions as ProbeScript |
+| `probe report` | Generate HTML report from test results |
+| `probe migrate` | Convert Maestro YAML flows to ProbeScript |
+| `probe generate` | AI-assisted test generation |
 
-## Architecture
+## Custom Plugins
 
+Define custom commands via YAML in the `plugins/` directory:
+
+```yaml
+# plugins/auth_bypass.yaml
+command: "bypass login as"
+method: "probe.plugin.auth_bypass"
+description: "Authenticate directly using a dev token"
+params:
+  token: "${1}"
 ```
-probe CLI (Go)  ──WebSocket/JSON-RPC──▶  ProbeAgent (Dart)
-     │                                         │
-     │  parses .probe files                    │  queries widget tree
-     │  manages devices via ADB                │  executes actions
-     │  generates reports                      │  triple-signal sync
-```
+
+These dispatch to corresponding Dart handlers in the ProbeAgent.
+
+## CI / GitHub Actions
+
+The repo includes a GitHub Actions workflow (`.github/workflows/e2e.yml`) that:
+
+1. Builds the `probe` CLI
+2. Runs Go unit tests with coverage
+3. Runs Android E2E tests across API levels 31 and 34, sharded 3 ways
+4. Runs iOS E2E tests on macOS runners
+5. Generates an HTML report
+
+A Docker setup is also available in `docker/` for self-hosted CI with Android emulators.
+
+## VS Code Extension
+
+A VS Code extension is included in `vscode/` providing:
+
+- ProbeScript syntax highlighting
+- Code snippets for common patterns
+- Commands: Run Test, Run File, Lint File, Start Recording, Open Studio
 
 ## Project Structure
 
 ```
-flutterprobe/
-├── cmd/probe/          # CLI entry point
+FlutterProbe/
+├── cmd/probe/            # CLI entry point (main.go)
 ├── internal/
-│   ├── cli/            # cobra commands (init, test, lint, device, report)
-│   ├── config/         # probe.yaml parsing
-│   ├── parser/         # ProbeScript lexer + AST + parser
-│   ├── probelink/      # JSON-RPC 2.0 WebSocket client
-│   ├── device/         # ADB + emulator management
-│   └── runner/         # test execution, executor, reporter
-└── probe_agent/        # Dart package (on-device agent)
-    └── lib/
-        └── src/
-            ├── agent.dart      # top-level API
-            ├── server.dart     # WebSocket server
-            ├── executor.dart   # command dispatcher
-            ├── finder.dart     # widget selector engine
-            ├── sync.dart       # triple-signal synchronization
-            └── protocol.dart   # JSON-RPC types
+│   ├── ai/               # Self-healing selectors (fuzzy match against widget tree)
+│   ├── cli/              # Cobra command definitions
+│   ├── config/           # probe.yaml parsing
+│   ├── device/           # ADB + Android emulator management
+│   ├── ios/              # iOS simulator management (simctl)
+│   ├── migrate/          # Maestro YAML → ProbeScript converter
+│   ├── parser/           # ProbeScript lexer + recursive-descent parser → AST
+│   ├── plugin/           # YAML-based custom command system
+│   ├── probelink/        # JSON-RPC 2.0 WebSocket client
+│   ├── report/           # HTML report generation
+│   ├── runner/           # Test orchestration, executor, reporter
+│   ├── studio/           # Interactive test studio
+│   └── visual/           # Screenshot-based visual regression testing
+├── probe_agent/          # Dart package (on-device agent)
+│   └── lib/src/
+│       ├── agent.dart    # Top-level ProbeAgent.start() API
+│       ├── server.dart   # WebSocket server + token auth
+│       ├── executor.dart # Command dispatcher (tap, type, see, etc.)
+│       ├── finder.dart   # Widget selector engine (text, key, type, ordinal, positional)
+│       ├── sync.dart     # Triple-signal sync (frames + animations + microtasks)
+│       ├── gestures.dart # Gesture handlers
+│       └── protocol.dart # JSON-RPC types
+├── plugins/              # Custom command definitions (YAML)
+├── tests/                # Example .probe test files
+├── docker/               # CI Docker setup for Android emulators
+├── vscode/               # VS Code extension for ProbeScript
+├── .github/workflows/    # GitHub Actions CI pipeline
+└── Makefile              # Build, test, lint, clean targets
 ```
 
 ## Performance Targets
@@ -102,3 +500,10 @@ flutterprobe/
 | CLI cold start | < 100ms |
 | 50-test suite | < 90 seconds |
 | Flake rate | < 0.5% |
+
+## Requirements
+
+- Go 1.23+
+- Dart 3.3+ / Flutter 3.19+
+- Android: ADB + Android SDK
+- iOS: Xcode + `xcrun simctl`

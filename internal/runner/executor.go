@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flutterprobe/probe/internal/parser"
@@ -11,19 +12,27 @@ import (
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
 type Executor struct {
-	client  *probelink.Client
-	timeout time.Duration
-	recipes map[string]parser.RecipeDef // loaded recipes by name
-	vars    map[string]string            // variable scope for data-driven tests
+	client      *probelink.Client
+	deviceCtx   *DeviceContext                // nil in dry-run mode
+	onReconnect func(*probelink.Client)       // callback to update Runner's client ref
+	timeout     time.Duration
+	recipes     map[string]parser.RecipeDef   // loaded recipes by name
+	vars        map[string]string             // variable scope for data-driven tests
+	verbose     bool
+	depth       int      // indentation depth for verbose logging
+	artifacts   []string // collected screenshot paths (on-device)
 }
 
 // NewExecutor creates an Executor.
-func NewExecutor(client *probelink.Client, timeout time.Duration) *Executor {
+func NewExecutor(client *probelink.Client, deviceCtx *DeviceContext, onReconnect func(*probelink.Client), timeout time.Duration, verbose bool) *Executor {
 	return &Executor{
-		client:  client,
-		timeout: timeout,
-		recipes: make(map[string]parser.RecipeDef),
-		vars:    make(map[string]string),
+		client:      client,
+		deviceCtx:   deviceCtx,
+		onReconnect: onReconnect,
+		timeout:     timeout,
+		recipes:     make(map[string]parser.RecipeDef),
+		vars:        make(map[string]string),
+		verbose:     verbose,
 	}
 }
 
@@ -37,6 +46,16 @@ func (e *Executor) SetVar(key, value string) {
 	e.vars[key] = value
 }
 
+// Artifacts returns the list of screenshot paths collected during execution.
+func (e *Executor) Artifacts() []string {
+	return e.artifacts
+}
+
+// AddArtifact appends a path to the collected artifacts.
+func (e *Executor) AddArtifact(path string) {
+	e.artifacts = append(e.artifacts, path)
+}
+
 // RunBody executes a slice of steps sequentially.
 func (e *Executor) RunBody(ctx context.Context, steps []parser.Step) error {
 	for _, step := range steps {
@@ -48,29 +67,141 @@ func (e *Executor) RunBody(ctx context.Context, steps []parser.Step) error {
 }
 
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
-	stepCtx, cancel := context.WithTimeout(ctx, e.timeout)
+	// Use a longer timeout for restart/clear — they kill the app and reconnect
+	stepTimeout := e.timeout
+	if a, ok := step.(parser.ActionStep); ok {
+		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData {
+			stepTimeout = 90 * time.Second
+		}
+	}
+	stepCtx, cancel := context.WithTimeout(ctx, stepTimeout)
 	defer cancel()
+
+	start := time.Now()
+	desc := e.stepDescription(step)
+	var err error
 
 	switch s := step.(type) {
 	case parser.ActionStep:
-		return e.runAction(stepCtx, s)
+		err = e.runAction(stepCtx, s)
 	case parser.AssertStep:
-		return e.runAssert(stepCtx, s)
+		err = e.runAssert(stepCtx, s)
 	case parser.WaitStep:
-		return e.runWait(stepCtx, s)
+		err = e.runWait(stepCtx, s)
 	case parser.ConditionalStep:
-		return e.runConditional(ctx, s) // pass parent ctx — conditional manages its own timeout
+		err = e.runConditional(ctx, s) // pass parent ctx — conditional manages its own timeout
 	case parser.LoopStep:
-		return e.runLoop(ctx, s)
+		err = e.runLoop(ctx, s)
 	case parser.DartBlock:
-		return e.runDart(stepCtx, s)
+		err = e.runDart(stepCtx, s)
 	case parser.MockBlock:
-		return e.runMock(stepCtx, s)
+		err = e.runMock(stepCtx, s)
 	case parser.RecipeCall:
-		return e.runRecipeCall(ctx, s)
-	default:
-		return nil
+		err = e.runRecipeCall(ctx, s)
 	}
+
+	if e.verbose && desc != "" {
+		elapsed := time.Since(start)
+		indent := strings.Repeat("  ", e.depth)
+		status := "\033[32m✓\033[0m"
+		if err != nil {
+			status = "\033[31m✗\033[0m"
+		}
+		fmt.Printf("    %s%s %s \033[2m(%.1fs)\033[0m\n", indent, status, desc, elapsed.Seconds())
+	}
+
+	return err
+}
+
+// stepDescription returns a human-readable description of the step.
+func (e *Executor) stepDescription(step parser.Step) string {
+	switch s := step.(type) {
+	case parser.ActionStep:
+		switch s.Verb {
+		case parser.VerbTap:
+			if s.Sel != nil {
+				return fmt.Sprintf("tap %q", s.Sel.Text)
+			}
+		case parser.VerbDoubleTap:
+			if s.Sel != nil {
+				return fmt.Sprintf("double tap %q", s.Sel.Text)
+			}
+		case parser.VerbType:
+			target := ""
+			if s.Sel != nil {
+				target = fmt.Sprintf(" into %q", s.Sel.Text)
+			}
+			return fmt.Sprintf("type %q%s", e.resolve(s.Text), target)
+		case parser.VerbClear:
+			if s.Sel != nil {
+				return fmt.Sprintf("clear %q", s.Sel.Text)
+			}
+		case parser.VerbSwipe:
+			return fmt.Sprintf("swipe %s", s.Direction)
+		case parser.VerbScroll:
+			return fmt.Sprintf("scroll %s", s.Direction)
+		case parser.VerbOpen:
+			return "open the app"
+		case parser.VerbClose:
+			return "close the app"
+		case parser.VerbGoBack:
+			return "go back"
+		case parser.VerbTakeShot:
+			return fmt.Sprintf("screenshot %q", s.Name)
+		case parser.VerbDumpTree:
+			return "dump tree"
+		case parser.VerbLog:
+			return fmt.Sprintf("log %q", s.Name)
+		case parser.VerbPause:
+			return "pause"
+		case parser.VerbRestart:
+			return "restart the app"
+		case parser.VerbClearAppData:
+			return "clear app data"
+		case parser.VerbAllowPermission:
+			return fmt.Sprintf("allow permission %q", s.Name)
+		case parser.VerbDenyPermission:
+			return fmt.Sprintf("deny permission %q", s.Name)
+		case parser.VerbGrantAllPerms:
+			return "grant all permissions"
+		case parser.VerbRevokeAllPerms:
+			return "revoke all permissions"
+		case parser.VerbLongPress:
+			if s.Sel != nil {
+				return fmt.Sprintf("long press %q", s.Sel.Text)
+			}
+		default:
+			return string(s.Verb)
+		}
+	case parser.AssertStep:
+		neg := ""
+		if s.Negated {
+			neg = "don't "
+		}
+		return fmt.Sprintf("%ssee %q", neg, s.Sel.Text)
+	case parser.WaitStep:
+		switch s.Kind {
+		case parser.WaitDuration:
+			return fmt.Sprintf("wait %.0f seconds", s.Duration)
+		case parser.WaitAppears:
+			return fmt.Sprintf("wait until %q appears", s.Target)
+		case parser.WaitDisappears:
+			return fmt.Sprintf("wait until %q disappears", s.Target)
+		case parser.WaitPageLoad:
+			return "wait for page to load"
+		case parser.WaitNetworkIdle:
+			return "wait for network idle"
+		default:
+			return "wait"
+		}
+	case parser.ConditionalStep:
+		return fmt.Sprintf("if %q appears", s.Condition)
+	case parser.RecipeCall:
+		return fmt.Sprintf("%s", s.Name)
+	case parser.LoopStep:
+		return fmt.Sprintf("repeat %d times", s.Count)
+	}
+	return ""
 }
 
 // ---- Action execution ----
@@ -162,7 +293,10 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.DeviceAction(ctx, "shake", "")
 
 	case parser.VerbTakeShot:
-		_, err := e.client.Screenshot(ctx, a.Name)
+		path, err := e.client.Screenshot(ctx, a.Name)
+		if err == nil && path != "" {
+			e.artifacts = append(e.artifacts, path)
+		}
 		return err
 
 	case parser.VerbDumpTree:
@@ -179,6 +313,66 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	case parser.VerbLog:
 		fmt.Printf("  [log] %s\n", a.Name)
 		return nil
+
+	case parser.VerbRestart:
+		if e.deviceCtx == nil {
+			return fmt.Errorf("restart the app: no device context (dry-run or missing config)")
+		}
+		e.client.Close()
+		if err := e.deviceCtx.RestartApp(ctx); err != nil {
+			return err
+		}
+		newClient, err := e.deviceCtx.Reconnect(ctx)
+		if err != nil {
+			return fmt.Errorf("restart the app: %w", err)
+		}
+		e.client = newClient
+		if e.onReconnect != nil {
+			e.onReconnect(newClient)
+		}
+		return nil
+
+	case parser.VerbClearAppData:
+		if e.deviceCtx == nil {
+			return fmt.Errorf("clear app data: no device context (dry-run or missing config)")
+		}
+		e.client.Close()
+		if err := e.deviceCtx.ClearAppData(ctx); err != nil {
+			return err
+		}
+		newClient, err := e.deviceCtx.Reconnect(ctx)
+		if err != nil {
+			return fmt.Errorf("clear app data: %w", err)
+		}
+		e.client = newClient
+		if e.onReconnect != nil {
+			e.onReconnect(newClient)
+		}
+		return nil
+
+	case parser.VerbAllowPermission:
+		if e.deviceCtx == nil {
+			return fmt.Errorf("allow permission: no device context (dry-run or missing config)")
+		}
+		return e.deviceCtx.AllowPermission(ctx, a.Name)
+
+	case parser.VerbDenyPermission:
+		if e.deviceCtx == nil {
+			return fmt.Errorf("deny permission: no device context (dry-run or missing config)")
+		}
+		return e.deviceCtx.DenyPermission(ctx, a.Name)
+
+	case parser.VerbGrantAllPerms:
+		if e.deviceCtx == nil {
+			return fmt.Errorf("grant all permissions: no device context (dry-run or missing config)")
+		}
+		return e.deviceCtx.GrantAllPermissions(ctx)
+
+	case parser.VerbRevokeAllPerms:
+		if e.deviceCtx == nil {
+			return fmt.Errorf("revoke all permissions: no device context (dry-run or missing config)")
+		}
+		return e.deviceCtx.RevokeAllPermissions(ctx)
 	}
 
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)
@@ -233,11 +427,15 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 
 func (e *Executor) runConditional(ctx context.Context, c parser.ConditionalStep) error {
 	// Check visibility with a short timeout
-	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
+	sel := probelink.SelectorParam{Kind: "text", Text: c.Condition}
+	if strings.HasPrefix(c.Condition, "#") {
+		sel = probelink.SelectorParam{Kind: "id", Text: c.Condition}
+	}
 	err := e.client.See(checkCtx, probelink.SeeParams{
-		Selector: probelink.SelectorParam{Kind: "text", Text: c.Condition},
+		Selector: sel,
 	})
 	if err == nil {
 		// condition is visible — run then branch
@@ -292,7 +490,10 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 			e.vars[param] = rc.Args[i]
 		}
 	}
-	return e.RunBody(ctx, recipe.Body)
+	e.depth++
+	err := e.RunBody(ctx, recipe.Body)
+	e.depth--
+	return err
 }
 
 // ---- Helpers ----

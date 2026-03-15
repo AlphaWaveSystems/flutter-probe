@@ -1,15 +1,15 @@
+import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_test/flutter_test.dart' show find, CommonFinders;
 
-/// ProbeFinder translates ProbeLink SelectorParam JSON into Flutter finders.
+/// ProbeFinder translates ProbeLink SelectorParam JSON into Flutter elements
+/// by walking the live widget tree. Does NOT use flutter_test finders since
+/// those require TestWidgetsFlutterBinding.
 class ProbeFinder {
   ProbeFinder._();
   static final ProbeFinder instance = ProbeFinder._();
 
-  /// Returns a [Finder] for the given selector map.
-  ///
-  /// Selector kinds: text | id | type | ordinal | positional
-  Finder forSelector(Map<String, dynamic> sel) {
+  /// Returns all [Element]s matching the given selector map.
+  List<Element> findElements(Map<String, dynamic> sel) {
     final kind = sel['kind'] as String? ?? 'text';
     final text = sel['text'] as String? ?? '';
     final ordinal = (sel['ordinal'] as num?)?.toInt() ?? 1;
@@ -17,78 +17,110 @@ class ProbeFinder {
 
     switch (kind) {
       case 'text':
-        return _byText(text);
+        return _findByText(text);
 
       case 'id':
-        // Strip leading #
         final key = text.startsWith('#') ? text.substring(1) : text;
-        return find.byKey(ValueKey(key));
+        return _findByKey(key);
 
       case 'type':
-        // Match by widget type name using a predicate
-        return find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == text,
-          description: 'widget of type $text',
-        );
+        return _findByType(text);
 
       case 'ordinal':
-        // e.g. 2nd "Add to Cart" button
-        final base = _byText(text);
-        return _atIndex(base, ordinal - 1); // ordinal is 1-based
+        final matches = _findByText(text);
+        if (ordinal > 0 && ordinal <= matches.length) {
+          return [matches[ordinal - 1]];
+        }
+        return [];
 
       case 'positional':
-        // "text" in "container"
         if (container.isNotEmpty) {
-          final containerFinder = _byText(container);
-          return find.descendant(
-            of: containerFinder,
-            matching: _byText(text),
-          );
+          final containers = _findByText(container);
+          if (containers.isEmpty) return [];
+          // Find text within the container element's subtree
+          final results = <Element>[];
+          for (final c in containers) {
+            _visitElement(c, (e) {
+              if (_matchesText(e.widget, text)) {
+                results.add(e);
+              }
+            });
+          }
+          return results;
         }
-        return _byText(text);
+        return _findByText(text);
 
       default:
-        return _byText(text);
+        return _findByText(text);
     }
   }
 
-  /// Finds the widget at [index] within [base].
-  Finder _atIndex(Finder base, int index) {
-    return find.byWidgetPredicate(
-      (widget) {
-        final matches = base.evaluate().toList();
-        if (index >= matches.length) return false;
-        final target = matches[index];
-        return base.evaluate().any((e) => e == target && e.widget == widget);
-      },
-      description: 'element at index $index of $base',
-    );
+  List<Element> _findByText(String text) {
+    final results = <Element>[];
+    walkTree((e) {
+      if (_matchesText(e.widget, text)) {
+        results.add(e);
+      }
+    });
+    return results;
   }
 
-  Finder _byText(String text) {
-    // Try exact text first, then substring
-    return find.byWidgetPredicate(
-      (widget) {
-        if (widget is Text) {
-          return widget.data == text ||
-              (widget.data?.contains(text) ?? false);
+  List<Element> _findByKey(String key) {
+    final results = <Element>[];
+    final targetKey = ValueKey(key);
+    walkTree((e) {
+      if (e.widget.key == targetKey) {
+        results.add(e);
+        return;
+      }
+      // Also match Semantics.identifier
+      if (e.widget is Semantics) {
+        final sem = e.widget as Semantics;
+        if (sem.properties.identifier == key) {
+          results.add(e);
         }
-        if (widget is RichText) {
-          return widget.text.toPlainText().contains(text);
-        }
-        if (widget is EditableText) {
-          return widget.controller.text.contains(text);
-        }
-        return false;
-      },
-      description: 'text "$text"',
-    );
+      }
+    });
+    return results;
+  }
+
+  List<Element> _findByType(String typeName) {
+    final results = <Element>[];
+    walkTree((e) {
+      if (e.widget.runtimeType.toString() == typeName) {
+        results.add(e);
+      }
+    });
+    return results;
+  }
+
+  bool _matchesText(Widget widget, String text) {
+    if (widget is Text) {
+      return widget.data == text || (widget.data?.contains(text) ?? false);
+    }
+    if (widget is RichText) {
+      return widget.text.toPlainText().contains(text);
+    }
+    if (widget is EditableText) {
+      return widget.controller.text.contains(text);
+    }
+    return false;
+  }
+
+  void walkTree(void Function(Element) visitor) {
+    final rootElement = WidgetsBinding.instance.rootElement;
+    if (rootElement == null) return;
+    _visitElement(rootElement, visitor);
+  }
+
+  void _visitElement(Element element, void Function(Element) visitor) {
+    visitor(element);
+    element.visitChildren((child) => _visitElement(child, visitor));
   }
 
   /// Returns all element info for a given selector (used by dump_tree).
   List<Map<String, dynamic>> findAll(Map<String, dynamic> sel) {
-    final finder = forSelector(sel);
-    final elements = finder.evaluate().toList();
+    final elements = findElements(sel);
     return elements.map((e) => _elementInfo(e)).toList();
   }
 

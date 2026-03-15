@@ -170,6 +170,7 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
 .error-msg{background:#1a0808;border:1px solid #3a1818;border-radius:6px;padding:12px;font-family:monospace;font-size:13px;color:#f88;margin-top:10px;white-space:pre-wrap}
 .shots{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .shots img{max-height:160px;border-radius:6px;border:1px solid #333}
+.shots video{max-height:160px;border-radius:6px;border:1px solid #333}
 .bar{height:4px;background:#1a1a1a;border-radius:2px;margin-bottom:32px;overflow:hidden}
 .bar-pass{height:100%;background:#4caf81;transition:width .5s}
 .empty{text-align:center;color:#444;padding:60px;font-size:16px}
@@ -220,7 +221,14 @@ function render(results) {
   list.innerHTML = results.map((r, i) => {
     const cls = r.skipped ? 'skip' : r.passed ? 'pass' : 'fail';
     const dot = cls + '-dot';
-    const shots = (r.shots||[]).map(s => '<img src="file://'+s+'" loading="lazy">').join('');
+    const shots = (r.shots||[]).map(s => {
+      const src = s.startsWith('/') ? 'file://'+s : s;
+      const ext = s.split('.').pop().toLowerCase();
+      if (ext === 'mp4' || ext === 'webm' || ext === 'mov') {
+        return '<video controls src="'+src+'" loading="lazy"></video>';
+      }
+      return '<img src="'+src+'" loading="lazy">';
+    }).join('');
     const err = r.error ? '<div class="error-msg">'+escHtml(r.error)+'</div>' : '';
     const shotsHtml = shots ? '<div class="shots">'+shots+'</div>' : '';
     return '<div class="test-card '+cls+'" data-name="'+escHtml(r.name)+'" data-status="'+cls+'">' +
