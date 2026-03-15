@@ -12,10 +12,21 @@ import (
 )
 
 const (
-	defaultAgentPort    = 8686
+	defaultAgentPort    = 48686
 	defaultPingInterval = 5 * time.Second
 	defaultDialTimeout  = 30 * time.Second
 )
+
+// DefaultPort returns the default ProbeAgent WebSocket port.
+func DefaultPort() int { return defaultAgentPort }
+
+// DialOptions configures the WebSocket connection to the ProbeAgent.
+type DialOptions struct {
+	Host        string        // default "127.0.0.1"
+	Port        int           // default 48686
+	Token       string        // one-time auth token
+	DialTimeout time.Duration // max time to establish connection (default 30s)
+}
 
 // Client is a ProbeLink WebSocket client connecting to the ProbeAgent.
 type Client struct {
@@ -30,34 +41,50 @@ type Client struct {
 // Dial connects to the ProbeAgent running on the given device port.
 // token is the one-time session token emitted to stdout by the app.
 func Dial(ctx context.Context, host string, port int, token string) (*Client, error) {
-	if port == 0 {
-		port = defaultAgentPort
+	return DialWithOptions(ctx, DialOptions{
+		Host:  host,
+		Port:  port,
+		Token: token,
+	})
+}
+
+// DialWithOptions connects to the ProbeAgent with full configuration control.
+func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
+	if opts.Port == 0 {
+		opts.Port = defaultAgentPort
 	}
-	if host == "" {
-		host = "127.0.0.1"
+	if opts.Host == "" {
+		opts.Host = "127.0.0.1"
+	}
+	if opts.DialTimeout == 0 {
+		opts.DialTimeout = defaultDialTimeout
 	}
 
 	u := url.URL{
 		Scheme:   "ws",
-		Host:     fmt.Sprintf("%s:%d", host, port),
+		Host:     fmt.Sprintf("%s:%d", opts.Host, opts.Port),
 		Path:     "/probe",
-		RawQuery: "token=" + token,
+		RawQuery: "token=" + opts.Token,
 	}
 
-	dialCtx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
+	dialCtx, cancel := context.WithTimeout(ctx, opts.DialTimeout)
 	defer cancel()
 
 	dialer := websocket.DefaultDialer
 	conn, _, err := dialer.DialContext(dialCtx, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("probelink: dial %s: %w", u.String(), err)
+		// Mask token in error message to prevent leaking into CI logs
+		safeURL := fmt.Sprintf("ws://%s:%d/probe?token=***", opts.Host, opts.Port)
+		return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
 	}
 
+	// Store address without token for safe logging
+	safeAddr := fmt.Sprintf("ws://%s:%d/probe", opts.Host, opts.Port)
 	c := &Client{
 		conn:    conn,
 		pending: make(map[uint64]chan Response),
-		token:   token,
-		addr:    u.String(),
+		token:   opts.Token,
+		addr:    safeAddr,
 	}
 
 	go c.readLoop()

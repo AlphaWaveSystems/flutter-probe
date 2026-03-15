@@ -515,16 +515,21 @@ func (e *Executor) resolve(s string) string {
 	return s
 }
 
+// recipeFillerWords are common filler words stripped from recipe call names
+// to enable fuzzy matching against recipe definitions.
+var recipeFillerWords = map[string]bool{
+	"and": true, "with": true, "the": true, "then": true,
+}
+
 // stripRecipeCallArgs removes <arg> placeholders and common filler words
 // from a recipe call name so it can match the recipe definition name.
 // e.g., "sign in with <arg> and <arg>" → "sign in with"
 //       "enter credentials <arg> and <arg>" → "enter credentials"
 func stripRecipeCallArgs(name string) string {
 	words := strings.Fields(name)
-	fillers := map[string]bool{"and": true, "with": true, "the": true, "then": true}
 	var result []string
 	for _, w := range words {
-		if w == "<arg>" || fillers[w] {
+		if w == "<arg>" || recipeFillerWords[w] {
 			continue
 		}
 		result = append(result, w)

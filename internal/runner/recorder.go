@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ type VideoRecorder struct {
 	segments   []string  // for screenrecord chaining or screencap frames
 	stopCh     chan struct{}
 	frameIdx   int
+	mu         sync.Mutex // protects cmd, segments, frameIdx, remotePath
 }
 
 // NewVideoRecorder creates a VideoRecorder, auto-detecting the best backend.
@@ -150,6 +152,7 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 			case <-vr.stopCh:
 				return
 			case <-time.After(cycleInterval):
+				vr.mu.Lock()
 				// Stop current recording
 				if vr.cmd != nil && vr.cmd.Process != nil {
 					_ = vr.cmd.Process.Signal(syscall.SIGINT)
@@ -166,6 +169,7 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 				vr.cmd = exec.Command(adbBin, "-s", vr.serial,
 					"shell", "screenrecord", "--size", vr.videoCfg.Resolution, newRemote)
 				_ = vr.cmd.Start()
+				vr.mu.Unlock()
 			}
 		}
 	}()
@@ -175,6 +179,9 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 
 func (vr *VideoRecorder) stopScreenrecord(ctx context.Context) (string, error) {
 	close(vr.stopCh)
+	// Wait briefly for the chaining goroutine to exit after receiving stopCh
+	time.Sleep(200 * time.Millisecond)
+	vr.mu.Lock()
 	if vr.cmd != nil && vr.cmd.Process != nil {
 		_ = vr.cmd.Process.Signal(syscall.SIGINT)
 		_ = vr.cmd.Wait()
@@ -184,6 +191,7 @@ func (vr *VideoRecorder) stopScreenrecord(ctx context.Context) (string, error) {
 	if err := vr.manager.ADB().Pull(ctx, vr.serial, vr.remotePath, finalSeg); err == nil {
 		vr.segments = append(vr.segments, finalSeg)
 	}
+	vr.mu.Unlock()
 
 	if len(vr.segments) == 1 {
 		// Single segment — just rename
@@ -244,13 +252,18 @@ func (vr *VideoRecorder) startScreencap(_ context.Context, safeName string) erro
 			case <-vr.stopCh:
 				return
 			default:
-				framePath := filepath.Join(framesDir, fmt.Sprintf("frame_%04d.png", vr.frameIdx))
+				vr.mu.Lock()
+				idx := vr.frameIdx
+				vr.mu.Unlock()
+				framePath := filepath.Join(framesDir, fmt.Sprintf("frame_%04d.png", idx))
 				cmd := exec.Command(adbBin, "-s", vr.serial, "exec-out", "screencap", "-p")
 				data, err := cmd.Output()
 				if err == nil && len(data) > 0 {
 					_ = os.WriteFile(framePath, data, 0644)
+					vr.mu.Lock()
 					vr.segments = append(vr.segments, framePath)
 					vr.frameIdx++
+					vr.mu.Unlock()
 				}
 				time.Sleep(captureInterval)
 			}

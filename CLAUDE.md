@@ -169,6 +169,35 @@ Both JSON and HTML reports use **relative paths** for artifacts (videos, screens
 
 iOS simulator videos use `--codec=h264` (not HEVC) for browser compatibility in HTML reports. Android videos are MP4 (H.264 by default).
 
+## Security
+
+### Input validation
+
+- **`project.app`** (bundle ID) is validated against `^[a-zA-Z][a-zA-Z0-9_.]*$` at config load time. Invalid values are rejected with a clear error.
+- **`--device` serial** is validated against `^[a-zA-Z0-9._:/-]+$` via `config.ValidateDeviceSerial()` before being passed to any shell command.
+- **Selector text** from recorded events is sanitized (newlines stripped) before writing to `.probe` files to prevent syntax injection.
+
+### Token handling
+
+- The ProbeAgent auth token is a one-time 32-char random string, only valid on loopback (`127.0.0.1`).
+- Token is **masked in error messages** — dial errors show `ws://host:port/probe?token=***` instead of the real token.
+- Token is intentionally printed to stdout/logcat for CLI pickup — this is by design for the auth flow.
+
+### Studio security
+
+- Studio HTTP server binds to `127.0.0.1` only (not exposed to network).
+- **CORS protection**: API requests from origins other than the Studio's own (`http://127.0.0.1:<port>`) are rejected with 403.
+- **XSS prevention**: All user-controlled content (widget types, keys, error messages) is HTML-escaped via `escHtml()` before rendering in the DOM.
+
+### Thread safety
+
+- `VideoRecorder` uses a `sync.Mutex` to protect `cmd`, `segments`, `frameIdx`, and `remotePath` fields that are accessed by background goroutines (screenrecord chaining and screencap capture).
+
+### Constants
+
+- All 22 JSON-RPC method names are defined as constants in both Go (`internal/probelink/protocol.go`) and Dart (`ProbeMethods` class in `probe_agent/lib/src/protocol.dart`). No string literals for method names in dispatchers.
+- Notification methods (`probe.recorded_event`, `probe.exec_dart`, `probe.restart_app`) are also constants in both languages.
+
 ### Configurable tool paths
 
 The `--adb` and `--flutter` CLI flags (or `tools:` in probe.yaml) allow overriding binary paths for CI/CD or non-standard installations. Resolution order: CLI flag → probe.yaml → PATH.

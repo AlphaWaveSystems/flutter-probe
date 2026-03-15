@@ -116,8 +116,9 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	}
 	defer client.Close()
 
-	// Set up HTTP server for Studio UI
+	// Set up HTTP server for Studio UI with CORS protection
 	mux := http.NewServeMux()
+	studioOrigin := fmt.Sprintf("http://127.0.0.1:%d", port)
 
 	// Serve the Studio HTML UI
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +207,20 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\n  \033[32m✓\033[0m  FlutterProbe Studio running at \033[1mhttp://%s\033[0m\n", addr)
 	fmt.Println("  Press Ctrl+C to stop.")
 
-	return http.ListenAndServe(addr, mux)
+	// Wrap mux with CORS protection — only allow requests from the Studio's own origin
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && origin != studioOrigin {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if origin == studioOrigin {
+			w.Header().Set("Access-Control-Allow-Origin", studioOrigin)
+		}
+		mux.ServeHTTP(w, r)
+	})
+
+	return http.ListenAndServe(addr, handler)
 }
 
 // studioHTML is the embedded Studio web UI.
@@ -358,9 +372,9 @@ function renderTree(text) {
     const type = content.split('(')[0];
     const key = (content.match(/key=([^)]+)/) || ['',''])[1];
     return '<div class="tree-node" style="padding-left:' + (indent*12) + 'px" ' +
-           'onclick="selectWidget(' + JSON.stringify({type, key, indent}) + ')">' +
-           '<span class="type">' + type + '</span>' +
-           (key && key !== 'null' ? ' <span class="key">[' + key + ']</span>' : '') +
+           'onclick="selectWidget(' + escHtml(JSON.stringify({type, key, indent})) + ')">' +
+           '<span class="type">' + escHtml(type) + '</span>' +
+           (key && key !== 'null' ? ' <span class="key">[' + escHtml(key) + ']</span>' : '') +
            '</div>';
   }).join('');
   document.getElementById('tree-panel').innerHTML = html || '<div class="empty-state">Empty tree</div>';
@@ -370,9 +384,9 @@ function selectWidget(widget) {
   selectedWidget = widget;
   // Inspector
   const html = '<div class="prop-row"><span class="prop-key">Type</span>' +
-    '<span class="prop-val">' + widget.type + '</span></div>' +
+    '<span class="prop-val">' + escHtml(widget.type) + '</span></div>' +
     (widget.key ? '<div class="prop-row"><span class="prop-key">Key</span>' +
-    '<span class="prop-val">#' + widget.key.replace('[','').replace(']','') + '</span></div>' : '');
+    '<span class="prop-val">#' + escHtml(widget.key.replace('[','').replace(']','')) + '</span></div>' : '');
   document.getElementById('inspector-panel').innerHTML = html;
 
   // Selectors
@@ -387,7 +401,7 @@ function selectWidget(widget) {
   selectors.push("see a " + widget.type);
 
   const html2 = selectors.map(s =>
-    '<span class="selector-chip" onclick="copyToClipboard(\'' + s + '\')" title="Click to copy">' + s + '</span>'
+    '<span class="selector-chip" onclick="copyToClipboard(\'' + escHtml(s) + '\')" title="Click to copy">' + escHtml(s) + '</span>'
   ).join('');
   document.getElementById('selector-panel').innerHTML = html2;
 }
@@ -438,7 +452,7 @@ function handleScreenshotClick(e) {
 
 function log(cls, msg) {
   const el = document.getElementById('step-log');
-  el.innerHTML = '<div class="' + cls + '">' + msg + '</div>' + el.innerHTML;
+  el.innerHTML = '<div class="' + cls + '">' + escHtml(msg) + '</div>' + el.innerHTML;
 }
 
 function copyToClipboard(text) {
@@ -450,6 +464,10 @@ function copyToClipboard(text) {
 function refreshAll() {
   loadScreenshot();
   loadTree();
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // Auto-connect on load

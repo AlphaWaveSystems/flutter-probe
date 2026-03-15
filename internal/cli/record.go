@@ -263,13 +263,21 @@ func generateProbeScript(events []recordedEvent) string {
 	return sb.String()
 }
 
+// sanitizeText removes newlines and excess whitespace from text that will
+// appear in generated .probe files (which use indentation-based syntax).
+func sanitizeText(s string) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", "")
+	return strings.TrimSpace(s)
+}
+
 // selectorFromParams extracts the best selector string from event params.
 // Handles both flat params (text/id) and nested selector maps from the agent.
 func selectorFromParams(params map[string]interface{}) string {
 	// Check for nested selector map from agent
 	if sel, ok := params["selector"].(map[string]interface{}); ok {
 		kind, _ := sel["kind"].(string)
-		text, _ := sel["text"].(string)
+		text := sanitizeText(sel["text"].(string))
 		switch kind {
 		case "id":
 			if strings.HasPrefix(text, "#") {
@@ -289,10 +297,10 @@ func selectorFromParams(params map[string]interface{}) string {
 
 	// Fallback: flat params
 	if text, ok := params["text"].(string); ok && text != "" {
-		return fmt.Sprintf("%q", text)
+		return fmt.Sprintf("%q", sanitizeText(text))
 	}
 	if id, ok := params["id"].(string); ok && id != "" {
-		return "#" + id
+		return "#" + sanitizeText(id)
 	}
 	return "the element"
 }
