@@ -177,4 +177,9 @@ const (
 	MethodSaveLogs       = "probe.save_logs"
 	MethodStartRecording = "probe.start_recording"
 	MethodStopRecording  = "probe.stop_recording"
+
+	// Notification methods (agent → CLI, no response expected)
+	NotifyRecordedEvent = "probe.recorded_event"
+	NotifyExecDart      = "probe.exec_dart"
+	NotifyRestartApp     = "probe.restart_app"
 )

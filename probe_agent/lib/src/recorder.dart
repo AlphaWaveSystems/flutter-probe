@@ -366,7 +366,7 @@ class ProbeRecorder {
 
   void _emit(Map<String, dynamic> event) {
     _send?.call(
-      ProbeNotification('probe.recorded_event', event).encode(),
+      ProbeNotification(ProbeMethods.notifyRecordedEvent, event).encode(),
     );
   }
 }

@@ -45,10 +45,10 @@ class ProbeExecutor {
   Future<dynamic> _handle(ProbeRequest req) async {
     switch (req.method) {
       // ---- Lifecycle ----
-      case 'probe.ping':
+      case ProbeMethods.ping:
         return {'ok': true};
 
-      case 'probe.settled':
+      case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;
         await _sync.waitForSettled(
           timeout: Duration(milliseconds: (timeout * 1000).toInt()),
@@ -56,7 +56,7 @@ class ProbeExecutor {
         return {'ok': true};
 
       // ---- Navigation ----
-      case 'probe.open':
+      case ProbeMethods.open:
         final screen = req.params['screen'] as String? ?? '';
         if (screen.isEmpty) {
           // Restart the app
@@ -66,61 +66,61 @@ class ProbeExecutor {
         return {'ok': true};
 
       // ---- Touch actions ----
-      case 'probe.tap':
+      case ProbeMethods.tap:
         await _tap(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
         return {'ok': true};
 
-      case 'probe.double_tap':
+      case ProbeMethods.doubleTap:
         await _doubleTap(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
         return {'ok': true};
 
-      case 'probe.long_press':
+      case ProbeMethods.longPress:
         await _longPress(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
         return {'ok': true};
 
       // ---- Text input ----
-      case 'probe.type':
+      case ProbeMethods.type_:
         final sel = req.params['selector'] as Map<String, dynamic>;
         final text = req.params['text'] as String;
         await _typeText(sel, text);
         await _sync.waitForSettled();
         return {'ok': true};
 
-      case 'probe.clear':
+      case ProbeMethods.clear:
         final sel = req.params['selector'] as Map<String, dynamic>;
         await _clearText(sel);
         await _sync.waitForSettled();
         return {'ok': true};
 
       // ---- Assertions ----
-      case 'probe.see':
+      case ProbeMethods.see:
         await _see(req.params);
         return {'ok': true};
 
       // ---- Wait ----
-      case 'probe.wait':
+      case ProbeMethods.wait:
         await _wait(req.params);
         return {'ok': true};
 
       // ---- Gestures ----
-      case 'probe.swipe':
+      case ProbeMethods.swipe:
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
         await _swipe(dir, sel);
         await _sync.waitForSettled();
         return {'ok': true};
 
-      case 'probe.scroll':
+      case ProbeMethods.scroll:
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
         await _scroll(dir, sel);
         await _sync.waitForSettled();
         return {'ok': true};
 
-      case 'probe.drag':
+      case ProbeMethods.drag:
         await _drag(
           req.params['from'] as Map<String, dynamic>,
           req.params['to'] as Map<String, dynamic>,
@@ -129,7 +129,7 @@ class ProbeExecutor {
         return {'ok': true};
 
       // ---- Device actions ----
-      case 'probe.device_action':
+      case ProbeMethods.deviceAction:
         await _deviceAction(
           req.params['action'] as String,
           req.params['value'] as String? ?? '',
@@ -137,42 +137,42 @@ class ProbeExecutor {
         await _sync.waitForSettled();
         return {'ok': true};
 
-      case 'probe.close':
+      case ProbeMethods.close:
         await SystemNavigator.pop();
         return {'ok': true};
 
       // ---- Diagnostics ----
-      case 'probe.screenshot':
+      case ProbeMethods.screenshot:
         final name = req.params['name'] as String? ?? 'screenshot';
         final path = await _screenshot(name);
         return {'path': path};
 
-      case 'probe.dump_tree':
+      case ProbeMethods.dumpTree:
         final tree = _dumpWidgetTree();
         return {'tree': tree};
 
-      case 'probe.save_logs':
+      case ProbeMethods.saveLogs:
         return {'ok': true}; // device logs collected by CLI via adb logcat
 
       // ---- Dart execution ----
-      case 'probe.run_dart':
+      case ProbeMethods.runDart:
         // Dart eval is handled by the host app via a registered callback.
         // The agent sends a notification for the app to handle.
         final code = req.params['code'] as String;
-        _send(ProbeNotification('probe.exec_dart', {'code': code}).encode());
+        _send(ProbeNotification(ProbeMethods.notifyExecDart, {'code': code}).encode());
         return {'ok': true, 'note': 'dart execution delegated to app'};
 
       // ---- Recording ----
-      case 'probe.start_recording':
+      case ProbeMethods.startRecording:
         _recorder.start(_send);
         return {'ok': true};
 
-      case 'probe.stop_recording':
+      case ProbeMethods.stopRecording:
         _recorder.stop();
         return {'ok': true};
 
       // ---- HTTP mocking ----
-      case 'probe.mock':
+      case ProbeMethods.mock:
         _registerMock(req.params);
         return {'ok': true};
 
@@ -599,7 +599,7 @@ class ProbeExecutor {
 
   Future<void> _restartApp() async {
     // Signal the app to restart
-    _send(ProbeNotification('probe.restart_app', {}).encode());
+    _send(ProbeNotification(ProbeMethods.notifyRestartApp, {}).encode());
     await Future.delayed(const Duration(milliseconds: 500));
   }
 }

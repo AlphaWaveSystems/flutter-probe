@@ -19,4 +19,4 @@ export 'src/finder.dart' show ProbeFinder;
 export 'src/executor.dart' show ProbeExecutor;
 export 'src/sync.dart' show ProbeSync;
 export 'src/recorder.dart' show ProbeRecorder;
-export 'src/protocol.dart' show ProbeRequest, ProbeResponse, ProbeError;
+export 'src/protocol.dart' show ProbeRequest, ProbeResponse, ProbeError, ProbeMethods;

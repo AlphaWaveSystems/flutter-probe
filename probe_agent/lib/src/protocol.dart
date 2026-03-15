@@ -85,3 +85,37 @@ class ProbeNotification {
         'params': params,
       });
 }
+
+/// JSON-RPC method name constants — mirrors Go probelink/protocol.go.
+class ProbeMethods {
+  ProbeMethods._();
+
+  // Request methods (CLI → agent)
+  static const ping = 'probe.ping';
+  static const settled = 'probe.settled';
+  static const open = 'probe.open';
+  static const tap = 'probe.tap';
+  static const doubleTap = 'probe.double_tap';
+  static const longPress = 'probe.long_press';
+  static const type_ = 'probe.type';
+  static const clear = 'probe.clear';
+  static const see = 'probe.see';
+  static const wait = 'probe.wait';
+  static const swipe = 'probe.swipe';
+  static const scroll = 'probe.scroll';
+  static const drag = 'probe.drag';
+  static const deviceAction = 'probe.device_action';
+  static const close = 'probe.close';
+  static const screenshot = 'probe.screenshot';
+  static const dumpTree = 'probe.dump_tree';
+  static const saveLogs = 'probe.save_logs';
+  static const runDart = 'probe.run_dart';
+  static const mock = 'probe.mock';
+  static const startRecording = 'probe.start_recording';
+  static const stopRecording = 'probe.stop_recording';
+
+  // Notification methods (agent → CLI)
+  static const notifyRecordedEvent = 'probe.recorded_event';
+  static const notifyExecDart = 'probe.exec_dart';
+  static const notifyRestartApp = 'probe.restart_app';
+}

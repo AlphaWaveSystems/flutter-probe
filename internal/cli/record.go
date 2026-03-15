@@ -131,7 +131,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 
 	// Subscribe to recording notifications from the agent
 	client.OnNotify = func(method string, params json.RawMessage) {
-		if method == "probe.recorded_event" {
+		if method == probelink.NotifyRecordedEvent {
 			var p map[string]interface{}
 			if err := json.Unmarshal(params, &p); err == nil {
 				ev := recordedEvent{

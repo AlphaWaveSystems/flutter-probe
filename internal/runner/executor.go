@@ -481,6 +481,12 @@ func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
 func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
 	recipe, ok := e.recipes[rc.Name]
 	if !ok {
+		// Try matching by stripping <arg> placeholders and filler words from the call name.
+		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
+		stripped := stripRecipeCallArgs(rc.Name)
+		recipe, ok = e.recipes[stripped]
+	}
+	if !ok {
 		// Unknown recipe — skip rather than error (may be a filler line)
 		return nil
 	}
@@ -507,6 +513,23 @@ func (e *Executor) resolve(s string) string {
 		}
 	}
 	return s
+}
+
+// stripRecipeCallArgs removes <arg> placeholders and common filler words
+// from a recipe call name so it can match the recipe definition name.
+// e.g., "sign in with <arg> and <arg>" → "sign in with"
+//       "enter credentials <arg> and <arg>" → "enter credentials"
+func stripRecipeCallArgs(name string) string {
+	words := strings.Fields(name)
+	fillers := map[string]bool{"and": true, "with": true, "the": true, "then": true}
+	var result []string
+	for _, w := range words {
+		if w == "<arg>" || fillers[w] {
+			continue
+		}
+		result = append(result, w)
+	}
+	return strings.TrimSpace(strings.Join(result, " "))
 }
 
 func containsSubstr(s, sub string) bool {

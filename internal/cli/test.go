@@ -182,6 +182,13 @@ func runTests(cmd *cobra.Command, args []string) error {
 			toolPaths.Flutter = flutterPath
 		}
 		dm = device.NewManagerWithPaths(toolPaths)
+		// Validate device serial if provided
+		if deviceSerial != "" {
+			if err := config.ValidateDeviceSerial(deviceSerial); err != nil {
+				return err
+			}
+		}
+
 		// Pick device and detect platform
 		platform = device.Platform(cfg.Defaults.Platform)
 		if deviceSerial == "" {
