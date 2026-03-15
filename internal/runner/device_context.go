@@ -24,10 +24,47 @@ type DeviceContext struct {
 	Serial                  string          // ADB serial or iOS UDID
 	Platform                device.Platform
 	AppID                   string          // bundle ID / package name
-	Port                    int             // agent port (default 8686)
+	Port                    int             // host-side agent port (default 48686)
+	DevicePort              int             // on-device agent port (default: same as Port)
 	AllowClearData          bool            // if true, skip confirmation for clear app data (CI/CD mode)
 	Confirm                 ConfirmFunc     // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
 	GrantPermissionsOnClear bool            // if true, auto-grant all permissions after clearing data
+	ReconnectDelay          time.Duration   // delay after app restart before reconnecting WebSocket (default 2s)
+	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
+	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
+	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
+}
+
+// reconnectDelay returns the configured reconnect delay or the default.
+func (dc *DeviceContext) reconnectDelay() time.Duration {
+	if dc.ReconnectDelay > 0 {
+		return dc.ReconnectDelay
+	}
+	return 2 * time.Second
+}
+
+// restartDelay returns the configured restart delay or the default.
+func (dc *DeviceContext) restartDelay() time.Duration {
+	if dc.RestartDelay > 0 {
+		return dc.RestartDelay
+	}
+	return 500 * time.Millisecond
+}
+
+// tokenReadTimeout returns the configured token read timeout or the default.
+func (dc *DeviceContext) tokenTimeout() time.Duration {
+	if dc.TokenReadTimeout > 0 {
+		return dc.TokenReadTimeout
+	}
+	return 30 * time.Second
+}
+
+// dialTimeoutVal returns the configured dial timeout or the default.
+func (dc *DeviceContext) dialTimeoutVal() time.Duration {
+	if dc.DialTimeout > 0 {
+		return dc.DialTimeout
+	}
+	return 30 * time.Second
 }
 
 // RestartApp force-stops the app and relaunches it. This preserves app data.
@@ -40,7 +77,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 			"am", "force-stop", dc.AppID); err != nil {
 			return fmt.Errorf("restart: force-stop: %w", err)
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		// Launch via monkey (works without knowing the main activity name)
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
@@ -52,7 +89,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 	case device.PlatformIOS:
 		simctl := dc.Manager.SimCtl()
 		_ = simctl.Terminate(ctx, dc.Serial, dc.AppID) // ignore if not running
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
 			return fmt.Errorf("restart: launch: %w", err)
@@ -93,7 +130,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 				fmt.Printf("    \033[33m⚠\033[0m  auto-grant permissions: %v\n", err)
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
 			"monkey", "-p", dc.AppID,
@@ -127,7 +164,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 				fmt.Printf("    \033[33m⚠\033[0m  auto-grant permissions: %v\n", err)
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
 			return fmt.Errorf("clear data: relaunch: %w", err)
@@ -256,14 +293,18 @@ func (dc *DeviceContext) RevokeAllPermissions(ctx context.Context) error {
 // Reconnect waits for the app to boot its agent, reads the new token,
 // and establishes a fresh WebSocket connection.
 func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, error) {
-	tokenTimeout := 30 * time.Second
+	tokenTimeout := dc.tokenTimeout()
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		// Clear logcat so we only see the new token
 		dc.Manager.ADB().Run(ctx, dc.Serial, "logcat", "-c") //nolint:errcheck
 		// Re-establish port forward (force-stop may have dropped it)
-		_ = dc.Manager.ForwardPort(ctx, dc.Serial, dc.Port, dc.Port)
+		devPort := dc.DevicePort
+		if devPort == 0 {
+			devPort = dc.Port
+		}
+		_ = dc.Manager.ForwardPort(ctx, dc.Serial, dc.Port, devPort)
 	case device.PlatformIOS:
 		// Delete stale token file so ReadTokenIOS picks up the fresh one
 		simctl := dc.Manager.SimCtl()
@@ -273,8 +314,8 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 		}
 	}
 
-	// Wait a moment for the app to start and the agent to initialize
-	time.Sleep(2 * time.Second)
+	// Wait for the app to start and the agent to initialize
+	time.Sleep(dc.reconnectDelay())
 
 	var token string
 	var err error
@@ -289,7 +330,12 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 		return nil, fmt.Errorf("reconnect: read token: %w", err)
 	}
 
-	client, err := probelink.Dial(ctx, "127.0.0.1", dc.Port, token)
+	client, err := probelink.DialWithOptions(ctx, probelink.DialOptions{
+		Host:        "127.0.0.1",
+		Port:        dc.Port,
+		Token:       token,
+		DialTimeout: dc.dialTimeoutVal(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("reconnect: dial: %w", err)
 	}

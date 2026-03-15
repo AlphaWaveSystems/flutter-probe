@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/flutterprobe/probe/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +39,17 @@ func init() {
 	rootCmd.AddCommand(lintCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(deviceCmd)
+}
+
+// loadConfig loads the probe config, respecting the --config flag.
+// If --config is set, loads that specific file. Otherwise loads probe.yaml from cwd.
+func loadConfig(cmd *cobra.Command) (*config.Config, error) {
+	cfgPath, _ := cmd.Flags().GetString("config")
+	if cfgPath != "" {
+		return config.LoadFile(cfgPath)
+	}
+	cfgDir, _ := os.Getwd()
+	return config.Load(cfgDir)
 }
 
 // exitOnErr prints an error and exits with code 1.

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/config"
 	"github.com/flutterprobe/probe/internal/report"
 	"github.com/flutterprobe/probe/internal/runner"
 	"github.com/spf13/cobra"
@@ -54,10 +53,9 @@ func runReport(cmd *cobra.Command, args []string) error {
 	outputPath, _ := cmd.Flags().GetString("output")
 	openBrowser, _ := cmd.Flags().GetBool("open")
 
-	// Load project name from config (best-effort)
+	// Load project name from config (best-effort, respects --config flag)
 	projectName := "FlutterProbe"
-	cfgDir, _ := os.Getwd()
-	if cfg, err := config.Load(cfgDir); err == nil && cfg.Project.Name != "" {
+	if cfg, err := loadConfig(cmd); err == nil && cfg.Project.Name != "" {
 		projectName = cfg.Project.Name
 	}
 

@@ -85,9 +85,8 @@ func init() {
 func runTests(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Load config
-	cfgDir, _ := os.Getwd()
-	cfg, err := config.Load(cfgDir)
+	// Load config (respects --config flag for platform-specific configs)
+	cfg, err := loadConfig(cmd)
 	if err != nil {
 		return err
 	}
@@ -261,7 +260,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			defer client.Close()
 		} else {
 			// Android: forward port via ADB
-			if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.Port); err != nil {
+			if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
 				return fmt.Errorf("port forward: %w", err)
 			}
 			defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
@@ -311,6 +310,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Platform:                platform,
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
+			DevicePort:              cfg.Agent.AgentDevicePort(),
 			AllowClearData:          autoYes,
 			Confirm:                 promptUserConfirm,
 			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,

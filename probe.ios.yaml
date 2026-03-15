@@ -1,0 +1,21 @@
+project:
+  name: "Digacel iOS"
+  app: com.digacel.ios.tae.Digacel
+
+defaults:
+  platform: ios
+  timeout: 30s
+  screenshots: on_failure
+  video: false
+
+agent:
+  port: 48686
+  dial_timeout: 30s
+  token_read_timeout: 30s
+  reconnect_delay: 3s
+
+device:
+  restart_delay: 1s
+
+reports_folder: reports/ios
+recipes_folder: tests/recipes

@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/config"
 	"github.com/flutterprobe/probe/internal/device"
 	"github.com/flutterprobe/probe/internal/probelink"
 	"github.com/spf13/cobra"
@@ -55,9 +54,8 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	portFlag, _ := cmd.Flags().GetInt("port")
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 
-	// Load config
-	cfgDir, _ := os.Getwd()
-	cfg, err := config.Load(cfgDir)
+	// Load config (respects --config flag for platform-specific configs)
+	cfg, err := loadConfig(cmd)
 	if err != nil {
 		return err
 	}
@@ -108,7 +106,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 		dialOpts.Token = token
 	} else {
 		// Android: forward port via ADB
-		if err := dm.ForwardPort(ctx, deviceSerial, agentPort, agentPort); err != nil {
+		if err := dm.ForwardPort(ctx, deviceSerial, agentPort, cfg.Agent.AgentDevicePort()); err != nil {
 			return fmt.Errorf("port forward: %w", err)
 		}
 		defer dm.RemoveForward(ctx, deviceSerial, agentPort) //nolint:errcheck

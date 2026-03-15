@@ -53,7 +53,8 @@ type DefaultsConfig struct {
 
 // AgentConfig controls the ProbeAgent WebSocket connection.
 type AgentConfig struct {
-	Port             int           `yaml:"port"`               // WebSocket port the agent listens on (default: 48686)
+	Port             int           `yaml:"port"`               // host-side WebSocket port for connecting to the agent (default: 48686)
+	DevicePort       int           `yaml:"device_port"`        // on-device port the agent listens on (default: same as port). Set differently for parallel runs with adb forward.
 	DialTimeout      time.Duration `yaml:"dial_timeout"`       // max time to establish a WebSocket connection (default: 30s)
 	PingInterval     time.Duration `yaml:"ping_interval"`      // interval between WebSocket keepalive pings (default: 5s)
 	TokenReadTimeout time.Duration `yaml:"token_read_timeout"` // max time to wait for the agent to emit its auth token (default: 30s)
@@ -124,19 +125,24 @@ var defaultConfig = Config{
 
 // Load reads probe.yaml from the given directory. Falls back to defaults if missing.
 func Load(dir string) (*Config, error) {
+	return LoadFile(dir + "/probe.yaml")
+}
+
+// LoadFile reads a specific YAML config file. Falls back to defaults if the file doesn't exist.
+// This allows platform-specific configs like probe.ios.yaml or probe.android.yaml.
+func LoadFile(path string) (*Config, error) {
 	cfg := defaultConfig
 
-	path := dir + "/probe.yaml"
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &cfg, nil
 		}
-		return nil, fmt.Errorf("reading probe.yaml: %w", err)
+		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing probe.yaml: %w", err)
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
 	// Apply defaults for zero-valued fields that were not set in YAML
@@ -148,6 +154,15 @@ func Load(dir string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// AgentDevicePort returns the on-device port the agent listens on.
+// Defaults to Port if DevicePort is not explicitly set.
+func (a *AgentConfig) AgentDevicePort() int {
+	if a.DevicePort != 0 {
+		return a.DevicePort
+	}
+	return a.Port
 }
 
 // ValidateDeviceSerial checks that a device serial/UDID is safe to pass to shell commands.

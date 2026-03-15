@@ -637,6 +637,36 @@ jobs:
 
 A Docker setup is also available in `docker/` for self-hosted CI with Android emulators.
 
+### Parallel Testing (iOS + Android)
+
+Run tests on both platforms simultaneously using platform-specific configs with the `--config` flag:
+
+```bash
+# Create platform-specific configs
+# probe.ios.yaml — uses port 48686, reports to reports/ios/
+# probe.android.yaml — uses host port 48687 → device port 48686, reports to reports/android/
+
+# Run in parallel
+bin/probe test tests/ --config probe.ios.yaml --device <IOS_UDID> -v -y &
+bin/probe test tests/ --config probe.android.yaml --device emulator-5554 -v -y &
+wait
+```
+
+Key config differences for parallel runs:
+
+```yaml
+# probe.ios.yaml
+agent:
+  port: 48686        # iOS simulator shares host loopback, no port forwarding
+
+# probe.android.yaml
+agent:
+  port: 48687        # different host port to avoid conflict with iOS
+  device_port: 48686 # on-device port stays the same (what ProbeAgent listens on)
+```
+
+The `device_port` field allows the host-side port to differ from the on-device port. This is needed because `adb forward` maps `host:48687 → device:48686`, while the iOS simulator uses `localhost:48686` directly.
+
 ## VS Code Extension
 
 A VS Code extension is included in `vscode/` providing:
@@ -693,7 +723,29 @@ FlutterProbe/
 
 ## Requirements
 
+### Core
+
 - Go 1.23+
 - Dart 3.3+ / Flutter 3.19+
 - Android: ADB + Android SDK
 - iOS: Xcode + `xcrun simctl`
+
+### Video recording
+
+| Platform | Tool | Required? | Notes |
+|----------|------|-----------|-------|
+| iOS | `xcrun simctl` | Built-in | Uses `simctl io recordVideo --codec=h264` |
+| Android | `screenrecord` | Built-in | On-device, auto-chains to avoid 180s limit |
+| Android | `scrcpy` | Optional | Preferred backend if installed (higher quality) |
+| Both | `ffmpeg` | Optional | Required to stitch multi-segment Android recordings and screencap frames into a single video. Without it, segments are kept as separate files |
+
+### Screenshots
+
+Screenshots are captured by the Dart agent directly (no external tools needed). They are saved as PNG files on the device and pulled to `reports/screenshots/` automatically.
+
+### HTML reports
+
+The HTML report uses relative paths for videos and screenshots. To view with embedded media:
+
+- **Recommended**: Serve via HTTP — `cd reports && python3 -m http.server 8080`
+- **Direct open**: `open reports/report.html` — screenshots work, videos may not load in all browsers due to `file://` security restrictions
