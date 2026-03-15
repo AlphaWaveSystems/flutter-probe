@@ -142,8 +142,14 @@ const (
 	VerbTakeShot   ActionVerb = "take_screenshot"
 	VerbDumpTree   ActionVerb = "dump_widget_tree"
 	VerbSaveLogs   ActionVerb = "save_logs"
-	VerbPause      ActionVerb = "pause"
-	VerbLog        ActionVerb = "log"
+	VerbPause        ActionVerb = "pause"
+	VerbLog          ActionVerb = "log"
+	VerbRestart         ActionVerb = "restart"
+	VerbClearAppData    ActionVerb = "clear_app_data"
+	VerbAllowPermission ActionVerb = "allow_permission"
+	VerbDenyPermission  ActionVerb = "deny_permission"
+	VerbGrantAllPerms   ActionVerb = "grant_all_permissions"
+	VerbRevokeAllPerms  ActionVerb = "revoke_all_permissions"
 )
 
 type SwipeDirection string

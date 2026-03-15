@@ -20,6 +20,14 @@ func NewADB() *ADB {
 	return &ADB{bin: "adb"}
 }
 
+// NewADBWithPath creates an ADB wrapper using a specific binary path.
+func NewADBWithPath(bin string) *ADB {
+	if bin == "" {
+		bin = "adb"
+	}
+	return &ADB{bin: bin}
+}
+
 // Devices returns all currently connected Android emulators/devices.
 func (a *ADB) Devices(ctx context.Context) ([]Device, error) {
 	out, err := a.run(ctx, "devices", "-l")
@@ -104,6 +112,55 @@ func (a *ADB) RemoveForward(ctx context.Context, serial string, hostPort int) er
 func (a *ADB) Shell(ctx context.Context, serial string, args ...string) ([]byte, error) {
 	cmdArgs := append([]string{"-s", serial, "shell"}, args...)
 	return a.run(ctx, cmdArgs...)
+}
+
+// Run executes an adb command (not shell) on the given device.
+func (a *ADB) Run(ctx context.Context, serial string, args ...string) ([]byte, error) {
+	cmdArgs := append([]string{"-s", serial}, args...)
+	return a.run(ctx, cmdArgs...)
+}
+
+// GrantPermission grants a runtime permission to an app.
+func (a *ADB) GrantPermission(ctx context.Context, serial, appID, permission string) error {
+	_, err := a.Shell(ctx, serial, "pm", "grant", appID, permission)
+	return err
+}
+
+// RevokePermission revokes a runtime permission from an app.
+func (a *ADB) RevokePermission(ctx context.Context, serial, appID, permission string) error {
+	_, err := a.Shell(ctx, serial, "pm", "revoke", appID, permission)
+	return err
+}
+
+// Install installs an APK on the given device, replacing any existing version.
+func (a *ADB) Install(ctx context.Context, serial, apkPath string) error {
+	_, err := a.run(ctx, "-s", serial, "install", "-r", apkPath)
+	if err != nil {
+		return fmt.Errorf("adb install: %w", err)
+	}
+	return nil
+}
+
+// LaunchApp starts an app by package name using the LAUNCHER intent.
+func (a *ADB) LaunchApp(ctx context.Context, serial, packageName string) error {
+	_, err := a.Shell(ctx, serial,
+		"monkey", "-p", packageName,
+		"-c", "android.intent.category.LAUNCHER", "1")
+	if err != nil {
+		return fmt.Errorf("adb launch: %w", err)
+	}
+	return nil
+}
+
+// Bin returns the path to the adb binary.
+func (a *ADB) Bin() string {
+	return a.bin
+}
+
+// ClearLogcat clears the logcat buffer on the device.
+func (a *ADB) ClearLogcat(ctx context.Context, serial string) error {
+	_, err := a.run(ctx, "-s", serial, "logcat", "-c")
+	return err
 }
 
 // Pull copies a file from the device to the host.

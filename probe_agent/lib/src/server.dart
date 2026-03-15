@@ -18,14 +18,25 @@ class ProbeServer {
 
   ProbeServer({this.port = 8686});
 
+  Timer? _tokenTimer;
+
   /// Starts the WebSocket server and prints the session token.
   Future<void> start() async {
     _token = _generateToken();
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
 
-    // Emit token so the CLI (via adb logcat) can read it
+    // Emit token so the CLI (via adb logcat / simctl log) can read it
     // ignore: avoid_print
     print('PROBE_TOKEN=$_token');
+
+    // Write token to a file so the CLI can read it directly
+    await _writeTokenFile();
+
+    // Re-print token periodically so late-connecting CLI can pick it up
+    _tokenTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      // ignore: avoid_print
+      print('PROBE_TOKEN=$_token');
+    });
 
     _serve();
   }
@@ -81,8 +92,22 @@ class ProbeServer {
 
   /// Stops the server.
   Future<void> stop() async {
+    _tokenTimer?.cancel();
+    _tokenTimer = null;
     await _server?.close(force: true);
     _server = null;
+  }
+
+  Future<void> _writeTokenFile() async {
+    try {
+      final dir = Platform.isIOS
+          ? '${Directory.systemTemp.path}/probe'
+          : '/data/local/tmp/probe';
+      await Directory(dir).create(recursive: true);
+      await File('$dir/token').writeAsString(_token!);
+    } catch (_) {
+      // Non-fatal: CLI can still read from log stream
+    }
   }
 
   ProbeExecutor? get executor => _executor;

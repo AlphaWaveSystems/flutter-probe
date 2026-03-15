@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart' show ElevatedButton, TextButton, OutlinedButton, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_test/flutter_test.dart'
-    show find, TestGesture, WidgetController;
 
 import 'finder.dart';
 import 'protocol.dart';
@@ -204,34 +203,88 @@ class ProbeExecutor {
   // ---- Text input helpers ----
 
   Future<void> _typeText(Map<String, dynamic> sel, String text) async {
-    // Tap the field first to focus it
-    await _tap(sel);
-    await Future.delayed(const Duration(milliseconds: 50));
-    // Inject text via platform channel
-    await _injectText(text);
+    // Find the nearest EditableText in the widget tree near the selector
+    final element = _requireElement(sel);
+    final controller = _findTextController(element);
+    if (controller != null) {
+      controller.text = text;
+      controller.selection = TextSelection.collapsed(offset: text.length);
+    } else {
+      // Fallback: tap to focus, then try to find any focused text field
+      await _tap(sel);
+      await Future.delayed(const Duration(milliseconds: 200));
+      final focusedController = _findFocusedTextController();
+      if (focusedController != null) {
+        focusedController.text = text;
+        focusedController.selection = TextSelection.collapsed(offset: text.length);
+      } else {
+        throw ProbeError(ProbeError.widgetNotFound, 'No text field found for: ${_selDesc(sel)}');
+      }
+    }
   }
 
-  Future<void> _injectText(String text) async {
-    final encoded = jsonEncode({'text': text});
-    await ServicesBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
-      SystemChannels.textInput.name,
-      SystemChannels.textInput.codec.encodeMethodCall(
-        MethodCall('TextInputClient.updateEditingState', <dynamic>[
-          -1,
-          TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length))
-              .toJSON(),
-        ]),
-      ),
-      (_) {},
-    );
-    _ = encoded; // suppress unused warning
+  /// Walks up and down from an element to find a TextEditingController.
+  TextEditingController? _findTextController(Element element) {
+    // Search within the element's subtree for an EditableText
+    TextEditingController? result;
+    void visit(Element e) {
+      if (result != null) return;
+      if (e.widget is EditableText) {
+        result = (e.widget as EditableText).controller;
+        return;
+      }
+      if (e.widget is TextField) {
+        result = (e.widget as TextField).controller;
+        return;
+      }
+      e.visitChildren(visit);
+    }
+
+    // First search in parent chain up to find a TextField ancestor
+    Element? current = element;
+    for (int i = 0; i < 20 && current != null; i++) {
+      if (current.widget is TextField) {
+        result = (current.widget as TextField).controller;
+        if (result != null) return result;
+      }
+      if (current.widget is EditableText) {
+        return (current.widget as EditableText).controller;
+      }
+      // Try searching children of current
+      visit(current);
+      if (result != null) return result;
+      // Go up
+      Element? parent;
+      current.visitAncestorElements((ancestor) {
+        parent = ancestor;
+        return false;
+      });
+      current = parent;
+    }
+    return result;
+  }
+
+  /// Finds any currently focused text controller.
+  TextEditingController? _findFocusedTextController() {
+    TextEditingController? result;
+    _finder.walkTree((e) {
+      if (result != null) return;
+      if (e.widget is EditableText) {
+        final editableText = e.widget as EditableText;
+        if (editableText.focusNode.hasFocus) {
+          result = editableText.controller;
+        }
+      }
+    });
+    return result;
   }
 
   Future<void> _clearText(Map<String, dynamic> sel) async {
-    await _tap(sel);
-    await Future.delayed(const Duration(milliseconds: 50));
-    // Select all + delete
-    await _injectText('');
+    final element = _requireElement(sel);
+    final controller = _findTextController(element);
+    if (controller != null) {
+      controller.clear();
+    }
   }
 
   // ---- Assertions ----
@@ -244,8 +297,7 @@ class ProbeExecutor {
     final checkVal = params['check_val'] as String? ?? '';
     final pattern = params['pattern'] as String? ?? '';
 
-    final finder = _finder.forSelector(sel);
-    final elements = finder.evaluate().toList();
+    final elements = _finder.findElements(sel);
 
     if (negated) {
       if (elements.isNotEmpty) {
@@ -334,7 +386,7 @@ class ProbeExecutor {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       final sel = {'kind': 'text', 'text': text};
-      final found = _finder.forSelector(sel).evaluate().isNotEmpty;
+      final found = _finder.findElements(sel).isNotEmpty;
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
       await _sync.waitForSettled(timeout: const Duration(seconds: 1));
@@ -358,8 +410,11 @@ class ProbeExecutor {
       center = box.localToGlobal(box.size.center(Offset.zero));
       size = box.size;
     } else {
-      final binding = WidgetsBinding.instance;
-      final viewSize = binding.renderView.size;
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      final viewSize = view != null
+          ? Size(view.physicalSize.width / view.devicePixelRatio,
+                 view.physicalSize.height / view.devicePixelRatio)
+          : const Size(390, 844); // fallback
       center = Offset(viewSize.width / 2, viewSize.height / 2);
       size = viewSize;
     }
@@ -427,13 +482,19 @@ class ProbeExecutor {
   // ---- Screenshot ----
 
   Future<String> _screenshot(String name) async {
+    // ignore: deprecated_member_use
     final renderView = WidgetsBinding.instance.renderView;
-    final image = await renderView.layer!.toImage(
+    final layer = renderView.layer;
+    if (layer == null || layer is! OffsetLayer) {
+      throw ProbeError(ProbeError.internalError, 'No renderable layer for screenshot');
+    }
+    final image = await layer.toImage(
       renderView.paintBounds,
       pixelRatio: 2.0,
     );
-    final bytes = await image.toByteData(format: ImageByteFormat.png);
-    final path = '/sdcard/probe_screenshots/${name}_${DateTime.now().millisecondsSinceEpoch}.png';
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final dir = '${Directory.systemTemp.path}/probe_screenshots';
+    final path = '$dir/${name}_${DateTime.now().millisecondsSinceEpoch}.png';
     final file = File(path);
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes!.buffer.asUint8List());
@@ -444,7 +505,7 @@ class ProbeExecutor {
 
   String _dumpWidgetTree() {
     final buffer = StringBuffer();
-    WidgetsBinding.instance.renderViewElement?.visitChildren((e) {
+    WidgetsBinding.instance.rootElement?.visitChildren((e) {
       _dumpElement(e, buffer, 0);
     });
     return buffer.toString();
@@ -473,8 +534,7 @@ class ProbeExecutor {
   // ---- Internal helpers ----
 
   Element _requireElement(Map<String, dynamic> sel) {
-    final finder = _finder.forSelector(sel);
-    final elements = finder.evaluate().toList();
+    final elements = _finder.findElements(sel);
     if (elements.isEmpty) {
       throw ProbeError(
         ProbeError.widgetNotFound,
@@ -515,18 +575,15 @@ class ProbeExecutor {
       }
       e.visitChildren(visit);
     }
-    WidgetsBinding.instance.renderViewElement?.visitChildren(visit);
+    WidgetsBinding.instance.rootElement?.visitChildren(visit);
     return nav;
   }
 
-  Future<TestGesture> _createGesture(Offset position) async {
-    // TestGesture requires a WidgetController which isn't available outside
-    // of the test framework. We fall back to platform gesture simulation.
+  Future<_ProbeGesture> _createGesture(Offset position) async {
     final binding = GestureBinding.instance;
     final pointer = PointerDownEvent(position: position);
     binding.handlePointerEvent(pointer);
-    // Return a thin wrapper
-    return _FakeTestGesture(position, binding);
+    return _ProbeGesture(position, binding);
   }
 
   Future<void> _restartApp() async {
@@ -536,31 +593,24 @@ class ProbeExecutor {
   }
 }
 
-// ---- Minimal TestGesture stand-in ----
+// ---- Minimal gesture wrapper ----
 
-class _FakeTestGesture implements TestGesture {
+class _ProbeGesture {
   Offset _position;
   final GestureBinding _binding;
 
-  _FakeTestGesture(this._position, this._binding);
+  _ProbeGesture(this._position, this._binding);
 
-  @override
-  Future<void> up({Duration? timeStamp}) async {
+  Future<void> up() async {
     _binding.handlePointerEvent(PointerUpEvent(position: _position));
   }
 
-  @override
   Future<void> moveTo(Offset location, {Duration? timeStamp}) async {
     _binding.handlePointerEvent(PointerMoveEvent(position: location));
     _position = location;
   }
 
-  @override
   Future<void> moveBy(Offset delta, {Duration? timeStamp}) async {
     await moveTo(_position + delta, timeStamp: timeStamp);
   }
-
-  // ---- Unused stubs from TestGesture interface ----
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
 }

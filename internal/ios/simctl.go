@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -122,13 +123,31 @@ func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte
 	return s.run(ctx, cmdArgs...)
 }
 
-// ReadToken reads the ProbeAgent token from the simulator's syslog.
+// ReadToken reads the ProbeAgent token. It first tries the token file written
+// by the agent, then falls back to streaming the simulator's system log.
 func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Duration) (string, error) {
 	tCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Try reading token from file first (fast path)
+	tokenPath := s.simDataPath(udid) + "/tmp/probe/token"
+	for i := 0; i < 5; i++ {
+		if data, err := os.ReadFile(tokenPath); err == nil {
+			token := strings.TrimSpace(string(data))
+			if len(token) >= 16 {
+				return token, nil
+			}
+		}
+		select {
+		case <-tCtx.Done():
+			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
+		case <-time.After(1 * time.Second):
+		}
+	}
+
+	// Fall back to log stream
 	cmd := exec.CommandContext(tCtx, "xcrun", "simctl", "spawn", udid, "log", "stream",
-		"--predicate", `process == "Runner" && messageType == "info"`)
+		"--predicate", `eventMessage CONTAINS "PROBE_TOKEN="`)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", err
@@ -142,10 +161,53 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	for scanner.Scan() {
 		line := scanner.Text()
 		if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
-			return strings.TrimSpace(line[idx+len("PROBE_TOKEN="):]), nil
+			token := strings.TrimSpace(line[idx+len("PROBE_TOKEN="):])
+			// Skip the log stream filter header which also contains PROBE_TOKEN=
+			if len(token) >= 16 && !strings.HasPrefix(token, `"`) {
+				return token, nil
+			}
 		}
 	}
 	return "", fmt.Errorf("ios: probe token not found within %s", timeout)
+}
+
+// GrantPrivacy grants a privacy service permission to an app on the simulator.
+func (s *SimCtl) GrantPrivacy(ctx context.Context, udid, bundleID, service string) error {
+	_, err := s.run(ctx, "privacy", udid, "grant", service, bundleID)
+	return err
+}
+
+// RevokePrivacy revokes a privacy service permission from an app on the simulator.
+func (s *SimCtl) RevokePrivacy(ctx context.Context, udid, bundleID, service string) error {
+	_, err := s.run(ctx, "privacy", udid, "revoke", service, bundleID)
+	return err
+}
+
+// ResetPrivacy resets all privacy permissions for an app on the simulator.
+func (s *SimCtl) ResetPrivacy(ctx context.Context, udid, bundleID string) error {
+	_, err := s.run(ctx, "privacy", udid, "reset", "all", bundleID)
+	return err
+}
+
+// Uninstall removes an app from the simulator.
+func (s *SimCtl) Uninstall(ctx context.Context, udid, bundleID string) error {
+	_, err := s.run(ctx, "uninstall", udid, bundleID)
+	return err
+}
+
+// AppDataPath returns the data container path for an app on the simulator.
+func (s *SimCtl) AppDataPath(ctx context.Context, udid, bundleID string) string {
+	out, err := s.run(ctx, "get_app_container", udid, bundleID, "data")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// simDataPath returns the data directory for a simulator UDID.
+func (s *SimCtl) simDataPath(udid string) string {
+	home, _ := os.UserHomeDir()
+	return home + "/Library/Developer/CoreSimulator/Devices/" + udid + "/data"
 }
 
 // ForwardPort uses idb or socat to forward a port from simulator to host.

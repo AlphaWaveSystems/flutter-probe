@@ -38,13 +38,14 @@ type jsonResultFile struct {
 	Failed      int    `json:"failed"`
 	Skipped     int    `json:"skipped"`
 	Results     []struct {
-		Name     string  `json:"name"`
-		File     string  `json:"file"`
-		Passed   bool    `json:"passed"`
-		Skipped  bool    `json:"skipped"`
-		Duration float64 `json:"duration_ms"`
-		Error    string  `json:"error,omitempty"`
-		Row      int     `json:"row,omitempty"`
+		Name      string   `json:"name"`
+		File      string   `json:"file"`
+		Passed    bool     `json:"passed"`
+		Skipped   bool     `json:"skipped"`
+		Duration  float64  `json:"duration_ms"`
+		Error     string   `json:"error,omitempty"`
+		Row       int      `json:"row,omitempty"`
+		Artifacts []string `json:"artifacts,omitempty"`
 	} `json:"results"`
 }
 
@@ -75,19 +76,24 @@ func runReport(cmd *cobra.Command, args []string) error {
 		return errors.New("results file contains no test results")
 	}
 
-	// Convert to runner.TestResult slice
+	// Convert to runner.TestResult slice and build artifacts map
 	results := make([]runner.TestResult, 0, len(jrf.Results))
+	artifacts := make(map[string][]string)
 	for _, r := range jrf.Results {
 		tr := runner.TestResult{
-			TestName: r.Name,
-			File:     r.File,
-			Passed:   r.Passed,
-			Skipped:  r.Skipped,
-			Duration: time.Duration(r.Duration) * time.Millisecond,
-			Row:      r.Row,
+			TestName:  r.Name,
+			File:      r.File,
+			Passed:    r.Passed,
+			Skipped:   r.Skipped,
+			Duration:  time.Duration(r.Duration) * time.Millisecond,
+			Row:       r.Row,
+			Artifacts: r.Artifacts,
 		}
 		if r.Error != "" {
 			tr.Error = errors.New(r.Error)
+		}
+		if len(r.Artifacts) > 0 {
+			artifacts[r.Name] = r.Artifacts
 		}
 		results = append(results, tr)
 	}
@@ -99,7 +105,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 
 	// Generate HTML report
 	rep := report.NewHTMLReport(outputPath, projectName)
-	if err := rep.Write(results, nil); err != nil {
+	if err := rep.Write(results, artifacts); err != nil {
 		return fmt.Errorf("generating report: %w", err)
 	}
 
