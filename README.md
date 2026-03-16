@@ -30,8 +30,10 @@ FlutterProbe has two components:
 └──────────────┘                                    └─────────────────┘
 ```
 
-**Android**: CLI → `adb forward tcp:48686 tcp:48686` → WebSocket → ProbeAgent
-**iOS Simulator**: CLI → `localhost:48686` directly (simulator shares host network)
+**Android**: CLI → `adb forward tcp:<host-port> tcp:<device-port>` → WebSocket on `localhost:<host-port>` → ProbeAgent
+**iOS Simulator**: CLI → `localhost:<port>` directly (simulator shares host loopback — no port forwarding needed)
+
+By default both ports are `48686`. For parallel testing, the host port can differ from the device port (e.g., `adb forward tcp:48687 tcp:48686`) — see [Parallel Testing](#parallel-testing-ios--android).
 
 ## Quick Start
 

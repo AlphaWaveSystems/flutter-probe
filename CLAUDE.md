@@ -49,8 +49,8 @@ The system has two main components that communicate via WebSocket + JSON-RPC 2.0
 
 ### Connection Flow
 
-- **Android**: CLI → `adb forward tcp:48686 tcp:48686` → WebSocket connect → authenticate via one-time token (extracted from `adb logcat` matching `PROBE_TOKEN=...`) → dispatch JSON-RPC commands
-- **iOS Simulator**: CLI → `localhost:48686` directly (simulator shares host loopback) → authenticate via token file at `~/Library/Developer/CoreSimulator/Devices/<UDID>/data/tmp/probe/token` (fast path) or log stream (fallback)
+- **Android**: CLI → `adb forward tcp:<host-port> tcp:<device-port>` → WebSocket connect to `ws://127.0.0.1:<host-port>/probe?token=...` → authenticate via one-time token (extracted from `adb logcat` matching `PROBE_TOKEN=...`) → dispatch JSON-RPC commands. Host port defaults to `agent.port` (48686), device port defaults to `agent.device_port` (same as `agent.port` unless overridden). Different host ports enable parallel testing on multiple devices.
+- **iOS Simulator**: CLI → `ws://127.0.0.1:<port>/probe?token=...` directly (simulator shares host loopback — `ios/simctl.go:ForwardPort()` is a no-op) → authenticate via token file at `~/Library/Developer/CoreSimulator/Devices/<UDID>/data/tmp/probe/token` (fast path) or log stream (fallback)
 
 ### Go CLI internals (`internal/`)
 
@@ -82,7 +82,7 @@ All settings follow the resolution order: **CLI flag > probe.yaml > built-in def
 
 ### probe.yaml sections
 
-- **`agent:`** — WebSocket port (`48686`), dial timeout (`30s`), ping interval (`5s`), token read timeout (`30s`), reconnect delay (`2s`)
+- **`agent:`** — WebSocket host port (`port: 48686`), on-device port (`device_port`: defaults to `port` if unset — allows `adb forward` to map different host↔device ports for parallel testing), dial timeout (`30s`), ping interval (`5s`), token read timeout (`30s`), reconnect delay (`2s`)
 - **`device:`** — Emulator boot timeout (`120s`), simulator boot timeout (`60s`), boot poll interval (`2s`), token file retries (`5`), restart delay (`500ms`)
 - **`video:`** — Resolution (`720x1280`), framerate (`2` fps), screenrecord cycle (`170s`)
 - **`visual:`** — Threshold (`0.5`%), pixel delta (`8`)
