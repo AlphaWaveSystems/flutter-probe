@@ -20,12 +20,25 @@ const (
 	FormatJSON     Format = "json"
 )
 
+// RunMetadata contains device, app, and environment info for report traceability.
+type RunMetadata struct {
+	DeviceName   string `json:"device_name"`
+	DeviceID     string `json:"device_id"`
+	Platform     string `json:"platform"`      // "ios" or "android"
+	OSVersion    string `json:"os_version"`     // "iOS 18.6" or "Android 14"
+	AppID        string `json:"app_id"`         // bundle ID / package name
+	AppVersion   string `json:"app_version"`    // e.g. "1.2.16"
+	ProbeVersion string `json:"probe_version"`  // FlutterProbe CLI version
+	ConfigFile   string `json:"config_file"`    // which probe.yaml was used
+}
+
 // Reporter writes test results to various output formats.
 type Reporter struct {
 	format    Format
 	out       io.Writer
 	verbose   bool
 	outputDir string // directory of the output file, used to relativize artifact paths
+	metadata  *RunMetadata
 }
 
 // NewReporter creates a reporter writing to the given writer.
@@ -44,6 +57,11 @@ func NewFileReporter(format Format, path string, verbose bool) (*Reporter, error
 	}
 	absDir, _ := filepath.Abs(filepath.Dir(path))
 	return &Reporter{format: format, out: f, verbose: verbose, outputDir: absDir}, nil
+}
+
+// SetMetadata attaches run metadata that will be included in JSON reports.
+func (r *Reporter) SetMetadata(m RunMetadata) {
+	r.metadata = &m
 }
 
 // Report writes results to the output.
@@ -197,6 +215,7 @@ type jsonResult struct {
 
 type jsonReport struct {
 	GeneratedAt string       `json:"generated_at"`
+	Metadata    *RunMetadata `json:"metadata,omitempty"`
 	TotalTests  int          `json:"total_tests"`
 	Passed      int          `json:"passed"`
 	Failed      int          `json:"failed"`
@@ -207,6 +226,7 @@ type jsonReport struct {
 func (r *Reporter) writeJSON(results []TestResult) error {
 	report := jsonReport{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Metadata:    r.metadata,
 		TotalTests:  len(results),
 	}
 	for _, res := range results {

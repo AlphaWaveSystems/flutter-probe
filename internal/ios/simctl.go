@@ -22,6 +22,24 @@ type Simulator struct {
 	DeviceTypeID  string
 }
 
+// HumanRuntime converts the raw runtime string (e.g.
+// "com.apple.CoreSimulator.SimRuntime.iOS-18-6") to a human-readable form
+// like "iOS 18.6".
+func (s Simulator) HumanRuntime() string {
+	// e.g. "com.apple.CoreSimulator.SimRuntime.iOS-18-6"
+	r := s.Runtime
+	if idx := strings.LastIndex(r, "."); idx >= 0 {
+		r = r[idx+1:] // "iOS-18-6"
+	}
+	// Split on first dash to separate platform from version numbers
+	parts := strings.SplitN(r, "-", 2) // ["iOS", "18-6"]
+	if len(parts) == 2 {
+		ver := strings.ReplaceAll(parts[1], "-", ".")
+		return parts[0] + " " + ver // "iOS 18.6"
+	}
+	return r
+}
+
 // SimCtl wraps xcrun simctl.
 type SimCtl struct{}
 
@@ -77,7 +95,11 @@ func (s *SimCtl) Shutdown(ctx context.Context, udid string) error {
 }
 
 // WaitForBoot polls until the simulator is booted or timeout elapses.
-func (s *SimCtl) WaitForBoot(ctx context.Context, udid string, timeout time.Duration) error {
+// pollInterval controls how often to check (0 = default 2s).
+func (s *SimCtl) WaitForBoot(ctx context.Context, udid string, timeout, pollInterval time.Duration) error {
+	if pollInterval == 0 {
+		pollInterval = 2 * time.Second
+	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		sims, err := s.List(ctx)
@@ -88,7 +110,7 @@ func (s *SimCtl) WaitForBoot(ctx context.Context, udid string, timeout time.Dura
 				}
 			}
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(pollInterval)
 	}
 	return fmt.Errorf("simctl: simulator %s did not boot within %s", udid, timeout)
 }
@@ -125,13 +147,20 @@ func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte
 
 // ReadToken reads the ProbeAgent token. It first tries the token file written
 // by the agent, then falls back to streaming the simulator's system log.
-func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Duration) (string, error) {
+// fileRetries controls how many times to attempt reading the token file before
+// falling back to the log stream (0 = default 5).
+func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Duration, fileRetries ...int) (string, error) {
 	tCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	retries := 5
+	if len(fileRetries) > 0 && fileRetries[0] > 0 {
+		retries = fileRetries[0]
+	}
+
 	// Try reading token from file first (fast path)
 	tokenPath := s.simDataPath(udid) + "/tmp/probe/token"
-	for i := 0; i < 5; i++ {
+	for i := 0; i < retries; i++ {
 		if data, err := os.ReadFile(tokenPath); err == nil {
 			token := strings.TrimSpace(string(data))
 			if len(token) >= 16 {

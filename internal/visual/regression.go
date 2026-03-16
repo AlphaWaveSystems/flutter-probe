@@ -30,6 +30,7 @@ type Comparator struct {
 	ActualDir   string  // directory for actual run PNGs
 	DiffDir     string  // directory for diff images
 	Threshold   float64 // max allowed diff % (e.g. 0.5 = 0.5%)
+	PixelDelta  int     // per-pixel color distance threshold (0–255); 0 uses default of 8
 }
 
 // NewComparator creates a Comparator with sensible defaults.
@@ -40,6 +41,18 @@ func NewComparator(projectDir string) *Comparator {
 		DiffDir:     filepath.Join(projectDir, "reports", "visual-diff"),
 		Threshold:   0.5,
 	}
+}
+
+// NewComparatorWithConfig creates a Comparator using the provided visual settings.
+func NewComparatorWithConfig(projectDir string, threshold float64, pixelDelta int) *Comparator {
+	c := NewComparator(projectDir)
+	if threshold > 0 {
+		c.Threshold = threshold
+	}
+	if pixelDelta > 0 {
+		c.PixelDelta = pixelDelta
+	}
+	return c
 }
 
 // Compare compares [actualPath] against the baseline named [name].
@@ -80,7 +93,11 @@ func (c *Comparator) Compare(name string, actualPath string) (*DiffResult, error
 	}
 
 	// Compare pixel by pixel
-	diffImg, diffPixels, totalPixels := pixelDiff(baseline, actual)
+	delta := c.PixelDelta
+	if delta <= 0 {
+		delta = 8
+	}
+	diffImg, diffPixels, totalPixels := pixelDiff(baseline, actual, delta)
 	diffPct := 0.0
 	if totalPixels > 0 {
 		diffPct = float64(diffPixels) / float64(totalPixels) * 100.0
@@ -115,7 +132,8 @@ func (c *Comparator) UpdateBaseline(name, actualPath string) error {
 // ---- Image diff ----
 
 // pixelDiff produces a diff image and returns the number of differing pixels.
-func pixelDiff(a, b image.Image) (image.Image, int, int) {
+// pixelDelta controls the per-pixel color distance threshold (0–255).
+func pixelDiff(a, b image.Image, pixelDelta int) (image.Image, int, int) {
 	bounds := a.Bounds()
 	bBounds := b.Bounds()
 
@@ -144,7 +162,7 @@ func pixelDiff(a, b image.Image) (image.Image, int, int) {
 			da := absDiff(aA, bA)
 
 			maxDelta := math.Max(math.Max(float64(dr), float64(dg)), math.Max(float64(db), float64(da)))
-			if maxDelta > 8 { // threshold per-pixel (0–255 scale)
+			if maxDelta > float64(pixelDelta) {
 				diffPixels++
 				// Highlight diff in red with original brightness
 				brightness := uint8((float64(aR)*0.3 + float64(aG)*0.6 + float64(aB)*0.1) / 2)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/flutterprobe/probe/internal/report"
 	"github.com/flutterprobe/probe/internal/runner"
+
 	"github.com/spf13/cobra"
 )
 
@@ -31,11 +32,12 @@ func init() {
 
 // jsonResultFile mirrors the JSON schema produced by runner.Reporter (writeJSON).
 type jsonResultFile struct {
-	GeneratedAt string `json:"generated_at"`
-	TotalTests  int    `json:"total_tests"`
-	Passed      int    `json:"passed"`
-	Failed      int    `json:"failed"`
-	Skipped     int    `json:"skipped"`
+	GeneratedAt string              `json:"generated_at"`
+	Metadata    *runner.RunMetadata `json:"metadata,omitempty"`
+	TotalTests  int                 `json:"total_tests"`
+	Passed      int                 `json:"passed"`
+	Failed      int                 `json:"failed"`
+	Skipped     int                 `json:"skipped"`
 	Results     []struct {
 		Name      string   `json:"name"`
 		File      string   `json:"file"`
@@ -103,6 +105,9 @@ func runReport(cmd *cobra.Command, args []string) error {
 
 	// Generate HTML report
 	rep := report.NewHTMLReport(outputPath, projectName)
+	if jrf.Metadata != nil {
+		rep.Metadata = jrf.Metadata
+	}
 	if err := rep.Write(results, artifacts); err != nil {
 		return fmt.Errorf("generating report: %w", err)
 	}

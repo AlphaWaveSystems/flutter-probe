@@ -21,10 +21,11 @@ const (
 
 // Device represents a connected emulator or simulator.
 type Device struct {
-	ID       string   // ADB serial or iOS UDID
-	Name     string   // display name
-	Platform Platform
-	State    string // online | offline | booting
+	ID        string   // ADB serial or iOS UDID
+	Name      string   // display name
+	Platform  Platform
+	State     string // online | offline | booting
+	OSVersion string // e.g. "iOS 18.6" or "Android 14"
 }
 
 // ToolPaths holds configurable paths to external tools.
@@ -71,10 +72,11 @@ func (m *Manager) List(ctx context.Context) ([]Device, error) {
 	if err == nil {
 		for _, s := range sims {
 			all = append(all, Device{
-				ID:       s.UDID,
-				Name:     s.Name,
-				Platform: PlatformIOS,
-				State:    strings.ToLower(s.State),
+				ID:        s.UDID,
+				Name:      s.Name,
+				Platform:  PlatformIOS,
+				State:     strings.ToLower(s.State),
+				OSVersion: s.HumanRuntime(),
 			})
 		}
 	}
@@ -83,8 +85,9 @@ func (m *Manager) List(ctx context.Context) ([]Device, error) {
 }
 
 // Start boots an Android emulator identified by avdName.
-func (m *Manager) Start(ctx context.Context, avdName string) (*Device, error) {
-	return m.adb.StartEmulator(ctx, avdName)
+// bootTimeout and pollInterval control startup behavior (0 = use defaults).
+func (m *Manager) Start(ctx context.Context, avdName string, bootTimeout, pollInterval time.Duration) (*Device, error) {
+	return m.adb.StartEmulator(ctx, avdName, bootTimeout, pollInterval)
 }
 
 // StartIOS boots an iOS simulator by UDID. If udid is empty, auto-selects one.
@@ -100,7 +103,7 @@ func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
 	if err := m.simctl.Boot(ctx, udid); err != nil {
 		return nil, err
 	}
-	if err := m.simctl.WaitForBoot(ctx, udid, 60*time.Second); err != nil {
+	if err := m.simctl.WaitForBoot(ctx, udid, 60*time.Second, 0); err != nil {
 		return nil, err
 	}
 
@@ -178,8 +181,12 @@ func (m *Manager) InstallAndLaunchApp(ctx context.Context, serial string, platfo
 }
 
 // WaitForBoot polls until a device is online or the context is cancelled.
-func (m *Manager) WaitForBoot(ctx context.Context, serial string) error {
-	ticker := time.NewTicker(2 * time.Second)
+// pollInterval controls how often to check (0 = default 2s).
+func (m *Manager) WaitForBoot(ctx context.Context, serial string, pollInterval time.Duration) error {
+	if pollInterval == 0 {
+		pollInterval = 2 * time.Second
+	}
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 	for {
 		select {

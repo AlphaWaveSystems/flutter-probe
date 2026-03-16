@@ -15,10 +15,14 @@ import (
 	"github.com/flutterprobe/probe/internal/runner"
 )
 
+// ReportMetadata is a type alias used to pass run metadata into the HTML template.
+type ReportMetadata = runner.RunMetadata
+
 // HTMLReport generates an interactive HTML dashboard from test results.
 type HTMLReport struct {
 	OutputPath  string
 	ProjectName string
+	Metadata    *ReportMetadata
 }
 
 // NewHTMLReport creates an HTMLReport.
@@ -88,24 +92,54 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		return err
 	}
 
+	// Build metadata display strings
+	metaDevice, metaPlatform, metaOS, metaApp := "", "", "", ""
+	if h.Metadata != nil {
+		m := h.Metadata
+		if m.DeviceName != "" {
+			metaDevice = m.DeviceName
+			if m.DeviceID != "" && m.DeviceID != m.DeviceName {
+				metaDevice += " (" + m.DeviceID + ")"
+			}
+		} else if m.DeviceID != "" {
+			metaDevice = m.DeviceID
+		}
+		metaPlatform = m.Platform
+		metaOS = m.OSVersion
+		if m.AppID != "" {
+			metaApp = m.AppID
+			if m.AppVersion != "" {
+				metaApp += " v" + m.AppVersion
+			}
+		}
+	}
+
 	data := struct {
-		ProjectName string
-		GeneratedAt string
-		TotalDur    string
-		Passed      int
-		Failed      int
-		Skipped     int
-		Total       int
-		ResultsJSON string
+		ProjectName  string
+		GeneratedAt  string
+		TotalDur     string
+		Passed       int
+		Failed       int
+		Skipped      int
+		Total        int
+		ResultsJSON  string
+		MetaDevice   string
+		MetaPlatform string
+		MetaOS       string
+		MetaApp      string
 	}{
-		ProjectName: h.ProjectName,
-		GeneratedAt: time.Now().Format("Mon Jan 02 2006 15:04:05 MST"),
-		TotalDur:    totalDur.Round(time.Millisecond).String(),
-		Passed:      passed,
-		Failed:      failed,
-		Skipped:     skipped,
-		Total:       len(results),
-		ResultsJSON: string(resultsJSON),
+		ProjectName:  h.ProjectName,
+		GeneratedAt:  time.Now().Format("Mon Jan 02 2006 15:04:05 MST"),
+		TotalDur:     totalDur.Round(time.Millisecond).String(),
+		Passed:       passed,
+		Failed:       failed,
+		Skipped:      skipped,
+		Total:        len(results),
+		ResultsJSON:  string(resultsJSON),
+		MetaDevice:   metaDevice,
+		MetaPlatform: metaPlatform,
+		MetaOS:       metaOS,
+		MetaApp:      metaApp,
 	}
 
 	tmpl, err := template.New("report").Funcs(template.FuncMap{
@@ -197,7 +231,8 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
     <span class="project">/ {{.ProjectName}}</span>
   </div>
   <div class="meta">Generated {{.GeneratedAt}} · Total duration {{.TotalDur}}</div>
-</header>
+{{if or .MetaDevice .MetaOS .MetaApp}}  <div class="meta" style="margin-top:4px">{{if .MetaDevice}}Device: {{.MetaDevice}}{{end}}{{if .MetaOS}} · OS: {{.MetaOS}}{{end}}{{if .MetaPlatform}} · Platform: {{.MetaPlatform}}{{end}}{{if .MetaApp}} · App: {{.MetaApp}}{{end}}</div>
+{{end}}</header>
 
 <div class="summary">
   <div class="stat pass"><div class="num">{{.Passed}}</div><div class="lbl">Passed</div></div>

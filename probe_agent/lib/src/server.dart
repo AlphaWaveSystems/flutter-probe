@@ -5,7 +5,7 @@ import 'dart:math';
 import 'executor.dart';
 import 'protocol.dart';
 
-/// ProbeServer is a WebSocket server that listens on localhost:8686.
+/// ProbeServer is a WebSocket server that listens on localhost:48686.
 ///
 /// The probe CLI connects to this server after the app starts.
 /// Authentication is token-based: the server emits a one-time token
@@ -16,7 +16,7 @@ class ProbeServer {
   String? _token;
   ProbeExecutor? _executor;
 
-  ProbeServer({this.port = 8686});
+  ProbeServer({this.port = 48686});
 
   Timer? _tokenTimer;
 

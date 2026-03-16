@@ -27,7 +27,7 @@ class ProbeAgent {
   /// Starts the ProbeAgent WebSocket server.
   ///
   /// No-op on non-debug builds (checked via assert).
-  static Future<void> start({int port = 8686}) async {
+  static Future<void> start({int port = 48686}) async {
     // Safety guard — only meaningful in debug / profile builds.
     // In release mode this is a no-op because asserts are disabled.
     assert(() {
@@ -52,7 +52,7 @@ class ProbeAgent {
   static bool get isRunning => _server != null;
 
   /// The port the agent is listening on.
-  static int get port => _server?.port ?? 8686;
+  static int get port => _server?.port ?? 48686;
 }
 
 /// Utility: true when running in a probe-enabled build.

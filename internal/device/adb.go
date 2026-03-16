@@ -67,7 +67,16 @@ func (a *ADB) Devices(ctx context.Context) ([]Device, error) {
 }
 
 // StartEmulator boots an AVD and returns a Device once it appears.
-func (a *ADB) StartEmulator(ctx context.Context, avdName string) (*Device, error) {
+// bootTimeout controls how long to wait for the emulator to appear (default 120s).
+// pollInterval controls how often to check for the device (default 2s).
+func (a *ADB) StartEmulator(ctx context.Context, avdName string, bootTimeout, pollInterval time.Duration) (*Device, error) {
+	if bootTimeout == 0 {
+		bootTimeout = 120 * time.Second
+	}
+	if pollInterval == 0 {
+		pollInterval = 2 * time.Second
+	}
+
 	// Start the emulator in background
 	cmd := exec.CommandContext(ctx, "emulator", "-avd", avdName, "-no-audio", "-no-boot-anim")
 	if err := cmd.Start(); err != nil {
@@ -75,7 +84,7 @@ func (a *ADB) StartEmulator(ctx context.Context, avdName string) (*Device, error
 	}
 
 	// Poll for the device to appear
-	deadline := time.Now().Add(120 * time.Second)
+	deadline := time.Now().Add(bootTimeout)
 	for time.Now().Before(deadline) {
 		devices, err := a.Devices(ctx)
 		if err == nil {
@@ -85,9 +94,9 @@ func (a *ADB) StartEmulator(ctx context.Context, avdName string) (*Device, error
 				}
 			}
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(pollInterval)
 	}
-	return nil, fmt.Errorf("adb: emulator %q did not appear within 120s", avdName)
+	return nil, fmt.Errorf("adb: emulator %q did not appear within %s", avdName, bootTimeout)
 }
 
 // Forward creates an adb forward rule: tcp:hostPort -> tcp:devicePort.
@@ -150,6 +159,31 @@ func (a *ADB) LaunchApp(ctx context.Context, serial, packageName string) error {
 		return fmt.Errorf("adb launch: %w", err)
 	}
 	return nil
+}
+
+// GetProp reads a system property from the device.
+func (a *ADB) GetProp(ctx context.Context, serial, prop string) (string, error) {
+	out, err := a.Shell(ctx, serial, "getprop", prop)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// GetAppVersion returns the versionName for an installed package.
+func (a *ADB) GetAppVersion(ctx context.Context, serial, appID string) (string, error) {
+	out, err := a.Shell(ctx, serial, "dumpsys", "package", appID)
+	if err != nil {
+		return "", err
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "versionName=") {
+			return strings.TrimPrefix(line, "versionName="), nil
+		}
+	}
+	return "", fmt.Errorf("adb: versionName not found for %s", appID)
 }
 
 // Bin returns the path to the adb binary.

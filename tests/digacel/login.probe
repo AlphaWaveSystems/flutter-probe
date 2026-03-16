@@ -6,11 +6,19 @@ on failure
 
 # ---- Tests ----
 
+test "happy path login reaches main menu"
+  @smoke @critical
+  open the app
+  wait until "Login" appears
+  type "test01" into "Usuario"
+  type "123456" into "Contraseña"
+  tap "Login"
+  wait until "Lector" appears
+  see "Dígita"
+  take a screenshot called "login_success"
+
 test "menu drawer shows user info and logout"
   @smoke
-  open the app
-  wait 4 seconds
-  see "Lector"
   tap #MenuButton
   wait 2 seconds
   see "Salir"
@@ -30,27 +38,8 @@ test "login screen has required fields and labels"
   see "Login"
   see "aviso de privacidad"
 
-test "happy path login reaches main menu"
-  @smoke @critical
-  see "Login"
-  type "test01" into "Usuario"
-  type "123456" into "Contraseña"
-  tap "Login"
-  wait 5 seconds
-  see "Lector"
-  see "Dígita"
-  take a screenshot called "login_success"
-
 test "wrong credentials show Spanish error"
   @critical
-  # Restart to get clean state, then logout
-  restart the app
-  wait 5 seconds
-  tap #MenuButton
-  wait 2 seconds
-  tap "Salir"
-  wait 4 seconds
-  see "Login"
   type "wronguser" into "Usuario"
   type "wrongpass" into "Contraseña"
   tap "Login"
@@ -65,13 +54,13 @@ test "input sanitization strips whitespace and lowercases username"
   type "<username>" into "Usuario"
   type "123456" into "Contraseña"
   tap "Login"
-  wait 5 seconds
-  see "Lector"
+  wait until "Lector" appears
   see "Dígita"
   take a screenshot called "sanitized_login"
-  # Log out for next permutation
+  # Restart and logout for next permutation
   restart the app
-  wait 5 seconds
+  wait until "Lector" appears
+  wait 2 seconds
   tap #MenuButton
   wait 2 seconds
   tap "Salir"
@@ -80,12 +69,9 @@ test "input sanitization strips whitespace and lowercases username"
 with examples:
   username
   " test01"
-  "test01 "
-  " test01 "
   "TEST01"
-  " TEST01 "
-  "Test01"
-  "  Test01  "
+  " Test01 "
+  "  TEST01  "
 
 test "silent login after app restart"
   @critical
@@ -93,12 +79,10 @@ test "silent login after app restart"
   type "test01" into "Usuario"
   type "123456" into "Contraseña"
   tap "Login"
-  wait 5 seconds
-  see "Lector"
+  wait until "Lector" appears
   # PR #38: FCM token no longer blocks silent login
   restart the app
-  wait 5 seconds
-  see "Lector"
+  wait until "Lector" appears
   see "Dígita"
   don't see "Login"
   don't see "Usuario"

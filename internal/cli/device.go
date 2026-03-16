@@ -59,7 +59,7 @@ var deviceStartCmd = &cobra.Command{
 				avd = avds[0]
 			}
 			fmt.Printf("  Starting emulator %q...\n", avd)
-			d, err := dm.Start(ctx, avd)
+			d, err := dm.Start(ctx, avd, 0, 0)
 			if err != nil {
 				return err
 			}

@@ -295,6 +295,45 @@ func runTests(cmd *cobra.Command, args []string) error {
 		report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 	}
 
+	// Attach run metadata for JSON/HTML reports
+	if !dryRun && dm != nil {
+		meta := runner.RunMetadata{
+			DeviceID: deviceSerial,
+			Platform: string(platform),
+			AppID:    cfg.Project.App,
+		}
+		// Resolve config file path
+		cfgPath, _ := cmd.Flags().GetString("config")
+		if cfgPath != "" {
+			meta.ConfigFile = cfgPath
+		} else {
+			meta.ConfigFile = "probe.yaml"
+		}
+		// Get device name and OS version from device list
+		devices, _ := dm.List(ctx)
+		for _, d := range devices {
+			if d.ID == deviceSerial {
+				meta.DeviceName = d.Name
+				meta.OSVersion = d.OSVersion
+				break
+			}
+		}
+		// Android-specific: query OS version and app version via ADB
+		if platform == device.PlatformAndroid {
+			if meta.OSVersion == "" {
+				if v, err := dm.ADB().GetProp(ctx, deviceSerial, "ro.build.version.release"); err == nil && v != "" {
+					meta.OSVersion = "Android " + v
+				}
+			}
+			if cfg.Project.App != "" {
+				if v, err := dm.ADB().GetAppVersion(ctx, deviceSerial, cfg.Project.App); err == nil {
+					meta.AppVersion = v
+				}
+			}
+		}
+		report.SetMetadata(meta)
+	}
+
 	// Tags
 	var tags []string
 	if tag != "" {
