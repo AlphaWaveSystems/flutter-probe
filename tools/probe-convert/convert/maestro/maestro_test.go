@@ -274,6 +274,22 @@ func TestConvert_SkipOn(t *testing.T) {
 	assertContains(t, result.ProbeCode, "Platform.isIos")
 }
 
+func TestConvert_OnlyOn(t *testing.T) {
+	yaml := `---
+- onlyOn:
+    platform: android
+`
+	c := New()
+	result, err := c.Convert([]byte(yaml), "onlyon.yaml")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	assertContains(t, result.ProbeCode, "migrated from Maestro onlyOn: android")
+	assertContains(t, result.ProbeCode, "Platform.isAndroid")
+	// onlyOn uses the negated guard (same as ifdef)
+	assertContains(t, result.ProbeCode, "!Platform.isAndroid")
+}
+
 func TestConvert_SetLocation(t *testing.T) {
 	yaml := `---
 - setLocation:

@@ -73,6 +73,23 @@ class XPathTest(unittest.TestCase):
 	assertContains(t, result.ProbeCode, `tap on "Submit"`)
 }
 
+func TestConvert_PythonXPathNonExtractable(t *testing.T) {
+	py := `
+class XPathTest(unittest.TestCase):
+    def test_xpath_fallback(self):
+        self.driver.find_element(AppiumBy.XPATH, '//android.widget.LinearLayout[2]/Button').click()
+`
+	c := New()
+	result, err := c.Convert([]byte(py), "test_xpath_fallback.py")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+
+	// Non-extractable xpath → comment fallback
+	assertContains(t, result.ProbeCode, "# xpath:")
+	assertContains(t, result.ProbeCode, "LinearLayout")
+}
+
 func TestConvert_PythonBack(t *testing.T) {
 	py := `
 class NavTest(unittest.TestCase):
@@ -145,6 +162,43 @@ public class CheckoutTest {
 	}
 
 	assertContains(t, result.ProbeCode, `test "add item to cart and checkout"`)
+}
+
+func TestConvert_JavaXPathExtractable(t *testing.T) {
+	java := `
+public class XPathTest {
+    @Test
+    public void testXpathClick() {
+        driver.findElement(By.xpath("//Button[@text='Submit']")).click();
+    }
+}
+`
+	c := New()
+	result, err := c.Convert([]byte(java), "XPathTest.java")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+
+	assertContains(t, result.ProbeCode, `tap on "Submit"`)
+}
+
+func TestConvert_JavaXPathNonExtractable(t *testing.T) {
+	java := `
+public class XPathTest {
+    @Test
+    public void testXpathFallback() {
+        driver.findElement(By.xpath("//LinearLayout[2]/Button")).click();
+    }
+}
+`
+	c := New()
+	result, err := c.Convert([]byte(java), "XPathFallback.java")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+
+	assertContains(t, result.ProbeCode, "# xpath:")
+	assertContains(t, result.ProbeCode, "LinearLayout")
 }
 
 // ---- JS tests ----

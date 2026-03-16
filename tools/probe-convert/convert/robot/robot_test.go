@@ -132,6 +132,39 @@ Parameterized
 	assertContains(t, result.ProbeCode, "<password>")
 }
 
+func TestConvert_XPathExtractable(t *testing.T) {
+	robot := `*** Test Cases ***
+XPath Test
+    Click Element    xpath=//android.widget.Button[@text="Submit"]
+    Click Element    xpath=//View[@content-desc="Settings"]
+`
+	c := New()
+	result, err := c.Convert([]byte(robot), "xpath.robot")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+
+	// Text-extractable xpath → full selector
+	assertContains(t, result.ProbeCode, `tap on "Submit"`)
+	assertContains(t, result.ProbeCode, `tap on "Settings"`)
+}
+
+func TestConvert_XPathNonExtractable(t *testing.T) {
+	robot := `*** Test Cases ***
+XPath Fallback
+    Click Element    xpath=//android.widget.LinearLayout[2]/android.widget.Button
+`
+	c := New()
+	result, err := c.Convert([]byte(robot), "xpath_fallback.robot")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+
+	// Non-extractable xpath → comment fallback
+	assertContains(t, result.ProbeCode, "# xpath:")
+	assertContains(t, result.ProbeCode, "LinearLayout")
+}
+
 func assertContains(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {
