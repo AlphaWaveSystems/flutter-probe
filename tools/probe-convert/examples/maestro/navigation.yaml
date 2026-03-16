@@ -1,0 +1,18 @@
+appId: com.example.app
+---
+- launchApp
+- tapOn:
+    id: "menuButton"
+- assertVisible: "Settings"
+- assertVisible: "Profile"
+- assertVisible: "Logout"
+- tapOn: "Settings"
+- assertVisible: "Notifications"
+- back
+- longPressOn: "Profile"
+- assertVisible: "Edit Profile"
+- hideKeyboard
+- scrollDown
+- tapOn: "Logout"
+- assertVisible: "Sign In"
+- takeScreenshot: "after_logout"

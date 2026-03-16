@@ -1,0 +1,16 @@
+appId: com.example.app
+---
+- launchApp
+- waitForAnimationToEnd
+- assertVisible: "Welcome"
+- takeScreenshot: "welcome_screen"
+- tapOn: "Get Started"
+- swipe:
+    direction: LEFT
+- swipe:
+    direction: LEFT
+- swipe:
+    direction: LEFT
+- tapOn: "Skip"
+- assertNotVisible: "Get Started"
+- assertVisible: "Home"

@@ -1,0 +1,27 @@
+# Converted from Gherkin — Feature: Login
+
+before each
+  open the app
+  wait until "Sign In" appears
+
+test "User can log in with email"
+  @smoke @critical
+  tap on "Sign In"
+  type "user@test.com" into "Email"
+  type "pass123" into "Password"
+  tap on "Continue"
+  see "Dashboard"
+
+test "User sees error for wrong credentials"
+  @smoke
+  tap on "Sign In"
+  type "wrong@test.com" into "Email"
+  type "badpass" into "Password"
+  tap on "Continue"
+  see "Invalid credentials"
+  don't see "Dashboard"
+
+test "User can navigate back from login"
+  tap on "Sign In"
+  go back
+  see "Welcome"

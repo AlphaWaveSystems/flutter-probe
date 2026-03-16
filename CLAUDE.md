@@ -62,7 +62,7 @@ The system has two main components that communicate via WebSocket + JSON-RPC 2.0
 - **`ios/`** — iOS simulator management via `xcrun simctl`: boot, install, launch, log streaming, token reading
 - **`config/`** — `probe.yaml` parsing with sections: `project`, `defaults`, `agent`, `device`, `video`, `visual`, `tools`, `devices`, `environment`. All timeouts and tuning constants are configurable.
 - **`ai/`** — Self-healing selectors via fuzzy matching against widget tree (strategies: text_fuzzy, key_partial, type_position, semantic)
-- **`migrate/`** — Converts Maestro YAML test flows to ProbeScript
+- **`migrate/`** — Converts Maestro YAML test flows to ProbeScript (legacy; see `tools/probe-convert/` for multi-format converter)
 - **`report/`** — HTML report generation with relative artifact paths for portability
 - **`plugin/`** — YAML-based custom command system; plugins define new ProbeScript commands that dispatch to Dart handlers
 - **`visual/`** — Screenshot-based visual regression testing with configurable threshold and pixel delta
@@ -244,6 +244,78 @@ test "a user can sign in"
 ```
 
 Key constructs: `test`, `recipe` (reusable steps with params), `use` (import recipes), `before each`/`after each` hooks, `on failure` hooks, `if`/`else` conditionals, `repeat N times` loops, `Examples:` blocks for data-driven tests with `<var>` substitution, `dart:` blocks for escape-hatch Dart code, `when ... respond with` for HTTP mocking, `clear app data` / `restart the app` for lifecycle control, `allow permission` / `deny permission` / `grant all permissions` for OS permission management.
+
+## probe-convert Tool (`tools/probe-convert/`)
+
+Standalone multi-format test converter that translates tests from 7 source formats into ProbeScript. All languages are at **100% construct coverage** (no Manual-level constructs remaining).
+
+### Build & Test Commands
+
+```bash
+# From repo root
+make build-convert                # Build → bin/probe-convert
+make test-convert                 # Unit tests (converter packages only)
+make test-convert-integration     # Golden files + probe lint + probe test --dry-run
+
+# From tools/probe-convert/
+make test                         # Unit tests
+make test-all                     # Unit + integration
+make update-golden                # Regenerate golden files after intentional changes
+```
+
+### Architecture
+
+- **`convert/`** — Common types (`Converter` interface, `Result`, `Warning`, `ProbeWriter`)
+- **`convert/maestro/`** — Maestro YAML → ProbeScript (26 constructs, 100% coverage)
+- **`convert/gherkin/`** — Gherkin/Cucumber `.feature` → ProbeScript (34 constructs)
+- **`convert/robot/`** — Robot Framework `.robot` → ProbeScript (29 constructs)
+- **`convert/detox/`** — Detox JS/TS → ProbeScript (22 constructs)
+- **`convert/appium/`** — Appium Python/Java/JS → ProbeScript (39 constructs across 3 variants)
+- **`catalog/`** — Formal grammar construct catalog per language with EBNF, examples, ProbeScript mappings, and coverage levels
+- **`cmd/`** — Cobra CLI: root convert command + `catalog` and `formats` subcommands
+- **`ui/`** — Terminal output (colors, spinners, syntax-highlighted dry-run)
+
+### Conversion Levels
+
+- **Full** — Lossless 1:1 mapping (e.g., `tapOn` → `tap on`)
+- **Partial** — Lossy but valid ProbeScript with guidance comments (e.g., `evalScript` → `run dart:` block, `ifdef` → platform guard in dart block, `setLocation` → GPS mock comments + dart block)
+- **Manual** — Emitted as `# TODO` comment (none remaining — all promoted)
+- **Skip** — Intentionally ignored (imports, boilerplate)
+
+### Key Maestro Mappings (recently promoted)
+
+| Maestro Construct | ProbeScript Output | Level |
+|---|---|---|
+| `evalScript: "console.log('x')"` | `run dart:` block with JS→Dart transpilation (`console.log`→`print`, `===`→`==`, `const`→`final`) | Full |
+| `setAirplaneMode: true` | `toggle wifi off` | Full |
+| `ifdef: {platform: android}` | `run dart:` block with platform guard comment (`Platform.isAndroid`) | Partial |
+| `setLocation: {lat, lng}` | Comments with `adb`/`simctl` GPS commands + `run dart:` block | Partial |
+
+### Integration Test Contract
+
+`integration_test.go` runs 3 test suites across all 15 example files (all 7 formats):
+
+1. **TestGoldenFiles** — Converter output matches `testdata/golden/` snapshots
+2. **TestLintGeneratedOutput** — Generated `.probe` files pass `probe lint` (ProbeScript parser accepts them)
+3. **TestVerifyDryRun** — Generated files pass `probe test --dry-run` (full parse + recipe resolution)
+
+### Format Auto-Detection
+
+`convert/detect.go` guesses format from file extension + content markers:
+- `.feature` → Gherkin, `.robot` → Robot
+- `.yaml`/`.yml` → Maestro (if contains `appId`, `tapOn`, `launchApp`, etc.)
+- `.js`/`.ts` → Detox (if contains `element(by.` or `device.launchApp`) else Appium JS
+- `.py` → Appium Python, `.java`/`.kt` → Appium Java
+
+### CLI Flags
+
+- `--from/-f` — Force source format (maestro|gherkin|robot|detox|appium)
+- `--output/-o` — Output directory or file
+- `--dry-run` — Preview to stdout
+- `--recursive/-r` — Recurse into subdirectories
+- `--lint` — Validate with `probe lint` after conversion
+- `--verify` — Validate with `probe test --dry-run` after conversion
+- `--probe-path` — Path to probe binary (auto-detected)
 
 ## Key Dependencies
 

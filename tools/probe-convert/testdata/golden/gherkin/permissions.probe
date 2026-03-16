@@ -1,0 +1,23 @@
+# Converted from Gherkin — Feature: Permissions
+
+
+test "Grant camera permission"
+  @permissions
+  open the app
+  allow permission "camera"
+  tap on "Take Photo"
+  see "Camera Preview"
+
+test "Deny location permission"
+  @permissions
+  open the app
+  deny permission "location"
+  tap on "Find Nearby"
+  see "Location permission required"
+
+test "Grant all permissions at once"
+  @permissions
+  open the app
+  grant all permissions
+  tap on "Full Access"
+  see "All features unlocked"

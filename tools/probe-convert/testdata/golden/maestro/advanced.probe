@@ -1,0 +1,25 @@
+# Converted from Maestro — app: com.example.app
+
+test "advanced"
+  open the app
+  # clearState
+  repeat 3 times
+    tap on "Next"
+    see "Page"
+  run dart:
+    // Migrated from Maestro evalScript — review and adapt JS → Dart
+    // Original: console.log('Checking state...')
+    print('Checking state...')
+  open "https://example.com/deeplink"
+  # Location: 37.7749, -122.4194 (migrated from Maestro setLocation)
+  # Android: adb shell cmd location set-location 37.7749 -122.4194
+  # iOS sim: xcrun simctl location set <UDID> 37.7749 -122.4194
+  run dart:
+    // Set mock location — requires platform-level GPS mocking
+    // Coordinates: 37.7749, -122.4194
+  toggle wifi off
+  # Platform conditional (migrated from Maestro ifdef: android)
+  run dart:
+    // Platform guard — adapt to your needs
+    // if (!Platform.isAndroid) throw Exception('Skip: not android');
+  tap on "Android Only Button"

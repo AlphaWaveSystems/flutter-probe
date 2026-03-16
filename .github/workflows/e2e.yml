@@ -46,6 +46,26 @@ jobs:
         with:
           file: coverage.out
 
+  # ---- probe-convert integration tests ----
+  convert-tests:
+    name: probe-convert integration tests
+    runs-on: ubuntu-latest
+    needs: build-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+      - name: Build probe CLI
+        run: make build
+      - name: Build probe-convert
+        run: make build-convert
+      - name: Run unit tests
+        run: make test-convert
+      - name: Run integration tests (golden + lint + verify)
+        run: make test-convert-integration
+
   # ---- Android E2E ----
   e2e-android:
     name: Android E2E (${{ matrix.api-level }})

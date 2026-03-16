@@ -1,0 +1,33 @@
+# Converted from Robot Framework
+
+before each
+  open the app
+
+after each
+  close the app
+
+
+test "Login With Valid Credentials"
+  @smoke @critical
+  tap on "Sign In"
+  type "<email>" into #emailField
+  type "<password>" into #passwordField
+  tap on #loginButton
+  wait until "Dashboard" appears
+  take a screenshot
+
+test "Login With Wrong Credentials Shows Error"
+  @smoke
+  tap on "Sign In"
+  type "wrong@test.com" into #emailField
+  type "badpass" into #passwordField
+  tap on #loginButton
+  wait 2 seconds
+  see "Invalid credentials"
+  don't see "Dashboard"
+
+test "Navigate Back From Login"
+  tap on "Sign In"
+  go back
+  wait until "Welcome" appears
+  see "Welcome"

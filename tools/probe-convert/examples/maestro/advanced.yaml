@@ -1,0 +1,18 @@
+appId: com.example.app
+---
+- launchApp
+- clearState
+- repeat:
+    times: 3
+    commands:
+      - tapOn: "Next"
+      - assertVisible: "Page"
+- evalScript: "console.log('Checking state...')"
+- openLink: "https://example.com/deeplink"
+- setLocation:
+    latitude: 37.7749
+    longitude: -122.4194
+- setAirplaneMode: true
+- ifdef:
+    platform: android
+- tapOn: "Android Only Button"

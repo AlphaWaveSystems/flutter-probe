@@ -1,0 +1,14 @@
+# Converted from Maestro — app: com.example.app
+
+test "onboarding"
+  open the app
+  wait for the page to load
+  see "Welcome"
+  take a screenshot called "welcome_screen"
+  tap on "Get Started"
+  swipe left
+  swipe left
+  swipe left
+  tap on "Skip"
+  don't see "Get Started"
+  see "Home"

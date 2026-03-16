@@ -1,0 +1,24 @@
+# Converted from Appium Java
+
+# Test class: LoginTest
+before each
+after each
+
+test "login with valid credentials"
+  tap on "Sign In"
+  tap on #emailInput
+  type "user@test.com" into #emailInput
+  type "pass123" into #passwordInput
+  tap on #loginButton
+  wait 3 seconds
+
+test "login with wrong credentials"
+  tap on "Sign In"
+  type "wrong@test.com" into #emailInput
+  type "badpass" into #passwordInput
+  tap on #loginButton
+  wait 2 seconds
+
+test "navigate back"
+  tap on "Sign In"
+  go back

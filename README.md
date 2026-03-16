@@ -429,6 +429,8 @@ pause                              # 1-second pause
 | `probe report` | Generate HTML report from test results |
 | `probe migrate` | Convert Maestro YAML flows to ProbeScript |
 | `probe generate` | AI-assisted test generation |
+| `probe-convert <file\|dir>` | Convert tests from other frameworks to ProbeScript |
+| `probe-convert catalog [lang]` | Show grammar construct catalog and coverage stats |
 
 ## Recording Tests
 
@@ -699,6 +701,158 @@ agent:
 
 The `device_port` field allows the host-side port to differ from the on-device port. This is needed because `adb forward` maps `host:48687 → device:48686`, while the iOS simulator uses `localhost:48686` directly.
 
+## Migrating From Other Frameworks (`probe-convert`)
+
+FlutterProbe includes a standalone converter tool that translates tests from 7 source formats into ProbeScript with **100% construct coverage** across all supported languages.
+
+### Supported Formats
+
+| Source Framework | Extensions | Constructs | Full | Partial | Coverage |
+|------------------|-----------|------------|------|---------|----------|
+| Maestro | `.yaml`, `.yml` | 26 | 24 | 2 | 100% |
+| Gherkin (Cucumber) | `.feature` | 34 | 34 | 0 | 100% |
+| Robot Framework | `.robot` | 29 | 28 | 1 | 100% |
+| Detox | `.js`, `.ts` | 22 | 22 | 0 | 100% |
+| Appium (Python) | `.py` | 14 | 13 | 1 | 100% |
+| Appium (Java) | `.java`, `.kt` | 12 | 12 | 0 | 100% |
+| Appium (JS/WebdriverIO) | `.js` | 13 | 13 | 0 | 100% |
+
+### Build & Install
+
+```bash
+make build-convert      # outputs bin/probe-convert
+# or from tools/probe-convert:
+cd tools/probe-convert && make build
+```
+
+### Usage
+
+```bash
+# Convert a single file (auto-detects format)
+bin/probe-convert tests/login.yaml
+
+# Convert a directory recursively
+bin/probe-convert -r maestro_tests/ -o probe_tests/
+
+# Force a specific source format
+bin/probe-convert --from maestro flow.yml
+
+# Preview without writing files
+bin/probe-convert --dry-run tests/login.yaml
+
+# Convert and validate with probe lint
+bin/probe-convert --lint tests/login.yaml -o output/
+
+# Convert and verify with probe test --dry-run
+bin/probe-convert --verify tests/login.yaml -o output/
+
+# Show catalog for a language
+bin/probe-convert catalog maestro
+
+# Show full catalog summary table
+bin/probe-convert catalog
+```
+
+### Conversion Examples
+
+**Maestro YAML → ProbeScript:**
+```yaml
+# login.yaml (Maestro)
+appId: com.example.app
+---
+- launchApp
+- tapOn: "Sign In"
+- inputText: "user@test.com"
+- assertVisible: "Dashboard"
+- evalScript: "console.log('done')"
+- setAirplaneMode: true
+```
+```
+# login.probe (generated)
+test "login"
+  open the app
+  tap on "Sign In"
+  type "user@test.com"
+  see "Dashboard"
+  run dart:
+    // Migrated from Maestro evalScript — review and adapt JS → Dart
+    // Original: console.log('done')
+    print('done')
+  toggle wifi off
+```
+
+**Gherkin → ProbeScript:**
+```gherkin
+Feature: Login
+  Background:
+    Given the app is launched
+
+  Scenario: Valid login
+    When I tap on "Sign In"
+    And I type "user@test.com" into "Email"
+    Then I should see "Dashboard"
+```
+```
+# login.probe (generated)
+before each
+  open the app
+
+test "Valid login"
+  tap on "Sign In"
+  type "user@test.com" into "Email"
+  see "Dashboard"
+```
+
+**Detox JS → ProbeScript:**
+```js
+describe('Login', () => {
+  it('should sign in', async () => {
+    await element(by.id('email')).typeText('user@test.com');
+    await element(by.text('Sign In')).tap();
+    await expect(element(by.text('Dashboard'))).toBeVisible();
+  });
+});
+```
+```
+# login.probe (generated)
+test "should sign in"
+  type "user@test.com" into #email
+  tap on "Sign In"
+  see "Dashboard"
+```
+
+### Conversion Levels
+
+- **Full** — Lossless 1:1 mapping to ProbeScript (e.g., `tapOn` → `tap on`)
+- **Partial** — Lossy but usable; emits valid ProbeScript with guidance comments (e.g., `evalScript` → `run dart:` block, `ifdef` → platform guard, `setLocation` → GPS mock comments)
+
+### Grammar Catalog
+
+Every construct in every supported language is formally catalogued with EBNF rules, examples, and ProbeScript mappings. View with:
+
+```bash
+bin/probe-convert catalog            # summary table
+bin/probe-convert catalog maestro    # full Maestro construct catalog
+bin/probe-convert catalog gherkin    # full Gherkin construct catalog
+bin/probe-convert catalog --markdown # Markdown output for docs
+```
+
+### Testing Converted Output
+
+```bash
+# Run converter unit tests
+make test-convert
+
+# Run full integration suite (golden files + lint + dry-run verify)
+make test-convert-integration
+
+# From tools/probe-convert directory:
+cd tools/probe-convert
+make test          # unit tests
+make test-all      # unit + integration
+make update-golden # regenerate golden files after intentional changes
+```
+
 ## VS Code Extension
 
 A VS Code extension is included in `vscode/` providing:
@@ -738,6 +892,12 @@ FlutterProbe/
 │       └── protocol.dart # JSON-RPC types
 ├── plugins/              # Custom command definitions (YAML)
 ├── tests/                # Example .probe test files
+├── tools/
+│   └── probe-convert/    # Multi-format test converter (Maestro, Gherkin, Robot, Detox, Appium)
+│       ├── convert/      # Converter implementations per format
+│       ├── catalog/      # Grammar construct catalogs with EBNF rules
+│       ├── examples/     # Example input files for all formats
+│       └── testdata/     # Golden files for integration tests
 ├── docker/               # CI Docker setup for Android emulators
 ├── vscode/               # VS Code extension for ProbeScript
 ├── .github/workflows/    # GitHub Actions CI pipeline

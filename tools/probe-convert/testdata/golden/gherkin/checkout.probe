@@ -1,0 +1,29 @@
+# Converted from Gherkin — Feature: Checkout
+
+before each
+  open the app
+  tap on "Sign In"
+  type "user@test.com" into "Email"
+  type "pass123" into "Password"
+  tap on "Continue"
+
+test "Add item to cart"
+  @cart
+  tap on "Shop"
+  tap on "Running Shoes"
+  tap on "Add to Cart"
+  see "Cart (1)"
+
+test "Remove item from cart"
+  @cart
+  tap on "Cart"
+  long press on "Running Shoes"
+  tap on "Remove"
+  see "Cart is empty"
+
+test "Swipe through products"
+  tap on "Shop"
+  swipe left
+  swipe left
+  see "Featured"
+  take a screenshot

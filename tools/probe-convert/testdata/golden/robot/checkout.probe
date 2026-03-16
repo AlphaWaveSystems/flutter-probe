@@ -1,0 +1,47 @@
+# Converted from Robot Framework
+
+before each
+  open the app
+
+after each
+  close the app
+
+
+recipe "Login As User"
+  # arguments: email, password
+  tap on "Sign In"
+  type "<email>" into #emailField
+  type "<password>" into #passwordField
+  tap on #loginButton
+  wait until "Dashboard" appears
+
+recipe "Add Item To Cart"
+  # arguments: item_name
+  tap on "Shop"
+  tap on "<item_name>"
+  tap on #addToCartBtn
+  wait 1 seconds
+
+test "Add Product To Cart"
+  @cart @smoke
+  Login As User with "user@test.com" and "pass123"
+  Add Item To Cart with "Running Shoes"
+  see "Cart (1)"
+  take a screenshot
+
+test "Remove Product From Cart"
+  @cart
+  Login As User with "user@test.com" and "pass123"
+  Add Item To Cart with "Running Shoes"
+  tap on "Cart"
+  long press on #cartItem1
+  tap on "Remove"
+  see "Cart is empty"
+
+test "Check Product Visibility"
+  @ui
+  Login As User with "user@test.com" and "pass123"
+  tap on "Shop"
+  wait until #productList appears
+  see #featuredBanner
+  don't see #loadingSpinner

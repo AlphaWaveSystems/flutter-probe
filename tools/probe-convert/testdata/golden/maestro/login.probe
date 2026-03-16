@@ -1,0 +1,11 @@
+# Converted from Maestro — app: com.example.app
+
+test "login"
+  open the app
+  tap on "Sign In"
+  tap on "Email"
+  type "user@test.com"
+  tap on "Password"
+  type "pass123"
+  tap on "Continue"
+  see "Dashboard"

@@ -1,0 +1,17 @@
+# Converted from Gherkin — Feature: Login variants
+
+
+test "Login with <role> credentials"
+  @parametrized
+  open the app
+  tap on "Sign In"
+  type "<email>" into "Email"
+  type "<password>" into "Password"
+  tap on "Continue"
+  see "<expected>"
+
+with examples:
+  role	email	password	expected
+  "admin"	"admin@test.com"	"admin123"	"Admin Panel"
+  "user"	"user@test.com"	"pass123"	"Dashboard"
+  "guest"	"guest@test.com"	"guest1"	"Limited Access"

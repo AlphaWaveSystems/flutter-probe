@@ -1,0 +1,30 @@
+# Converted from Appium Python
+
+# Test class: LoginTest
+before each
+after each
+
+test "login success"
+  tap on "Sign In"
+  tap on #emailInput
+  type "user@test.com" into #emailInput
+  type "pass123" into #passwordInput
+  tap on #loginButton
+  wait until #dashboardTitle appears
+
+test "login wrong credentials"
+  tap on "Sign In"
+  type "wrong@test.com" into #emailInput
+  type "badpass" into #passwordInput
+  tap on #loginButton
+  wait 3 seconds
+  take a screenshot called "wrong_creds.png"
+
+test "navigate back"
+  tap on "Sign In"
+  go back
+  wait until "Welcome" appears
+
+test "xpath login"
+  tap on "Sign In"
+  type "user@test.com" into "Email"

@@ -1,0 +1,26 @@
+# Converted from Appium JS
+
+# Login
+
+before each
+  wait 1 seconds
+
+test "should login with valid credentials"
+  tap on "Sign In"
+  type "user@test.com" into "emailInput"
+  type "pass123" into "passwordInput"
+  tap on #loginButton
+  wait until "dashboardTitle" appears
+
+test "should show error for wrong credentials"
+  tap on "Sign In"
+  type "wrong@test.com" into "emailInput"
+  type "badpass" into "passwordInput"
+  tap on #loginButton
+  wait 2 seconds
+  take a screenshot called "wrong_creds.png"
+
+test "should navigate back"
+  tap on "Sign In"
+  go back
+  wait until "Welcome" appears

@@ -1,0 +1,34 @@
+# Converted from Detox
+
+# Checkout
+
+before each
+  open the app
+  type "user@test.com" into #emailInput
+  type "pass123" into #passwordInput
+  tap on "Sign In"
+  wait until "Dashboard" appears
+
+test "should add item to cart"
+  tap on "Shop"
+  tap on "Running Shoes"
+  tap on #addToCartBtn
+  see "Cart (1)"
+  take a screenshot called "item_added"
+
+test "should edit cart item quantity"
+  tap on "Cart"
+  clear #quantityInput
+  type "3" into #quantityInput
+  see "$299.97"
+
+test "should perform gestures"
+  swipe up on #productList
+  long press on #promoItem
+  see "Promo Details"
+  scroll down on #productCarousel
+
+test "should handle device operations"
+  restart the app
+  wait until "Dashboard" appears
+  take a screenshot called "after_reload"

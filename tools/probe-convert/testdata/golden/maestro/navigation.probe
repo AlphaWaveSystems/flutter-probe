@@ -1,0 +1,18 @@
+# Converted from Maestro — app: com.example.app
+
+test "navigation"
+  open the app
+  tap on #menuButton
+  see "Settings"
+  see "Profile"
+  see "Logout"
+  tap on "Settings"
+  see "Notifications"
+  go back
+  long press on "Profile"
+  see "Edit Profile"
+  close keyboard
+  # scrollDown
+  tap on "Logout"
+  see "Sign In"
+  take a screenshot called "after_logout"

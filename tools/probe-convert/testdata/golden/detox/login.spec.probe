@@ -1,0 +1,27 @@
+# Converted from Detox
+
+# Login
+
+before each
+  open the app
+after each
+  take a screenshot called "after_test"
+
+test "should log in with valid credentials"
+  type "user@test.com" into #emailInput
+  type "pass123" into #passwordInput
+  tap on "Sign In"
+  wait until "Dashboard" appears
+  see "Dashboard"
+
+test "should show error for wrong credentials"
+  type "wrong@test.com" into #emailInput
+  type "badpass" into #passwordInput
+  tap on "Sign In"
+  see "Invalid credentials"
+  don't see "Dashboard"
+
+test "should navigate back from login"
+  tap on "Sign In"
+  tap on #backButton
+  see "Welcome"
