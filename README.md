@@ -410,6 +410,14 @@ pause                              # 1-second pause
 | `probe test --format junit -o results.xml` | JUnit XML output |
 | `probe test --format json -o results.json` | JSON output (for HTML reports) |
 | `probe test -y` | Auto-confirm destructive ops + auto-grant permissions |
+| `probe test --config probe.ios.yaml` | Use a specific config file (for parallel platform runs) |
+| `probe test --video` | Enable video recording per test |
+| `probe test --video-resolution 720x1280` | Set Android screenrecord resolution |
+| `probe test --visual-threshold 0.5` | Max allowed pixel diff % for visual regression |
+| `probe test --port 48687` | Override ProbeAgent WebSocket port |
+| `probe test --dial-timeout 45s` | WebSocket connection timeout |
+| `probe test --token-timeout 60s` | Agent auth token wait timeout |
+| `probe test --app-path app.apk` | Install app before testing |
 | `probe test --adb /path/to/adb` | Override ADB binary path |
 | `probe test --flutter /path/to/flutter` | Override Flutter binary path |
 | `probe test --shard N/M` | Run shard N of M (for parallel CI) |
@@ -485,6 +493,30 @@ probe test tests/ --format json -o reports/results.json --video
 # Generate interactive HTML report from JSON
 probe report --input reports/results.json -o reports/report.html --open
 ```
+
+### Report Metadata
+
+JSON and HTML reports include a `metadata` section with device and environment info for CI/CD traceability:
+
+```json
+{
+  "metadata": {
+    "device_name": "iPhone 16 Pro",
+    "device_id": "909F49AD-EE6A-4263-AFED-BAC0FC5C8B40",
+    "platform": "ios",
+    "os_version": "iOS 18.6",
+    "app_id": "com.example.myapp",
+    "app_version": "1.2.16",
+    "config_file": "probe.ios.yaml"
+  }
+}
+```
+
+The HTML report renders this in the header: `Device: iPhone 16 Pro · OS: iOS 18.6 · Platform: ios · App: com.example.myapp v1.2.16`
+
+Metadata is collected automatically — iOS version from the simulator runtime, Android version from `getprop`, and app version from `dumpsys package`.
+
+### Report Artifacts
 
 The `reports/` folder is **fully self-contained and portable**:
 
