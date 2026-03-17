@@ -25,9 +25,27 @@ type Config struct {
 	Visual   VisualConfig      `yaml:"visual"`
 	Devices  []DeviceEntry     `yaml:"devices"`
 	Tools    ToolsConfig       `yaml:"tools"`
+	Cloud    CloudConfig       `yaml:"cloud"`
+	AI       AIConfig          `yaml:"ai"`
 	Recipes  string            `yaml:"recipes_folder"`
 	Reports  string            `yaml:"reports_folder"`
 	Env      map[string]string `yaml:"environment"`
+}
+
+// CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.
+type CloudConfig struct {
+	URL         string            `yaml:"url"`         // cloud API base URL (default: https://flutterprobe-cloud.fly.dev)
+	Token       string            `yaml:"token"`       // API key for cloud authentication (supports ${ENV_VAR} syntax)
+	Provider    string            `yaml:"provider"`    // cloud device farm provider: browserstack, aws, firebase, saucelabs, lambdatest
+	Credentials map[string]string `yaml:"credentials"` // provider-specific credentials (e.g. username, access_key)
+	App         string            `yaml:"app"`         // path to .apk/.ipa to upload to the cloud provider
+	Devices     []string          `yaml:"devices"`     // target device names for cloud testing
+}
+
+// AIConfig holds settings for LLM-powered features (test generation, self-healing).
+type AIConfig struct {
+	APIKey string `yaml:"api_key"` // Anthropic API key (supports ${ENV_VAR} syntax)
+	Model  string `yaml:"model"`   // model name (default: claude-sonnet-4-20250514)
 }
 
 // ToolsConfig holds paths to external tools. Empty means "find in PATH".

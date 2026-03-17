@@ -1,0 +1,448 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlutterProbe - Flutter E2E Tests in Plain English</title>
+  <meta name="description" content="High-performance local E2E testing framework for Flutter mobile apps. Natural language syntax with sub-50ms execution." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a1a;
+      --bg-card: #12122a;
+      --bg-code: #1a1a35;
+      --border: #2a2a4a;
+      --text: #e0e0f0;
+      --text-muted: #8888aa;
+      --accent: #00d4ff;
+      --accent-dim: #0099bb;
+      --green: #00e676;
+      --purple: #b388ff;
+      --orange: #ffab40;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Nav */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.25rem 2rem;
+    }
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { color: var(--text-muted); font-size: 0.95rem; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero .subtitle {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 2.5rem;
+    }
+    .hero-code {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      text-align: left;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.9rem;
+      line-height: 1.8;
+      max-width: 520px;
+      margin: 0 auto 2.5rem;
+      overflow-x: auto;
+    }
+    .hero-code .kw { color: var(--purple); }
+    .hero-code .str { color: var(--green); }
+    .hero-code .cmd { color: var(--text); }
+
+    .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      padding: 0.75rem 1.75rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { text-decoration: none; opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+    /* Sections */
+    section { max-width: 1200px; margin: 0 auto; padding: 5rem 2rem; }
+    section h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    section .section-sub {
+      text-align: center;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 3rem;
+    }
+
+    /* How it works */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+    .step {
+      text-align: center;
+      padding: 2rem 1.5rem;
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #000;
+      font-weight: 800;
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .step h3 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+    .step p { color: var(--text-muted); font-size: 0.95rem; }
+
+    /* Features grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+    }
+    .feature-card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: var(--accent);
+    }
+    .feature-card p { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* Code comparison */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+    @media (max-width: 768px) {
+      .comparison { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 2.2rem; }
+    }
+    .compare-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .compare-header {
+      padding: 0.75rem 1.25rem;
+      font-weight: 600;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .compare-body {
+      padding: 1.25rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    /* Migration */
+    .migration-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      text-align: center;
+    }
+    .migration-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    /* Getting started steps */
+    .gs-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.5rem;
+    }
+    .gs-step {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+    }
+    .gs-step .gs-num {
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .gs-step h3 { font-size: 1.05rem; margin-bottom: 0.5rem; }
+    .gs-step p { color: var(--text-muted); font-size: 0.9rem; }
+    .gs-step code {
+      display: inline-block;
+      background: var(--bg-code);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      margin-top: 0.5rem;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-links { display: flex; gap: 1.5rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo">FlutterProbe</a>
+    <div class="nav-links">
+      <a href="/getting-started/installation/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="https://github.com/nicktesh/FlutterProbe">GitHub</a>
+      <a href="/getting-started/installation/" class="btn btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Flutter E2E Tests<br/>in <span class="accent">Plain English</span>.<br/>Sub-50ms Execution.</h1>
+    <p class="subtitle">Write tests your whole team can read. Execute them with direct widget-tree access for unmatched speed and reliability.</p>
+    <div class="hero-code">
+      <span class="kw">test</span> <span class="str">"user can log in"</span><br/>
+      &nbsp;&nbsp;<span class="cmd">open the app</span><br/>
+      &nbsp;&nbsp;<span class="cmd">tap</span> <span class="str">"Sign In"</span><br/>
+      &nbsp;&nbsp;<span class="cmd">type</span> <span class="str">"user@test.com"</span> <span class="cmd">into</span> <span class="str">"Email"</span><br/>
+      &nbsp;&nbsp;<span class="cmd">type</span> <span class="str">"secret"</span> <span class="cmd">into</span> <span class="str">"Password"</span><br/>
+      &nbsp;&nbsp;<span class="cmd">tap</span> <span class="str">"Continue"</span><br/>
+      &nbsp;&nbsp;<span class="cmd">see</span> <span class="str">"Dashboard"</span>
+    </div>
+    <div class="cta-group">
+      <a href="/getting-started/installation/" class="btn btn-primary">Get Started</a>
+      <a href="/getting-started/quick-start/" class="btn btn-secondary">Quick Start Guide</a>
+    </div>
+  </div>
+
+  <!-- How It Works -->
+  <section>
+    <h2>How It Works</h2>
+    <p class="section-sub">Three steps from test file to results. No test harness, no code generation, no flaky waits.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Write</h3>
+        <p>Author tests in ProbeScript -- a natural language syntax with indent-based blocks. Anyone on your team can read and write them.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Run</h3>
+        <p>The Go CLI parses your tests and dispatches commands to the Dart agent running inside your Flutter app via JSON-RPC over WebSocket.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Report</h3>
+        <p>Get results as terminal output, JUnit XML for CI, or interactive HTML reports with embedded screenshots and video.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section>
+    <h2>Features</h2>
+    <p class="section-sub">Everything you need for reliable Flutter E2E testing.</p>
+    <div class="features">
+      <div class="feature-card">
+        <h3>Natural Language</h3>
+        <p>ProbeScript reads like plain English. No locators, no async/await, no boilerplate. Tests are readable by QA, product, and engineering.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Sub-50ms Execution</h3>
+        <p>The Dart agent accesses the widget tree directly -- no XPath, no accessibility bridge. Command round-trips complete in under 50 milliseconds.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Cross-Platform</h3>
+        <p>Run the same tests on Android emulators and iOS simulators. Platform-specific operations (permissions, lifecycle) are handled automatically.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Test Converter</h3>
+        <p>Migrate from Maestro, Gherkin, Robot Framework, Detox, or Appium with 100% construct coverage across all 7 supported formats.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Recording</h3>
+        <p>Record user interactions on a real device and generate ProbeScript automatically. Taps, swipes, text input, and waits are all captured.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Visual Regression</h3>
+        <p>Screenshot-based visual testing with configurable pixel thresholds. Catch unintended UI changes before they ship.</p>
+      </div>
+      <div class="feature-card">
+        <h3>CI/CD Ready</h3>
+        <p>JUnit XML, JSON, and HTML report formats. GitHub Actions examples, test sharding, and parallel platform runs out of the box.</p>
+      </div>
+      <div class="feature-card">
+        <h3>VS Code Extension</h3>
+        <p>Syntax highlighting, code snippets, and integrated commands. Run tests, lint files, and start recordings from your editor.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section>
+    <h2>FlutterProbe vs flutter_test</h2>
+    <p class="section-sub">Same test, different experience.</p>
+    <div class="comparison">
+      <div class="compare-block">
+        <div class="compare-header">FlutterProbe (.probe)</div>
+        <div class="compare-body"><span style="color:#b388ff">test</span> <span style="color:#00e676">"user can log in"</span>
+  open the app
+  tap <span style="color:#00e676">"Sign In"</span>
+  type <span style="color:#00e676">"user@test.com"</span> into <span style="color:#00e676">"Email"</span>
+  type <span style="color:#00e676">"secret"</span> into <span style="color:#00e676">"Password"</span>
+  tap <span style="color:#00e676">"Continue"</span>
+  see <span style="color:#00e676">"Dashboard"</span></div>
+      </div>
+      <div class="compare-block">
+        <div class="compare-header">flutter_test (Dart)</div>
+        <div class="compare-body"><span style="color:#b388ff">testWidgets</span>(<span style="color:#00e676">'user can log in'</span>, (tester) <span style="color:#b388ff">async</span> {
+  <span style="color:#b388ff">await</span> tester.pumpWidget(MyApp());
+  <span style="color:#b388ff">await</span> tester.pumpAndSettle();
+  <span style="color:#b388ff">await</span> tester.tap(find.text(<span style="color:#00e676">'Sign In'</span>));
+  <span style="color:#b388ff">await</span> tester.pumpAndSettle();
+  <span style="color:#b388ff">await</span> tester.enterText(
+    find.byKey(Key(<span style="color:#00e676">'email'</span>)),
+    <span style="color:#00e676">'user@test.com'</span>,
+  );
+  <span style="color:#b388ff">await</span> tester.enterText(
+    find.byKey(Key(<span style="color:#00e676">'password'</span>)),
+    <span style="color:#00e676">'secret'</span>,
+  );
+  <span style="color:#b388ff">await</span> tester.tap(find.text(<span style="color:#00e676">'Continue'</span>));
+  <span style="color:#b388ff">await</span> tester.pumpAndSettle();
+  expect(find.text(<span style="color:#00e676">'Dashboard'</span>),
+    findsOneWidget);
+});</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Migration -->
+  <section>
+    <h2>Migrate From Any Framework</h2>
+    <p class="section-sub">probe-convert translates tests from 7 source formats with 100% construct coverage.</p>
+    <div class="migration-grid">
+      <div class="migration-item">Maestro</div>
+      <div class="migration-item">Gherkin</div>
+      <div class="migration-item">Robot Framework</div>
+      <div class="migration-item">Detox</div>
+      <div class="migration-item">Appium Python</div>
+      <div class="migration-item">Appium Java</div>
+      <div class="migration-item">Appium JS</div>
+    </div>
+  </section>
+
+  <!-- Getting Started -->
+  <section>
+    <h2>Get Started in 4 Steps</h2>
+    <p class="section-sub">From zero to running tests in under 10 minutes.</p>
+    <div class="gs-steps">
+      <div class="gs-step">
+        <div class="gs-num">1</div>
+        <h3>Build the CLI</h3>
+        <p>Clone the repo and build the probe binary.</p>
+        <code>make build</code>
+      </div>
+      <div class="gs-step">
+        <div class="gs-num">2</div>
+        <h3>Add the Agent</h3>
+        <p>Add probe_agent to your Flutter app's dev dependencies and initialize in main.dart.</p>
+        <code>probe init</code>
+      </div>
+      <div class="gs-step">
+        <div class="gs-num">3</div>
+        <h3>Write a Test</h3>
+        <p>Create a .probe file with natural language test steps.</p>
+        <code>tests/login.probe</code>
+      </div>
+      <div class="gs-step">
+        <div class="gs-num">4</div>
+        <h3>Run It</h3>
+        <p>Execute your tests against a running device or simulator.</p>
+        <code>probe test tests/ -v</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <span>FlutterProbe &mdash; High-performance E2E testing for Flutter</span>
+    <div class="footer-links">
+      <a href="/getting-started/installation/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="https://github.com/nicktesh/FlutterProbe">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>

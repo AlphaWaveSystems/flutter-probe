@@ -3,11 +3,13 @@ package cli
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/flutterprobe/probe/internal/cloud"
 	"github.com/flutterprobe/probe/internal/config"
 	"github.com/flutterprobe/probe/internal/device"
 	"github.com/flutterprobe/probe/internal/probelink"
@@ -80,6 +82,21 @@ func init() {
 	// Visual regression
 	f.Float64("visual-threshold", 0, "max allowed pixel diff percentage, e.g. 0.5 (default: 0.5)")
 	f.Int("visual-pixel-delta", 0, "per-pixel color distance threshold 0–255 (default: 8)")
+
+	// Cloud integration
+	f.Bool("cloud", false, "upload test results to FlutterProbe Cloud after run")
+	f.String("cloud-token", "", "API key for FlutterProbe Cloud authentication")
+	f.String("cloud-url", "", `cloud API base URL (default: "https://flutterprobe-cloud.fly.dev")`)
+
+	// Cloud device farm providers
+	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, firebase, saucelabs, lambdatest)")
+	f.String("cloud-app", "", "path to app binary (.apk/.ipa) to upload to cloud provider")
+	f.String("cloud-device", "", "target device name on the cloud provider")
+	f.String("cloud-key", "", "cloud provider API key or username")
+	f.String("cloud-secret", "", "cloud provider API secret or access key")
+
+	// x402 pay-per-use
+	f.String("pay", "", `payment method for cloud upload: "x402" for pay-per-use via crypto wallet`)
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
@@ -164,125 +181,241 @@ func runTests(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Cloud device farm provider flags
+	cloudProvider, _ := cmd.Flags().GetString("cloud-provider")
+	cloudApp, _ := cmd.Flags().GetString("cloud-app")
+	cloudDevice, _ := cmd.Flags().GetString("cloud-device")
+	cloudKey, _ := cmd.Flags().GetString("cloud-key")
+	cloudSecret, _ := cmd.Flags().GetString("cloud-secret")
+
+	// Apply CLI overrides for cloud provider config
+	if cloudProvider == "" {
+		cloudProvider = cfg.Cloud.Provider
+	}
+	if cloudApp == "" {
+		cloudApp = cfg.Cloud.App
+	}
+
 	// Connect to ProbeAgent (skip if dry-run)
 	var client *probelink.Client
 	var dm *device.Manager
 	var platform device.Platform
+	var cloudSession *cloud.Session // non-nil when using a cloud provider
 	if !dryRun {
-		// Resolve tool paths: CLI flags > probe.yaml > PATH
-		toolPaths := device.ToolPaths{
-			ADB:     cfg.Tools.ADB,
-			Flutter: cfg.Tools.Flutter,
-		}
-		if adbPath != "" {
-			toolPaths.ADB = adbPath
-		}
-		if flutterPath != "" {
-			toolPaths.Flutter = flutterPath
-		}
-		dm = device.NewManagerWithPaths(toolPaths)
-		// Validate device serial if provided
-		if deviceSerial != "" {
-			if err := config.ValidateDeviceSerial(deviceSerial); err != nil {
-				return err
-			}
-		}
 
-		// Pick device and detect platform
-		platform = device.Platform(cfg.Defaults.Platform)
-		if deviceSerial == "" {
-			devices, err := dm.List(ctx)
-			if err != nil || len(devices) == 0 {
-				return fmt.Errorf("no connected devices found. Run 'probe device list' to check.")
+		if cloudProvider != "" {
+			// ── Cloud device farm path ──────────────────────────────────────
+			// Build credentials map from CLI flags and probe.yaml
+			creds := make(map[string]string)
+			for k, v := range cfg.Cloud.Credentials {
+				creds[k] = v
 			}
-			deviceSerial = devices[0].ID
-			platform = devices[0].Platform
+			// CLI flags override probe.yaml credentials
+			if cloudKey != "" {
+				creds["username"] = cloudKey
+				creds["access_key_id"] = cloudKey // AWS uses different key name
+			}
+			if cloudSecret != "" {
+				creds["access_key"] = cloudSecret
+				creds["secret_access_key"] = cloudSecret // AWS uses different key name
+			}
+
+			provider, err := cloud.NewProvider(cloudProvider, creds)
+			if err != nil {
+				return fmt.Errorf("cloud provider: %w", err)
+			}
+
+			// Validate required cloud flags
+			if cloudApp == "" {
+				return fmt.Errorf("--cloud-app is required when using --cloud-provider (path to .apk/.ipa)")
+			}
+			if _, err := os.Stat(cloudApp); err != nil {
+				return fmt.Errorf("cloud-app: %w", err)
+			}
+
+			// Determine target device
+			targetDevice := cloudDevice
+			if targetDevice == "" && len(cfg.Cloud.Devices) > 0 {
+				targetDevice = cfg.Cloud.Devices[0]
+			}
+			if targetDevice == "" {
+				return fmt.Errorf("--cloud-device is required when using --cloud-provider (target device name)")
+			}
+
+			// Step 1: Upload app
+			fmt.Printf("  Uploading app to %s...\n", provider.Name())
+			appID, err := provider.UploadApp(ctx, cloudApp)
+			if err != nil {
+				return fmt.Errorf("cloud upload: %w", err)
+			}
+			fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
+
+			// Step 2: Start session
+			fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
+			sess, err := provider.StartSession(ctx, appID, targetDevice)
+			if err != nil {
+				return fmt.Errorf("cloud session: %w", err)
+			}
+			cloudSession = &sess
+			defer func() {
+				fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
+				if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
+					fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+				} else {
+					fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+				}
+			}()
+			fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
+
+			// Step 3: Forward port
+			devicePort := cfg.Agent.AgentDevicePort()
+			localPort, err := provider.ForwardPort(ctx, sess, devicePort)
+			if err != nil {
+				return fmt.Errorf("cloud port forward: %w", err)
+			}
+			sess.LocalPort = localPort
+			fmt.Printf("  \033[32m✓\033[0m  Port forwarded: localhost:%d -> device:%d\n", localPort, devicePort)
+
+			// Step 4: Connect to ProbeAgent via the tunneled port
+			dialOpts := probelink.DialOptions{
+				Host:        "127.0.0.1",
+				Port:        localPort,
+				DialTimeout: cfg.Agent.DialTimeout,
+			}
+			// Cloud sessions may not require token auth (handled by the provider)
+			// but we attempt to connect with whatever the provider gives us
+			client, err = probelink.DialWithOptions(ctx, dialOpts)
+			if err != nil {
+				return fmt.Errorf("connecting to cloud ProbeAgent: %w", err)
+			}
+			defer client.Close()
+
+			if err := client.Ping(ctx); err != nil {
+				return fmt.Errorf("cloud agent ping failed: %w", err)
+			}
+			fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s (%s)\n\n", targetDevice, provider.Name())
+
+			// Use cloud device info as the "serial" for reporting
+			deviceSerial = fmt.Sprintf("%s:%s", provider.Name(), targetDevice)
+
 		} else {
-			// Detect platform from device list when serial is specified manually
-			devices, _ := dm.List(ctx)
-			for _, d := range devices {
-				if d.ID == deviceSerial {
-					platform = d.Platform
-					break
+			// ── Local device path (existing behavior) ───────────────────────
+			// Resolve tool paths: CLI flags > probe.yaml > PATH
+			toolPaths := device.ToolPaths{
+				ADB:     cfg.Tools.ADB,
+				Flutter: cfg.Tools.Flutter,
+			}
+			if adbPath != "" {
+				toolPaths.ADB = adbPath
+			}
+			if flutterPath != "" {
+				toolPaths.Flutter = flutterPath
+			}
+			dm = device.NewManagerWithPaths(toolPaths)
+			// Validate device serial if provided
+			if deviceSerial != "" {
+				if err := config.ValidateDeviceSerial(deviceSerial); err != nil {
+					return err
 				}
 			}
-		}
 
-		// Install app if --app-path provided
-		if appPath != "" {
-			// Validate file exists
-			info, err := os.Stat(appPath)
-			if err != nil {
-				return fmt.Errorf("app-path: %w", err)
+			// Pick device and detect platform
+			platform = device.Platform(cfg.Defaults.Platform)
+			if deviceSerial == "" {
+				devices, err := dm.List(ctx)
+				if err != nil || len(devices) == 0 {
+					return fmt.Errorf("no connected devices found. Run 'probe device list' to check.")
+				}
+				deviceSerial = devices[0].ID
+				platform = devices[0].Platform
+			} else {
+				// Detect platform from device list when serial is specified manually
+				devices, _ := dm.List(ctx)
+				for _, d := range devices {
+					if d.ID == deviceSerial {
+						platform = d.Platform
+						break
+					}
+				}
 			}
-			if info.IsDir() && !strings.HasSuffix(appPath, ".app") {
-				return fmt.Errorf("app-path: %s is a directory (expected .apk file or .app bundle)", appPath)
-			}
-			// Validate extension matches platform
-			if platform == device.PlatformAndroid && !strings.HasSuffix(appPath, ".apk") {
-				return fmt.Errorf("app-path: Android requires .apk file, got %s", filepath.Base(appPath))
-			}
-			if platform == device.PlatformIOS && !strings.HasSuffix(appPath, ".app") {
-				return fmt.Errorf("app-path: iOS requires .app bundle, got %s", filepath.Base(appPath))
-			}
-			// Require app ID
-			if cfg.Project.App == "" {
-				return fmt.Errorf("app-path: project.app must be set in probe.yaml to install and launch")
-			}
-			// Clear logcat on Android so we catch the fresh token
-			if platform == device.PlatformAndroid {
-				_ = dm.ADB().ClearLogcat(ctx, deviceSerial)
-			}
-			if err := dm.InstallAndLaunchApp(ctx, deviceSerial, platform, appPath, cfg.Project.App, autoYes); err != nil {
-				return fmt.Errorf("app install: %w", err)
-			}
-			fmt.Printf("  \033[32m✓\033[0m  App installed and launched\n")
-		}
 
-		dialOpts := probelink.DialOptions{
-			Host:        "127.0.0.1",
-			Port:        cfg.Agent.Port,
-			DialTimeout: cfg.Agent.DialTimeout,
-		}
+			// Install app if --app-path provided
+			if appPath != "" {
+				// Validate file exists
+				info, err := os.Stat(appPath)
+				if err != nil {
+					return fmt.Errorf("app-path: %w", err)
+				}
+				if info.IsDir() && !strings.HasSuffix(appPath, ".app") {
+					return fmt.Errorf("app-path: %s is a directory (expected .apk file or .app bundle)", appPath)
+				}
+				// Validate extension matches platform
+				if platform == device.PlatformAndroid && !strings.HasSuffix(appPath, ".apk") {
+					return fmt.Errorf("app-path: Android requires .apk file, got %s", filepath.Base(appPath))
+				}
+				if platform == device.PlatformIOS && !strings.HasSuffix(appPath, ".app") {
+					return fmt.Errorf("app-path: iOS requires .app bundle, got %s", filepath.Base(appPath))
+				}
+				// Require app ID
+				if cfg.Project.App == "" {
+					return fmt.Errorf("app-path: project.app must be set in probe.yaml to install and launch")
+				}
+				// Clear logcat on Android so we catch the fresh token
+				if platform == device.PlatformAndroid {
+					_ = dm.ADB().ClearLogcat(ctx, deviceSerial)
+				}
+				if err := dm.InstallAndLaunchApp(ctx, deviceSerial, platform, appPath, cfg.Project.App, autoYes); err != nil {
+					return fmt.Errorf("app install: %w", err)
+				}
+				fmt.Printf("  \033[32m✓\033[0m  App installed and launched\n")
+			}
 
-		if platform == device.PlatformIOS {
-			// iOS: simulators share host loopback — no port forwarding needed
-			fmt.Println("  Waiting for ProbeAgent token (iOS)...")
-			token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
-			if err != nil {
-				return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+			dialOpts := probelink.DialOptions{
+				Host:        "127.0.0.1",
+				Port:        cfg.Agent.Port,
+				DialTimeout: cfg.Agent.DialTimeout,
 			}
-			dialOpts.Token = token
-			client, err = probelink.DialWithOptions(ctx, dialOpts)
-			if err != nil {
-				return fmt.Errorf("connecting to ProbeAgent: %w", err)
-			}
-			defer client.Close()
-		} else {
-			// Android: forward port via ADB
-			if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
-				return fmt.Errorf("port forward: %w", err)
-			}
-			defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
 
-			fmt.Println("  Waiting for ProbeAgent token...")
-			token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
-			if err != nil {
-				return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
-			}
-			dialOpts.Token = token
-			client, err = probelink.DialWithOptions(ctx, dialOpts)
-			if err != nil {
-				return fmt.Errorf("connecting to ProbeAgent: %w", err)
-			}
-			defer client.Close()
-		}
+			if platform == device.PlatformIOS {
+				// iOS: simulators share host loopback — no port forwarding needed
+				fmt.Println("  Waiting for ProbeAgent token (iOS)...")
+				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+				if err != nil {
+					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+				}
+				dialOpts.Token = token
+				client, err = probelink.DialWithOptions(ctx, dialOpts)
+				if err != nil {
+					return fmt.Errorf("connecting to ProbeAgent: %w", err)
+				}
+				defer client.Close()
+			} else {
+				// Android: forward port via ADB
+				if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+					return fmt.Errorf("port forward: %w", err)
+				}
+				defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
 
-		if err := client.Ping(ctx); err != nil {
-			return fmt.Errorf("agent ping failed: %w", err)
+				fmt.Println("  Waiting for ProbeAgent token...")
+				token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+				if err != nil {
+					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+				}
+				dialOpts.Token = token
+				client, err = probelink.DialWithOptions(ctx, dialOpts)
+				if err != nil {
+					return fmt.Errorf("connecting to ProbeAgent: %w", err)
+				}
+				defer client.Close()
+			}
+
+			if err := client.Ping(ctx); err != nil {
+				return fmt.Errorf("agent ping failed: %w", err)
+			}
+			fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s\n\n", deviceSerial)
 		}
-		fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s\n\n", deviceSerial)
 	}
+	_ = cloudSession // used by deferred StopSession above
 
 	// Build reporter
 	var report *runner.Reporter
@@ -406,10 +539,123 @@ func runTests(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Cloud upload (after report is written)
+	cloudEnabled, _ := cmd.Flags().GetBool("cloud")
+	payMethod, _ := cmd.Flags().GetString("pay")
+	if cloudEnabled || payMethod == "x402" {
+		cloudToken, _ := cmd.Flags().GetString("cloud-token")
+		cloudURL, _ := cmd.Flags().GetString("cloud-url")
+
+		// Resolution order: CLI flag > probe.yaml > default
+		if cloudToken == "" {
+			cloudToken = cfg.Cloud.Token
+		}
+		if cloudURL == "" {
+			cloudURL = cfg.Cloud.URL
+		}
+
+		// Prepare JSON data for upload.
+		var jsonData []byte
+		if format == "json" && outFile != "" {
+			jsonData, err = os.ReadFile(outFile)
+			if err != nil {
+				fmt.Printf("\n  \033[31m✗  Cloud upload: could not read JSON results: %s\033[0m\n", err)
+			}
+		}
+		if len(jsonData) == 0 {
+			jsonData, err = generateJSONResults(results, report)
+			if err != nil {
+				fmt.Printf("\n  \033[31m✗  Cloud upload: could not serialize results: %s\033[0m\n", err)
+			}
+		}
+
+		if len(jsonData) > 0 && payMethod == "x402" {
+			// x402 pay-per-use upload — no subscription token needed.
+			configDir, cfgErr := cloud.ConfigDir()
+			if cfgErr != nil {
+				fmt.Printf("\n  \033[31m✗  x402: could not locate config dir: %s\033[0m\n", cfgErr)
+			} else {
+				wallet, walletErr := cloud.LoadWallet(configDir)
+				if walletErr != nil {
+					fmt.Printf("\n  \033[31m✗  x402: %s\033[0m\n", walletErr)
+				} else {
+					fmt.Printf("\n  Uploading results via x402 (wallet %s)...\n", wallet.Address)
+					cc := cloud.NewClient(cloudURL, "")
+					runID, dashURL, uploadErr := cc.UploadResultsWithPayment(ctx, jsonData, wallet)
+					if uploadErr != nil {
+						fmt.Printf("  \033[31m✗  x402 upload failed: %s\033[0m\n", uploadErr)
+					} else {
+						fmt.Printf("  \033[32m✓\033[0m  Paid & uploaded (run %s)\n", runID)
+						fmt.Printf("  \033[36m→  %s\033[0m\n", dashURL)
+					}
+				}
+			}
+		} else if len(jsonData) > 0 && cloudToken != "" {
+			// Subscription-based upload.
+			fmt.Println("\n  Uploading results to FlutterProbe Cloud...")
+			cc := cloud.NewClient(cloudURL, cloudToken)
+			runID, dashURL, uploadErr := cc.UploadResults(ctx, jsonData)
+			if uploadErr != nil {
+				fmt.Printf("  \033[31m✗  Cloud upload failed: %s\033[0m\n", uploadErr)
+			} else {
+				fmt.Printf("  \033[32m✓\033[0m  Uploaded (run %s)\n", runID)
+				fmt.Printf("  \033[36m→  %s\033[0m\n", dashURL)
+			}
+		} else if cloudToken == "" && payMethod != "x402" {
+			fmt.Println("\n  \033[33m⚠  --cloud-token not set and cloud.token not found in probe.yaml. Skipping cloud upload.\033[0m")
+		}
+	}
+
 	if !runner.AllPassed(results) {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// generateJSONResults serializes test results to JSON for cloud upload when
+// the user did not use --format json.
+func generateJSONResults(results []runner.TestResult, report *runner.Reporter) ([]byte, error) {
+	type jsonResult struct {
+		Name     string  `json:"name"`
+		File     string  `json:"file"`
+		Passed   bool    `json:"passed"`
+		Skipped  bool    `json:"skipped"`
+		Duration float64 `json:"duration_ms"`
+		Error    string  `json:"error,omitempty"`
+		Row      int     `json:"row,omitempty"`
+	}
+	type jsonReport struct {
+		TotalTests int          `json:"total_tests"`
+		Passed     int          `json:"passed"`
+		Failed     int          `json:"failed"`
+		Skipped    int          `json:"skipped"`
+		Results    []jsonResult `json:"results"`
+	}
+
+	rpt := jsonReport{TotalTests: len(results)}
+	for _, res := range results {
+		jr := jsonResult{
+			Name:     res.TestName,
+			File:     res.File,
+			Passed:   res.Passed,
+			Skipped:  res.Skipped,
+			Duration: float64(res.Duration.Milliseconds()),
+			Row:      res.Row,
+		}
+		if res.Error != nil {
+			jr.Error = res.Error.Error()
+		}
+		switch {
+		case res.Skipped:
+			rpt.Skipped++
+		case res.Passed:
+			rpt.Passed++
+		default:
+			rpt.Failed++
+		}
+		rpt.Results = append(rpt.Results, jr)
+	}
+	return json.Marshal(rpt)
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.

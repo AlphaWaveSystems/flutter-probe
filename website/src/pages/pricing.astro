@@ -1,0 +1,285 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing - FlutterProbe</title>
+  <meta name="description" content="FlutterProbe pricing plans. Free for individuals, Team plan for organizations, Pay-per-use with x402." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a1a;
+      --bg-card: #12122a;
+      --bg-code: #1a1a35;
+      --border: #2a2a4a;
+      --border-accent: #00d4ff;
+      --text: #e0e0f0;
+      --text-muted: #8888aa;
+      --accent: #00d4ff;
+      --green: #00e676;
+      --purple: #b388ff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.25rem 2rem;
+    }
+    .nav-logo { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { color: var(--text-muted); font-size: 0.95rem; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    .page-header {
+      text-align: center;
+      padding: 5rem 2rem 3rem;
+    }
+    .page-header h1 { font-size: 2.8rem; font-weight: 800; margin-bottom: 1rem; }
+    .page-header p { color: var(--text-muted); font-size: 1.15rem; max-width: 550px; margin: 0 auto; }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 0 2rem 5rem;
+    }
+
+    .plan {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .plan.featured {
+      border-color: var(--border-accent);
+      position: relative;
+    }
+    .plan.featured::before {
+      content: 'Most Popular';
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #000;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.25rem 1rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .plan-name { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .plan-price {
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin-bottom: 0.25rem;
+    }
+    .plan-price span { font-size: 1rem; font-weight: 400; color: var(--text-muted); }
+    .plan-desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+
+    .plan-features {
+      list-style: none;
+      flex: 1;
+      margin-bottom: 2rem;
+    }
+    .plan-features li {
+      padding: 0.4rem 0;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+    .plan-features li::before {
+      content: '\2713';
+      color: var(--green);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      display: block;
+      text-align: center;
+      padding: 0.85rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: opacity 0.15s;
+      border: none;
+      cursor: pointer;
+    }
+    .btn:hover { text-decoration: none; opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-purple { background: var(--purple); color: #000; }
+
+    /* Waitlist form */
+    .waitlist {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 0 2rem 5rem;
+      text-align: center;
+    }
+    .waitlist h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .waitlist p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .waitlist-form {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .waitlist-form input[type="email"] {
+      flex: 1;
+      min-width: 240px;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-code);
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+    }
+    .waitlist-form input[type="email"]:focus {
+      border-color: var(--accent);
+    }
+    .waitlist-form button {
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      font-size: 1rem;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .waitlist-form button:hover { opacity: 0.85; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-links { display: flex; gap: 1.5rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="nav-logo">FlutterProbe</a>
+    <div class="nav-links">
+      <a href="/getting-started/installation/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="https://github.com/nicktesh/FlutterProbe">GitHub</a>
+    </div>
+  </nav>
+
+  <div class="page-header">
+    <h1>Simple, Transparent Pricing</h1>
+    <p>Start free. Scale when you need to.</p>
+  </div>
+
+  <div class="pricing-grid">
+    <!-- Free -->
+    <div class="plan">
+      <div class="plan-name">Free</div>
+      <div class="plan-price">$0 <span>forever</span></div>
+      <p class="plan-desc">For individual developers and open-source projects.</p>
+      <ul class="plan-features">
+        <li>Full CLI and Dart agent</li>
+        <li>Unlimited local test runs</li>
+        <li>All ProbeScript features</li>
+        <li>Terminal, JUnit, JSON reports</li>
+        <li>probe-convert (all 7 formats)</li>
+        <li>VS Code extension</li>
+        <li>Recording and visual regression</li>
+        <li>Community support</li>
+      </ul>
+      <a href="/getting-started/installation/" class="btn btn-primary">Get Started</a>
+    </div>
+
+    <!-- Team -->
+    <div class="plan featured">
+      <div class="plan-name">Team</div>
+      <div class="plan-price">$49 <span>/ month</span></div>
+      <p class="plan-desc">For teams that need shared infrastructure and reporting.</p>
+      <ul class="plan-features">
+        <li>Everything in Free</li>
+        <li>Cloud test dashboard</li>
+        <li>Shared report hosting</li>
+        <li>Team management and roles</li>
+        <li>Slack and email notifications</li>
+        <li>Parallel test orchestration</li>
+        <li>Historical trend analytics</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="#waitlist" class="btn btn-primary">Join Waitlist</a>
+    </div>
+
+    <!-- Pay-per-use -->
+    <div class="plan">
+      <div class="plan-name">Pay-per-use (x402)</div>
+      <div class="plan-price">Usage <span>based</span></div>
+      <p class="plan-desc">Programmatic access via the x402 payment protocol. Pay only for what you use.</p>
+      <ul class="plan-features">
+        <li>Everything in Free</li>
+        <li>API access to cloud runners</li>
+        <li>Per-test-run billing via x402</li>
+        <li>No subscription required</li>
+        <li>Automated CI/CD integration</li>
+        <li>On-demand device farms</li>
+        <li>Pay with crypto or fiat</li>
+        <li>Transparent per-run pricing</li>
+      </ul>
+      <a href="#waitlist" class="btn btn-purple">Join Waitlist</a>
+    </div>
+  </div>
+
+  <!-- Waitlist -->
+  <div class="waitlist" id="waitlist">
+    <h2>Join the Waitlist</h2>
+    <p>Team and Pay-per-use plans are coming soon. Enter your email to get early access.</p>
+    <form class="waitlist-form" action="https://docs.google.com/forms/d/e/YOUR_FORM_ID/formResponse" method="POST" target="_blank">
+      <input type="email" name="entry.EMAIL_FIELD_ID" placeholder="you@company.com" required />
+      <button type="submit">Notify Me</button>
+    </form>
+  </div>
+
+  <footer>
+    <span>FlutterProbe &mdash; High-performance E2E testing for Flutter</span>
+    <div class="footer-links">
+      <a href="/getting-started/installation/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="https://github.com/nicktesh/FlutterProbe">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>

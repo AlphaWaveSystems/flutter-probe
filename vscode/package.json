@@ -1,13 +1,13 @@
 {
   "name": "flutterprobe",
   "displayName": "FlutterProbe",
-  "description": "ProbeScript language support, test runner, and Studio integration for FlutterProbe",
+  "description": "ProbeScript language support, test runner, Session Manager, and Studio integration for FlutterProbe",
   "version": "0.1.0",
   "publisher": "flutterprobe",
-  "icon": "images/icon.png",
+  "icon": "resources/probe-icon.png",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Testing", "Languages", "Snippets"],
-  "keywords": ["flutter", "testing", "e2e", "probe", "probescript"],
+  "keywords": ["flutter", "testing", "e2e", "probe", "probescript", "mobile"],
   "repository": {
     "type": "git",
     "url": "https://github.com/flutterprobe/flutterprobe"
@@ -43,7 +43,7 @@
     "commands": [
       {
         "command": "flutterprobe.runTest",
-        "title": "FlutterProbe: Run Test",
+        "title": "FlutterProbe: Run Test at Cursor",
         "icon": "$(play)"
       },
       {
@@ -52,19 +52,128 @@
         "icon": "$(run-all)"
       },
       {
-        "command": "flutterprobe.openStudio",
-        "title": "FlutterProbe: Open Studio",
-        "icon": "$(inspect)"
+        "command": "flutterprobe.runByTag",
+        "title": "FlutterProbe: Run by Tag",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "flutterprobe.runWithOptions",
+        "title": "FlutterProbe: Run with Options..."
+      },
+      {
+        "command": "flutterprobe.runProfile",
+        "title": "FlutterProbe: Configure Run Options"
       },
       {
         "command": "flutterprobe.lintFile",
         "title": "FlutterProbe: Lint File"
       },
       {
+        "command": "flutterprobe.lintWorkspace",
+        "title": "FlutterProbe: Lint Workspace"
+      },
+      {
         "command": "flutterprobe.record",
-        "title": "FlutterProbe: Start Recording"
+        "title": "FlutterProbe: Start Recording",
+        "icon": "$(record)"
+      },
+      {
+        "command": "flutterprobe.stopRecord",
+        "title": "FlutterProbe: Stop Recording",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "flutterprobe.listDevices",
+        "title": "FlutterProbe: List Devices",
+        "icon": "$(device-mobile)"
+      },
+      {
+        "command": "flutterprobe.startDevice",
+        "title": "FlutterProbe: Start Device/Emulator"
+      },
+      {
+        "command": "flutterprobe.generateReport",
+        "title": "FlutterProbe: Generate HTML Report"
+      },
+      {
+        "command": "flutterprobe.openReport",
+        "title": "FlutterProbe: Open Report"
+      },
+      {
+        "command": "flutterprobe.openStudio",
+        "title": "FlutterProbe: Open Studio",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "flutterprobe.init",
+        "title": "FlutterProbe: Init Project"
+      },
+      {
+        "command": "flutterprobe.convert",
+        "title": "FlutterProbe: Convert Tests from Other Frameworks"
+      },
+      {
+        "command": "flutterprobe.addSession",
+        "title": "FlutterProbe: Add Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "flutterprobe.removeSession",
+        "title": "FlutterProbe: Remove Session",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "flutterprobe.editSession",
+        "title": "FlutterProbe: Edit Session",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "flutterprobe.runOnSession",
+        "title": "FlutterProbe: Run All Tests on Session",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "flutterprobe.runFileOnSession",
+        "title": "FlutterProbe: Run Current File on Session",
+        "icon": "$(play)"
+      },
+      {
+        "command": "flutterprobe.runOnAllSessions",
+        "title": "FlutterProbe: Run on All Sessions (Parallel)",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "flutterprobe.refreshSessions",
+        "title": "FlutterProbe: Refresh Sessions",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "flutterprobe.refreshTests",
+        "title": "FlutterProbe: Refresh Test Explorer",
+        "icon": "$(refresh)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "flutterprobe",
+          "title": "FlutterProbe",
+          "icon": "resources/probe-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "flutterprobe": [
+        {
+          "id": "flutterprobe.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "flutterprobe.tests",
+          "name": "Tests"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {
@@ -77,10 +186,88 @@
         {
           "when": "resourceExtname == .probe",
           "command": "flutterprobe.runTest",
-          "group": "flutterprobe"
+          "group": "flutterprobe@1"
+        },
+        {
+          "when": "resourceExtname == .probe",
+          "command": "flutterprobe.runFile",
+          "group": "flutterprobe@2"
+        },
+        {
+          "when": "resourceExtname == .probe",
+          "command": "flutterprobe.lintFile",
+          "group": "flutterprobe@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "flutterprobe.addSession",
+          "when": "view == flutterprobe.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "flutterprobe.runOnAllSessions",
+          "when": "view == flutterprobe.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "flutterprobe.refreshSessions",
+          "when": "view == flutterprobe.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "flutterprobe.refreshTests",
+          "when": "view == flutterprobe.tests",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "flutterprobe.runOnSession",
+          "when": "viewItem == session",
+          "group": "inline"
+        },
+        {
+          "command": "flutterprobe.runFileOnSession",
+          "when": "viewItem == session",
+          "group": "inline"
+        },
+        {
+          "command": "flutterprobe.editSession",
+          "when": "viewItem == session"
+        },
+        {
+          "command": "flutterprobe.removeSession",
+          "when": "viewItem == session"
         }
       ]
     },
+    "keybindings": [
+      {
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "command": "flutterprobe.runTest",
+        "when": "editorLangId == probescript"
+      },
+      {
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "command": "flutterprobe.runFile",
+        "when": "editorLangId == probescript"
+      },
+      {
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "command": "flutterprobe.lintFile",
+        "when": "editorLangId == probescript"
+      },
+      {
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "command": "flutterprobe.runOnAllSessions",
+        "when": "editorLangId == probescript"
+      }
+    ],
     "configuration": {
       "title": "FlutterProbe",
       "properties": {
@@ -98,6 +285,92 @@
           "type": "number",
           "default": 9191,
           "description": "Port for probe studio"
+        },
+        "flutterprobe.defaultDevice": {
+          "type": "string",
+          "default": "",
+          "description": "Default device serial for running tests"
+        },
+        "flutterprobe.defaultTimeout": {
+          "type": "string",
+          "default": "30s",
+          "description": "Default per-step timeout"
+        },
+        "flutterprobe.autoConfirm": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-confirm destructive actions (-y flag)"
+        },
+        "flutterprobe.outputFormat": {
+          "type": "string",
+          "default": "terminal",
+          "enum": ["terminal", "junit", "json"],
+          "description": "Default output format for test results"
+        },
+        "flutterprobe.outputPath": {
+          "type": "string",
+          "default": "",
+          "description": "Default output file path for test results"
+        },
+        "flutterprobe.video": {
+          "type": "boolean",
+          "default": false,
+          "description": "Record video during test runs"
+        },
+        "flutterprobe.videoResolution": {
+          "type": "string",
+          "default": "720x1280",
+          "description": "Video recording resolution"
+        },
+        "flutterprobe.videoFramerate": {
+          "type": "number",
+          "default": 2,
+          "description": "Video recording framerate (fps)"
+        },
+        "flutterprobe.visualThreshold": {
+          "type": "number",
+          "default": 0.5,
+          "description": "Visual regression threshold (%)"
+        },
+        "flutterprobe.visualPixelDelta": {
+          "type": "number",
+          "default": 8,
+          "description": "Visual regression per-pixel delta tolerance"
+        },
+        "flutterprobe.agentPort": {
+          "type": "number",
+          "default": 48686,
+          "description": "Agent WebSocket host port"
+        },
+        "flutterprobe.dialTimeout": {
+          "type": "string",
+          "default": "30s",
+          "description": "WebSocket dial timeout"
+        },
+        "flutterprobe.tokenTimeout": {
+          "type": "string",
+          "default": "30s",
+          "description": "Agent token wait timeout"
+        },
+        "flutterprobe.reconnectDelay": {
+          "type": "string",
+          "default": "2s",
+          "description": "Post-restart reconnect delay"
+        },
+        "flutterprobe.adbPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to adb binary"
+        },
+        "flutterprobe.flutterPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to flutter binary"
+        },
+        "flutterprobe.convertPath": {
+          "type": "string",
+          "default": "probe-convert",
+          "description": "Path to the probe-convert binary"
         }
       }
     },
@@ -115,6 +388,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "lint": "tsc --noEmit -p ./",
     "package": "vsce package"
   },
   "devDependencies": {

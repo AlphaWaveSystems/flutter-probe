@@ -2,6 +2,8 @@
 
 BINARY  = probe
 OUT_DIR = bin
+VERSION = $(shell cat VERSION)
+LDFLAGS = -ldflags="-s -w -X github.com/flutterprobe/probe/internal/cli.Version=$(VERSION)"
 
 ## Download dependencies
 deps:
@@ -11,23 +13,23 @@ deps:
 ## Build the probe binary
 build: deps
 	@mkdir -p $(OUT_DIR)
-	go build -ldflags="-s -w" -o $(OUT_DIR)/$(BINARY) ./cmd/probe
+	go build $(LDFLAGS) -o $(OUT_DIR)/$(BINARY) ./cmd/probe
 
 ## Build probe-convert tool
 build-convert:
-	cd tools/probe-convert && go build -o ../../$(OUT_DIR)/probe-convert .
+	cd tools/probe-convert && go build -ldflags="-s -w" -o ../../$(OUT_DIR)/probe-convert .
 
 ## Install probe to GOPATH/bin
 install: deps
-	go install ./cmd/probe
+	go install $(LDFLAGS) ./cmd/probe
 
 ## Cross-compile for all platforms
 build-all: deps
 	@mkdir -p $(OUT_DIR)
-	GOOS=linux   GOARCH=amd64 go build -o $(OUT_DIR)/probe-linux-amd64     ./cmd/probe
-	GOOS=darwin  GOARCH=amd64 go build -o $(OUT_DIR)/probe-darwin-amd64    ./cmd/probe
-	GOOS=darwin  GOARCH=arm64 go build -o $(OUT_DIR)/probe-darwin-arm64    ./cmd/probe
-	GOOS=windows GOARCH=amd64 go build -o $(OUT_DIR)/probe-windows-amd64.exe ./cmd/probe
+	GOOS=linux   GOARCH=amd64 go build $(LDFLAGS) -o $(OUT_DIR)/probe-linux-amd64     ./cmd/probe
+	GOOS=darwin  GOARCH=amd64 go build $(LDFLAGS) -o $(OUT_DIR)/probe-darwin-amd64    ./cmd/probe
+	GOOS=darwin  GOARCH=arm64 go build $(LDFLAGS) -o $(OUT_DIR)/probe-darwin-arm64    ./cmd/probe
+	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(OUT_DIR)/probe-windows-amd64.exe ./cmd/probe
 
 ## Run unit tests (probe CLI)
 test:

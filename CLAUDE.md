@@ -6,10 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FlutterProbe is a high-performance local E2E testing framework for Flutter mobile apps. It uses a natural language test syntax called ProbeScript (`.probe` files) with sub-50ms command execution via direct widget-tree access.
 
+## Versioning
+
+Single `VERSION` file at repo root is the source of truth. The version is injected into the Go binary at build time via `-ldflags`. `probe version` prints it.
+
+- `VERSION` — plain text, e.g. `0.1.0`
+- `probe_agent/pubspec.yaml` and `vscode/package.json` must stay in sync
+- `scripts/release.sh <version>` bumps all three, commits, and tags `v<version>`
+
 ## Build & Development Commands
 
 ```bash
-make build              # Build probe binary → bin/probe
+make build              # Build probe binary → bin/probe (with version from VERSION file)
 make install            # Install to $GOPATH/bin
 make test               # Run all Go unit tests (go test ./...)
 make deps               # go mod tidy + download
@@ -54,7 +62,7 @@ The system has two main components that communicate via WebSocket + JSON-RPC 2.0
 
 ### Go CLI internals (`internal/`)
 
-- **`cli/`** — Cobra command definitions (`probe test`, `probe init`, `probe lint`, `probe device`, `probe record`, `probe report`, `probe migrate`, `probe generate`, `probe studio`)
+- **`cli/`** — Cobra command definitions (`probe test`, `probe init`, `probe lint`, `probe device`, `probe record`, `probe report`, `probe migrate`, `probe generate`, `probe studio`, `probe version`)
 - **`parser/`** — Indent-aware lexer + recursive-descent parser producing an AST. ProbeScript is Python-like with indent-based blocks. Key types: `Program → UseStmt | RecipeDef | HookDef | TestDef`, each containing `Step` nodes
 - **`runner/`** — Test orchestration: `runner.go` loads recipes/files/tags, `executor.go` walks AST steps and dispatches to ProbeLink, `reporter.go` outputs Terminal/JUnit/JSON, `device_context.go` handles platform-level operations (restart, clear data, permissions, reconnection)
 - **`probelink/`** — JSON-RPC 2.0 WebSocket client. `DialWithOptions()` for full config control. Methods like `probe.tap`, `probe.type`, `probe.see`, `probe.wait`, `probe.screenshot`, etc.
@@ -317,9 +325,85 @@ make update-golden                # Regenerate golden files after intentional ch
 - `--verify` — Validate with `probe test --dry-run` after conversion
 - `--probe-path` — Path to probe binary (auto-detected)
 
+## Cloud Service (separate private repo: `AlphaWaveSystems/probe-cloud`)
+
+The cloud service (multitenant API, dashboard, visual regression, x402 payments) lives in a separate private repository at `github.com/AlphaWaveSystems/probe-cloud`. It uses PostgreSQL (via pgxpool) and communicates with the CLI exclusively via HTTP REST. See the cloud repo's README for setup and architecture details.
+
+The CLI's `internal/cloud/client.go` is the only integration point — it talks to the cloud API via REST endpoints.
+
+## Cloud Provider Integration (`internal/cloud/`)
+
+Device farm providers for running tests on remote devices. Users bring their own account.
+
+- **`internal/cloud/provider.go`** — `CloudProvider` interface: UploadApp, ListDevices, StartSession, ForwardPort, StopSession
+- **`internal/cloud/browserstack.go`** — BrowserStack App Automate (most complete)
+- **`internal/cloud/aws.go`** — AWS Device Farm
+- **`internal/cloud/firebase.go`** — Firebase Test Lab
+- **`internal/cloud/saucelabs.go`** — Sauce Labs
+- **`internal/cloud/lambdatest.go`** — LambdaTest
+- **`internal/cloud/client.go`** — HTTP client for cloud API (upload results, x402 payment flow)
+- **`internal/cloud/wallet.go`** — Wallet config for x402 payments
+
+CLI flags: `--cloud-provider`, `--cloud-app`, `--cloud-device`, `--cloud-key`, `--cloud-secret`
+
+## AI Test Generation (`internal/ai/`)
+
+- **`internal/ai/generate.go`** — LLM-based test generation via Claude API. Sends ProbeScript system prompt + user intent, returns validated .probe file
+- **`internal/ai/heal.go`** — Self-healing selector suggestions: sends failed selector + widget tree to LLM, returns alternative with confidence score
+- CLI: `probe generate --prompt "test login flow"` or `probe generate --from-recording recording.json`
+- Config: `ai.api_key` and `ai.model` in probe.yaml or `probe config set ai.api_key <KEY>`
+
+## CLI Config Command
+
+`probe config set/get` for persistent user settings stored in `~/.flutterprobe/`:
+- `probe config set wallet <ADDRESS>` — x402 payment wallet
+- `probe config set ai.api_key <KEY>` — AI generation API key
+- `probe config get wallet` / `probe config get ai.api_key`
+
 ## Key Dependencies
 
 - Go 1.23, Dart 3.3+, Flutter 3.19+
 - `github.com/gorilla/websocket` — WebSocket client
 - `github.com/spf13/cobra` — CLI framework
 - `gopkg.in/yaml.v3` — YAML parsing
+- `github.com/mattn/go-sqlite3` — SQLite driver (cloud service)
+
+## Website & Documentation
+
+Documentation site built with **Starlight (Astro)** in `website/`:
+
+```bash
+cd website && npm install && npm run dev    # Local dev server
+cd website && npm run build                 # Production build → website/dist/
+```
+
+- **Landing page**: `website/src/pages/index.astro` — hero, features, code comparison, getting started
+- **Pricing page**: `website/src/pages/pricing.astro` — Free / Team ($49/mo) / Pay-per-use (x402)
+- **Docs**: `website/src/content/docs/` — 20+ pages organized by topic (getting-started, probescript, platform, tools, ci-cd, advanced)
+- **Config**: `website/astro.config.mjs` — sidebar structure, site URL, social links
+- **Deploys to**: GitHub Pages via `.github/workflows/docs.yml` (triggers on `website/**` changes to main)
+
+## CI/CD Workflows
+
+- **`.github/workflows/e2e.yml`** — Existing E2E test pipeline
+- **`.github/workflows/docs.yml`** — Builds and deploys Starlight site to GitHub Pages on `website/**` changes
+- **`.github/workflows/release.yml`** — Triggers on `v*` tags: cross-compiles binaries, creates GitHub Release with CHANGELOG body, attaches artifacts
+
+## Release Process
+
+```bash
+# Bump version, commit, and tag
+./scripts/release.sh 0.2.0
+
+# Push to trigger release workflow
+git push origin main --tags
+```
+
+The release workflow builds binaries for linux-amd64, darwin-amd64, darwin-arm64, and windows-amd64, then creates a GitHub Release.
+
+## Project Governance
+
+- **License**: BSL 1.1 — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release.
+- **CONTRIBUTING.md** — PR flow, code style, DCO sign-off, testing requirements
+- **CODE_OF_CONDUCT.md** — Contributor Covenant v2.1
+- **CHANGELOG.md** — Keep a Changelog format, updated with each release

@@ -8,6 +8,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is set at build time via -ldflags.
+var Version = "dev"
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the probe version",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("probe version %s\n", Version)
+	},
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "probe",
 	Short: "FlutterProbe — high-performance Flutter E2E testing",
@@ -39,6 +50,7 @@ func init() {
 	rootCmd.AddCommand(lintCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(deviceCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 // loadConfig loads the probe config, respecting the --config flag.

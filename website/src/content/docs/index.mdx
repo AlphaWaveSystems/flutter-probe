@@ -1,0 +1,81 @@
+---
+title: FlutterProbe Documentation
+description: High-performance local E2E testing for Flutter mobile apps with natural language syntax and sub-50ms execution.
+template: splash
+hero:
+  tagline: Write Flutter E2E tests in plain English. Execute with sub-50ms command round-trips via direct widget-tree access.
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/nicktesh/FlutterProbe
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is FlutterProbe?
+
+FlutterProbe is a high-performance local E2E testing framework for Flutter mobile apps. It uses a natural language test syntax called **ProbeScript** with sub-50ms command execution via direct widget-tree access.
+
+```
+test "user can log in"
+  open the app
+  see "Email"
+  type "user@example.com" into "Email"
+  type "secret" into "Password"
+  tap "Sign In"
+  see "Dashboard"
+```
+
+## Key Features
+
+<CardGrid stagger>
+  <Card title="Natural Language Tests" icon="pencil">
+    Write tests in ProbeScript — a readable, indent-based syntax that anyone on your team can understand.
+  </Card>
+  <Card title="Sub-50ms Execution" icon="rocket">
+    Direct widget-tree access via an in-app Dart agent delivers command round-trips under 50 milliseconds.
+  </Card>
+  <Card title="Cross-Platform" icon="laptop">
+    Run the same tests on Android emulators and iOS simulators with platform-specific handling built in.
+  </Card>
+  <Card title="Test Converter" icon="random">
+    Migrate from Maestro, Gherkin, Robot Framework, Detox, or Appium with 100% construct coverage.
+  </Card>
+  <Card title="Recording" icon="setting">
+    Record user interactions on a real device and generate ProbeScript automatically.
+  </Card>
+  <Card title="Visual Regression" icon="approve-check">
+    Screenshot-based visual regression testing with configurable thresholds.
+  </Card>
+  <Card title="CI/CD Ready" icon="seti:pipeline">
+    JUnit XML, JSON, and HTML report formats. GitHub Actions examples included.
+  </Card>
+  <Card title="VS Code Extension" icon="seti:code-search">
+    Syntax highlighting, code snippets, and integrated commands for VS Code.
+  </Card>
+</CardGrid>
+
+## Explore the Docs
+
+<CardGrid>
+  <Card title="Installation" icon="add-document">
+    Build from source and add ProbeAgent to your Flutter app.
+    [Read more](/getting-started/installation/)
+  </Card>
+  <Card title="ProbeScript Syntax" icon="open-book">
+    Learn the full ProbeScript language — selectors, assertions, gestures, and more.
+    [Read more](/probescript/syntax/)
+  </Card>
+  <Card title="CLI Reference" icon="setting">
+    All commands and flags for the probe CLI.
+    [Read more](/tools/cli-reference/)
+  </Card>
+  <Card title="Architecture" icon="puzzle">
+    Understand the Go CLI + Dart Agent architecture and JSON-RPC protocol.
+    [Read more](/advanced/architecture/)
+  </Card>
+</CardGrid>

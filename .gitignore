@@ -1,0 +1,51 @@
+# Build artifacts
+bin/
+coverage.out
+*.exe
+*.test
+*.prof
+
+# Sensitive/private documents
+LAUNCH_PLAN.md
+MARKET_RESEARCH.md
+
+# Cloud service (private, moves to separate repo)
+cloud/
+
+# Go
+vendor/
+
+# Dart / Flutter
+probe_agent/.dart_tool/
+probe_agent/build/
+probe_agent/pubspec.lock
+probe_agent/.packages
+
+# VS Code extension build output
+vscode/node_modules/
+vscode/out/
+vscode/*.vsix
+vscode/.vscode-test/
+
+# Website build output
+website/node_modules/
+website/dist/
+website/.astro/
+
+# Reports (generated test output)
+reports/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
