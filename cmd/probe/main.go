@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/flutterprobe/probe/internal/cli"
+	"github.com/alphawavesystems/flutter-probe/internal/cli"
 )
 
 func main() {

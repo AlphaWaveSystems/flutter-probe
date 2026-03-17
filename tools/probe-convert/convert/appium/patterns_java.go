@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/flutterprobe/probe-convert/convert"
+	"github.com/alphawavesystems/probe-convert/convert"
 )
 
 // Java Appium patterns.

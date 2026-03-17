@@ -3,7 +3,7 @@ package ai_test
 import (
 	"testing"
 
-	"github.com/flutterprobe/probe/internal/ai"
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
 
 var sampleTree = []ai.WidgetInfo{

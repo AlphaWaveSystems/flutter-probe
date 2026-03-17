@@ -1,4 +1,4 @@
-module github.com/flutterprobe/probe-convert
+module github.com/alphawavesystems/probe-convert
 
 go 1.25.0
 

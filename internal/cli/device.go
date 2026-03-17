@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flutterprobe/probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/spf13/cobra"
 )
 

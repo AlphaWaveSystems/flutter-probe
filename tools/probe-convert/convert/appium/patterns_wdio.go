@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/flutterprobe/probe-convert/convert"
+	"github.com/alphawavesystems/probe-convert/convert"
 )
 
 // WebdriverIO / Appium JS patterns.

@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flutterprobe/probe/internal/cloud"
-	"github.com/flutterprobe/probe/internal/config"
-	"github.com/flutterprobe/probe/internal/device"
-	"github.com/flutterprobe/probe/internal/probelink"
-	"github.com/flutterprobe/probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/cloud"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/spf13/cobra"
 )
 

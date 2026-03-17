@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/flutterprobe/probe/internal/cloud"
+	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/spf13/cobra"
 )
 

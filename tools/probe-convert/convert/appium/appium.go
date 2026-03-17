@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flutterprobe/probe-convert/convert"
+	"github.com/alphawavesystems/probe-convert/convert"
 )
 
 // Converter handles Appium → ProbeScript conversion.

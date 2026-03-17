@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flutterprobe/probe-convert/catalog"
-	"github.com/flutterprobe/probe-convert/ui"
+	"github.com/alphawavesystems/probe-convert/catalog"
+	"github.com/alphawavesystems/probe-convert/ui"
 	"github.com/spf13/cobra"
 )
 

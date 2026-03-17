@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flutterprobe/probe/internal/migrate"
-	"github.com/flutterprobe/probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/migrate"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/spf13/cobra"
 )
 

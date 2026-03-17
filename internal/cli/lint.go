@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/flutterprobe/probe/internal/parser"
-	"github.com/flutterprobe/probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/spf13/cobra"
 )
 

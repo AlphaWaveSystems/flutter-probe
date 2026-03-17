@@ -3,7 +3,7 @@
 BINARY  = probe
 OUT_DIR = bin
 VERSION = $(shell cat VERSION)
-LDFLAGS = -ldflags="-s -w -X github.com/flutterprobe/probe/internal/cli.Version=$(VERSION)"
+LDFLAGS = -ldflags="-s -w -X github.com/alphawavesystems/flutter-probe/internal/cli.Version=$(VERSION)"
 
 ## Download dependencies
 deps:

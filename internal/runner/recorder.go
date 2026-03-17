@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/config"
-	"github.com/flutterprobe/probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
 
 // VideoRecorder captures device screen recordings at the OS level.

@@ -12,7 +12,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // ReportMetadata is a type alias used to pass run metadata into the HTML template.

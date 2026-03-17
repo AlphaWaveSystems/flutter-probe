@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/device"
-	"github.com/flutterprobe/probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/spf13/cobra"
 )
 

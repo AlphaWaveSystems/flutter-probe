@@ -1,4 +1,4 @@
-module github.com/flutterprobe/probe
+module github.com/alphawavesystems/flutter-probe
 
 go 1.23
 

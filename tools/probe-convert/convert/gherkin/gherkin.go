@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flutterprobe/probe-convert/convert"
+	"github.com/alphawavesystems/probe-convert/convert"
 )
 
 // Converter handles Gherkin → ProbeScript conversion.

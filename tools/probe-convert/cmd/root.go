@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/flutterprobe/probe-convert/ui"
+	"github.com/alphawavesystems/probe-convert/ui"
 	"github.com/spf13/cobra"
 )
 

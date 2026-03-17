@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flutterprobe/probe/internal/ai"
-	"github.com/flutterprobe/probe/internal/config"
-	"github.com/flutterprobe/probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/spf13/cobra"
 )
 

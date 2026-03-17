@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flutterprobe/probe-convert/ui"
+	"github.com/alphawavesystems/probe-convert/ui"
 )
 
 // findProbe locates the probe binary. Search order:

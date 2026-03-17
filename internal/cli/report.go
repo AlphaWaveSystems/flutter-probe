@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/report"
-	"github.com/flutterprobe/probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/report"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 
 	"github.com/spf13/cobra"
 )

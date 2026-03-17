@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/ios"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 )
 
 // Platform indicates the target platform.

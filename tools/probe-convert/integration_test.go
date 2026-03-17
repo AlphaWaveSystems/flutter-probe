@@ -25,12 +25,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flutterprobe/probe-convert/convert"
-	"github.com/flutterprobe/probe-convert/convert/appium"
-	"github.com/flutterprobe/probe-convert/convert/detox"
-	"github.com/flutterprobe/probe-convert/convert/gherkin"
-	"github.com/flutterprobe/probe-convert/convert/maestro"
-	"github.com/flutterprobe/probe-convert/convert/robot"
+	"github.com/alphawavesystems/probe-convert/convert"
+	"github.com/alphawavesystems/probe-convert/convert/appium"
+	"github.com/alphawavesystems/probe-convert/convert/detox"
+	"github.com/alphawavesystems/probe-convert/convert/gherkin"
+	"github.com/alphawavesystems/probe-convert/convert/maestro"
+	"github.com/alphawavesystems/probe-convert/convert/robot"
 )
 
 var update = flag.Bool("update", false, "update golden files")

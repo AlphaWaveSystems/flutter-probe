@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/parser"
-	"github.com/flutterprobe/probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flutterprobe/probe/internal/migrate"
+	"github.com/alphawavesystems/flutter-probe/internal/migrate"
 )
 
 func TestConvertYAML_LoginFlow(t *testing.T) {

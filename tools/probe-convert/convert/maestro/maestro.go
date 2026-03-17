@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flutterprobe/probe-convert/convert"
+	"github.com/alphawavesystems/probe-convert/convert"
 	"gopkg.in/yaml.v3"
 )
 

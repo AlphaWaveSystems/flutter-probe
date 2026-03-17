@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/flutterprobe/probe/internal/parser"
-	"github.com/flutterprobe/probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // ---- Reporter tests (no network required) ----

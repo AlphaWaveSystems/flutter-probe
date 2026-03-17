@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flutterprobe/probe/internal/config"
-	"github.com/flutterprobe/probe/internal/device"
-	"github.com/flutterprobe/probe/internal/parser"
-	"github.com/flutterprobe/probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 // TestResult captures the outcome of a single test run.

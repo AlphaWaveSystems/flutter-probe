@@ -3,7 +3,7 @@ package parser_test
 import (
 	"testing"
 
-	"github.com/flutterprobe/probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
 // ---- Helpers ----
