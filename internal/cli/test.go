@@ -97,6 +97,10 @@ func init() {
 
 	// x402 pay-per-use
 	f.String("pay", "", `payment method for cloud upload: "x402" for pay-per-use via crypto wallet`)
+
+	// Relay mode
+	f.Bool("relay", false, "force enable relay mode for cloud device farm testing")
+	f.Bool("no-relay", false, "force disable relay mode (use direct port forwarding)")
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
@@ -242,58 +246,149 @@ func runTests(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("--cloud-device is required when using --cloud-provider (target device name)")
 			}
 
-			// Step 1: Upload app
-			fmt.Printf("  Uploading app to %s...\n", provider.Name())
-			appID, err := provider.UploadApp(ctx, cloudApp)
-			if err != nil {
-				return fmt.Errorf("cloud upload: %w", err)
+			// Determine relay mode: --relay/--no-relay flags > probe.yaml > auto
+			relayFlag, _ := cmd.Flags().GetBool("relay")
+			noRelayFlag, _ := cmd.Flags().GetBool("no-relay")
+			useRelay := cfg.Cloud.Relay.RelayEnabled(true) // auto-enabled for cloud providers
+			if relayFlag {
+				useRelay = true
 			}
-			fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
+			if noRelayFlag {
+				useRelay = false
+			}
 
-			// Step 2: Start session
-			fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
-			sess, err := provider.StartSession(ctx, appID, targetDevice)
-			if err != nil {
-				return fmt.Errorf("cloud session: %w", err)
-			}
-			cloudSession = &sess
-			defer func() {
-				fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
-				if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
-					fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
-				} else {
-					fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+			if useRelay {
+				// ── Relay path: connect via ProbeRelay server ──────────────
+
+				// Resolve cloud API client
+				cloudToken, _ := cmd.Flags().GetString("cloud-token")
+				cloudURL, _ := cmd.Flags().GetString("cloud-url")
+				if cloudToken == "" {
+					cloudToken = cfg.Cloud.Token
 				}
-			}()
-			fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
+				if cloudURL == "" {
+					cloudURL = cfg.Cloud.URL
+				}
+				if cloudToken == "" {
+					return fmt.Errorf("--cloud-token is required for relay mode (API key for relay session creation)")
+				}
 
-			// Step 3: Forward port
-			devicePort := cfg.Agent.AgentDevicePort()
-			localPort, err := provider.ForwardPort(ctx, sess, devicePort)
-			if err != nil {
-				return fmt.Errorf("cloud port forward: %w", err)
-			}
-			sess.LocalPort = localPort
-			fmt.Printf("  \033[32m✓\033[0m  Port forwarded: localhost:%d -> device:%d\n", localPort, devicePort)
+				cc := cloud.NewClient(cloudURL, cloudToken)
 
-			// Step 4: Connect to ProbeAgent via the tunneled port
-			dialOpts := probelink.DialOptions{
-				Host:        "127.0.0.1",
-				Port:        localPort,
-				DialTimeout: cfg.Agent.DialTimeout,
-			}
-			// Cloud sessions may not require token auth (handled by the provider)
-			// but we attempt to connect with whatever the provider gives us
-			client, err = probelink.DialWithOptions(ctx, dialOpts)
-			if err != nil {
-				return fmt.Errorf("connecting to cloud ProbeAgent: %w", err)
-			}
-			defer client.Close()
+				// Step 1: Create relay session
+				fmt.Println("  Creating relay session...")
+				relaySess, err := cc.CreateRelaySession(ctx, cloudProvider, targetDevice, cfg.Cloud.Relay.RelayTTL())
+				if err != nil {
+					return fmt.Errorf("relay session: %w", err)
+				}
+				defer func() {
+					if delErr := cc.DeleteRelaySession(ctx, relaySess.SessionID); delErr != nil {
+						fmt.Printf("  \033[33m⚠  Failed to close relay session: %s\033[0m\n", delErr)
+					}
+				}()
+				fmt.Printf("  \033[32m✓\033[0m  Relay session: %s\n", relaySess.SessionID)
 
-			if err := client.Ping(ctx); err != nil {
-				return fmt.Errorf("cloud agent ping failed: %w", err)
+				// Step 2: Upload app (with relay DART_DEFINES baked in)
+				fmt.Printf("  Uploading app to %s...\n", provider.Name())
+				appID, err := provider.UploadApp(ctx, cloudApp)
+				if err != nil {
+					return fmt.Errorf("cloud upload: %w", err)
+				}
+				fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
+
+				// Step 3: Start cloud session (app launches on device)
+				fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
+				sess, err := provider.StartSession(ctx, appID, targetDevice)
+				if err != nil {
+					return fmt.Errorf("cloud session: %w", err)
+				}
+				sess.RelayURL = relaySess.RelayURL
+				sess.CLIToken = relaySess.CLIToken
+				cloudSession = &sess
+				defer func() {
+					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
+					if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
+						fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+					} else {
+						fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+					}
+				}()
+				fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
+
+				// Step 4: Wait for agent to connect to relay
+				fmt.Println("  Waiting for agent to connect to relay...")
+				connectTimeout := cfg.Cloud.Relay.RelayConnectTimeout()
+				status, err := cc.PollRelayStatus(ctx, relaySess.SessionID, connectTimeout)
+				if err != nil {
+					return fmt.Errorf("relay wait: %w", err)
+				}
+				fmt.Printf("  \033[32m✓\033[0m  Agent connected (status: %s)\n", status.Status)
+
+				// Step 5: CLI connects to relay
+				client, err = probelink.DialRelay(ctx, relaySess.RelayURL, relaySess.CLIToken, cfg.Agent.DialTimeout)
+				if err != nil {
+					return fmt.Errorf("connecting via relay: %w", err)
+				}
+				defer client.Close()
+
+				if err := client.Ping(ctx); err != nil {
+					return fmt.Errorf("relay agent ping failed: %w", err)
+				}
+				fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent via relay on %s (%s)\n\n", targetDevice, provider.Name())
+			} else {
+				// ── Direct path: port forwarding (existing behavior) ──────
+
+				// Step 1: Upload app
+				fmt.Printf("  Uploading app to %s...\n", provider.Name())
+				appID, err := provider.UploadApp(ctx, cloudApp)
+				if err != nil {
+					return fmt.Errorf("cloud upload: %w", err)
+				}
+				fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
+
+				// Step 2: Start session
+				fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
+				sess, err := provider.StartSession(ctx, appID, targetDevice)
+				if err != nil {
+					return fmt.Errorf("cloud session: %w", err)
+				}
+				cloudSession = &sess
+				defer func() {
+					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
+					if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
+						fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+					} else {
+						fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+					}
+				}()
+				fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
+
+				// Step 3: Forward port
+				devicePort := cfg.Agent.AgentDevicePort()
+				localPort, err := provider.ForwardPort(ctx, sess, devicePort)
+				if err != nil {
+					return fmt.Errorf("cloud port forward: %w", err)
+				}
+				sess.LocalPort = localPort
+				fmt.Printf("  \033[32m✓\033[0m  Port forwarded: localhost:%d -> device:%d\n", localPort, devicePort)
+
+				// Step 4: Connect to ProbeAgent via the tunneled port
+				dialOpts := probelink.DialOptions{
+					Host:        "127.0.0.1",
+					Port:        localPort,
+					DialTimeout: cfg.Agent.DialTimeout,
+				}
+				client, err = probelink.DialWithOptions(ctx, dialOpts)
+				if err != nil {
+					return fmt.Errorf("connecting to cloud ProbeAgent: %w", err)
+				}
+				defer client.Close()
+
+				if err := client.Ping(ctx); err != nil {
+					return fmt.Errorf("cloud agent ping failed: %w", err)
+				}
+				fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s (%s)\n\n", targetDevice, provider.Name())
 			}
-			fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s (%s)\n\n", targetDevice, provider.Name())
 
 			// Use cloud device info as the "serial" for reporting
 			deviceSerial = fmt.Sprintf("%s:%s", provider.Name(), targetDevice)
