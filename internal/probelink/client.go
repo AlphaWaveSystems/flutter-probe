@@ -91,6 +91,52 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	return c, nil
 }
 
+// DialRelay connects to the ProbeAgent via a ProbeRelay server.
+// The relay forwards WebSocket frames between CLI and agent. From the
+// client's perspective, the connection behaves identically to a direct
+// connection — Call, Ping, readLoop, etc. all work unchanged.
+func DialRelay(ctx context.Context, relayURL, cliToken string, timeout time.Duration) (*Client, error) {
+	if timeout == 0 {
+		timeout = defaultDialTimeout
+	}
+
+	u, err := url.Parse(relayURL)
+	if err != nil {
+		return nil, fmt.Errorf("probelink: invalid relay URL: %w", err)
+	}
+	q := u.Query()
+	q.Set("role", "cli")
+	q.Set("token", cliToken)
+	u.RawQuery = q.Encode()
+
+	// Use WSS if the relay URL uses HTTPS, otherwise WS
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	} else if u.Scheme == "http" {
+		u.Scheme = "ws"
+	}
+
+	dialCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	conn, _, err := websocket.DefaultDialer.DialContext(dialCtx, u.String(), nil)
+	if err != nil {
+		// Mask token in error message
+		safeURL := fmt.Sprintf("%s://%s%s?role=cli&token=***", u.Scheme, u.Host, u.Path)
+		return nil, fmt.Errorf("probelink: dial relay %s: %w", safeURL, err)
+	}
+
+	safeAddr := fmt.Sprintf("relay://%s%s", u.Host, u.Path)
+	c := &Client{
+		conn:    conn,
+		pending: make(map[uint64]chan Response),
+		addr:    safeAddr,
+	}
+
+	go c.readLoop()
+	return c, nil
+}
+
 // Close terminates the connection.
 func (c *Client) Close() error {
 	return c.conn.Close()

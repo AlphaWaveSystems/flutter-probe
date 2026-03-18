@@ -17,5 +17,9 @@ agent:
 device:
   restart_delay: 1s
 
+cloud:
+  url: http://localhost:8080
+  token: ${PROBE_CLOUD_TOKEN}
+
 reports_folder: reports
 recipes_folder: tests/recipes

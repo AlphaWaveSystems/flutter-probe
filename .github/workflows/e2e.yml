@@ -137,7 +137,13 @@ jobs:
             probe test tests/ \
               --shard ${{ matrix.shard }}/3 \
               --format junit \
-              --output reports/results-${{ matrix.api-level }}-${{ matrix.shard }}.xml
+              --output reports/results-${{ matrix.api-level }}-${{ matrix.shard }}.xml \
+              --cloud --cloud-token "$PROBE_CLOUD_TOKEN" \
+              --cloud-url "${PROBE_CLOUD_URL:-https://flutterprobe-cloud.fly.dev}" \
+              || true
+        env:
+          PROBE_CLOUD_TOKEN: ${{ secrets.PROBE_CLOUD_TOKEN }}
+          PROBE_CLOUD_URL: ${{ vars.PROBE_CLOUD_URL }}
 
       - name: Upload test results
         if: always()
@@ -185,7 +191,14 @@ jobs:
         run: |
           flutter build ios --debug --simulator \
             --dart-define=PROBE_AGENT=true
-          probe test tests/ --format junit --output reports/ios-results.xml
+          probe test tests/ \
+            --format junit --output reports/ios-results.xml \
+            --cloud --cloud-token "$PROBE_CLOUD_TOKEN" \
+            --cloud-url "${PROBE_CLOUD_URL:-https://flutterprobe-cloud.fly.dev}" \
+            || true
+        env:
+          PROBE_CLOUD_TOKEN: ${{ secrets.PROBE_CLOUD_TOKEN }}
+          PROBE_CLOUD_URL: ${{ vars.PROBE_CLOUD_URL }}
 
       - name: Upload iOS results
         if: always()

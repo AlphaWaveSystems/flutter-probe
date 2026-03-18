@@ -14,6 +14,7 @@
 library probe_agent;
 
 export 'src/agent.dart' show ProbeAgent;
+export 'src/relay_client.dart' show ProbeRelayClient;
 export 'src/server.dart' show ProbeServer;
 export 'src/finder.dart' show ProbeFinder;
 export 'src/executor.dart' show ProbeExecutor;

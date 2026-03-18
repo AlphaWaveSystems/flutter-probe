@@ -40,6 +40,14 @@ type CloudConfig struct {
 	Credentials map[string]string `yaml:"credentials"` // provider-specific credentials (e.g. username, access_key)
 	App         string            `yaml:"app"`         // path to .apk/.ipa to upload to the cloud provider
 	Devices     []string          `yaml:"devices"`     // target device names for cloud testing
+	Relay       RelayConfig       `yaml:"relay"`       // WebSocket relay settings for cloud device farms
+}
+
+// RelayConfig controls the ProbeRelay WebSocket relay for cloud device farms.
+type RelayConfig struct {
+	Enabled        *bool         `yaml:"enabled"`         // auto when using cloud provider (nil = auto)
+	TTL            int           `yaml:"ttl"`             // session TTL in seconds (default: 600)
+	ConnectTimeout time.Duration `yaml:"connect_timeout"` // max time to wait for agent to connect to relay (default: 60s)
 }
 
 // AIConfig holds settings for LLM-powered features (test generation, self-healing).
@@ -264,6 +272,31 @@ func applyDefaults(cfg *Config) {
 	if cfg.Reports == "" {
 		cfg.Reports = d.Reports
 	}
+}
+
+// RelayTTL returns the relay session TTL in seconds, defaulting to 600 (10 min).
+func (r *RelayConfig) RelayTTL() int {
+	if r.TTL > 0 {
+		return r.TTL
+	}
+	return 600
+}
+
+// RelayConnectTimeout returns the relay agent connect timeout, defaulting to 60s.
+func (r *RelayConfig) RelayConnectTimeout() time.Duration {
+	if r.ConnectTimeout > 0 {
+		return r.ConnectTimeout
+	}
+	return 60 * time.Second
+}
+
+// RelayEnabled returns whether relay mode is enabled. When nil (auto),
+// relay is enabled when a cloud provider is configured.
+func (r *RelayConfig) RelayEnabled(hasCloudProvider bool) bool {
+	if r.Enabled != nil {
+		return *r.Enabled
+	}
+	return hasCloudProvider
 }
 
 // DefaultYAML returns the content written by `probe init`.
