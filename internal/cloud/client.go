@@ -65,7 +65,7 @@ func (c *Client) UploadResults(ctx context.Context, jsonData []byte) (runID stri
 		return "", "", fmt.Errorf("cloud: reading response: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		msg := string(body)
 		var parsed uploadResponse
 		if json.Unmarshal(body, &parsed) == nil && parsed.Error != "" {
