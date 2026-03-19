@@ -10,7 +10,7 @@ LAUNCH_PLAN.md
 MARKET_RESEARCH.md
 
 # Cloud service (private, moves to separate repo)
-cloud/
+/cloud/
 
 # Go
 vendor/
