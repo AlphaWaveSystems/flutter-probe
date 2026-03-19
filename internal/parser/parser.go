@@ -264,6 +264,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseMockBlock()
 	case TOKEN_TAKE:
 		return p.parseActionTakeShot()
+	case TOKEN_COMPARE:
+		return p.parseActionCompareShot()
 	case TOKEN_DUMP:
 		return p.parseActionDumpTree()
 	case TOKEN_SAVE:
@@ -448,6 +450,29 @@ func (p *Parser) parseActionTakeShot() (Step, error) {
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbTakeShot, Name: name, Line: line}, nil
+}
+
+func (p *Parser) parseActionCompareShot() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compare
+	p.skipFillers()
+	// screenshot
+	if p.peek().Type == TOKEN_SCREENSHOT {
+		p.advance()
+	}
+	p.skipFillers()
+	name := ""
+	if p.peek().Type == TOKEN_STRING {
+		name = p.expectString("screenshot name")
+	} else if p.peek().Type == TOKEN_CALLED {
+		p.advance()
+		name = p.expectString("screenshot name")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("line %d: compare screenshot requires a name", line)
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbCompareShot, Name: name, Line: line}, nil
 }
 
 func (p *Parser) parseActionDumpTree() (Step, error) {

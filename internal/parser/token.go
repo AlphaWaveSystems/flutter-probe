@@ -112,6 +112,7 @@ const (
 	TOKEN_MATCHING // "matching"
 	TOKEN_BETWEEN  // "between"
 	TOKEN_TAKE
+	TOKEN_COMPARE
 	TOKEN_SCREENSHOT
 	TOKEN_CALLED
 	TOKEN_DUMP
@@ -225,6 +226,7 @@ var keywords = map[string]TokenType{
 	"matching":     TOKEN_MATCHING,
 	"between":      TOKEN_BETWEEN,
 	"take":         TOKEN_TAKE,
+	"compare":      TOKEN_COMPARE,
 	"screenshot":   TOKEN_SCREENSHOT,
 	"called":       TOKEN_CALLED,
 	"dump":         TOKEN_DUMP,

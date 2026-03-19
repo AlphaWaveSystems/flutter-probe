@@ -8,6 +8,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
@@ -21,6 +22,7 @@ type Executor struct {
 	verbose     bool
 	depth       int      // indentation depth for verbose logging
 	artifacts   []string // collected screenshot paths (on-device)
+	visual      *visual.Comparator // nil if visual regression is not configured
 }
 
 // NewExecutor creates an Executor.
@@ -44,6 +46,11 @@ func (e *Executor) RegisterRecipe(r parser.RecipeDef) {
 // SetVar sets a variable (used for data-driven row substitution).
 func (e *Executor) SetVar(key, value string) {
 	e.vars[key] = value
+}
+
+// SetVisual configures visual regression comparison for this executor.
+func (e *Executor) SetVisual(c *visual.Comparator) {
+	e.visual = c
 }
 
 // Artifacts returns the list of screenshot paths collected during execution.
@@ -148,6 +155,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "go back"
 		case parser.VerbTakeShot:
 			return fmt.Sprintf("screenshot %q", s.Name)
+		case parser.VerbCompareShot:
+			return fmt.Sprintf("compare screenshot %q", s.Name)
 		case parser.VerbDumpTree:
 			return "dump tree"
 		case parser.VerbLog:
@@ -298,6 +307,29 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			e.artifacts = append(e.artifacts, path)
 		}
 		return err
+
+	case parser.VerbCompareShot:
+		path, err := e.client.Screenshot(ctx, a.Name)
+		if err != nil {
+			return fmt.Errorf("compare screenshot: take screenshot failed: %w", err)
+		}
+		if path != "" {
+			e.artifacts = append(e.artifacts, path)
+		}
+		if e.visual != nil && path != "" {
+			result, cmpErr := e.visual.Compare(a.Name, path)
+			if cmpErr != nil {
+				return fmt.Errorf("compare screenshot %q: %w", a.Name, cmpErr)
+			}
+			if !result.Passed {
+				return fmt.Errorf("visual regression: %q differs by %.2f%% (threshold %.2f%%), diff: %s",
+					a.Name, result.DiffPercent, result.Threshold, result.DiffPath)
+			}
+			if result.DiffPath != "" {
+				e.artifacts = append(e.artifacts, result.DiffPath)
+			}
+		}
+		return nil
 
 	case parser.VerbDumpTree:
 		_, err := e.client.DumpWidgetTree(ctx)

@@ -16,6 +16,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/visual"
 	"github.com/spf13/cobra"
 )
 
@@ -676,6 +677,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	r := runner.New(cfg, client, devCtx, opts)
+
+	// Configure visual regression if threshold is set.
+	if !dryRun {
+		vc := visual.NewComparatorWithConfig(".", cfg.Visual.Threshold, cfg.Visual.PixelDelta)
+		r.SetVisual(vc)
+	}
 
 	fmt.Printf("  Running %d test file(s)...\n\n", len(files))
 	results, err := r.Run(ctx)

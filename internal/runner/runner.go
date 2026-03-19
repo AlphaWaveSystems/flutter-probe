@@ -13,6 +13,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
 // TestResult captures the outcome of a single test run.
@@ -35,6 +36,7 @@ type Runner struct {
 	deviceCtx *DeviceContext // nil in dry-run mode
 	opts      RunOptions
 	recipes   map[string]parser.RecipeDef
+	visual    *visual.Comparator // nil if visual regression is not configured
 }
 
 // RunOptions configures a test run.
@@ -62,6 +64,11 @@ func New(cfg *config.Config, client *probelink.Client, deviceCtx *DeviceContext,
 		opts:      opts,
 		recipes:   make(map[string]parser.RecipeDef),
 	}
+}
+
+// SetVisual configures visual regression comparison for this runner.
+func (r *Runner) SetVisual(c *visual.Comparator) {
+	r.visual = c
 }
 
 // Run executes all specified test files and returns results.
@@ -166,6 +173,9 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 		for k, v := range vars {
 			exec.SetVar(k, v)
 		}
+	}
+	if r.visual != nil {
+		exec.SetVisual(r.visual)
 	}
 
 	// Start video recording if enabled
