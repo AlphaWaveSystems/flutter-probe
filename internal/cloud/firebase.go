@@ -424,22 +424,45 @@ func (p *firebaseTestLab) GetSessionArtifacts(ctx context.Context, matrixID stri
 
 	var listResult struct {
 		Items []struct {
-			Name string `json:"name"`
+			Name      string `json:"name"`
+			MediaLink string `json:"mediaLink"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(listBody, &listResult); err != nil {
 		return &SessionArtifacts{}, nil
 	}
 
+	// Make each artifact object publicly readable so dashboard can display them.
+	// This is safe — test artifacts are not sensitive and the bucket is project-scoped.
 	artifacts := &SessionArtifacts{}
 	for _, item := range listResult.Items {
 		lower := strings.ToLower(item.Name)
+		isVideo := strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, "video.webm")
+		isImage := strings.HasSuffix(lower, ".png") || strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg")
+		if !isVideo && !isImage {
+			continue
+		}
+
+		// Set object ACL to public-read so the dashboard can load it without auth.
+		aclURL := fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s/o/%s/acl",
+			bucket, url.PathEscape(item.Name))
+		aclBody := []byte(`{"entity":"allUsers","role":"READER"}`)
+		aclReq, aclErr := http.NewRequestWithContext(ctx, http.MethodPost, aclURL, bytes.NewReader(aclBody))
+		if aclErr == nil {
+			aclReq.Header.Set("Authorization", "Bearer "+p.accessToken)
+			aclReq.Header.Set("Content-Type", "application/json")
+			aclResp, aclDoErr := p.http.Do(aclReq)
+			if aclDoErr == nil {
+				aclResp.Body.Close()
+			}
+		}
+
 		publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, item.Name)
-		if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, "video.webm") {
+		if isVideo {
 			if artifacts.VideoURL == "" {
 				artifacts.VideoURL = publicURL
 			}
-		} else if strings.HasSuffix(lower, ".png") || strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") {
+		} else {
 			artifacts.ScreenshotURLs = append(artifacts.ScreenshotURLs, publicURL)
 		}
 	}
