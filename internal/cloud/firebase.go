@@ -230,7 +230,12 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		"environmentMatrix": map[string]interface{}{
 			"androidDeviceList": map[string]interface{}{
 				"androidDevices": []map[string]string{
-					{"androidModelId": deviceName, "androidVersionId": osVersion},
+					{
+						"androidModelId":   deviceName,
+						"androidVersionId": osVersion,
+						"locale":           "en",
+						"orientation":      "portrait",
+					},
 				},
 			},
 		},
