@@ -162,10 +162,11 @@ func (p *lambdaTest) StartSession(ctx context.Context, appID string, device stri
 	}
 
 	alwaysMatch := map[string]interface{}{
-		"appium:app":        appID,
-		"appium:deviceName": deviceName,
-		"platformName":      platformName,
-		"lt:options":        ltOpts,
+		"appium:app":                  appID,
+		"appium:deviceName":           deviceName,
+		"platformName":                platformName,
+		"appium:autoGrantPermissions": true,
+		"lt:options":                  ltOpts,
 	}
 	if osVersion != "" {
 		alwaysMatch["appium:platformVersion"] = osVersion
