@@ -108,6 +108,13 @@ func newFirebaseTestLab(creds map[string]string) (*firebaseTestLab, error) {
 			return nil, fmt.Errorf("firebase: service account auth: %w", err)
 		}
 		p.accessToken = token
+
+		// Clean up temp file — the access token is now in memory and the
+		// private key material on disk is no longer needed.
+		if strings.Contains(p.serviceAccount, "firebase-sa-") {
+			os.Remove(p.serviceAccount)
+			p.serviceAccount = ""
+		}
 	}
 
 	if p.accessToken == "" {
@@ -432,8 +439,13 @@ func (p *firebaseTestLab) GetSessionArtifacts(ctx context.Context, matrixID stri
 		return &SessionArtifacts{}, nil
 	}
 
-	// Make each artifact object publicly readable so dashboard can display them.
-	// This is safe — test artifacts are not sensitive and the bucket is project-scoped.
+	// Download artifact files locally using authenticated GCS requests.
+	// Avoids setting permanent public-read ACLs on GCS objects.
+	tmpDir, err := os.MkdirTemp("", "firebase-artifacts-*")
+	if err != nil {
+		return &SessionArtifacts{}, nil
+	}
+
 	artifacts := &SessionArtifacts{}
 	for _, item := range listResult.Items {
 		lower := strings.ToLower(item.Name)
@@ -443,27 +455,37 @@ func (p *firebaseTestLab) GetSessionArtifacts(ctx context.Context, matrixID stri
 			continue
 		}
 
-		// Set object ACL to public-read so the dashboard can load it without auth.
-		aclURL := fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s/o/%s/acl",
+		// Download via authenticated GCS JSON API.
+		dlURL := fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s/o/%s?alt=media",
 			bucket, url.PathEscape(item.Name))
-		aclBody := []byte(`{"entity":"allUsers","role":"READER"}`)
-		aclReq, aclErr := http.NewRequestWithContext(ctx, http.MethodPost, aclURL, bytes.NewReader(aclBody))
-		if aclErr == nil {
-			aclReq.Header.Set("Authorization", "Bearer "+p.accessToken)
-			aclReq.Header.Set("Content-Type", "application/json")
-			aclResp, aclDoErr := p.http.Do(aclReq)
-			if aclDoErr == nil {
-				aclResp.Body.Close()
-			}
+		dlReq, dlErr := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+		if dlErr != nil {
+			continue
+		}
+		dlReq.Header.Set("Authorization", "Bearer "+p.accessToken)
+
+		dlResp, dlDoErr := p.http.Do(dlReq)
+		if dlDoErr != nil {
+			continue
+		}
+		dlBody, dlReadErr := io.ReadAll(dlResp.Body)
+		dlResp.Body.Close()
+		if dlReadErr != nil || dlResp.StatusCode != http.StatusOK {
+			continue
 		}
 
-		publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, item.Name)
+		localName := filepath.Base(item.Name)
+		localPath := filepath.Join(tmpDir, localName)
+		if writeErr := os.WriteFile(localPath, dlBody, 0o600); writeErr != nil {
+			continue
+		}
+
 		if isVideo {
 			if artifacts.VideoURL == "" {
-				artifacts.VideoURL = publicURL
+				artifacts.VideoURL = localPath
 			}
 		} else {
-			artifacts.ScreenshotURLs = append(artifacts.ScreenshotURLs, publicURL)
+			artifacts.ScreenshotURLs = append(artifacts.ScreenshotURLs, localPath)
 		}
 	}
 	return artifacts, nil
