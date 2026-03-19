@@ -3,6 +3,8 @@ package cloud
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 // Device represents a device available on a cloud provider.
@@ -65,6 +67,29 @@ func NewProvider(name string, creds map[string]string) (CloudProvider, error) {
 	default:
 		return nil, fmt.Errorf("unknown cloud provider %q (supported: browserstack, aws, firebase, saucelabs, lambdatest)", name)
 	}
+}
+
+// parseDeviceString splits a device string like "Google Pixel 7-14.0" into
+// device name and OS version. If no version suffix is found, returns the
+// original string with an empty version.
+func parseDeviceString(device string) (name string, version string) {
+	if idx := strings.LastIndex(device, "-"); idx > 0 {
+		candidate := device[idx+1:]
+		if _, err := strconv.ParseFloat(candidate, 64); err == nil {
+			return device[:idx], candidate
+		}
+	}
+	return device, ""
+}
+
+// detectPlatform guesses the platform from device name or explicit OS field.
+// Defaults to "Android" if undetermined.
+func detectPlatform(device string) string {
+	lower := strings.ToLower(device)
+	if strings.Contains(lower, "iphone") || strings.Contains(lower, "ipad") || strings.Contains(lower, "ios") {
+		return "iOS"
+	}
+	return "Android"
 }
 
 // validProviders lists all supported provider names for validation and help text.

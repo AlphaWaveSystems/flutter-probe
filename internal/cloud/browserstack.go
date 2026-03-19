@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -159,33 +160,60 @@ func (p *browserStack) ListDevices(ctx context.Context) ([]Device, error) {
 	return devices, nil
 }
 
-// bsSessionRequest is the POST body for starting an App Automate session.
-type bsSessionRequest struct {
-	AppURL      string `json:"app"`
-	Device      string `json:"device"`
-	OS          string `json:"os"`
-	OSVersion   string `json:"os_version"`
-	Project     string `json:"project,omitempty"`
-	Build       string `json:"build,omitempty"`
-	Name        string `json:"name,omitempty"`
-	DeviceLogs  bool   `json:"deviceLogs"`
-	NetworkLogs bool   `json:"networkLogs"`
-}
+// bsAppiumHubURL is the BrowserStack Appium W3C WebDriver endpoint.
+const bsAppiumHubURL = "https://hub-cloud.browserstack.com/wd/hub/session"
 
-// bsSessionResponse is the JSON returned when creating a BrowserStack session.
+// bsSessionResponse is the JSON returned when creating a BrowserStack Appium session.
 type bsSessionResponse struct {
-	BuildID   string `json:"build_id"`
-	SessionID string `json:"session_id"`
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
+	Value struct {
+		SessionID    string `json:"sessionId"`
+		Error        string `json:"error,omitempty"`
+		Message      string `json:"message,omitempty"`
+		Capabilities struct {
+			DeviceName string `json:"deviceName"`
+		} `json:"capabilities,omitempty"`
+	} `json:"value"`
 }
 
-// StartSession starts an App Automate session on the specified device.
+// StartSession starts an App Automate session via the Appium W3C WebDriver hub.
+// The device string can be "Google Pixel 7" or "Google Pixel 7-14.0" (with OS version).
 func (p *browserStack) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	payload := bsSessionRequest{
-		AppURL:     appID, // bs://... URL from UploadApp
-		Device:     device,
-		DeviceLogs: true,
+	deviceName, osVersion := parseDeviceString(device)
+	platformName := detectPlatform(deviceName)
+
+	// Build W3C capabilities payload
+	bstackOpts := map[string]interface{}{
+		"userName":    p.username,
+		"accessKey":   p.accessKey,
+		"projectName": "FlutterProbe",
+		"buildName":   fmt.Sprintf("probe-%s", time.Now().Format("2006-01-02")),
+		"sessionName": "probe-test",
+		"deviceLogs":  true,
+		"networkLogs": true,
+	}
+
+	alwaysMatch := map[string]interface{}{
+		"appium:app":        appID,
+		"appium:deviceName": deviceName,
+		"platformName":      platformName,
+		"bstack:options":    bstackOpts,
+	}
+	if osVersion != "" {
+		alwaysMatch["appium:platformVersion"] = osVersion
+	}
+
+	// Detect automation name from platform
+	if strings.EqualFold(platformName, "Android") {
+		alwaysMatch["appium:automationName"] = "UiAutomator2"
+	} else {
+		alwaysMatch["appium:automationName"] = "XCUITest"
+	}
+
+	payload := map[string]interface{}{
+		"capabilities": map[string]interface{}{
+			"firstMatch":  []map[string]interface{}{{}},
+			"alwaysMatch": alwaysMatch,
+		},
 	}
 
 	data, err := json.Marshal(payload)
@@ -193,8 +221,7 @@ func (p *browserStack) StartSession(ctx context.Context, appID string, device st
 		return Session{}, fmt.Errorf("browserstack: marshaling session request: %w", err)
 	}
 
-	url := bsBaseURL + "/build"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, bsAppiumHubURL, bytes.NewReader(data))
 	if err != nil {
 		return Session{}, fmt.Errorf("browserstack: creating session request: %w", err)
 	}
@@ -220,50 +247,66 @@ func (p *browserStack) StartSession(ctx context.Context, appID string, device st
 	if err := json.Unmarshal(body, &result); err != nil {
 		return Session{}, fmt.Errorf("browserstack: invalid session response: %w", err)
 	}
-	if result.Error != "" {
-		return Session{}, fmt.Errorf("browserstack: session error: %s", result.Error)
+	if result.Value.Error != "" {
+		return Session{}, fmt.Errorf("browserstack: session error: %s — %s", result.Value.Error, result.Value.Message)
+	}
+	if result.Value.SessionID == "" {
+		return Session{}, fmt.Errorf("browserstack: session created but no sessionId in response")
 	}
 
 	return Session{
-		ID:         result.SessionID,
+		ID:         result.Value.SessionID,
 		DeviceName: device,
 		Provider:   "browserstack",
 	}, nil
 }
 
-// ForwardPort establishes a local tunnel to the BrowserStack device.
+// ForwardPort is a no-op for BrowserStack when using relay mode.
 //
-// BrowserStack uses their "BrowserStack Local" binary for tunneling.
-// This is a placeholder that documents the approach -- in production, this would
-// start the BrowserStackLocal binary and wait for the tunnel to be established.
+// In relay mode, the ProbeAgent on the BrowserStack device connects outbound to
+// the ProbeRelay server, so no inbound tunneling is needed. For direct mode
+// (non-relay), BrowserStackLocal binary would be required — this is not yet
+// implemented. Use relay mode (--relay or cloud.relay.enabled: true) instead.
 func (p *browserStack) ForwardPort(ctx context.Context, session Session, devicePort int) (int, error) {
-	// TODO: Start BrowserStackLocal binary for tunneling:
-	//   1. Download/locate BrowserStackLocal binary
-	//   2. Run: BrowserStackLocal --key <access_key> --local-identifier <session.ID> --force-local
-	//   3. Wait for "You can now access your local server" output
-	//   4. The local port maps through the tunnel to the device
-	//
-	// For now, return the device port as-is. In production, BrowserStack Local
-	// handles the tunnel transparently -- the WebSocket connection goes through
-	// BrowserStack's infrastructure.
-	return devicePort, nil
+	// Relay mode bypasses port forwarding entirely. If this is called in direct
+	// mode, log a warning that BrowserStackLocal is required.
+	if session.RelayURL != "" {
+		return devicePort, nil
+	}
+	return 0, fmt.Errorf("browserstack: direct port forwarding requires BrowserStackLocal binary (not yet supported) — use relay mode with --relay flag")
 }
 
-// StopSession terminates a BrowserStack session and marks it as complete.
+// StopSession terminates a BrowserStack Appium session via the W3C WebDriver
+// DELETE endpoint and then marks it as completed in the App Automate API.
 func (p *browserStack) StopSession(ctx context.Context, session Session) error {
 	if session.ID == "" {
 		return nil
 	}
 
-	url := fmt.Sprintf("%s/sessions/%s.json", bsBaseURL, session.ID)
+	// Step 1: Delete the Appium WebDriver session (graceful close)
+	deleteURL := fmt.Sprintf("%s/%s", bsAppiumHubURL, session.ID)
+	delReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
+	if err != nil {
+		return fmt.Errorf("browserstack: creating delete request: %w", err)
+	}
+	delReq.SetBasicAuth(p.username, p.accessKey)
 
-	// Mark the session status as completed
+	delResp, err := p.http.Do(delReq)
+	if err != nil {
+		// Don't fail — continue to mark completed in App Automate API
+		fmt.Printf("    browserstack: warning: WebDriver DELETE failed: %v\n", err)
+	} else {
+		delResp.Body.Close()
+	}
+
+	// Step 2: Mark the session as completed in the App Automate REST API
+	statusURL := fmt.Sprintf("%s/sessions/%s.json", bsBaseURL, session.ID)
 	payload := map[string]string{"status": "completed"}
 	data, _ := json.Marshal(payload)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, statusURL, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("browserstack: creating stop request: %w", err)
+		return fmt.Errorf("browserstack: creating status request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(p.username, p.accessKey)
@@ -280,4 +323,36 @@ func (p *browserStack) StopSession(ctx context.Context, session Session) error {
 	}
 
 	return nil
+}
+
+// SessionVideoURL fetches the video recording URL for a completed BrowserStack session.
+// BrowserStack automatically records video for all sessions.
+func (p *browserStack) SessionVideoURL(ctx context.Context, sessionID string) (string, error) {
+	url := fmt.Sprintf("%s/sessions/%s.json", bsBaseURL, sessionID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.SetBasicAuth(p.username, p.accessKey)
+
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Automation struct {
+			VideoURL string `json:"video_url"`
+		} `json:"automation_session"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+	return result.Automation.VideoURL, nil
 }

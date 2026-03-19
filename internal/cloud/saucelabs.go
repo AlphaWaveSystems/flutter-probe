@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -140,19 +141,44 @@ func (p *sauceLabs) ListDevices(ctx context.Context) ([]Device, error) {
 	return devices, nil
 }
 
-// StartSession starts a real device session on Sauce Labs.
+// StartSession starts a real device live testing session on Sauce Labs via
+// the W3C WebDriver endpoint for real devices.
 func (p *sauceLabs) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	// TODO: Use the correct endpoint for real device manual/live testing sessions
-	// For real device testing: POST /v2/testcomposer/sessions
+	deviceName, osVersion := parseDeviceString(device)
+	platformName := detectPlatform(deviceName)
+
+	sauceOpts := map[string]interface{}{
+		"appiumVersion": "2.0",
+		"name":          "probe-test",
+		"build":         fmt.Sprintf("probe-%s", time.Now().Format("2006-01-02")),
+	}
+
+	alwaysMatch := map[string]interface{}{
+		"appium:app":        appID,
+		"appium:deviceName": deviceName,
+		"platformName":      platformName,
+		"sauce:options":     sauceOpts,
+	}
+	if osVersion != "" {
+		alwaysMatch["appium:platformVersion"] = osVersion
+	}
+
+	if strings.EqualFold(platformName, "Android") {
+		alwaysMatch["appium:automationName"] = "UiAutomator2"
+	} else {
+		alwaysMatch["appium:automationName"] = "XCUITest"
+	}
+
 	payload := map[string]interface{}{
-		"app":           appID,
-		"deviceName":    device,
-		"platformName":  "Android", // TODO: detect from device
-		"testFramework": "manual",
+		"capabilities": map[string]interface{}{
+			"firstMatch":  []map[string]interface{}{{}},
+			"alwaysMatch": alwaysMatch,
+		},
 	}
 
 	data, _ := json.Marshal(payload)
-	url := fmt.Sprintf("%s/v2/testcomposer/sessions", p.slBaseURL())
+	// Sauce Labs real device Appium endpoint
+	url := fmt.Sprintf("https://ondemand.%s.saucelabs.com/wd/hub/session", p.region)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return Session{}, fmt.Errorf("saucelabs: creating session request: %w", err)
@@ -172,39 +198,45 @@ func (p *sauceLabs) StartSession(ctx context.Context, appID string, device strin
 	}
 
 	var result struct {
-		SessionID string `json:"sessionId"`
+		Value struct {
+			SessionID string `json:"sessionId"`
+			Error     string `json:"error,omitempty"`
+			Message   string `json:"message,omitempty"`
+		} `json:"value"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return Session{}, fmt.Errorf("saucelabs: invalid session response: %w", err)
 	}
+	if result.Value.Error != "" {
+		return Session{}, fmt.Errorf("saucelabs: session error: %s — %s", result.Value.Error, result.Value.Message)
+	}
 
 	return Session{
-		ID:         result.SessionID,
+		ID:         result.Value.SessionID,
 		DeviceName: device,
 		Provider:   "saucelabs",
 	}, nil
 }
 
-// ForwardPort establishes a Sauce Connect tunnel to the device.
+// ForwardPort is a no-op for Sauce Labs when using relay mode.
 //
-// Sauce Labs uses Sauce Connect Proxy for tunneling.
+// In relay mode, the ProbeAgent connects outbound to the ProbeRelay server.
+// Direct mode requires Sauce Connect Proxy binary — not yet supported.
 func (p *sauceLabs) ForwardPort(ctx context.Context, session Session, devicePort int) (int, error) {
-	// TODO: Start Sauce Connect Proxy for local tunneling:
-	//   1. Download/locate sc binary
-	//   2. Run: sc -u <username> -k <access_key> --tunnel-name <session.ID>
-	//   3. Wait for "Sauce Connect is up" in stdout
-	//   4. Return local port that tunnels to the device
-	return devicePort, nil
+	if session.RelayURL != "" {
+		return devicePort, nil
+	}
+	return 0, fmt.Errorf("saucelabs: direct port forwarding requires Sauce Connect Proxy (not yet supported) — use relay mode with --relay flag")
 }
 
-// StopSession terminates a Sauce Labs session.
+// StopSession terminates a Sauce Labs Appium session via WebDriver DELETE.
 func (p *sauceLabs) StopSession(ctx context.Context, session Session) error {
 	if session.ID == "" {
 		return nil
 	}
 
-	// TODO: Use the correct endpoint for stopping real device sessions
-	url := fmt.Sprintf("%s/v1/rdc/manual/sessions/%s", p.slBaseURL(), session.ID)
+	// Delete via W3C WebDriver endpoint
+	url := fmt.Sprintf("https://ondemand.%s.saucelabs.com/wd/hub/session/%s", p.region, session.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("saucelabs: creating stop request: %w", err)

@@ -11,6 +11,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -126,10 +128,65 @@ func (p *awsDeviceFarm) UploadApp(ctx context.Context, appPath string) (string, 
 		return "", fmt.Errorf("aws: S3 upload failed (HTTP %d)", putResp.StatusCode)
 	}
 
-	// TODO: Step 3 -- Poll GetUpload until status is SUCCEEDED or FAILED
-	// For now, return the ARN immediately.
+	// Step 3: Poll GetUpload until status is SUCCEEDED or FAILED
+	if err := p.pollUploadReady(ctx, createResp.Upload.ARN, 3*time.Minute); err != nil {
+		return "", err
+	}
 
 	return createResp.Upload.ARN, nil
+}
+
+// pollUploadReady polls GetUpload until the upload processing completes.
+func (p *awsDeviceFarm) pollUploadReady(ctx context.Context, arn string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		payload := map[string]string{"arn": arn}
+		data, _ := json.Marshal(payload)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(), bytes.NewReader(data))
+		if err != nil {
+			return fmt.Errorf("aws: creating get-upload request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+		req.Header.Set("X-Amz-Target", "DeviceFarm_20150623.GetUpload")
+		p.signRequest(req, data)
+
+		resp, err := p.http.Do(req)
+		if err != nil {
+			return fmt.Errorf("aws: get upload failed: %w", err)
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("aws: get upload failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+
+		var result struct {
+			Upload struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			} `json:"upload"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return fmt.Errorf("aws: invalid get-upload response: %w", err)
+		}
+
+		switch result.Upload.Status {
+		case "SUCCEEDED":
+			return nil
+		case "FAILED":
+			return fmt.Errorf("aws: upload processing failed: %s", result.Upload.Message)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(3 * time.Second):
+		}
+	}
+	return fmt.Errorf("aws: upload did not complete within %s", timeout)
 }
 
 // ListDevices returns available devices from AWS Device Farm.
@@ -222,33 +279,89 @@ func (p *awsDeviceFarm) StartSession(ctx context.Context, appID string, device s
 		RemoteAccessSession struct {
 			ARN      string `json:"arn"`
 			Endpoint string `json:"endpoint"`
+			Status   string `json:"status"`
 		} `json:"remoteAccessSession"`
 	}
 	if err := json.Unmarshal(body, &sessResp); err != nil {
 		return Session{}, fmt.Errorf("aws: invalid session response: %w", err)
 	}
 
-	// TODO: Poll until session status is RUNNING before returning
+	// Poll until session status is RUNNING (or terminal state)
+	arn := sessResp.RemoteAccessSession.ARN
+	if sessResp.RemoteAccessSession.Status != "RUNNING" {
+		if err := p.pollSessionReady(ctx, arn, 5*time.Minute); err != nil {
+			return Session{}, err
+		}
+	}
 
 	return Session{
-		ID:         sessResp.RemoteAccessSession.ARN,
+		ID:         arn,
 		DeviceName: device,
 		Provider:   "aws",
 	}, nil
 }
 
-// ForwardPort establishes an SSH tunnel to the Device Farm device.
+// pollSessionReady polls GetRemoteAccessSession until status is RUNNING or a terminal state.
+func (p *awsDeviceFarm) pollSessionReady(ctx context.Context, arn string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		payload := map[string]string{"arn": arn}
+		data, _ := json.Marshal(payload)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(), bytes.NewReader(data))
+		if err != nil {
+			return fmt.Errorf("aws: creating poll request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+		req.Header.Set("X-Amz-Target", "DeviceFarm_20150623.GetRemoteAccessSession")
+		p.signRequest(req, data)
+
+		resp, err := p.http.Do(req)
+		if err != nil {
+			return fmt.Errorf("aws: poll session failed: %w", err)
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("aws: poll session failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+
+		var result struct {
+			RemoteAccessSession struct {
+				Status string `json:"status"`
+			} `json:"remoteAccessSession"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return fmt.Errorf("aws: invalid poll response: %w", err)
+		}
+
+		switch result.RemoteAccessSession.Status {
+		case "RUNNING":
+			return nil
+		case "COMPLETED", "STOPPING", "ERRORED":
+			return fmt.Errorf("aws: session reached terminal state %q before becoming RUNNING", result.RemoteAccessSession.Status)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return fmt.Errorf("aws: session did not become RUNNING within %s", timeout)
+}
+
+// ForwardPort is a no-op for AWS Device Farm when using relay mode.
 //
-// AWS Device Farm remote access sessions expose an endpoint URL.
-// Port forwarding requires SSH tunneling through the session endpoint.
+// In relay mode, the ProbeAgent connects outbound to the ProbeRelay server.
+// Direct mode would require SSH tunneling through the session endpoint.
 func (p *awsDeviceFarm) ForwardPort(ctx context.Context, session Session, devicePort int) (int, error) {
-	// TODO: Establish SSH tunnel to the Device Farm remote access session.
-	// The session endpoint provides the SSH connection details.
-	// In production:
-	//   1. Parse session endpoint URL for SSH host/port
-	//   2. Create SSH tunnel: local port -> device port
-	//   3. Return the local tunnel port
-	return devicePort, nil
+	if session.RelayURL != "" {
+		return devicePort, nil
+	}
+	return 0, fmt.Errorf("aws: direct port forwarding requires SSH tunnel (not yet supported) — use relay mode with --relay flag")
 }
 
 // StopSession terminates an AWS Device Farm remote access session.
@@ -285,8 +398,9 @@ func (p *awsDeviceFarm) StopSession(ctx context.Context, session Session) error 
 }
 
 // signRequest adds AWS Signature Version 4 headers to the request.
-// This is a minimal placeholder -- production code should use a full SigV4 implementation.
 func (p *awsDeviceFarm) signRequest(req *http.Request, payload []byte) {
+	const service = "devicefarm"
+
 	now := time.Now().UTC()
 	dateStamp := now.Format("20060102")
 	amzDate := now.Format("20060102T150405Z")
@@ -298,9 +412,73 @@ func (p *awsDeviceFarm) signRequest(req *http.Request, payload []byte) {
 	payloadHash := awsSHA256Hex(payload)
 	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
 
-	// TODO: Complete SigV4 signing (canonical request, string to sign, signing key derivation)
-	// Signing key chain: HMAC-SHA256(HMAC-SHA256(HMAC-SHA256(HMAC-SHA256("AWS4"+secret, date), region), service), "aws4_request")
-	_ = dateStamp
+	// Step 1: Canonical request
+	signedHeaders, canonicalHeaders := awsCanonicalHeaders(req)
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		"/", // canonical URI
+		"",  // canonical query string (empty for POST)
+		canonicalHeaders,
+		signedHeaders,
+		payloadHash,
+	}, "\n")
+
+	// Step 2: String to sign
+	credentialScope := fmt.Sprintf("%s/%s/%s/aws4_request", dateStamp, p.region, service)
+	stringToSign := strings.Join([]string{
+		"AWS4-HMAC-SHA256",
+		amzDate,
+		credentialScope,
+		awsSHA256Hex([]byte(canonicalRequest)),
+	}, "\n")
+
+	// Step 3: Signing key derivation
+	signingKey := awsHMACSHA256([]byte("AWS4"+p.secretAccessKey), []byte(dateStamp))
+	signingKey = awsHMACSHA256(signingKey, []byte(p.region))
+	signingKey = awsHMACSHA256(signingKey, []byte(service))
+	signingKey = awsHMACSHA256(signingKey, []byte("aws4_request"))
+
+	// Step 4: Signature
+	signature := hex.EncodeToString(awsHMACSHA256(signingKey, []byte(stringToSign)))
+
+	// Step 5: Authorization header
+	authHeader := fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		p.accessKeyID, credentialScope, signedHeaders, signature)
+	req.Header.Set("Authorization", authHeader)
+}
+
+// awsCanonicalHeaders builds the sorted canonical headers and signed headers strings.
+func awsCanonicalHeaders(req *http.Request) (signedHeaders, canonical string) {
+	// Collect headers to sign
+	headers := make(map[string]string)
+	for key := range req.Header {
+		lower := strings.ToLower(key)
+		if lower == "host" || lower == "content-type" || strings.HasPrefix(lower, "x-amz-") {
+			headers[lower] = strings.TrimSpace(req.Header.Get(key))
+		}
+	}
+	// Ensure host is included
+	if _, ok := headers["host"]; !ok {
+		headers["host"] = req.URL.Host
+	}
+
+	// Sort header names
+	names := make([]string, 0, len(headers))
+	for name := range headers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	// Build canonical headers string (each line: "key:value\n")
+	var canonicalBuf strings.Builder
+	for _, name := range names {
+		canonicalBuf.WriteString(name)
+		canonicalBuf.WriteString(":")
+		canonicalBuf.WriteString(headers[name])
+		canonicalBuf.WriteString("\n")
+	}
+
+	return strings.Join(names, ";"), canonicalBuf.String()
 }
 
 // awsSHA256Hex returns the lowercase hex-encoded SHA-256 hash of data.

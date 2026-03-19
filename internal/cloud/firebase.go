@@ -3,12 +3,21 @@ package cloud
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -52,11 +61,11 @@ func newFirebaseTestLab(creds map[string]string) (*firebaseTestLab, error) {
 
 	// If a service account JSON path is provided, load and exchange for an access token
 	if p.accessToken == "" && p.serviceAccount != "" {
-		// TODO: Implement service account JWT -> access token exchange:
-		//   1. Parse service account JSON for client_email and private_key
-		//   2. Create a signed JWT with scope https://www.googleapis.com/auth/cloud-platform
-		//   3. POST to https://oauth2.googleapis.com/token to exchange JWT for access token
-		return nil, fmt.Errorf("firebase: service account auth not yet implemented — use 'access_token' from: gcloud auth print-access-token")
+		token, err := exchangeServiceAccountJWT(p.serviceAccount)
+		if err != nil {
+			return nil, fmt.Errorf("firebase: service account auth: %w", err)
+		}
+		p.accessToken = token
 	}
 
 	if p.accessToken == "" {
@@ -154,16 +163,18 @@ func (p *firebaseTestLab) ListDevices(ctx context.Context) ([]Device, error) {
 	return devices, nil
 }
 
-// StartSession starts a test execution on Firebase Test Lab.
+// StartSession creates a test matrix on Firebase Test Lab.
 //
-// Firebase Test Lab is primarily a batch-run system (not interactive sessions).
-// This implementation uses the Testing API to schedule a test matrix.
+// IMPORTANT: Firebase Test Lab is a batch-run system, not an interactive session
+// system. It doesn't support real-time WebSocket connections to running devices
+// like BrowserStack/SauceLabs/LambdaTest do. For FlutterProbe, the app with
+// ProbeAgent embedded is launched via a Robo test, and the agent connects
+// outbound to a ProbeRelay server. This requires relay mode (--relay flag).
 func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	// TODO: Firebase Test Lab doesn't natively support interactive sessions like BrowserStack.
-	// For FlutterProbe, options include:
-	//   1. Create a test matrix with a custom instrumentation test that starts the ProbeAgent
-	//   2. Use a robo test with the app that has ProbeAgent embedded
-	//   3. Set up a tunnel (e.g., via a relay service)
+	deviceName, osVersion := parseDeviceString(device)
+	if osVersion == "" {
+		osVersion = "34" // default to latest
+	}
 
 	payload := map[string]interface{}{
 		"projectId": p.projectID,
@@ -177,15 +188,20 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		"environmentMatrix": map[string]interface{}{
 			"androidDeviceList": map[string]interface{}{
 				"androidDevices": []map[string]string{
-					{"androidModelId": device, "androidVersionId": "34"},
+					{"androidModelId": deviceName, "androidVersionId": osVersion},
 				},
+			},
+		},
+		"resultStorage": map[string]interface{}{
+			"googleCloudStorage": map[string]string{
+				"gcsPath": fmt.Sprintf("gs://%s/probe-results", p.bucket),
 			},
 		},
 	}
 
 	data, _ := json.Marshal(payload)
-	url := fmt.Sprintf("%s/projects/%s/testMatrices", firebaseTestingAPI, p.projectID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	reqURL := fmt.Sprintf("%s/projects/%s/testMatrices", firebaseTestingAPI, p.projectID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(data))
 	if err != nil {
 		return Session{}, fmt.Errorf("firebase: creating test matrix request: %w", err)
 	}
@@ -211,7 +227,12 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		return Session{}, fmt.Errorf("firebase: invalid test matrix response: %w", err)
 	}
 
-	// TODO: Poll until state is RUNNING or FINISHED
+	// Poll until the test matrix reaches a running or terminal state
+	if matrixResp.State != "RUNNING" && matrixResp.State != "FINISHED" {
+		if err := p.pollMatrixReady(ctx, matrixResp.TestMatrixID, 5*time.Minute); err != nil {
+			return Session{}, err
+		}
+	}
 
 	return Session{
 		ID:         matrixResp.TestMatrixID,
@@ -220,17 +241,60 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 	}, nil
 }
 
-// ForwardPort is a placeholder for Firebase Test Lab.
+// pollMatrixReady polls the test matrix until it reaches RUNNING or a terminal state.
+func (p *firebaseTestLab) pollMatrixReady(ctx context.Context, matrixID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		reqURL := fmt.Sprintf("%s/projects/%s/testMatrices/%s", firebaseTestingAPI, p.projectID, matrixID)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			return fmt.Errorf("firebase: creating poll request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+p.accessToken)
+
+		resp, err := p.http.Do(req)
+		if err != nil {
+			return fmt.Errorf("firebase: poll matrix failed: %w", err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("firebase: poll matrix failed (HTTP %d): %s", resp.StatusCode, string(body))
+		}
+
+		var result struct {
+			State string `json:"state"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return fmt.Errorf("firebase: invalid poll response: %w", err)
+		}
+
+		switch result.State {
+		case "RUNNING", "FINISHED":
+			return nil
+		case "ERROR", "INVALID", "CANCELLED":
+			return fmt.Errorf("firebase: test matrix reached terminal state %q", result.State)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return fmt.Errorf("firebase: test matrix did not start within %s", timeout)
+}
+
+// ForwardPort is a no-op for Firebase Test Lab — relay mode is required.
 //
-// Firebase Test Lab does not natively support port forwarding to running devices.
-// Interactive testing would require a relay service or custom instrumentation.
+// Firebase Test Lab doesn't support direct port forwarding to running devices.
+// The ProbeAgent must connect outbound to a ProbeRelay server.
 func (p *firebaseTestLab) ForwardPort(ctx context.Context, session Session, devicePort int) (int, error) {
-	// TODO: Firebase Test Lab doesn't support direct device tunneling.
-	// Options for interactive access:
-	//   1. Use a custom instrumentation test that connects back to a relay server
-	//   2. Use gcloud beta firebase test android run with --network-profile
-	//   3. Use a third-party tunnel service
-	return devicePort, nil
+	if session.RelayURL != "" {
+		return devicePort, nil
+	}
+	return 0, fmt.Errorf("firebase: does not support direct port forwarding — relay mode is required (use --relay flag)")
 }
 
 // StopSession cleans up a Firebase Test Lab test matrix.
@@ -259,4 +323,105 @@ func (p *firebaseTestLab) StopSession(ctx context.Context, session Session) erro
 	}
 
 	return nil
+}
+
+// ---- Service Account JWT Authentication ----
+
+// serviceAccountJSON is the structure of a Google service account key file.
+type serviceAccountJSON struct {
+	ClientEmail string `json:"client_email"`
+	PrivateKey  string `json:"private_key"`
+	TokenURI    string `json:"token_uri"`
+}
+
+// exchangeServiceAccountJWT reads a service account JSON file, creates a signed
+// JWT, and exchanges it for an OAuth2 access token at Google's token endpoint.
+func exchangeServiceAccountJWT(saPath string) (string, error) {
+	data, err := os.ReadFile(saPath)
+	if err != nil {
+		return "", fmt.Errorf("reading service account file: %w", err)
+	}
+
+	var sa serviceAccountJSON
+	if err := json.Unmarshal(data, &sa); err != nil {
+		return "", fmt.Errorf("parsing service account JSON: %w", err)
+	}
+	if sa.ClientEmail == "" || sa.PrivateKey == "" {
+		return "", fmt.Errorf("service account JSON missing client_email or private_key")
+	}
+
+	tokenURI := sa.TokenURI
+	if tokenURI == "" {
+		tokenURI = "https://oauth2.googleapis.com/token"
+	}
+
+	// Parse the RSA private key from PEM
+	block, _ := pem.Decode([]byte(sa.PrivateKey))
+	if block == nil {
+		return "", fmt.Errorf("failed to decode PEM block from private_key")
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("parsing private key: %w", err)
+	}
+	rsaKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("private key is not RSA")
+	}
+
+	// Create JWT
+	now := time.Now()
+	header := base64URLEncode([]byte(`{"alg":"RS256","typ":"JWT"}`))
+	claims := map[string]interface{}{
+		"iss":   sa.ClientEmail,
+		"scope": "https://www.googleapis.com/auth/cloud-platform",
+		"aud":   tokenURI,
+		"iat":   now.Unix(),
+		"exp":   now.Add(1 * time.Hour).Unix(),
+	}
+	claimsJSON, _ := json.Marshal(claims)
+	payload := base64URLEncode(claimsJSON)
+
+	sigInput := header + "." + payload
+	hashed := sha256.Sum256([]byte(sigInput))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, rsaKey, crypto.SHA256, hashed[:])
+	if err != nil {
+		return "", fmt.Errorf("signing JWT: %w", err)
+	}
+
+	jwt := sigInput + "." + base64URLEncode(sig)
+
+	// Exchange JWT for access token
+	form := url.Values{
+		"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
+		"assertion":  {jwt},
+	}
+	resp, err := http.Post(tokenURI, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("token exchange request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token exchange failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+	}
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("invalid token response: %w", err)
+	}
+	if tokenResp.AccessToken == "" {
+		return "", fmt.Errorf("token exchange returned empty access_token")
+	}
+
+	return tokenResp.AccessToken, nil
+}
+
+// base64URLEncode encodes data using base64url (no padding) per RFC 7515.
+func base64URLEncode(data []byte) string {
+	return base64.RawURLEncoding.EncodeToString(data)
 }
