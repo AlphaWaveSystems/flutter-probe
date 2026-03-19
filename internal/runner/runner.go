@@ -401,6 +401,28 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 	}
 }
 
+// LocalizeArtifacts ensures artifact paths are valid for cloud mode where
+// screenshots were saved locally by the probelink client (base64 in RPC response).
+// It creates the screenshot directory and converts paths to absolute.
+func LocalizeArtifacts(results []TestResult, localDir string) {
+	_ = os.MkdirAll(localDir, 0755)
+	for i := range results {
+		var localPaths []string
+		for _, p := range results[i].Artifacts {
+			// If the file already exists on disk (saved by probelink client), use as-is
+			if _, err := os.Stat(p); err == nil {
+				absPath, _ := filepath.Abs(p)
+				if absPath != "" {
+					localPaths = append(localPaths, absPath)
+				} else {
+					localPaths = append(localPaths, p)
+				}
+			}
+		}
+		results[i].Artifacts = localPaths
+	}
+}
+
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {

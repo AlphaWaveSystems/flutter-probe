@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -53,7 +54,6 @@ func (p *lambdaTest) UploadApp(ctx context.Context, appPath string) (string, err
 	}
 	defer file.Close()
 
-	// TODO: Detect app type from extension and use appropriate endpoint
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("appFile", filepath.Base(appPath))
@@ -65,7 +65,8 @@ func (p *lambdaTest) UploadApp(ctx context.Context, appPath string) (string, err
 	}
 	writer.Close()
 
-	url := ltBaseURL + "/framework/v1/espresso/app"
+	// Use the general app storage endpoint (not the espresso-specific one)
+	url := ltBaseURL + "/app/upload/realDevice"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
 	if err != nil {
 		return "", fmt.Errorf("lambdatest: creating upload request: %w", err)
@@ -144,19 +145,47 @@ func (p *lambdaTest) ListDevices(ctx context.Context) ([]Device, error) {
 	return devices, nil
 }
 
-// StartSession starts a real device session on LambdaTest.
+// ltAppiumHubURL is the LambdaTest Appium W3C WebDriver endpoint.
+const ltAppiumHubURL = "https://mobile-hub.lambdatest.com/wd/hub/session"
+
+// StartSession starts a real device session on LambdaTest via the Appium W3C
+// WebDriver hub (not the batch Espresso build API).
 func (p *lambdaTest) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	// TODO: Use the correct endpoint for live/interactive sessions vs build-based runs
+	deviceName, osVersion := parseDeviceString(device)
+	platformName := detectPlatform(deviceName)
+
+	ltOpts := map[string]interface{}{
+		"w3c":       true,
+		"name":      "probe-test",
+		"build":     fmt.Sprintf("probe-%s", time.Now().Format("2006-01-02")),
+		"isRealMobile": true,
+	}
+
+	alwaysMatch := map[string]interface{}{
+		"appium:app":        appID,
+		"appium:deviceName": deviceName,
+		"platformName":      platformName,
+		"lt:options":        ltOpts,
+	}
+	if osVersion != "" {
+		alwaysMatch["appium:platformVersion"] = osVersion
+	}
+
+	if strings.EqualFold(platformName, "Android") {
+		alwaysMatch["appium:automationName"] = "UiAutomator2"
+	} else {
+		alwaysMatch["appium:automationName"] = "XCUITest"
+	}
+
 	payload := map[string]interface{}{
-		"app":          appID,
-		"deviceName":   device,
-		"build":        "FlutterProbe Cloud Run",
-		"queueTimeout": 300,
+		"capabilities": map[string]interface{}{
+			"firstMatch":  []map[string]interface{}{{}},
+			"alwaysMatch": alwaysMatch,
+		},
 	}
 
 	data, _ := json.Marshal(payload)
-	url := ltBaseURL + "/framework/v1/espresso/build"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ltAppiumHubURL, bytes.NewReader(data))
 	if err != nil {
 		return Session{}, fmt.Errorf("lambdatest: creating session request: %w", err)
 	}
@@ -175,45 +204,44 @@ func (p *lambdaTest) StartSession(ctx context.Context, appID string, device stri
 	}
 
 	var result struct {
-		BuildID   string `json:"buildId"`
-		SessionID string `json:"sessionId"`
+		Value struct {
+			SessionID string `json:"sessionId"`
+			Error     string `json:"error,omitempty"`
+			Message   string `json:"message,omitempty"`
+		} `json:"value"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return Session{}, fmt.Errorf("lambdatest: invalid session response: %w", err)
 	}
-
-	sessionID := result.SessionID
-	if sessionID == "" {
-		sessionID = result.BuildID
+	if result.Value.Error != "" {
+		return Session{}, fmt.Errorf("lambdatest: session error: %s — %s", result.Value.Error, result.Value.Message)
 	}
 
 	return Session{
-		ID:         sessionID,
+		ID:         result.Value.SessionID,
 		DeviceName: device,
 		Provider:   "lambdatest",
 	}, nil
 }
 
-// ForwardPort establishes a LambdaTest Tunnel to the device.
+// ForwardPort is a no-op for LambdaTest when using relay mode.
 //
-// LambdaTest uses their tunnel binary for local testing access.
+// In relay mode, the ProbeAgent connects outbound to the ProbeRelay server.
+// Direct mode requires LambdaTest Tunnel binary — not yet supported.
 func (p *lambdaTest) ForwardPort(ctx context.Context, session Session, devicePort int) (int, error) {
-	// TODO: Start LambdaTest Tunnel binary:
-	//   1. Download/locate LT binary
-	//   2. Run: LT --user <username> --key <access_key> --tunnelName <session.ID>
-	//   3. Wait for tunnel establishment
-	//   4. Return local port
-	return devicePort, nil
+	if session.RelayURL != "" {
+		return devicePort, nil
+	}
+	return 0, fmt.Errorf("lambdatest: direct port forwarding requires LambdaTest Tunnel (not yet supported) — use relay mode with --relay flag")
 }
 
-// StopSession terminates a LambdaTest session.
+// StopSession terminates a LambdaTest Appium session via WebDriver DELETE.
 func (p *lambdaTest) StopSession(ctx context.Context, session Session) error {
 	if session.ID == "" {
 		return nil
 	}
 
-	// TODO: Use the correct endpoint for stopping sessions vs builds
-	url := fmt.Sprintf("%s/framework/v1/espresso/build/%s", ltBaseURL, session.ID)
+	url := fmt.Sprintf("%s/%s", ltAppiumHubURL, session.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("lambdatest: creating stop request: %w", err)

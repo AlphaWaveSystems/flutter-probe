@@ -524,7 +524,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	// Attach run metadata for JSON/HTML reports
-	if !dryRun && dm != nil {
+	if !dryRun && dm != nil { //nolint:nestif
 		meta := runner.RunMetadata{
 			DeviceID: deviceSerial,
 			Platform: string(platform),
@@ -558,6 +558,21 @@ func runTests(cmd *cobra.Command, args []string) error {
 					meta.AppVersion = v
 				}
 			}
+		}
+		report.SetMetadata(meta)
+	} else if !dryRun && cloudSession != nil {
+		// Cloud mode: metadata from cloud session info
+		meta := runner.RunMetadata{
+			DeviceID:   deviceSerial,
+			DeviceName: cloudSession.DeviceName,
+			Platform:   "cloud:" + cloudSession.Provider,
+			AppID:      cfg.Project.App,
+		}
+		cfgPath, _ := cmd.Flags().GetString("config")
+		if cfgPath != "" {
+			meta.ConfigFile = cfgPath
+		} else {
+			meta.ConfigFile = "probe.yaml"
 		}
 		report.SetMetadata(meta)
 	}
@@ -621,13 +636,22 @@ func runTests(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Pull screenshots from device to local reports/screenshots/ folder
+	// Pull screenshots from device to local reports/screenshots/ folder.
+	// In cloud mode (devCtx is nil), screenshots are taken via the ProbeAgent
+	// RPC and returned as on-device paths. Since we can't pull files from cloud
+	// devices, the artifacts are already base64-encoded in the RPC response and
+	// saved locally by the probelink client. We just ensure the paths are correct.
+	screenshotDir := filepath.Join(reportsBase, "screenshots")
+	if outFile != "" {
+		screenshotDir = filepath.Join(filepath.Dir(outFile), "screenshots")
+	}
 	if devCtx != nil {
-		screenshotDir := filepath.Join(reportsBase, "screenshots")
-		if outFile != "" {
-			screenshotDir = filepath.Join(filepath.Dir(outFile), "screenshots")
-		}
 		runner.PullArtifacts(ctx, results, devCtx, screenshotDir)
+	} else if cloudSession != nil {
+		// In cloud mode, screenshots are saved locally by the probelink client
+		// via the probe.screenshot RPC (base64 data in response). Ensure the
+		// screenshot directory exists and relativize paths.
+		runner.LocalizeArtifacts(results, screenshotDir)
 	}
 
 	if err := report.Report(results); err != nil {
