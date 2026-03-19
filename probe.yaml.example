@@ -1,0 +1,37 @@
+# FlutterProbe configuration — copy to probe.yaml and customize
+#
+# Resolution order: CLI flag > probe.yaml > built-in default
+
+project:
+  name: "My App"
+  app: com.example.myapp        # Bundle ID (Android) or Bundle Identifier (iOS)
+
+defaults:
+  platform: android              # android | ios
+  timeout: 30s
+  screenshots: on_failure        # true | false | on_failure
+  video: false
+  retry_failed_tests: 0
+
+agent:
+  port: 48686
+  dial_timeout: 30s
+  token_read_timeout: 30s
+  reconnect_delay: 2s
+
+device:
+  boot_timeout: 120s
+  restart_delay: 500ms
+
+# Cloud dashboard (optional)
+# cloud:
+#   url: https://flutterprobe-cloud.fly.dev
+#   token: ${PROBE_CLOUD_TOKEN}
+
+reports_folder: reports
+recipes_folder: tests/recipes
+
+# Custom tool paths (optional — defaults to PATH lookup)
+# tools:
+#   adb: /path/to/adb
+#   flutter: /path/to/flutter
