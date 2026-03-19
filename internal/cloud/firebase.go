@@ -40,8 +40,47 @@ type firebaseTestLab struct {
 // Requires "project_id" and either "access_token" or "service_account_json" in creds.
 func newFirebaseTestLab(creds map[string]string) (*firebaseTestLab, error) {
 	projectID := creds["project_id"]
+	serviceAccount := creds["service_account_json"]
+	accessToken := creds["access_token"]
+
+	// Fall back to environment variables (common for CI/CD)
+	if serviceAccount == "" {
+		serviceAccount = os.Getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+	}
+	if accessToken == "" {
+		accessToken = os.Getenv("FIREBASE_ACCESS_TOKEN")
+	}
+
+	// If service_account_json is raw JSON content (not a file path), write to temp file
+	if serviceAccount != "" && strings.HasPrefix(strings.TrimSpace(serviceAccount), "{") {
+		tmpFile, err := os.CreateTemp("", "firebase-sa-*.json")
+		if err != nil {
+			return nil, fmt.Errorf("firebase: creating temp service account file: %w", err)
+		}
+		if _, err := tmpFile.WriteString(serviceAccount); err != nil {
+			tmpFile.Close()
+			return nil, fmt.Errorf("firebase: writing temp service account file: %w", err)
+		}
+		tmpFile.Close()
+		serviceAccount = tmpFile.Name()
+
+		// Extract project_id from the service account JSON if not provided
+		if projectID == "" {
+			var sa struct {
+				ProjectID string `json:"project_id"`
+			}
+			if err := json.Unmarshal([]byte(creds["service_account_json"]), &sa); err == nil && sa.ProjectID != "" {
+				projectID = sa.ProjectID
+			} else if raw := os.Getenv("FIREBASE_SERVICE_ACCOUNT_JSON"); raw != "" {
+				if err := json.Unmarshal([]byte(raw), &sa); err == nil && sa.ProjectID != "" {
+					projectID = sa.ProjectID
+				}
+			}
+		}
+	}
+
 	if projectID == "" {
-		return nil, fmt.Errorf("firebase: credentials require 'project_id' (set via probe.yaml cloud.credentials)")
+		return nil, fmt.Errorf("firebase: credentials require 'project_id' (set via probe.yaml cloud.credentials or include in service account JSON)")
 	}
 
 	bucket := creds["bucket"]
@@ -52,8 +91,8 @@ func newFirebaseTestLab(creds map[string]string) (*firebaseTestLab, error) {
 	p := &firebaseTestLab{
 		projectID:      projectID,
 		bucket:         bucket,
-		accessToken:    creds["access_token"],
-		serviceAccount: creds["service_account_json"],
+		accessToken:    accessToken,
+		serviceAccount: serviceAccount,
 		http: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
@@ -69,7 +108,7 @@ func newFirebaseTestLab(creds map[string]string) (*firebaseTestLab, error) {
 	}
 
 	if p.accessToken == "" {
-		return nil, fmt.Errorf("firebase: credentials require 'access_token' (run: gcloud auth print-access-token) or 'service_account_json' path")
+		return nil, fmt.Errorf("firebase: credentials require 'access_token', 'service_account_json' path, or FIREBASE_SERVICE_ACCOUNT_JSON env var")
 	}
 
 	return p, nil
