@@ -109,11 +109,16 @@ func DialRelay(ctx context.Context, relayURL, cliToken string, timeout time.Dura
 	q.Set("token", cliToken)
 	u.RawQuery = q.Encode()
 
-	// Use WSS if the relay URL uses HTTPS, otherwise WS
-	if u.Scheme == "https" {
+	// Normalize scheme to ws/wss
+	switch u.Scheme {
+	case "https":
 		u.Scheme = "wss"
-	} else if u.Scheme == "http" {
+	case "http":
 		u.Scheme = "ws"
+	}
+	// Upgrade ws:// to wss:// for non-localhost hosts (cloud relays require TLS)
+	if u.Scheme == "ws" && u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost" {
+		u.Scheme = "wss"
 	}
 
 	dialCtx, cancel := context.WithTimeout(ctx, timeout)
