@@ -274,9 +274,11 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		return Session{}, fmt.Errorf("firebase: invalid test matrix response: %w", err)
 	}
 
-	// Poll until the test matrix reaches a running or terminal state
+	// Poll until the test matrix reaches a running or terminal state.
+	// Firebase device allocation can take several minutes.
 	if matrixResp.State != "RUNNING" && matrixResp.State != "FINISHED" {
-		if err := p.pollMatrixReady(ctx, matrixResp.TestMatrixID, 5*time.Minute); err != nil {
+		fmt.Printf("    firebase: matrix %s created (state: %s), waiting for device...\n", matrixResp.TestMatrixID, matrixResp.State)
+		if err := p.pollMatrixReady(ctx, matrixResp.TestMatrixID, 8*time.Minute); err != nil {
 			return Session{}, err
 		}
 	}
@@ -319,15 +321,18 @@ func (p *firebaseTestLab) pollMatrixReady(ctx context.Context, matrixID string, 
 
 		switch result.State {
 		case "RUNNING", "FINISHED":
+			fmt.Printf("    firebase: matrix state → %s\n", result.State)
 			return nil
 		case "ERROR", "INVALID", "CANCELLED":
 			return fmt.Errorf("firebase: test matrix reached terminal state %q", result.State)
+		default:
+			fmt.Printf("    firebase: matrix state: %s (waiting...)\n", result.State)
 		}
 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-time.After(10 * time.Second):
 		}
 	}
 	return fmt.Errorf("firebase: test matrix did not start within %s", timeout)
