@@ -558,7 +558,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 		report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 	}
 
-	// Attach run metadata for JSON/HTML reports
+	// Attach run metadata for JSON/HTML reports (also used for cloud upload)
+	var runMeta runner.RunMetadata
 	if !dryRun && dm != nil { //nolint:nestif
 		meta := runner.RunMetadata{
 			DeviceID: deviceSerial,
@@ -594,6 +595,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
+		runMeta = meta
 		report.SetMetadata(meta)
 	} else if !dryRun && cloudSession != nil {
 		// Cloud mode: metadata from cloud session info
@@ -609,6 +611,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		} else {
 			meta.ConfigFile = "probe.yaml"
 		}
+		runMeta = meta
 		report.SetMetadata(meta)
 	}
 
@@ -718,7 +721,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if len(jsonData) == 0 {
-			jsonData, err = generateJSONResults(results, report)
+			jsonData, err = generateCloudJSON(results, runMeta)
 			if err != nil {
 				fmt.Printf("\n  \033[31m✗  Cloud upload: could not serialize results: %s\033[0m\n", err)
 			}
@@ -767,49 +770,74 @@ func runTests(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// generateJSONResults serializes test results to JSON for cloud upload when
-// the user did not use --format json.
-func generateJSONResults(results []runner.TestResult, report *runner.Reporter) ([]byte, error) {
-	type jsonResult struct {
-		Name     string  `json:"name"`
-		File     string  `json:"file"`
-		Passed   bool    `json:"passed"`
-		Skipped  bool    `json:"skipped"`
-		Duration float64 `json:"duration_ms"`
-		Error    string  `json:"error,omitempty"`
-		Row      int     `json:"row,omitempty"`
+// generateCloudJSON serializes test results in the format expected by the
+// FlutterProbe Cloud API (POST /api/v1/results).
+func generateCloudJSON(results []runner.TestResult, meta runner.RunMetadata) ([]byte, error) {
+	type cloudTest struct {
+		Name          string  `json:"name"`
+		File          string  `json:"file"`
+		Status        string  `json:"status"` // "passed", "failed", "skipped"
+		Duration      float64 `json:"duration"`
+		Error         string  `json:"error,omitempty"`
+		ScreenshotURL string  `json:"screenshot_url,omitempty"`
+		VideoURL      string  `json:"video_url,omitempty"`
 	}
-	type jsonReport struct {
-		TotalTests int          `json:"total_tests"`
-		Passed     int          `json:"passed"`
-		Failed     int          `json:"failed"`
-		Skipped    int          `json:"skipped"`
-		Results    []jsonResult `json:"results"`
+	type cloudReport struct {
+		Project    string      `json:"project"`
+		Platform   string      `json:"platform,omitempty"`
+		Device     string      `json:"device,omitempty"`
+		Duration   float64     `json:"duration"`
+		TotalTests int         `json:"total_tests"`
+		Passed     int         `json:"passed"`
+		Failed     int         `json:"failed"`
+		Skipped    int         `json:"skipped"`
+		Tests      []cloudTest `json:"tests"`
 	}
 
-	rpt := jsonReport{TotalTests: len(results)}
+	rpt := cloudReport{
+		Project:    meta.AppID,
+		Platform:   meta.Platform,
+		Device:     meta.DeviceName,
+		TotalTests: len(results),
+		Tests:      make([]cloudTest, 0, len(results)),
+	}
+	if rpt.Project == "" {
+		rpt.Project = meta.DeviceID
+	}
+
+	var totalDuration float64
 	for _, res := range results {
-		jr := jsonResult{
+		status := "passed"
+		if res.Skipped {
+			status = "skipped"
+			rpt.Skipped++
+		} else if !res.Passed {
+			status = "failed"
+			rpt.Failed++
+		} else {
+			rpt.Passed++
+		}
+
+		dur := res.Duration.Seconds()
+		totalDuration += dur
+
+		ct := cloudTest{
 			Name:     res.TestName,
 			File:     res.File,
-			Passed:   res.Passed,
-			Skipped:  res.Skipped,
-			Duration: float64(res.Duration.Milliseconds()),
-			Row:      res.Row,
+			Status:   status,
+			Duration: dur,
 		}
 		if res.Error != nil {
-			jr.Error = res.Error.Error()
+			ct.Error = res.Error.Error()
 		}
-		switch {
-		case res.Skipped:
-			rpt.Skipped++
-		case res.Passed:
-			rpt.Passed++
-		default:
-			rpt.Failed++
+		// Include first artifact as screenshot_url if available
+		if len(res.Artifacts) > 0 {
+			ct.ScreenshotURL = res.Artifacts[0]
 		}
-		rpt.Results = append(rpt.Results, jr)
+		rpt.Tests = append(rpt.Tests, ct)
 	}
+	rpt.Duration = totalDuration
+
 	return json.Marshal(rpt)
 }
 
