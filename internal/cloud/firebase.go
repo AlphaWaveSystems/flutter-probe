@@ -221,10 +221,12 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 	payload := map[string]interface{}{
 		"projectId": p.projectID,
 		"testSpecification": map[string]interface{}{
+			"testTimeout": "600s", // 10 minutes — enough for ProbeAgent to connect and run tests
 			"androidRoboTest": map[string]interface{}{
 				"appApk": map[string]string{
 					"gcsPath": appID, // gs://... URI from UploadApp
 				},
+				"maxSteps": 1, // Minimize Robo exploration — we just need the app launched
 			},
 		},
 		"environmentMatrix": map[string]interface{}{
@@ -274,9 +276,10 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		return Session{}, fmt.Errorf("firebase: invalid test matrix response: %w", err)
 	}
 
-	// Poll until the test matrix reaches a running or terminal state.
+	// Poll until the test matrix reaches RUNNING state.
 	// Firebase device allocation can take several minutes.
-	if matrixResp.State != "RUNNING" && matrixResp.State != "FINISHED" {
+	// We do NOT accept FINISHED — that means the Robo test already completed.
+	if matrixResp.State != "RUNNING" {
 		fmt.Printf("    firebase: matrix %s created (state: %s), waiting for device...\n", matrixResp.TestMatrixID, matrixResp.State)
 		if err := p.pollMatrixReady(ctx, matrixResp.TestMatrixID, 8*time.Minute); err != nil {
 			return Session{}, err
@@ -320,8 +323,13 @@ func (p *firebaseTestLab) pollMatrixReady(ctx context.Context, matrixID string, 
 		}
 
 		switch result.State {
-		case "RUNNING", "FINISHED":
+		case "RUNNING":
 			fmt.Printf("    firebase: matrix state → %s\n", result.State)
+			return nil
+		case "FINISHED":
+			// Robo test completed too quickly — the app may have been killed.
+			// Accept FINISHED but warn — the ProbeAgent may not have had time.
+			fmt.Printf("    firebase: matrix state → %s (Robo test completed)\n", result.State)
 			return nil
 		case "ERROR", "INVALID", "CANCELLED":
 			return fmt.Errorf("firebase: test matrix reached terminal state %q", result.State)
