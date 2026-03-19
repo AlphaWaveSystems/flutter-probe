@@ -99,6 +99,15 @@ func (c *Client) PollRelayStatus(ctx context.Context, sessionID string, timeout 
 			return nil, fmt.Errorf("relay: reading poll response: %w", err)
 		}
 
+		if resp.StatusCode == http.StatusTooManyRequests {
+			// Rate limited — back off and retry
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(10 * time.Second):
+			}
+			continue
+		}
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("relay: poll returned %d: %s", resp.StatusCode, string(body))
 		}
@@ -116,11 +125,11 @@ func (c *Client) PollRelayStatus(ctx context.Context, sessionID string, timeout 
 			return nil, fmt.Errorf("relay: session %s is %s", sessionID, status.Status)
 		}
 
-		// Wait before polling again
+		// Wait before polling again (5s to avoid rate limits on long waits)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(5 * time.Second):
 		}
 	}
 
