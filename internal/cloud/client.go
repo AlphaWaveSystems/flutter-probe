@@ -22,10 +22,11 @@ type Client struct {
 }
 
 // uploadResponse is the JSON body returned by the upload endpoint.
+// RunID is json.Number because the API returns it as an integer.
 type uploadResponse struct {
-	RunID        string `json:"run_id"`
-	DashboardURL string `json:"dashboard_url"`
-	Error        string `json:"error,omitempty"`
+	RunID        json.Number `json:"run_id"`
+	DashboardURL string      `json:"dashboard_url"`
+	Error        string      `json:"error,omitempty"`
 }
 
 // NewClient creates a new Cloud API client with a 30-second timeout.
@@ -79,7 +80,7 @@ func (c *Client) UploadResults(ctx context.Context, jsonData []byte) (runID stri
 		return "", "", fmt.Errorf("cloud: invalid response JSON: %w", err)
 	}
 
-	return result.RunID, result.DashboardURL, nil
+	return result.RunID.String(), result.DashboardURL, nil
 }
 
 // UploadResultsWithPayment sends JSON test results using x402 pay-per-use.
@@ -116,7 +117,7 @@ func (c *Client) UploadResultsWithPayment(ctx context.Context, jsonData []byte, 
 		if err := json.Unmarshal(body, &result); err != nil {
 			return "", "", fmt.Errorf("cloud: invalid response JSON: %w", err)
 		}
-		return result.RunID, result.DashboardURL, nil
+		return result.RunID.String(), result.DashboardURL, nil
 	}
 
 	// Parse 402 payment requirements.
@@ -162,5 +163,5 @@ func (c *Client) UploadResultsWithPayment(ctx context.Context, jsonData []byte, 
 		return "", "", fmt.Errorf("cloud: invalid response JSON: %w", err)
 	}
 
-	return result.RunID, result.DashboardURL, nil
+	return result.RunID.String(), result.DashboardURL, nil
 }
