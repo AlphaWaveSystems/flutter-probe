@@ -338,11 +338,16 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}()
 				fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
 
-				// Wait for agent to connect to relay
+				// Wait for agent to connect to relay.
+				// Firebase Test Lab takes longer (device allocation + app install),
+				// so use a longer timeout for Firebase.
 				if relaySessionID != "" && cloudToken != "" {
 					cc := cloud.NewClient(cloudURL, cloudToken)
 					fmt.Println("  Waiting for agent to connect to relay...")
 					connectTimeout := cfg.Cloud.Relay.RelayConnectTimeout()
+					if cloudProvider == "firebase" && connectTimeout < 5*time.Minute {
+						connectTimeout = 5 * time.Minute
+					}
 					status, err := cc.PollRelayStatus(ctx, relaySessionID, connectTimeout)
 					if err != nil {
 						return fmt.Errorf("relay wait: %w", err)

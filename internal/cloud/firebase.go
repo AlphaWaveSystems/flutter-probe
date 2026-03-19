@@ -280,15 +280,10 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		return Session{}, fmt.Errorf("firebase: invalid test matrix response: %w", err)
 	}
 
-	// Poll until the test matrix reaches RUNNING state.
-	// Firebase device allocation can take several minutes.
-	// We do NOT accept FINISHED — that means the Robo test already completed.
-	if matrixResp.State != "RUNNING" {
-		fmt.Printf("    firebase: matrix %s created (state: %s), waiting for device...\n", matrixResp.TestMatrixID, matrixResp.State)
-		if err := p.pollMatrixReady(ctx, matrixResp.TestMatrixID, 8*time.Minute); err != nil {
-			return Session{}, err
-		}
-	}
+	// Don't poll the matrix — Firebase Robo tests may finish quickly, killing the app.
+	// Instead, return immediately and let the CLI poll the relay for agent connection.
+	// The agent connects to the relay as soon as the app launches on the device.
+	fmt.Printf("    firebase: matrix %s submitted (state: %s)\n", matrixResp.TestMatrixID, matrixResp.State)
 
 	return Session{
 		ID:         matrixResp.TestMatrixID,
