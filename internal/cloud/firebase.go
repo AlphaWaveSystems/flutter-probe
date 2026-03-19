@@ -85,7 +85,10 @@ func newFirebaseTestLab(creds map[string]string) (*firebaseTestLab, error) {
 
 	bucket := creds["bucket"]
 	if bucket == "" {
-		bucket = projectID + "-probe-uploads"
+		// Firebase Test Lab uses the project's default test results bucket.
+		// Format: test-lab-<hash>-<region> — but we can't guess the hash.
+		// Use the standard Cloud Storage default bucket for the project.
+		bucket = projectID + ".appspot.com"
 	}
 
 	p := &firebaseTestLab{
