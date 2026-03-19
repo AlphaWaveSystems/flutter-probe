@@ -221,12 +221,16 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 	payload := map[string]interface{}{
 		"projectId": p.projectID,
 		"testSpecification": map[string]interface{}{
-			"testTimeout": "600s", // 10 minutes — enough for ProbeAgent to connect and run tests
+			"testTimeout": "600s", // 10 min — Robo explores while ProbeAgent runs tests via relay
+			"disableVideoRecording": true,
+			"disablePerformanceMetrics": true,
 			"androidRoboTest": map[string]interface{}{
 				"appApk": map[string]string{
 					"gcsPath": appID, // gs://... URI from UploadApp
 				},
-				"maxSteps": 1, // Minimize Robo exploration — we just need the app launched
+				// No maxSteps — let Robo explore freely for the full testTimeout.
+				// This keeps the app alive while ProbeAgent handles test commands via relay.
+				"maxDepth": 1, // Stay shallow — don't navigate away from the app's main screens
 			},
 		},
 		"environmentMatrix": map[string]interface{}{
