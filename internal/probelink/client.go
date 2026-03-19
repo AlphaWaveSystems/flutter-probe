@@ -2,14 +2,22 @@ package probelink
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// base64Decode is a helper for decoding base64-encoded screenshot data.
+func base64Decode(s string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(s)
+}
 
 const (
 	defaultAgentPort    = 48686
@@ -301,6 +309,24 @@ func (c *Client) Screenshot(ctx context.Context, name string) (string, error) {
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return "", err
 	}
+
+	// If base64 data is included (cloud mode), save locally.
+	if result.Data != "" {
+		decoded, decErr := base64Decode(result.Data)
+		if decErr == nil && len(decoded) > 0 {
+			localDir := filepath.Join("reports", "screenshots")
+			_ = os.MkdirAll(localDir, 0755)
+			localPath := filepath.Join(localDir, filepath.Base(result.Path))
+			if writeErr := os.WriteFile(localPath, decoded, 0644); writeErr == nil {
+				absPath, _ := filepath.Abs(localPath)
+				if absPath != "" {
+					return absPath, nil
+				}
+				return localPath, nil
+			}
+		}
+	}
+
 	return result.Path, nil
 }
 

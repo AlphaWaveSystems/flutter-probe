@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -145,7 +146,11 @@ class ProbeExecutor {
       case ProbeMethods.screenshot:
         final name = req.params['name'] as String? ?? 'screenshot';
         final path = await _screenshot(name);
-        return {'path': path};
+        // Include base64-encoded PNG data so CLI can save locally (essential for cloud mode
+        // where the file is on a remote device and can't be pulled via ADB).
+        final fileBytes = await File(path).readAsBytes();
+        final b64 = base64Encode(fileBytes);
+        return {'path': path, 'data': b64};
 
       case ProbeMethods.dumpTree:
         final tree = _dumpWidgetTree();

@@ -119,7 +119,8 @@ type SelectorParam struct {
 
 // ScreenshotResult is returned by the take_screenshot command.
 type ScreenshotResult struct {
-	Path string `json:"path"` // absolute path on host machine
+	Path string `json:"path"`           // absolute path on device
+	Data string `json:"data,omitempty"` // base64-encoded PNG data (for cloud mode)
 }
 
 // MockParam registers an HTTP mock.
