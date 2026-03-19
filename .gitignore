@@ -10,7 +10,7 @@ LAUNCH_PLAN.md
 MARKET_RESEARCH.md
 
 # Cloud service (private, moves to separate repo)
-cloud/
+/cloud/
 
 # Go
 vendor/
@@ -49,3 +49,22 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# MCP config (contains credentials)
+.mcp.json
+
+# Claude Code local config
+.claude/
+
+# Local probe configs (project-specific, not framework defaults)
+probe.yaml
+probe.*.yaml
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Firebase debug logs
+firebase-debug.log
+
+# Screenshots (local dev artifacts in repo root)
+/*.png
