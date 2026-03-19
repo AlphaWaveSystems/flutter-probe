@@ -613,9 +613,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 		tags = []string{tag}
 	}
 
-	// Build device context for platform-level operations (restart, clear data)
+	// Build device context for platform-level operations (restart, clear data).
+	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
-	if !dryRun && client != nil {
+	if !dryRun && client != nil && dm != nil {
 		devCtx = &runner.DeviceContext{
 			Manager:                 dm,
 			Serial:                  deviceSerial,
