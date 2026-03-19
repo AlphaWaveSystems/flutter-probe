@@ -25,6 +25,7 @@ type TestResult struct {
 	Error     error
 	Row       int // data-driven row index, -1 = not data-driven
 	Artifacts []string
+	VideoURL  string // cloud provider video URL (session-level)
 }
 
 // Runner coordinates parsing, connecting, and executing .probe files.

@@ -144,8 +144,8 @@ func (p *sauceLabs) ListDevices(ctx context.Context) ([]Device, error) {
 // StartSession starts a real device live testing session on Sauce Labs via
 // the W3C WebDriver endpoint for real devices.
 func (p *sauceLabs) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	deviceName, osVersion := parseDeviceString(device)
-	platformName := detectPlatform(deviceName)
+	deviceName, osVersion := ParseDeviceString(device)
+	platformName := DetectPlatform(deviceName)
 
 	sauceOpts := map[string]interface{}{
 		"appiumVersion": "2.0",
@@ -228,6 +228,35 @@ func (p *sauceLabs) ForwardPort(ctx context.Context, session Session, devicePort
 		return devicePort, nil
 	}
 	return 0, fmt.Errorf("saucelabs: direct port forwarding requires Sauce Connect Proxy (not yet supported) — use relay mode with --relay flag")
+}
+
+// GetSessionArtifacts retrieves video URL from a Sauce Labs RDC job.
+func (p *sauceLabs) GetSessionArtifacts(ctx context.Context, sessionID string) (*SessionArtifacts, error) {
+	url := fmt.Sprintf("%s/v1/rdc/jobs/%s", p.slBaseURL(), sessionID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("saucelabs: creating job request: %w", err)
+	}
+	req.SetBasicAuth(p.username, p.accessKey)
+
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("saucelabs: get job failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("saucelabs: get job failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		VideoURL string `json:"video_url"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("saucelabs: invalid job response: %w", err)
+	}
+	return &SessionArtifacts{VideoURL: result.VideoURL}, nil
 }
 
 // StopSession terminates a Sauce Labs Appium session via WebDriver DELETE.

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -208,7 +209,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var client *probelink.Client
 	var dm *device.Manager
 	var platform device.Platform
-	var cloudSession *cloud.Session // non-nil when using a cloud provider
+	var cloudSession *cloud.Session       // non-nil when using a cloud provider
+	var cloudProviderImpl cloud.CloudProvider // saved for artifact collection
 	if !dryRun {
 
 		if cloudProvider != "" {
@@ -232,6 +234,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return fmt.Errorf("cloud provider: %w", err)
 			}
+			cloudProviderImpl = provider
 
 			// Validate required cloud flags
 			if cloudApp == "" {
@@ -564,6 +567,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		meta := runner.RunMetadata{
 			DeviceID: deviceSerial,
 			Platform: string(platform),
+			Provider: "local",
 			AppID:    cfg.Project.App,
 		}
 		// Resolve config file path
@@ -599,10 +603,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 		report.SetMetadata(meta)
 	} else if !dryRun && cloudSession != nil {
 		// Cloud mode: metadata from cloud session info
+		detectedPlatform := cloud.DetectPlatform(cloudSession.DeviceName)
+		_, osVer := cloud.ParseDeviceString(cloudSession.DeviceName)
 		meta := runner.RunMetadata{
 			DeviceID:   deviceSerial,
 			DeviceName: cloudSession.DeviceName,
-			Platform:   "cloud:" + cloudSession.Provider,
+			Platform:   detectedPlatform,
+			OSVersion:  osVer,
+			Provider:   cloudSession.Provider,
 			AppID:      cfg.Project.App,
 		}
 		cfgPath, _ := cmd.Flags().GetString("config")
@@ -691,6 +699,30 @@ func runTests(cmd *cobra.Command, args []string) error {
 		// via the probe.screenshot RPC (base64 data in response). Ensure the
 		// screenshot directory exists and relativize paths.
 		runner.LocalizeArtifacts(results, screenshotDir)
+
+		// Collect artifacts from cloud provider (video, screenshots).
+		if cloudProviderImpl != nil {
+			if ac, ok := cloudProviderImpl.(cloud.ArtifactCollector); ok {
+				fmt.Println("  Collecting cloud session artifacts...")
+				arts, artErr := ac.GetSessionArtifacts(ctx, cloudSession.ID)
+				if artErr != nil {
+					fmt.Printf("  \033[33m⚠  Artifact collection: %s\033[0m\n", artErr)
+				} else {
+					if arts.VideoURL != "" {
+						for i := range results {
+							results[i].VideoURL = arts.VideoURL
+						}
+						fmt.Printf("  \033[32m✓\033[0m  Video: %s\n", arts.VideoURL)
+					}
+					if len(arts.ScreenshotURLs) > 0 {
+						for i := range results {
+							results[i].Artifacts = append(results[i].Artifacts, arts.ScreenshotURLs...)
+						}
+						fmt.Printf("  \033[32m✓\033[0m  Screenshots: %d collected\n", len(arts.ScreenshotURLs))
+					}
+				}
+			}
+		}
 	}
 
 	if err := report.Report(results); err != nil {
@@ -786,7 +818,11 @@ func generateCloudJSON(results []runner.TestResult, meta runner.RunMetadata) ([]
 		Project    string      `json:"project"`
 		Platform   string      `json:"platform,omitempty"`
 		Device     string      `json:"device,omitempty"`
+		OSVersion  string      `json:"os_version,omitempty"`
+		Provider   string      `json:"provider,omitempty"`
 		Duration   float64     `json:"duration"`
+		GitSHA     string      `json:"git_sha,omitempty"`
+		GitBranch  string      `json:"git_branch,omitempty"`
 		TotalTests int         `json:"total_tests"`
 		Passed     int         `json:"passed"`
 		Failed     int         `json:"failed"`
@@ -798,11 +834,21 @@ func generateCloudJSON(results []runner.TestResult, meta runner.RunMetadata) ([]
 		Project:    meta.AppID,
 		Platform:   meta.Platform,
 		Device:     meta.DeviceName,
+		OSVersion:  meta.OSVersion,
+		Provider:   meta.Provider,
 		TotalTests: len(results),
 		Tests:      make([]cloudTest, 0, len(results)),
 	}
 	if rpt.Project == "" {
 		rpt.Project = meta.DeviceID
+	}
+
+	// Resolve git info from local repo
+	if sha, err := exec.Command("git", "rev-parse", "HEAD").Output(); err == nil {
+		rpt.GitSHA = strings.TrimSpace(string(sha))
+	}
+	if branch, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		rpt.GitBranch = strings.TrimSpace(string(branch))
 	}
 
 	var totalDuration float64
@@ -826,13 +872,14 @@ func generateCloudJSON(results []runner.TestResult, meta runner.RunMetadata) ([]
 			File:     res.File,
 			Status:   status,
 			Duration: dur,
+			VideoURL: res.VideoURL,
 		}
 		if res.Error != nil {
 			ct.Error = res.Error.Error()
 		}
-		// Include first artifact as screenshot_url if available
+		// Include all artifacts as comma-separated screenshot_url
 		if len(res.Artifacts) > 0 {
-			ct.ScreenshotURL = res.Artifacts[0]
+			ct.ScreenshotURL = strings.Join(res.Artifacts, ",")
 		}
 		rpt.Tests = append(rpt.Tests, ct)
 	}

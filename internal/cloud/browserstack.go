@@ -178,8 +178,8 @@ type bsSessionResponse struct {
 // StartSession starts an App Automate session via the Appium W3C WebDriver hub.
 // The device string can be "Google Pixel 7" or "Google Pixel 7-14.0" (with OS version).
 func (p *browserStack) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	deviceName, osVersion := parseDeviceString(device)
-	platformName := detectPlatform(deviceName)
+	deviceName, osVersion := ParseDeviceString(device)
+	platformName := DetectPlatform(deviceName)
 
 	// Build W3C capabilities payload
 	bstackOpts := map[string]interface{}{
@@ -324,6 +324,30 @@ func (p *browserStack) StopSession(ctx context.Context, session Session) error {
 	}
 
 	return nil
+}
+
+// GetSessionArtifacts retrieves video and screenshot URLs from a completed BrowserStack session.
+// BrowserStack automatically records video for all sessions. Polls up to 30s for video availability.
+func (p *browserStack) GetSessionArtifacts(ctx context.Context, sessionID string) (*SessionArtifacts, error) {
+	// Poll up to 30s for video URL to become available (BrowserStack processes video async)
+	var videoURL string
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		url, err := p.SessionVideoURL(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if url != "" {
+			videoURL = url
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(3 * time.Second):
+		}
+	}
+	return &SessionArtifacts{VideoURL: videoURL}, nil
 }
 
 // SessionVideoURL fetches the video recording URL for a completed BrowserStack session.

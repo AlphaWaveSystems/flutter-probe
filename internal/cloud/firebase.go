@@ -213,7 +213,7 @@ func (p *firebaseTestLab) ListDevices(ctx context.Context) ([]Device, error) {
 // ProbeAgent embedded is launched via a Robo test, and the agent connects
 // outbound to a ProbeRelay server. This requires relay mode (--relay flag).
 func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	deviceName, osVersion := parseDeviceString(device)
+	deviceName, osVersion := ParseDeviceString(device)
 	if osVersion == "" {
 		osVersion = "34" // default to latest
 	}
@@ -222,7 +222,7 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 		"projectId": p.projectID,
 		"testSpecification": map[string]interface{}{
 			"testTimeout": "600s", // 10 min — Robo explores while ProbeAgent runs tests via relay
-			"disableVideoRecording": true,
+			"disableVideoRecording": false,
 			"disablePerformanceMetrics": true,
 			"androidRoboTest": map[string]interface{}{
 				"appApk": map[string]string{
@@ -354,6 +354,96 @@ func (p *firebaseTestLab) ForwardPort(ctx context.Context, session Session, devi
 		return devicePort, nil
 	}
 	return 0, fmt.Errorf("firebase: does not support direct port forwarding — relay mode is required (use --relay flag)")
+}
+
+// GetSessionArtifacts retrieves artifacts from a Firebase Test Lab test matrix.
+// Firebase stores artifacts in GCS under the result storage path. The matrix
+// response contains the GCS path to the results directory.
+func (p *firebaseTestLab) GetSessionArtifacts(ctx context.Context, matrixID string) (*SessionArtifacts, error) {
+	// Get the test matrix to find the result storage path
+	reqURL := fmt.Sprintf("%s/projects/%s/testMatrices/%s", firebaseTestingAPI, p.projectID, matrixID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("firebase: creating matrix request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+p.accessToken)
+
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("firebase: get matrix failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("firebase: get matrix failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var matrixResp struct {
+		ResultStorage struct {
+			GoogleCloudStorage struct {
+				GCSPath string `json:"gcsPath"`
+			} `json:"googleCloudStorage"`
+		} `json:"resultStorage"`
+	}
+	if err := json.Unmarshal(body, &matrixResp); err != nil {
+		return nil, fmt.Errorf("firebase: invalid matrix response: %w", err)
+	}
+
+	gcsPath := matrixResp.ResultStorage.GoogleCloudStorage.GCSPath
+	if gcsPath == "" {
+		return &SessionArtifacts{}, nil
+	}
+
+	// List objects in the GCS results directory to find video and screenshots.
+	// GCS path format: gs://bucket/path — extract bucket and prefix.
+	gcsPath = strings.TrimPrefix(gcsPath, "gs://")
+	parts := strings.SplitN(gcsPath, "/", 2)
+	if len(parts) < 2 {
+		return &SessionArtifacts{}, nil
+	}
+	bucket, prefix := parts[0], parts[1]
+
+	listURL := fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s/o?prefix=%s", bucket, prefix)
+	listReq, err := http.NewRequestWithContext(ctx, http.MethodGet, listURL, nil)
+	if err != nil {
+		return &SessionArtifacts{}, nil
+	}
+	listReq.Header.Set("Authorization", "Bearer "+p.accessToken)
+
+	listResp, err := p.http.Do(listReq)
+	if err != nil {
+		return &SessionArtifacts{}, nil
+	}
+	defer listResp.Body.Close()
+
+	listBody, _ := io.ReadAll(listResp.Body)
+	if listResp.StatusCode != http.StatusOK {
+		return &SessionArtifacts{}, nil
+	}
+
+	var listResult struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listBody, &listResult); err != nil {
+		return &SessionArtifacts{}, nil
+	}
+
+	artifacts := &SessionArtifacts{}
+	for _, item := range listResult.Items {
+		lower := strings.ToLower(item.Name)
+		publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, item.Name)
+		if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, "video.webm") {
+			if artifacts.VideoURL == "" {
+				artifacts.VideoURL = publicURL
+			}
+		} else if strings.HasSuffix(lower, ".png") || strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") {
+			artifacts.ScreenshotURLs = append(artifacts.ScreenshotURLs, publicURL)
+		}
+	}
+	return artifacts, nil
 }
 
 // StopSession cleans up a Firebase Test Lab test matrix.

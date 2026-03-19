@@ -151,8 +151,8 @@ const ltAppiumHubURL = "https://mobile-hub.lambdatest.com/wd/hub/session"
 // StartSession starts a real device session on LambdaTest via the Appium W3C
 // WebDriver hub (not the batch Espresso build API).
 func (p *lambdaTest) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	deviceName, osVersion := parseDeviceString(device)
-	platformName := detectPlatform(deviceName)
+	deviceName, osVersion := ParseDeviceString(device)
+	platformName := DetectPlatform(deviceName)
 
 	ltOpts := map[string]interface{}{
 		"w3c":       true,
@@ -234,6 +234,35 @@ func (p *lambdaTest) ForwardPort(ctx context.Context, session Session, devicePor
 		return devicePort, nil
 	}
 	return 0, fmt.Errorf("lambdatest: direct port forwarding requires LambdaTest Tunnel (not yet supported) — use relay mode with --relay flag")
+}
+
+// GetSessionArtifacts retrieves video URL from a LambdaTest session.
+func (p *lambdaTest) GetSessionArtifacts(ctx context.Context, sessionID string) (*SessionArtifacts, error) {
+	url := fmt.Sprintf("%s/sessions/%s", ltBaseURL, sessionID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("lambdatest: creating session request: %w", err)
+	}
+	req.SetBasicAuth(p.username, p.accessKey)
+
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("lambdatest: get session failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("lambdatest: get session failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		VideoURL string `json:"video_url"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("lambdatest: invalid session response: %w", err)
+	}
+	return &SessionArtifacts{VideoURL: result.VideoURL}, nil
 }
 
 // StopSession terminates a LambdaTest Appium session via WebDriver DELETE.

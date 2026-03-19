@@ -50,6 +50,20 @@ type CloudProvider interface {
 	StopSession(ctx context.Context, session Session) error
 }
 
+// SessionArtifacts holds artifacts collected from a cloud provider session.
+type SessionArtifacts struct {
+	VideoURL       string
+	ScreenshotURLs []string
+	DeviceLogs     string
+}
+
+// ArtifactCollector is an optional interface that cloud providers can implement
+// to retrieve session artifacts (video, screenshots) after test execution.
+// Providers opt in via type assertion — non-breaking for existing providers.
+type ArtifactCollector interface {
+	GetSessionArtifacts(ctx context.Context, sessionID string) (*SessionArtifacts, error)
+}
+
 // NewProvider creates a CloudProvider for the given provider name.
 // Credentials are provider-specific key-value pairs (e.g. "username", "access_key").
 func NewProvider(name string, creds map[string]string) (CloudProvider, error) {
@@ -69,10 +83,10 @@ func NewProvider(name string, creds map[string]string) (CloudProvider, error) {
 	}
 }
 
-// parseDeviceString splits a device string like "Google Pixel 7-14.0" into
+// ParseDeviceString splits a device string like "Google Pixel 7-14.0" into
 // device name and OS version. If no version suffix is found, returns the
 // original string with an empty version.
-func parseDeviceString(device string) (name string, version string) {
+func ParseDeviceString(device string) (name string, version string) {
 	if idx := strings.LastIndex(device, "-"); idx > 0 {
 		candidate := device[idx+1:]
 		if _, err := strconv.ParseFloat(candidate, 64); err == nil {
@@ -82,9 +96,9 @@ func parseDeviceString(device string) (name string, version string) {
 	return device, ""
 }
 
-// detectPlatform guesses the platform from device name or explicit OS field.
+// DetectPlatform guesses the platform from device name or explicit OS field.
 // Defaults to "Android" if undetermined.
-func detectPlatform(device string) string {
+func DetectPlatform(device string) string {
 	lower := strings.ToLower(device)
 	if strings.Contains(lower, "iphone") || strings.Contains(lower, "ipad") || strings.Contains(lower, "ios") {
 		return "iOS"

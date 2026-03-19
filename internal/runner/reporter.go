@@ -26,6 +26,7 @@ type RunMetadata struct {
 	DeviceID     string `json:"device_id"`
 	Platform     string `json:"platform"`      // "ios" or "android"
 	OSVersion    string `json:"os_version"`     // "iOS 18.6" or "Android 14"
+	Provider     string `json:"provider"`       // "local", "browserstack", "firebase", etc.
 	AppID        string `json:"app_id"`         // bundle ID / package name
 	AppVersion   string `json:"app_version"`    // e.g. "1.2.16"
 	ProbeVersion string `json:"probe_version"`  // FlutterProbe CLI version

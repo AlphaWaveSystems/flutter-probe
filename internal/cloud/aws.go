@@ -397,6 +397,71 @@ func (p *awsDeviceFarm) StopSession(ctx context.Context, session Session) error 
 	return nil
 }
 
+// GetSessionArtifacts retrieves artifacts from an AWS Device Farm session using
+// the ListArtifacts API. Returns presigned S3 URLs for video and screenshot files.
+func (p *awsDeviceFarm) GetSessionArtifacts(ctx context.Context, sessionARN string) (*SessionArtifacts, error) {
+	artifacts := &SessionArtifacts{}
+
+	// Fetch VIDEO artifacts
+	videoURLs, err := p.listArtifacts(ctx, sessionARN, "VIDEO")
+	if err == nil && len(videoURLs) > 0 {
+		artifacts.VideoURL = videoURLs[0]
+	}
+
+	// Fetch SCREENSHOT artifacts
+	screenshots, err := p.listArtifacts(ctx, sessionARN, "SCREENSHOT")
+	if err == nil {
+		artifacts.ScreenshotURLs = screenshots
+	}
+
+	return artifacts, nil
+}
+
+// listArtifacts calls DeviceFarm ListArtifacts for the given type.
+func (p *awsDeviceFarm) listArtifacts(ctx context.Context, arn, artifactType string) ([]string, error) {
+	payload := map[string]string{
+		"arn":  arn,
+		"type": artifactType,
+	}
+	data, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(), bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+	req.Header.Set("X-Amz-Target", "DeviceFarm_20150623.ListArtifacts")
+	p.signRequest(req, data)
+
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("aws: list artifacts failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Artifacts []struct {
+			URL string `json:"url"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	var urls []string
+	for _, a := range result.Artifacts {
+		if a.URL != "" {
+			urls = append(urls, a.URL)
+		}
+	}
+	return urls, nil
+}
+
 // signRequest adds AWS Signature Version 4 headers to the request.
 func (p *awsDeviceFarm) signRequest(req *http.Request, payload []byte) {
 	const service = "devicefarm"
