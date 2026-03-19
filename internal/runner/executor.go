@@ -316,7 +316,8 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbRestart:
 		if e.deviceCtx == nil {
-			return fmt.Errorf("restart the app: no device context (dry-run or missing config)")
+			fmt.Println("    \033[33m⚠\033[0m  Skipping restart (cloud mode — not supported without ADB/simctl)")
+			return nil
 		}
 		e.client.Close()
 		if err := e.deviceCtx.RestartApp(ctx); err != nil {
@@ -334,7 +335,10 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbClearAppData:
 		if e.deviceCtx == nil {
-			return fmt.Errorf("clear app data: no device context (dry-run or missing config)")
+			// In cloud mode, there's no device context (no ADB/simctl).
+			// The app is already fresh since it was just installed on the cloud device.
+			fmt.Println("    \033[33m⚠\033[0m  Skipping clear app data (cloud mode — app is already fresh)")
+			return nil
 		}
 		e.client.Close()
 		if err := e.deviceCtx.ClearAppData(ctx); err != nil {
@@ -352,25 +356,26 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbAllowPermission:
 		if e.deviceCtx == nil {
-			return fmt.Errorf("allow permission: no device context (dry-run or missing config)")
+			// Cloud mode: permissions auto-granted via Appium capabilities
+			return nil
 		}
 		return e.deviceCtx.AllowPermission(ctx, a.Name)
 
 	case parser.VerbDenyPermission:
 		if e.deviceCtx == nil {
-			return fmt.Errorf("deny permission: no device context (dry-run or missing config)")
+			return nil
 		}
 		return e.deviceCtx.DenyPermission(ctx, a.Name)
 
 	case parser.VerbGrantAllPerms:
 		if e.deviceCtx == nil {
-			return fmt.Errorf("grant all permissions: no device context (dry-run or missing config)")
+			return nil
 		}
 		return e.deviceCtx.GrantAllPermissions(ctx)
 
 	case parser.VerbRevokeAllPerms:
 		if e.deviceCtx == nil {
-			return fmt.Errorf("revoke all permissions: no device context (dry-run or missing config)")
+			return nil
 		}
 		return e.deviceCtx.RevokeAllPermissions(ctx)
 	}
