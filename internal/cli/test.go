@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
@@ -101,6 +102,9 @@ func init() {
 	// Relay mode
 	f.Bool("relay", false, "force enable relay mode for cloud device farm testing")
 	f.Bool("no-relay", false, "force disable relay mode (use direct port forwarding)")
+	f.String("relay-url", "", "reuse an existing relay session (WebSocket URL) — skips relay creation")
+	f.String("relay-token", "", "CLI auth token for the existing relay session (used with --relay-url)")
+	f.String("relay-session-id", "", "existing relay session ID for status polling and cleanup")
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
@@ -269,26 +273,45 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if cloudURL == "" {
 					cloudURL = cfg.Cloud.URL
 				}
-				if cloudToken == "" {
-					return fmt.Errorf("--cloud-token is required for relay mode (API key for relay session creation)")
-				}
 
-				cc := cloud.NewClient(cloudURL, cloudToken)
+				// Check if an existing relay session was provided (pre-created
+				// in CI so the relay URL can be baked into the APK at build time)
+				existingRelayURL, _ := cmd.Flags().GetString("relay-url")
+				existingRelayToken, _ := cmd.Flags().GetString("relay-token")
+				existingRelaySessionID, _ := cmd.Flags().GetString("relay-session-id")
 
-				// Step 1: Create relay session
-				fmt.Println("  Creating relay session...")
-				relaySess, err := cc.CreateRelaySession(ctx, cloudProvider, targetDevice, cfg.Cloud.Relay.RelayTTL())
-				if err != nil {
-					return fmt.Errorf("relay session: %w", err)
-				}
-				defer func() {
-					if delErr := cc.DeleteRelaySession(ctx, relaySess.SessionID); delErr != nil {
-						fmt.Printf("  \033[33m⚠  Failed to close relay session: %s\033[0m\n", delErr)
+				var relayURL, cliToken, relaySessionID string
+
+				if existingRelayURL != "" && existingRelayToken != "" {
+					// Reuse existing relay session (relay URL already baked into APK)
+					relayURL = existingRelayURL
+					cliToken = existingRelayToken
+					relaySessionID = existingRelaySessionID
+					fmt.Printf("  \033[32m✓\033[0m  Reusing relay session: %s\n", relaySessionID)
+				} else {
+					// Create a new relay session
+					if cloudToken == "" {
+						return fmt.Errorf("--cloud-token is required for relay mode (API key for relay session creation)")
 					}
-				}()
-				fmt.Printf("  \033[32m✓\033[0m  Relay session: %s\n", relaySess.SessionID)
+					cc := cloud.NewClient(cloudURL, cloudToken)
 
-				// Step 2: Upload app (with relay DART_DEFINES baked in)
+					fmt.Println("  Creating relay session...")
+					relaySess, err := cc.CreateRelaySession(ctx, cloudProvider, targetDevice, cfg.Cloud.Relay.RelayTTL())
+					if err != nil {
+						return fmt.Errorf("relay session: %w", err)
+					}
+					defer func() {
+						if delErr := cc.DeleteRelaySession(ctx, relaySess.SessionID); delErr != nil {
+							fmt.Printf("  \033[33m⚠  Failed to close relay session: %s\033[0m\n", delErr)
+						}
+					}()
+					relayURL = relaySess.RelayURL
+					cliToken = relaySess.CLIToken
+					relaySessionID = relaySess.SessionID
+					fmt.Printf("  \033[32m✓\033[0m  Relay session: %s\n", relaySessionID)
+				}
+
+				// Upload app
 				fmt.Printf("  Uploading app to %s...\n", provider.Name())
 				appID, err := provider.UploadApp(ctx, cloudApp)
 				if err != nil {
@@ -296,14 +319,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
 
-				// Step 3: Start cloud session (app launches on device)
+				// Start cloud session (app launches on device)
 				fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
 				sess, err := provider.StartSession(ctx, appID, targetDevice)
 				if err != nil {
 					return fmt.Errorf("cloud session: %w", err)
 				}
-				sess.RelayURL = relaySess.RelayURL
-				sess.CLIToken = relaySess.CLIToken
+				sess.RelayURL = relayURL
+				sess.CLIToken = cliToken
 				cloudSession = &sess
 				defer func() {
 					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
@@ -315,17 +338,24 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}()
 				fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
 
-				// Step 4: Wait for agent to connect to relay
-				fmt.Println("  Waiting for agent to connect to relay...")
-				connectTimeout := cfg.Cloud.Relay.RelayConnectTimeout()
-				status, err := cc.PollRelayStatus(ctx, relaySess.SessionID, connectTimeout)
-				if err != nil {
-					return fmt.Errorf("relay wait: %w", err)
+				// Wait for agent to connect to relay
+				if relaySessionID != "" && cloudToken != "" {
+					cc := cloud.NewClient(cloudURL, cloudToken)
+					fmt.Println("  Waiting for agent to connect to relay...")
+					connectTimeout := cfg.Cloud.Relay.RelayConnectTimeout()
+					status, err := cc.PollRelayStatus(ctx, relaySessionID, connectTimeout)
+					if err != nil {
+						return fmt.Errorf("relay wait: %w", err)
+					}
+					fmt.Printf("  \033[32m✓\033[0m  Agent connected (status: %s)\n", status.Status)
+				} else {
+					// No session ID to poll — wait a fixed duration for agent boot
+					fmt.Println("  Waiting for agent to connect to relay...")
+					time.Sleep(15 * time.Second)
 				}
-				fmt.Printf("  \033[32m✓\033[0m  Agent connected (status: %s)\n", status.Status)
 
-				// Step 5: CLI connects to relay
-				client, err = probelink.DialRelay(ctx, relaySess.RelayURL, relaySess.CLIToken, cfg.Agent.DialTimeout)
+				// CLI connects to relay
+				client, err = probelink.DialRelay(ctx, relayURL, cliToken, cfg.Agent.DialTimeout)
 				if err != nil {
 					return fmt.Errorf("connecting via relay: %w", err)
 				}
