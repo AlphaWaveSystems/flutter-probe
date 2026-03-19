@@ -154,10 +154,11 @@ func (p *sauceLabs) StartSession(ctx context.Context, appID string, device strin
 	}
 
 	alwaysMatch := map[string]interface{}{
-		"appium:app":        appID,
-		"appium:deviceName": deviceName,
-		"platformName":      platformName,
-		"sauce:options":     sauceOpts,
+		"appium:app":                  appID,
+		"appium:deviceName":           deviceName,
+		"platformName":                platformName,
+		"appium:autoGrantPermissions": true,
+		"sauce:options":               sauceOpts,
 	}
 	if osVersion != "" {
 		alwaysMatch["appium:platformVersion"] = osVersion

@@ -193,10 +193,11 @@ func (p *browserStack) StartSession(ctx context.Context, appID string, device st
 	}
 
 	alwaysMatch := map[string]interface{}{
-		"appium:app":        appID,
-		"appium:deviceName": deviceName,
-		"platformName":      platformName,
-		"bstack:options":    bstackOpts,
+		"appium:app":                  appID,
+		"appium:deviceName":           deviceName,
+		"platformName":                platformName,
+		"appium:autoGrantPermissions": true, // auto-dismiss OS permission dialogs
+		"bstack:options":              bstackOpts,
 	}
 	if osVersion != "" {
 		alwaysMatch["appium:platformVersion"] = osVersion
