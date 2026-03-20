@@ -212,6 +212,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var platform device.Platform
 	var cloudSession *cloud.Session       // non-nil when using a cloud provider
 	var cloudProviderImpl cloud.CloudProvider // saved for artifact collection
+	var sessionStopped bool                   // prevents double-stop in defer
 	if !dryRun {
 
 		if cloudProvider != "" {
@@ -333,6 +334,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 				sess.CLIToken = cliToken
 				cloudSession = &sess
 				defer func() {
+					if sessionStopped {
+						return
+					}
 					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
 					if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
 						fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
@@ -393,6 +397,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				cloudSession = &sess
 				defer func() {
+					if sessionStopped {
+						return
+					}
 					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
 					if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
 						fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
@@ -706,6 +713,21 @@ func runTests(cmd *cobra.Command, args []string) error {
 		// via the probe.screenshot RPC (base64 data in response). Ensure the
 		// screenshot directory exists and relativize paths.
 		runner.LocalizeArtifacts(results, screenshotDir)
+
+		// Stop the cloud session BEFORE collecting artifacts — some providers
+		// (e.g. SauceLabs) only make video available after the session ends.
+		if cloudProviderImpl != nil && cloudSession != nil && !sessionStopped {
+			fmt.Printf("  Stopping cloud session %s...\n", cloudSession.ID)
+			if stopErr := cloudProviderImpl.StopSession(ctx, *cloudSession); stopErr != nil {
+				fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+			} else {
+				fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+			}
+			sessionStopped = true
+
+			// Brief wait for provider to finalize artifacts (video encoding).
+			time.Sleep(3 * time.Second)
+		}
 
 		// Collect artifacts from cloud provider (video, screenshots).
 		if cloudProviderImpl != nil {

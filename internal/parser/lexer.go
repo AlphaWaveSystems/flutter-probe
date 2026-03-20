@@ -115,6 +115,9 @@ func (l *Lexer) nextLine() error {
 		case ch == '\'':
 			// handle don't
 			l.lexIdent()
+		case ch == '@':
+			// @tag — include the @ prefix so the parser can recognize it
+			l.lexTag()
 		default:
 			if unicode.IsLetter(ch) || ch == '_' {
 				l.lexIdent()
@@ -242,6 +245,25 @@ func (l *Lexer) lexIdent() {
 	} else {
 		l.tokens = append(l.tokens, Token{Type: TOKEN_IDENT, Literal: raw, Line: l.line, Col: startCol})
 	}
+}
+
+// lexTag lexes a @tag token (e.g. @smoke, @critical, @ui).
+func (l *Lexer) lexTag() {
+	startCol := l.col
+	start := l.pos
+	l.pos++ // skip @
+	l.col++
+	for l.pos < len(l.src) {
+		ch := l.src[l.pos]
+		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' {
+			l.pos++
+			l.col++
+		} else {
+			break
+		}
+	}
+	raw := string(l.src[start:l.pos]) // includes @
+	l.tokens = append(l.tokens, Token{Type: TOKEN_IDENT, Literal: raw, Line: l.line, Col: startCol})
 }
 
 // tryCompound peeks for multi-word keywords like "don't see", "go back", "long press", "double tap".

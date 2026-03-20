@@ -115,15 +115,63 @@ func (p *Parser) parseTest() (TestDef, error) {
 	line := p.peek().Line
 	p.expect(TOKEN_TEST)
 	name := p.expectString("test name")
-	// optional @tag
+	// optional @tag (may appear on same line or next indented line)
 	var tags []string
 	for p.peek().Type == TOKEN_IDENT && strings.HasPrefix(p.peek().Literal, "@") {
 		tags = append(tags, strings.TrimPrefix(p.advance().Literal, "@"))
 	}
-	p.consumeNewline()
-	body, err := p.parseBody()
-	if err != nil {
-		return TestDef{}, err
+	// Tags on the next line: peek past newline/indent to check for @tags.
+	// If found, we consume INDENT here and parse body steps inline (since
+	// tags and body share the same indent level — only one INDENT token).
+	indentConsumed := false
+	if len(tags) == 0 {
+		saved := p.pos
+		p.consumeNewline()
+		if p.peek().Type == TOKEN_INDENT {
+			p.advance() // consume INDENT
+			for p.peek().Type == TOKEN_IDENT && strings.HasPrefix(p.peek().Literal, "@") {
+				tags = append(tags, strings.TrimPrefix(p.advance().Literal, "@"))
+			}
+			if len(tags) == 0 {
+				// No tags found after indent — rewind.
+				p.pos = saved
+				p.consumeNewline()
+			} else {
+				indentConsumed = true
+			}
+		} else {
+			p.pos = saved
+			p.consumeNewline()
+		}
+	} else {
+		p.consumeNewline()
+	}
+
+	var body []Step
+	var err error
+	if indentConsumed {
+		// INDENT was already consumed for tag scanning — parse steps directly until DEDENT.
+		for p.peek().Type != TOKEN_DEDENT && !p.atEOF() {
+			p.skipNewlines()
+			if p.peek().Type == TOKEN_DEDENT || p.atEOF() {
+				break
+			}
+			step, stepErr := p.parseStep()
+			if stepErr != nil {
+				return TestDef{}, stepErr
+			}
+			if step != nil {
+				body = append(body, step)
+			}
+		}
+		if p.peek().Type == TOKEN_DEDENT {
+			p.advance() // consume DEDENT
+		}
+	} else {
+		body, err = p.parseBody()
+		if err != nil {
+			return TestDef{}, err
+		}
 	}
 	// "with examples:"
 	var examples *ExamplesBlock
