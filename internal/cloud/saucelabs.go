@@ -248,7 +248,10 @@ func (p *sauceLabs) GetSessionArtifacts(ctx context.Context, sessionID string) (
 	if err != nil {
 		return nil, err
 	}
-	return &SessionArtifacts{VideoURL: detail.VideoURL}, nil
+	return &SessionArtifacts{
+		VideoURL:       detail.VideoURL,
+		ScreenshotURLs: detail.ScreenshotURLs,
+	}, nil
 }
 
 // findRDCJobBySession resolves an RDC job from an Appium session ID.
@@ -300,8 +303,9 @@ func (p *sauceLabs) findRDCJobBySession(ctx context.Context, appiumSessionID str
 
 // rdcJobDetail holds the fields we need from a job detail response.
 type rdcJobDetail struct {
-	AppiumSessionID string `json:"appium_session_id"`
-	VideoURL        string `json:"video_url"`
+	AppiumSessionID string   `json:"appium_session_id"`
+	VideoURL        string   `json:"video_url"`
+	ScreenshotURLs  []string `json:"screenshot_urls"`
 }
 
 // fetchJobDetail retrieves the full detail for a single RDC job.
