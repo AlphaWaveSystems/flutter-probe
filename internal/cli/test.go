@@ -737,19 +737,20 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	// Cloud upload (after report is written)
-	cloudEnabled, _ := cmd.Flags().GetBool("cloud")
 	payMethod, _ := cmd.Flags().GetString("pay")
-	if cloudEnabled || payMethod == "x402" {
-		cloudToken, _ := cmd.Flags().GetString("cloud-token")
-		cloudURL, _ := cmd.Flags().GetString("cloud-url")
+	cloudToken, _ := cmd.Flags().GetString("cloud-token")
+	cloudURL, _ := cmd.Flags().GetString("cloud-url")
 
-		// Resolution order: CLI flag > probe.yaml > default
-		if cloudToken == "" {
-			cloudToken = cfg.Cloud.Token
-		}
-		if cloudURL == "" {
-			cloudURL = cfg.Cloud.URL
-		}
+	// Resolution order: CLI flag > probe.yaml > default
+	if cloudToken == "" {
+		cloudToken = cfg.Cloud.Token
+	}
+	if cloudURL == "" {
+		cloudURL = cfg.Cloud.URL
+	}
+
+	// Upload when token is available or x402 payment is requested.
+	if cloudToken != "" || payMethod == "x402" {
 
 		// Prepare JSON data for upload. Always use generateCloudJSON which
 		// produces the format the Cloud API expects (flat fields, status strings).
