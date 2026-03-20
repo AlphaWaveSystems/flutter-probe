@@ -751,19 +751,13 @@ func runTests(cmd *cobra.Command, args []string) error {
 			cloudURL = cfg.Cloud.URL
 		}
 
-		// Prepare JSON data for upload.
-		var jsonData []byte
-		if format == "json" && outFile != "" {
-			jsonData, err = os.ReadFile(outFile)
-			if err != nil {
-				fmt.Printf("\n  \033[31m✗  Cloud upload: could not read JSON results: %s\033[0m\n", err)
-			}
-		}
-		if len(jsonData) == 0 {
-			jsonData, err = generateCloudJSON(results, runMeta)
-			if err != nil {
-				fmt.Printf("\n  \033[31m✗  Cloud upload: could not serialize results: %s\033[0m\n", err)
-			}
+		// Prepare JSON data for upload. Always use generateCloudJSON which
+		// produces the format the Cloud API expects (flat fields, status strings).
+		// The reporter's JSON format (--format json) is different (nested metadata,
+		// boolean passed/skipped fields) and must not be sent directly.
+		jsonData, err := generateCloudJSON(results, runMeta)
+		if err != nil {
+			fmt.Printf("\n  \033[31m✗  Cloud upload: could not serialize results: %s\033[0m\n", err)
 		}
 
 		if len(jsonData) > 0 && payMethod == "x402" {
