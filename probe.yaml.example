@@ -23,10 +23,35 @@ device:
   boot_timeout: 120s
   restart_delay: 500ms
 
-# Cloud dashboard (optional)
+# Cloud dashboard (optional — upload results to FlutterProbe Cloud)
 # cloud:
 #   url: https://flutterprobe-cloud.fly.dev
 #   token: ${PROBE_CLOUD_TOKEN}
+
+# Cloud device farm provider (optional — bring your own account)
+# Supported: browserstack | saucelabs | lambdatest | aws | firebase
+#
+# cloud:
+#   provider: saucelabs
+#   app: build/app/outputs/flutter-apk/app-debug.apk
+#   devices:
+#     - "Google Pixel 7-13.0"
+#   credentials:
+#     username: ${SAUCE_USERNAME}          # or BROWSERSTACK_USERNAME, etc.
+#     access_key: ${SAUCE_ACCESS_KEY}      # or BROWSERSTACK_ACCESS_KEY, etc.
+#     region: us-west-1                    # SauceLabs only (us-west-1 | eu-central-1)
+#
+# AWS Device Farm:
+#   credentials:
+#     access_key_id: ${AWS_ACCESS_KEY_ID}
+#     secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+#     project_arn: arn:aws:devicefarm:us-west-2:...
+#     region: us-west-2
+#
+# Firebase Test Lab:
+#   credentials:
+#     service_account: /path/to/service-account.json
+#     project_id: my-firebase-project
 
 reports_folder: reports
 recipes_folder: tests/recipes

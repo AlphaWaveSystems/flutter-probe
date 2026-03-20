@@ -47,8 +47,14 @@ Thumbs.db
 
 # Environment
 .env
-.env.local
-.env.*.local
+.env.*
+*.env
+
+# Credentials / secrets
+*.pem
+*.key
+*service-account*.json
+credentials.json
 
 # MCP config (contains credentials)
 .mcp.json
