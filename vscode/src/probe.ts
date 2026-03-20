@@ -149,13 +149,45 @@ export function buildTestArgs(
     adbPath?: string;
     flutterPath?: string;
     config?: string;
+    cloudProvider?: string;
+    cloudDevice?: string;
+    cloudApp?: string;
+    cloudKey?: string;
+    cloudSecret?: string;
+    relayUrl?: string;
+    relayToken?: string;
   }
 ): string[] {
   const args = ['test', filePath];
   const o = options ?? {};
 
-  const device = o.device ?? getSetting<string>('defaultDevice');
-  if (device) { args.push('--device', device); }
+  // Cloud provider flags
+  const cloudProvider = o.cloudProvider ?? getSetting<string>('cloudProvider');
+  if (cloudProvider) { args.push('--cloud-provider', cloudProvider); }
+
+  const cloudDevice = o.cloudDevice ?? getSetting<string>('cloudDevice');
+  if (cloudDevice) { args.push('--cloud-device', cloudDevice); }
+
+  const cloudApp = o.cloudApp ?? getSetting<string>('cloudApp');
+  if (cloudApp) { args.push('--cloud-app', cloudApp); }
+
+  const cloudKey = o.cloudKey ?? getSetting<string>('cloudKey');
+  if (cloudKey) { args.push('--cloud-key', cloudKey); }
+
+  const cloudSecret = o.cloudSecret ?? getSetting<string>('cloudSecret');
+  if (cloudSecret) { args.push('--cloud-secret', cloudSecret); }
+
+  const relayUrl = o.relayUrl ?? getSetting<string>('relayUrl');
+  if (relayUrl) { args.push('--relay-url', relayUrl); }
+
+  const relayToken = o.relayToken ?? getSetting<string>('relayToken');
+  if (relayToken) { args.push('--relay-token', relayToken); }
+
+  // Local device flags (only when not using cloud provider)
+  if (!cloudProvider) {
+    const device = o.device ?? getSetting<string>('defaultDevice');
+    if (device) { args.push('--device', device); }
+  }
 
   const timeout = o.timeout ?? getSetting<string>('defaultTimeout');
   if (timeout) { args.push('--timeout', timeout); }

@@ -39,6 +39,13 @@ export class RunProfilePanel {
           video: msg.video,
           autoConfirm: msg.autoConfirm,
           verbose: msg.verbose,
+          cloudProvider: msg.cloudProvider || undefined,
+          cloudDevice: msg.cloudDevice || undefined,
+          cloudApp: msg.cloudApp || undefined,
+          cloudKey: msg.cloudKey || undefined,
+          cloudSecret: msg.cloudSecret || undefined,
+          relayUrl: msg.relayUrl || undefined,
+          relayToken: msg.relayToken || undefined,
         });
         runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
         this.panel?.dispose();
@@ -60,6 +67,11 @@ export class RunProfilePanel {
     button { padding: 8px 24px; margin-top: 16px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; cursor: pointer; }
     button:hover { background: var(--vscode-button-hoverBackground); }
     .row { display: flex; align-items: center; }
+    .section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--vscode-panel-border); }
+    .section h3 { margin: 0 0 12px; }
+    .cloud-fields { display: none; }
+    .cloud-fields.visible { display: block; }
+    .hint { font-size: 11px; opacity: 0.7; margin-top: -4px; margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -67,9 +79,6 @@ export class RunProfilePanel {
 
   <label>File</label>
   <input id="file" value="${filePath}" />
-
-  <label>Device Serial</label>
-  <input id="device" placeholder="emulator-5554 (leave empty for default)" />
 
   <label>Timeout</label>
   <input id="timeout" value="30s" />
@@ -85,10 +94,63 @@ export class RunProfilePanel {
   <div class="row"><input type="checkbox" id="autoConfirm" /><label for="autoConfirm">Auto-confirm (-y)</label></div>
   <div class="row"><input type="checkbox" id="verbose" checked /><label for="verbose">Verbose (-v)</label></div>
 
+  <div class="section">
+    <h3>Target</h3>
+    <label>Cloud Provider</label>
+    <select id="cloudProvider" onchange="toggleCloud()">
+      <option value="">Local Device</option>
+      <option value="browserstack">BrowserStack</option>
+      <option value="saucelabs">Sauce Labs</option>
+      <option value="lambdatest">LambdaTest</option>
+      <option value="aws">AWS Device Farm</option>
+      <option value="firebase">Firebase Test Lab</option>
+    </select>
+
+    <div id="localFields">
+      <label>Device Serial</label>
+      <input id="device" placeholder="emulator-5554 (leave empty for default)" />
+    </div>
+
+    <div id="cloudFields" class="cloud-fields">
+      <label>Cloud Device</label>
+      <input id="cloudDevice" placeholder="Google Pixel 7-13.0" />
+      <p class="hint">Format: "Device Name-OS Version" (e.g., "iPhone 14-16.0")</p>
+
+      <label>App Binary</label>
+      <input id="cloudApp" placeholder="/path/to/app.apk or /path/to/app.ipa" />
+
+      <label>Username / Access Key ID</label>
+      <input id="cloudKey" placeholder="From your provider account" />
+
+      <label>Access Key / Secret</label>
+      <input id="cloudSecret" type="password" placeholder="From your provider account" />
+
+      <label>Relay URL</label>
+      <input id="relayUrl" placeholder="wss://relay.flutterprobe.com (required for cloud E2E)" />
+
+      <label>Relay Token</label>
+      <input id="relayToken" placeholder="Relay authentication token" />
+    </div>
+  </div>
+
   <button onclick="run()">Run</button>
 
   <script>
     const vscode = acquireVsCodeApi();
+
+    function toggleCloud() {
+      const provider = document.getElementById('cloudProvider').value;
+      const cloudFields = document.getElementById('cloudFields');
+      const localFields = document.getElementById('localFields');
+      if (provider) {
+        cloudFields.classList.add('visible');
+        localFields.style.display = 'none';
+      } else {
+        cloudFields.classList.remove('visible');
+        localFields.style.display = 'block';
+      }
+    }
+
     function run() {
       vscode.postMessage({
         command: 'run',
@@ -99,6 +161,13 @@ export class RunProfilePanel {
         video: document.getElementById('video').checked,
         autoConfirm: document.getElementById('autoConfirm').checked,
         verbose: document.getElementById('verbose').checked,
+        cloudProvider: document.getElementById('cloudProvider').value,
+        cloudDevice: document.getElementById('cloudDevice').value,
+        cloudApp: document.getElementById('cloudApp').value,
+        cloudKey: document.getElementById('cloudKey').value,
+        cloudSecret: document.getElementById('cloudSecret').value,
+        relayUrl: document.getElementById('relayUrl').value,
+        relayToken: document.getElementById('relayToken').value,
       });
     }
   </script>

@@ -157,12 +157,14 @@ func (p *sauceLabs) StartSession(ctx context.Context, appID string, device strin
 	platformName := DetectPlatform(deviceName)
 
 	sauceOpts := map[string]interface{}{
-		"appiumVersion": "2.0",
+		"appiumVersion": "latest",
 		"name":          "probe-test",
 		"build":         fmt.Sprintf("probe-%s", time.Now().Format("2006-01-02")),
 	}
 
-	alwaysMatch := map[string]interface{}{
+	// Sauce Labs RDC uses firstMatch array with all capabilities inside
+	// (not alwaysMatch). SauceLabs RDC supports regex in deviceName.
+	caps := map[string]interface{}{
 		"appium:app":                  appID,
 		"appium:deviceName":           deviceName,
 		"platformName":                platformName,
@@ -170,19 +172,18 @@ func (p *sauceLabs) StartSession(ctx context.Context, appID string, device strin
 		"sauce:options":               sauceOpts,
 	}
 	if osVersion != "" {
-		alwaysMatch["appium:platformVersion"] = osVersion
+		caps["appium:platformVersion"] = osVersion
 	}
 
-	if strings.EqualFold(platformName, "Android") {
-		alwaysMatch["appium:automationName"] = "UiAutomator2"
+	if strings.EqualFold(platformName, "android") {
+		caps["appium:automationName"] = "UiAutomator2"
 	} else {
-		alwaysMatch["appium:automationName"] = "XCUITest"
+		caps["appium:automationName"] = "XCUITest"
 	}
 
 	payload := map[string]interface{}{
 		"capabilities": map[string]interface{}{
-			"firstMatch":  []map[string]interface{}{{}},
-			"alwaysMatch": alwaysMatch,
+			"firstMatch": []map[string]interface{}{caps},
 		},
 	}
 

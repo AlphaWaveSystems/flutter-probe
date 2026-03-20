@@ -85,6 +85,20 @@ export interface ProbeConfig {
     adb?: string;
     flutter?: string;
   };
+  cloud?: {
+    provider?: string;
+    device?: string;
+    app?: string;
+    credentials?: {
+      username?: string;
+      access_key?: string;
+      access_key_id?: string;
+      secret_access_key?: string;
+      project_id?: string;
+      service_account?: string;
+      region?: string;
+    };
+  };
   reports_folder?: string;
 }
 

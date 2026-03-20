@@ -1,13 +1,13 @@
 {
   "name": "flutterprobe",
   "displayName": "FlutterProbe",
-  "description": "ProbeScript language support, test runner, Session Manager, and Studio integration for FlutterProbe",
+  "description": "High-performance E2E testing for Flutter apps — ProbeScript language support, local & cloud device testing (BrowserStack, Sauce Labs, AWS Device Farm, Firebase Test Lab, LambdaTest), visual regression, test recording, and Studio integration",
   "version": "0.1.0",
   "publisher": "flutterprobe",
   "icon": "resources/probe-icon.png",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Testing", "Languages", "Snippets"],
-  "keywords": ["flutter", "testing", "e2e", "probe", "probescript", "mobile"],
+  "keywords": ["flutter", "testing", "e2e", "probe", "probescript", "mobile", "browserstack", "saucelabs", "device-farm", "firebase", "visual-regression", "cloud-testing"],
   "repository": {
     "type": "git",
     "url": "https://github.com/flutterprobe/flutterprobe"
@@ -371,6 +371,50 @@
           "type": "string",
           "default": "probe-convert",
           "description": "Path to the probe-convert binary"
+        },
+        "flutterprobe.cloudProvider": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "browserstack", "saucelabs", "lambdatest", "aws", "firebase"],
+          "enumDescriptions": [
+            "None (local testing)",
+            "BrowserStack App Automate",
+            "Sauce Labs Real Device Cloud",
+            "LambdaTest Real Devices",
+            "AWS Device Farm",
+            "Firebase Test Lab"
+          ],
+          "description": "Cloud device farm provider for remote testing"
+        },
+        "flutterprobe.cloudDevice": {
+          "type": "string",
+          "default": "",
+          "description": "Cloud device string (e.g., \"Google Pixel 7-13.0\", \"iPhone 14-16.0\")"
+        },
+        "flutterprobe.cloudApp": {
+          "type": "string",
+          "default": "",
+          "description": "Path to app binary (.apk or .ipa) for cloud testing"
+        },
+        "flutterprobe.cloudKey": {
+          "type": "string",
+          "default": "",
+          "description": "Cloud provider username or access key ID"
+        },
+        "flutterprobe.cloudSecret": {
+          "type": "string",
+          "default": "",
+          "description": "Cloud provider access key or secret (stored in settings — consider using env vars for CI)"
+        },
+        "flutterprobe.relayUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Relay server URL for cloud E2E testing (e.g., wss://relay.flutterprobe.com)"
+        },
+        "flutterprobe.relayToken": {
+          "type": "string",
+          "default": "",
+          "description": "Relay authentication token"
         }
       }
     },

@@ -120,6 +120,24 @@ function setConfigValue(config: ProbeConfig, section: string, key: string, value
       if (key === 'adb') { config.tools.adb = value; }
       if (key === 'flutter') { config.tools.flutter = value; }
       break;
+    case 'cloud':
+      if (!config.cloud) { config.cloud = {}; }
+      if (key === 'provider') { config.cloud.provider = value; }
+      if (key === 'device') { config.cloud.device = value; }
+      if (key === 'app') { config.cloud.app = value; }
+      break;
+    case 'credentials':
+      // credentials is a nested section under cloud
+      if (!config.cloud) { config.cloud = {}; }
+      if (!config.cloud.credentials) { config.cloud.credentials = {}; }
+      if (key === 'username') { config.cloud.credentials.username = value; }
+      if (key === 'access_key') { config.cloud.credentials.access_key = value; }
+      if (key === 'access_key_id') { config.cloud.credentials.access_key_id = value; }
+      if (key === 'secret_access_key') { config.cloud.credentials.secret_access_key = value; }
+      if (key === 'project_id') { config.cloud.credentials.project_id = value; }
+      if (key === 'service_account') { config.cloud.credentials.service_account = value; }
+      if (key === 'region') { config.cloud.credentials.region = value; }
+      break;
   }
   if (!section && key === 'reports_folder') {
     config.reports_folder = value;
