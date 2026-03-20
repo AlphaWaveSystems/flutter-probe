@@ -241,8 +241,19 @@ func (p *sauceLabs) ForwardPort(ctx context.Context, session Session, devicePort
 }
 
 // GetSessionArtifacts retrieves video URL from a Sauce Labs RDC job.
+// The Appium WebDriver session ID differs from the RDC job ID. We try
+// multiple strategies: direct lookup, dash-stripped ID, and job list scan.
 func (p *sauceLabs) GetSessionArtifacts(ctx context.Context, sessionID string) (*SessionArtifacts, error) {
-	url := fmt.Sprintf("%s/v1/rdc/jobs/%s", p.slBaseURL(), sessionID)
+	jobID, err := p.findRDCJobID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return p.fetchJobArtifacts(ctx, jobID)
+}
+
+// fetchJobArtifacts retrieves video URL for a known RDC job ID.
+func (p *sauceLabs) fetchJobArtifacts(ctx context.Context, jobID string) (*SessionArtifacts, error) {
+	url := fmt.Sprintf("%s/v1/rdc/jobs/%s", p.slBaseURL(), jobID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("saucelabs: creating job request: %w", err)
@@ -267,6 +278,77 @@ func (p *sauceLabs) GetSessionArtifacts(ctx context.Context, sessionID string) (
 		return nil, fmt.Errorf("saucelabs: invalid job response: %w", err)
 	}
 	return &SessionArtifacts{VideoURL: result.VideoURL}, nil
+}
+
+// findRDCJobID resolves the RDC job ID from an Appium session ID.
+// Strategy: (1) try the session ID directly, (2) try without dashes (RDC
+// job IDs are dashless UUIDs), (3) list recent jobs and match by
+// appium_session_id field.
+func (p *sauceLabs) findRDCJobID(ctx context.Context, appiumSessionID string) (string, error) {
+	// Strategy 1: direct lookup (works if IDs happen to match).
+	if p.rdcJobExists(ctx, appiumSessionID) {
+		return appiumSessionID, nil
+	}
+
+	// Strategy 2: RDC job IDs are often dashless UUIDs.
+	dashless := strings.ReplaceAll(appiumSessionID, "-", "")
+	if dashless != appiumSessionID && p.rdcJobExists(ctx, dashless) {
+		return dashless, nil
+	}
+
+	// Strategy 3: list recent jobs and match by appium_session_id.
+	url := fmt.Sprintf("%s/v1/rdc/jobs?limit=20", p.slBaseURL())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("saucelabs: creating jobs list request: %w", err)
+	}
+	req.SetBasicAuth(p.username, p.accessKey)
+
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("saucelabs: list jobs failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("saucelabs: list jobs failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var jobs struct {
+		Entities []struct {
+			ID              string `json:"id"`
+			AppiumSessionID string `json:"appium_session_id"`
+		} `json:"entities"`
+	}
+	if err := json.Unmarshal(body, &jobs); err != nil {
+		return "", fmt.Errorf("saucelabs: invalid jobs list response: %w", err)
+	}
+
+	for _, job := range jobs.Entities {
+		if job.AppiumSessionID == appiumSessionID {
+			return job.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("saucelabs: no RDC job found for Appium session %s (tried direct, dashless, and job list)", appiumSessionID)
+}
+
+// rdcJobExists checks if a job ID is valid by issuing a HEAD-like GET request.
+func (p *sauceLabs) rdcJobExists(ctx context.Context, jobID string) bool {
+	url := fmt.Sprintf("%s/v1/rdc/jobs/%s", p.slBaseURL(), jobID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	req.SetBasicAuth(p.username, p.accessKey)
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode == http.StatusOK
 }
 
 // StopSession terminates a Sauce Labs Appium session via WebDriver DELETE.
