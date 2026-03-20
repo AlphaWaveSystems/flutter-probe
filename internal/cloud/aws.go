@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -66,11 +67,14 @@ func (p *awsDeviceFarm) endpoint() string {
 //  3. Poll GetUpload until status is SUCCEEDED
 func (p *awsDeviceFarm) UploadApp(ctx context.Context, appPath string) (string, error) {
 	// Step 1: CreateUpload to get a presigned URL
-	// TODO: Sign this request with AWS Signature V4
+	uploadType := "ANDROID_APP"
+	if strings.HasSuffix(strings.ToLower(appPath), ".ipa") {
+		uploadType = "IOS_APP"
+	}
 	createPayload := map[string]string{
 		"projectArn":  p.projectARN,
-		"name":        appPath,
-		"type":        "ANDROID_APP", // or IOS_APP based on extension
+		"name":        filepath.Base(appPath),
+		"type":        uploadType,
 		"contentType": "application/octet-stream",
 	}
 
@@ -189,9 +193,38 @@ func (p *awsDeviceFarm) pollUploadReady(ctx context.Context, arn string, timeout
 	return fmt.Errorf("aws: upload did not complete within %s", timeout)
 }
 
+// awsDevice is a raw device from the AWS ListDevices response.
+type awsDevice struct {
+	ARN      string `json:"arn"`
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
+	OS       string `json:"os"`
+}
+
 // ListDevices returns available devices from AWS Device Farm.
 func (p *awsDeviceFarm) ListDevices(ctx context.Context) ([]Device, error) {
-	// TODO: Implement full AWS Signature V4 signing for this request
+	raw, err := p.listDevicesRaw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	devices := make([]Device, 0, len(raw))
+	for _, d := range raw {
+		osName := "android"
+		if d.Platform == "IOS" {
+			osName = "ios"
+		}
+		devices = append(devices, Device{
+			Name:     d.Name,
+			OS:       osName,
+			Version:  d.OS,
+			Provider: "aws",
+		})
+	}
+	return devices, nil
+}
+
+// listDevicesRaw returns raw AWS device structs including ARNs.
+func (p *awsDeviceFarm) listDevicesRaw(ctx context.Context) ([]awsDevice, error) {
 	payload := map[string]interface{}{
 		"filters": []map[string]interface{}{
 			{"attribute": "AVAILABILITY", "operator": "EQUALS", "values": []string{"AVAILABLE"}},
@@ -219,39 +252,49 @@ func (p *awsDeviceFarm) ListDevices(ctx context.Context) ([]Device, error) {
 	}
 
 	var listResp struct {
-		Devices []struct {
-			Name     string `json:"name"`
-			Platform string `json:"platform"`
-			OS       string `json:"os"`
-		} `json:"devices"`
+		Devices []awsDevice `json:"devices"`
 	}
 	if err := json.Unmarshal(body, &listResp); err != nil {
 		return nil, fmt.Errorf("aws: invalid list devices response: %w", err)
 	}
+	return listResp.Devices, nil
+}
 
-	devices := make([]Device, 0, len(listResp.Devices))
-	for _, d := range listResp.Devices {
-		osName := "android"
-		if d.Platform == "IOS" {
-			osName = "ios"
-		}
-		devices = append(devices, Device{
-			Name:     d.Name,
-			OS:       osName,
-			Version:  d.OS,
-			Provider: "aws",
-		})
+// resolveDeviceARN looks up the device ARN by matching the device name and
+// optional OS version against the available devices list.
+func (p *awsDeviceFarm) resolveDeviceARN(ctx context.Context, device string) (string, error) {
+	// If it already looks like an ARN, use it directly.
+	if strings.HasPrefix(device, "arn:") {
+		return device, nil
 	}
-	return devices, nil
+
+	deviceName, osVersion := ParseDeviceString(device)
+	raw, err := p.listDevicesRaw(ctx)
+	if err != nil {
+		return "", fmt.Errorf("aws: resolving device ARN: %w", err)
+	}
+
+	for _, d := range raw {
+		if strings.EqualFold(d.Name, deviceName) {
+			if osVersion == "" || d.OS == osVersion {
+				return d.ARN, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("aws: device %q not found (checked %d available devices)", device, len(raw))
 }
 
 // StartSession creates a remote access session on AWS Device Farm.
 func (p *awsDeviceFarm) StartSession(ctx context.Context, appID string, device string) (Session, error) {
-	// TODO: Use CreateRemoteAccessSession for interactive sessions
-	// or ScheduleRun for automated test runs.
+	// Resolve device name (e.g. "Google Pixel 7-14.0") to an ARN.
+	deviceARN, err := p.resolveDeviceARN(ctx, device)
+	if err != nil {
+		return Session{}, err
+	}
+
 	payload := map[string]interface{}{
 		"projectArn":         p.projectARN,
-		"deviceArn":          device,
+		"deviceArn":          deviceARN,
 		"remoteDebugEnabled": true,
 	}
 

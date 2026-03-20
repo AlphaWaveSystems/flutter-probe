@@ -101,7 +101,6 @@ func (p *lambdaTest) UploadApp(ctx context.Context, appPath string) (string, err
 
 // ListDevices returns available real devices on LambdaTest.
 func (p *lambdaTest) ListDevices(ctx context.Context) ([]Device, error) {
-	// TODO: Add query parameters for filtering by OS, availability, etc.
 	url := ltBaseURL + "/v1/device"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -132,7 +131,7 @@ func (p *lambdaTest) ListDevices(ctx context.Context) ([]Device, error) {
 	devices := make([]Device, 0, len(raw))
 	for _, d := range raw {
 		osName := "android"
-		if d.Platform == "ios" || d.Platform == "iOS" {
+		if strings.EqualFold(d.Platform, "ios") {
 			osName = "ios"
 		}
 		devices = append(devices, Device{

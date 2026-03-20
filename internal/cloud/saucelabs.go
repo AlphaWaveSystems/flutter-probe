@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func (p *sauceLabs) slBaseURL() string {
 	return fmt.Sprintf("https://api.%s.saucelabs.com", p.region)
 }
 
-// UploadApp uploads the app binary to Sauce Labs app storage.
+// UploadApp uploads the app binary to Sauce Labs app storage using multipart form.
 func (p *sauceLabs) UploadApp(ctx context.Context, appPath string) (string, error) {
 	file, err := os.Open(appPath)
 	if err != nil {
@@ -61,15 +62,24 @@ func (p *sauceLabs) UploadApp(ctx context.Context, appPath string) (string, erro
 	}
 	defer file.Close()
 
-	// TODO: Use multipart form upload for larger files
 	// Sauce Labs app storage API: https://docs.saucelabs.com/dev/api/storage/
+	var formBuf bytes.Buffer
+	writer := multipart.NewWriter(&formBuf)
+	part, err := writer.CreateFormFile("payload", filepath.Base(appPath))
+	if err != nil {
+		return "", fmt.Errorf("saucelabs: creating form: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return "", fmt.Errorf("saucelabs: copying file: %w", err)
+	}
+	writer.Close()
+
 	url := fmt.Sprintf("%s/v1/storage/upload", p.slBaseURL())
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, file)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &formBuf)
 	if err != nil {
 		return "", fmt.Errorf("saucelabs: creating upload request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(appPath)))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.SetBasicAuth(p.username, p.accessKey)
 
 	resp, err := p.http.Do(req)
@@ -97,7 +107,6 @@ func (p *sauceLabs) UploadApp(ctx context.Context, appPath string) (string, erro
 
 // ListDevices returns available real devices on Sauce Labs.
 func (p *sauceLabs) ListDevices(ctx context.Context) ([]Device, error) {
-	// TODO: Add query parameters for filtering by OS, availability, etc.
 	url := fmt.Sprintf("%s/v1/rdc/devices", p.slBaseURL())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -128,7 +137,7 @@ func (p *sauceLabs) ListDevices(ctx context.Context) ([]Device, error) {
 	devices := make([]Device, 0, len(raw))
 	for _, d := range raw {
 		osName := "android"
-		if d.OS == "iOS" || d.OS == "ios" {
+		if strings.EqualFold(d.OS, "ios") {
 			osName = "ios"
 		}
 		devices = append(devices, Device{

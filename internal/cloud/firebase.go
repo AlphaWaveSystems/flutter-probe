@@ -137,12 +137,16 @@ func (p *firebaseTestLab) UploadApp(ctx context.Context, appPath string) (string
 	objectName := fmt.Sprintf("probe-uploads/%s", filepath.Base(appPath))
 	url := fmt.Sprintf("%s/b/%s/o?uploadType=media&name=%s", firebaseStorageAPI, p.bucket, objectName)
 
-	// TODO: Determine content type from extension (.apk -> application/vnd.android.package-archive)
+	contentType := "application/octet-stream"
+	if strings.HasSuffix(appPath, ".apk") {
+		contentType = "application/vnd.android.package-archive"
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, file)
 	if err != nil {
 		return "", fmt.Errorf("firebase: creating upload request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", "Bearer "+p.accessToken)
 
 	resp, err := p.http.Do(req)
@@ -161,11 +165,30 @@ func (p *firebaseTestLab) UploadApp(ctx context.Context, appPath string) (string
 	return gcsURI, nil
 }
 
-// ListDevices returns available device models from Firebase Test Lab.
+// ListDevices returns available device models from Firebase Test Lab (Android + iOS).
 func (p *firebaseTestLab) ListDevices(ctx context.Context) ([]Device, error) {
-	// TODO: Also query IOS catalog: GET .../testEnvironmentCatalog/IOS
-	url := fmt.Sprintf("%s/testEnvironmentCatalog/ANDROID", firebaseTestingAPI)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	var devices []Device
+
+	// Fetch Android catalog
+	androidDevices, err := p.listDeviceCatalog(ctx, "ANDROID")
+	if err != nil {
+		return nil, err
+	}
+	devices = append(devices, androidDevices...)
+
+	// Fetch iOS catalog (non-fatal — Firebase may not have iOS enabled)
+	iosDevices, err := p.listDeviceCatalog(ctx, "IOS")
+	if err == nil {
+		devices = append(devices, iosDevices...)
+	}
+
+	return devices, nil
+}
+
+// listDeviceCatalog fetches the device catalog for the given environment type ("ANDROID" or "IOS").
+func (p *firebaseTestLab) listDeviceCatalog(ctx context.Context, envType string) ([]Device, error) {
+	reqURL := fmt.Sprintf("%s/testEnvironmentCatalog/%s", firebaseTestingAPI, envType)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("firebase: creating list request: %w", err)
 	}
@@ -173,42 +196,63 @@ func (p *firebaseTestLab) ListDevices(ctx context.Context) ([]Device, error) {
 
 	resp, err := p.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("firebase: list devices failed: %w", err)
+		return nil, fmt.Errorf("firebase: list %s devices failed: %w", envType, err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("firebase: list devices failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("firebase: list %s devices failed (HTTP %d): %s", envType, resp.StatusCode, string(body))
 	}
 
-	var catalog struct {
-		AndroidDeviceCatalog struct {
-			Models []struct {
-				ID                string   `json:"id"`
-				Name              string   `json:"name"`
-				SupportedVersions []string `json:"supportedVersionIds"`
-			} `json:"models"`
-		} `json:"androidDeviceCatalog"`
-	}
-	if err := json.Unmarshal(body, &catalog); err != nil {
+	// Both Android and iOS catalogs share a similar model structure, but under
+	// different top-level keys. Parse generically.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("firebase: invalid catalog response: %w", err)
 	}
 
+	// Find the catalog key (androidDeviceCatalog or iosDeviceCatalog)
+	var catalogData json.RawMessage
+	for key, val := range raw {
+		if strings.HasSuffix(key, "DeviceCatalog") {
+			catalogData = val
+			break
+		}
+	}
+	if catalogData == nil {
+		return nil, nil
+	}
+
+	var catalog struct {
+		Models []struct {
+			ID                string   `json:"id"`
+			Name              string   `json:"name"`
+			SupportedVersions []string `json:"supportedVersionIds"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(catalogData, &catalog); err != nil {
+		return nil, fmt.Errorf("firebase: invalid %s catalog: %w", envType, err)
+	}
+
+	osName := "android"
+	if envType == "IOS" {
+		osName = "ios"
+	}
+
 	var devices []Device
-	for _, m := range catalog.AndroidDeviceCatalog.Models {
+	for _, m := range catalog.Models {
 		version := ""
 		if len(m.SupportedVersions) > 0 {
 			version = m.SupportedVersions[len(m.SupportedVersions)-1]
 		}
 		devices = append(devices, Device{
 			Name:     m.Name,
-			OS:       "android",
+			OS:       osName,
 			Version:  version,
 			Provider: "firebase",
 		})
 	}
-
 	return devices, nil
 }
 

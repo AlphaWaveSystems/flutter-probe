@@ -147,7 +147,7 @@ func (p *browserStack) ListDevices(ctx context.Context) ([]Device, error) {
 	devices := make([]Device, 0, len(raw))
 	for _, d := range raw {
 		osName := "android"
-		if d.OS == "ios" || d.OS == "iOS" {
+		if strings.EqualFold(d.OS, "ios") {
 			osName = "ios"
 		}
 		devices = append(devices, Device{
