@@ -41,7 +41,7 @@ export async function listDevices(): Promise<Device[]> {
   //   SERIAL                 STATE        NAME
   //   ------                 -----        ----
   //   emulator-5554          device       sdk gphone64 x86 64
-  //   909F49AD-...           booted       iPhone 16 Pro
+  //   A1B2C3D4-...           booted       iPhone 16 Pro
   const devices: Device[] = [];
   const lines = result.stdout.split('\n');
 

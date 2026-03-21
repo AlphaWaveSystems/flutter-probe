@@ -10,7 +10,7 @@
   "keywords": ["flutter", "testing", "e2e", "probe", "probescript", "mobile", "browserstack", "saucelabs", "device-farm", "firebase", "visual-regression", "cloud-testing"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/flutterprobe/flutterprobe"
+    "url": "https://github.com/AlphaWaveSystems/flutter-probe"
   },
   "activationEvents": [
     "onLanguage:probescript",

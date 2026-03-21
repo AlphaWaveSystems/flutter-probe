@@ -15,7 +15,7 @@ description: Build FlutterProbe from source and integrate the Dart agent into yo
 Clone the repository and build the `probe` binary:
 
 ```bash
-git clone https://github.com/nicktesh/FlutterProbe.git
+git clone https://github.com/AlphaWaveSystems/flutter-probe.git
 cd FlutterProbe
 make build          # outputs bin/probe
 ```

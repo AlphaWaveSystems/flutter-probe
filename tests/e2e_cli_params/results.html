@@ -35,6 +35,16 @@
     margin-bottom: 2rem;
     font-size: 0.95rem;
   }
+  .device-info {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    font-size: 0.85rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .device-info strong { color: var(--text); }
   .summary-bar {
     display: flex;
     gap: 1.5rem;
@@ -141,174 +151,61 @@
     font-size: 0.8rem;
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 </style>
 </head>
 <body>
 
 <h1>FlutterProbe CLI E2E Parameter Test Results</h1>
-<p class="subtitle">Comprehensive test of every CLI parameter and meaningful combinations &mdash; Local machine (Android emulator + iOS simulator) &mdash; 2025-03-21</p>
+<p class="subtitle">Comprehensive test of every CLI parameter and meaningful combinations &mdash; 2026-03-21 11:29:58</p>
+
+<div class="device-info">
+  <strong>Devices:</strong> Android: emulator-5554 / iOS Simulator: 909F49AD... (no token)
+</div>
 
 <div class="summary-bar">
-  <div class="summary-card"><div class="label">Total</div><div class="value total">84</div></div>
-  <div class="summary-card"><div class="label">Passed</div><div class="value pass">83</div></div>
-  <div class="summary-card"><div class="label">Failed</div><div class="value fail">1</div></div>
+  <div class="summary-card"><div class="label">Total</div><div class="value total">20</div></div>
+  <div class="summary-card"><div class="label">Passed</div><div class="value pass">7</div></div>
+  <div class="summary-card"><div class="label">Failed</div><div class="value fail">13</div></div>
   <div class="summary-card"><div class="label">Skipped</div><div class="value skip">0</div></div>
 </div>
 
-<!-- PHASE 1 -->
 <div class="phase">
   <div class="phase-header">
     <h2>Phase 1: Offline Tests (no device needed)</h2>
-    <span class="phase-badge all-pass">20/20 PASS</span>
+    <span class="phase-badge has-fail">7/20 PASS, 13 fail</span>
   </div>
   <table>
     <tr><th width="50">#</th><th>Test</th><th width="250">Parameters Tested</th><th width="70">Status</th><th width="40">Exit</th><th>Notes</th></tr>
-    <tr><td class="id">001</td><td>probe version</td><td class="param">version</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">002</td><td>probe lint probe_tests/login/</td><td class="param">lint &lt;dir&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">003</td><td>probe lint single file</td><td class="param">lint &lt;file&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">004</td><td>probe lint all test dirs</td><td class="param">lint &lt;dir&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">005</td><td>probe lint nonexistent path</td><td class="param">lint &lt;bad-path&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error</td></tr>
-    <tr><td class="id">006</td><td>probe test --dry-run single file</td><td class="param">--dry-run</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">007</td><td>probe test --dry-run entire suite</td><td class="param">--dry-run &lt;dir&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">008</td><td>probe test --dry-run --tag smoke</td><td class="param">--dry-run -t smoke</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">3 smoke tests found</td></tr>
-    <tr><td class="id">009</td><td>probe test --dry-run --tag labels</td><td class="param">--dry-run -t labels</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">4 labels tests found</td></tr>
-    <tr><td class="id">010</td><td>probe test --dry-run --tag regression</td><td class="param">--dry-run -t regression</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">9 regression tests found</td></tr>
-    <tr><td class="id">011</td><td>probe test --dry-run --tag nonexistent</td><td class="param">--dry-run -t &lt;unknown&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">0 tests matched</td></tr>
-    <tr><td class="id">012</td><td>probe test --dry-run --format json</td><td class="param">--dry-run --format json</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">013</td><td>probe test --dry-run --format junit</td><td class="param">--dry-run --format junit</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">014</td><td>probe device list</td><td class="param">device list</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">emulator-5554 listed</td></tr>
-    <tr><td class="id">015</td><td>probe report --input nonexistent</td><td class="param">report --input &lt;bad&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error</td></tr>
-    <tr><td class="id">016</td><td>probe test --dry-run from /tmp</td><td class="param">--dry-run (no tests)</td><td><span class="status pass">PASS</span></td><td>any</td><td class="note">No tests found</td></tr>
-    <tr><td class="id">017</td><td>probe --help</td><td class="param">--help</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Shows commands</td></tr>
-    <tr><td class="id">018</td><td>probe test --help</td><td class="param">test --help</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Shows --tag, --video, --format</td></tr>
-    <tr><td class="id">019</td><td>probe test --dry-run ignores --device</td><td class="param">--dry-run --device &lt;x&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">020</td><td>probe test --dry-run --format json -o file</td><td class="param">--dry-run --format json -o</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">JSON file created</td></tr>
-  </table>
-</div>
+    <tr><td class="id">001</td><td>probe version</td><td class="param">version</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">1s</td></tr>
+    <tr><td class="id">002</td><td>probe lint probe_tests/login/</td><td class="param">lint &lt;dir&gt;</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">003</td><td>probe lint single file</td><td class="param">lint &lt;file&gt;</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">004</td><td>probe lint all test dirs</td><td class="param">lint &lt;dir&gt;</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">005</td><td>probe lint nonexistent path (expect error)</td><td class="param">lint &lt;bad-path&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error, exit=1, 0s</td></tr>
+    <tr><td class="id">006</td><td>probe test --dry-run single smoke file</td><td class="param">--dry-run</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">007</td><td>probe test --dry-run entire test suite</td><td class="param">--dry-run &lt;dir&gt;</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">008</td><td>probe test --dry-run --tag smoke</td><td class="param">--dry-run -t smoke</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">009</td><td>probe test --dry-run --tag labels</td><td class="param">--dry-run -t labels</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">010</td><td>probe test --dry-run --tag regression</td><td class="param">--dry-run -t regression</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">011</td><td>probe test --dry-run --tag nonexistent (0 tests)</td><td class="param">--dry-run -t &lt;unknown&gt;</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">012</td><td>probe test --dry-run --format json</td><td class="param">--dry-run --format json</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">013</td><td>probe test --dry-run --format junit</td><td class="param">--dry-run --format junit</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">014</td><td>probe device list</td><td class="param">device list</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">0s</td></tr>
+    <tr><td class="id">015</td><td>probe report --input nonexistent (expect error)</td><td class="param">report --input &lt;bad&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error, exit=1, 0s</td></tr>
+    <tr><td class="id">016</td><td>probe test --dry-run from /tmp (no tests found)</td><td class="param">--dry-run (no tests)</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">exit=1 (any accepted), 0s</td></tr>
+    <tr><td class="id">017</td><td>probe --help</td><td class="param">--help</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">0s</td></tr>
+    <tr><td class="id">018</td><td>probe test --help</td><td class="param">test --help</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">0s</td></tr>
+    <tr><td class="id">019</td><td>probe test --dry-run ignores --device</td><td class="param">--dry-run --device &lt;x&gt;</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
+    <tr><td class="id">020</td><td>probe test --dry-run --format json -o file</td><td class="param">--dry-run --format json -o</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">expected exit=0, got=1, 0s</td></tr>
 
-<!-- PHASE 2 -->
-<div class="phase">
-  <div class="phase-header">
-    <h2>Phase 2: Android Emulator &mdash; Individual Parameters</h2>
-    <span class="phase-badge all-pass">31/31 PASS</span>
-  </div>
-  <table>
-    <tr><th width="50">#</th><th>Test</th><th width="250">Parameters Tested</th><th width="70">Status</th><th width="40">Exit</th><th>Notes</th></tr>
-    <tr><td class="id">021</td><td>Android baseline: smoke test</td><td class="param">-y -v (auto-detect)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">022</td><td>Android --device explicit</td><td class="param">--device emulator-5554</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">023</td><td>--device invalid;serial</td><td class="param">--device &lt;injection&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Shell injection rejected</td></tr>
-    <tr><td class="id">024</td><td>--device nonexistent-1234</td><td class="param">--device &lt;bad&gt; --token-timeout 3s</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Timeout as expected</td></tr>
-    <tr><td class="id">025</td><td>--port wrong port</td><td class="param">--port 48687 --dial-timeout 3s</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Connection refused</td></tr>
-    <tr><td class="id">026</td><td>--dial-timeout fast fail</td><td class="param">--dial-timeout 2s --port 48687</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Fast timeout</td></tr>
-    <tr><td class="id">027</td><td>--token-timeout 5s</td><td class="param">--token-timeout 5s</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Token found fast</td></tr>
-    <tr><td class="id">028</td><td>--tag smoke (3 tests)</td><td class="param">-t smoke</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">3 tests executed</td></tr>
-    <tr><td class="id">029</td><td>--format json -o results.json</td><td class="param">--format json -o &lt;file&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">JSON file created</td></tr>
-    <tr><td class="id">030</td><td>probe report from JSON</td><td class="param">report --input -o</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">HTML report generated</td></tr>
-    <tr><td class="id">031</td><td>--format junit -o results.xml</td><td class="param">--format junit -o &lt;file&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">JUnit XML structure valid</td></tr>
-    <tr><td class="id">032</td><td>--format terminal (explicit)</td><td class="param">--format terminal</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">033</td><td>Verbose output (-v)</td><td class="param">-v</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">034</td><td>Non-verbose output</td><td class="param">(no -v)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">035</td><td>--video enable</td><td class="param">--video</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Video recorded</td></tr>
-    <tr><td class="id">036</td><td>--no-video disable</td><td class="param">--no-video</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">No video recorded</td></tr>
-    <tr><td class="id">037</td><td>--video custom resolution</td><td class="param">--video --video-resolution 480x854</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">038</td><td>--video custom framerate</td><td class="param">--video --video-framerate 4</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">039</td><td>--timeout 45s (generous)</td><td class="param">--timeout 45s</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">040</td><td>--timeout 100ms (too short)</td><td class="param">--timeout 100ms</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected timeout failure</td></tr>
-    <tr><td class="id">041</td><td>-y auto-confirm lifecycle</td><td class="param">-y (clear app data)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Clear + relaunch</td></tr>
-    <tr><td class="id">042</td><td>--config probe.yaml explicit</td><td class="param">--config probe.yaml</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">043</td><td>--config nonexistent.yaml</td><td class="param">--config &lt;bad&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error</td></tr>
-    <tr><td class="id">044</td><td>--adb explicit path</td><td class="param">--adb $(which adb)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">045</td><td>--adb invalid path</td><td class="param">--adb /nonexistent/adb</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error</td></tr>
-    <tr><td class="id">046</td><td>Intentional failure + screenshot</td><td class="param">(failure path)</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Screenshot captured on failure</td></tr>
-    <tr><td class="id">047</td><td>--reconnect-delay 3s</td><td class="param">--reconnect-delay 3s</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Lifecycle + reconnect</td></tr>
-    <tr><td class="id">048</td><td>--format json to stdout</td><td class="param">--format json (stdout)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">049</td><td>Visual regression thresholds</td><td class="param">--visual-threshold 1.0 --visual-pixel-delta 16</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">050</td><td>Multiple file arguments</td><td class="param">&lt;file1&gt; &lt;file2&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">2 test files</td></tr>
-    <tr><td class="id">051</td><td>Directory + tag intersection</td><td class="param">&lt;dir&gt; -t smoke</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-  </table>
-</div>
-
-<!-- PHASE 3 -->
-<div class="phase">
-  <div class="phase-header">
-    <h2>Phase 3: iOS Simulator</h2>
-    <span class="phase-badge all-pass">7/7 PASS</span>
-  </div>
-  <table>
-    <tr><th width="50">#</th><th>Test</th><th width="250">Parameters Tested</th><th width="70">Status</th><th width="40">Exit</th><th>Notes</th></tr>
-    <tr><td class="id">052</td><td>iOS baseline: smoke test</td><td class="param">--config ios --device &lt;UDID&gt;</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Clear data + login + main menu</td></tr>
-    <tr><td class="id">053</td><td>iOS --format json -o</td><td class="param">--format json -o (iOS)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">JSON file created</td></tr>
-    <tr><td class="id">054</td><td>iOS --tag smoke (3 tests)</td><td class="param">-t smoke (iOS)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">3 tests executed</td></tr>
-    <tr><td class="id">055</td><td>iOS intentional failure</td><td class="param">(failure path, iOS)</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected failure + screenshot</td></tr>
-    <tr><td class="id">056</td><td>iOS --video recording (h264)</td><td class="param">--video (iOS, h264)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Video recorded (h264 codec)</td></tr>
-    <tr><td class="id">057</td><td>iOS lifecycle: clear app data</td><td class="param">-y clear data (iOS)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Data + keychain cleared, reconnect OK</td></tr>
-    <tr><td class="id">058</td><td>iOS --token-timeout 5s</td><td class="param">--token-timeout 5s (iOS)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Token found fast from container</td></tr>
-  </table>
-</div>
-
-<!-- PHASE 4 -->
-<div class="phase">
-  <div class="phase-header">
-    <h2>Phase 4: Meaningful Parameter Combinations</h2>
-    <span class="phase-badge all-pass">9/9 PASS</span>
-  </div>
-  <table>
-    <tr><th width="50">#</th><th>Test</th><th width="250">Parameters Tested</th><th width="70">Status</th><th width="40">Exit</th><th>Notes</th></tr>
-    <tr><td class="id">059</td><td>CI sim: tag + json + video</td><td class="param">-t smoke --format json -o --video --video-resolution --video-framerate</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Full CI simulation</td></tr>
-    <tr><td class="id">060</td><td>Report from CI JSON &rarr; HTML</td><td class="param">report --input -o</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">HTML report from CI JSON</td></tr>
-    <tr><td class="id">061</td><td>All custom timeouts combined</td><td class="param">--timeout --dial-timeout --token-timeout --reconnect-delay</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">062</td><td>Multi-path + tag smoke</td><td class="param">&lt;dir1&gt; &lt;dir2&gt; -t smoke</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">063</td><td>Fail test &rarr; JSON (failure metadata)</td><td class="param">--format json -o (failure)</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Failure metadata in JSON</td></tr>
-    <tr><td class="id">064</td><td>JUnit + verbose + --config</td><td class="param">--config --format junit -o -v</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Combo JUnit XML valid</td></tr>
-    <tr><td class="id">065</td><td>Video(480x854,4fps) + JSON</td><td class="param">--video --video-resolution --video-framerate --format json -o</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">066</td><td>Visual regression custom thresholds</td><td class="param">--visual-threshold 2.0 --visual-pixel-delta 32</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">067</td><td>iOS CI sim: tag + json + video</td><td class="param">-t smoke --format json --video (iOS)</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Full iOS CI simulation</td></tr>
-  </table>
-</div>
-
-<!-- PHASE 5 -->
-<div class="phase">
-  <div class="phase-header">
-    <h2>Phase 5: Edge Cases and Error Conditions</h2>
-    <span class="phase-badge has-fail">8/9 PASS, 1 known limitation</span>
-  </div>
-  <table>
-    <tr><th width="50">#</th><th>Test</th><th width="250">Parameters Tested</th><th width="70">Status</th><th width="40">Exit</th><th>Notes</th></tr>
-    <tr><td class="id">068</td><td>--video + --no-video (conflicting)</td><td class="param">--video --no-video</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Last flag wins</td></tr>
-    <tr><td class="id">069</td><td>-o deep/nested/dir</td><td class="param">-o &lt;nested&gt;</td><td><span class="status pass">PASS</span></td><td>any</td><td class="note">Auto-creates directories</td></tr>
-    <tr><td class="id">070</td><td>--format json stdout | jq validate</td><td class="param">--format json (pipe)</td><td><span class="status fail">FAIL</span></td><td>1</td><td class="note">Mixed stderr/stdout in pipe; device contention from parallel phase</td></tr>
-    <tr><td class="id">071</td><td>Recipes-only dir (0 tests)</td><td class="param">&lt;recipes-dir&gt;</td><td><span class="status pass">PASS</span></td><td>any</td><td class="note">0 tests found</td></tr>
-    <tr><td class="id">072</td><td>--timeout 0 (use default)</td><td class="param">--timeout 0</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Falls back to config default</td></tr>
-    <tr><td class="id">073</td><td>Nonexistent .probe file</td><td class="param">&lt;bad-path.probe&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Expected error</td></tr>
-    <tr><td class="id">074</td><td>--format xml (unknown format)</td><td class="param">--format xml</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">CLI is permissive (falls back to terminal)</td></tr>
-    <tr><td class="id">075</td><td>--port 0 (OS-assigned)</td><td class="param">--port 0</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">OS assigns random port; CLI is permissive</td></tr>
-    <tr><td class="id">076</td><td>--dial-timeout 120s (generous)</td><td class="param">--dial-timeout 120s</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Connects fast despite large timeout</td></tr>
-  </table>
-</div>
-
-<!-- PHASE 6 -->
-<div class="phase">
-  <div class="phase-header">
-    <h2>Phase 6: Subcommand Coverage</h2>
-    <span class="phase-badge all-pass">8/8 PASS</span>
-  </div>
-  <table>
-    <tr><th width="50">#</th><th>Test</th><th width="250">Parameters Tested</th><th width="70">Status</th><th width="40">Exit</th><th>Notes</th></tr>
-    <tr><td class="id">077</td><td>probe device list</td><td class="param">device list</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Device table output</td></tr>
-    <tr><td class="id">078</td><td>probe device start android</td><td class="param">device start --platform android</td><td><span class="status pass">PASS</span></td><td>any</td><td class="note">Already running</td></tr>
-    <tr><td class="id">079</td><td>probe device start ios</td><td class="param">device start --platform ios --udid</td><td><span class="status pass">PASS</span></td><td>any</td><td class="note">Already booted</td></tr>
-    <tr><td class="id">080</td><td>probe device start --platform windows</td><td class="param">device start --platform &lt;invalid&gt;</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Invalid platform rejected</td></tr>
-    <tr><td class="id">081</td><td>probe report --format html (explicit)</td><td class="param">report --format html --input -o</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Explicit HTML format</td></tr>
-    <tr><td class="id">082</td><td>probe version</td><td class="param">version</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note">Version string found</td></tr>
-    <tr><td class="id">083</td><td>probe lint -v verbose</td><td class="param">lint -v</td><td><span class="status pass">PASS</span></td><td>0</td><td class="note"></td></tr>
-    <tr><td class="id">084</td><td>probe init scaffold</td><td class="param">init</td><td><span class="status pass">PASS</span></td><td>1</td><td class="note">Scaffold created</td></tr>
   </table>
 </div>
 
 <div class="footer">
-  <span>FlutterProbe v0.1.0 &mdash; CLI E2E Parameter Coverage</span>
-  <span>Generated 2025-03-21 &mdash; macOS 24.6.0 / Android emulator-5554 / iOS Simulator iPhone 16 Pro (909F49AD)</span>
+  <span>probe version 0.1.0 &mdash; CLI E2E Parameter Coverage</span>
+  <span>Generated 2026-03-21 11:29:58 &mdash; Darwin 24.6.0 / Android: emulator-5554 / iOS Simulator: 909F49AD... (no token)</span>
 </div>
 
 </body>

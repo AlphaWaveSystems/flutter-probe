@@ -7,7 +7,7 @@ export default defineConfig({
     starlight({
       title: 'FlutterProbe',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/nicktesh/FlutterProbe' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/AlphaWaveSystems/flutter-probe' },
       ],
       sidebar: [
         {

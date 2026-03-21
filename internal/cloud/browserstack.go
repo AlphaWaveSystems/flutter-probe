@@ -292,10 +292,10 @@ func (p *browserStack) StopSession(ctx context.Context, session Session) error {
 	}
 	delReq.SetBasicAuth(p.username, p.accessKey)
 
-	delResp, err := p.http.Do(delReq)
-	if err != nil {
-		// Don't fail — continue to mark completed in App Automate API
-		fmt.Printf("    browserstack: warning: WebDriver DELETE failed: %v\n", err)
+	delResp, delErr := p.http.Do(delReq)
+	if delErr != nil {
+		// Non-fatal — continue to mark completed in App Automate API.
+		// The session may already have been closed by BrowserStack.
 	} else {
 		delResp.Body.Close()
 	}
@@ -333,7 +333,7 @@ func (p *browserStack) GetSessionArtifacts(ctx context.Context, sessionID string
 	var videoURL string
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		url, err := p.SessionVideoURL(ctx, sessionID)
+		url, err := p.sessionVideoURL(ctx, sessionID)
 		if err != nil {
 			return nil, err
 		}
@@ -350,9 +350,9 @@ func (p *browserStack) GetSessionArtifacts(ctx context.Context, sessionID string
 	return &SessionArtifacts{VideoURL: videoURL}, nil
 }
 
-// SessionVideoURL fetches the video recording URL for a completed BrowserStack session.
+// sessionVideoURL fetches the video recording URL for a completed BrowserStack session.
 // BrowserStack automatically records video for all sessions.
-func (p *browserStack) SessionVideoURL(ctx context.Context, sessionID string) (string, error) {
+func (p *browserStack) sessionVideoURL(ctx context.Context, sessionID string) (string, error) {
 	url := fmt.Sprintf("%s/sessions/%s.json", bsBaseURL, sessionID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

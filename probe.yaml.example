@@ -24,8 +24,10 @@ device:
   restart_delay: 500ms
 
 # Cloud dashboard (optional — upload results to FlutterProbe Cloud)
+# Set cloud.url to your cloud API endpoint. There is no default URL;
+# you must configure it here or pass --cloud-url on the CLI.
 # cloud:
-#   url: https://flutterprobe-cloud.fly.dev
+#   url: https://your-cloud-instance.example.com
 #   token: ${PROBE_CLOUD_TOKEN}
 
 # Cloud device farm provider (optional — bring your own account)

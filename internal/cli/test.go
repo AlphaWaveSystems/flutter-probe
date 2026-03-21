@@ -89,7 +89,7 @@ func init() {
 	// Cloud integration
 	f.Bool("cloud", false, "upload test results to FlutterProbe Cloud after run")
 	f.String("cloud-token", "", "API key for FlutterProbe Cloud authentication")
-	f.String("cloud-url", "", `cloud API base URL (default: "https://flutterprobe-cloud.fly.dev")`)
+	f.String("cloud-url", "", "cloud API base URL (must be set via this flag or cloud.url in probe.yaml)")
 
 	// Cloud device farm providers
 	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, firebase, saucelabs, lambdatest)")
@@ -312,6 +312,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 					// Create a new relay session
 					if cloudToken == "" {
 						return fmt.Errorf("--cloud-token is required for relay mode (API key for relay session creation)")
+					}
+					if cloudURL == "" {
+						return fmt.Errorf("--cloud-url or cloud.url in probe.yaml is required for relay mode")
 					}
 					cc := cloud.NewClient(cloudURL, cloudToken)
 
@@ -811,6 +814,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Upload when token is available or x402 payment is requested.
 	if cloudToken != "" || payMethod == "x402" {
+		if cloudURL == "" {
+			statusFail(statusW, "Cloud upload skipped: no cloud URL configured. Set cloud.url in probe.yaml or pass --cloud-url.")
+		}
 
 		// Prepare JSON data for upload. Always use generateCloudJSON which
 		// produces the format the Cloud API expects (flat fields, status strings).
@@ -821,7 +827,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			statusFail(statusW, "Cloud upload: could not serialize results: %s", err)
 		}
 
-		if len(jsonData) > 0 && payMethod == "x402" {
+		if len(jsonData) > 0 && cloudURL != "" && payMethod == "x402" {
 			// x402 pay-per-use upload — no subscription token needed.
 			configDir, cfgErr := cloud.ConfigDir()
 			if cfgErr != nil {
@@ -842,7 +848,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 					}
 				}
 			}
-		} else if len(jsonData) > 0 && cloudToken != "" {
+		} else if len(jsonData) > 0 && cloudURL != "" && cloudToken != "" {
 			// Subscription-based upload.
 			fmt.Fprintln(statusW, msgUploadingToCloud)
 			cc := cloud.NewClient(cloudURL, cloudToken)

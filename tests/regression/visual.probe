@@ -1,4 +1,4 @@
-# Visual regression test suite for Digacel
+# Visual regression test suite
 # Each test captures a screenshot and compares against a baseline.
 use "tests/recipes/common.probe"
 

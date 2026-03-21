@@ -47,7 +47,7 @@ When the gap between two actions exceeds 2 seconds, a `wait N seconds` step is a
 As you interact with the app, the CLI prints each detected event:
 
 ```
-  ● Recording on 909F49AD... — interact with your app
+  ● Recording on A1B2C3D4... — interact with your app
   ✓ tap "Sign In"
   ✓ type "user@test.com" into "Email"
   ✓ swipe up

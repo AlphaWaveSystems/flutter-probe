@@ -21,7 +21,8 @@ set -euo pipefail
 # ---- Resolve paths ----
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PROBE="$REPO_ROOT/bin/probe"
-APP_DIR="/Users/patrickbertsch/dev/flutter-projects/Digacel-Flutter"
+APP_DIR="${APP_DIR:-}"
+# APP_DIR is validated later, only when device-connected tests are needed
 IOS_CONFIG="probe_ios.yaml"
 RESULTS_DIR="/tmp/probe_e2e_results"
 REPORT_FILE="$REPO_ROOT/tests/e2e_cli_params/results.html"
@@ -681,8 +682,6 @@ fi
 
 detect_devices
 
-cd "$APP_DIR"
-
 # ============================================================================
 # PHASE 1: Offline / Fast Tests (no device needed)
 # ============================================================================
@@ -780,6 +779,19 @@ if [ "$PHASE" = "1" ] || [ "$PHASE" = "all" ]; then
     "--dry-run --format json -o" 1 \
     "$PROBE" test "$SMOKE_TEST" --dry-run --format json -o "$RESULTS_DIR/dryrun_output.json"
   check_file "$RESULTS_DIR/dryrun_output.json" "JSON output file"
+fi
+
+# Validate APP_DIR before device-connected phases
+if [ "$PHASE" != "1" ] && [ -z "$APP_DIR" ]; then
+  echo ""
+  echo "WARNING: APP_DIR is not set. Skipping device-connected tests."
+  echo "  To run device tests: export APP_DIR=/path/to/your/flutter/project"
+  echo ""
+  generate_report
+  exit 0
+fi
+if [ -n "$APP_DIR" ]; then
+  cd "$APP_DIR"
 fi
 
 # ============================================================================
@@ -979,7 +991,9 @@ if [ "$PHASE" = "3" ] || [ "$PHASE" = "all" ]; then
       echo ""
       printf "  ${DIM}Terminating iOS app to free port 48686 for Android tests...${RESET}\n"
       set +e
-      xcrun simctl terminate "$IOS_DEVICE" com.digacel.app.dev 2>/dev/null
+      # Terminate the app under test; reads bundle ID from probe.yaml if available
+      APP_BUNDLE_ID="${APP_BUNDLE_ID:-com.example.myapp}"
+      xcrun simctl terminate "$IOS_DEVICE" "$APP_BUNDLE_ID" 2>/dev/null
       set -e
       sleep 1
     fi

@@ -22,7 +22,7 @@ defaults:
 
 devices:
   - name: iPhone 16 Pro
-    serial: 909F49AD-EE6A-4263-AFED-BAC0FC5C8B40
+    serial: A1B2C3D4-E5F6-7890-ABCD-EF1234567890
   - name: Pixel 7
     serial: emulator-5554
 

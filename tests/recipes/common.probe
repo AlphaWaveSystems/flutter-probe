@@ -1,16 +1,16 @@
-# Common recipes shared across all Digacel test suites
+# Common recipes shared across test suites
 
 recipe "open and wait for the app"
   open the app
   wait 3 seconds
-  see "Lector"
+  see "Home"
 
 recipe "navigate to keypad"
-  tap "Dígita"
+  tap "Keypad"
   wait 2 seconds
-  see "Digita el número de 10 dígitos"
+  see "Enter the 10-digit number"
 
 recipe "go back to main menu"
   go back
   wait 1 seconds
-  see "Lector"
+  see "Home"

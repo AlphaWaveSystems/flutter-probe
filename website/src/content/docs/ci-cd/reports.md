@@ -39,7 +39,7 @@ JSON reports include a `metadata` section for CI/CD traceability:
 {
   "metadata": {
     "device_name": "iPhone 16 Pro",
-    "device_id": "909F49AD-EE6A-4263-AFED-BAC0FC5C8B40",
+    "device_id": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
     "platform": "ios",
     "os_version": "iOS 18.6",
     "app_id": "com.example.myapp",

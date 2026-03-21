@@ -11,16 +11,22 @@
 #
 # Prerequisites:
 #   - bin/probe built (make build)
-#   - Android emulator running with Digacel app (emulator-5554)
-#   - iOS simulator booted with Digacel app (for phase 3)
+#   - Android emulator running with the Flutter app under test (emulator-5554)
+#   - iOS simulator booted with the Flutter app under test (for phase 3)
 # ============================================================================
 
 set -euo pipefail
 
 PROBE="$(cd "$(dirname "$0")/../.." && pwd)/bin/probe"
-APP_DIR="/Users/patrickbertsch/dev/flutter-projects/Digacel-Flutter"
+APP_DIR="${APP_DIR:-}"
+if [ -z "$APP_DIR" ]; then
+  echo "ERROR: APP_DIR is not set. Export APP_DIR to point to your Flutter project directory."
+  echo "  export APP_DIR=/path/to/your/flutter/project"
+  exit 1
+fi
 ANDROID_DEVICE="emulator-5554"
-IOS_DEVICE="909F49AD-EE6A-4263-AFED-BAC0FC5C8B40"
+# Auto-detect the first booted iOS simulator, or override via IOS_DEVICE env var
+IOS_DEVICE="${IOS_DEVICE:-$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c "import sys,json; devs=[d['udid'] for r in json.load(sys.stdin)['devices'].values() for d in r if d['state']=='Booted']; print(devs[0] if devs else '')" 2>/dev/null || echo "")}"
 IOS_CONFIG="probe_ios.yaml"
 RESULTS_DIR="/tmp/probe_e2e_results"
 SMOKE_TEST="probe_tests/smoke/00_smoke_happy_path.probe"

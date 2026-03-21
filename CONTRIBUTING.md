@@ -4,7 +4,7 @@ Thank you for your interest in contributing to FlutterProbe! This guide explains
 
 ## Reporting Bugs
 
-Open an issue on [GitHub Issues](https://github.com/nicklaus-dev/FlutterProbe/issues) with:
+Open an issue on [GitHub Issues](https://github.com/AlphaWaveSystems/flutter-probe/issues) with:
 
 - A clear, descriptive title
 - Steps to reproduce the problem

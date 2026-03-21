@@ -334,66 +334,12 @@ func (p *firebaseTestLab) StartSession(ctx context.Context, appID string, device
 	// Don't poll the matrix — Firebase Robo tests may finish quickly, killing the app.
 	// Instead, return immediately and let the CLI poll the relay for agent connection.
 	// The agent connects to the relay as soon as the app launches on the device.
-	fmt.Printf("    firebase: matrix %s submitted (state: %s)\n", matrixResp.TestMatrixID, matrixResp.State)
 
 	return Session{
 		ID:         matrixResp.TestMatrixID,
 		DeviceName: device,
 		Provider:   "firebase",
 	}, nil
-}
-
-// pollMatrixReady polls the test matrix until it reaches RUNNING or a terminal state.
-func (p *firebaseTestLab) pollMatrixReady(ctx context.Context, matrixID string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		reqURL := fmt.Sprintf("%s/projects/%s/testMatrices/%s", firebaseTestingAPI, p.projectID, matrixID)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-		if err != nil {
-			return fmt.Errorf("firebase: creating poll request: %w", err)
-		}
-		req.Header.Set("Authorization", "Bearer "+p.accessToken)
-
-		resp, err := p.http.Do(req)
-		if err != nil {
-			return fmt.Errorf("firebase: poll matrix failed: %w", err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("firebase: poll matrix failed (HTTP %d): %s", resp.StatusCode, string(body))
-		}
-
-		var result struct {
-			State string `json:"state"`
-		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("firebase: invalid poll response: %w", err)
-		}
-
-		switch result.State {
-		case "RUNNING":
-			fmt.Printf("    firebase: matrix state → %s\n", result.State)
-			return nil
-		case "FINISHED":
-			// Robo test completed too quickly — the app may have been killed.
-			// Accept FINISHED but warn — the ProbeAgent may not have had time.
-			fmt.Printf("    firebase: matrix state → %s (Robo test completed)\n", result.State)
-			return nil
-		case "ERROR", "INVALID", "CANCELLED":
-			return fmt.Errorf("firebase: test matrix reached terminal state %q", result.State)
-		default:
-			fmt.Printf("    firebase: matrix state: %s (waiting...)\n", result.State)
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(10 * time.Second):
-		}
-	}
-	return fmt.Errorf("firebase: test matrix did not start within %s", timeout)
 }
 
 // ForwardPort is a no-op for Firebase Test Lab — relay mode is required.

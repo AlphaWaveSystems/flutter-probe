@@ -10,7 +10,7 @@ Instead, use one of the following methods:
 
 1. **GitHub Private Vulnerability Reporting** (preferred): Navigate to the [Security Advisories](https://github.com/AlphaWaveSystems/flutter-probe/security/advisories) page and click "Report a vulnerability." This allows for private, coordinated disclosure directly within GitHub.
 
-2. **Email**: Send details to [security@alphawavesystems.com](mailto:security@alphawavesystems.com). If possible, encrypt your message using our PGP key (available on request).
+2. **Email**: Send details to [support@alphawavesystems.com](mailto:support@alphawavesystems.com). If possible, encrypt your message using our PGP key (available on request).
 
 When reporting, please include:
 

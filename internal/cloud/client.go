@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
-// DefaultBaseURL is the default FlutterProbe Cloud API endpoint.
-const DefaultBaseURL = "https://flutterprobe-cloud.fly.dev"
+// DefaultBaseURL is kept as a named constant for backward compatibility but
+// is intentionally empty — users must configure cloud.url in probe.yaml or
+// pass --cloud-url on the CLI.
+const DefaultBaseURL = ""
 
 // Client is an HTTP client for the FlutterProbe Cloud API.
 type Client struct {
@@ -30,10 +32,8 @@ type uploadResponse struct {
 }
 
 // NewClient creates a new Cloud API client with a 30-second timeout.
+// baseURL must be set by the caller (from config or CLI flag).
 func NewClient(baseURL, token string) *Client {
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-	}
 	return &Client{
 		BaseURL: baseURL,
 		Token:   token,

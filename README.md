@@ -19,7 +19,7 @@ test "user can log in"
 
 ```bash
 # 1. Build the CLI
-git clone https://github.com/flutterprobe/probe.git
+git clone https://github.com/AlphaWaveSystems/flutter-probe.git
 cd FlutterProbe
 make build        # → bin/probe
 

@@ -34,7 +34,7 @@ type Config struct {
 
 // CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.
 type CloudConfig struct {
-	URL         string            `yaml:"url"`         // cloud API base URL (default: https://flutterprobe-cloud.fly.dev)
+	URL         string            `yaml:"url"`         // cloud API base URL (must be configured by the user)
 	Token       string            `yaml:"token"`       // API key for cloud authentication (supports ${ENV_VAR} syntax)
 	Provider    string            `yaml:"provider"`    // cloud device farm provider: browserstack, aws, firebase, saucelabs, lambdatest
 	Credentials map[string]string `yaml:"credentials"` // provider-specific credentials (e.g. username, access_key)
