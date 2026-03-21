@@ -409,7 +409,7 @@
         "flutterprobe.relayUrl": {
           "type": "string",
           "default": "",
-          "description": "Relay server URL for cloud E2E testing (e.g., wss://relay.flutterprobe.com)"
+          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers)"
         },
         "flutterprobe.relayToken": {
           "type": "string",

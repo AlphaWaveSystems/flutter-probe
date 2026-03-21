@@ -126,7 +126,7 @@ export class RunProfilePanel {
       <input id="cloudSecret" type="password" placeholder="From your provider account" />
 
       <label>Relay URL</label>
-      <input id="relayUrl" placeholder="wss://relay.flutterprobe.com (required for cloud E2E)" />
+      <input id="relayUrl" placeholder="wss://your-relay-server (required for Firebase / relay-mode cloud E2E)" />
 
       <label>Relay Token</label>
       <input id="relayToken" placeholder="Relay authentication token" />

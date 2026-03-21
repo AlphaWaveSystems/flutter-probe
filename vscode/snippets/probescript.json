@@ -72,19 +72,18 @@
   "Data-driven test": {
     "prefix": "testdd",
     "body": [
-      "test \"${1:test name}\"",
+      "test \"${1:test name with <${2:param}>}\"",
       "  open the app",
-      "  type <${2:email}> into the \"Email\" field",
+      "  type <${2:param}> into the \"${3:Field}\" field",
       "  tap \"Continue\"",
-      "  see <${3:expected}>",
-      "",
-      "with examples:",
-      "  $2         $3",
-      "  \"${4:value1}\"  \"${5:result1}\"",
-      "  \"${6:value2}\"  \"${7:result2}\"",
+      "  see <${4:expected}>",
+      "  Examples:",
+      "    | ${2:param}       | ${4:expected}  |",
+      "    | \"${5:value1}\"  | \"${6:result1}\" |",
+      "    | \"${7:value2}\"  | \"${8:result2}\" |",
       "$0"
     ],
-    "description": "Data-driven test with examples"
+    "description": "Data-driven test with Examples table"
   },
   "Run Dart": {
     "prefix": "dart",

@@ -4,7 +4,7 @@ import { getWorkspaceRoot } from '../config';
 
 const PROBESCRIPT_KEYWORDS = [
   'test', 'recipe', 'use', 'before each test', 'after each test', 'on failure',
-  'if', 'else', 'repeat', 'with examples', 'run dart',
+  'if', 'else', 'repeat', 'Examples:', 'run dart:',
   'open the app', 'tap on', 'tap', 'type', 'see', "don't see",
   'wait until', 'wait for', 'wait',
   'swipe up', 'swipe down', 'swipe left', 'swipe right',
