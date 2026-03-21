@@ -17,15 +17,19 @@ var AndroidPermissions = map[string][]string{
 }
 
 // IOSPrivacyServices maps human-readable names to simctl privacy service names.
+// NOTE: "notifications" is intentionally excluded — xcrun simctl privacy does
+// not support granting notification permission (it requires the native
+// UNUserNotificationCenter prompt). Apps should check
+// bool.fromEnvironment('PROBE_AGENT') and skip the notification request when
+// running under FlutterProbe.
 var IOSPrivacyServices = map[string]string{
-	"notifications": "notifications",
-	"camera":        "camera",
-	"location":      "location",
-	"microphone":    "microphone",
-	"photos":        "photos",
-	"contacts":      "contacts-limited",
-	"calendar":      "calendar",
-	"sms":           "sms",
+	"camera":    "camera",
+	"location":  "location",
+	"microphone": "microphone",
+	"photos":    "photos",
+	"contacts":  "contacts-limited",
+	"calendar":  "calendar",
+	"sms":       "sms",
 }
 
 // ResolveAndroidPermissions returns the Android permission strings for a human-readable name.

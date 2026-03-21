@@ -324,7 +324,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 	case device.PlatformAndroid:
 		token, err = dc.Manager.ReadToken(ctx, dc.Serial, tokenTimeout)
 	case device.PlatformIOS:
-		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout)
+		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reconnect: read token: %w", err)

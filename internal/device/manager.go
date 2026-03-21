@@ -216,9 +216,10 @@ func (m *Manager) RemoveForward(ctx context.Context, serial string, hostPort int
 	return m.adb.RemoveForward(ctx, serial, hostPort)
 }
 
-// ReadTokenIOS reads the ProbeAgent token from the iOS simulator's syslog.
-func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Duration) (string, error) {
-	return m.simctl.ReadToken(ctx, udid, timeout)
+// ReadTokenIOS reads the ProbeAgent token from the iOS simulator.
+// bundleID is optional — if provided, it checks the app container's token file first.
+func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Duration, bundleID ...string) (string, error) {
+	return m.simctl.ReadToken(ctx, udid, timeout, bundleID...)
 }
 
 // ReadToken scans the device logcat output for the ProbeAgent one-time token.

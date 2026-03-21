@@ -518,9 +518,21 @@ func runTests(cmd *cobra.Command, args []string) error {
 			}
 
 			if platform == device.PlatformIOS {
+				// iOS: grant privacy permissions and relaunch the app.
+				// simctl privacy grant terminates the running app, so we must
+				// grant first, then relaunch. This prevents native OS dialogs
+				// (camera, location, etc.) from blocking the Flutter UI.
+				if autoYes && cfg.Project.App != "" {
+					for _, svc := range []string{"camera", "microphone", "location", "photos", "contacts-limited", "calendar"} {
+						_ = dm.SimCtl().GrantPrivacy(ctx, deviceSerial, cfg.Project.App, svc)
+					}
+					// Relaunch the app — simctl privacy grant terminates it
+					_ = dm.SimCtl().Launch(ctx, deviceSerial, cfg.Project.App)
+					time.Sleep(3 * time.Second) // give agent time to start
+				}
 				// iOS: simulators share host loopback — no port forwarding needed
 				fmt.Println("  Waiting for ProbeAgent token (iOS)...")
-				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App)
 				if err != nil {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 				}
@@ -531,6 +543,17 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 			} else {
+				// Android: grant permissions BEFORE reading token when -y is used.
+				// This prevents OS permission dialogs from blocking the app on
+				// first launch (especially POST_NOTIFICATIONS on Android 13+).
+				if autoYes && cfg.Project.App != "" {
+					for _, perms := range device.AndroidPermissions {
+						for _, perm := range perms {
+							_ = dm.ADB().GrantPermission(ctx, deviceSerial, cfg.Project.App, perm)
+						}
+					}
+				}
+
 				// Android: forward port via ADB
 				if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
 					return fmt.Errorf("port forward: %w", err)

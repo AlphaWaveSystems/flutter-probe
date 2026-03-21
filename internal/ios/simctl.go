@@ -2,7 +2,6 @@
 package ios
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -146,25 +145,35 @@ func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte
 }
 
 // ReadToken reads the ProbeAgent token. It first tries the token file written
-// by the agent, then falls back to streaming the simulator's system log.
-// fileRetries controls how many times to attempt reading the token file before
-// falling back to the log stream (0 = default 5).
-func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Duration, fileRetries ...int) (string, error) {
+// by the agent (checking both the app container path and the legacy device-level
+// path), then falls back to polling the simulator's system log via `log show`.
+// bundleID is optional — if provided, the app container path is checked first
+// for faster token pickup.
+func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Duration, bundleID ...string) (string, error) {
 	tCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	retries := 5
-	if len(fileRetries) > 0 && fileRetries[0] > 0 {
-		retries = fileRetries[0]
+	// Build list of token file paths to check
+	var tokenPaths []string
+
+	// Primary: app container path (where the Dart agent actually writes)
+	if len(bundleID) > 0 && bundleID[0] != "" {
+		if containerPath := s.appContainerDataPath(tCtx, udid, bundleID[0]); containerPath != "" {
+			tokenPaths = append(tokenPaths, containerPath+"/tmp/probe/token")
+		}
 	}
 
-	// Try reading token from file first (fast path)
-	tokenPath := s.simDataPath(udid) + "/tmp/probe/token"
-	for i := 0; i < retries; i++ {
-		if data, err := os.ReadFile(tokenPath); err == nil {
-			token := strings.TrimSpace(string(data))
-			if len(token) >= 16 {
-				return token, nil
+	// Fallback: device-level tmp (legacy path)
+	tokenPaths = append(tokenPaths, s.simDataPath(udid)+"/tmp/probe/token")
+
+	// Try reading token from file (fast path) — up to 10 attempts, 1s apart
+	for i := 0; i < 10; i++ {
+		for _, tp := range tokenPaths {
+			if data, err := os.ReadFile(tp); err == nil {
+				token := strings.TrimSpace(string(data))
+				if len(token) >= 16 {
+					return token, nil
+				}
 			}
 		}
 		select {
@@ -174,30 +183,43 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 		}
 	}
 
-	// Fall back to log stream
-	cmd := exec.CommandContext(tCtx, "xcrun", "simctl", "spawn", udid, "log", "stream",
-		"--predicate", `eventMessage CONTAINS "PROBE_TOKEN="`)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-	if err := cmd.Start(); err != nil {
-		return "", err
-	}
-	defer cmd.Process.Kill() //nolint:errcheck
-
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
-			token := strings.TrimSpace(line[idx+len("PROBE_TOKEN="):])
-			// Skip the log stream filter header which also contains PROBE_TOKEN=
-			if len(token) >= 16 && !strings.HasPrefix(token, `"`) {
-				return token, nil
+	// Fall back to polling `log show` — `simctl spawn ... log stream` has
+	// buffering issues when called from Go (ongoing log entries don't arrive
+	// on stdout/stderr pipes). Poll `log show --last 30s` instead.
+	for {
+		select {
+		case <-tCtx.Done():
+			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
+		default:
+		}
+		out, err := exec.CommandContext(tCtx, "xcrun", "simctl", "spawn", udid,
+			"log", "show", "--last", "30s",
+			"--predicate", `eventMessage CONTAINS "PROBE_TOKEN="`).CombinedOutput()
+		if err == nil {
+			for _, line := range strings.Split(string(out), "\n") {
+				if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
+					token := strings.TrimSpace(line[idx+len("PROBE_TOKEN="):])
+					if len(token) >= 16 && !strings.HasPrefix(token, `"`) {
+						return token, nil
+					}
+				}
 			}
 		}
+		select {
+		case <-tCtx.Done():
+			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
+		case <-time.After(2 * time.Second):
+		}
 	}
-	return "", fmt.Errorf("ios: probe token not found within %s", timeout)
+}
+
+// appContainerDataPath returns the data container path for an app on the simulator.
+func (s *SimCtl) appContainerDataPath(ctx context.Context, udid, bundleID string) string {
+	out, err := s.run(ctx, "get_app_container", udid, bundleID, "data")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // GrantPrivacy grants a privacy service permission to an app on the simulator.
