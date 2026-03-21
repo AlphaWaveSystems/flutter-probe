@@ -38,7 +38,25 @@ The **ProbeAgent** is a Dart package you add to your Flutter app as a dev depend
 
 ## Installation
 
-### 1. Build the CLI
+### Option A — Download pre-built binary (recommended for CI/CD)
+
+Pre-built binaries for Linux, macOS (Intel + Apple Silicon), and Windows are attached to every [GitHub Release](https://github.com/AlphaWaveSystems/flutter-probe/releases).
+
+```bash
+# Linux (amd64)
+curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/latest/download/probe-linux-amd64
+chmod +x probe && sudo mv probe /usr/local/bin/
+
+# macOS Apple Silicon
+curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/latest/download/probe-darwin-arm64
+chmod +x probe && sudo mv probe /usr/local/bin/
+
+# macOS Intel
+curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/latest/download/probe-darwin-amd64
+chmod +x probe && sudo mv probe /usr/local/bin/
+```
+
+### Option B — Build from source
 
 ```bash
 git clone https://github.com/AlphaWaveSystems/flutter-probe.git
@@ -252,21 +270,48 @@ Tap, swipe, and type in your app — FlutterProbe writes the `.probe` file as yo
 
 ## CI/CD Integration
 
-```yaml
-# .github/workflows/test.yml
-- name: Run FlutterProbe tests
-  run: |
-    bin/probe test tests/ \
-      --device emulator-5554 \
-      --format junit \
-      -o results.xml \
-      --timeout 60s -v -y
+No need to clone this repo in your own CI pipelines. Download the pre-built binary directly from GitHub Releases:
 
-- name: Upload results
-  uses: actions/upload-artifact@v4
-  with:
-    name: test-results
-    path: results.xml
+```yaml
+# .github/workflows/e2e.yml
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FlutterProbe
+        run: |
+          curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/latest/download/probe-linux-amd64
+          chmod +x probe
+          sudo mv probe /usr/local/bin/
+
+      - name: Start Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          script: |
+            probe test tests/ \
+              --device emulator-5554 \
+              --format junit \
+              -o results.xml \
+              --timeout 60s -v -y
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: results.xml
+```
+
+Pin to a specific version for reproducible builds:
+
+```yaml
+- name: Install FlutterProbe v0.1.0
+  run: |
+    curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.1.0/probe-linux-amd64
+    chmod +x probe && sudo mv probe /usr/local/bin/
 ```
 
 Generate a portable HTML report from JSON output:
