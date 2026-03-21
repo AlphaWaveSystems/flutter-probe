@@ -158,6 +158,12 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 			fmt.Printf("    \033[32m✓\033[0m  Cleared data container: %s\n", dataPath)
 		}
 
+		// Reset the simulator keychain to clear stored credentials (passwords,
+		// tokens, etc.) that persist outside the app's data container.
+		if err := simctl.KeychainReset(ctx, dc.Serial); err != nil {
+			fmt.Printf("    \033[33m⚠\033[0m  keychain reset: %v\n", err)
+		}
+
 		// Auto-grant permissions before relaunch to prevent OS permission dialogs
 		if dc.GrantPermissionsOnClear {
 			if err := dc.GrantAllPermissions(ctx); err != nil {
@@ -349,10 +355,20 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 }
 
 // iosTokenPath returns the path to the agent's token file on the simulator.
+// It checks the app container first (where the agent actually writes), then
+// falls back to the device-level tmp path.
 func (dc *DeviceContext) iosTokenPath() string {
 	if dc.Platform != device.PlatformIOS {
 		return ""
 	}
+	// Primary: app container path (where Dart agent writes)
+	if dc.AppID != "" {
+		simctl := dc.Manager.SimCtl()
+		if cp := simctl.AppDataPath(context.Background(), dc.Serial, dc.AppID); cp != "" {
+			return cp + "/tmp/probe/token"
+		}
+	}
+	// Fallback: device-level tmp
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""

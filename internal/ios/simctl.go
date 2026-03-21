@@ -166,8 +166,20 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	// Fallback: device-level tmp (legacy path)
 	tokenPaths = append(tokenPaths, s.simDataPath(udid)+"/tmp/probe/token")
 
-	// Try reading token from file (fast path) — up to 10 attempts, 1s apart
-	for i := 0; i < 10; i++ {
+	// Poll token file until timeout. Re-resolve the app container path
+	// periodically in case the container changed (e.g. after clear app data).
+	fileAttempt := 0
+	for {
+		// Re-resolve container path every 5 attempts (container ID may change)
+		if fileAttempt > 0 && fileAttempt%5 == 0 && len(bundleID) > 0 && bundleID[0] != "" {
+			if cp := s.appContainerDataPath(tCtx, udid, bundleID[0]); cp != "" {
+				newPath := cp + "/tmp/probe/token"
+				if len(tokenPaths) == 0 || tokenPaths[0] != newPath {
+					tokenPaths = append([]string{newPath}, tokenPaths...)
+				}
+			}
+		}
+
 		for _, tp := range tokenPaths {
 			if data, err := os.ReadFile(tp); err == nil {
 				token := strings.TrimSpace(string(data))
@@ -176,39 +188,12 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 				}
 			}
 		}
+
+		fileAttempt++
 		select {
 		case <-tCtx.Done():
 			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
 		case <-time.After(1 * time.Second):
-		}
-	}
-
-	// Fall back to polling `log show` — `simctl spawn ... log stream` has
-	// buffering issues when called from Go (ongoing log entries don't arrive
-	// on stdout/stderr pipes). Poll `log show --last 30s` instead.
-	for {
-		select {
-		case <-tCtx.Done():
-			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
-		default:
-		}
-		out, err := exec.CommandContext(tCtx, "xcrun", "simctl", "spawn", udid,
-			"log", "show", "--last", "30s",
-			"--predicate", `eventMessage CONTAINS "PROBE_TOKEN="`).CombinedOutput()
-		if err == nil {
-			for _, line := range strings.Split(string(out), "\n") {
-				if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
-					token := strings.TrimSpace(line[idx+len("PROBE_TOKEN="):])
-					if len(token) >= 16 && !strings.HasPrefix(token, `"`) {
-						return token, nil
-					}
-				}
-			}
-		}
-		select {
-		case <-tCtx.Done():
-			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
-		case <-time.After(2 * time.Second):
 		}
 	}
 }
@@ -237,6 +222,14 @@ func (s *SimCtl) RevokePrivacy(ctx context.Context, udid, bundleID, service stri
 // ResetPrivacy resets all privacy permissions for an app on the simulator.
 func (s *SimCtl) ResetPrivacy(ctx context.Context, udid, bundleID string) error {
 	_, err := s.run(ctx, "privacy", udid, "reset", "all", bundleID)
+	return err
+}
+
+// KeychainReset resets the simulator's keychain, clearing all stored passwords,
+// tokens, and certificates. This is necessary because the Keychain persists
+// outside the app's data container and survives app data clearing.
+func (s *SimCtl) KeychainReset(ctx context.Context, udid string) error {
+	_, err := s.run(ctx, "keychain", udid, "reset")
 	return err
 }
 
