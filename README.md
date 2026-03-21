@@ -404,4 +404,4 @@ Full documentation: [alphawavesystems.github.io/flutter-probe](https://alphawave
 
 [Business Source License 1.1](LICENSE) — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release.
 
-Copyright © 2025 Alpha Wave Systems S.A. de C.V.
+Copyright © 2026 Alpha Wave Systems S.A. de C.V.
