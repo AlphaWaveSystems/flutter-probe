@@ -24,7 +24,7 @@ on:
         description: "Flutter version"
         required: false
         type: string
-        default: "3.24.0"
+        default: "3.41.4"
       test-path:
         description: "Path to test files"
         required: false

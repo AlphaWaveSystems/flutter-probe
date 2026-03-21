@@ -83,7 +83,7 @@ make build        # → bin/probe
 make install      # → $GOPATH/bin/probe (optional)
 ```
 
-**Requirements:** Go 1.26+, Dart 3.3+ / Flutter 3.19+, ADB (Android), Xcode (iOS)
+**Requirements:** Go 1.26+, Dart 3.3+ / Flutter 3.19+ (tested up to 3.41), ADB (Android), Xcode (iOS)
 
 ### 2. Add ProbeAgent to your Flutter app
 
