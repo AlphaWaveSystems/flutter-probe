@@ -5,7 +5,7 @@ description: Build FlutterProbe from source and integrate the Dart agent into yo
 
 ## Prerequisites
 
-- **Go 1.23+** — for building the probe CLI
+- **Go 1.26+** — for building the probe CLI
 - **Dart 3.3+ / Flutter 3.19+** — for the probe_agent package
 - **Android**: ADB + Android SDK (for Android emulator testing)
 - **iOS**: Xcode + `xcrun simctl` (for iOS simulator testing)

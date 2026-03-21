@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.23+
+- Go 1.26+
 - Dart 3.3+ / Flutter 3.19+
 - Android SDK with `adb` in PATH
 - Xcode with `xcrun simctl` (macOS only, for iOS testing)
