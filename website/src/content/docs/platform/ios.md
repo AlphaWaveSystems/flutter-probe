@@ -73,6 +73,22 @@ revoke all permissions
 
 This works on iOS 14+ simulators.
 
+:::caution[Notification permissions cannot be pre-granted]
+Apple does not support granting notification permissions via `simctl privacy`. If your app requests notification permission (e.g. via `UNUserNotificationCenter` or Firebase Messaging), the native dialog will block the Flutter UI and prevent tests from proceeding.
+
+**Solution:** Guard notification permission requests in your app's `main.dart`:
+
+```dart
+const probeEnabled = bool.fromEnvironment('PROBE_AGENT');
+if (!probeEnabled) {
+  await requestNotificationPermission();
+  await FirebaseMessaging.instance.requestPermission();
+}
+```
+
+Build with `--dart-define=PROBE_AGENT=true` to skip these requests during testing.
+:::
+
 ## Video Recording
 
 iOS simulator video is recorded via `xcrun simctl io <UDID> recordVideo`. Videos use the `h264` codec (not HEVC) for browser compatibility in HTML reports.
@@ -109,6 +125,10 @@ If the CLI times out waiting for the auth token:
 ### Build fails with SDK mismatch
 
 When your Xcode SDK version differs from the target simulator iOS version, use `xcodebuild` with explicit `-destination` instead of `flutter build`.
+
+### Notification permission dialog blocks tests
+
+If a native notification permission dialog appears and blocks the Flutter UI, your app is requesting notification permissions without checking for `PROBE_AGENT`. See the [Permissions section](#permissions) above for the fix.
 
 ### Data clearing on iOS
 

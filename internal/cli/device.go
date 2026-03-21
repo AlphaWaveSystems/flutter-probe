@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/spf13/cobra"
@@ -63,7 +64,7 @@ var deviceStartCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			fmt.Printf("  \033[32m✓\033[0m  Emulator %s (%s) is online\n", d.Name, d.ID)
+			statusOK(os.Stdout, "Emulator %s (%s) is online", d.Name, d.ID)
 		case "ios":
 			udid, _ := cmd.Flags().GetString("udid")
 			fmt.Println("  Booting iOS simulator...")
@@ -71,7 +72,7 @@ var deviceStartCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			fmt.Printf("  \033[32m✓\033[0m  Simulator %s (%s) is booted\n", d.Name, d.ID)
+			statusOK(os.Stdout, "Simulator %s (%s) is booted", d.Name, d.ID)
 		default:
 			return fmt.Errorf("unknown platform %q — use android or ios", platform)
 		}

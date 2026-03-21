@@ -112,7 +112,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generating report: %w", err)
 	}
 
-	fmt.Printf("  \033[32m✓\033[0m  Report generated → %s\n", outputPath)
+	statusOK(os.Stdout, "Report generated → %s", outputPath)
 	fmt.Printf("       %d passed, %d failed, %d skipped  (%d total)\n",
 		jrf.Passed, jrf.Failed, jrf.Skipped, jrf.TotalTests)
 

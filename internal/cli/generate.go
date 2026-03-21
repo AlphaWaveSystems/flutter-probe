@@ -84,7 +84,7 @@ var generatePromptCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("  \033[32m✓\033[0m  Generated → %s\n", output)
+		statusOK(os.Stdout, "Generated → %s", output)
 		fmt.Printf("  Description: %s\n", result.Description)
 		return nil
 	},
@@ -133,7 +133,7 @@ var generateFromRecordingCmd = &cobra.Command{
 			if err := os.WriteFile(output, []byte(content), 0644); err != nil {
 				return err
 			}
-			fmt.Printf("  \033[32m✓\033[0m  Generated → %s\n", output)
+			statusOK(os.Stdout, "Generated → %s", output)
 			return nil
 		}
 
@@ -220,7 +220,7 @@ and AI semantic analysis.`,
 
 		if applyFixes {
 			fmt.Println("  Applying suggestions...")
-			fmt.Println("  \033[32m✓\033[0m  2 selectors healed")
+			statusOK(os.Stdout, "2 selectors healed")
 		} else {
 			fmt.Println("  Run with --apply to automatically patch the .probe files.")
 		}
@@ -266,7 +266,7 @@ func writeGeneratedOutput(output, defaultFilename, content string) error {
 	if err := os.WriteFile(output, []byte(content+"\n"), 0644); err != nil {
 		return err
 	}
-	fmt.Printf("  \033[32m✓\033[0m  Generated → %s\n", output)
+	statusOK(os.Stdout, "Generated → %s", output)
 	return nil
 }
 

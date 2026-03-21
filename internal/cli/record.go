@@ -177,7 +177,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("\n  \033[32m✓\033[0m  Recorded %d events → %s\n", len(events), outFile)
+	statusOK(os.Stdout, "Recorded %d events → %s", len(events), outFile)
 	return nil
 }
 
@@ -189,21 +189,21 @@ func printRecordedEvent(e recordedEvent) {
 
 	switch action {
 	case "tap":
-		fmt.Printf("  \033[32m✓\033[0m  tap %s\n", sel)
+		statusOK(os.Stdout, "tap %s", sel)
 	case "type":
 		text, _ := params["text"].(string)
 		if sel != "the element" {
-			fmt.Printf("  \033[32m✓\033[0m  type %q into %s\n", text, sel)
+			statusOK(os.Stdout, "type %q into %s", text, sel)
 		} else {
-			fmt.Printf("  \033[32m✓\033[0m  type %q\n", text)
+			statusOK(os.Stdout, "type %q", text)
 		}
 	case "swipe":
 		dir, _ := params["direction"].(string)
-		fmt.Printf("  \033[32m✓\033[0m  swipe %s\n", dir)
+		statusOK(os.Stdout, "swipe %s", dir)
 	case "long_press":
-		fmt.Printf("  \033[32m✓\033[0m  long press on %s\n", sel)
+		statusOK(os.Stdout, "long press on %s", sel)
 	default:
-		fmt.Printf("  \033[32m✓\033[0m  %s\n", action)
+		statusOK(os.Stdout, "%s", action)
 	}
 }
 

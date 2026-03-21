@@ -122,6 +122,21 @@ func runTests(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 	outFile, _ := cmd.Flags().GetString("output")
 	tag, _ := cmd.Flags().GetString("tag")
+
+	// Validate --format value early
+	switch runner.Format(format) {
+	case runner.FormatTerminal, runner.FormatJUnit, runner.FormatJSON:
+		// valid
+	default:
+		return fmt.Errorf("unknown format %q: must be one of terminal, junit, json", format)
+	}
+
+	// When structured output (json, junit) goes to stdout (no -o file),
+	// route all status messages to stderr so the output stays parseable.
+	statusW := os.Stdout
+	if outFile == "" && (format == "json" || format == "junit") {
+		statusW = os.Stderr
+	}
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	deviceSerial, _ := cmd.Flags().GetString("device")
@@ -187,7 +202,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("collecting test files: %w", err)
 	}
 	if len(files) == 0 {
-		fmt.Println("No .probe files found.")
+		fmt.Fprintln(statusW, msgNoProbeFiles)
 		return nil
 	}
 
@@ -292,7 +307,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 					relayURL = existingRelayURL
 					cliToken = existingRelayToken
 					relaySessionID = existingRelaySessionID
-					fmt.Printf("  \033[32m✓\033[0m  Reusing relay session: %s\n", relaySessionID)
+					statusOK(statusW, "Reusing relay session: %s", relaySessionID)
 				} else {
 					// Create a new relay session
 					if cloudToken == "" {
@@ -300,32 +315,32 @@ func runTests(cmd *cobra.Command, args []string) error {
 					}
 					cc := cloud.NewClient(cloudURL, cloudToken)
 
-					fmt.Println("  Creating relay session...")
+					fmt.Fprintln(statusW, msgCreatingRelaySession)
 					relaySess, err := cc.CreateRelaySession(ctx, cloudProvider, targetDevice, cfg.Cloud.Relay.RelayTTL())
 					if err != nil {
 						return fmt.Errorf("relay session: %w", err)
 					}
 					defer func() {
 						if delErr := cc.DeleteRelaySession(ctx, relaySess.SessionID); delErr != nil {
-							fmt.Printf("  \033[33m⚠  Failed to close relay session: %s\033[0m\n", delErr)
+							statusWarn(statusW, "Failed to close relay session: %s", delErr)
 						}
 					}()
 					relayURL = relaySess.RelayURL
 					cliToken = relaySess.CLIToken
 					relaySessionID = relaySess.SessionID
-					fmt.Printf("  \033[32m✓\033[0m  Relay session: %s\n", relaySessionID)
+					statusOK(statusW, "Relay session: %s", relaySessionID)
 				}
 
 				// Upload app
-				fmt.Printf("  Uploading app to %s...\n", provider.Name())
+				statusInfo(statusW, "Uploading app to %s...", provider.Name())
 				appID, err := provider.UploadApp(ctx, cloudApp)
 				if err != nil {
 					return fmt.Errorf("cloud upload: %w", err)
 				}
-				fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
+				statusOK(statusW, "App uploaded: %s", appID)
 
 				// Start cloud session (app launches on device)
-				fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
+				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
 				sess, err := provider.StartSession(ctx, appID, targetDevice)
 				if err != nil {
 					return fmt.Errorf("cloud session: %w", err)
@@ -337,21 +352,21 @@ func runTests(cmd *cobra.Command, args []string) error {
 					if sessionStopped {
 						return
 					}
-					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
+					statusInfo(statusW, "Stopping cloud session %s...", sess.ID)
 					if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
-						fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+						statusWarn(statusW, "Failed to stop cloud session: %s", stopErr)
 					} else {
-						fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+						statusOK(statusW, msgCloudSessionStopped)
 					}
 				}()
-				fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
+				statusOK(statusW, "Session started: %s", sess.ID)
 
 				// Wait for agent to connect to relay.
 				// Firebase Test Lab takes longer (device allocation + app install),
 				// so use a longer timeout for Firebase.
 				if relaySessionID != "" && cloudToken != "" {
 					cc := cloud.NewClient(cloudURL, cloudToken)
-					fmt.Println("  Waiting for agent to connect to relay...")
+					fmt.Fprintln(statusW, msgWaitingForAgentRelay)
 					connectTimeout := cfg.Cloud.Relay.RelayConnectTimeout()
 					if cloudProvider == "firebase" && connectTimeout < 5*time.Minute {
 						connectTimeout = 5 * time.Minute
@@ -360,10 +375,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 					if err != nil {
 						return fmt.Errorf("relay wait: %w", err)
 					}
-					fmt.Printf("  \033[32m✓\033[0m  Agent connected (status: %s)\n", status.Status)
+					statusOK(statusW, "Agent connected (status: %s)", status.Status)
 				} else {
 					// No session ID to poll — wait a fixed duration for agent boot
-					fmt.Println("  Waiting for agent to connect to relay...")
+					fmt.Fprintln(statusW, msgWaitingForAgentRelay)
 					time.Sleep(15 * time.Second)
 				}
 
@@ -377,20 +392,20 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if err := client.Ping(ctx); err != nil {
 					return fmt.Errorf("relay agent ping failed: %w", err)
 				}
-				fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent via relay on %s (%s)\n\n", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", targetDevice, provider.Name())
 			} else {
 				// ── Direct path: port forwarding (existing behavior) ──────
 
 				// Step 1: Upload app
-				fmt.Printf("  Uploading app to %s...\n", provider.Name())
+				statusInfo(statusW, "Uploading app to %s...", provider.Name())
 				appID, err := provider.UploadApp(ctx, cloudApp)
 				if err != nil {
 					return fmt.Errorf("cloud upload: %w", err)
 				}
-				fmt.Printf("  \033[32m✓\033[0m  App uploaded: %s\n", appID)
+				statusOK(statusW, "App uploaded: %s", appID)
 
 				// Step 2: Start session
-				fmt.Printf("  Starting cloud session on %s (%s)...\n", targetDevice, provider.Name())
+				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
 				sess, err := provider.StartSession(ctx, appID, targetDevice)
 				if err != nil {
 					return fmt.Errorf("cloud session: %w", err)
@@ -400,14 +415,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 					if sessionStopped {
 						return
 					}
-					fmt.Printf("  Stopping cloud session %s...\n", sess.ID)
+					statusInfo(statusW, "Stopping cloud session %s...", sess.ID)
 					if stopErr := provider.StopSession(ctx, sess); stopErr != nil {
-						fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+						statusWarn(statusW, "Failed to stop cloud session: %s", stopErr)
 					} else {
-						fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+						statusOK(statusW, msgCloudSessionStopped)
 					}
 				}()
-				fmt.Printf("  \033[32m✓\033[0m  Session started: %s\n", sess.ID)
+				statusOK(statusW, "Session started: %s", sess.ID)
 
 				// Step 3: Forward port
 				devicePort := cfg.Agent.AgentDevicePort()
@@ -416,7 +431,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 					return fmt.Errorf("cloud port forward: %w", err)
 				}
 				sess.LocalPort = localPort
-				fmt.Printf("  \033[32m✓\033[0m  Port forwarded: localhost:%d -> device:%d\n", localPort, devicePort)
+				statusOK(statusW, "Port forwarded: localhost:%d -> device:%d", localPort, devicePort)
 
 				// Step 4: Connect to ProbeAgent via the tunneled port
 				dialOpts := probelink.DialOptions{
@@ -433,7 +448,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if err := client.Ping(ctx); err != nil {
 					return fmt.Errorf("cloud agent ping failed: %w", err)
 				}
-				fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s (%s)\n\n", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
 			}
 
 			// Use cloud device info as the "serial" for reporting
@@ -508,7 +523,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if err := dm.InstallAndLaunchApp(ctx, deviceSerial, platform, appPath, cfg.Project.App, autoYes); err != nil {
 					return fmt.Errorf("app install: %w", err)
 				}
-				fmt.Printf("  \033[32m✓\033[0m  App installed and launched\n")
+				statusOK(statusW, msgAppInstalledAndLaunched)
 			}
 
 			dialOpts := probelink.DialOptions{
@@ -531,7 +546,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 					time.Sleep(3 * time.Second) // give agent time to start
 				}
 				// iOS: simulators share host loopback — no port forwarding needed
-				fmt.Println("  Waiting for ProbeAgent token (iOS)...")
+				fmt.Fprintln(statusW, msgWaitingForTokenIOS)
 				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App)
 				if err != nil {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
@@ -560,7 +575,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
 
-				fmt.Println("  Waiting for ProbeAgent token...")
+				fmt.Fprintln(statusW, msgWaitingForToken)
 				token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
 				if err != nil {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
@@ -576,7 +591,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if err := client.Ping(ctx); err != nil {
 				return fmt.Errorf("agent ping failed: %w", err)
 			}
-			fmt.Printf("  \033[32m✓\033[0m  Connected to ProbeAgent on %s\n\n", deviceSerial)
+			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
 		}
 	}
 	_ = cloudSession // used by deferred StopSession above
@@ -714,7 +729,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		r.SetVisual(vc)
 	}
 
-	fmt.Printf("  Running %d test file(s)...\n\n", len(files))
+	statusInfo(statusW, "Running %d test file(s)...", len(files))
 	results, err := r.Run(ctx)
 	if err != nil {
 		return err
@@ -740,11 +755,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 		// Stop the cloud session BEFORE collecting artifacts — some providers
 		// (e.g. SauceLabs) only make video available after the session ends.
 		if cloudProviderImpl != nil && cloudSession != nil && !sessionStopped {
-			fmt.Printf("  Stopping cloud session %s...\n", cloudSession.ID)
+			statusInfo(statusW, "Stopping cloud session %s...", cloudSession.ID)
 			if stopErr := cloudProviderImpl.StopSession(ctx, *cloudSession); stopErr != nil {
-				fmt.Printf("  \033[33m⚠  Failed to stop cloud session: %s\033[0m\n", stopErr)
+				statusWarn(statusW, "Failed to stop cloud session: %s", stopErr)
 			} else {
-				fmt.Printf("  \033[32m✓\033[0m  Cloud session stopped\n")
+				statusOK(statusW, msgCloudSessionStopped)
 			}
 			sessionStopped = true
 
@@ -755,22 +770,22 @@ func runTests(cmd *cobra.Command, args []string) error {
 		// Collect artifacts from cloud provider (video, screenshots).
 		if cloudProviderImpl != nil {
 			if ac, ok := cloudProviderImpl.(cloud.ArtifactCollector); ok {
-				fmt.Println("  Collecting cloud session artifacts...")
+				fmt.Fprintln(statusW, msgCollectingArtifacts)
 				arts, artErr := ac.GetSessionArtifacts(ctx, cloudSession.ID)
 				if artErr != nil {
-					fmt.Printf("  \033[33m⚠  Artifact collection: %s\033[0m\n", artErr)
+					statusWarn(statusW, "Artifact collection: %s", artErr)
 				} else {
 					if arts.VideoURL != "" {
 						for i := range results {
 							results[i].VideoURL = arts.VideoURL
 						}
-						fmt.Printf("  \033[32m✓\033[0m  Video: %s\n", arts.VideoURL)
+						statusOK(statusW, "Video: %s", arts.VideoURL)
 					}
 					if len(arts.ScreenshotURLs) > 0 {
 						for i := range results {
 							results[i].Artifacts = append(results[i].Artifacts, arts.ScreenshotURLs...)
 						}
-						fmt.Printf("  \033[32m✓\033[0m  Screenshots: %d collected\n", len(arts.ScreenshotURLs))
+						statusOK(statusW, "Screenshots: %d collected", len(arts.ScreenshotURLs))
 					}
 				}
 			}
@@ -803,43 +818,43 @@ func runTests(cmd *cobra.Command, args []string) error {
 		// boolean passed/skipped fields) and must not be sent directly.
 		jsonData, err := generateCloudJSON(results, runMeta)
 		if err != nil {
-			fmt.Printf("\n  \033[31m✗  Cloud upload: could not serialize results: %s\033[0m\n", err)
+			statusFail(statusW, "Cloud upload: could not serialize results: %s", err)
 		}
 
 		if len(jsonData) > 0 && payMethod == "x402" {
 			// x402 pay-per-use upload — no subscription token needed.
 			configDir, cfgErr := cloud.ConfigDir()
 			if cfgErr != nil {
-				fmt.Printf("\n  \033[31m✗  x402: could not locate config dir: %s\033[0m\n", cfgErr)
+				statusFail(statusW, "x402: could not locate config dir: %s", cfgErr)
 			} else {
 				wallet, walletErr := cloud.LoadWallet(configDir)
 				if walletErr != nil {
-					fmt.Printf("\n  \033[31m✗  x402: %s\033[0m\n", walletErr)
+					statusFail(statusW, "x402: %s", walletErr)
 				} else {
-					fmt.Printf("\n  Uploading results via x402 (wallet %s)...\n", wallet.Address)
+					statusInfo(statusW, "Uploading results via x402 (wallet %s)...", wallet.Address)
 					cc := cloud.NewClient(cloudURL, "")
 					runID, dashURL, uploadErr := cc.UploadResultsWithPayment(ctx, jsonData, wallet)
 					if uploadErr != nil {
-						fmt.Printf("  \033[31m✗  x402 upload failed: %s\033[0m\n", uploadErr)
+						statusFail(statusW, "x402 upload failed: %s", uploadErr)
 					} else {
-						fmt.Printf("  \033[32m✓\033[0m  Paid & uploaded (run %s)\n", runID)
-						fmt.Printf("  \033[36m→  %s\033[0m\n", dashURL)
+						statusOK(statusW, "Paid & uploaded (run %s)", runID)
+						statusNav(statusW, "%s", dashURL)
 					}
 				}
 			}
 		} else if len(jsonData) > 0 && cloudToken != "" {
 			// Subscription-based upload.
-			fmt.Println("\n  Uploading results to FlutterProbe Cloud...")
+			fmt.Fprintln(statusW, msgUploadingToCloud)
 			cc := cloud.NewClient(cloudURL, cloudToken)
 			runID, dashURL, uploadErr := cc.UploadResults(ctx, jsonData)
 			if uploadErr != nil {
-				fmt.Printf("  \033[31m✗  Cloud upload failed: %s\033[0m\n", uploadErr)
+				statusFail(statusW, "Cloud upload failed: %s", uploadErr)
 			} else {
-				fmt.Printf("  \033[32m✓\033[0m  Uploaded (run %s)\n", runID)
-				fmt.Printf("  \033[36m→  %s\033[0m\n", dashURL)
+				statusOK(statusW, "Uploaded (run %s)", runID)
+				statusNav(statusW, "%s", dashURL)
 			}
 		} else if cloudToken == "" && payMethod != "x402" {
-			fmt.Println("\n  \033[33m⚠  --cloud-token not set and cloud.token not found in probe.yaml. Skipping cloud upload.\033[0m")
+			fmt.Fprintln(statusW, msgCloudTokenMissing)
 		}
 	}
 

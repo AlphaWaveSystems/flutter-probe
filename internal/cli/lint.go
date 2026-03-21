@@ -48,7 +48,7 @@ var lintCmd = &cobra.Command{
 					fmt.Printf("     %s\n", w)
 				}
 			} else {
-				fmt.Printf("  \033[32m✓\033[0m  %s  (%d test(s))\n", f, len(prog.Tests))
+				statusOK(os.Stdout, "%s  (%d test(s))", f, len(prog.Tests))
 			}
 		}
 

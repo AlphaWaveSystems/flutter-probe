@@ -23,7 +23,7 @@ var initCmd = &cobra.Command{
 			if err := os.WriteFile(cfgPath, []byte(config.DefaultYAML), 0644); err != nil {
 				return fmt.Errorf("writing probe.yaml: %w", err)
 			}
-			fmt.Println("  \033[32m✓\033[0m  Created probe.yaml")
+			statusOK(os.Stdout, "Created probe.yaml")
 		}
 
 		// Create directory structure
@@ -49,7 +49,7 @@ var initCmd = &cobra.Command{
 			if err := os.WriteFile(sample, []byte(content), 0644); err != nil {
 				return fmt.Errorf("writing sample test: %w", err)
 			}
-			fmt.Println("  \033[32m✓\033[0m  Created tests/example.probe")
+			statusOK(os.Stdout, "Created tests/example.probe")
 		}
 
 		// Write a sample recipe
@@ -67,7 +67,7 @@ var initCmd = &cobra.Command{
 			if err := os.WriteFile(recipe, []byte(content), 0644); err != nil {
 				return fmt.Errorf("writing sample recipe: %w", err)
 			}
-			fmt.Println("  \033[32m✓\033[0m  Created tests/recipes/login.probe")
+			statusOK(os.Stdout, "Created tests/recipes/login.probe")
 		}
 
 		fmt.Println()

@@ -66,7 +66,7 @@ var migrateMaestroCmd = &cobra.Command{
 				fmt.Printf("  \033[31m✗\033[0m  %s — %s\n", filepath.Base(yf), err)
 				continue
 			}
-			fmt.Printf("  \033[32m✓\033[0m  %s → %s\n", filepath.Base(yf), result)
+			statusOK(os.Stdout, "%s → %s", filepath.Base(yf), result)
 			converted++
 		}
 
