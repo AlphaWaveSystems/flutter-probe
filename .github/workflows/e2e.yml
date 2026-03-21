@@ -1,96 +1,61 @@
-name: FlutterProbe E2E Tests
+name: E2E Tests
 
+# Manual trigger only — E2E tests require a Flutter app project with ProbeAgent
+# integrated, plus emulator/simulator setup. This workflow serves as a template
+# that can be customized per-project.
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Target platform"
+        required: true
+        type: choice
+        options:
+          - android
+          - ios
+          - both
+        default: android
+      api-level:
+        description: "Android API level (ignored for iOS)"
+        required: false
+        type: string
+        default: "34"
+      flutter-version:
+        description: "Flutter version"
+        required: false
+        type: string
+        default: "3.24.0"
+      test-path:
+        description: "Path to test files"
+        required: false
+        type: string
+        default: "tests/"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ---- Build probe CLI ----
-  build-cli:
-    name: Build probe CLI
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-      - name: Build
-        run: make build
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: probe-linux-amd64
-          path: bin/probe
-
-  # ---- Unit tests ----
-  unit-tests:
-    name: Go unit tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-      - name: Run tests
-        run: go test ./... -v -race -coverprofile=coverage.out
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: coverage.out
-
-  # ---- probe-convert integration tests ----
-  convert-tests:
-    name: probe-convert integration tests
-    runs-on: ubuntu-latest
-    needs: build-cli
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-      - name: Build probe CLI
-        run: make build
-      - name: Build probe-convert
-        run: make build-convert
-      - name: Run unit tests
-        run: make test-convert
-      - name: Run integration tests (golden + lint + verify)
-        run: make test-convert-integration
-
   # ---- Android E2E ----
   e2e-android:
-    name: Android E2E (${{ matrix.api-level }})
-    runs-on: macos-latest  # KVM not required on macOS runners
-    needs: build-cli
-    strategy:
-      fail-fast: false
-      matrix:
-        api-level: [31, 34]
-        shard: [1, 2, 3]
-
+    name: Android E2E (API ${{ inputs.api-level }})
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download probe CLI
-        uses: actions/download-artifact@v4
+      - uses: actions/setup-go@v5
         with:
-          name: probe-linux-amd64
-          path: /usr/local/bin/
-      - run: chmod +x /usr/local/bin/probe
+          go-version: "1.23"
+          cache: true
+
+      - name: Build probe CLI
+        run: make build
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: ${{ inputs.flutter-version }}
           channel: stable
           cache: true
 
@@ -108,127 +73,113 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ matrix.api-level }}-${{ runner.os }}
+          key: avd-${{ inputs.api-level }}-${{ runner.os }}
 
       - name: Create AVD
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.api-level }}
+          api-level: ${{ inputs.api-level }}
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: false
           script: echo "AVD created"
 
-      - name: Build Flutter app with ProbeAgent
-        run: |
-          flutter build apk --debug \
-            --dart-define=PROBE_AGENT=true
+      # TODO: Add your Flutter app build step here.
+      # The app must have probe_agent integrated and built with:
+      #   flutter build apk --debug --dart-define=PROBE_AGENT=true
+      # Then install and launch:
+      #   adb install -r build/app/outputs/flutter-apk/app-debug.apk
+      #   adb shell am start -n <package>/<activity>
 
-      - name: Run E2E tests (shard ${{ matrix.shard }}/3)
+      - name: Run E2E tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.api-level }}
+          api-level: ${{ inputs.api-level }}
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            adb install -r build/app/outputs/flutter-apk/app-debug.apk
-            adb shell am start -n com.example.app/.MainActivity
-            probe test tests/ \
-              --shard ${{ matrix.shard }}/3 \
-              --format junit \
-              --output reports/results-${{ matrix.api-level }}-${{ matrix.shard }}.xml \
-              --cloud --cloud-token "$PROBE_CLOUD_TOKEN" \
-              --cloud-url "${PROBE_CLOUD_URL:-https://flutterprobe-cloud.fly.dev}" \
+            bin/probe test ${{ inputs.test-path }} \
+              --format json \
+              --output reports/results.json \
+              -v -y \
               || true
-        env:
-          PROBE_CLOUD_TOKEN: ${{ secrets.PROBE_CLOUD_TOKEN }}
-          PROBE_CLOUD_URL: ${{ vars.PROBE_CLOUD_URL }}
+
+      - name: Generate HTML report
+        if: always()
+        run: |
+          if [ -f reports/results.json ]; then
+            bin/probe report --input reports/results.json -o reports/report.html
+          fi
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.api-level }}-${{ matrix.shard }}
-          path: reports/results-*.xml
+          name: android-e2e-results
+          path: reports/
+          if-no-files-found: ignore
 
-      - name: Publish test results
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: E2E Results (API ${{ matrix.api-level }}, Shard ${{ matrix.shard }})
-          path: reports/results-*.xml
-          reporter: java-junit
-
-  # ---- iOS E2E (macOS only) ----
+  # ---- iOS E2E ----
   e2e-ios:
     name: iOS E2E
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
     runs-on: macos-latest
-    needs: build-cli
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download probe CLI
-        uses: actions/download-artifact@v4
+      - uses: actions/setup-go@v5
         with:
-          name: probe-linux-amd64
-          path: /usr/local/bin/
-      - run: chmod +x /usr/local/bin/probe
+          go-version: "1.23"
+          cache: true
+
+      - name: Build probe CLI
+        run: make build
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: ${{ inputs.flutter-version }}
           channel: stable
 
       - name: Boot iOS simulator
         run: |
-          xcrun simctl boot "iPhone 15" || true
-          probe device list
+          DEVICE=$(xcrun simctl list devices available -j | \
+            python3 -c "import json,sys; devs=[d for r in json.load(sys.stdin)['devices'].values() for d in r if 'iPhone' in d['name'] and d['isAvailable']]; print(devs[0]['udid'] if devs else '')")
+          if [ -n "$DEVICE" ]; then
+            xcrun simctl boot "$DEVICE" || true
+            echo "DEVICE_UDID=$DEVICE" >> "$GITHUB_ENV"
+          else
+            echo "No available iPhone simulator found"
+            exit 1
+          fi
 
-      - name: Build & run E2E tests
+      # TODO: Add your Flutter app build and install steps here.
+      # For iOS simulator:
+      #   flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
+      #   xcrun simctl install "$DEVICE_UDID" build/ios/iphonesimulator/Runner.app
+      #   xcrun simctl launch "$DEVICE_UDID" <bundle-id>
+
+      - name: Run E2E tests
         run: |
-          flutter build ios --debug --simulator \
-            --dart-define=PROBE_AGENT=true
-          probe test tests/ \
-            --format junit --output reports/ios-results.xml \
-            --cloud --cloud-token "$PROBE_CLOUD_TOKEN" \
-            --cloud-url "${PROBE_CLOUD_URL:-https://flutterprobe-cloud.fly.dev}" \
+          bin/probe test ${{ inputs.test-path }} \
+            --device "$DEVICE_UDID" \
+            --format json \
+            --output reports/ios-results.json \
+            -v -y \
             || true
-        env:
-          PROBE_CLOUD_TOKEN: ${{ secrets.PROBE_CLOUD_TOKEN }}
-          PROBE_CLOUD_URL: ${{ vars.PROBE_CLOUD_URL }}
+
+      - name: Generate HTML report
+        if: always()
+        run: |
+          if [ -f reports/ios-results.json ]; then
+            bin/probe report --input reports/ios-results.json -o reports/ios-report.html
+          fi
 
       - name: Upload iOS results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-test-results
-          path: reports/ios-results.xml
-
-  # ---- Report ----
-  report:
-    name: Generate HTML Report
-    runs-on: ubuntu-latest
-    needs: [e2e-android, e2e-ios]
-    if: always()
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download all results
-        uses: actions/download-artifact@v4
-        with:
+          name: ios-e2e-results
           path: reports/
-      - name: Download probe CLI
-        uses: actions/download-artifact@v4
-        with:
-          name: probe-linux-amd64
-          path: /usr/local/bin/
-      - run: chmod +x /usr/local/bin/probe
-      - name: Generate HTML report
-        run: probe report --format html --output reports/report.html
-      - name: Upload report
-        uses: actions/upload-artifact@v4
-        with:
-          name: html-report
-          path: reports/report.html
+          if-no-files-found: ignore

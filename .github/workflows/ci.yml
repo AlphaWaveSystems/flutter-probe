@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---- Lint & Vet ----
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: Go vet
+        run: go vet ./...
+      - name: Go vet (probe-convert)
+        run: cd tools/probe-convert && go vet ./...
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+      - name: Staticcheck
+        run: staticcheck ./...
+      - name: Staticcheck (probe-convert)
+        run: cd tools/probe-convert && staticcheck ./...
+
+  # ---- Unit tests ----
+  unit-tests:
+    name: Go unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.out
+          fail_ci_if_error: false
+
+  # ---- Build verification ----
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: Build probe CLI
+        run: make build
+      - name: Build probe-convert
+        run: make build-convert
+      - name: Verify binaries exist
+        run: |
+          test -x bin/probe
+          test -x bin/probe-convert
+      - name: Upload probe binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-linux-amd64
+          path: bin/probe
+
+  # ---- probe-convert tests ----
+  convert-tests:
+    name: probe-convert tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: Build probe CLI
+        run: make build
+      - name: Build probe-convert
+        run: make build-convert
+      - name: Run unit tests
+        run: make test-convert
+      - name: Run integration tests (golden + lint + verify)
+        run: make test-convert-integration

@@ -42,7 +42,7 @@ jobs:
           EXT=""
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
           BINARY="probe-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
-          go build -ldflags "-s -w -X main.version=${VERSION}" -o "${BINARY}" ./cmd/probe/
+          go build -ldflags "-s -w -X github.com/alphawavesystems/flutter-probe/internal/cli.Version=${VERSION}" -o "${BINARY}" ./cmd/probe/
           echo "BINARY=${BINARY}" >> "$GITHUB_ENV"
         shell: bash
 

@@ -1,0 +1,54 @@
+version: 2
+
+updates:
+  # Go modules -- CLI (root)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps):"
+    open-pull-requests-limit: 10
+
+  # Go modules -- probe-convert tool
+  - package-ecosystem: "gomod"
+    directory: "/tools/probe-convert/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps):"
+    open-pull-requests-limit: 5
+
+  # npm -- documentation website (Starlight/Astro)
+  - package-ecosystem: "npm"
+    directory: "/website/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps):"
+    open-pull-requests-limit: 10
+
+  # GitHub Actions -- CI/CD workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci):"
+    open-pull-requests-limit: 5
