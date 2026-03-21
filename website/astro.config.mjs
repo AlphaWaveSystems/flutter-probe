@@ -2,7 +2,8 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://flutterprobe.github.io',
+  site: 'https://alphawavesystems.github.io',
+  base: '/flutter-probe',
   integrations: [
     starlight({
       title: 'FlutterProbe',
