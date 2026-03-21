@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	defaultModel  = "claude-sonnet-4-20250514"
+	defaultModel  = "claude-sonnet-4-6"
 	defaultAPIURL = "https://api.anthropic.com/v1/messages"
 	apiVersion    = "2023-06-01"
 	maxTokens     = 4096
