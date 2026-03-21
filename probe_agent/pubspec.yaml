@@ -4,7 +4,7 @@ description: >
   and executes test commands against the live Flutter widget tree.
   Add as a dev dependency only — stripped from release builds.
 
-version: 0.1.0
+version: 0.2.0
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
