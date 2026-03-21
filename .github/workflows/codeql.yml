@@ -10,18 +10,13 @@ on:
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Analyze (go)
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       packages: read
       actions: read
       contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [go]
 
     steps:
       - uses: actions/checkout@v5
@@ -32,10 +27,17 @@ jobs:
 
       - uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
+          languages: go
 
-      - uses: github/codeql-action/autobuild@v4
+      # Build root module (CLI)
+      - name: Build CLI
+        run: go build ./...
+
+      # Build probe-convert tool (separate module)
+      - name: Build probe-convert
+        working-directory: tools/probe-convert
+        run: go build ./...
 
       - uses: github/codeql-action/analyze@v4
         with:
-          category: /language:${{ matrix.language }}
+          category: /language:go
