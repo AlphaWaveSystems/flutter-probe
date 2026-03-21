@@ -16,6 +16,24 @@ test "user can log in"
   see "Dashboard"
 ```
 
+## Table of Contents
+
+- [How It Works](#how-it-works)
+- [Installation](#installation)
+- [ProbeScript Language](#probescript-language)
+- [CLI Commands](#cli-commands)
+- [Visual Regression](#visual-regression)
+- [Test Recording](#test-recording)
+- [CI/CD Integration](#cicd-integration)
+- [Cloud Device Farms](#cloud-device-farms)
+- [Migrating from Other Frameworks](#migrating-from-other-frameworks)
+- [VS Code Extension](#vs-code-extension)
+- [Configuration (`probe.yaml`)](#configuration-probeyaml)
+- [Self-Healing Selectors](#self-healing-selectors)
+- [Repository Structure](#repository-structure)
+- [Documentation](#documentation)
+- [License](#license)
+
 ## How It Works
 
 FlutterProbe has two components that communicate over WebSocket + JSON-RPC 2.0:
