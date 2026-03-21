@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/spf13/cobra"
@@ -125,13 +126,9 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		if cfg.AIAPIKey == "" {
 			return fmt.Errorf("ai.api_key not set")
 		}
-		// Mask the key for security: show first 8 and last 4 chars.
-		key := cfg.AIAPIKey
-		if len(key) > 12 {
-			fmt.Printf("%s...%s\n", key[:8], key[len(key)-4:])
-		} else {
-			fmt.Println(key)
-		}
+		// Print only a fixed-length indicator — never log the key itself.
+		stars := strings.Repeat("*", 20)
+		fmt.Printf("[configured] %s\n", stars)
 		return nil
 
 	default:
