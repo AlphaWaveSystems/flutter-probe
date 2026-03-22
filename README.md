@@ -85,6 +85,16 @@ make install      # → $GOPATH/bin/probe (optional)
 
 **Requirements:** Go 1.26+, Dart 3.3+ / Flutter 3.19+ (tested up to 3.41), ADB (Android), Xcode (iOS)
 
+### Physical iOS Devices
+
+Testing on physical iOS devices requires `iproxy` (from libimobiledevice) for USB port forwarding:
+
+```bash
+brew install libimobiledevice  # macOS
+```
+
+> **Note:** `iproxy` is **not** needed for iOS simulators (they share the host loopback) or Android devices (which use `adb forward`).
+
 ### 2. Add ProbeAgent to your Flutter app
 
 In your app's `pubspec.yaml`:

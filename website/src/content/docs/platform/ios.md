@@ -8,6 +8,7 @@ description: iOS simulator setup, token reading, simctl integration, and platfor
 - macOS with Xcode installed
 - `xcrun simctl` command-line tools
 - Flutter app built for simulator with `--dart-define=PROBE_AGENT=true`
+- **Physical devices only:** `iproxy` from `libimobiledevice` for USB port forwarding (see [Physical Device Setup](#physical-device-setup) below)
 
 ## Simulator Setup
 
@@ -51,7 +52,31 @@ xcodebuild -workspace ios/Runner.xcworkspace \
   build
 ```
 
-## Connection Flow
+## Physical Device Setup
+
+Testing on a physical iOS device requires USB port forwarding because, unlike simulators, physical devices do not share the host's loopback network. FlutterProbe uses `iproxy` (from the `libimobiledevice` suite) to forward the agent's WebSocket port over USB.
+
+### Install iproxy
+
+```bash
+brew install libimobiledevice  # macOS
+```
+
+Verify the installation:
+
+```bash
+iproxy --help
+```
+
+### How it works
+
+When targeting a physical device, the CLI runs `iproxy <host-port> <device-port> -u <UDID>` to create a TCP tunnel over USB. The CLI then connects to `ws://127.0.0.1:<host-port>/probe?token=...` just like it would for a simulator.
+
+:::note
+`iproxy` is **not** needed for iOS simulators (they share the host loopback network) or Android devices (which use `adb forward` for port forwarding).
+:::
+
+## Connection Flow (Simulator)
 
 The iOS simulator shares the host's `localhost` network. No port forwarding is needed.
 
