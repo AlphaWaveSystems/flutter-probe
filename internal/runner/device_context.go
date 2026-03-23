@@ -4,11 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+)
+
+// Warning messages for unsupported operations on physical iOS devices.
+const (
+	warnPhysicalIOSPermissions = "permission management is not supported on physical iOS devices"
+	warnPhysicalIOSClearData   = "clear app data is not supported on physical iOS devices — use uninstall/reinstall instead"
 )
 
 // ConfirmFunc is called before destructive operations. It receives a description
@@ -23,6 +30,7 @@ type DeviceContext struct {
 	Manager                 *device.Manager
 	Serial                  string          // ADB serial or iOS UDID
 	Platform                device.Platform
+	IsSimulator             bool            // true for iOS simulators, false for physical iOS devices
 	AppID                   string          // bundle ID / package name
 	Port                    int             // host-side agent port (default 48686)
 	DevicePort              int             // on-device agent port (default: same as Port)
@@ -33,6 +41,7 @@ type DeviceContext struct {
 	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
 	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
 	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
+	IProxyCmd               *exec.Cmd       // iproxy process for physical iOS devices (nil for simulators/Android)
 }
 
 // reconnectDelay returns the configured reconnect delay or the default.
@@ -87,12 +96,22 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 		}
 
 	case device.PlatformIOS:
-		simctl := dc.Manager.SimCtl()
-		_ = simctl.Terminate(ctx, dc.Serial, dc.AppID) // ignore if not running
-		time.Sleep(dc.restartDelay())
-		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
-		if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
-			return fmt.Errorf("restart: launch: %w", err)
+		if dc.IsSimulator {
+			simctl := dc.Manager.SimCtl()
+			_ = simctl.Terminate(ctx, dc.Serial, dc.AppID) // ignore if not running
+			time.Sleep(dc.restartDelay())
+			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+			if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
+				return fmt.Errorf("restart: launch: %w", err)
+			}
+		} else {
+			iosDev := dc.Manager.IOSDevice()
+			_ = iosDev.TerminateApp(ctx, dc.Serial, dc.AppID)
+			time.Sleep(dc.restartDelay())
+			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+			if err := iosDev.LaunchApp(ctx, dc.Serial, dc.AppID); err != nil {
+				return fmt.Errorf("restart: launch: %w", err)
+			}
 		}
 	}
 	return nil
@@ -139,6 +158,11 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		}
 
 	case device.PlatformIOS:
+		if !dc.IsSimulator {
+			fmt.Printf("    \033[33m⚠\033[0m  %s\n", warnPhysicalIOSClearData)
+			return nil
+		}
+
 		simctl := dc.Manager.SimCtl()
 		_ = simctl.Terminate(ctx, dc.Serial, dc.AppID)
 
@@ -226,6 +250,10 @@ func (dc *DeviceContext) AllowPermission(ctx context.Context, name string) error
 			}
 		}
 	case device.PlatformIOS:
+		if !dc.IsSimulator {
+			fmt.Printf("    \033[33m⚠\033[0m  %s\n", warnPhysicalIOSPermissions)
+			return nil
+		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
 			return err
@@ -251,6 +279,10 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 			}
 		}
 	case device.PlatformIOS:
+		if !dc.IsSimulator {
+			fmt.Printf("    \033[33m⚠\033[0m  %s\n", warnPhysicalIOSPermissions)
+			return nil
+		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
 			return err
@@ -274,6 +306,10 @@ func (dc *DeviceContext) GrantAllPermissions(ctx context.Context) error {
 			}
 		}
 	case device.PlatformIOS:
+		if !dc.IsSimulator {
+			fmt.Printf("    \033[33m⚠\033[0m  %s\n", warnPhysicalIOSPermissions)
+			return nil
+		}
 		for _, svc := range device.IOSPrivacyServices {
 			_ = dc.Manager.SimCtl().GrantPrivacy(ctx, dc.Serial, dc.AppID, svc)
 		}
@@ -291,6 +327,10 @@ func (dc *DeviceContext) RevokeAllPermissions(ctx context.Context) error {
 			}
 		}
 	case device.PlatformIOS:
+		if !dc.IsSimulator {
+			fmt.Printf("    \033[33m⚠\033[0m  %s\n", warnPhysicalIOSPermissions)
+			return nil
+		}
 		_ = dc.Manager.SimCtl().ResetPrivacy(ctx, dc.Serial, dc.AppID)
 	}
 	return nil
@@ -312,11 +352,28 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 		}
 		_ = dc.Manager.ForwardPort(ctx, dc.Serial, dc.Port, devPort)
 	case device.PlatformIOS:
-		// Delete stale token file so ReadTokenIOS picks up the fresh one
-		simctl := dc.Manager.SimCtl()
-		tokenPath := dc.iosTokenPath()
-		if tokenPath != "" {
-			_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
+		if dc.IsSimulator {
+			// Delete stale token file so ReadTokenIOS picks up the fresh one
+			simctl := dc.Manager.SimCtl()
+			tokenPath := dc.iosTokenPath()
+			if tokenPath != "" {
+				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
+			}
+		} else {
+			// Physical iOS: restart iproxy (app restart may have dropped the connection)
+			iosDev := dc.Manager.IOSDevice()
+			if dc.IProxyCmd != nil {
+				iosDev.StopForward(dc.IProxyCmd)
+			}
+			devPort := dc.DevicePort
+			if devPort == 0 {
+				devPort = dc.Port
+			}
+			newCmd, err := iosDev.ForwardPort(ctx, dc.Serial, dc.Port, devPort)
+			if err != nil {
+				return nil, fmt.Errorf("reconnect: iproxy: %w", err)
+			}
+			dc.IProxyCmd = newCmd
 		}
 	}
 
@@ -330,7 +387,11 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 	case device.PlatformAndroid:
 		token, err = dc.Manager.ReadToken(ctx, dc.Serial, tokenTimeout)
 	case device.PlatformIOS:
-		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
+		if dc.IsSimulator {
+			token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
+		} else {
+			token, err = dc.Manager.IOSDevice().ReadToken(ctx, dc.Serial, tokenTimeout)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reconnect: read token: %w", err)

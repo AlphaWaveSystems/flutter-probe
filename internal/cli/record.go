@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/spf13/cobra"
 )
@@ -71,6 +72,8 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	// Connect to device
 	dm := device.NewManager()
 	platform := device.Platform(cfg.Defaults.Platform)
+	isSimulator := true
+	deviceFoundInList := false
 	if deviceSerial == "" {
 		devices, err := dm.List(ctx)
 		if err != nil || len(devices) == 0 {
@@ -78,15 +81,22 @@ func runRecord(cmd *cobra.Command, args []string) error {
 		}
 		deviceSerial = devices[0].ID
 		platform = devices[0].Platform
+		isSimulator = devices[0].IsSimulator
+		deviceFoundInList = true
 	} else {
 		// Detect platform from device list
 		devices, _ := dm.List(ctx)
 		for _, d := range devices {
 			if d.ID == deviceSerial {
 				platform = d.Platform
+				isSimulator = d.IsSimulator
+				deviceFoundInList = true
 				break
 			}
 		}
+	}
+	if platform == device.PlatformIOS && !deviceFoundInList {
+		isSimulator = ios.IsSimulatorUDID(deviceSerial)
 	}
 
 	agentPort := cfg.Agent.Port
@@ -96,8 +106,23 @@ func runRecord(cmd *cobra.Command, args []string) error {
 		DialTimeout: cfg.Agent.DialTimeout,
 	}
 
-	if platform == device.PlatformIOS {
-		// iOS: simulators share host loopback — no port forwarding needed
+	if platform == device.PlatformIOS && !isSimulator {
+		// Physical iOS: iproxy + idevicesyslog
+		iosDev := dm.IOSDevice()
+		iproxyCmd, err := iosDev.ForwardPort(ctx, deviceSerial, agentPort, cfg.Agent.AgentDevicePort())
+		if err != nil {
+			return fmt.Errorf("iproxy: %w", err)
+		}
+		defer iosDev.StopForward(iproxyCmd)
+
+		fmt.Println("  Waiting for ProbeAgent token (iOS device)...")
+		token, err := iosDev.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+		if err != nil {
+			return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+		}
+		dialOpts.Token = token
+	} else if platform == device.PlatformIOS {
+		// iOS simulator: no port forwarding needed
 		fmt.Println("  Waiting for ProbeAgent token (iOS)...")
 		token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
 		if err != nil {

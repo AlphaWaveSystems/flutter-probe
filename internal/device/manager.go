@@ -19,13 +19,14 @@ const (
 	PlatformIOS     Platform = "ios"
 )
 
-// Device represents a connected emulator or simulator.
+// Device represents a connected emulator, simulator, or physical device.
 type Device struct {
-	ID        string   // ADB serial or iOS UDID
-	Name      string   // display name
-	Platform  Platform
-	State     string // online | offline | booting
-	OSVersion string // e.g. "iOS 18.6" or "Android 14"
+	ID          string   // ADB serial or iOS UDID
+	Name        string   // display name
+	Platform    Platform
+	State       string // online | offline | booting | connected
+	OSVersion   string // e.g. "iOS 18.6" or "Android 14"
+	IsSimulator bool   // true for iOS simulators, false for physical iOS devices (always false for Android)
 }
 
 // ToolPaths holds configurable paths to external tools.
@@ -33,31 +34,35 @@ type Device struct {
 type ToolPaths struct {
 	ADB     string // path to adb binary
 	Flutter string // path to flutter binary
+	IProxy  string // path to iproxy binary (for physical iOS devices)
 }
 
 // Manager handles device discovery and lifecycle.
 type Manager struct {
-	adb    *ADB
-	simctl *ios.SimCtl
-	tools  ToolPaths
+	adb       *ADB
+	simctl    *ios.SimCtl
+	iosDevice *ios.IOSDevice
+	tools     ToolPaths
 }
 
 // NewManager creates a Manager using tools found in PATH.
 func NewManager() *Manager {
-	return &Manager{adb: NewADB(), simctl: ios.New()}
+	return &Manager{adb: NewADB(), simctl: ios.New(), iosDevice: ios.NewIOSDevice()}
 }
 
 // NewManagerWithPaths creates a Manager with configurable tool paths.
 // This is useful for CI/CD environments or when tools are not in PATH.
 func NewManagerWithPaths(paths ToolPaths) *Manager {
 	return &Manager{
-		adb:    NewADBWithPath(paths.ADB),
-		simctl: ios.New(),
-		tools:  paths,
+		adb:       NewADBWithPath(paths.ADB),
+		simctl:    ios.New(),
+		iosDevice: ios.NewIOSDevice(),
+		tools:     paths,
 	}
 }
 
-// List returns all connected Android emulators/devices and iOS simulators.
+// List returns all connected Android emulators/devices, iOS simulators,
+// and physical iOS devices.
 func (m *Manager) List(ctx context.Context) ([]Device, error) {
 	var all []Device
 
@@ -72,12 +77,37 @@ func (m *Manager) List(ctx context.Context) ([]Device, error) {
 	if err == nil {
 		for _, s := range sims {
 			all = append(all, Device{
-				ID:        s.UDID,
-				Name:      s.Name,
-				Platform:  PlatformIOS,
-				State:     strings.ToLower(s.State),
-				OSVersion: s.HumanRuntime(),
+				ID:          s.UDID,
+				Name:        s.Name,
+				Platform:    PlatformIOS,
+				State:       strings.ToLower(s.State),
+				OSVersion:   s.HumanRuntime(),
+				IsSimulator: true,
 			})
+		}
+	}
+
+	// Physical iOS devices (via xcrun devicectl)
+	if m.iosDevice.IsAvailable() {
+		physicals, err := m.iosDevice.ListDevices(ctx)
+		if err == nil {
+			// Build set of existing UDIDs to avoid duplicates
+			seen := make(map[string]bool, len(all))
+			for _, d := range all {
+				seen[d.ID] = true
+			}
+			for _, p := range physicals {
+				if !seen[p.UDID] {
+					all = append(all, Device{
+						ID:          p.UDID,
+						Name:        p.Name,
+						Platform:    PlatformIOS,
+						State:       p.State,
+						OSVersion:   p.OSVersion,
+						IsSimulator: false,
+					})
+				}
+			}
 		}
 	}
 
@@ -128,6 +158,11 @@ func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
 // SimCtl returns the underlying SimCtl for direct access.
 func (m *Manager) SimCtl() *ios.SimCtl {
 	return m.simctl
+}
+
+// IOSDevice returns the underlying IOSDevice for physical device operations.
+func (m *Manager) IOSDevice() *ios.IOSDevice {
+	return m.iosDevice
 }
 
 // ADB returns the underlying ADB wrapper for direct access.

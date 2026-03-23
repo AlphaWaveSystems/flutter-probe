@@ -61,6 +61,7 @@ type AIConfig struct {
 type ToolsConfig struct {
 	ADB     string `yaml:"adb"`     // e.g. "/home/ci/android-sdk/platform-tools/adb"
 	Flutter string `yaml:"flutter"` // e.g. "/opt/flutter/bin/flutter"
+	IProxy  string `yaml:"iproxy"`  // e.g. "/usr/local/bin/iproxy" (physical iOS USB forwarding)
 }
 
 type ProjectConfig struct {

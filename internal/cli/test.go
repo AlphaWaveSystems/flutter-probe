@@ -14,6 +14,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
@@ -225,6 +226,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var client *probelink.Client
 	var dm *device.Manager
 	var platform device.Platform
+	isSimulator := true                   // default: treat iOS as simulator (safe default)
 	var cloudSession *cloud.Session       // non-nil when using a cloud provider
 	var cloudProviderImpl cloud.CloudProvider // saved for artifact collection
 	var sessionStopped bool                   // prevents double-stop in defer
@@ -480,6 +482,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 			// Pick device and detect platform
 			platform = device.Platform(cfg.Defaults.Platform)
+			deviceFoundInList := false
 			if deviceSerial == "" {
 				devices, err := dm.List(ctx)
 				if err != nil || len(devices) == 0 {
@@ -487,15 +490,23 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				deviceSerial = devices[0].ID
 				platform = devices[0].Platform
+				isSimulator = devices[0].IsSimulator
+				deviceFoundInList = true
 			} else {
 				// Detect platform from device list when serial is specified manually
 				devices, _ := dm.List(ctx)
 				for _, d := range devices {
 					if d.ID == deviceSerial {
 						platform = d.Platform
+						isSimulator = d.IsSimulator
+						deviceFoundInList = true
 						break
 					}
 				}
+			}
+			// If the device wasn't found in the list, use UDID format as fallback
+			if platform == device.PlatformIOS && !deviceFoundInList {
+				isSimulator = ios.IsSimulatorUDID(deviceSerial)
 			}
 
 			// Install app if --app-path provided
@@ -535,11 +546,38 @@ func runTests(cmd *cobra.Command, args []string) error {
 				DialTimeout: cfg.Agent.DialTimeout,
 			}
 
-			if platform == device.PlatformIOS {
-				// iOS: grant privacy permissions and relaunch the app.
-				// simctl privacy grant terminates the running app, so we must
-				// grant first, then relaunch. This prevents native OS dialogs
-				// (camera, location, etc.) from blocking the Flutter UI.
+			if platform == device.PlatformIOS && !isSimulator {
+				// ── Physical iOS device ──────────────────────────────────
+				// Physical devices need iproxy for USB port forwarding and
+				// idevicesyslog for token reading.
+				iosDev := dm.IOSDevice()
+
+				// Port forwarding via iproxy (physical devices don't share host loopback)
+				devPort := cfg.Agent.AgentDevicePort()
+				iproxyCmd, err := iosDev.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, devPort)
+				if err != nil {
+					return fmt.Errorf("iproxy: %w", err)
+				}
+				defer iosDev.StopForward(iproxyCmd)
+
+				// Read token via idevicesyslog
+				fmt.Fprintln(statusW, "  Waiting for ProbeAgent token (iOS device)...")
+				token, err := iosDev.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+				if err != nil {
+					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+				}
+				dialOpts.Token = token
+				client, err = probelink.DialWithOptions(ctx, dialOpts)
+				if err != nil {
+					return fmt.Errorf("connecting to ProbeAgent: %w", err)
+				}
+				defer client.Close()
+
+				// Store iproxy cmd for DeviceContext reconnection
+				_ = iproxyCmd // used below in DeviceContext
+			} else if platform == device.PlatformIOS {
+				// ── iOS Simulator ────────────────────────────────────────
+				// Simulators share host loopback — no port forwarding needed.
 				if autoYes && cfg.Project.App != "" {
 					for _, svc := range []string{"camera", "microphone", "location", "photos", "contacts-limited", "calendar"} {
 						_ = dm.SimCtl().GrantPrivacy(ctx, deviceSerial, cfg.Project.App, svc)
@@ -548,7 +586,6 @@ func runTests(cmd *cobra.Command, args []string) error {
 					_ = dm.SimCtl().Launch(ctx, deviceSerial, cfg.Project.App)
 					time.Sleep(3 * time.Second) // give agent time to start
 				}
-				// iOS: simulators share host loopback — no port forwarding needed
 				fmt.Fprintln(statusW, msgWaitingForTokenIOS)
 				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App)
 				if err != nil {
@@ -686,6 +723,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Manager:                 dm,
 			Serial:                  deviceSerial,
 			Platform:                platform,
+			IsSimulator:             isSimulator,
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
 			DevicePort:              cfg.Agent.AgentDevicePort(),
