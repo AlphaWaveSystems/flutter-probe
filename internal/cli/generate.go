@@ -194,9 +194,11 @@ and AI semantic analysis.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		applyFixes, _ := cmd.Flags().GetBool("apply")
 
-		if len(args) == 0 {
-			args = []string{"tests"}
+		targets := args
+		if len(targets) == 0 {
+			targets = []string{"tests"}
 		}
+		_ = targets
 
 		fmt.Println("  Self-healing selector analysis...")
 		fmt.Println()

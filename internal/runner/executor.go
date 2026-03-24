@@ -206,7 +206,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 	case parser.ConditionalStep:
 		return fmt.Sprintf("if %q appears", s.Condition)
 	case parser.RecipeCall:
-		return fmt.Sprintf("%s", s.Name)
+		return s.Name
 	case parser.LoopStep:
 		return fmt.Sprintf("repeat %d times", s.Count)
 	}

@@ -169,10 +169,8 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 		exec.RegisterRecipe(rec)
 		_ = name
 	}
-	if vars != nil {
-		for k, v := range vars {
-			exec.SetVar(k, v)
-		}
+	for k, v := range vars {
+		exec.SetVar(k, v)
 	}
 	if r.visual != nil {
 		exec.SetVisual(r.visual)
@@ -287,7 +285,7 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 		if !strings.HasSuffix(e.Name(), ".probe") {
 			continue
 		}
-		if err := r.loadRecipeFile(nil, filepath.Join(r.cfg.Recipes, e.Name())); err != nil {
+		if err := r.loadRecipeFile(context.TODO(), filepath.Join(r.cfg.Recipes, e.Name())); err != nil {
 			return err
 		}
 	}

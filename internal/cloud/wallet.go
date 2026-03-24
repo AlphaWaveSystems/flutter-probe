@@ -1,15 +1,15 @@
 package cloud
 
 import (
+	"crypto/ecdh"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,10 +87,19 @@ func (w *WalletConfig) SignPayment(amount, currency, network, receiver string) (
 		return "", fmt.Errorf("invalid private key hex: %w", err)
 	}
 
-	privKey := new(ecdsa.PrivateKey)
-	privKey.Curve = elliptic.P256()
-	privKey.D = new(big.Int).SetBytes(privKeyBytes)
-	privKey.PublicKey.X, privKey.PublicKey.Y = privKey.Curve.ScalarBaseMult(privKeyBytes)
+	ecdhKey, err := ecdh.P256().NewPrivateKey(privKeyBytes)
+	if err != nil {
+		return "", fmt.Errorf("invalid private key: %w", err)
+	}
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(ecdhKey)
+	if err != nil {
+		return "", fmt.Errorf("marshaling key: %w", err)
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(pkcs8)
+	if err != nil {
+		return "", fmt.Errorf("parsing key: %w", err)
+	}
+	privKey := parsed.(*ecdsa.PrivateKey)
 
 	// Build the EIP-712 hash.
 	msgHash := buildEIP712Hash(amount, currency, network, receiver)

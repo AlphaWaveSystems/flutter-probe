@@ -483,7 +483,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if deviceSerial == "" {
 				devices, err := dm.List(ctx)
 				if err != nil || len(devices) == 0 {
-					return fmt.Errorf("no connected devices found. Run 'probe device list' to check.")
+					return fmt.Errorf("no connected devices found, run 'probe device list' to check")
 				}
 				deviceSerial = devices[0].ID
 				platform = devices[0].Platform

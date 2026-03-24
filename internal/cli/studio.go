@@ -158,7 +158,7 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	// API: execute a probe step
 	mux.HandleFunc("/api/exec", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "POST only", 405)
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
 		var body struct {
@@ -177,7 +177,7 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	// API: tap by coordinate
 	mux.HandleFunc("/api/tap", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "POST only", 405)
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
 		var body struct {

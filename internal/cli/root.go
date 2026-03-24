@@ -64,8 +64,3 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 	return config.Load(cfgDir)
 }
 
-// exitOnErr prints an error and exits with code 1.
-func exitOnErr(err error) {
-	fmt.Fprintln(os.Stderr, "\033[31merror:\033[0m", err)
-	os.Exit(1)
-}
