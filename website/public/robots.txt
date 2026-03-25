@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://alphawavesystems.github.io/flutter-probe/sitemap-index.xml
