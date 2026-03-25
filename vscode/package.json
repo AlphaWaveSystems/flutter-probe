@@ -2,7 +2,7 @@
   "name": "flutterprobe",
   "displayName": "FlutterProbe",
   "description": "High-performance E2E testing for Flutter apps — ProbeScript language support, local & cloud device testing (BrowserStack, Sauce Labs, AWS Device Farm, Firebase Test Lab, LambdaTest), visual regression, test recording, and Studio integration",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "flutterprobe",
   "icon": "resources/probe-icon.png",
   "engines": { "vscode": "^1.85.0" },

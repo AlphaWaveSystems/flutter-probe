@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-25
+
+### Fixed
+
+- Resolve all pre-existing staticcheck lint errors blocking CI
+- Replace deprecated Go 1.26 crypto/ecdsa field access with ecdh+x509 round-trip in wallet signing
+- Remove unused functions and variables across CLI, runner, and probe-convert packages
+- Fix error string style violations (punctuation, numeric HTTP status codes, nil context)
+
+### Added
+
+- Unit tests for 6 previously untested packages: config, plugin, visual, report, device, cloud/wallet
+- Test coverage for config loading/validation, plugin registry, visual regression comparison, HTML report generation, permission resolution, and wallet operations
+
+### Changed
+
+- Bump GitHub Actions: actions/checkout v5→v6, actions/upload-artifact v4→v7, actions/setup-node v4→v6, actions/upload-pages-artifact v3→v4, codecov/codecov-action v4→v5
+
+## [0.2.0] - 2026-03-22
+
 ## [0.1.0] - 2026-03-16
 
 ### Added
