@@ -272,6 +272,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				deviceRuns = append(deviceRuns, runner.DeviceRun{
 					DeviceID: serial,
 					Platform: p,
+					AppID:    runner.ResolveAppID(cfg.Project.App, p),
 				})
 			}
 		} else {
@@ -285,6 +286,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 					DeviceID:   d.ID,
 					DeviceName: d.Name,
 					Platform:   d.Platform,
+					AppID:      runner.ResolveAppID(cfg.Project.App, d.Platform),
 				})
 			}
 		}
@@ -295,12 +297,16 @@ func runTests(cmd *cobra.Command, args []string) error {
 			portBase = 48686
 		}
 		fileBuckets := runner.DistributeFiles(files, len(deviceRuns))
+		// Assign host ports: Android devices get unique ports via adb forward,
+		// iOS simulators connect directly on portBase (each sim has its own loopback)
+		androidIdx := 0
 		for i := range deviceRuns {
 			deviceRuns[i].Files = fileBuckets[i]
 			if deviceRuns[i].Platform == device.PlatformAndroid {
-				deviceRuns[i].Port = portBase + i
+				deviceRuns[i].Port = portBase + androidIdx + 1 // 48687, 48688, ...
+				androidIdx++
 			} else {
-				deviceRuns[i].Port = portBase // iOS simulators have separate loopback
+				deviceRuns[i].Port = portBase // iOS: direct localhost:48686
 			}
 		}
 
