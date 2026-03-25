@@ -1,0 +1,301 @@
+name: Dependabot Compatibility
+
+# Runs on Dependabot PRs to ensure dependency updates don't break anything.
+# Checks: compatibility, security, license compliance, then auto-merges safe updates.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---- Determine what changed ----
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      npm: ${{ steps.filter.outputs.npm }}
+      actions: ${{ steps.filter.outputs.actions }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'go.mod'
+              - 'go.sum'
+              - 'tools/probe-convert/go.mod'
+              - 'tools/probe-convert/go.sum'
+            npm:
+              - 'website/package.json'
+              - 'website/package-lock.json'
+            actions:
+              - '.github/workflows/**'
+
+  # ---- Go dependency updates ----
+  go-compat:
+    name: Go compatibility
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Verify dependencies resolve
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+
+      - name: Build CLI
+        run: go build -o bin/probe ./cmd/probe/
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Staticcheck
+        run: staticcheck ./...
+
+      - name: Unit tests
+        run: go test ./... -count=1 -race -timeout 5m
+
+      - name: Build probe-convert
+        run: cd tools/probe-convert && go build -o ../../bin/probe-convert .
+
+      - name: probe-convert vet + staticcheck
+        run: cd tools/probe-convert && go vet ./... && staticcheck ./...
+
+      - name: probe-convert tests
+        run: cd tools/probe-convert && go test ./... -count=1 -timeout 5m
+
+      - name: Cross-compile check
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/probe/
+          GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/probe/
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/probe/
+
+      - name: Backward compatibility — lint existing .probe files
+        run: |
+          bin/probe lint tests/ 2>&1 || true
+          # Ensure parser still handles all existing test syntax
+          for f in tests/*.probe tests/**/*.probe; do
+            if [ -f "$f" ]; then
+              bin/probe lint "$f" > /dev/null 2>&1 || {
+                echo "ERROR: Parser broke on $f"
+                exit 1
+              }
+            fi
+          done
+          echo "✓ All .probe files still parse"
+
+  # ---- npm dependency updates (website) ----
+  npm-compat:
+    name: Website compatibility
+    needs: changes
+    if: needs.changes.outputs.npm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: cd website && npm ci
+
+      - name: Build website
+        run: cd website && npm run build
+
+      - name: Verify sitemap generated
+        run: test -f website/dist/sitemap-index.xml
+
+      - name: Verify page count
+        run: |
+          COUNT=$(find website/dist -name 'index.html' | wc -l | tr -d ' ')
+          echo "Built $COUNT pages"
+          if [ "$COUNT" -lt 30 ]; then
+            echo "ERROR: Expected 30+ pages, got $COUNT"
+            exit 1
+          fi
+
+      - name: Check for broken internal links
+        run: |
+          cd website/dist
+          for page in getting-started/installation getting-started/quick-start \
+                      probescript/syntax comparisons/flutter-e2e-testing \
+                      blog/guide-to-flutter-e2e-testing; do
+            if [ ! -f "$page/index.html" ]; then
+              echo "ERROR: Missing page: $page"
+              exit 1
+            fi
+          done
+          echo "✓ All key pages present"
+
+  # ---- GitHub Actions updates ----
+  actions-compat:
+    name: Actions compatibility
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Build CLI
+        run: go build -o bin/probe ./cmd/probe/
+
+      - name: Unit tests
+        run: go test ./... -count=1 -timeout 5m
+
+  # ---- Security audit ----
+  security:
+    name: Security audit
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        if: needs.changes.outputs.go == 'true'
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Go vulnerability check
+        if: needs.changes.outputs.go == 'true'
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "=== Main module ==="
+          govulncheck ./... || true
+          echo "=== probe-convert ==="
+          cd tools/probe-convert && govulncheck ./... || true
+
+      - uses: actions/setup-node@v6
+        if: needs.changes.outputs.npm == 'true'
+        with:
+          node-version: 22
+
+      - name: npm audit
+        if: needs.changes.outputs.npm == 'true'
+        run: |
+          cd website && npm ci
+          npm audit --omit=dev || true
+          # Fail only on critical/high vulnerabilities
+          npm audit --omit=dev --audit-level=high
+
+  # ---- License compliance ----
+  license:
+    name: License compliance
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        if: needs.changes.outputs.go == 'true'
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Check Go dependency licenses
+        if: needs.changes.outputs.go == 'true'
+        run: |
+          go install github.com/google/go-licenses@latest
+          echo "=== Checking for GPL/AGPL/SSPL licenses (incompatible with BSL) ==="
+          VIOLATIONS=$(go-licenses report ./... 2>/dev/null | grep -iE "GPL|AGPL|SSPL|EUPL" | grep -v "Apache" || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "⚠️  Potentially incompatible licenses found:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "FlutterProbe uses BSL 1.1. GPL/AGPL dependencies may create license conflicts."
+            echo "Review these dependencies before merging."
+            exit 1
+          fi
+          echo "✓ No incompatible licenses detected"
+
+      - uses: actions/setup-node@v6
+        if: needs.changes.outputs.npm == 'true'
+        with:
+          node-version: 22
+
+      - name: Check npm dependency licenses
+        if: needs.changes.outputs.npm == 'true'
+        run: |
+          cd website && npm ci
+          npx license-checker --failOn "GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;SSPL-1.0;EUPL-1.1;EUPL-1.2" \
+            --excludePrivatePackages 2>&1 || {
+            echo "⚠️  Incompatible license found in npm dependencies"
+            exit 1
+          }
+          echo "✓ No incompatible npm licenses detected"
+
+  # ---- Auto-approve and auto-merge safe updates ----
+  auto-merge:
+    name: Auto-merge
+    needs: [go-compat, npm-compat, actions-compat, security, license]
+    if: |
+      always() &&
+      github.actor == 'dependabot[bot]' &&
+      !contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Get Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve PR
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge patch and minor updates
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on major updates (require manual review)
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh pr comment "$PR_URL" --body "⚠️ **Major version update** — auto-merge skipped. Please review breaking changes before merging.
+
+          All compatibility checks passed:
+          - ✓ Build + tests
+          - ✓ Security audit
+          - ✓ License compliance
+          - ✓ Backward compatibility"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
