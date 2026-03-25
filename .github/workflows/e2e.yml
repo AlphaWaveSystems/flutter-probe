@@ -114,7 +114,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-e2e-results
           path: reports/
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload iOS results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-e2e-results
           path: reports/
