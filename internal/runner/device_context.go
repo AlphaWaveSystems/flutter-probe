@@ -40,6 +40,10 @@ func (dc *DeviceContext) reconnectDelay() time.Duration {
 	if dc.ReconnectDelay > 0 {
 		return dc.ReconnectDelay
 	}
+	// Android emulators need more time to boot the Flutter engine after restart
+	if dc.Platform == device.PlatformAndroid {
+		return 5 * time.Second
+	}
 	return 2 * time.Second
 }
 
@@ -79,10 +83,9 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 		}
 		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
-		// Launch via monkey (works without knowing the main activity name)
+		// Launch via am start with the standard Flutter MainActivity
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
-			"monkey", "-p", dc.AppID,
-			"-c", "android.intent.category.LAUNCHER", "1"); err != nil {
+			"am", "start", "-n", dc.AppID+"/.MainActivity"); err != nil {
 			return fmt.Errorf("restart: launch: %w", err)
 		}
 
@@ -133,8 +136,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
-			"monkey", "-p", dc.AppID,
-			"-c", "android.intent.category.LAUNCHER", "1"); err != nil {
+			"am", "start", "-n", dc.AppID+"/.MainActivity"); err != nil {
 			return fmt.Errorf("clear data: relaunch: %w", err)
 		}
 
@@ -303,7 +305,12 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		// Clear logcat so we only see the new token
+		// Delete stale token files so we pick up the fresh one after relaunch
+		if dc.AppID != "" {
+			dc.Manager.ADB().Shell(ctx, dc.Serial, "run-as", dc.AppID, "rm", "-f", "cache/probe/token")
+		}
+		dc.Manager.ADB().Shell(ctx, dc.Serial, "rm", "-f", "/data/local/tmp/probe/token")
+		// Also clear logcat as fallback
 		dc.Manager.ADB().Run(ctx, dc.Serial, "logcat", "-c") //nolint:errcheck
 		// Re-establish port forward (force-stop may have dropped it)
 		devPort := dc.DevicePort
@@ -328,7 +335,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		token, err = dc.Manager.ReadToken(ctx, dc.Serial, tokenTimeout)
+		token, err = dc.Manager.ReadTokenAndroid(ctx, dc.Serial, tokenTimeout, dc.AppID)
 	case device.PlatformIOS:
 		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
 	}
@@ -396,8 +403,7 @@ func (dc *DeviceContext) LaunchApp(ctx context.Context) error {
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
-			"monkey", "-p", dc.AppID,
-			"-c", "android.intent.category.LAUNCHER", "1"); err != nil {
+			"am", "start", "-n", dc.AppID+"/.MainActivity"); err != nil {
 			return fmt.Errorf("launch app: %w", err)
 		}
 	case device.PlatformIOS:

@@ -100,14 +100,38 @@ class ProbeServer {
 
   Future<void> _writeTokenFile() async {
     try {
-      final dir = Platform.isIOS
-          ? '${Directory.systemTemp.path}/probe'
-          : '/data/local/tmp/probe';
-      await Directory(dir).create(recursive: true);
-      await File('$dir/token').writeAsString(_token!);
+      if (Platform.isIOS) {
+        final dir = '${Directory.systemTemp.path}/probe';
+        await Directory(dir).create(recursive: true);
+        await File('$dir/token').writeAsString(_token!);
+      } else if (Platform.isAndroid) {
+        // Write to app's cache directory (readable via adb shell run-as)
+        final cacheDir = Directory('/data/data/${_resolvePackageName()}/cache/probe');
+        await cacheDir.create(recursive: true);
+        await File('${cacheDir.path}/token').writeAsString(_token!);
+        // Also try the world-readable tmp (may work on some devices/emulators)
+        try {
+          final tmpDir = Directory('/data/local/tmp/probe');
+          await tmpDir.create(recursive: true);
+          await File('${tmpDir.path}/token').writeAsString(_token!);
+        } catch (_) {}
+      }
     } catch (_) {
       // Non-fatal: CLI can still read from log stream
     }
+  }
+
+  static String _resolvePackageName() {
+    // Extract package name from the app's data directory path
+    try {
+      final dataDir = Directory.current.path;
+      // On Android, cwd or isolate info may contain the package name
+      // Fallback: read from /proc/self/cmdline
+      final cmdline = File('/proc/self/cmdline').readAsStringSync();
+      final pkg = cmdline.split('\x00').first;
+      if (pkg.contains('.')) return pkg;
+    } catch (_) {}
+    return 'com.unknown.app';
   }
 
   ProbeExecutor? get executor => _executor;

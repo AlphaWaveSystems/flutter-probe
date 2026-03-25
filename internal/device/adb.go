@@ -150,11 +150,10 @@ func (a *ADB) Install(ctx context.Context, serial, apkPath string) error {
 	return nil
 }
 
-// LaunchApp starts an app by package name using the LAUNCHER intent.
+// LaunchApp starts an app by package name using am start with the Flutter MainActivity.
 func (a *ADB) LaunchApp(ctx context.Context, serial, packageName string) error {
 	_, err := a.Shell(ctx, serial,
-		"monkey", "-p", packageName,
-		"-c", "android.intent.category.LAUNCHER", "1")
+		"am", "start", "-n", packageName+"/.MainActivity")
 	if err != nil {
 		return fmt.Errorf("adb launch: %w", err)
 	}

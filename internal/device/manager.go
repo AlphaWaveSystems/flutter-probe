@@ -1,7 +1,6 @@
 package device
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os/exec"
@@ -222,31 +221,59 @@ func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Du
 	return m.simctl.ReadToken(ctx, udid, timeout, bundleID...)
 }
 
-// ReadToken scans the device logcat output for the ProbeAgent one-time token.
-// The agent prints a line of the form:  PROBE_TOKEN=<token>
+// ReadToken reads the ProbeAgent token from the Android device.
+// It tries multiple sources: app cache file (via run-as), /data/local/tmp,
+// and logcat streaming as fallback.
 func (m *Manager) ReadToken(ctx context.Context, serial string, timeout time.Duration) (string, error) {
-	tCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	return m.ReadTokenAndroid(ctx, serial, timeout, "")
+}
 
-	cmd := exec.CommandContext(tCtx, m.adb.bin, "-s", serial, "logcat", "-s", "flutter:I")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("device: logcat pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("device: logcat start: %w", err)
-	}
-	defer cmd.Process.Kill() //nolint:errcheck
+// ReadTokenAndroid reads the token with an optional app ID for run-as access.
+func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout time.Duration, appID string) (string, error) {
+	deadline := time.Now().Add(timeout)
 
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
-			token := strings.TrimSpace(line[idx+len("PROBE_TOKEN="):])
-			return token, nil
+	for time.Now().Before(deadline) {
+		// Try 1: read from app cache via run-as (most reliable)
+		if appID != "" {
+			out, err := m.adb.Shell(ctx, serial, "run-as", appID, "cat", "cache/probe/token")
+			if err == nil {
+				token := strings.TrimSpace(string(out))
+				if len(token) >= 16 {
+					return token, nil
+				}
+			}
+		}
+
+		// Try 2: read from /data/local/tmp (world-readable, works on some devices)
+		out, err := m.adb.Shell(ctx, serial, "cat", "/data/local/tmp/probe/token")
+		if err == nil {
+			token := strings.TrimSpace(string(out))
+			if len(token) >= 16 {
+				return token, nil
+			}
+		}
+
+		// Try 3: scan logcat dump for PROBE_TOKEN=
+		logOut, err := m.adb.Shell(ctx, serial, "logcat", "-d", "-s", "flutter:I")
+		if err == nil {
+			for _, line := range strings.Split(string(logOut), "\n") {
+				if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
+					token := strings.TrimSpace(string(line[idx+len("PROBE_TOKEN="):]))
+					if len(token) >= 16 {
+						return token, nil
+					}
+				}
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(1 * time.Second):
 		}
 	}
-	return "", fmt.Errorf("device: token not found within %s", timeout)
+
+	return "", fmt.Errorf("android: probe token not found within %s — is the app running with probe_agent?", timeout)
 }
 
 // RunFlutter launches flutter run with ProbeAgent in debug mode.
