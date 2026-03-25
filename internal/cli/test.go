@@ -49,13 +49,15 @@ func init() {
 	// Test selection & output
 	f.StringP("tag", "t", "", "run only tests matching this tag (e.g. @smoke, @critical)")
 	f.BoolP("watch", "w", false, "watch mode — re-run tests automatically on file changes")
-	f.Int("shard", 0, "split tests across N devices in parallel (0 = no sharding)")
+	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
 	// Device selection
 	f.String("device", "", "target device serial or UDID (default: first available)")
+	f.Bool("parallel", false, "run tests in parallel across all connected devices")
+	f.String("devices", "", "comma-separated device serials for parallel execution")
 
 	// Per-step timeout
 	f.Duration("timeout", 0, "per-step timeout; 0 uses probe.yaml or default 30s")
@@ -206,6 +208,28 @@ func runTests(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Shard filtering: --shard "1/3" runs a deterministic subset of files
+	shardStr, _ := cmd.Flags().GetString("shard")
+	if shardStr != "" {
+		shardIdx, shardTotal, err := runner.ParseShard(shardStr)
+		if err != nil {
+			return err
+		}
+		files = runner.ShardFiles(files, shardIdx, shardTotal)
+		if len(files) == 0 {
+			fmt.Fprintf(statusW, "  Shard %s: no files assigned to this shard\n", shardStr)
+			return nil
+		}
+		fmt.Fprintf(statusW, "  Shard %s: running %d files\n", shardStr, len(files))
+	}
+
+	// Parallel mode: --parallel [--devices serial1,serial2]
+	parallelMode, _ := cmd.Flags().GetBool("parallel")
+	devicesStr, _ := cmd.Flags().GetString("devices")
+	if devicesStr != "" {
+		parallelMode = true // --devices implies --parallel
+	}
+
 	// Cloud device farm provider flags
 	cloudProvider, _ := cmd.Flags().GetString("cloud-provider")
 	cloudApp, _ := cmd.Flags().GetString("cloud-app")
@@ -221,6 +245,107 @@ func runTests(cmd *cobra.Command, args []string) error {
 		cloudApp = cfg.Cloud.App
 	}
 
+	// ── Parallel mode: distribute files across multiple devices ──
+	if parallelMode && !dryRun && cloudProvider == "" {
+		toolPaths := device.ToolPaths{ADB: adbPath, Flutter: flutterPath}
+		if adbPath == "" {
+			toolPaths.ADB = cfg.Tools.ADB
+		}
+		if flutterPath == "" {
+			toolPaths.Flutter = cfg.Tools.Flutter
+		}
+		dm := device.NewManagerWithPaths(toolPaths)
+
+		// Discover or parse devices
+		var deviceRuns []runner.DeviceRun
+		if devicesStr != "" {
+			for _, serial := range strings.Split(devicesStr, ",") {
+				serial = strings.TrimSpace(serial)
+				if serial == "" {
+					continue
+				}
+				p := device.PlatformAndroid
+				// Simple heuristic: UUIDs with dashes are iOS
+				if strings.Count(serial, "-") >= 4 && len(serial) > 30 {
+					p = device.PlatformIOS
+				}
+				deviceRuns = append(deviceRuns, runner.DeviceRun{
+					DeviceID: serial,
+					Platform: p,
+				})
+			}
+		} else {
+			// Auto-discover all connected devices
+			devList, err := dm.List(ctx)
+			if err != nil || len(devList) < 2 {
+				return fmt.Errorf("parallel mode requires 2+ connected devices (found %d)", len(devList))
+			}
+			for _, d := range devList {
+				deviceRuns = append(deviceRuns, runner.DeviceRun{
+					DeviceID:   d.ID,
+					DeviceName: d.Name,
+					Platform:   d.Platform,
+				})
+			}
+		}
+
+		// Distribute files across devices
+		portBase := cfg.Agent.Port
+		if portBase == 0 {
+			portBase = 48686
+		}
+		fileBuckets := runner.DistributeFiles(files, len(deviceRuns))
+		for i := range deviceRuns {
+			deviceRuns[i].Files = fileBuckets[i]
+			if deviceRuns[i].Platform == device.PlatformAndroid {
+				deviceRuns[i].Port = portBase + i
+			} else {
+				deviceRuns[i].Port = portBase // iOS simulators have separate loopback
+			}
+		}
+
+		var tags []string
+		if tag != "" {
+			tags = strings.Split(tag, ",")
+		}
+
+		opts := runner.RunOptions{
+			Files:   files,
+			Tags:    tags,
+			Timeout: timeout,
+			Verbose: verbose,
+		}
+
+		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
+		results, orchErr := orch.Run(ctx)
+
+		orch.PrintSummary()
+
+		if orchErr != nil {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %v\n", orchErr)
+		}
+
+		// Report results
+		var report *runner.Reporter
+		if outFile != "" {
+			report, err = runner.NewFileReporter(runner.Format(format), outFile, verbose)
+			if err != nil {
+				return err
+			}
+		} else {
+			report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
+		}
+		if err := report.Report(results); err != nil {
+			return err
+		}
+
+		if !runner.AllPassed(results) {
+			return fmt.Errorf("%s", runner.Summary(results))
+		}
+		return nil
+	}
+
+	// ── Single-device mode (default) ──
 	// Connect to ProbeAgent (skip if dry-run)
 	var client *probelink.Client
 	var dm *device.Manager

@@ -18,15 +18,17 @@ import (
 
 // TestResult captures the outcome of a single test run.
 type TestResult struct {
-	TestName  string
-	File      string
-	Passed    bool
-	Skipped   bool
-	Duration  time.Duration
-	Error     error
-	Row       int // data-driven row index, -1 = not data-driven
-	Artifacts []string
-	VideoURL  string // cloud provider video URL (session-level)
+	TestName   string
+	File       string
+	Passed     bool
+	Skipped    bool
+	Duration   time.Duration
+	Error      error
+	Row        int // data-driven row index, -1 = not data-driven
+	Artifacts  []string
+	VideoURL   string // cloud provider video URL (session-level)
+	DeviceID   string // device serial/UDID that ran this test
+	DeviceName string // human-readable device name
 }
 
 // Runner coordinates parsing, connecting, and executing .probe files.
@@ -44,12 +46,13 @@ type RunOptions struct {
 	Files        []string // .probe files to run
 	Tags         []string // filter by tag
 	Watch        bool     // re-run on file change
-	Shard        int      // number of shards (0 = no sharding)
 	Timeout      time.Duration
 	DryRun       bool   // parse only
 	Verbose      bool
 	VideoEnabled bool   // record device screen during tests
 	VideoDir     string // directory to store video recordings
+	DeviceID     string // device serial/UDID (for tagging results)
+	DeviceName   string // human-readable device name
 }
 
 // New creates a Runner.
@@ -303,13 +306,15 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 	}
 
 	return TestResult{
-		TestName:  name,
-		File:      file,
-		Passed:    runErr == nil,
-		Duration:  time.Since(start),
-		Error:     runErr,
-		Row:       row,
-		Artifacts: exec.Artifacts(),
+		TestName:   name,
+		File:       file,
+		Passed:     runErr == nil,
+		Duration:   time.Since(start),
+		Error:      runErr,
+		Row:        row,
+		Artifacts:  exec.Artifacts(),
+		DeviceID:   r.opts.DeviceID,
+		DeviceName: r.opts.DeviceName,
 	}
 }
 
