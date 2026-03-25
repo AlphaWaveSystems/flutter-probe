@@ -479,12 +479,15 @@ func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 	case parser.StateContains:
 		checkStr = "contains"
 	}
+	// Resolve variables in selector text (for data-driven tests)
+	sel := a.Sel
+	sel.Text = e.resolve(sel.Text)
 	params := probelink.SeeParams{
-		Selector: toSelectorParam(a.Sel),
+		Selector: toSelectorParam(sel),
 		Negated:  a.Negated,
 		Count:    a.Count,
 		Check:    checkStr,
-		CheckVal: a.CheckVal,
+		CheckVal: e.resolve(a.CheckVal),
 		Pattern:  a.Pattern,
 	}
 	return e.client.See(ctx, params)
@@ -504,7 +507,7 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 
 	return e.client.Wait(ctx, probelink.WaitParams{
 		Kind:     kindStr,
-		Target:   w.Target,
+		Target:   e.resolve(w.Target),
 		Duration: w.Duration,
 		Timeout:  e.timeout.Seconds(),
 	})

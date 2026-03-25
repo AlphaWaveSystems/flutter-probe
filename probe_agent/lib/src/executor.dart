@@ -36,23 +36,19 @@ class ProbeExecutor {
   /// Intercepts url_launcher platform channel to track external browser launches.
   void _interceptUrlLauncher() {
     const channel = MethodChannel('plugins.flutter.io/url_launcher');
-    // Dart test bindings allow handler overrides; in production builds this
-    // is a best-effort hook — if the channel is already claimed it will still
-    // record launches via the standard handler.
-    ServicesBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-      channel,
-      (MethodCall call) async {
-        if (call.method == 'launch' || call.method == 'launchUrl') {
-          final url = call.arguments is String
-              ? call.arguments as String
-              : (call.arguments as Map?)?.values.firstOrNull?.toString() ?? '';
-          if (url.isNotEmpty) {
-            _externalUrlLaunches.add(url);
-          }
+    channel.setMethodCallHandler((MethodCall call) async {
+      if (call.method == 'launch' || call.method == 'launchUrl') {
+        final url = call.arguments is String
+            ? call.arguments as String
+            : (call.arguments is Map
+                ? (call.arguments as Map)['url']?.toString() ?? ''
+                : '');
+        if (url.isNotEmpty) {
+          _externalUrlLaunches.add(url);
         }
-        return true; // allow the launch
-      },
-    );
+      }
+      return true;
+    });
   }
 
   /// Dispatch a JSON-RPC request and respond via [_send].
@@ -222,7 +218,7 @@ class ProbeExecutor {
       // ---- Browser verification ----
       case ProbeMethods.verifyBrowser:
         if (_externalUrlLaunches.isEmpty) {
-          throw ProbeError(ProbeError.assertionFailed, 'No external browser launch detected');
+          throw ProbeError(ProbeError.assertFailed, 'No external browser launch detected');
         }
         return {'ok': true, 'urls': _externalUrlLaunches};
 
