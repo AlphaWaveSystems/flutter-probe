@@ -501,16 +501,16 @@ tests/                  E2E test suites and health checks
 
 ## Documentation
 
-Full documentation: [alphawavesystems.github.io/flutter-probe](https://alphawavesystems.github.io/flutter-probe/)
+Full documentation: [alphawavesystems.github.io/flutter-probe](https://flutterprobe.dev/)
 
-- [Installation Guide](https://alphawavesystems.github.io/flutter-probe/getting-started/installation/)
-- [Quick Start](https://alphawavesystems.github.io/flutter-probe/getting-started/quick-start/)
-- [ProbeScript Syntax](https://alphawavesystems.github.io/flutter-probe/probescript/syntax/)
-- [CLI Reference](https://alphawavesystems.github.io/flutter-probe/tools/cli-reference/)
-- [CI/CD Integration](https://alphawavesystems.github.io/flutter-probe/ci-cd/github-actions/)
-- [Configuration Reference](https://alphawavesystems.github.io/flutter-probe/advanced/configuration/)
-- [Cloud Providers](https://alphawavesystems.github.io/flutter-probe/advanced/configuration/)
-- [Visual Regression](https://alphawavesystems.github.io/flutter-probe/advanced/visual-regression/)
+- [Installation Guide](https://flutterprobe.dev/getting-started/installation/)
+- [Quick Start](https://flutterprobe.dev/getting-started/quick-start/)
+- [ProbeScript Syntax](https://flutterprobe.dev/probescript/syntax/)
+- [CLI Reference](https://flutterprobe.dev/tools/cli-reference/)
+- [CI/CD Integration](https://flutterprobe.dev/ci-cd/github-actions/)
+- [Configuration Reference](https://flutterprobe.dev/advanced/configuration/)
+- [Cloud Providers](https://flutterprobe.dev/advanced/configuration/)
+- [Visual Regression](https://flutterprobe.dev/advanced/visual-regression/)
 
 ## FAQ & Best Practices
 

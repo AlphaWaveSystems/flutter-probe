@@ -3,8 +3,7 @@ import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  site: 'https://alphawavesystems.github.io',
-  base: '/flutter-probe',
+  site: 'https://flutterprobe.dev',
   integrations: [
     sitemap(),
     starlight({
@@ -14,9 +13,9 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/AlphaWaveSystems/flutter-probe' },
       ],
       head: [
-        { tag: 'meta', attrs: { property: 'og:image', content: 'https://alphawavesystems.github.io/flutter-probe/og-image.png' } },
+        { tag: 'meta', attrs: { property: 'og:image', content: 'https://flutterprobe.dev/og-image.png' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://alphawavesystems.github.io/flutter-probe/og-image.png' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://flutterprobe.dev/og-image.png' } },
       ],
       sidebar: [
         {
