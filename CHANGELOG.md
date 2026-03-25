@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 3 blog posts (Flutter E2E testing guide, Why We Built FlutterProbe, honest comparison)
 - Copilot Code Review configuration with path-specific review instructions for parser, runner, agent, website, and CI
 - Dependabot compatibility workflow: security audit (`govulncheck`, `npm audit`), license compliance (rejects GPL/AGPL/SSPL), backward compatibility (.probe file parsing), auto-merge for patch/minor updates
+- Headless E2E CI/CD: fully wired Android (ubuntu + emulator) and iOS (macOS + simulator) workflows with 3-way sharding, automated app build/install/launch, and HTML report generation
 
 ### Fixed
 
