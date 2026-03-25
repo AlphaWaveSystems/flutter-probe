@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +20,8 @@ type DeviceRun struct {
 	DeviceID   string
 	DeviceName string
 	Platform   device.Platform
-	Port       int // host-side port for this device
+	AppID      string // package name / bundle ID (can differ per platform)
+	Port       int    // host-side port for this device
 	Files      []string
 	Results    []TestResult
 	Error      error
@@ -70,8 +72,26 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 		go func(dr *DeviceRun) {
 			defer wg.Done()
 			start := time.Now()
-			dr.Results, dr.Error = po.runOnDevice(ctx, dr)
+
+			// Retry up to 2 times on connection failure
+			maxRetries := 2
+			for attempt := 0; attempt <= maxRetries; attempt++ {
+				dr.Results, dr.Error = po.runOnDevice(ctx, dr)
+				if dr.Error == nil {
+					break
+				}
+				if attempt < maxRetries {
+					fmt.Printf("  \033[33m⚠\033[0m  [%s] attempt %d failed: %v — retrying in 5s...\n",
+						po.shortID(dr.DeviceID), attempt+1, dr.Error)
+					time.Sleep(5 * time.Second)
+				}
+			}
+
 			dr.Duration = time.Since(start)
+			if dr.Error != nil {
+				fmt.Printf("  \033[31m✗\033[0m  [%s] all attempts failed: %v\n",
+					po.shortID(dr.DeviceID), dr.Error)
+			}
 		}(&po.devices[i])
 	}
 	wg.Wait()
@@ -98,11 +118,16 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		tokenTimeout = 30 * time.Second
 	}
 
+	appID := dr.AppID
+	if appID == "" {
+		appID = po.cfg.Project.App
+	}
+
 	switch dr.Platform {
 	case device.PlatformAndroid:
-		token, err = po.manager.ReadTokenAndroid(ctx, dr.DeviceID, tokenTimeout, po.cfg.Project.App)
+		token, err = po.manager.ReadTokenAndroid(ctx, dr.DeviceID, tokenTimeout, appID)
 	case device.PlatformIOS:
-		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, po.cfg.Project.App)
+		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("[%s] token: %w", dr.DeviceID, err)
@@ -136,7 +161,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		Manager:                 po.manager,
 		Serial:                  dr.DeviceID,
 		Platform:                dr.Platform,
-		AppID:                   po.cfg.Project.App,
+		AppID:                   appID,
 		Port:                    dr.Port,
 		DevicePort:              po.cfg.Agent.AgentDevicePort(),
 		AllowClearData:          true,
@@ -245,6 +270,44 @@ func joinLines(ss []string) string {
 		result += s
 	}
 	return result
+}
+
+// ResolveAppID returns the correct app ID for a platform.
+// Flutter uses camelCase bundle IDs on iOS (com.example.myApp) but
+// snake_case package names on Android (com.example.my_app).
+// If the configured app ID contains uppercase letters and the platform
+// is Android, convert to snake_case.
+func ResolveAppID(configAppID string, platform device.Platform) string {
+	if platform != device.PlatformAndroid {
+		return configAppID
+	}
+	// Check if the last segment has uppercase (camelCase iOS bundle ID)
+	parts := strings.Split(configAppID, ".")
+	last := parts[len(parts)-1]
+	hasUpper := false
+	for _, r := range last {
+		if r >= 'A' && r <= 'Z' {
+			hasUpper = true
+			break
+		}
+	}
+	if !hasUpper {
+		return configAppID // already snake_case or no conversion needed
+	}
+	// Convert camelCase to snake_case in the last segment
+	var result []byte
+	for i, r := range last {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				result = append(result, '_')
+			}
+			result = append(result, byte(r+'a'-'A'))
+		} else {
+			result = append(result, byte(r))
+		}
+	}
+	parts[len(parts)-1] = string(result)
+	return strings.Join(parts, ".")
 }
 
 // ---- File Distribution ----
