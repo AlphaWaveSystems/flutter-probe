@@ -776,8 +776,8 @@ func TestParser_SetLocation(t *testing.T) {
 	if a.Verb != parser.VerbSetLocation {
 		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbSetLocation)
 	}
-	if a.Name == "" {
-		t.Error("location should not be empty")
+	if a.Name != "37.7749,-122.4194" {
+		t.Errorf("location: got %q, want %q", a.Name, "37.7749,-122.4194")
 	}
 }
 

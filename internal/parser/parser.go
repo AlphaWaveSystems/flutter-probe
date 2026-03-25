@@ -1264,10 +1264,24 @@ func (p *Parser) parseActionSetLocation() (Step, error) {
 	}
 	p.consumeNewline()
 
-	// Join and split on comma to get lat,lng
-	raw := strings.Join(parts, "")
-	// Clean up: remove spaces around comma
-	raw = strings.ReplaceAll(raw, " ", "")
+	// Rebuild coordinate string preserving negative signs and decimals
+	raw := ""
+	for i, p := range parts {
+		if p == "," {
+			raw += ","
+		} else if p == "-" {
+			raw += "-"
+		} else if len(raw) > 0 && raw[len(raw)-1] == ',' {
+			raw += p
+		} else if len(raw) > 0 && raw[len(raw)-1] == '-' {
+			raw += p
+		} else if i == 0 {
+			raw += p
+		} else {
+			raw += "," + p
+		}
+	}
+	raw = strings.TrimSpace(raw)
 	return ActionStep{Verb: VerbSetLocation, Name: raw, Line: line}, nil
 }
 

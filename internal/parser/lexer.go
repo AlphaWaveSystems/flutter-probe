@@ -103,7 +103,7 @@ func (l *Lexer) nextLine() error {
 			l.emit(TOKEN_COLON, ":")
 			l.pos++
 			l.col++
-		case ch == '(' || ch == ')' || ch == ',':
+		case ch == '(' || ch == ')' || ch == ',' || ch == '-':
 			l.emit(TOKEN_IDENT, string(ch))
 			l.pos++
 			l.col++
@@ -180,7 +180,25 @@ func (l *Lexer) lexNumber() {
 		l.pos++
 		l.col++
 	}
+
+	// Check for decimal point → float
+	isFloat := false
+	if l.pos < len(l.src) && l.src[l.pos] == '.' && l.pos+1 < len(l.src) && unicode.IsDigit(l.src[l.pos+1]) {
+		isFloat = true
+		l.pos++ // consume '.'
+		l.col++
+		for l.pos < len(l.src) && unicode.IsDigit(l.src[l.pos]) {
+			l.pos++
+			l.col++
+		}
+	}
+
 	raw := string(l.src[start:l.pos])
+
+	if isFloat {
+		l.tokens = append(l.tokens, Token{Type: TOKEN_FLOAT, Literal: raw, Line: l.line, Col: startCol})
+		return
+	}
 
 	// Check ordinal suffix: 1st 2nd 3rd 4th
 	if l.pos < len(l.src) {
