@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-03-25
+
+### Added
+
+- Cross-platform parallel E2E execution: `--parallel --devices emulator-5554,<iOS-UDID>` runs tests on iOS + Android simultaneously
+- `ResolveAppID`: auto-converts camelCase iOS bundle IDs to snake_case Android package names for cross-platform runs
+- Per-device `AppID` field in `DeviceRun` for mixed-platform parallel testing
+- Retry logic for parallel device connections (up to 2 retries with 5s backoff)
+- Graceful per-device error handling — one device failing doesn't stop others
+- Custom domain: site now lives at [flutterprobe.dev](https://flutterprobe.dev)
+- SEO overhaul: sitemap.xml, robots.txt, JSON-LD structured data, Twitter Cards, OG image
+- 7 comparison pages targeting search intent (Flutter E2E testing, integration_test alternative, Patrol alternative, etc.)
+- 3 blog posts (Flutter E2E testing guide, Why We Built FlutterProbe, honest comparison)
+
+### Fixed
+
+- Parallel port assignment: Android gets `portBase+1` via ADB forward, iOS uses `portBase` directly
+- Landing page version badge updated to current release
+
 ## [0.4.1] - 2026-03-25
 
 ### Fixed
