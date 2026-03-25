@@ -1,0 +1,57 @@
+# Copilot Code Review configuration
+# See: https://docs.github.com/en/copilot/using-github-copilot/code-review/using-copilot-code-review
+
+reviews:
+  # High-level review instructions
+  instructions: |
+    This is FlutterProbe, a Flutter E2E testing framework written in Go (CLI) + Dart (agent).
+
+    When reviewing:
+    - Check for backward compatibility — existing ProbeScript syntax must not break
+    - Verify error handling follows patterns in internal/runner/executor.go
+    - Ensure new parser tokens follow the pipeline: token.go → lexer.go → parser.go → ast.go → executor.go
+    - Check that new features have unit tests (standard lib testing, table-driven)
+    - Verify CHANGELOG.md is updated for user-facing changes
+    - Check for security: no command injection in ADB/simctl shell calls
+    - Ensure Go code passes staticcheck and go vet
+
+  # Path-specific review instructions
+  path_instructions:
+    - path: "internal/parser/**"
+      instructions: |
+        Parser changes must maintain backward compatibility with existing .probe files.
+        New tokens need: keyword mapping in token.go, compound detection in lexer.go if multi-word,
+        parse case in parser.go parseStep(), and verb constant in ast.go.
+        Add parser tests in parser_test.go following existing patterns.
+
+    - path: "internal/runner/**"
+      instructions: |
+        Runner changes affect test execution. Check that:
+        - Variables are resolved via resolve() before use in assertions and waits
+        - Device operations handle both Android (ADB) and iOS (simctl)
+        - Reconnect flows handle token reading and WebSocket re-establishment
+        - New features work in both local and cloud modes (deviceCtx may be nil)
+
+    - path: "probe_agent/**"
+      instructions: |
+        Dart agent changes affect on-device behavior. Check that:
+        - New RPC methods are added to both protocol.dart and executor.dart
+        - Methods call _sync.waitForSettled() before returning
+        - Error handling uses ProbeError with appropriate error codes
+        - No breaking changes to the JSON-RPC protocol
+
+    - path: "website/**"
+      instructions: |
+        Website changes affect SEO and documentation. Check that:
+        - New pages have unique title and description in frontmatter
+        - Internal links use relative paths (no /flutter-probe/ prefix since custom domain)
+        - Meta tags use flutterprobe.dev URLs
+        - Sidebar is updated in astro.config.mjs for new pages
+
+    - path: ".github/workflows/**"
+      instructions: |
+        CI/CD changes affect all contributors. Check that:
+        - Go version matches go.mod (1.26)
+        - Actions use pinned major versions (e.g. @v6 not @latest)
+        - Secrets are not exposed in logs
+        - Matrix strategies use fail-fast: false for independent jobs

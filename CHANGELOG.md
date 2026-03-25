@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - SEO overhaul: sitemap.xml, robots.txt, JSON-LD structured data, Twitter Cards, OG image
 - 7 comparison pages targeting search intent (Flutter E2E testing, integration_test alternative, Patrol alternative, etc.)
 - 3 blog posts (Flutter E2E testing guide, Why We Built FlutterProbe, honest comparison)
+- Copilot Code Review configuration with path-specific review instructions for parser, runner, agent, website, and CI
+- Dependabot compatibility workflow: security audit (`govulncheck`, `npm audit`), license compliance (rejects GPL/AGPL/SSPL), backward compatibility (.probe file parsing), auto-merge for patch/minor updates
 
 ### Fixed
 
