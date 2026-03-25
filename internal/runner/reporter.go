@@ -204,14 +204,16 @@ func (r *Reporter) writeJUnit(results []TestResult) error {
 // ---- JSON ----
 
 type jsonResult struct {
-	Name      string   `json:"name"`
-	File      string   `json:"file"`
-	Passed    bool     `json:"passed"`
-	Skipped   bool     `json:"skipped"`
-	Duration  float64  `json:"duration_ms"`
-	Error     string   `json:"error,omitempty"`
-	Row       int      `json:"row,omitempty"`
-	Artifacts []string `json:"artifacts,omitempty"`
+	Name       string   `json:"name"`
+	File       string   `json:"file"`
+	Passed     bool     `json:"passed"`
+	Skipped    bool     `json:"skipped"`
+	Duration   float64  `json:"duration_ms"`
+	Error      string   `json:"error,omitempty"`
+	Row        int      `json:"row,omitempty"`
+	Artifacts  []string `json:"artifacts,omitempty"`
+	DeviceID   string   `json:"device_id,omitempty"`
+	DeviceName string   `json:"device_name,omitempty"`
 }
 
 type jsonReport struct {
@@ -232,12 +234,14 @@ func (r *Reporter) writeJSON(results []TestResult) error {
 	}
 	for _, res := range results {
 		jr := jsonResult{
-			Name:     res.TestName,
-			File:     res.File,
-			Passed:   res.Passed,
-			Skipped:  res.Skipped,
-			Duration: float64(res.Duration.Milliseconds()),
-			Row:      res.Row,
+			Name:       res.TestName,
+			File:       res.File,
+			Passed:     res.Passed,
+			Skipped:    res.Skipped,
+			Duration:   float64(res.Duration.Milliseconds()),
+			Row:        res.Row,
+			DeviceID:   res.DeviceID,
+			DeviceName: res.DeviceName,
 		}
 		// Convert artifact paths to relative paths for portability (CI/CD)
 		for _, art := range res.Artifacts {
