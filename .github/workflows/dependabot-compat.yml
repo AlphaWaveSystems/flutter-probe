@@ -1,0 +1,178 @@
+name: Dependabot Compatibility
+
+# Runs on Dependabot PRs to ensure dependency updates don't break anything.
+# Goes beyond the standard CI by also building binaries, running probe-convert
+# integration tests, and verifying the website builds.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+# Only run for Dependabot PRs
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---- Determine what changed ----
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      npm: ${{ steps.filter.outputs.npm }}
+      actions: ${{ steps.filter.outputs.actions }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'go.mod'
+              - 'go.sum'
+              - 'tools/probe-convert/go.mod'
+              - 'tools/probe-convert/go.sum'
+            npm:
+              - 'website/package.json'
+              - 'website/package-lock.json'
+            actions:
+              - '.github/workflows/**'
+
+  # ---- Go dependency updates ----
+  go-compat:
+    name: Go compatibility
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Verify dependencies resolve
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+
+      - name: Build CLI
+        run: go build -o bin/probe ./cmd/probe/
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Staticcheck
+        run: staticcheck ./...
+
+      - name: Unit tests
+        run: go test ./... -count=1 -race -timeout 5m
+
+      - name: Build probe-convert
+        run: cd tools/probe-convert && go build -o ../../bin/probe-convert .
+
+      - name: probe-convert vet + staticcheck
+        run: cd tools/probe-convert && go vet ./... && staticcheck ./...
+
+      - name: probe-convert tests
+        run: cd tools/probe-convert && go test ./... -count=1 -timeout 5m
+
+      - name: Cross-compile check
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/probe/
+          GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/probe/
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/probe/
+
+  # ---- npm dependency updates (website) ----
+  npm-compat:
+    name: Website compatibility
+    needs: changes
+    if: needs.changes.outputs.npm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: cd website && npm ci
+
+      - name: Build website
+        run: cd website && npm run build
+
+      - name: Verify sitemap generated
+        run: test -f website/dist/sitemap-index.xml
+
+      - name: Verify page count
+        run: |
+          COUNT=$(find website/dist -name 'index.html' | wc -l | tr -d ' ')
+          echo "Built $COUNT pages"
+          if [ "$COUNT" -lt 30 ]; then
+            echo "ERROR: Expected 30+ pages, got $COUNT"
+            exit 1
+          fi
+
+      - name: Check for broken internal links
+        run: |
+          cd website/dist
+          # Verify key pages exist
+          for page in getting-started/installation getting-started/quick-start \
+                      probescript/syntax comparisons/flutter-e2e-testing \
+                      blog/guide-to-flutter-e2e-testing; do
+            if [ ! -f "$page/index.html" ]; then
+              echo "ERROR: Missing page: $page"
+              exit 1
+            fi
+          done
+          echo "All key pages present"
+
+  # ---- GitHub Actions updates ----
+  actions-compat:
+    name: Actions compatibility
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Build CLI (verifies the build step in CI still works)
+        run: go build -o bin/probe ./cmd/probe/
+
+      - name: Unit tests (verifies the test step in CI still works)
+        run: go test ./... -count=1 -timeout 5m
+
+  # ---- Auto-approve safe updates ----
+  auto-approve:
+    name: Auto-approve
+    needs: [go-compat, npm-compat, actions-compat]
+    if: |
+      always() &&
+      github.actor == 'dependabot[bot]' &&
+      !contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Approve PR
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
