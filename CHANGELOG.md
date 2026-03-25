@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-25
+
+### Fixed
+
+- Fix `set location` decimal parsing — coordinates like `37.7749, -122.4194` were stripped of decimals and negative signs
+- Fix Android app launch — replace `adb shell monkey` with `am start -n {package}/.MainActivity` (monkey fails silently on many emulators)
+- Fix Android token reading — file-based token via `adb shell run-as` instead of unreliable logcat scanning
+- Fix variable resolution in `see` assertions — data-driven variables like `<expected>` were not substituted
+- Fix Dart agent url_launcher interceptor — use proper `MethodChannel.setMethodCallHandler` instead of mock-only API
+- Increase Android reconnect delay to 5s (emulators need more boot time than iOS simulators)
+
+### Added
+
+- `--parallel` flag — auto-discover all connected devices, distribute test files round-robin, run in parallel goroutines
+- `--devices serial1,serial2` flag — explicit device list for parallel execution
+- `--shard N/M` flag — deterministic file-based sharding for CI matrix jobs (e.g. `--shard 1/3`)
+- `ParallelOrchestrator` with per-device goroutines, independent WebSocket connections, port allocation, and result merging
+- Per-device test attribution — `TestResult` includes `DeviceID` and `DeviceName`
+- JSON reporter includes `device_id` and `device_name` per result
+- Terminal output shows per-device summary table in parallel mode
+- Lexer support for float literals (e.g. `37.7749`) and negative sign tokens
+
 ## [0.4.0] - 2026-03-25
 
 ### Added

@@ -512,6 +512,69 @@ Full documentation: [alphawavesystems.github.io/flutter-probe](https://alphawave
 - [Cloud Providers](https://alphawavesystems.github.io/flutter-probe/advanced/configuration/)
 - [Visual Regression](https://alphawavesystems.github.io/flutter-probe/advanced/visual-regression/)
 
+## FAQ & Best Practices
+
+### Tests hang or get stuck after `restart the app`
+
+On Android, the app needs ~5 seconds to boot after restart. Always add `wait 5 seconds` after `restart the app`. On iOS simulators, the navigation stack may persist across restarts — use `pushNamedAndRemoveUntil` in your Flutter app instead of `pushReplacementNamed`.
+
+### `tap` on a widget succeeds but nothing happens
+
+Use **text selectors** (`tap "Settings"`) instead of **ID selectors** (`tap #nav_settings`) for `ListTile` navigation. The framework finds the widget by key but the tap may not hit the interactive area. Text selectors target the `Text` widget which is always within the tappable zone.
+
+### Tests fail with "Widget not found" after navigation
+
+Add `wait 1 seconds` or `wait 2 seconds` after every navigation tap to let the page transition complete before asserting. The widget tree needs time to rebuild after a route push.
+
+### `restart the app` in `before each` breaks all tests
+
+Don't use `restart the app` inside `before each` hooks — it creates WebSocket reconnection issues. Instead, put `restart the app` + `wait 5 seconds` inside each test body for full isolation.
+
+### Data-driven variables don't resolve in `see` assertions
+
+Wrap variables in quotes: `see "<expected>"` not `see <expected>`. The `<variable>` syntax requires the enclosing quotes to be treated as a text selector.
+
+### Android emulator: app doesn't launch after restart
+
+FlutterProbe uses `am start -n {package}/.MainActivity` for Android. Ensure your app's `AndroidManifest.xml` has `MainActivity` as the launcher activity. This is the default for Flutter apps created with `flutter create`.
+
+### How do I run tests in parallel?
+
+```bash
+# Local: auto-discover all connected devices
+probe test tests/ --parallel
+
+# CI: split files across matrix jobs (each job = 1 emulator)
+probe test tests/ --shard 1/3 --device emulator-5554
+```
+
+### How do I speed up CI?
+
+Use matrix sharding — 3 parallel CI jobs each running 1/3 of the test files:
+
+```yaml
+strategy:
+  matrix:
+    shard: ["1/3", "2/3", "3/3"]
+steps:
+  - run: probe test tests/ --shard ${{ matrix.shard }} -v -y
+```
+
+### Which cloud device farms are supported?
+
+BrowserStack, Sauce Labs, AWS Device Farm, LambdaTest (interactive via WebSocket relay), and Firebase Test Lab (batch mode only). All relay-compatible providers support `--parallel` for concurrent multi-device execution.
+
+### How do I debug a failing test?
+
+1. Run with `-v` for step-by-step output: `probe test tests/my_test.probe -v`
+2. Check failure screenshots in `reports/screenshots/`
+3. Add `pause` or `take a screenshot called "debug"` at the point of failure
+4. Use `dump the widget tree` to inspect what's on screen
+
+### What's the minimum Flutter version?
+
+Flutter 3.19+ with Dart 3.3+. The ProbeAgent uses `package:flutter/services.dart` APIs that require these versions.
+
 ## License
 
 [Business Source License 1.1](LICENSE) — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release.

@@ -38,9 +38,13 @@ concurrency:
 jobs:
   # ---- Android E2E ----
   e2e-android:
-    name: Android E2E (API ${{ inputs.api-level }})
+    name: Android E2E (API ${{ inputs.api-level }}, shard ${{ matrix.shard }})
     if: inputs.platform == 'android' || inputs.platform == 'both'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/3", "2/3", "3/3"]
     steps:
       - uses: actions/checkout@v6
 
@@ -100,8 +104,9 @@ jobs:
           disable-animations: true
           script: |
             bin/probe test ${{ inputs.test-path }} \
+              --shard ${{ matrix.shard }} \
               --format json \
-              --output reports/results.json \
+              --output reports/results-shard-${{ strategy.job-index }}.json \
               -v -y \
               || true
 
@@ -122,9 +127,13 @@ jobs:
 
   # ---- iOS E2E ----
   e2e-ios:
-    name: iOS E2E
+    name: iOS E2E (shard ${{ matrix.shard }})
     if: inputs.platform == 'ios' || inputs.platform == 'both'
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/3", "2/3", "3/3"]
     steps:
       - uses: actions/checkout@v6
 
@@ -163,9 +172,10 @@ jobs:
       - name: Run E2E tests
         run: |
           bin/probe test ${{ inputs.test-path }} \
+            --shard ${{ matrix.shard }} \
             --device "$DEVICE_UDID" \
             --format json \
-            --output reports/ios-results.json \
+            --output reports/ios-results-shard-${{ strategy.job-index }}.json \
             -v -y \
             || true
 
