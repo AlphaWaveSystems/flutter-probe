@@ -1,8 +1,9 @@
 name: E2E Tests
 
-# Manual trigger only — E2E tests require a Flutter app project with ProbeAgent
-# integrated, plus emulator/simulator setup. This workflow serves as a template
-# that can be customized per-project.
+# Runs the full FlutterProbe E2E test suite against the test app on
+# real emulators/simulators. Tests are sharded across 3 parallel jobs
+# per platform for ~3x speedup.
+
 on:
   workflow_dispatch:
     inputs:
@@ -25,44 +26,69 @@ on:
         required: false
         type: string
         default: "3.41.4"
-      test-path:
-        description: "Path to test files"
-        required: false
-        type: string
-        default: "tests/"
+  push:
+    tags: ['v*']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  E2E_REPO: AlphaWaveSystems/e2e-test-workspace
+  ANDROID_APP_ID: com.alphawavesystems.probe_test_app
+  IOS_BUNDLE_ID: com.alphawavesystems.probeTestApp
+  FLUTTER_VERSION: ${{ inputs.flutter-version || '3.41.4' }}
+  API_LEVEL: ${{ inputs.api-level || '34' }}
+
 jobs:
   # ---- Android E2E ----
   e2e-android:
-    name: Android E2E (API ${{ inputs.api-level }}, shard ${{ matrix.shard }})
-    if: inputs.platform == 'android' || inputs.platform == 'both'
+    name: Android E2E (API ${{ inputs.api-level || '34' }}, shard ${{ matrix.shard }})
+    if: >
+      github.event_name == 'push' ||
+      inputs.platform == 'android' ||
+      inputs.platform == 'both'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         shard: ["1/3", "2/3", "3/3"]
     steps:
-      - uses: actions/checkout@v6
+      # ── Checkout repos ──
+      - name: Checkout FlutterProbe
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v6
+      - name: Checkout E2E test app
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.E2E_REPO }}
+          path: e2e-app
+
+      # ── Tool setup ──
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26"
           cache: true
 
-      - name: Build probe CLI
-        run: make build
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ inputs.flutter-version }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
+      # ── Build probe CLI ──
+      - name: Build probe CLI
+        run: make build
+
+      # ── Emulator setup ──
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
@@ -77,119 +103,183 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ inputs.api-level }}-${{ runner.os }}
+          key: avd-${{ env.API_LEVEL }}-${{ runner.os }}
 
       - name: Create AVD
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ inputs.api-level }}
+          api-level: ${{ env.API_LEVEL }}
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: false
           script: echo "AVD created"
 
-      # TODO: Add your Flutter app build step here.
-      # The app must have probe_agent integrated and built with:
-      #   flutter build apk --debug --dart-define=PROBE_AGENT=true
-      # Then install and launch:
-      #   adb install -r build/app/outputs/flutter-apk/app-debug.apk
-      #   adb shell am start -n <package>/<activity>
+      # ── Build and install test app ──
+      - name: Configure probe_agent dependency
+        run: |
+          cd e2e-app/mobile
+          cat > pubspec_overrides.yaml << 'EOF'
+          dependency_overrides:
+            probe_agent:
+              path: ../../probe_agent
+          EOF
 
+      - name: Install Flutter dependencies
+        run: cd e2e-app/mobile && flutter pub get
+
+      - name: Build debug APK with ProbeAgent
+        run: cd e2e-app/mobile && flutter build apk --debug --dart-define=PROBE_AGENT=true
+
+      # ── Run tests inside emulator session ──
       - name: Run E2E tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ inputs.api-level }}
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          api-level: ${{ env.API_LEVEL }}
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
           disable-animations: true
           script: |
-            bin/probe test ${{ inputs.test-path }} \
+            # Install and launch the test app
+            adb install -r e2e-app/mobile/build/app/outputs/flutter-apk/app-debug.apk
+            adb logcat -c
+            adb shell am start -n ${{ env.ANDROID_APP_ID }}/.MainActivity
+            sleep 10
+
+            # Run tests with sharding
+            bin/probe test e2e-app/mobile/tests/ \
               --shard ${{ matrix.shard }} \
+              --device emulator-5554 \
+              --config e2e-app/mobile/tests/probe.yaml \
               --format json \
-              --output reports/results-shard-${{ strategy.job-index }}.json \
+              --output reports/results-android-shard-${{ strategy.job-index }}.json \
               -v -y \
               || true
 
+      # ── Reports ──
       - name: Generate HTML report
         if: always()
         run: |
-          if [ -f reports/results.json ]; then
-            bin/probe report --input reports/results.json -o reports/report.html
+          RESULT_FILE="reports/results-android-shard-${{ strategy.job-index }}.json"
+          if [ -f "$RESULT_FILE" ]; then
+            bin/probe report --input "$RESULT_FILE" -o "reports/report-android-shard-${{ strategy.job-index }}.html"
           fi
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: android-e2e-results
+          name: android-e2e-shard-${{ strategy.job-index }}
           path: reports/
           if-no-files-found: ignore
 
   # ---- iOS E2E ----
   e2e-ios:
     name: iOS E2E (shard ${{ matrix.shard }})
-    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    if: >
+      github.event_name == 'push' ||
+      inputs.platform == 'ios' ||
+      inputs.platform == 'both'
     runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
         shard: ["1/3", "2/3", "3/3"]
     steps:
-      - uses: actions/checkout@v6
+      # ── Checkout repos ──
+      - name: Checkout FlutterProbe
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v6
+      - name: Checkout E2E test app
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.E2E_REPO }}
+          path: e2e-app
+
+      # ── Tool setup ──
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26"
           cache: true
 
-      - name: Build probe CLI
-        run: make build
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ inputs.flutter-version }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
 
+      # ── Build probe CLI ──
+      - name: Build probe CLI
+        run: make build
+
+      # ── Boot iOS simulator ──
       - name: Boot iOS simulator
         run: |
           DEVICE=$(xcrun simctl list devices available -j | \
             python3 -c "import json,sys; devs=[d for r in json.load(sys.stdin)['devices'].values() for d in r if 'iPhone' in d['name'] and d['isAvailable']]; print(devs[0]['udid'] if devs else '')")
           if [ -n "$DEVICE" ]; then
             xcrun simctl boot "$DEVICE" || true
+            xcrun simctl bootstatus "$DEVICE"
             echo "DEVICE_UDID=$DEVICE" >> "$GITHUB_ENV"
+            echo "Booted simulator: $DEVICE"
           else
             echo "No available iPhone simulator found"
             exit 1
           fi
 
-      # TODO: Add your Flutter app build and install steps here.
-      # For iOS simulator:
-      #   flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
-      #   xcrun simctl install "$DEVICE_UDID" build/ios/iphonesimulator/Runner.app
-      #   xcrun simctl launch "$DEVICE_UDID" <bundle-id>
+      # ── Build and install test app ──
+      - name: Configure probe_agent dependency
+        run: |
+          cd e2e-app/mobile
+          cat > pubspec_overrides.yaml << 'EOF'
+          dependency_overrides:
+            probe_agent:
+              path: ../../probe_agent
+          EOF
 
+      - name: Install Flutter dependencies
+        run: cd e2e-app/mobile && flutter pub get
+
+      - name: Build iOS simulator app with ProbeAgent
+        run: cd e2e-app/mobile && flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
+
+      - name: Install and launch on simulator
+        run: |
+          xcrun simctl install "$DEVICE_UDID" e2e-app/mobile/build/ios/iphonesimulator/Runner.app
+          xcrun simctl launch "$DEVICE_UDID" ${{ env.IOS_BUNDLE_ID }}
+          sleep 5
+          echo "App launched on $DEVICE_UDID"
+
+      # ── Run tests ──
       - name: Run E2E tests
         run: |
-          bin/probe test ${{ inputs.test-path }} \
+          bin/probe test e2e-app/mobile/tests/ \
             --shard ${{ matrix.shard }} \
             --device "$DEVICE_UDID" \
+            --config e2e-app/mobile/tests/probe.yaml \
             --format json \
-            --output reports/ios-results-shard-${{ strategy.job-index }}.json \
+            --output reports/results-ios-shard-${{ strategy.job-index }}.json \
             -v -y \
             || true
 
+      # ── Reports ──
       - name: Generate HTML report
         if: always()
         run: |
-          if [ -f reports/ios-results.json ]; then
-            bin/probe report --input reports/ios-results.json -o reports/ios-report.html
+          RESULT_FILE="reports/results-ios-shard-${{ strategy.job-index }}.json"
+          if [ -f "$RESULT_FILE" ]; then
+            bin/probe report --input "$RESULT_FILE" -o "reports/report-ios-shard-${{ strategy.job-index }}.html"
           fi
+
+      # ── Cleanup ──
+      - name: Shutdown simulator
+        if: always()
+        run: xcrun simctl shutdown "$DEVICE_UDID" 2>/dev/null || true
 
       - name: Upload iOS results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-e2e-results
+          name: ios-e2e-shard-${{ strategy.job-index }}
           path: reports/
           if-no-files-found: ignore
