@@ -148,11 +148,7 @@ func convertRobot(src, path string) (string, []convert.Warning) {
 			// Handle special settings.
 			switch strings.ToLower(first) {
 			case "[tags]":
-				var tags []string
-				for _, t := range rest {
-					tags = append(tags, t)
-				}
-				w.Tags(tags)
+				w.Tags(append([]string{}, rest...))
 				continue
 			case "[arguments]":
 				// Re-declare recipe with params.

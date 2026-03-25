@@ -33,7 +33,7 @@ var knownExtensions = map[string]bool{
 
 func runConvert(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("no input files or directories specified\n\nUsage: probe-convert [flags] <file|dir>...")
+		return fmt.Errorf("no input files or directories specified; usage: probe-convert [flags] <file|dir>")
 	}
 
 	noColorFlag, _ := cmd.Flags().GetBool("no-color")
