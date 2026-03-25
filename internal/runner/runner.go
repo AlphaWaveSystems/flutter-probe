@@ -125,7 +125,30 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	}
 
 	var results []TestResult
-	// Run hooks + tests
+
+	// Run beforeAll hooks (fail-fast: if beforeAll fails, skip all tests in file)
+	for _, hook := range prog.Hooks {
+		if hook.Kind == parser.HookBeforeAll {
+			exec := NewExecutor(r.client, r.deviceCtx, func(newClient *probelink.Client) {
+				r.client = newClient
+			}, r.opts.Timeout, r.opts.Verbose)
+			if err := exec.RunBody(ctx, hook.Body); err != nil {
+				// Mark all tests as failed due to beforeAll failure
+				for _, t := range tests {
+					results = append(results, TestResult{
+						TestName: t.Name,
+						File:     path,
+						Passed:   false,
+						Error:    fmt.Errorf("before all: %w", err),
+						Row:      -1,
+					})
+				}
+				return results, nil
+			}
+		}
+	}
+
+	// Run tests
 	for _, t := range tests {
 		testResults, err := r.runTest(ctx, prog, t, path)
 		if err != nil {
@@ -133,10 +156,31 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 		}
 		results = append(results, testResults...)
 	}
+
+	// Run afterAll hooks (always, best-effort)
+	for _, hook := range prog.Hooks {
+		if hook.Kind == parser.HookAfterAll {
+			exec := NewExecutor(r.client, r.deviceCtx, func(newClient *probelink.Client) {
+				r.client = newClient
+			}, r.opts.Timeout, r.opts.Verbose)
+			_ = exec.RunBody(ctx, hook.Body)
+		}
+	}
+
 	return results, nil
 }
 
 func (r *Runner) runTest(ctx context.Context, prog *parser.Program, t parser.TestDef, file string) ([]TestResult, error) {
+	// Load CSV examples if Source is set
+	if t.Examples != nil && t.Examples.Source != "" && len(t.Examples.Rows) == 0 {
+		csvExamples, err := loadCSVExamples(filepath.Dir(file), t.Examples.Source)
+		if err != nil {
+			return nil, err
+		}
+		t.Examples.Headers = csvExamples.Headers
+		t.Examples.Rows = csvExamples.Rows
+	}
+
 	// Data-driven: expand rows
 	if t.Examples != nil && len(t.Examples.Rows) > 0 {
 		return r.runDataDriven(ctx, prog, t, file)

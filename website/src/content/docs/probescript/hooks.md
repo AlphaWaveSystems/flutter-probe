@@ -1,9 +1,38 @@
 ---
 title: Hooks
-description: Run setup and teardown steps with before each, after each, and on failure hooks.
+description: Run setup and teardown steps with before all, after all, before each, after each, and on failure hooks.
 ---
 
 Hooks let you define steps that run automatically around your tests. They are defined at the file level and apply to all tests in that file.
+
+FlutterProbe supports two levels of hooks:
+- **Suite-level**: `before all` and `after all` — run once per file
+- **Test-level**: `before each`, `after each`, and `on failure` — run around every test
+
+## before all
+
+Runs once before the first test in the file. If it fails, all tests in the file are skipped:
+
+```
+before all
+  open the app
+  tap "Accept Terms"
+  wait for the page to load
+```
+
+Use this for expensive one-time setup like accepting onboarding flows, seeding data, or logging in.
+
+## after all
+
+Runs once after the last test in the file, regardless of whether tests passed or failed:
+
+```
+after all
+  take screenshot "suite_final"
+  call DELETE "https://api.example.com/test-data"
+```
+
+Use this for suite-level teardown like cleaning up test data or capturing final state.
 
 ## before each
 
@@ -41,15 +70,21 @@ on failure
 
 ## Combining Hooks
 
-You can use all three hooks in the same file:
+You can use all five hooks in the same file:
 
 ```
-before each
+before all
   open the app
-  wait for the page to load
+  tap "Accept Terms"
+
+after all
+  take screenshot "suite_final"
+
+before each
+  see "Home"
 
 after each
-  take screenshot "final_state"
+  take screenshot "after_test"
 
 on failure
   take screenshot "failure_state"
@@ -59,26 +94,34 @@ on failure
 test "user can view settings"
   tap "Settings"
   see "Account"
-  see "Notifications"
+  go back
 
 test "user can view profile"
   tap "Profile"
   see "Email"
-  see "Name"
+  go back
 ```
 
 ## Execution Order
 
-For a passing test:
-1. `before each` steps
-2. Test steps
-3. `after each` steps
+Full execution order for a file with two tests:
+
+1. `before all` steps (once)
+2. `before each` steps
+3. Test 1 steps
+4. `after each` steps
+5. `before each` steps
+6. Test 2 steps
+7. `after each` steps
+8. `after all` steps (once)
 
 For a failing test:
 1. `before each` steps
 2. Test steps (until failure)
-3. `on failure` steps
-4. `after each` steps
+3. `on failure` steps (best-effort)
+4. `after each` steps (best-effort)
+
+If `before all` fails, all tests in the file are marked as failed and skipped. `after all` always runs, even if tests failed.
 
 ## Hooks with Recipes
 
@@ -101,3 +144,5 @@ test "user can update name"
 ## Scope
 
 Hooks are file-scoped. Each `.probe` file can define its own set of hooks. There are no global hooks — if you need the same hooks across multiple files, define them in a recipe and call it from each file's `before each`.
+
+`before all` and `after all` share a separate executor from the per-test hooks, so state set in `before all` (like variables) does not carry into individual tests.

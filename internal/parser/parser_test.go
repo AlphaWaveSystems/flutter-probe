@@ -675,3 +675,227 @@ func TestParser_CommentsOnly(t *testing.T) {
 `)
 	assertTestCount(t, prog, 0)
 }
+
+// ---- Parser: beforeAll / afterAll hooks ----
+
+func TestParser_BeforeAllHook(t *testing.T) {
+	src := `before all
+  open the app
+
+test "t"
+  see "Home"
+`
+	prog := mustParse(t, src)
+	if len(prog.Hooks) != 1 {
+		t.Fatalf("hooks: got %d, want 1", len(prog.Hooks))
+	}
+	if prog.Hooks[0].Kind != parser.HookBeforeAll {
+		t.Errorf("hook kind: got %q, want %q", prog.Hooks[0].Kind, parser.HookBeforeAll)
+	}
+	if len(prog.Hooks[0].Body) == 0 {
+		t.Error("beforeAll body is empty")
+	}
+}
+
+func TestParser_AfterAllHook(t *testing.T) {
+	src := `after all tests
+  take a screenshot called "final"
+
+test "t"
+  see "Home"
+`
+	prog := mustParse(t, src)
+	if len(prog.Hooks) != 1 {
+		t.Fatalf("hooks: got %d, want 1", len(prog.Hooks))
+	}
+	if prog.Hooks[0].Kind != parser.HookAfterAll {
+		t.Errorf("hook kind: got %q, want %q", prog.Hooks[0].Kind, parser.HookAfterAll)
+	}
+}
+
+// ---- Parser: new E2E commands (v0.4.0) ----
+
+func TestParser_KillApp(t *testing.T) {
+	src := `test "t"
+  kill the app
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbKill {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbKill)
+	}
+}
+
+func TestParser_CopyClipboard(t *testing.T) {
+	src := `test "t"
+  copy "hello@test.com" to clipboard
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbCopyClipboard {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbCopyClipboard)
+	}
+	if a.Text != "hello@test.com" {
+		t.Errorf("text: got %q, want %q", a.Text, "hello@test.com")
+	}
+}
+
+func TestParser_PasteClipboard(t *testing.T) {
+	src := `test "t"
+  paste from clipboard
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbPasteClipboard {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbPasteClipboard)
+	}
+}
+
+func TestParser_SetLocation(t *testing.T) {
+	src := `test "t"
+  set location 37.7749, -122.4194
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbSetLocation {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbSetLocation)
+	}
+	if a.Name == "" {
+		t.Error("location should not be empty")
+	}
+}
+
+func TestParser_VerifyBrowser(t *testing.T) {
+	src := `test "t"
+  verify external browser opened
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbVerifyBrowser {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbVerifyBrowser)
+	}
+}
+
+func TestParser_HTTPCallGET(t *testing.T) {
+	src := `test "t"
+  call GET "https://api.example.com/health"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	h, ok := prog.Tests[0].Body[0].(parser.HTTPCallStep)
+	if !ok {
+		t.Fatal("expected HTTPCallStep")
+	}
+	if h.Method != "GET" {
+		t.Errorf("method: %q", h.Method)
+	}
+	if h.URL != "https://api.example.com/health" {
+		t.Errorf("url: %q", h.URL)
+	}
+	if h.Body != "" {
+		t.Errorf("body should be empty: %q", h.Body)
+	}
+}
+
+func TestParser_HTTPCallPOSTWithBody(t *testing.T) {
+	src := `test "t"
+  call POST "https://api.example.com/users" with body "{\"name\":\"test\"}"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	h, ok := prog.Tests[0].Body[0].(parser.HTTPCallStep)
+	if !ok {
+		t.Fatal("expected HTTPCallStep")
+	}
+	if h.Method != "POST" {
+		t.Errorf("method: %q", h.Method)
+	}
+	if h.Body == "" {
+		t.Error("body should not be empty")
+	}
+}
+
+func TestParser_HTTPCallDELETE(t *testing.T) {
+	src := `test "t"
+  call DELETE "https://api.example.com/users/1"
+`
+	prog := mustParse(t, src)
+	h, ok := prog.Tests[0].Body[0].(parser.HTTPCallStep)
+	if !ok {
+		t.Fatal("expected HTTPCallStep")
+	}
+	if h.Method != "DELETE" {
+		t.Errorf("method: %q", h.Method)
+	}
+}
+
+func TestParser_ExamplesFromCSV(t *testing.T) {
+	src := `test "t"
+  type "<email>" into "Email"
+
+with examples from "data/users.csv"
+`
+	prog := mustParse(t, src)
+	if prog.Tests[0].Examples == nil {
+		t.Fatal("examples is nil")
+	}
+	if prog.Tests[0].Examples.Source != "data/users.csv" {
+		t.Errorf("source: %q", prog.Tests[0].Examples.Source)
+	}
+}
+
+func TestParser_BeforeAllAndBeforeEach(t *testing.T) {
+	src := `before all
+  open the app
+
+before each test
+  see "Home"
+
+after all
+  close the app
+
+test "t1"
+  tap "Button"
+
+test "t2"
+  tap "Other"
+`
+	prog := mustParse(t, src)
+	if len(prog.Hooks) != 3 {
+		t.Fatalf("hooks: got %d, want 3", len(prog.Hooks))
+	}
+	kinds := map[parser.HookKind]int{}
+	for _, h := range prog.Hooks {
+		kinds[h.Kind]++
+	}
+	if kinds[parser.HookBeforeAll] != 1 {
+		t.Errorf("beforeAll count: %d", kinds[parser.HookBeforeAll])
+	}
+	if kinds[parser.HookBeforeEach] != 1 {
+		t.Errorf("beforeEach count: %d", kinds[parser.HookBeforeEach])
+	}
+	if kinds[parser.HookAfterAll] != 1 {
+		t.Errorf("afterAll count: %d", kinds[parser.HookAfterAll])
+	}
+	assertTestCount(t, prog, 2)
+}

@@ -142,6 +142,56 @@ pause                              # 1-second pause
 ```
 clear app data                     # wipe data and relaunch
 restart the app                    # force-stop and relaunch (preserves data)
+kill the app                       # force-stop only (no relaunch)
+open the app                       # launch the app (CLI-side) and reconnect
+```
+
+## Clipboard
+
+```
+copy "user@example.com" to clipboard
+paste from clipboard               # stores result in <clipboard> variable
+type "<clipboard>" into "Email"    # use the pasted value
+```
+
+## Device Location
+
+```
+set location 37.7749, -122.4194    # set GPS coordinates (lat, lng)
+```
+
+## External Browser
+
+```
+verify external browser opened     # assert url_launcher was called
+```
+
+## HTTP Calls
+
+Make real HTTP requests to APIs (runs on the CLI, not the device):
+
+```
+call GET "https://api.example.com/health"
+call POST "https://api.example.com/seed" with body "{\"env\":\"test\"}"
+call PUT "https://api.example.com/users/1" with body "{\"name\":\"updated\"}"
+call DELETE "https://api.example.com/sessions"
+```
+
+Responses are stored in variables:
+- `<response.status>` — HTTP status code (e.g., `200`)
+- `<response.body>` — response body as a string
+
+## Data Generators
+
+Generate random data for form-heavy tests:
+
+```
+type "<random.email>" into "Email"          # e.g., user_x7k2m@test.probe
+type "<random.name>" into "Name"            # e.g., Alice Johnson
+type "<random.phone>" into "Phone"          # e.g., +1-555-042-7831
+type "<random.uuid>" into "Reference"       # UUID v4
+type "<random.number(1,100)>" into "Age"    # random int in range
+type "<random.text(8)>" into "Code"         # random alphanumeric string
 ```
 
 ## Permissions

@@ -361,3 +361,27 @@ func (c *Client) SaveLogs(ctx context.Context) error {
 	_, err := c.Call(ctx, MethodSaveLogs, nil)
 	return err
 }
+
+func (c *Client) CopyToClipboard(ctx context.Context, text string) error {
+	_, err := c.Call(ctx, MethodCopyClipboard, map[string]string{"text": text})
+	return err
+}
+
+func (c *Client) PasteFromClipboard(ctx context.Context) (string, error) {
+	raw, err := c.Call(ctx, MethodPasteClipboard, nil)
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", err
+	}
+	return result.Text, nil
+}
+
+func (c *Client) VerifyBrowser(ctx context.Context) error {
+	_, err := c.Call(ctx, MethodVerifyBrowser, nil)
+	return err
+}

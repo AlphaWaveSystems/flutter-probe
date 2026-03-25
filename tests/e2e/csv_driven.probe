@@ -1,0 +1,8 @@
+test "login with CSV data"
+  open the app
+  type "<email>" into "Email"
+  type "<password>" into "Password"
+  tap "Sign In"
+  see "<expected>"
+
+with examples from "fixtures/users.csv"

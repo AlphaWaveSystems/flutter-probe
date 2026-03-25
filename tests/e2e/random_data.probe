@@ -1,0 +1,8 @@
+test "register with random data"
+  open the app
+  type "<random.email>" into "Email"
+  type "<random.name>" into "Full Name"
+  type "<random.phone>" into "Phone"
+  type "<random.uuid>" into "Reference ID"
+  tap "Register"
+  see "Success"

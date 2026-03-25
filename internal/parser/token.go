@@ -136,6 +136,14 @@ const (
 	TOKEN_REVOKE     // "revoke"
 	TOKEN_PERMISSION // "permission"
 	TOKEN_ALL        // "all"
+
+	// New E2E commands (v0.4.0)
+	TOKEN_KILL            // "kill"
+	TOKEN_COPY            // "copy"
+	TOKEN_PASTE           // "paste"
+	TOKEN_SET_LOCATION    // compound: "set location"
+	TOKEN_VERIFY_BROWSER  // compound: "verify external browser"
+	TOKEN_CALL            // "call"
 )
 
 // Token is a single lexical unit.
@@ -248,6 +256,14 @@ var keywords = map[string]TokenType{
 	"permission":   TOKEN_PERMISSION,
 	"permissions":  TOKEN_PERMISSION,
 	"all":          TOKEN_ALL,
+	"kill":         TOKEN_KILL,
+	"copy":         TOKEN_COPY,
+	"paste":        TOKEN_PASTE,
+	"call":         TOKEN_CALL,
+	"verify":       TOKEN_IDENT,
+	"set":          TOKEN_IDENT,
+	"location":     TOKEN_IDENT,
+	"clipboard":    TOKEN_IDENT,
 }
 
 // fillerWords are stripped by the forgiving parser.

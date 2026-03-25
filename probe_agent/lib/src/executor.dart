@@ -26,7 +26,34 @@ class ProbeExecutor {
   // Mock registry: method+path -> {status, body}
   final Map<String, Map<String, dynamic>> _mocks = {};
 
-  ProbeExecutor(this._send);
+  // Tracks external URL launches (populated by url_launcher interceptor)
+  final List<String> _externalUrlLaunches = [];
+
+  ProbeExecutor(this._send) {
+    _interceptUrlLauncher();
+  }
+
+  /// Intercepts url_launcher platform channel to track external browser launches.
+  void _interceptUrlLauncher() {
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    // Dart test bindings allow handler overrides; in production builds this
+    // is a best-effort hook — if the channel is already claimed it will still
+    // record launches via the standard handler.
+    ServicesBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (MethodCall call) async {
+        if (call.method == 'launch' || call.method == 'launchUrl') {
+          final url = call.arguments is String
+              ? call.arguments as String
+              : (call.arguments as Map?)?.values.firstOrNull?.toString() ?? '';
+          if (url.isNotEmpty) {
+            _externalUrlLaunches.add(url);
+          }
+        }
+        return true; // allow the launch
+      },
+    );
+  }
 
   /// Dispatch a JSON-RPC request and respond via [_send].
   Future<void> dispatch(ProbeRequest req) async {
@@ -180,6 +207,24 @@ class ProbeExecutor {
       case ProbeMethods.mock:
         _registerMock(req.params);
         return {'ok': true};
+
+      // ---- Clipboard ----
+      case ProbeMethods.copyClipboard:
+        final text = req.params['text'] as String? ?? '';
+        await Clipboard.setData(ClipboardData(text: text));
+        await _sync.waitForSettled();
+        return {'ok': true};
+
+      case ProbeMethods.pasteClipboard:
+        final data = await Clipboard.getData(Clipboard.kTextPlain);
+        return {'text': data?.text ?? ''};
+
+      // ---- Browser verification ----
+      case ProbeMethods.verifyBrowser:
+        if (_externalUrlLaunches.isEmpty) {
+          throw ProbeError(ProbeError.assertionFailed, 'No external browser launch detected');
+        }
+        return {'ok': true, 'urls': _externalUrlLaunches};
 
       default:
         throw ProbeError(ProbeError.methodNotFound, 'Unknown method: ${req.method}');

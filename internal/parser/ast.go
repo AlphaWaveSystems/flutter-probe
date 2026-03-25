@@ -79,6 +79,8 @@ const (
 	HookBeforeEach HookKind = "before_each"
 	HookAfterEach  HookKind = "after_each"
 	HookOnFailure  HookKind = "on_failure"
+	HookBeforeAll  HookKind = "before_all"
+	HookAfterAll   HookKind = "after_all"
 )
 
 type HookDef struct {
@@ -108,6 +110,7 @@ func (t TestDef) GetLine() int     { return t.Line }
 type ExamplesBlock struct {
 	Headers []string
 	Rows    [][]string
+	Source  string // CSV file path (empty means inline data)
 	Line    int
 }
 
@@ -151,6 +154,11 @@ const (
 	VerbDenyPermission  ActionVerb = "deny_permission"
 	VerbGrantAllPerms   ActionVerb = "grant_all_permissions"
 	VerbRevokeAllPerms  ActionVerb = "revoke_all_permissions"
+	VerbKill            ActionVerb = "kill"
+	VerbCopyClipboard   ActionVerb = "copy_clipboard"
+	VerbPasteClipboard  ActionVerb = "paste_clipboard"
+	VerbSetLocation     ActionVerb = "set_location"
+	VerbVerifyBrowser   ActionVerb = "verify_browser"
 )
 
 type SwipeDirection string
@@ -277,3 +285,16 @@ type RecipeCall struct {
 func (r RecipeCall) nodeType() string { return "recipe_call" }
 func (r RecipeCall) GetLine() int     { return r.Line }
 func (r RecipeCall) stepType() string { return "recipe_call" }
+
+// ---- HTTPCallStep ----
+
+type HTTPCallStep struct {
+	Method string // GET, POST, PUT, DELETE
+	URL    string
+	Body   string // optional request body
+	Line   int
+}
+
+func (h HTTPCallStep) nodeType() string { return "http_call" }
+func (h HTTPCallStep) GetLine() int     { return h.Line }
+func (h HTTPCallStep) stepType() string { return "http_call" }

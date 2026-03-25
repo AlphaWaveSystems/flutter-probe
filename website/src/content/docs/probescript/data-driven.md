@@ -77,3 +77,59 @@ with examples:
   "user@test.com"     "user123"    "Dashboard"
   "guest@test.com"    "guest123"   "Read Only"
 ```
+
+## Loading Data from CSV
+
+For large data sets, load examples from an external CSV file instead of inline tables:
+
+```
+test "login with CSV data"
+  open the app
+  type "<email>" into "Email"
+  type "<password>" into "Password"
+  tap "Sign In"
+  see "<expected>"
+
+with examples from "fixtures/users.csv"
+```
+
+The CSV file should have headers as the first row:
+
+```csv
+email,password,expected
+user@test.com,pass123,Dashboard
+admin@test.com,admin456,Admin Panel
+guest@test.com,guest1,Limited Access
+```
+
+CSV paths are resolved relative to the `.probe` file's directory. Absolute paths are also supported.
+
+## Random Data Generators
+
+Use built-in generators to create random test data on each run:
+
+```
+test "registration with random data"
+  open the app
+  type "<random.email>" into "Email"
+  type "<random.name>" into "Full Name"
+  type "<random.phone>" into "Phone"
+  type "<random.uuid>" into "Reference ID"
+  type "<random.number(18,65)>" into "Age"
+  type "<random.text(8)>" into "Invite Code"
+  tap "Register"
+  see "Success"
+```
+
+Available generators:
+
+| Generator | Example Output | Description |
+|---|---|---|
+| `<random.email>` | `user_x7k2m@test.probe` | Random email address |
+| `<random.name>` | `Alice Johnson` | Random first + last name |
+| `<random.phone>` | `+1-555-042-7831` | US-format phone number |
+| `<random.uuid>` | `550e8400-e29b-...` | UUID v4 |
+| `<random.number(min,max)>` | `42` | Random integer in range |
+| `<random.text(length)>` | `aB3kM9xQ` | Random alphanumeric string |
+
+Random generators are expanded before variable substitution, so they work in both inline and CSV-based data-driven tests.

@@ -1,0 +1,6 @@
+test "copy and paste text"
+  open the app
+  copy "hello@test.com" to clipboard
+  paste from clipboard
+  type "<clipboard>" into "Email"
+  see "hello@test.com"

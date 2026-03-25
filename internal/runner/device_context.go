@@ -375,3 +375,53 @@ func (dc *DeviceContext) iosTokenPath() string {
 	}
 	return home + "/Library/Developer/CoreSimulator/Devices/" + dc.Serial + "/data/tmp/probe/token"
 }
+
+// KillApp force-stops the app without relaunching it.
+func (dc *DeviceContext) KillApp(ctx context.Context) error {
+	fmt.Printf("    \033[31m⏹\033[0m  Killing %s on %s\n", dc.AppID, dc.Serial)
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial, "am", "force-stop", dc.AppID); err != nil {
+			return fmt.Errorf("kill app: %w", err)
+		}
+	case device.PlatformIOS:
+		_ = dc.Manager.SimCtl().Terminate(ctx, dc.Serial, dc.AppID)
+	}
+	return nil
+}
+
+// LaunchApp launches the app without force-stopping first.
+func (dc *DeviceContext) LaunchApp(ctx context.Context) error {
+	fmt.Printf("    \033[32m▶\033[0m  Launching %s on %s\n", dc.AppID, dc.Serial)
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
+			"monkey", "-p", dc.AppID,
+			"-c", "android.intent.category.LAUNCHER", "1"); err != nil {
+			return fmt.Errorf("launch app: %w", err)
+		}
+	case device.PlatformIOS:
+		if err := dc.Manager.SimCtl().Launch(ctx, dc.Serial, dc.AppID); err != nil {
+			return fmt.Errorf("launch app: %w", err)
+		}
+	}
+	return nil
+}
+
+// SetLocation sets the device's GPS location.
+func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error {
+	fmt.Printf("    \033[36m📍\033[0m  Setting location to %s, %s\n", lat, lng)
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		// adb emu geo fix takes longitude first, then latitude
+		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial, "emu", "geo", "fix", lng, lat); err != nil {
+			return fmt.Errorf("set location: %w", err)
+		}
+	case device.PlatformIOS:
+		simctl := dc.Manager.SimCtl()
+		if err := simctl.SetLocation(ctx, dc.Serial, lat, lng); err != nil {
+			return fmt.Errorf("set location: %w", err)
+		}
+	}
+	return nil
+}

@@ -1,0 +1,4 @@
+test "set GPS coordinates"
+  set location 37.7749, -122.4194
+  open the app
+  see "San Francisco"

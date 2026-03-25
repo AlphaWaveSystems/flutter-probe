@@ -113,6 +113,9 @@ class ProbeMethods {
   static const mock = 'probe.mock';
   static const startRecording = 'probe.start_recording';
   static const stopRecording = 'probe.stop_recording';
+  static const copyClipboard = 'probe.copy_clipboard';
+  static const pasteClipboard = 'probe.paste_clipboard';
+  static const verifyBrowser = 'probe.verify_browser';
 
   // Notification methods (agent → CLI)
   static const notifyRecordedEvent = 'probe.recorded_event';

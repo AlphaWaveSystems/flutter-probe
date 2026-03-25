@@ -1,0 +1,6 @@
+test "kill and reopen app"
+  open the app
+  see "Home"
+  kill the app
+  open the app
+  see "Home"

@@ -181,12 +181,25 @@ func (p *Parser) parseTest() (TestDef, error) {
 		}
 		p.advance() // examples
 		p.skipIf(TOKEN_COLON)
-		p.consumeNewline()
-		ex, err := p.parseExamples()
-		if err != nil {
-			return TestDef{}, err
+
+		// Check for "from" keyword → external CSV file
+		if p.peek().Type == TOKEN_FROM || (p.peek().Type == TOKEN_IDENT && strings.ToLower(p.peek().Literal) == "from") {
+			p.advance() // from
+			p.skipFillers()
+			source := ""
+			if p.peek().Type == TOKEN_STRING {
+				source = p.advance().Literal
+			}
+			p.consumeNewline()
+			examples = &ExamplesBlock{Source: source, Line: p.peek().Line}
+		} else {
+			p.consumeNewline()
+			ex, err := p.parseExamples()
+			if err != nil {
+				return TestDef{}, err
+			}
+			examples = ex
 		}
-		examples = ex
 	}
 	return TestDef{Name: name, Tags: tags, Body: body, Examples: examples, Line: line}, nil
 }
@@ -197,12 +210,24 @@ func (p *Parser) parseHook() (HookDef, error) {
 	var kind HookKind
 	switch tok.Type {
 	case TOKEN_BEFORE:
-		// before each test
 		p.skipFillers()
-		kind = HookBeforeEach
+		// Check if next token is "all" to distinguish before all vs before each
+		if p.peek().Type == TOKEN_ALL || (p.peek().Type == TOKEN_IDENT && strings.ToLower(p.peek().Literal) == "all") {
+			p.advance()
+			p.skipFillers()
+			kind = HookBeforeAll
+		} else {
+			kind = HookBeforeEach
+		}
 	case TOKEN_AFTER:
 		p.skipFillers()
-		kind = HookAfterEach
+		if p.peek().Type == TOKEN_ALL || (p.peek().Type == TOKEN_IDENT && strings.ToLower(p.peek().Literal) == "all") {
+			p.advance()
+			p.skipFillers()
+			kind = HookAfterAll
+		} else {
+			kind = HookAfterEach
+		}
 	case TOKEN_ON:
 		// on failure
 		p.skipFillers()
@@ -222,6 +247,10 @@ func (p *Parser) parseHookFromLifecycle() (HookDef, error) {
 	lower := strings.ToLower(tok.Literal)
 	var kind HookKind
 	switch {
+	case strings.Contains(lower, "before") && strings.Contains(lower, "all"):
+		kind = HookBeforeAll
+	case strings.Contains(lower, "after") && strings.Contains(lower, "all"):
+		kind = HookAfterAll
 	case strings.Contains(lower, "before"):
 		kind = HookBeforeEach
 	case strings.Contains(lower, "after"):
@@ -346,6 +375,18 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseGrantRevokeAll(VerbGrantAllPerms)
 	case TOKEN_REVOKE:
 		return p.parseGrantRevokeAll(VerbRevokeAllPerms)
+	case TOKEN_KILL:
+		return p.parseActionKill()
+	case TOKEN_COPY:
+		return p.parseActionCopy()
+	case TOKEN_PASTE:
+		return p.parseActionPaste()
+	case TOKEN_SET_LOCATION:
+		return p.parseActionSetLocation()
+	case TOKEN_VERIFY_BROWSER:
+		return p.parseActionVerifyBrowser()
+	case TOKEN_CALL:
+		return p.parseHTTPCall()
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -1166,4 +1207,126 @@ func parseOrdinal(s string) int {
 	num := strings.TrimRight(s, "stndrh")
 	n, _ := strconv.Atoi(num)
 	return n
+}
+
+// ---- New E2E command parsers (v0.4.0) ----
+
+func (p *Parser) parseActionKill() (Step, error) {
+	line := p.peek().Line
+	p.advance() // kill
+	p.skipFillers()
+	// skip "app" if present
+	if p.peek().Type == TOKEN_APP {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbKill, Line: line}, nil
+}
+
+func (p *Parser) parseActionCopy() (Step, error) {
+	line := p.peek().Line
+	p.advance() // copy
+	p.skipFillers()
+	text := ""
+	if p.peek().Type == TOKEN_STRING {
+		text = p.advance().Literal
+	}
+	p.skipFillers()
+	// skip "to", "clipboard" etc.
+	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbCopyClipboard, Text: text, Line: line}, nil
+}
+
+func (p *Parser) parseActionPaste() (Step, error) {
+	line := p.peek().Line
+	p.advance() // paste
+	p.skipFillers()
+	// skip "from", "clipboard" etc.
+	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbPasteClipboard, Line: line}, nil
+}
+
+func (p *Parser) parseActionSetLocation() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compound "set location"
+	p.skipFillers()
+
+	// Consume all remaining tokens on this line as the coordinate string
+	var parts []string
+	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF && p.peek().Type != TOKEN_DEDENT {
+		parts = append(parts, p.advance().Literal)
+	}
+	p.consumeNewline()
+
+	// Join and split on comma to get lat,lng
+	raw := strings.Join(parts, "")
+	// Clean up: remove spaces around comma
+	raw = strings.ReplaceAll(raw, " ", "")
+	return ActionStep{Verb: VerbSetLocation, Name: raw, Line: line}, nil
+}
+
+func (p *Parser) parseActionVerifyBrowser() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compound "verify external browser"
+	p.skipFillers()
+	// skip trailing words like "opened"
+	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbVerifyBrowser, Line: line}, nil
+}
+
+func (p *Parser) parseHTTPCall() (Step, error) {
+	line := p.peek().Line
+	p.advance() // call
+	p.skipFillers()
+
+	// Parse HTTP method
+	method := "GET"
+	switch p.peek().Type {
+	case TOKEN_GET:
+		method = "GET"
+		p.advance()
+	case TOKEN_POST:
+		method = "POST"
+		p.advance()
+	case TOKEN_PUT:
+		method = "PUT"
+		p.advance()
+	case TOKEN_DELETE:
+		method = "DELETE"
+		p.advance()
+	}
+	p.skipFillers()
+
+	// Parse URL
+	url := ""
+	if p.peek().Type == TOKEN_STRING {
+		url = p.advance().Literal
+	}
+	p.skipFillers()
+
+	// Optional: with body "..."
+	body := ""
+	if p.peek().Type == TOKEN_WITH {
+		p.advance()
+		p.skipFillers()
+		if p.peek().Type == TOKEN_BODY {
+			p.advance()
+		}
+		p.skipFillers()
+		if p.peek().Type == TOKEN_STRING {
+			body = p.advance().Literal
+		}
+	}
+
+	p.consumeNewline()
+	return HTTPCallStep{Method: method, URL: url, Body: body, Line: line}, nil
 }

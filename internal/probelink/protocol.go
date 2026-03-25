@@ -179,6 +179,11 @@ const (
 	MethodStartRecording = "probe.start_recording"
 	MethodStopRecording  = "probe.stop_recording"
 
+	// Clipboard and browser verification (v0.4.0)
+	MethodCopyClipboard  = "probe.copy_clipboard"
+	MethodPasteClipboard = "probe.paste_clipboard"
+	MethodVerifyBrowser  = "probe.verify_browser"
+
 	// Notification methods (agent → CLI, no response expected)
 	NotifyRecordedEvent = "probe.recorded_event"
 	NotifyExecDart      = "probe.exec_dart"

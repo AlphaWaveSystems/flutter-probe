@@ -291,3 +291,12 @@ func (s *SimCtl) AutoSelect(ctx context.Context) (*Simulator, error) {
 	}
 	return nil, fmt.Errorf("no iOS simulators available — create one with Xcode")
 }
+
+// SetLocation sets the simulator's GPS location.
+func (s *SimCtl) SetLocation(ctx context.Context, udid, lat, lng string) error {
+	cmd := exec.CommandContext(ctx, "xcrun", "simctl", "location", udid, "set", lat+","+lng)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("simctl location set: %s: %w", string(out), err)
+	}
+	return nil
+}

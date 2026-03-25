@@ -1,0 +1,17 @@
+before all
+  open the app
+  tap "Accept Terms"
+
+after all
+  take a screenshot called "suite_final"
+
+before each
+  see "Home"
+
+test "first test"
+  tap "Settings"
+  go back
+
+test "second test"
+  tap "Profile"
+  go back

@@ -1,0 +1,4 @@
+email,password,expected
+user@test.com,pass123,Dashboard
+admin@test.com,admin456,Admin Panel
+guest@test.com,guest1,Limited Access

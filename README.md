@@ -175,9 +175,12 @@ test "user can access dashboard"
 ### Hooks
 
 ```
-before each
-  clear app data
+before all
   open the app
+  tap "Accept Terms"
+
+before each
+  see "Home"
 
 after each
   take a screenshot called "after"
@@ -185,6 +188,9 @@ after each
 on failure
   take a screenshot called "failure"
   dump the widget tree
+
+after all
+  take a screenshot called "suite_final"
 ```
 
 ### Data-driven tests
@@ -199,6 +205,39 @@ test "login with <email>"
     | email              | result      |
     | "user@example.com" | "Dashboard" |
     | "bad@example.com"  | "Error"     |
+```
+
+Load data from CSV files:
+```
+with examples from "fixtures/users.csv"
+```
+
+### Random data generators
+
+```
+type "<random.email>" into "Email"
+type "<random.name>" into "Name"
+type "<random.phone>" into "Phone"
+type "<random.number(1,100)>" into "Age"
+```
+
+### HTTP calls
+
+Make real API requests from tests:
+```
+call POST "https://api.example.com/seed" with body "{\"env\":\"test\"}"
+call GET "https://api.example.com/health"
+```
+
+### Clipboard and device control
+
+```
+copy "user@test.com" to clipboard
+paste from clipboard
+set location 37.7749, -122.4194
+kill the app
+open the app
+verify external browser opened
 ```
 
 ### Conditionals and loops

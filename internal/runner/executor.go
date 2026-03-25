@@ -3,6 +3,9 @@ package runner
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -105,6 +108,8 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		err = e.runMock(stepCtx, s)
 	case parser.RecipeCall:
 		err = e.runRecipeCall(ctx, s)
+	case parser.HTTPCallStep:
+		err = e.runHTTPCall(stepCtx, s)
 	}
 
 	if e.verbose && desc != "" {
@@ -179,6 +184,16 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			if s.Sel != nil {
 				return fmt.Sprintf("long press %q", s.Sel.Text)
 			}
+		case parser.VerbKill:
+			return "kill the app"
+		case parser.VerbCopyClipboard:
+			return fmt.Sprintf("copy %q to clipboard", s.Text)
+		case parser.VerbPasteClipboard:
+			return "paste from clipboard"
+		case parser.VerbSetLocation:
+			return fmt.Sprintf("set location %s", s.Name)
+		case parser.VerbVerifyBrowser:
+			return "verify external browser opened"
 		default:
 			return string(s.Verb)
 		}
@@ -209,6 +224,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		return s.Name
 	case parser.LoopStep:
 		return fmt.Sprintf("repeat %d times", s.Count)
+	case parser.HTTPCallStep:
+		return fmt.Sprintf("call %s %q", s.Method, s.URL)
 	}
 	return ""
 }
@@ -410,6 +427,39 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return nil
 		}
 		return e.deviceCtx.RevokeAllPermissions(ctx)
+
+	case parser.VerbKill:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping kill (cloud mode)")
+			return nil
+		}
+		e.client.Close()
+		return e.deviceCtx.KillApp(ctx)
+
+	case parser.VerbCopyClipboard:
+		return e.client.CopyToClipboard(ctx, e.resolve(a.Text))
+
+	case parser.VerbPasteClipboard:
+		text, err := e.client.PasteFromClipboard(ctx)
+		if err != nil {
+			return err
+		}
+		e.vars["clipboard"] = text
+		return nil
+
+	case parser.VerbSetLocation:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping set location (cloud mode)")
+			return nil
+		}
+		parts := strings.SplitN(a.Name, ",", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("set location: expected lat,lng but got %q", a.Name)
+		}
+		return e.deviceCtx.SetLocation(ctx, strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
+
+	case parser.VerbVerifyBrowser:
+		return e.client.VerifyBrowser(ctx)
 	}
 
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)
@@ -541,8 +591,12 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 
 // ---- Helpers ----
 
-// resolve substitutes <variable> placeholders with values from the vars map.
+// resolve substitutes <variable> placeholders with values from the vars map
+// and expands <random.*> generators.
 func (e *Executor) resolve(s string) string {
+	// First: expand random data generators
+	s = resolveRandomVars(s)
+	// Then: substitute data-driven and recipe variables
 	for k, v := range e.vars {
 		old := "<" + k + ">"
 		for len(s) > 0 && containsSubstr(s, old) {
@@ -594,6 +648,42 @@ func replaceFirst(s, old, new string) string {
 		}
 	}
 	return s
+}
+
+// ---- HTTP call execution ----
+
+func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error {
+	url := e.resolve(h.URL)
+	body := e.resolve(h.Body)
+
+	var req *http.Request
+	var err error
+	if body != "" {
+		req, err = http.NewRequestWithContext(ctx, h.Method, url, strings.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("http call: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req, err = http.NewRequestWithContext(ctx, h.Method, url, nil)
+		if err != nil {
+			return fmt.Errorf("http call: %w", err)
+		}
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("http call %s %s: %w", h.Method, url, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	// Store response in variables accessible as <response.status> and <response.body>
+	e.vars["response.status"] = strconv.Itoa(resp.StatusCode)
+	e.vars["response.body"] = string(respBody)
+
+	return nil
 }
 
 // toSelectorParam converts an AST Selector to a probelink SelectorParam.

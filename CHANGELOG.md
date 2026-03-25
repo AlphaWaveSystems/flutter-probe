@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-25
+
+### Added
+
+- `before all` / `after all` hooks for suite-level setup and teardown (run once per file)
+- `kill the app` command — force-stop without relaunch (CLI-side via ADB/simctl)
+- `open the app` now performs CLI-side launch + reconnect when device context is available
+- `copy "text" to clipboard` and `paste from clipboard` commands (agent-side via Dart Clipboard API)
+- `set location lat, lng` command — set device GPS coordinates (ADB geo fix / simctl location)
+- `verify external browser opened` command — checks url_launcher platform channel for external launches
+- `call GET/POST/PUT/DELETE "url"` command — execute real HTTP requests from tests (Go-side net/http)
+- `call ... with body "json"` — HTTP calls with request body, response stored in `<response.status>` and `<response.body>` variables
+- `<random.email>`, `<random.name>`, `<random.phone>`, `<random.uuid>`, `<random.number(min,max)>`, `<random.text(length)>` data generators for form-heavy tests
+- `with examples from "file.csv"` — load data-driven test data from external CSV files
+- Unit tests for random data generators, CSV loader, all new parser commands
+- E2E test files for all new features: hooks, clipboard, app lifecycle, location, random data, HTTP calls, CSV-driven tests
+
 ## [0.3.0] - 2026-03-25
 
 ### Fixed
@@ -25,6 +42,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Bump GitHub Actions: actions/checkout v5→v6, actions/upload-artifact v4→v7, actions/setup-node v4→v6, actions/upload-pages-artifact v3→v4, codecov/codecov-action v4→v5
 
 ## [0.2.0] - 2026-03-22
+
+### Added
+
+- Cloud device farm integrations: BrowserStack, Sauce Labs, AWS Device Farm, Firebase Test Lab, LambdaTest
+- WebSocket relay mode for cloud device farms with session TTL and auto-connect
+- x402 payment protocol support for cloud API billing (EIP-712 wallet signing)
+- VS Code extension: Session Manager sidebar for multi-device parallel testing
+- VS Code extension: Test Explorer sidebar with workspace-wide test discovery
+- VS Code extension: CodeLens inline Run/Debug buttons above tests
+- VS Code extension: real-time diagnostics (lint-on-save) and IntelliSense completions
+- VS Code extension: Run Profile webview panel for configuring test options
+- Physical iOS device support via iproxy (libimobiledevice)
+- `probe studio` command for interactive widget-tree inspection
+- `probe generate` command for AI-assisted test generation (Claude API)
+- `probe heal` command for self-healing selector repair with AI analysis
+- `probe migrate` command for converting tests from other frameworks
+- Landing page and Astro/Starlight documentation website
+- Cloud relay configuration in probe.yaml (TTL, connect timeout, auto-enable)
+- AI configuration in probe.yaml (API key, model selection)
 
 ## [0.1.0] - 2026-03-16
 

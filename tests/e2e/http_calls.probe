@@ -1,0 +1,12 @@
+test "seed data via API"
+  call POST "https://api.example.com/reset" with body "{\"env\":\"test\"}"
+  call GET "https://api.example.com/health"
+  open the app
+  see "Ready"
+
+test "verify API after action"
+  open the app
+  tap "Create Item"
+  type "Test Item" into "Name"
+  tap "Save"
+  call GET "https://api.example.com/items"

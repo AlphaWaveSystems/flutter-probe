@@ -235,8 +235,9 @@ func (l *Lexer) lexIdent() {
 	// Multi-word compound checks (peek ahead for space + next word)
 	compound := l.tryCompound(lower)
 	if compound != TOKEN_EOF {
-		// consumed extra words in tryCompound
-		l.tokens = append(l.tokens, Token{Type: compound, Literal: lower, Line: l.line, Col: startCol})
+		// consumed extra words in tryCompound — use the full span as literal
+		full := strings.ToLower(string(l.src[start:l.pos]))
+		l.tokens = append(l.tokens, Token{Type: compound, Literal: full, Line: l.line, Col: startCol})
 		return
 	}
 
@@ -279,6 +280,10 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		{[]string{"long", "press"}, TOKEN_LONG_PRESS},
 		{[]string{"double", "tap"}, TOKEN_DOUBLE_TAP},
 		{[]string{"don't", "see"}, TOKEN_DONT_SEE},
+		{[]string{"before", "all", "tests"}, TOKEN_LIFECYCLE},
+		{[]string{"after", "all", "tests"}, TOKEN_LIFECYCLE},
+		{[]string{"before", "all"}, TOKEN_LIFECYCLE},
+		{[]string{"after", "all"}, TOKEN_LIFECYCLE},
 		{[]string{"before", "each", "test"}, TOKEN_LIFECYCLE},
 		{[]string{"after", "each", "test"}, TOKEN_LIFECYCLE},
 		{[]string{"on", "failure"}, TOKEN_LIFECYCLE},
@@ -289,6 +294,8 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		{[]string{"revoke", "all", "permissions"}, TOKEN_REVOKE},
 		{[]string{"allow", "permission"}, TOKEN_ALLOW},
 		{[]string{"deny", "permission"}, TOKEN_DENY},
+		{[]string{"set", "location"}, TOKEN_SET_LOCATION},
+		{[]string{"verify", "external", "browser"}, TOKEN_VERIFY_BROWSER},
 	}
 
 	for _, c := range compounds {
