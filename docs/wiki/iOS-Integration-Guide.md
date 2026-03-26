@@ -147,12 +147,12 @@ flutter run --profile --dart-define=PROBE_AGENT=true \
 
 ### Connection Modes
 
-**USB mode** (default):
-1. FlutterProbe starts `iproxy` to forward port 48686 from host to device
-2. CLI reads the agent token from `idevicesyslog`
-3. Uses HTTP POST transport (stateless, no persistent connection to drop)
+> **WiFi is the recommended connection mode for physical iOS devices.** USB-C connections
+> are unstable — the cable switches between charging and data transfer modes, causing
+> intermittent connection drops that interrupt test execution. WiFi provides a stable,
+> drop-free connection throughout the entire test run.
 
-**WiFi mode** (recommended — no USB-C charging/data switching drops):
+**WiFi mode** (recommended):
 ```bash
 # Build with WiFi enabled
 flutter build ios --profile --flavor <flavor> \
@@ -166,6 +166,15 @@ probe test tests/ --host <device-ip> --token <probe-token> --device <UDID>
 To find the token, check the app's console output for `PROBE_TOKEN=...` (printed every 3 seconds).
 
 **`restart the app` over WiFi**: The CLI automatically pre-shares a token with the agent before restarting. After restart, the agent uses the pre-shared token instead of generating a new one — no manual token re-reading needed.
+
+**USB mode** (fallback — may experience intermittent drops with USB-C):
+1. FlutterProbe starts `iproxy` to forward port 48686 from host to device
+2. CLI reads the agent token from `idevicesyslog`
+3. Uses HTTP POST transport with auto-reconnect (up to 2 retries per step)
+
+> **Note**: USB-C cables cause connection drops when the device switches between
+> charging and data transfer modes. If you experience frequent reconnects, switch
+> to WiFi mode. USB-A cables do not have this issue.
 
 ### How It Works
 
