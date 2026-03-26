@@ -165,6 +165,8 @@ probe test tests/ --host <device-ip> --token <probe-token> --device <UDID>
 
 To find the token, check the app's console output for `PROBE_TOKEN=...` (printed every 3 seconds).
 
+**`restart the app` over WiFi**: The CLI automatically pre-shares a token with the agent before restarting. After restart, the agent uses the pre-shared token instead of generating a new one — no manual token re-reading needed.
+
 ### How It Works
 
 1. **USB**: `iproxy` forwards port 48686; CLI reads token via `idevicesyslog`; HTTP POST transport

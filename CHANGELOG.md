@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-26
+
+### Added
+
+- Pre-shared restart token (`probe.set_next_token`) — CLI sends a token to the agent before `restart the app`; agent persists it and uses it after restart, enabling WiFi reconnection without `idevicesyslog`
+- `--host` flag for WiFi testing — connect directly to device IP, no iproxy needed
+- `--token` flag to skip USB-dependent token auto-detection
+- `PROBE_WIFI=true` dart-define — binds agent to `0.0.0.0` for network access
+- HTTP POST fallback transport (`POST /probe/rpc`) — stateless per-request communication for physical devices
+- `ProbeClient` interface — both WebSocket and HTTP clients satisfy it for transport-agnostic execution
+- `tap "X" if visible` ProbeScript syntax — silently skips when widget is not found; works with tap, type, clear, long press, double tap
+- Direct `onTap` invocation fallback for `Semantics`-wrapped `GestureDetector` widgets on physical devices
+- `take screenshot "name"` now accepts name directly (no `called` keyword needed)
+- Physical device E2E test suite for FlutterProbe Test App (12 tests covering all 10 screens)
+
+### Fixed
+
+- `clear app data` on physical iOS now skips immediately (before confirmation prompt) to avoid killing the agent
+- Connection error detection in `if visible` — propagates connection errors for auto-reconnect instead of silently swallowing them
+- Screenshot parser accepts `take screenshot "name"` without requiring `called` keyword
+
 ## [0.5.0] - 2026-03-26
 
 ### Added
