@@ -636,11 +636,17 @@ class ProbeExecutor {
     return nav;
   }
 
+  int _nextPointer = 900; // Start high to avoid collisions with real touches
+
   Future<_ProbeGesture> _createGesture(Offset position) async {
     final binding = GestureBinding.instance;
-    final pointer = PointerDownEvent(position: position);
+    final pointerId = _nextPointer++;
+    final pointer = PointerDownEvent(
+      pointer: pointerId,
+      position: position,
+    );
     binding.handlePointerEvent(pointer);
-    return _ProbeGesture(position, binding);
+    return _ProbeGesture(position, binding, pointerId);
   }
 
   Future<void> _restartApp() async {
@@ -655,15 +661,22 @@ class ProbeExecutor {
 class _ProbeGesture {
   Offset _position;
   final GestureBinding _binding;
+  final int _pointer;
 
-  _ProbeGesture(this._position, this._binding);
+  _ProbeGesture(this._position, this._binding, this._pointer);
 
   Future<void> up() async {
-    _binding.handlePointerEvent(PointerUpEvent(position: _position));
+    _binding.handlePointerEvent(PointerUpEvent(
+      pointer: _pointer,
+      position: _position,
+    ));
   }
 
   Future<void> moveTo(Offset location, {Duration? timeStamp}) async {
-    _binding.handlePointerEvent(PointerMoveEvent(position: location));
+    _binding.handlePointerEvent(PointerMoveEvent(
+      pointer: _pointer,
+      position: location,
+    ));
     _position = location;
   }
 

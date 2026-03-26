@@ -667,19 +667,31 @@ func runTests(cmd *cobra.Command, args []string) error {
 			}
 
 			if platform == device.PlatformIOS {
-				// iOS: grant privacy permissions and relaunch the app.
-				// simctl privacy grant terminates the running app, so we must
-				// grant first, then relaunch. This prevents native OS dialogs
-				// (camera, location, etc.) from blocking the Flutter UI.
-				if autoYes && cfg.Project.App != "" {
-					for _, svc := range []string{"camera", "microphone", "location", "photos", "contacts-limited", "calendar"} {
-						_ = dm.SimCtl().GrantPrivacy(ctx, deviceSerial, cfg.Project.App, svc)
+				// Detect physical vs simulator early for connection setup
+				isPhysicalIOS := dm.IsPhysicalIOS(ctx, deviceSerial)
+
+				if isPhysicalIOS {
+					// Physical iOS: set up iproxy for port forwarding
+					cleanupIProxy, iproxyErr := dm.EnsureIProxy(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort())
+					if iproxyErr != nil {
+						return fmt.Errorf("iproxy setup: %w", iproxyErr)
 					}
-					// Relaunch the app — simctl privacy grant terminates it
-					_ = dm.SimCtl().Launch(ctx, deviceSerial, cfg.Project.App)
-					time.Sleep(3 * time.Second) // give agent time to start
+					defer cleanupIProxy()
+				} else {
+					// iOS simulator: grant privacy permissions and relaunch the app.
+					// simctl privacy grant terminates the running app, so we must
+					// grant first, then relaunch. This prevents native OS dialogs
+					// (camera, location, etc.) from blocking the Flutter UI.
+					if autoYes && cfg.Project.App != "" {
+						for _, svc := range []string{"camera", "microphone", "location", "photos", "contacts-limited", "calendar"} {
+							_ = dm.SimCtl().GrantPrivacy(ctx, deviceSerial, cfg.Project.App, svc)
+						}
+						// Relaunch the app — simctl privacy grant terminates it
+						_ = dm.SimCtl().Launch(ctx, deviceSerial, cfg.Project.App)
+						time.Sleep(3 * time.Second) // give agent time to start
+					}
 				}
-				// iOS: simulators share host loopback — no port forwarding needed
+				// Simulators share host loopback; physical uses iproxy — both on 127.0.0.1
 				fmt.Fprintln(statusW, msgWaitingForTokenIOS)
 				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App)
 				if err != nil {
@@ -692,6 +704,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 			} else {
+				// Android: verify ADB is available and device is reachable,
+				// clean up stale port forwards
+				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
+					return fmt.Errorf("android setup: %w", err)
+				}
+
 				// Android: grant permissions BEFORE reading token when -y is used.
 				// This prevents OS permission dialogs from blocking the app on
 				// first launch (especially POST_NOTIFICATIONS on Android 13+).
@@ -813,6 +831,17 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
+		// Detect if this is a physical device (vs emulator/simulator)
+		isPhysical := false
+		if platform == device.PlatformIOS {
+			isPhysical = dm.IsPhysicalIOS(ctx, deviceSerial)
+		} else if platform == device.PlatformAndroid {
+			isPhysical = dm.IsPhysicalAndroid(ctx, deviceSerial)
+		}
+		if isPhysical {
+			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
+		}
+
 		devCtx = &runner.DeviceContext{
 			Manager:                 dm,
 			Serial:                  deviceSerial,
@@ -820,6 +849,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
 			DevicePort:              cfg.Agent.AgentDevicePort(),
+			IsPhysical:              isPhysical,
 			AllowClearData:          autoYes,
 			Confirm:                 promptUserConfirm,
 			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,

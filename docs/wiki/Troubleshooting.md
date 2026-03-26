@@ -77,6 +77,27 @@ if (!probeEnabled) {
 3. Read the token: `cat <container>/tmp/probe/token`
 4. Ensure `PROBE_AGENT=true` was passed during build
 
+### Physical iOS Device — WebSocket Drops
+
+**Cause**: iproxy connections on physical devices can be closed by iOS during idle periods.
+
+**Fix**: FlutterProbe v0.5.0+ includes automatic ping/pong keepalive (every 5s) and auto-reconnect (up to 2 retries). If you still see drops:
+1. Check iproxy is running: `pgrep -fl iproxy`
+2. Restart iproxy: `pkill -f "iproxy.*<UDID>" && iproxy 48686 48686 --udid <UDID> &`
+3. Use `--reconnect-delay 5s` for slower devices
+
+### Physical iOS Device — "devicectl launch: not installed"
+
+**Cause**: Bundle ID mismatch between `probe.yaml` and the installed app. Debug builds may use a `.dev` suffix.
+
+**Fix**: Check the installed bundle ID: `xcrun devicectl device info apps --device <UDID> | grep <appname>` and update `project.app` in `probe.yaml` to match.
+
+### Physical iOS Device — `tap #key` Not Working
+
+**Cause**: Widgets matched by `Semantics(identifier:)` may not forward gestures properly if pointer IDs collide with real touches.
+
+**Fix**: Update to FlutterProbe v0.5.0+ which uses unique pointer IDs starting at 900 to avoid collisions.
+
 ## Android-Specific Issues
 
 ### Permission Dialogs Block Tests

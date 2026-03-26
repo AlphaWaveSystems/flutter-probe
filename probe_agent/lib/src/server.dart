@@ -67,6 +67,11 @@ class ProbeServer {
   void _handleConnection(WebSocket ws) {
     // ignore: avoid_print
     print('ProbeAgent: CLI connected');
+
+    // Enable WebSocket-level ping/pong keepalive to prevent idle connections
+    // from being dropped by iproxy or iOS network stack on physical devices.
+    ws.pingInterval = const Duration(seconds: 5);
+
     final executor = ProbeExecutor((msg) => ws.add(msg));
     _executor = executor;
 

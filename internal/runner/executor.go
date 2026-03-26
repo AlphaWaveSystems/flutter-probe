@@ -26,6 +26,7 @@ type Executor struct {
 	depth       int      // indentation depth for verbose logging
 	artifacts   []string // collected screenshot paths (on-device)
 	visual      *visual.Comparator // nil if visual regression is not configured
+	maxReconnectAttempts int // max auto-reconnect attempts per call (default 2)
 }
 
 // NewExecutor creates an Executor.
@@ -79,9 +80,14 @@ func (e *Executor) RunBody(ctx context.Context, steps []parser.Step) error {
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Use a longer timeout for restart/clear — they kill the app and reconnect
 	stepTimeout := e.timeout
+	isLifecycleAction := false
 	if a, ok := step.(parser.ActionStep); ok {
 		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData {
 			stepTimeout = 90 * time.Second
+		}
+		// Don't auto-reconnect for actions that intentionally close the connection
+		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData || a.Verb == parser.VerbKill {
+			isLifecycleAction = true
 		}
 	}
 	stepCtx, cancel := context.WithTimeout(ctx, stepTimeout)
@@ -110,6 +116,39 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		err = e.runRecipeCall(ctx, s)
 	case parser.HTTPCallStep:
 		err = e.runHTTPCall(stepCtx, s)
+	}
+
+	// Auto-reconnect: if the step failed due to a connection error and this
+	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil {
+		maxAttempts := e.maxReconnectAttempts
+		if maxAttempts == 0 {
+			maxAttempts = 2
+		}
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			if reconnErr := e.tryReconnect(ctx); reconnErr != nil {
+				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
+				break
+			}
+			// Retry the step with a fresh timeout
+			retryCtx, retryCancel := context.WithTimeout(ctx, stepTimeout)
+			switch s := step.(type) {
+			case parser.ActionStep:
+				err = e.runAction(retryCtx, s)
+			case parser.AssertStep:
+				err = e.runAssert(retryCtx, s)
+			case parser.WaitStep:
+				err = e.runWait(retryCtx, s)
+			case parser.DartBlock:
+				err = e.runDart(retryCtx, s)
+			case parser.MockBlock:
+				err = e.runMock(retryCtx, s)
+			}
+			retryCancel()
+			if err == nil || !isConnectionError(err) {
+				break // either succeeded or a non-connection error
+			}
+		}
 	}
 
 	if e.verbose && desc != "" {
@@ -590,6 +629,48 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 	err := e.RunBody(ctx, recipe.Body)
 	e.depth--
 	return err
+}
+
+// ---- Auto-Reconnect ----
+
+// isConnectionError returns true if the error indicates a broken WebSocket connection.
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "probelink: write:") ||
+		strings.Contains(msg, "use of closed network connection") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "rpc error -32000")
+}
+
+// tryReconnect attempts to re-establish the WebSocket connection to the agent.
+// This is used when the connection drops mid-test (e.g., physical device via iproxy).
+// It does NOT restart the app — the app is still running, we just lost the TCP connection.
+func (e *Executor) tryReconnect(ctx context.Context) error {
+	if e.deviceCtx == nil {
+		return fmt.Errorf("reconnect: no device context (cloud mode)")
+	}
+	fmt.Printf("    \033[33m⟳\033[0m  WebSocket connection lost — attempting to reconnect...\n")
+	e.client.Close()
+
+	// The app is still running — we just need to re-dial.
+	// Give the agent a moment, then reconnect.
+	time.Sleep(1 * time.Second)
+
+	newClient, err := e.deviceCtx.Reconnect(ctx)
+	if err != nil {
+		return fmt.Errorf("auto-reconnect failed: %w", err)
+	}
+	e.client = newClient
+	if e.onReconnect != nil {
+		e.onReconnect(newClient)
+	}
+	fmt.Printf("    \033[32m⟳\033[0m  Reconnected successfully\n")
+	return nil
 }
 
 // ---- Helpers ----

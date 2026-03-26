@@ -26,6 +26,7 @@ type DeviceContext struct {
 	AppID                   string          // bundle ID / package name
 	Port                    int             // host-side agent port (default 48686)
 	DevicePort              int             // on-device agent port (default: same as Port)
+	IsPhysical              bool            // true for physical devices (vs emulator/simulator)
 	AllowClearData          bool            // if true, skip confirmation for clear app data (CI/CD mode)
 	Confirm                 ConfirmFunc     // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
 	GrantPermissionsOnClear bool            // if true, auto-grant all permissions after clearing data
@@ -90,12 +91,22 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 		}
 
 	case device.PlatformIOS:
-		simctl := dc.Manager.SimCtl()
-		_ = simctl.Terminate(ctx, dc.Serial, dc.AppID) // ignore if not running
-		time.Sleep(dc.restartDelay())
-		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
-		if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
-			return fmt.Errorf("restart: launch: %w", err)
+		if dc.IsPhysical {
+			dctl := dc.Manager.DeviceCtl()
+			_ = dctl.Terminate(ctx, dc.Serial, dc.AppID)
+			time.Sleep(dc.restartDelay())
+			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+			if err := dctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
+				return fmt.Errorf("restart: launch: %w", err)
+			}
+		} else {
+			simctl := dc.Manager.SimCtl()
+			_ = simctl.Terminate(ctx, dc.Serial, dc.AppID)
+			time.Sleep(dc.restartDelay())
+			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+			if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
+				return fmt.Errorf("restart: launch: %w", err)
+			}
 		}
 	}
 	return nil
@@ -141,17 +152,20 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		}
 
 	case device.PlatformIOS:
+		if dc.IsPhysical {
+			fmt.Println("    \033[33m⚠\033[0m  clear app data is not supported on physical iOS devices")
+			fmt.Println("       Workaround: uninstall and reinstall the app manually")
+			return nil
+		}
+
 		simctl := dc.Manager.SimCtl()
 		_ = simctl.Terminate(ctx, dc.Serial, dc.AppID)
 
-		// Get the app data container path via simctl (official Apple tooling)
 		dataPath := simctl.AppDataPath(ctx, dc.Serial, dc.AppID)
 		if err := dc.validateIOSDataPath(dataPath); err != nil {
 			return fmt.Errorf("clear data: %w", err)
 		}
 
-		// Clear data container contents (not the container dir itself)
-		// This is safer than rm -rf on the container — we only remove the contents
 		if dataPath != "" {
 			for _, subdir := range []string{"Documents", "Library", "tmp"} {
 				target := dataPath + "/" + subdir
@@ -160,13 +174,10 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 			fmt.Printf("    \033[32m✓\033[0m  Cleared data container: %s\n", dataPath)
 		}
 
-		// Reset the simulator keychain to clear stored credentials (passwords,
-		// tokens, etc.) that persist outside the app's data container.
 		if err := simctl.KeychainReset(ctx, dc.Serial); err != nil {
 			fmt.Printf("    \033[33m⚠\033[0m  keychain reset: %v\n", err)
 		}
 
-		// Auto-grant permissions before relaunch to prevent OS permission dialogs
 		if dc.GrantPermissionsOnClear {
 			if err := dc.GrantAllPermissions(ctx); err != nil {
 				fmt.Printf("    \033[33m⚠\033[0m  auto-grant permissions: %v\n", err)
@@ -228,6 +239,10 @@ func (dc *DeviceContext) AllowPermission(ctx context.Context, name string) error
 			}
 		}
 	case device.PlatformIOS:
+		if dc.IsPhysical {
+			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
+			return nil
+		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
 			return err
@@ -253,6 +268,10 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 			}
 		}
 	case device.PlatformIOS:
+		if dc.IsPhysical {
+			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
+			return nil
+		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
 			return err
@@ -271,11 +290,14 @@ func (dc *DeviceContext) GrantAllPermissions(ctx context.Context) error {
 	case device.PlatformAndroid:
 		for _, perms := range device.AndroidPermissions {
 			for _, perm := range perms {
-				// Best-effort: some permissions may not apply to this API level
 				_ = dc.Manager.ADB().GrantPermission(ctx, dc.Serial, dc.AppID, perm)
 			}
 		}
 	case device.PlatformIOS:
+		if dc.IsPhysical {
+			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
+			return nil
+		}
 		for _, svc := range device.IOSPrivacyServices {
 			_ = dc.Manager.SimCtl().GrantPrivacy(ctx, dc.Serial, dc.AppID, svc)
 		}
@@ -293,6 +315,10 @@ func (dc *DeviceContext) RevokeAllPermissions(ctx context.Context) error {
 			}
 		}
 	case device.PlatformIOS:
+		if dc.IsPhysical {
+			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
+			return nil
+		}
 		_ = dc.Manager.SimCtl().ResetPrivacy(ctx, dc.Serial, dc.AppID)
 	}
 	return nil
@@ -319,11 +345,16 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 		}
 		_ = dc.Manager.ForwardPort(ctx, dc.Serial, dc.Port, devPort)
 	case device.PlatformIOS:
-		// Delete stale token file so ReadTokenIOS picks up the fresh one
-		simctl := dc.Manager.SimCtl()
-		tokenPath := dc.iosTokenPath()
-		if tokenPath != "" {
-			_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
+		if dc.IsPhysical {
+			// Physical iOS: no token file to delete — idevicesyslog reads live stream
+			// Just wait for the app to restart
+		} else {
+			// Simulator: delete stale token file so ReadTokenIOS picks up the fresh one
+			simctl := dc.Manager.SimCtl()
+			tokenPath := dc.iosTokenPath()
+			if tokenPath != "" {
+				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
+			}
 		}
 	}
 
@@ -392,7 +423,11 @@ func (dc *DeviceContext) KillApp(ctx context.Context) error {
 			return fmt.Errorf("kill app: %w", err)
 		}
 	case device.PlatformIOS:
-		_ = dc.Manager.SimCtl().Terminate(ctx, dc.Serial, dc.AppID)
+		if dc.IsPhysical {
+			_ = dc.Manager.DeviceCtl().Terminate(ctx, dc.Serial, dc.AppID)
+		} else {
+			_ = dc.Manager.SimCtl().Terminate(ctx, dc.Serial, dc.AppID)
+		}
 	}
 	return nil
 }
@@ -407,19 +442,29 @@ func (dc *DeviceContext) LaunchApp(ctx context.Context) error {
 			return fmt.Errorf("launch app: %w", err)
 		}
 	case device.PlatformIOS:
-		if err := dc.Manager.SimCtl().Launch(ctx, dc.Serial, dc.AppID); err != nil {
-			return fmt.Errorf("launch app: %w", err)
+		if dc.IsPhysical {
+			if err := dc.Manager.DeviceCtl().Launch(ctx, dc.Serial, dc.AppID); err != nil {
+				return fmt.Errorf("launch app: %w", err)
+			}
+		} else {
+			if err := dc.Manager.SimCtl().Launch(ctx, dc.Serial, dc.AppID); err != nil {
+				return fmt.Errorf("launch app: %w", err)
+			}
 		}
 	}
 	return nil
 }
 
 // SetLocation sets the device's GPS location.
+// Not supported on physical devices — skips with a warning.
 func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error {
+	if dc.IsPhysical {
+		fmt.Printf("    \033[33m⚠\033[0m  set location is not supported on physical devices — skipping\n")
+		return nil
+	}
 	fmt.Printf("    \033[36m📍\033[0m  Setting location to %s, %s\n", lat, lng)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		// adb emu geo fix takes longitude first, then latitude
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial, "emu", "geo", "fix", lng, lat); err != nil {
 			return fmt.Errorf("set location: %w", err)
 		}

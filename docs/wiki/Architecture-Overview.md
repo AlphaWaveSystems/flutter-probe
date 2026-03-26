@@ -7,7 +7,7 @@ FlutterProbe consists of two main components that communicate via WebSocket + JS
 ```
 +------------------+       WebSocket (JSON-RPC 2.0)       +------------------+
 |   Go CLI         | <----------------------------------> |   Dart Agent     |
-|   (probe)        |       ws://127.0.0.1:48686           |   (ProbeAgent)   |
+|   (probe)        |   ws://127.0.0.1:48686 + ping/pong   |   (ProbeAgent)   |
 +------------------+                                       +------------------+
 |                  |                                       |                  |
 | - Parser         |                                       | - Server         |
@@ -35,8 +35,8 @@ The CLI is the orchestrator. It parses `.probe` test files, manages device conne
 | `parser/` | Indent-aware lexer + recursive-descent parser producing AST |
 | `runner/` | Test orchestration: loads files, walks AST, dispatches to ProbeLink |
 | `probelink/` | JSON-RPC 2.0 WebSocket client |
-| `device/` | ADB integration for Android (port forwarding, permissions, token extraction) |
-| `ios/` | iOS simulator management via `xcrun simctl` |
+| `device/` | ADB integration for Android, device detection (physical vs emulator), iproxy management |
+| `ios/` | iOS simulator management via `xcrun simctl`, physical device management via `xcrun devicectl` |
 | `config/` | `probe.yaml` parsing with layered resolution (CLI flag > config > default) |
 | `report/` | HTML report generation with portable relative paths |
 | `cloud/` | Cloud provider integration (BrowserStack, SauceLabs, AWS, Firebase, LambdaTest) |
@@ -74,6 +74,17 @@ The agent runs **inside the production Flutter app** using `WidgetsFlutterBindin
 2. CLI reads token from app container: `<container>/tmp/probe/token`
 3. CLI connects: `ws://127.0.0.1:<port>/probe?token=<token>`
 4. Fallback: parse token from `simctl spawn ... log show`
+
+### iOS Physical Device
+
+1. CLI detects physical device (UDID not in `simctl list`)
+2. CLI kills stale `iproxy` processes for this UDID
+3. CLI starts `iproxy <host-port> <device-port> --udid <UDID>`
+4. CLI reads token from `idevicesyslog -u <UDID> --match PROBE_TOKEN`
+5. CLI connects: `ws://127.0.0.1:<host-port>/probe?token=<token>`
+6. WebSocket ping/pong keepalive (5s) prevents idle drops
+7. Auto-reconnect on connection loss (up to 2 retries per step)
+8. App lifecycle managed via `xcrun devicectl` (launch/terminate)
 
 ### Cloud (Relay Mode)
 

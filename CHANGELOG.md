@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-26
+
+### Added
+
+- Physical iOS device support: launch/terminate via `xcrun devicectl`, token reading via `idevicesyslog`, port forwarding via `iproxy`
+- Physical Android device validation: `EnsureADB()` verifies binary, device reachability, and cleans stale port forwards
+- Physical device detection: `IsPhysicalIOS` (simctl list check) and `IsPhysicalAndroid` (ro.hardware property check)
+- Physical iOS devices listed in `probe device list` via `idevice_id`
+- WebSocket ping/pong keepalive (5s interval) — prevents idle connection drops on physical devices via iproxy
+- Auto-reconnect on WebSocket connection loss — up to 2 transparent retries per step with full re-dial
+- `EnsureIProxy()` — automatic iproxy lifecycle management: checks installation, kills stale processes, starts fresh, defers cleanup
+- Visibility filtering in widget finder — off-screen widgets (behind routes, Offstage, Visibility) no longer match `see`/`if appears`
+- Unique pointer IDs for synthetic gestures — prevents collision with real touch events on physical devices
+- ProbeAgent profile mode support — `ProbeAgent.start()` works in profile builds (required for physical iOS)
+- ProbeAgent release mode safeguards — blocked by default, opt-in via `allowReleaseBuild: true` + `PROBE_AGENT_FORCE=true`
+- Test files for all packages: `cmd/probe`, `internal/cli`, `internal/ios`, `internal/device` (manager tests)
+
+### Changed
+
+- Operations unsupported on physical devices now skip gracefully with warnings instead of crashing:
+  - `clear app data` on physical iOS → warning + skip
+  - `allow/deny permission` on physical iOS → warning + skip
+  - `set location` on any physical device → warning + skip
+- `restart the app` on physical iOS uses `xcrun devicectl` instead of `simctl`
+- iOS connection setup now branches: simulator path uses simctl permissions + loopback; physical path uses iproxy + idevicesyslog
+- Android connection setup validates ADB availability and device state before port forwarding
+
 ## [0.4.2] - 2026-03-25
 
 ### Added
