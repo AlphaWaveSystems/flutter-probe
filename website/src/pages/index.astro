@@ -352,6 +352,14 @@
       color: var(--accent);
       word-break: break-all;
     }
+    /* ── FAQ ── */
+    .faq { max-width: 720px; margin: 0 auto; }
+    .faq details { border-bottom: 1px solid var(--border); padding: 1rem 0; }
+    .faq summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; color: var(--fg); list-style: none; }
+    .faq summary::before { content: '+ '; color: var(--accent); margin-right: 0.5rem; }
+    .faq details[open] summary::before { content: '− '; }
+    .faq p { margin: 0.75rem 0 0; color: var(--muted); line-height: 1.6; }
+    .faq code { background: var(--bg2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9rem; }
     /* ── Install CTA ── */
     .install { max-width: 600px; margin: 0 auto; text-align: center; }
     .install-box {
@@ -535,6 +543,37 @@
       <div class="st"><div class="n">02</div><h3>Init</h3><p>Scaffolds config and test directory.</p><code>probe init</code></div>
       <div class="st"><div class="n">03</div><h3>Write</h3><p>Plain English in a .probe file.</p><code>tests/login.probe</code></div>
       <div class="st"><div class="n">04</div><h3>Run</h3><p>Against any connected device.</p><code>probe test tests/ -v</code></div>
+    </div>
+  </section>
+  <div class="divider"></div>
+  <!-- FAQ -->
+  <section>
+    <div class="sec-h"><h2>FAQ</h2></div>
+    <div class="faq">
+      <details>
+        <summary>Can I test on physical iOS devices?</summary>
+        <p>Yes. FlutterProbe supports physical iOS devices via USB or WiFi. <strong>WiFi is recommended</strong> &mdash; it provides a stable, drop-free connection. USB-C cables can cause intermittent disconnects due to charge/data mode switching. Build with <code>--dart-define=PROBE_WIFI=true</code> and connect with <code>--host &lt;device-ip&gt;</code>.</p>
+      </details>
+      <details>
+        <summary>Why does my USB connection keep dropping?</summary>
+        <p>USB-C cables switch between charging and data transfer modes, which momentarily disconnects the device. FlutterProbe auto-reconnects (up to 2 retries), but this adds latency. <strong>Switch to WiFi testing</strong> to eliminate drops entirely, or use a USB-A cable which doesn&rsquo;t have this issue.</p>
+      </details>
+      <details>
+        <summary>Does <code>restart the app</code> work over WiFi?</summary>
+        <p>Yes. The CLI pre-shares a token with the agent before restarting. After restart, the agent uses the pre-shared token &mdash; no USB log reading needed.</p>
+      </details>
+      <details>
+        <summary>What operations are unsupported on physical devices?</summary>
+        <p><code>clear app data</code>, <code>allow/deny permission</code>, and <code>set location</code> are skipped with a warning on physical iOS devices (no simulator sandbox access). On Android physical devices, only <code>set location</code> is unsupported. All other operations work normally.</p>
+      </details>
+      <details>
+        <summary>Do I need to modify my Flutter app?</summary>
+        <p>Add <code>probe_agent</code> as a dev dependency and call <code>ProbeAgent.start()</code> in your main entrypoint, guarded by <code>--dart-define=PROBE_AGENT=true</code>. No other changes needed. The agent is stripped from release builds.</p>
+      </details>
+      <details>
+        <summary>Can I run tests in CI/CD?</summary>
+        <p>Yes. FlutterProbe includes GitHub Actions workflows for Android (ubuntu + emulator) and iOS (macOS + simulator) with 3-way test sharding, automated app build, and HTML report generation. Use <code>--format junit -o results.xml</code> for CI integration.</p>
+      </details>
     </div>
   </section>
   <div class="divider"></div>
