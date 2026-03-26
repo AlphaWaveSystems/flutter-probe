@@ -3,7 +3,8 @@
 A high-performance E2E testing framework for Flutter mobile apps. Write tests in plain English, execute with sub-50ms command round-trips via direct widget-tree access — no UI automation layer, no WebDriver overhead.
 
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/tag/AlphaWaveSystems/flutter-probe?label=version&color=green)](CHANGELOG.md)
+[![GitHub stars](https://img.shields.io/github/stars/AlphaWaveSystems/flutter-probe)](https://github.com/AlphaWaveSystems/flutter-probe/stargazers)
 
 ```
 test "user can log in"
@@ -383,9 +384,9 @@ jobs:
 Pin to a specific version for reproducible builds:
 
 ```yaml
-- name: Install FlutterProbe v0.1.0
+- name: Install FlutterProbe
   run: |
-    curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.1.0/probe-linux-amd64
+    curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/latest/download/probe-linux-amd64
     chmod +x probe && sudo mv probe /usr/local/bin/
 ```
 
