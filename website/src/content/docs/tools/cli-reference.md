@@ -33,6 +33,10 @@ probe test [path] [flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--device <serial>` | auto | Target device UDID or serial |
+| `--host <ip>` | `127.0.0.1` | Agent host IP (use device IP for WiFi testing) |
+| `--token <string>` | — | Agent auth token (skip auto-detection; for WiFi testing) |
+| `--parallel` | `false` | Run tests in parallel across all connected devices |
+| `--devices <serials>` | — | Comma-separated device serials for parallel execution |
 | `--tag <tag>` | — | Run only tests matching this tag |
 | `--timeout <duration>` | `30s` | Per-step timeout |
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |
@@ -72,6 +76,13 @@ probe test tests/ --format junit -o reports/results.xml
 probe test tests/ --shard 1/3
 probe test tests/ --shard 2/3
 probe test tests/ --shard 3/3
+
+# WiFi testing on physical iOS device
+probe test tests/ --host 192.168.1.100 --token abc123... --device <UDID>
+
+# Parallel across multiple devices
+probe test tests/ --parallel
+probe test tests/ --devices emulator-5554,<iOS-UDID>
 ```
 
 ## probe lint

@@ -40,25 +40,31 @@ curl -sSL https://get.flutterprobe.com | sh
 
 Add the FlutterProbe Dart agent to your app's dev dependencies:
 
-```bash
-flutter pub add --dev flutterprobe_agent
+```yaml
+# pubspec.yaml
+dev_dependencies:
+  probe_agent:
+    path: /path/to/flutter-probe/probe_agent
 ```
 
-Initialize the agent in your app's main function for debug builds:
+Initialize the agent in your app's main function:
 
 ```dart
-import 'package:flutterprobe_agent/flutterprobe_agent.dart';
+import 'package:probe_agent/probe_agent.dart';
 
-void main() {
-  assert(() {
-    FlutterProbeAgent.initialize();
-    return true;
-  }());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const probeEnabled = bool.fromEnvironment('PROBE_AGENT', defaultValue: false);
+  if (probeEnabled) {
+    await ProbeAgent.start();
+  }
+
   runApp(const MyApp());
 }
 ```
 
-The `assert` block ensures the agent is only active in debug builds and is stripped from release binaries.
+The `bool.fromEnvironment` check ensures the agent is only active when built with `--dart-define=PROBE_AGENT=true`. It's completely stripped from release builds.
 
 ### Writing Your First Test
 
@@ -66,24 +72,22 @@ Create a file called `tests/login.probe`:
 
 ```
 test "User can sign in with valid credentials"
-
-  launch app
-  tap "Email" text field
-  type "testuser@example.com"
-  tap "Password" text field
-  type "correctPassword123"
-  tap "Sign In" button
-  wait for "Dashboard" screen
+  tap "Email"
+  type "testuser@example.com" into "Email"
+  tap "Password"
+  type "correctPassword123" into "Password"
+  tap "Sign In"
+  wait until "Dashboard" appears
   see "Welcome, Test User"
 ```
 
 Run it:
 
 ```bash
-flutterprobe run --target android --file tests/login.probe
+probe test tests/login.probe --device <your-device> -v
 ```
 
-Each line in a `.probe` file is a single action or assertion. ProbeScript uses widget labels and types to locate elements in the widget tree, so tests read like natural descriptions of user behavior. See the [ProbeScript syntax reference](/probescript/syntax/) for the full command set.
+Each line in a `.probe` file is a single action or assertion. ProbeScript uses widget text and keys to locate elements in the widget tree, so tests read like natural descriptions of user behavior. See the [ProbeScript syntax reference](/probescript/syntax/) for the full command set.
 
 ### Adding More Scenarios
 
@@ -91,22 +95,20 @@ A `.probe` file can contain multiple test blocks:
 
 ```
 test "User sees error with wrong password"
-
-  launch app
-  tap "Email" text field
-  type "testuser@example.com"
-  tap "Password" text field
-  type "wrongPassword"
-  tap "Sign In" button
+  tap "Email"
+  type "testuser@example.com" into "Email"
+  tap "Password"
+  type "wrongPassword" into "Password"
+  tap "Sign In"
+  wait 2 seconds
   see "Invalid email or password"
 
 test "User can reset password"
-
-  launch app
-  tap "Forgot Password?" link
-  tap "Email" text field
-  type "testuser@example.com"
-  tap "Send Reset Link" button
+  tap "Forgot Password?"
+  tap "Email"
+  type "testuser@example.com" into "Email"
+  tap "Send Reset Link"
+  wait until "Check your email" appears
   see "Check your email"
 ```
 
@@ -128,9 +130,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
-      - run: curl -sSL https://get.flutterprobe.com | sh
-      - run: flutter build apk --debug
-      - run: flutterprobe run --suite tests/ --report junit --output results.xml
+      - run: go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+      - run: flutter build apk --debug --dart-define=PROBE_AGENT=true
+      - run: probe test tests/ --format junit -o results.xml -y
       - uses: dorny/test-reporter@v1
         if: always()
         with:

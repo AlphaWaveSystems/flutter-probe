@@ -129,10 +129,12 @@ when the app calls POST "/api/auth/login"
 
 ```
 take screenshot "checkout_page"    # save PNG to screenshots folder
+compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
 go back                            # device back button
 rotate landscape                   # rotate device
+shake                              # simulate device shake gesture
 log "checkpoint reached"           # print to test output
 pause                              # 1-second pause
 ```
@@ -204,3 +206,18 @@ revoke all permissions
 ```
 
 See [App Lifecycle](/platform/app-lifecycle/) for details on how these work across platforms.
+
+## Conditional Actions
+
+Skip an action silently when the target widget is not found:
+
+```
+tap "Aceptar" if visible           # tap only if present, skip otherwise
+tap "Cerrar" if visible            # useful for dismissing optional dialogs
+clear "Search" if visible          # clear field only if it exists
+type "text" into "Field" if visible
+long press "Item" if visible
+double tap "Element" if visible
+```
+
+The `if visible` suffix works with `tap`, `type`, `clear`, `long press`, and `double tap`. If the widget is not found, the step is silently skipped (no error). Connection errors are still propagated.
