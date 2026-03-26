@@ -87,10 +87,8 @@ func (m *Manager) List(ctx context.Context) ([]Device, error) {
 	physicalUDIDs, err := ios.ListPhysicalDevices(ctx)
 	if err == nil {
 		simUDIDs := make(map[string]bool)
-		if sims != nil {
-			for _, s := range sims {
-				simUDIDs[s.UDID] = true
-			}
+		for _, s := range sims {
+			simUDIDs[s.UDID] = true
 		}
 		for _, udid := range physicalUDIDs {
 			if !simUDIDs[udid] { // avoid duplicates if somehow listed in both
