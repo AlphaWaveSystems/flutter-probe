@@ -116,6 +116,14 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 // operation that wipes SharedPreferences, databases, and all local files.
 // It requires explicit opt-in via --allow-clear-data flag or interactive confirmation.
 func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
+	// Physical iOS: skip immediately — no filesystem access, and attempting
+	// clear would kill the app/agent before we can recover.
+	if dc.Platform == device.PlatformIOS && dc.IsPhysical {
+		fmt.Println("    \033[33m⚠\033[0m  clear app data is not supported on physical iOS devices — skipping")
+		fmt.Println("       Workaround: uninstall and reinstall the app manually")
+		return nil
+	}
+
 	// Gate: require explicit permission for destructive data wipe
 	if !dc.AllowClearData {
 		if dc.Confirm == nil {
@@ -152,12 +160,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		}
 
 	case device.PlatformIOS:
-		if dc.IsPhysical {
-			fmt.Println("    \033[33m⚠\033[0m  clear app data is not supported on physical iOS devices")
-			fmt.Println("       Workaround: uninstall and reinstall the app manually")
-			return nil
-		}
-
+		// Physical iOS already handled above (early return).
 		simctl := dc.Manager.SimCtl()
 		_ = simctl.Terminate(ctx, dc.Serial, dc.AppID)
 
