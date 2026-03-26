@@ -32,6 +32,7 @@ export default defineConfig({
             { label: 'Recipes', slug: 'probescript/recipes' },
             { label: 'Data-Driven Tests', slug: 'probescript/data-driven' },
             { label: 'Hooks', slug: 'probescript/hooks' },
+            { label: 'Dictionary', slug: 'probescript/dictionary' },
           ],
         },
         {
