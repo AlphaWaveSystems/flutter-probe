@@ -85,7 +85,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		// Launch via am start with the standard Flutter MainActivity
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
-			"am", "start", "-n", dc.AppID+"/.MainActivity"); err != nil {
+			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("restart: launch: %w", err)
 		}
 
@@ -136,7 +136,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
-			"am", "start", "-n", dc.AppID+"/.MainActivity"); err != nil {
+			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("clear data: relaunch: %w", err)
 		}
 
@@ -403,7 +403,7 @@ func (dc *DeviceContext) LaunchApp(ctx context.Context) error {
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
-			"am", "start", "-n", dc.AppID+"/.MainActivity"); err != nil {
+			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("launch app: %w", err)
 		}
 	case device.PlatformIOS:

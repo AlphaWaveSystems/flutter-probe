@@ -150,14 +150,31 @@ func (a *ADB) Install(ctx context.Context, serial, apkPath string) error {
 	return nil
 }
 
-// LaunchApp starts an app by package name using am start with the Flutter MainActivity.
+// LaunchApp starts an app by resolving its launcher activity and launching it.
+// Falls back to {package}/.MainActivity if resolution fails.
 func (a *ADB) LaunchApp(ctx context.Context, serial, packageName string) error {
-	_, err := a.Shell(ctx, serial,
-		"am", "start", "-n", packageName+"/.MainActivity")
+	activity := a.ResolveLauncherActivity(ctx, serial, packageName)
+	_, err := a.Shell(ctx, serial, "am", "start", "-n", activity)
 	if err != nil {
 		return fmt.Errorf("adb launch: %w", err)
 	}
 	return nil
+}
+
+// ResolveLauncherActivity uses cmd package resolve-activity to find the
+// launcher activity for a package. Returns "{package}/{activity}" format.
+// Falls back to "{package}/.MainActivity" if resolution fails.
+func (a *ADB) ResolveLauncherActivity(ctx context.Context, serial, packageName string) string {
+	out, err := a.Shell(ctx, serial, "cmd", "package", "resolve-activity", "--brief", packageName)
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.Contains(line, packageName+"/") {
+				return line
+			}
+		}
+	}
+	return packageName + "/.MainActivity"
 }
 
 // GetProp reads a system property from the device.
