@@ -2,10 +2,38 @@
 
 ## Prerequisites
 
-- Go 1.26+
-- Dart 3.3+ / Flutter 3.19+
-- Android SDK with `adb` in PATH
-- Xcode with `xcrun simctl` (macOS only, for iOS testing)
+### Required
+
+| Tool | Version | Purpose | Install |
+|---|---|---|---|
+| Go | 1.26+ | Build the CLI | [go.dev](https://go.dev/dl/) |
+| Flutter | 3.19+ (tested up to 3.41) | Build apps with ProbeAgent | [flutter.dev](https://flutter.dev/docs/get-started/install) |
+| Dart | 3.3+ | Included with Flutter | — |
+
+### Platform-Specific
+
+| Tool | Platform | Purpose | Install |
+|---|---|---|---|
+| Android SDK | Android | `adb` for device/emulator communication | Android Studio or `sdkmanager` |
+| Xcode | iOS (macOS) | `xcrun simctl` for simulators, `xcrun devicectl` for physical devices | App Store |
+| CocoaPods | iOS (macOS) | Flutter iOS dependency management | `brew install cocoapods` |
+
+### Physical iOS Devices
+
+| Tool | Purpose | Install |
+|---|---|---|
+| libimobiledevice | `iproxy` (USB port forwarding) + `idevicesyslog` (token reading) + `idevice_id` (device detection) | `brew install libimobiledevice` |
+
+> **Note:** `libimobiledevice` is only needed for USB testing. WiFi testing (`--host` + `--token`) does not require it.
+
+### Optional
+
+| Tool | Purpose | Install |
+|---|---|---|
+| staticcheck | Go linting (used in CI) | `go install honnef.co/go/tools/cmd/staticcheck@latest` |
+| govulncheck | Go vulnerability scanning (used in CI) | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
+| scrcpy | Android screen recording | `brew install scrcpy` |
+| ffmpeg | Video post-processing | `brew install ffmpeg` |
 
 ## Build
 

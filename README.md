@@ -87,13 +87,21 @@ make install      # → $GOPATH/bin/probe (optional)
 
 ### Physical iOS Devices
 
-Testing on physical iOS devices requires `iproxy` (from libimobiledevice) for USB port forwarding:
-
+**WiFi (recommended)** — stable, zero connection drops:
 ```bash
-brew install libimobiledevice  # macOS
+# Build with WiFi enabled
+flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true
+
+# Run tests (find token in app console: PROBE_TOKEN=...)
+probe test tests/ --host <device-ip> --token <probe-token>
 ```
 
-> **Note:** `iproxy` is **not** needed for iOS simulators (they share the host loopback) or Android devices (which use `adb forward`).
+**USB** — requires libimobiledevice (may experience USB-C drops):
+```bash
+brew install libimobiledevice  # provides iproxy, idevicesyslog, idevice_id
+```
+
+> **Tip:** WiFi is recommended over USB-C. USB-C cables switch between charging and data modes, causing intermittent connection drops. See [FAQ](https://flutterprobe.dev/#faq) for details.
 
 ### 2. Add ProbeAgent to your Flutter app
 
