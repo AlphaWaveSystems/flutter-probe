@@ -145,12 +145,32 @@ flutter run --profile --dart-define=PROBE_AGENT=true \
   --device-id <UDID>
 ```
 
+### Connection Modes
+
+**USB mode** (default):
+1. FlutterProbe starts `iproxy` to forward port 48686 from host to device
+2. CLI reads the agent token from `idevicesyslog`
+3. Uses HTTP POST transport (stateless, no persistent connection to drop)
+
+**WiFi mode** (recommended — no USB-C charging/data switching drops):
+```bash
+# Build with WiFi enabled
+flutter build ios --profile --flavor <flavor> \
+  --dart-define=PROBE_AGENT=true \
+  --dart-define=PROBE_WIFI=true
+
+# Run tests over WiFi (no USB cable needed)
+probe test tests/ --host <device-ip> --token <probe-token> --device <UDID>
+```
+
+To find the token, check the app's console output for `PROBE_TOKEN=...` (printed every 3 seconds).
+
 ### How It Works
 
-1. **Port forwarding**: FlutterProbe automatically starts `iproxy` to forward port 48686 from the host to the device
-2. **Token reading**: The CLI reads the agent token from `idevicesyslog` (instead of simctl file paths)
+1. **USB**: `iproxy` forwards port 48686; CLI reads token via `idevicesyslog`; HTTP POST transport
+2. **WiFi**: Agent binds to `0.0.0.0` (via `PROBE_WIFI=true`); CLI connects directly to device IP; no iproxy needed
 3. **App lifecycle**: `xcrun devicectl` handles launch/terminate (instead of `simctl`)
-4. **Keepalive**: WebSocket ping/pong frames every 5s prevent idle connection drops
+4. **Keepalive**: WebSocket ping/pong frames every 5s prevent idle connection drops (USB mode)
 5. **Auto-reconnect**: If the connection drops mid-test, the CLI reconnects transparently (up to 2 retries)
 
 ### Limitations on Physical Devices

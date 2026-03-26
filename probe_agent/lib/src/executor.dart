@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, TextButton, OutlinedButton, TextField;
+import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -18,7 +18,7 @@ typedef SendFn = void Function(String message);
 
 /// ProbeExecutor handles all JSON-RPC method calls from the CLI.
 class ProbeExecutor {
-  final SendFn _send;
+  SendFn _send;
   final ProbeFinder _finder = ProbeFinder.instance;
   final ProbeSync _sync = ProbeSync.instance;
   final ProbeRecorder _recorder = ProbeRecorder();
@@ -32,6 +32,10 @@ class ProbeExecutor {
   ProbeExecutor(this._send) {
     _interceptUrlLauncher();
   }
+
+  /// Updates the send function. Used by HTTP mode to route responses
+  /// to the current HTTP request's completer.
+  set sendFn(SendFn fn) => _send = fn;
 
   /// Intercepts url_launcher platform channel to track external browser launches.
   void _interceptUrlLauncher() {
@@ -233,8 +237,46 @@ class ProbeExecutor {
     final element = _requireElement(sel);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
+
+    // Check if the matched element is a Semantics wrapper — if so, the
+    // synthetic gesture may not reach the GestureDetector child. In that
+    // case, invoke onTap directly instead of using pointer events.
+    if (element.widget is Semantics) {
+      final tapped = _tryDirectTap(element);
+      if (tapped) return;
+    }
+
     final gesture = await _createGesture(center);
     await gesture.up();
+  }
+
+  /// Walks down from [element] to find a GestureDetector or InkWell child
+  /// and invokes its onTap directly. Only used when the matched element is
+  /// a Semantics wrapper where synthetic pointer events are unreliable.
+  /// Returns true if onTap was invoked.
+  bool _tryDirectTap(Element element) {
+    bool found = false;
+    void visit(Element e) {
+      if (found) return;
+      try {
+        final widget = e.widget;
+        if (widget is GestureDetector && widget.onTap != null) {
+          widget.onTap!();
+          found = true;
+          return;
+        }
+        if (widget is InkWell && widget.onTap != null) {
+          widget.onTap!();
+          found = true;
+          return;
+        }
+        e.visitChildren(visit);
+      } catch (_) {
+        // Element may be disposed during tree walk — skip safely
+      }
+    }
+    visit(element);
+    return found;
   }
 
   Future<void> _doubleTap(Map<String, dynamic> sel) async {

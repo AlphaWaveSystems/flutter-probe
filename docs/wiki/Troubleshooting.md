@@ -77,14 +77,20 @@ if (!probeEnabled) {
 3. Read the token: `cat <container>/tmp/probe/token`
 4. Ensure `PROBE_AGENT=true` was passed during build
 
-### Physical iOS Device — WebSocket Drops
+### Physical iOS Device — Connection Drops via USB
 
-**Cause**: iproxy connections on physical devices can be closed by iOS during idle periods.
+**Cause**: USB-C cables cause intermittent drops when the device switches between charging and data transfer modes. This kills the iproxy tunnel.
 
-**Fix**: FlutterProbe v0.5.0+ includes automatic ping/pong keepalive (every 5s) and auto-reconnect (up to 2 retries). If you still see drops:
-1. Check iproxy is running: `pgrep -fl iproxy`
-2. Restart iproxy: `pkill -f "iproxy.*<UDID>" && iproxy 48686 48686 --udid <UDID> &`
-3. Use `--reconnect-delay 5s` for slower devices
+**Fix**: Use **WiFi mode** instead of USB to eliminate drops entirely:
+```bash
+# Build with WiFi enabled
+flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true
+
+# Run over WiFi (find token in app console logs)
+probe test tests/ --host <device-ip> --token <probe-token>
+```
+
+If you must use USB: FlutterProbe v0.5.0+ uses HTTP POST transport (not WebSocket) for physical devices, with auto-reconnect (up to 2 retries per step). Use a USB-A cable if available — no charge/data switching issue.
 
 ### Physical iOS Device — "devicectl launch: not installed"
 

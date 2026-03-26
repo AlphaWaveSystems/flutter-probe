@@ -396,6 +396,23 @@ func (p *Parser) parseStep() (Step, error) {
 	}
 }
 
+// checkIfVisible checks for a trailing "if visible" suffix before the newline.
+// Returns true if "if visible" was consumed.
+func (p *Parser) checkIfVisible() bool {
+	if p.peek().Type != TOKEN_IF {
+		return false
+	}
+	// Save position to restore if next word isn't "visible"
+	saved := p.pos
+	p.advance() // if
+	if p.peek().Literal == "visible" {
+		p.advance() // visible
+		return true
+	}
+	p.pos = saved // restore — this was a regular "if", not "if visible"
+	return false
+}
+
 // ---- Action parsers ----
 
 func (p *Parser) parseActionOpen() (Step, error) {
@@ -416,10 +433,10 @@ func (p *Parser) parseActionTap() (Step, error) {
 	line := p.peek().Line
 	p.advance() // tap
 	p.skipFillers()
-	// Check for ordinal
 	sel := p.parseSelector()
+	ifVis := p.checkIfVisible()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbTap, Sel: &sel, Line: line}, nil
+	return ActionStep{Verb: VerbTap, Sel: &sel, IfVisible: ifVis, Line: line}, nil
 }
 
 func (p *Parser) parseActionType() (Step, error) {
@@ -437,8 +454,9 @@ func (p *Parser) parseActionType() (Step, error) {
 	for p.peek().Type == TOKEN_FIELD || p.peek().Type == TOKEN_BUTTON {
 		p.advance()
 	}
+	ifVis := p.checkIfVisible()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbType, Text: text, Sel: sel, Line: line}, nil
+	return ActionStep{Verb: VerbType, Text: text, Sel: sel, IfVisible: ifVis, Line: line}, nil
 }
 
 func (p *Parser) parseActionSwipe() (Step, error) {
@@ -476,8 +494,9 @@ func (p *Parser) parseActionLongPress() (Step, error) {
 	p.advance() // long press
 	p.skipFillers()
 	sel := p.parseSelector()
+	ifVis := p.checkIfVisible()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbLongPress, Sel: &sel, Line: line}, nil
+	return ActionStep{Verb: VerbLongPress, Sel: &sel, IfVisible: ifVis, Line: line}, nil
 }
 
 func (p *Parser) parseActionDoubleTap() (Step, error) {
@@ -485,8 +504,9 @@ func (p *Parser) parseActionDoubleTap() (Step, error) {
 	p.advance() // double tap
 	p.skipFillers()
 	sel := p.parseSelector()
+	ifVis := p.checkIfVisible()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbDoubleTap, Sel: &sel, Line: line}, nil
+	return ActionStep{Verb: VerbDoubleTap, Sel: &sel, IfVisible: ifVis, Line: line}, nil
 }
 
 func (p *Parser) parseActionClear() (Step, error) {
@@ -494,8 +514,9 @@ func (p *Parser) parseActionClear() (Step, error) {
 	p.advance() // clear
 	p.skipFillers()
 	sel := p.parseSelector()
+	ifVis := p.checkIfVisible()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbClear, Sel: &sel, Line: line}, nil
+	return ActionStep{Verb: VerbClear, Sel: &sel, IfVisible: ifVis, Line: line}, nil
 }
 
 func (p *Parser) parseActionClose() (Step, error) {
@@ -535,6 +556,8 @@ func (p *Parser) parseActionTakeShot() (Step, error) {
 	name := ""
 	if p.peek().Type == TOKEN_CALLED {
 		p.advance()
+		name = p.expectString("screenshot name")
+	} else if p.peek().Type == TOKEN_STRING {
 		name = p.expectString("screenshot name")
 	}
 	p.consumeNewline()

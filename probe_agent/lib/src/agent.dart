@@ -109,8 +109,10 @@ class ProbeAgent {
       );
       await _relayClient!.connect();
     } else {
-      // Local mode: listen on port (existing behavior)
-      _server = ProbeServer(port: port);
+      // Local mode: listen on port
+      // PROBE_WIFI=true enables binding to 0.0.0.0 for WiFi testing
+      const allowWifi = bool.fromEnvironment('PROBE_WIFI', defaultValue: false);
+      _server = ProbeServer(port: port, allowRemoteConnections: allowWifi);
       await _server!.start();
     }
   }

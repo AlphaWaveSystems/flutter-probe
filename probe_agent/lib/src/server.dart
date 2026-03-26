@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -10,20 +11,35 @@ import 'protocol.dart';
 /// The probe CLI connects to this server after the app starts.
 /// Authentication is token-based: the server emits a one-time token
 /// to stdout/logcat which the CLI reads before connecting.
+///
+/// Supports two transport modes:
+/// - **WebSocket** (default): persistent connection at `ws://host:port/probe?token=<token>`
+/// - **HTTP POST** (fallback for physical devices): stateless `POST /probe/rpc?token=<token>`
 class ProbeServer {
   final int port;
+  final bool allowRemoteConnections;
   HttpServer? _server;
   String? _token;
   ProbeExecutor? _executor;
 
-  ProbeServer({this.port = 48686});
+  /// Shared executor for HTTP mode — persists state (mocks, URL tracking)
+  /// across stateless HTTP requests within the same session.
+  ProbeExecutor? _httpExecutor;
+
+  /// Creates a ProbeServer.
+  /// Set [allowRemoteConnections] to true for WiFi testing (binds to 0.0.0.0
+  /// instead of localhost). Only use in debug/profile builds — never in release.
+  ProbeServer({this.port = 48686, this.allowRemoteConnections = false});
 
   Timer? _tokenTimer;
 
   /// Starts the WebSocket server and prints the session token.
   Future<void> start() async {
     _token = _generateToken();
-    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+    final bindAddress = allowRemoteConnections
+        ? InternetAddress.anyIPv4
+        : InternetAddress.loopbackIPv4;
+    _server = await HttpServer.bind(bindAddress, port);
 
     // Emit token so the CLI (via adb logcat / simctl log) can read it
     // ignore: avoid_print
@@ -43,15 +59,9 @@ class ProbeServer {
 
   Future<void> _serve() async {
     await for (final req in _server!) {
-      if (!WebSocketTransformer.isUpgradeRequest(req)) {
-        req.response
-          ..statusCode = HttpStatus.badRequest
-          ..close();
-        continue;
-      }
-
-      // Validate token
-      final queryToken = req.uri.queryParameters['token'];
+      // Validate token (shared by both WebSocket and HTTP paths)
+      final queryToken = req.uri.queryParameters['token'] ??
+          req.headers.value('x-probe-token');
       if (queryToken != _token) {
         req.response
           ..statusCode = HttpStatus.unauthorized
@@ -59,8 +69,67 @@ class ProbeServer {
         continue;
       }
 
+      // HTTP POST fallback: stateless JSON-RPC over HTTP
+      if (req.method == 'POST' && req.uri.path == '/probe/rpc') {
+        await _handleHttpRpc(req);
+        continue;
+      }
+
+      // WebSocket upgrade
+      if (!WebSocketTransformer.isUpgradeRequest(req)) {
+        req.response
+          ..statusCode = HttpStatus.badRequest
+          ..close();
+        continue;
+      }
+
       final ws = await WebSocketTransformer.upgrade(req);
       _handleConnection(ws);
+    }
+  }
+
+  /// Handles a stateless HTTP POST JSON-RPC request.
+  Future<void> _handleHttpRpc(HttpRequest req) async {
+    try {
+      final body = await utf8.decoder.bind(req).join();
+      final probeReq = ProbeRequest.tryParse(body);
+      if (probeReq == null) {
+        req.response
+          ..statusCode = HttpStatus.badRequest
+          ..headers.contentType = ContentType.json
+          ..write('{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"}}')
+          ..close();
+        return;
+      }
+
+      // Use a shared executor so mocks and state persist across HTTP calls.
+      // Swap the send function per request to route the response back.
+      final completer = Completer<String>();
+      _httpExecutor ??= ProbeExecutor((msg) {
+        if (!completer.isCompleted) completer.complete(msg);
+      });
+      _httpExecutor!.sendFn = (msg) {
+        if (!completer.isCompleted) completer.complete(msg);
+      };
+
+      await _httpExecutor!.dispatch(probeReq);
+
+      final response = await completer.future.timeout(
+        const Duration(seconds: 120),
+        onTimeout: () => '{"jsonrpc":"2.0","id":${probeReq.id},"error":{"code":-32000,"message":"Timeout"}}',
+      );
+
+      req.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.json
+        ..write(response)
+        ..close();
+    } catch (e) {
+      req.response
+        ..statusCode = HttpStatus.internalServerError
+        ..headers.contentType = ContentType.json
+        ..write('{"jsonrpc":"2.0","error":{"code":-32603,"message":"${e.toString().replaceAll('"', '\\"')}"}}')
+        ..close();
     }
   }
 

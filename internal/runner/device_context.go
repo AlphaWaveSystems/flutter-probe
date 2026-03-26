@@ -27,6 +27,7 @@ type DeviceContext struct {
 	Port                    int             // host-side agent port (default 48686)
 	DevicePort              int             // on-device agent port (default: same as Port)
 	IsPhysical              bool            // true for physical devices (vs emulator/simulator)
+	UseHTTP                 bool            // if true, use HTTP POST instead of WebSocket for reconnection
 	AllowClearData          bool            // if true, skip confirmation for clear app data (CI/CD mode)
 	Confirm                 ConfirmFunc     // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
 	GrantPermissionsOnClear bool            // if true, auto-grant all permissions after clearing data
@@ -329,7 +330,7 @@ func (dc *DeviceContext) RevokeAllPermissions(ctx context.Context) error {
 
 // Reconnect waits for the app to boot its agent, reads the new token,
 // and establishes a fresh WebSocket connection.
-func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, error) {
+func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, error) {
 	tokenTimeout := dc.tokenTimeout()
 
 	switch dc.Platform {
@@ -377,12 +378,22 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (*probelink.Client, erro
 		return nil, fmt.Errorf("reconnect: read token: %w", err)
 	}
 
-	client, err := probelink.DialWithOptions(ctx, probelink.DialOptions{
+	dialOpts := probelink.DialOptions{
 		Host:        "127.0.0.1",
 		Port:        dc.Port,
 		Token:       token,
 		DialTimeout: dc.dialTimeoutVal(),
-	})
+	}
+
+	if dc.UseHTTP {
+		client, err := probelink.DialHTTP(ctx, dialOpts)
+		if err != nil {
+			return nil, fmt.Errorf("reconnect: http dial: %w", err)
+		}
+		return client, nil
+	}
+
+	client, err := probelink.DialWithOptions(ctx, dialOpts)
 	if err != nil {
 		return nil, fmt.Errorf("reconnect: dial: %w", err)
 	}

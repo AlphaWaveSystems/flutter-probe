@@ -16,9 +16,9 @@ import (
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
 type Executor struct {
-	client      *probelink.Client
+	client      probelink.ProbeClient
 	deviceCtx   *DeviceContext                // nil in dry-run mode
-	onReconnect func(*probelink.Client)       // callback to update Runner's client ref
+	onReconnect func(probelink.ProbeClient)       // callback to update Runner's client ref
 	timeout     time.Duration
 	recipes     map[string]parser.RecipeDef   // loaded recipes by name
 	vars        map[string]string             // variable scope for data-driven tests
@@ -30,7 +30,7 @@ type Executor struct {
 }
 
 // NewExecutor creates an Executor.
-func NewExecutor(client *probelink.Client, deviceCtx *DeviceContext, onReconnect func(*probelink.Client), timeout time.Duration, verbose bool) *Executor {
+func NewExecutor(client probelink.ProbeClient, deviceCtx *DeviceContext, onReconnect func(probelink.ProbeClient), timeout time.Duration, verbose bool) *Executor {
 	return &Executor{
 		client:      client,
 		deviceCtx:   deviceCtx,
@@ -272,6 +272,22 @@ func (e *Executor) stepDescription(step parser.Step) string {
 // ---- Action execution ----
 
 func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
+	// "if visible" suffix: check if the selector is visible before executing.
+	// If not visible, skip silently (no error). Connection errors propagate.
+	if a.IfVisible && a.Sel != nil {
+		checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		err := e.client.See(checkCtx, probelink.SeeParams{
+			Selector: toSelectorParam(*a.Sel),
+		})
+		cancel()
+		if err != nil {
+			if isConnectionError(err) {
+				return err // propagate connection errors for auto-reconnect
+			}
+			return nil // not visible — skip silently
+		}
+	}
+
 	switch a.Verb {
 	case parser.VerbOpen:
 		screen := ""
@@ -654,7 +670,7 @@ func (e *Executor) tryReconnect(ctx context.Context) error {
 	if e.deviceCtx == nil {
 		return fmt.Errorf("reconnect: no device context (cloud mode)")
 	}
-	fmt.Printf("    \033[33m⟳\033[0m  WebSocket connection lost — attempting to reconnect...\n")
+	fmt.Printf("    \033[33m⟳\033[0m  Connection lost — attempting to reconnect...\n")
 	e.client.Close()
 
 	// The app is still running — we just need to re-dial.
