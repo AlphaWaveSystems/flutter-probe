@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, TextButton, OutlinedButton, TextField;
+import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -18,7 +18,7 @@ typedef SendFn = void Function(String message);
 
 /// ProbeExecutor handles all JSON-RPC method calls from the CLI.
 class ProbeExecutor {
-  final SendFn _send;
+  SendFn _send;
   final ProbeFinder _finder = ProbeFinder.instance;
   final ProbeSync _sync = ProbeSync.instance;
   final ProbeRecorder _recorder = ProbeRecorder();
@@ -32,6 +32,10 @@ class ProbeExecutor {
   ProbeExecutor(this._send) {
     _interceptUrlLauncher();
   }
+
+  /// Updates the send function. Used by HTTP mode to route responses
+  /// to the current HTTP request's completer.
+  set sendFn(SendFn fn) => _send = fn;
 
   /// Intercepts url_launcher platform channel to track external browser launches.
   void _interceptUrlLauncher() {
@@ -77,6 +81,15 @@ class ProbeExecutor {
         await _sync.waitForSettled(
           timeout: Duration(milliseconds: (timeout * 1000).toInt()),
         );
+        return {'ok': true};
+
+      case ProbeMethods.setNextToken:
+        final token = req.params['token'] as String? ?? '';
+        if (token.length < 16) {
+          throw ProbeError(ProbeError.invalidParams, 'Token must be at least 16 characters');
+        }
+        // Access server via global to persist the token
+        await _persistNextToken(token);
         return {'ok': true};
 
       // ---- Navigation ----
@@ -233,8 +246,46 @@ class ProbeExecutor {
     final element = _requireElement(sel);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
+
+    // Check if the matched element is a Semantics wrapper — if so, the
+    // synthetic gesture may not reach the GestureDetector child. In that
+    // case, invoke onTap directly instead of using pointer events.
+    if (element.widget is Semantics) {
+      final tapped = _tryDirectTap(element);
+      if (tapped) return;
+    }
+
     final gesture = await _createGesture(center);
     await gesture.up();
+  }
+
+  /// Walks down from [element] to find a GestureDetector or InkWell child
+  /// and invokes its onTap directly. Only used when the matched element is
+  /// a Semantics wrapper where synthetic pointer events are unreliable.
+  /// Returns true if onTap was invoked.
+  bool _tryDirectTap(Element element) {
+    bool found = false;
+    void visit(Element e) {
+      if (found) return;
+      try {
+        final widget = e.widget;
+        if (widget is GestureDetector && widget.onTap != null) {
+          widget.onTap!();
+          found = true;
+          return;
+        }
+        if (widget is InkWell && widget.onTap != null) {
+          widget.onTap!();
+          found = true;
+          return;
+        }
+        e.visitChildren(visit);
+      } catch (_) {
+        // Element may be disposed during tree walk — skip safely
+      }
+    }
+    visit(element);
+    return found;
   }
 
   Future<void> _doubleTap(Map<String, dynamic> sel) async {
@@ -636,17 +687,44 @@ class ProbeExecutor {
     return nav;
   }
 
+  int _nextPointer = 900; // Start high to avoid collisions with real touches
+
   Future<_ProbeGesture> _createGesture(Offset position) async {
     final binding = GestureBinding.instance;
-    final pointer = PointerDownEvent(position: position);
+    final pointerId = _nextPointer++;
+    final pointer = PointerDownEvent(
+      pointer: pointerId,
+      position: position,
+    );
     binding.handlePointerEvent(pointer);
-    return _ProbeGesture(position, binding);
+    return _ProbeGesture(position, binding, pointerId);
   }
 
   Future<void> _restartApp() async {
     // Signal the app to restart
     _send(ProbeNotification(ProbeMethods.notifyRestartApp, {}).encode());
     await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  /// Persists a token to disk so the agent uses it after restart.
+  Future<void> _persistNextToken(String token) async {
+    try {
+      String path;
+      if (Platform.isIOS) {
+        path = '${Directory.systemTemp.path}/probe/next_token';
+      } else if (Platform.isAndroid) {
+        final cmdline = File('/proc/self/cmdline').readAsStringSync();
+        final pkg = cmdline.split('\x00').first;
+        path = '/data/data/$pkg/cache/probe/next_token';
+      } else {
+        path = '${Directory.systemTemp.path}/probe/next_token';
+      }
+      final file = File(path);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(token);
+    } catch (e) {
+      throw ProbeError(ProbeError.internalError, 'Failed to persist token: $e');
+    }
   }
 }
 
@@ -655,15 +733,22 @@ class ProbeExecutor {
 class _ProbeGesture {
   Offset _position;
   final GestureBinding _binding;
+  final int _pointer;
 
-  _ProbeGesture(this._position, this._binding);
+  _ProbeGesture(this._position, this._binding, this._pointer);
 
   Future<void> up() async {
-    _binding.handlePointerEvent(PointerUpEvent(position: _position));
+    _binding.handlePointerEvent(PointerUpEvent(
+      pointer: _pointer,
+      position: _position,
+    ));
   }
 
   Future<void> moveTo(Offset location, {Duration? timeStamp}) async {
-    _binding.handlePointerEvent(PointerMoveEvent(position: location));
+    _binding.handlePointerEvent(PointerMoveEvent(
+      pointer: _pointer,
+      position: location,
+    ));
     _position = location;
   }
 

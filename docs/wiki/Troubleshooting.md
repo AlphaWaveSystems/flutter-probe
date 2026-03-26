@@ -77,6 +77,33 @@ if (!probeEnabled) {
 3. Read the token: `cat <container>/tmp/probe/token`
 4. Ensure `PROBE_AGENT=true` was passed during build
 
+### Physical iOS Device — Connection Drops via USB
+
+**Cause**: USB-C cables cause intermittent drops when the device switches between charging and data transfer modes. This kills the iproxy tunnel.
+
+**Fix**: Use **WiFi mode** instead of USB to eliminate drops entirely:
+```bash
+# Build with WiFi enabled
+flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true
+
+# Run over WiFi (find token in app console logs)
+probe test tests/ --host <device-ip> --token <probe-token>
+```
+
+If you must use USB: FlutterProbe v0.5.0+ uses HTTP POST transport (not WebSocket) for physical devices, with auto-reconnect (up to 2 retries per step). Use a USB-A cable if available — no charge/data switching issue.
+
+### Physical iOS Device — "devicectl launch: not installed"
+
+**Cause**: Bundle ID mismatch between `probe.yaml` and the installed app. Debug builds may use a `.dev` suffix.
+
+**Fix**: Check the installed bundle ID: `xcrun devicectl device info apps --device <UDID> | grep <appname>` and update `project.app` in `probe.yaml` to match.
+
+### Physical iOS Device — `tap #key` Not Working
+
+**Cause**: Widgets matched by `Semantics(identifier:)` may not forward gestures properly if pointer IDs collide with real touches.
+
+**Fix**: Update to FlutterProbe v0.5.0+ which uses unique pointer IDs starting at 900 to avoid collisions.
+
 ## Android-Specific Issues
 
 ### Permission Dialogs Block Tests

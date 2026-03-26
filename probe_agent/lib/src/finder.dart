@@ -9,25 +9,28 @@ class ProbeFinder {
   static final ProbeFinder instance = ProbeFinder._();
 
   /// Returns all [Element]s matching the given selector map.
+  /// Only returns elements that are currently visible on screen
+  /// (not behind Offstage, Visibility(false), or off-screen routes).
   List<Element> findElements(Map<String, dynamic> sel) {
     final kind = sel['kind'] as String? ?? 'text';
     final text = sel['text'] as String? ?? '';
     final ordinal = (sel['ordinal'] as num?)?.toInt() ?? 1;
     final container = sel['container'] as String? ?? '';
 
+    List<Element> raw;
     switch (kind) {
       case 'text':
-        return _findByText(text);
+        raw = _findByText(text);
 
       case 'id':
         final key = text.startsWith('#') ? text.substring(1) : text;
-        return _findByKey(key);
+        raw = _findByKey(key);
 
       case 'type':
-        return _findByType(text);
+        raw = _findByType(text);
 
       case 'ordinal':
-        final matches = _findByText(text);
+        final matches = _findByText(text).where(_isVisible).toList();
         if (ordinal > 0 && ordinal <= matches.length) {
           return [matches[ordinal - 1]];
         }
@@ -35,24 +38,25 @@ class ProbeFinder {
 
       case 'positional':
         if (container.isNotEmpty) {
-          final containers = _findByText(container);
+          final containers = _findByText(container).where(_isVisible).toList();
           if (containers.isEmpty) return [];
-          // Find text within the container element's subtree
           final results = <Element>[];
           for (final c in containers) {
             _visitElement(c, (e) {
-              if (_matchesText(e.widget, text)) {
+              if (_matchesText(e.widget, text) && _isVisible(e)) {
                 results.add(e);
               }
             });
           }
           return results;
         }
-        return _findByText(text);
+        raw = _findByText(text);
 
       default:
-        return _findByText(text);
+        raw = _findByText(text);
     }
+    // Filter to only visible elements
+    return raw.where(_isVisible).toList();
   }
 
   List<Element> _findByText(String text) {
@@ -107,6 +111,38 @@ class ProbeFinder {
     return false;
   }
 
+  /// Returns true if the element is currently visible on screen.
+  /// Checks that the render object is painted and not hidden behind
+  /// Offstage or Visibility widgets.
+  bool _isVisible(Element element) {
+    final ro = element.renderObject;
+    if (ro == null || !ro.attached) return false;
+    if (ro is RenderBox) {
+      // Zero-size widgets are not visible
+      if (ro.size == Size.zero) return false;
+      // Check if the widget is actually painted (not behind Offstage etc.)
+      if (!ro.hasSize) return false;
+    }
+    // Walk up the tree to check for Offstage / Visibility ancestors
+    Element? current = element;
+    while (current != null) {
+      final widget = current.widget;
+      if (widget is Offstage && widget.offstage) return false;
+      if (widget is Visibility && !widget.visible) return false;
+      current = _parentElement(current);
+    }
+    return true;
+  }
+
+  Element? _parentElement(Element element) {
+    Element? parent;
+    element.visitAncestorElements((e) {
+      parent = e;
+      return false; // stop after first ancestor
+    });
+    return parent;
+  }
+
   void walkTree(void Function(Element) visitor) {
     final rootElement = WidgetsBinding.instance.rootElement;
     if (rootElement == null) return;
@@ -114,6 +150,10 @@ class ProbeFinder {
   }
 
   void _visitElement(Element element, void Function(Element) visitor) {
+    // Skip subtrees rooted at Offstage or Visibility(visible: false)
+    final widget = element.widget;
+    if (widget is Offstage && widget.offstage) return;
+    if (widget is Visibility && !widget.visible) return;
     visitor(element);
     element.visitChildren((child) => _visitElement(child, visitor));
   }

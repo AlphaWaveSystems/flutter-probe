@@ -7,7 +7,7 @@ FlutterProbe consists of two main components that communicate via WebSocket + JS
 ```
 +------------------+       WebSocket (JSON-RPC 2.0)       +------------------+
 |   Go CLI         | <----------------------------------> |   Dart Agent     |
-|   (probe)        |       ws://127.0.0.1:48686           |   (ProbeAgent)   |
+|   (probe)        |   ws://127.0.0.1:48686 + ping/pong   |   (ProbeAgent)   |
 +------------------+                                       +------------------+
 |                  |                                       |                  |
 | - Parser         |                                       | - Server         |
@@ -35,8 +35,8 @@ The CLI is the orchestrator. It parses `.probe` test files, manages device conne
 | `parser/` | Indent-aware lexer + recursive-descent parser producing AST |
 | `runner/` | Test orchestration: loads files, walks AST, dispatches to ProbeLink |
 | `probelink/` | JSON-RPC 2.0 WebSocket client |
-| `device/` | ADB integration for Android (port forwarding, permissions, token extraction) |
-| `ios/` | iOS simulator management via `xcrun simctl` |
+| `device/` | ADB integration for Android, device detection (physical vs emulator), iproxy management |
+| `ios/` | iOS simulator management via `xcrun simctl`, physical device management via `xcrun devicectl` |
 | `config/` | `probe.yaml` parsing with layered resolution (CLI flag > config > default) |
 | `report/` | HTML report generation with portable relative paths |
 | `cloud/` | Cloud provider integration (BrowserStack, SauceLabs, AWS, Firebase, LambdaTest) |
@@ -74,6 +74,24 @@ The agent runs **inside the production Flutter app** using `WidgetsFlutterBindin
 2. CLI reads token from app container: `<container>/tmp/probe/token`
 3. CLI connects: `ws://127.0.0.1:<port>/probe?token=<token>`
 4. Fallback: parse token from `simctl spawn ... log show`
+
+### iOS Physical Device (USB)
+
+1. CLI detects physical device (UDID not in `simctl list`)
+2. CLI kills stale `iproxy` processes, starts fresh `iproxy`
+3. CLI reads token from `idevicesyslog`
+4. CLI connects via HTTP POST: `POST http://127.0.0.1:<port>/probe/rpc?token=<token>`
+5. Each command is an independent HTTP request (no persistent connection to drop)
+6. Auto-reconnect on connection loss (up to 2 retries per step)
+7. App lifecycle managed via `xcrun devicectl` (launch/terminate)
+
+### iOS Physical Device (WiFi — recommended)
+
+1. App built with `--dart-define=PROBE_WIFI=true` (binds to `0.0.0.0`)
+2. CLI connects directly to device IP: `--host <ip> --token <token>`
+3. No `iproxy` needed — direct HTTP POST over WiFi
+4. Zero USB-C charge/data switching drops
+5. App lifecycle managed via `xcrun devicectl`
 
 ### Cloud (Relay Mode)
 

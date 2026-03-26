@@ -63,8 +63,10 @@ func init() {
 	f.Duration("timeout", 0, "per-step timeout; 0 uses probe.yaml or default 30s")
 
 	// Agent connection
+	f.String("host", "", "ProbeAgent host IP (default: 127.0.0.1; use device IP for WiFi testing)")
 	f.Int("port", 0, "ProbeAgent WebSocket port (default: 48686)")
 	f.Duration("dial-timeout", 0, "max time to establish WebSocket connection (default: 30s)")
+	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
 	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
 
@@ -150,6 +152,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 	noVideoFlag, _ := cmd.Flags().GetBool("no-video")
 
 	// Agent connection overrides: CLI flag > probe.yaml (already loaded)
+	agentHost, _ := cmd.Flags().GetString("host")
+	agentToken, _ := cmd.Flags().GetString("token")
 	agentPort, _ := cmd.Flags().GetInt("port")
 	dialTimeout, _ := cmd.Flags().GetDuration("dial-timeout")
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
@@ -353,7 +357,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// ── Single-device mode (default) ──
 	// Connect to ProbeAgent (skip if dry-run)
-	var client *probelink.Client
+	var client probelink.ProbeClient
 	var dm *device.Manager
 	var platform device.Platform
 	var cloudSession *cloud.Session       // non-nil when using a cloud provider
@@ -660,38 +664,74 @@ func runTests(cmd *cobra.Command, args []string) error {
 				statusOK(statusW, msgAppInstalledAndLaunched)
 			}
 
+			host := "127.0.0.1"
+			if agentHost != "" {
+				host = agentHost
+			}
 			dialOpts := probelink.DialOptions{
-				Host:        "127.0.0.1",
+				Host:        host,
 				Port:        cfg.Agent.Port,
 				DialTimeout: cfg.Agent.DialTimeout,
 			}
 
 			if platform == device.PlatformIOS {
-				// iOS: grant privacy permissions and relaunch the app.
-				// simctl privacy grant terminates the running app, so we must
-				// grant first, then relaunch. This prevents native OS dialogs
-				// (camera, location, etc.) from blocking the Flutter UI.
-				if autoYes && cfg.Project.App != "" {
-					for _, svc := range []string{"camera", "microphone", "location", "photos", "contacts-limited", "calendar"} {
-						_ = dm.SimCtl().GrantPrivacy(ctx, deviceSerial, cfg.Project.App, svc)
+				// Detect physical vs simulator early for connection setup
+				isPhysicalIOS := dm.IsPhysicalIOS(ctx, deviceSerial)
+
+				if isPhysicalIOS && agentHost == "" {
+					// Physical iOS via USB: set up iproxy for port forwarding
+					cleanupIProxy, iproxyErr := dm.EnsureIProxy(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort())
+					if iproxyErr != nil {
+						return fmt.Errorf("iproxy setup: %w", iproxyErr)
 					}
-					// Relaunch the app — simctl privacy grant terminates it
-					_ = dm.SimCtl().Launch(ctx, deviceSerial, cfg.Project.App)
-					time.Sleep(3 * time.Second) // give agent time to start
+					defer cleanupIProxy()
+				} else if isPhysicalIOS && agentHost != "" {
+					// Physical iOS via WiFi: connect directly, no iproxy needed
+					fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  WiFi mode: connecting to %s:%d\n", agentHost, cfg.Agent.Port)
+				} else {
+					// iOS simulator: grant privacy permissions and relaunch the app.
+					// simctl privacy grant terminates the running app, so we must
+					// grant first, then relaunch. This prevents native OS dialogs
+					// (camera, location, etc.) from blocking the Flutter UI.
+					if autoYes && cfg.Project.App != "" {
+						for _, svc := range []string{"camera", "microphone", "location", "photos", "contacts-limited", "calendar"} {
+							_ = dm.SimCtl().GrantPrivacy(ctx, deviceSerial, cfg.Project.App, svc)
+						}
+						// Relaunch the app — simctl privacy grant terminates it
+						_ = dm.SimCtl().Launch(ctx, deviceSerial, cfg.Project.App)
+						time.Sleep(3 * time.Second) // give agent time to start
+					}
 				}
-				// iOS: simulators share host loopback — no port forwarding needed
-				fmt.Fprintln(statusW, msgWaitingForTokenIOS)
-				token, err := dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App)
-				if err != nil {
-					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
+				// Read token: use --token flag if provided, otherwise auto-detect
+				var token string
+				if agentToken != "" {
+					token = agentToken
+				} else {
+					fmt.Fprintln(statusW, msgWaitingForTokenIOS)
+					var tokenErr error
+					token, tokenErr = dm.ReadTokenIOS(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App)
+					if tokenErr != nil {
+						return fmt.Errorf("agent token: %w — is the app running with probe_agent?", tokenErr)
+					}
 				}
 				dialOpts.Token = token
-				client, err = probelink.DialWithOptions(ctx, dialOpts)
+				if isPhysicalIOS {
+					// Physical iOS: use HTTP POST fallback (no persistent connection to drop)
+					client, err = probelink.DialHTTP(ctx, dialOpts)
+				} else {
+					client, err = probelink.DialWithOptions(ctx, dialOpts)
+				}
 				if err != nil {
 					return fmt.Errorf("connecting to ProbeAgent: %w", err)
 				}
 				defer client.Close()
 			} else {
+				// Android: verify ADB is available and device is reachable,
+				// clean up stale port forwards
+				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
+					return fmt.Errorf("android setup: %w", err)
+				}
+
 				// Android: grant permissions BEFORE reading token when -y is used.
 				// This prevents OS permission dialogs from blocking the app on
 				// first launch (especially POST_NOTIFICATIONS on Android 13+).
@@ -813,6 +853,17 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
+		// Detect if this is a physical device (vs emulator/simulator)
+		isPhysical := false
+		if platform == device.PlatformIOS {
+			isPhysical = dm.IsPhysicalIOS(ctx, deviceSerial)
+		} else if platform == device.PlatformAndroid {
+			isPhysical = dm.IsPhysicalAndroid(ctx, deviceSerial)
+		}
+		if isPhysical {
+			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
+		}
+
 		devCtx = &runner.DeviceContext{
 			Manager:                 dm,
 			Serial:                  deviceSerial,
@@ -820,6 +871,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
 			DevicePort:              cfg.Agent.AgentDevicePort(),
+			IsPhysical:              isPhysical,
+			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
+			AgentHost:               agentHost,  // device IP for WiFi mode
 			AllowClearData:          autoYes,
 			Confirm:                 promptUserConfirm,
 			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,

@@ -1,6 +1,7 @@
 package device
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os/exec"
@@ -36,31 +37,33 @@ type ToolPaths struct {
 
 // Manager handles device discovery and lifecycle.
 type Manager struct {
-	adb    *ADB
-	simctl *ios.SimCtl
-	tools  ToolPaths
+	adb       *ADB
+	simctl    *ios.SimCtl
+	devicectl *ios.DeviceCtl
+	tools     ToolPaths
 }
 
 // NewManager creates a Manager using tools found in PATH.
 func NewManager() *Manager {
-	return &Manager{adb: NewADB(), simctl: ios.New()}
+	return &Manager{adb: NewADB(), simctl: ios.New(), devicectl: ios.NewDeviceCtl()}
 }
 
 // NewManagerWithPaths creates a Manager with configurable tool paths.
 // This is useful for CI/CD environments or when tools are not in PATH.
 func NewManagerWithPaths(paths ToolPaths) *Manager {
 	return &Manager{
-		adb:    NewADBWithPath(paths.ADB),
-		simctl: ios.New(),
-		tools:  paths,
+		adb:       NewADBWithPath(paths.ADB),
+		simctl:    ios.New(),
+		devicectl: ios.NewDeviceCtl(),
+		tools:     paths,
 	}
 }
 
-// List returns all connected Android emulators/devices and iOS simulators.
+// List returns all connected Android devices/emulators, iOS simulators, and physical iOS devices.
 func (m *Manager) List(ctx context.Context) ([]Device, error) {
 	var all []Device
 
-	// Android devices
+	// Android devices (both emulators and physical)
 	androids, err := m.adb.Devices(ctx)
 	if err == nil {
 		all = append(all, androids...)
@@ -80,7 +83,158 @@ func (m *Manager) List(ctx context.Context) ([]Device, error) {
 		}
 	}
 
+	// Physical iOS devices (via libimobiledevice)
+	physicalUDIDs, err := ios.ListPhysicalDevices(ctx)
+	if err == nil {
+		simUDIDs := make(map[string]bool)
+		for _, s := range sims {
+			simUDIDs[s.UDID] = true
+		}
+		for _, udid := range physicalUDIDs {
+			if !simUDIDs[udid] { // avoid duplicates if somehow listed in both
+				all = append(all, Device{
+					ID:       udid,
+					Name:     "Physical iOS Device",
+					Platform: PlatformIOS,
+					State:    "online",
+				})
+			}
+		}
+	}
+
 	return all, nil
+}
+
+// DeviceCtl returns the DeviceCtl instance for physical iOS device operations.
+func (m *Manager) DeviceCtl() *ios.DeviceCtl {
+	return m.devicectl
+}
+
+// IsPhysicalIOS returns true if the given UDID is a physical iOS device
+// (not found in the simulator list).
+func (m *Manager) IsPhysicalIOS(ctx context.Context, udid string) bool {
+	sims, err := m.simctl.List(ctx)
+	if err != nil {
+		return true // assume physical if simctl fails
+	}
+	for _, s := range sims {
+		if s.UDID == udid {
+			return false
+		}
+	}
+	return true
+}
+
+// IsPhysicalAndroid returns true if the given serial is a physical Android device
+// (not an emulator).
+func (m *Manager) IsPhysicalAndroid(ctx context.Context, serial string) bool {
+	if strings.HasPrefix(serial, "emulator-") {
+		return false
+	}
+	out, err := m.adb.Shell(ctx, serial, "getprop", "ro.hardware")
+	if err != nil {
+		return !strings.HasPrefix(serial, "emulator-")
+	}
+	hw := strings.TrimSpace(string(out))
+	return hw != "ranchu" && hw != "goldfish"
+}
+
+// EnsureADB checks that the ADB binary is available and can communicate with
+// the specified device. It also cleans up any stale port forwards for the given port.
+func (m *Manager) EnsureADB(ctx context.Context, serial string, hostPort int) error {
+	// Check ADB is installed
+	if _, err := exec.LookPath(m.adb.Bin()); err != nil {
+		return fmt.Errorf("adb not found at %q — install Android SDK platform-tools or set tools.adb in probe.yaml", m.adb.Bin())
+	}
+
+	// Verify the device is reachable
+	devices, err := m.adb.Devices(ctx)
+	if err != nil {
+		return fmt.Errorf("adb devices: %w", err)
+	}
+	found := false
+	for _, d := range devices {
+		if d.ID == serial && d.State == "device" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("adb: device %s not found or not online — check USB connection", serial)
+	}
+
+	// Clean up stale port forwards for this port to avoid conflicts
+	out, err := m.adb.Run(ctx, serial, "forward", "--list")
+	if err == nil {
+		rule := fmt.Sprintf("tcp:%d", hostPort)
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.Contains(line, serial) && strings.Contains(line, rule) {
+				_ = m.adb.RemoveForward(ctx, serial, hostPort)
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// EnsureIProxy checks that iproxy is installed, kills any stale iproxy processes
+// for the given UDID, and starts a fresh iproxy forwarding hostPort to devicePort.
+// Returns a cleanup function that kills the iproxy process.
+func (m *Manager) EnsureIProxy(ctx context.Context, udid string, hostPort, devicePort int) (cleanup func(), err error) {
+	// Check iproxy is installed
+	if _, lookErr := exec.LookPath("iproxy"); lookErr != nil {
+		return nil, fmt.Errorf("iproxy not found — install via: brew install libimobiledevice")
+	}
+
+	// Kill stale iproxy processes for this UDID
+	KillStaleIProxy(udid)
+
+	// Start a fresh iproxy
+	cmd := exec.CommandContext(ctx, "iproxy",
+		fmt.Sprintf("%d", hostPort),
+		fmt.Sprintf("%d", devicePort),
+		"--udid", udid,
+	)
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("iproxy start: %w", err)
+	}
+
+	// Give iproxy time to bind the port
+	time.Sleep(1 * time.Second)
+
+	cleanup = func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}
+	return cleanup, nil
+}
+
+// KillStaleIProxy kills all iproxy processes that match the given UDID.
+// This prevents port conflicts from leftover processes after flutter run crashes.
+func KillStaleIProxy(udid string) {
+	// Find all iproxy PIDs
+	out, err := exec.Command("pgrep", "-f", "iproxy").Output()
+	if err != nil {
+		return // no iproxy processes
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		pid := strings.TrimSpace(line)
+		if pid == "" {
+			continue
+		}
+		// Check if this PID's command line contains our UDID
+		cmdline, err := exec.Command("ps", "-p", pid, "-o", "args=").Output()
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(cmdline), udid) {
+			exec.Command("kill", pid).Run()
+		}
+	}
+	// Brief pause to let ports be released
+	time.Sleep(500 * time.Millisecond)
 }
 
 // Start boots an Android emulator identified by avdName.
@@ -215,10 +369,47 @@ func (m *Manager) RemoveForward(ctx context.Context, serial string, hostPort int
 	return m.adb.RemoveForward(ctx, serial, hostPort)
 }
 
-// ReadTokenIOS reads the ProbeAgent token from the iOS simulator.
+// ReadTokenIOS reads the ProbeAgent token from an iOS device.
+// For simulators, reads the token file via simctl.
+// For physical devices, reads from idevicesyslog.
 // bundleID is optional — if provided, it checks the app container's token file first.
 func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Duration, bundleID ...string) (string, error) {
-	return m.simctl.ReadToken(ctx, udid, timeout, bundleID...)
+	// Try simulator path first (fast, file-based)
+	token, err := m.simctl.ReadToken(ctx, udid, timeout, bundleID...)
+	if err == nil {
+		return token, nil
+	}
+
+	// Fallback: physical device via idevicesyslog
+	return m.readTokenPhysicalIOS(ctx, udid, timeout)
+}
+
+// readTokenPhysicalIOS reads the token from a physical iOS device using idevicesyslog.
+func (m *Manager) readTokenPhysicalIOS(ctx context.Context, udid string, timeout time.Duration) (string, error) {
+	tCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(tCtx, "idevicesyslog", "-u", udid, "--match", "PROBE_TOKEN")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("ios physical: syslog pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("ios physical: idevicesyslog not found — install via: brew install libimobiledevice")
+	}
+	defer cmd.Process.Kill()
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
+			token := strings.TrimSpace(line[idx+len("PROBE_TOKEN="):])
+			if len(token) >= 16 {
+				return token, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("ios physical: token not found within %s — is the app running with probe_agent?", timeout)
 }
 
 // ReadToken reads the ProbeAgent token from the Android device.

@@ -34,7 +34,7 @@ type TestResult struct {
 // Runner coordinates parsing, connecting, and executing .probe files.
 type Runner struct {
 	cfg       *config.Config
-	client    *probelink.Client
+	client    probelink.ProbeClient
 	deviceCtx *DeviceContext // nil in dry-run mode
 	opts      RunOptions
 	recipes   map[string]parser.RecipeDef
@@ -56,7 +56,7 @@ type RunOptions struct {
 }
 
 // New creates a Runner.
-func New(cfg *config.Config, client *probelink.Client, deviceCtx *DeviceContext, opts RunOptions) *Runner {
+func New(cfg *config.Config, client probelink.ProbeClient, deviceCtx *DeviceContext, opts RunOptions) *Runner {
 	if opts.Timeout == 0 {
 		opts.Timeout = cfg.Defaults.Timeout
 	}
@@ -132,7 +132,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	// Run beforeAll hooks (fail-fast: if beforeAll fails, skip all tests in file)
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeAll {
-			exec := NewExecutor(r.client, r.deviceCtx, func(newClient *probelink.Client) {
+			exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
 				r.client = newClient
 			}, r.opts.Timeout, r.opts.Verbose)
 			if err := exec.RunBody(ctx, hook.Body); err != nil {
@@ -163,7 +163,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	// Run afterAll hooks (always, best-effort)
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookAfterAll {
-			exec := NewExecutor(r.client, r.deviceCtx, func(newClient *probelink.Client) {
+			exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
 				r.client = newClient
 			}, r.opts.Timeout, r.opts.Verbose)
 			_ = exec.RunBody(ctx, hook.Body)
@@ -209,7 +209,7 @@ func (r *Runner) runDataDriven(ctx context.Context, prog *parser.Program, t pars
 
 func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
 	start := time.Now()
-	exec := NewExecutor(r.client, r.deviceCtx, func(newClient *probelink.Client) {
+	exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
 		r.client = newClient
 	}, r.opts.Timeout, r.opts.Verbose)
 	for name, rec := range r.recipes {

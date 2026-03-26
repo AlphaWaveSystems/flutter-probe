@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,11 +16,18 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
+// generateToken creates a random 32-character hex token for pre-shared restart tokens.
+func generateToken() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
 type Executor struct {
-	client      *probelink.Client
+	client      probelink.ProbeClient
 	deviceCtx   *DeviceContext                // nil in dry-run mode
-	onReconnect func(*probelink.Client)       // callback to update Runner's client ref
+	onReconnect func(probelink.ProbeClient)       // callback to update Runner's client ref
 	timeout     time.Duration
 	recipes     map[string]parser.RecipeDef   // loaded recipes by name
 	vars        map[string]string             // variable scope for data-driven tests
@@ -26,10 +35,11 @@ type Executor struct {
 	depth       int      // indentation depth for verbose logging
 	artifacts   []string // collected screenshot paths (on-device)
 	visual      *visual.Comparator // nil if visual regression is not configured
+	maxReconnectAttempts int // max auto-reconnect attempts per call (default 2)
 }
 
 // NewExecutor creates an Executor.
-func NewExecutor(client *probelink.Client, deviceCtx *DeviceContext, onReconnect func(*probelink.Client), timeout time.Duration, verbose bool) *Executor {
+func NewExecutor(client probelink.ProbeClient, deviceCtx *DeviceContext, onReconnect func(probelink.ProbeClient), timeout time.Duration, verbose bool) *Executor {
 	return &Executor{
 		client:      client,
 		deviceCtx:   deviceCtx,
@@ -79,9 +89,14 @@ func (e *Executor) RunBody(ctx context.Context, steps []parser.Step) error {
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Use a longer timeout for restart/clear — they kill the app and reconnect
 	stepTimeout := e.timeout
+	isLifecycleAction := false
 	if a, ok := step.(parser.ActionStep); ok {
 		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData {
 			stepTimeout = 90 * time.Second
+		}
+		// Don't auto-reconnect for actions that intentionally close the connection
+		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData || a.Verb == parser.VerbKill {
+			isLifecycleAction = true
 		}
 	}
 	stepCtx, cancel := context.WithTimeout(ctx, stepTimeout)
@@ -110,6 +125,39 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		err = e.runRecipeCall(ctx, s)
 	case parser.HTTPCallStep:
 		err = e.runHTTPCall(stepCtx, s)
+	}
+
+	// Auto-reconnect: if the step failed due to a connection error and this
+	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil {
+		maxAttempts := e.maxReconnectAttempts
+		if maxAttempts == 0 {
+			maxAttempts = 2
+		}
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			if reconnErr := e.tryReconnect(ctx); reconnErr != nil {
+				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
+				break
+			}
+			// Retry the step with a fresh timeout
+			retryCtx, retryCancel := context.WithTimeout(ctx, stepTimeout)
+			switch s := step.(type) {
+			case parser.ActionStep:
+				err = e.runAction(retryCtx, s)
+			case parser.AssertStep:
+				err = e.runAssert(retryCtx, s)
+			case parser.WaitStep:
+				err = e.runWait(retryCtx, s)
+			case parser.DartBlock:
+				err = e.runDart(retryCtx, s)
+			case parser.MockBlock:
+				err = e.runMock(retryCtx, s)
+			}
+			retryCancel()
+			if err == nil || !isConnectionError(err) {
+				break // either succeeded or a non-connection error
+			}
+		}
 	}
 
 	if e.verbose && desc != "" {
@@ -233,6 +281,22 @@ func (e *Executor) stepDescription(step parser.Step) string {
 // ---- Action execution ----
 
 func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
+	// "if visible" suffix: check if the selector is visible before executing.
+	// If not visible, skip silently (no error). Connection errors propagate.
+	if a.IfVisible && a.Sel != nil {
+		checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		err := e.client.See(checkCtx, probelink.SeeParams{
+			Selector: toSelectorParam(*a.Sel),
+		})
+		cancel()
+		if err != nil {
+			if isConnectionError(err) {
+				return err // propagate connection errors for auto-reconnect
+			}
+			return nil // not visible — skip silently
+		}
+	}
+
 	switch a.Verb {
 	case parser.VerbOpen:
 		screen := ""
@@ -368,13 +432,28 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping restart (cloud mode — not supported without ADB/simctl)")
 			return nil
 		}
+		// Pre-share a token before restart so we can reconnect without
+		// reading device logs (critical for WiFi mode where idevicesyslog
+		// is unavailable). The agent persists it and uses it after restart.
+		nextToken := generateToken()
+		if err := e.client.SetNextToken(ctx, nextToken); err != nil {
+			// Non-fatal: fall back to normal token reading
+			fmt.Printf("    \033[33m⚠\033[0m  pre-share token: %v (will read from logs)\n", err)
+			nextToken = ""
+		}
 		e.client.Close()
 		if err := e.deviceCtx.RestartApp(ctx); err != nil {
 			return err
 		}
-		newClient, err := e.deviceCtx.Reconnect(ctx)
-		if err != nil {
-			return fmt.Errorf("restart the app: %w", err)
+		var newClient probelink.ProbeClient
+		var reconnErr error
+		if nextToken != "" {
+			newClient, reconnErr = e.deviceCtx.ReconnectWithToken(ctx, nextToken)
+		} else {
+			newClient, reconnErr = e.deviceCtx.Reconnect(ctx)
+		}
+		if reconnErr != nil {
+			return fmt.Errorf("restart the app: %w", reconnErr)
 		}
 		e.client = newClient
 		if e.onReconnect != nil {
@@ -590,6 +669,48 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 	err := e.RunBody(ctx, recipe.Body)
 	e.depth--
 	return err
+}
+
+// ---- Auto-Reconnect ----
+
+// isConnectionError returns true if the error indicates a broken WebSocket connection.
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "probelink: write:") ||
+		strings.Contains(msg, "use of closed network connection") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "rpc error -32000")
+}
+
+// tryReconnect attempts to re-establish the WebSocket connection to the agent.
+// This is used when the connection drops mid-test (e.g., physical device via iproxy).
+// It does NOT restart the app — the app is still running, we just lost the TCP connection.
+func (e *Executor) tryReconnect(ctx context.Context) error {
+	if e.deviceCtx == nil {
+		return fmt.Errorf("reconnect: no device context (cloud mode)")
+	}
+	fmt.Printf("    \033[33m⟳\033[0m  Connection lost — attempting to reconnect...\n")
+	e.client.Close()
+
+	// The app is still running — we just need to re-dial.
+	// Give the agent a moment, then reconnect.
+	time.Sleep(1 * time.Second)
+
+	newClient, err := e.deviceCtx.Reconnect(ctx)
+	if err != nil {
+		return fmt.Errorf("auto-reconnect failed: %w", err)
+	}
+	e.client = newClient
+	if e.onReconnect != nil {
+		e.onReconnect(newClient)
+	}
+	fmt.Printf("    \033[32m⟳\033[0m  Reconnected successfully\n")
+	return nil
 }
 
 // ---- Helpers ----

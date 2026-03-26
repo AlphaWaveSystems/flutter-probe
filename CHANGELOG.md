@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-26
+
+### Added
+
+- Pre-shared restart token (`probe.set_next_token`) — CLI sends a token to the agent before `restart the app`; agent persists it and uses it after restart, enabling WiFi reconnection without `idevicesyslog`
+- `--host` flag for WiFi testing — connect directly to device IP, no iproxy needed
+- `--token` flag to skip USB-dependent token auto-detection
+- `PROBE_WIFI=true` dart-define — binds agent to `0.0.0.0` for network access
+- HTTP POST fallback transport (`POST /probe/rpc`) — stateless per-request communication for physical devices
+- `ProbeClient` interface — both WebSocket and HTTP clients satisfy it for transport-agnostic execution
+- `tap "X" if visible` ProbeScript syntax — silently skips when widget is not found; works with tap, type, clear, long press, double tap
+- Direct `onTap` invocation fallback for `Semantics`-wrapped `GestureDetector` widgets on physical devices
+- `take screenshot "name"` now accepts name directly (no `called` keyword needed)
+- Physical device E2E test suite for FlutterProbe Test App (12 tests covering all 10 screens)
+
+### Fixed
+
+- `clear app data` on physical iOS now skips immediately (before confirmation prompt) to avoid killing the agent
+- Connection error detection in `if visible` — propagates connection errors for auto-reconnect instead of silently swallowing them
+- Screenshot parser accepts `take screenshot "name"` without requiring `called` keyword
+
+## [0.5.0] - 2026-03-26
+
+### Added
+
+- Physical iOS device support: launch/terminate via `xcrun devicectl`, token reading via `idevicesyslog`, port forwarding via `iproxy`
+- Physical Android device validation: `EnsureADB()` verifies binary, device reachability, and cleans stale port forwards
+- Physical device detection: `IsPhysicalIOS` (simctl list check) and `IsPhysicalAndroid` (ro.hardware property check)
+- Physical iOS devices listed in `probe device list` via `idevice_id`
+- WebSocket ping/pong keepalive (5s interval) — prevents idle connection drops on physical devices via iproxy
+- Auto-reconnect on WebSocket connection loss — up to 2 transparent retries per step with full re-dial
+- `EnsureIProxy()` — automatic iproxy lifecycle management: checks installation, kills stale processes, starts fresh, defers cleanup
+- Visibility filtering in widget finder — off-screen widgets (behind routes, Offstage, Visibility) no longer match `see`/`if appears`
+- Unique pointer IDs for synthetic gestures — prevents collision with real touch events on physical devices
+- ProbeAgent profile mode support — `ProbeAgent.start()` works in profile builds (required for physical iOS)
+- ProbeAgent release mode safeguards — blocked by default, opt-in via `allowReleaseBuild: true` + `PROBE_AGENT_FORCE=true`
+- Test files for all packages: `cmd/probe`, `internal/cli`, `internal/ios`, `internal/device` (manager tests)
+- HTTP POST fallback transport (`POST /probe/rpc`) — stateless alternative to WebSocket for physical devices, eliminates persistent connection drops
+- `ProbeClient` interface — both WebSocket `Client` and `HTTPClient` satisfy it, enabling transport-agnostic test execution
+- WiFi testing mode (`--host <ip>` + `--token <token>` + `--dart-define=PROBE_WIFI=true`) — test physical devices without USB, no iproxy needed
+- `tap "X" if visible` ProbeScript syntax — silently skips tap when widget is not found, replaces verbose dialog-dismissal recipes
+- Direct `onTap` invocation fallback for `Semantics`-wrapped widgets — fixes tap failures on physical devices where synthetic gestures don't reach `GestureDetector`
+- `take screenshot "name"` now accepts name directly (previously required `called` keyword)
+
+### Changed
+
+- Operations unsupported on physical devices now skip gracefully with warnings instead of crashing:
+  - `clear app data` on physical iOS → warning + skip
+  - `allow/deny permission` on physical iOS → warning + skip
+  - `set location` on any physical device → warning + skip
+- `restart the app` on physical iOS uses `xcrun devicectl` instead of `simctl`
+- iOS connection setup now branches: simulator path uses simctl permissions + loopback; physical path uses iproxy + idevicesyslog
+- Android connection setup validates ADB availability and device state before port forwarding
+
 ## [0.4.2] - 2026-03-25
 
 ### Added

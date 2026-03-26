@@ -177,6 +177,7 @@ type ActionStep struct {
 	Direction SwipeDirection // for swipe / scroll
 	Name      string      // for screenshot name, rotate direction, locale, etc.
 	To        *Selector   // for drag: destination
+	IfVisible bool        // if true, skip silently when selector is not found
 	Line      int
 }
 

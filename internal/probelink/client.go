@@ -43,6 +43,8 @@ type Client struct {
 	pending  map[uint64]chan Response
 	token    string
 	addr     string
+	done     chan struct{} // signals ping loop to stop
+	closed   bool
 	OnNotify func(method string, params json.RawMessage)
 }
 
@@ -93,9 +95,19 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		pending: make(map[uint64]chan Response),
 		token:   opts.Token,
 		addr:    safeAddr,
+		done:    make(chan struct{}),
 	}
 
+	// Set pong handler to extend read deadline on every pong received
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(3 * defaultPingInterval))
+		return nil
+	})
+	// Set initial read deadline (will be refreshed by pong responses)
+	conn.SetReadDeadline(time.Now().Add(3 * defaultPingInterval))
+
 	go c.readLoop()
+	go c.pingLoop()
 	return c, nil
 }
 
@@ -144,15 +156,61 @@ func DialRelay(ctx context.Context, relayURL, cliToken string, timeout time.Dura
 		conn:    conn,
 		pending: make(map[uint64]chan Response),
 		addr:    safeAddr,
+		done:    make(chan struct{}),
 	}
 
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(3 * defaultPingInterval))
+		return nil
+	})
+	conn.SetReadDeadline(time.Now().Add(3 * defaultPingInterval))
+
 	go c.readLoop()
+	go c.pingLoop()
 	return c, nil
 }
 
-// Close terminates the connection.
+// Close terminates the connection and stops the keepalive loop.
 func (c *Client) Close() error {
+	c.mu.Lock()
+	if !c.closed {
+		c.closed = true
+		close(c.done)
+	}
+	c.mu.Unlock()
 	return c.conn.Close()
+}
+
+// Connected returns true if the client has not been closed.
+func (c *Client) Connected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return !c.closed
+}
+
+// pingLoop sends WebSocket ping frames at regular intervals to keep the
+// connection alive. This is critical for physical device connections via
+// iproxy where idle TCP connections are aggressively closed by iOS.
+func (c *Client) pingLoop() {
+	ticker := time.NewTicker(defaultPingInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			c.mu.Lock()
+			err := c.conn.WriteControl(
+				websocket.PingMessage,
+				[]byte{},
+				time.Now().Add(2*time.Second),
+			)
+			c.mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}
 }
 
 // Call sends a JSON-RPC request and waits for the response.
@@ -209,10 +267,20 @@ func (c *Client) WaitSettled(ctx context.Context, timeout time.Duration) error {
 // readLoop dispatches incoming JSON-RPC messages to pending callers.
 func (c *Client) readLoop() {
 	for {
+		// Extend read deadline before each read — pong handler also resets it,
+		// but this ensures we don't timeout during long-running RPC calls
+		// (e.g., wait 10 seconds). We set a generous deadline here;
+		// the ping/pong mechanism handles actual liveness detection.
+		c.conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+
 		_, msg, err := c.conn.ReadMessage()
 		if err != nil {
 			// Connection closed — drain all pending with error
 			c.mu.Lock()
+			if !c.closed {
+				c.closed = true
+				close(c.done)
+			}
 			for id, ch := range c.pending {
 				ch <- Response{ID: id, Error: &RPCError{Code: -32000, Message: err.Error()}}
 				delete(c.pending, id)
@@ -383,5 +451,10 @@ func (c *Client) PasteFromClipboard(ctx context.Context) (string, error) {
 
 func (c *Client) VerifyBrowser(ctx context.Context) error {
 	_, err := c.Call(ctx, MethodVerifyBrowser, nil)
+	return err
+}
+
+func (c *Client) SetNextToken(ctx context.Context, token string) error {
+	_, err := c.Call(ctx, MethodSetNextToken, map[string]string{"token": token})
 	return err
 }

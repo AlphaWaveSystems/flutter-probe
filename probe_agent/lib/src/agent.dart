@@ -37,14 +37,62 @@ class ProbeAgent {
   ///   via `--dart-define` (connects out to a relay server).
   /// - **Local mode** otherwise (listens on localhost for CLI connections).
   ///
-  /// No-op on non-debug builds (checked via assert).
-  static Future<void> start({int port = 48686}) async {
-    // Safety guard — only meaningful in debug / profile builds.
-    // In release mode this is a no-op because asserts are disabled.
-    assert(() {
-      _startInternal(port);
-      return true;
-    }());
+  /// Build modes:
+  /// - **Debug**: works out of the box with `--dart-define=PROBE_AGENT=true`
+  /// - **Profile**: works out of the box (needed for physical iOS devices)
+  /// - **Release**: blocked by default. Pass `allowReleaseBuild: true` to
+  ///   override, and `--dart-define=PROBE_AGENT_FORCE=true` to skip the
+  ///   console warning.
+  ///
+  /// Requires `--dart-define=PROBE_AGENT=true` at build time. Without it,
+  /// this is always a no-op.
+  static Future<void> start({
+    int port = 48686,
+    bool allowReleaseBuild = false,
+  }) async {
+    const enabled = bool.fromEnvironment('PROBE_AGENT', defaultValue: false);
+    if (!enabled) return;
+
+    // Detect build mode
+    const isRelease = bool.fromEnvironment('dart.vm.product', defaultValue: false);
+    const isProfile = bool.fromEnvironment('dart.vm.profile', defaultValue: false);
+
+    if (isRelease && !allowReleaseBuild) {
+      // ignore: avoid_print
+      print('⚠️  ProbeAgent: BLOCKED — running in release mode.');
+      // ignore: avoid_print
+      print('    The ProbeAgent opens a WebSocket server on the device.');
+      // ignore: avoid_print
+      print('    Do NOT ship this to production users.');
+      // ignore: avoid_print
+      print('');
+      // ignore: avoid_print
+      print('    To allow: ProbeAgent.start(allowReleaseBuild: true)');
+      // ignore: avoid_print
+      print('    To silence: add --dart-define=PROBE_AGENT_FORCE=true');
+      return;
+    }
+
+    if (isRelease && allowReleaseBuild) {
+      const force = bool.fromEnvironment('PROBE_AGENT_FORCE', defaultValue: false);
+      if (!force) {
+        // ignore: avoid_print
+        print('⚠️  ProbeAgent: WARNING — starting in RELEASE mode.');
+        // ignore: avoid_print
+        print('    This build has a WebSocket debug server enabled.');
+        // ignore: avoid_print
+        print('    Do NOT distribute to end users.');
+        // ignore: avoid_print
+        print('    Add --dart-define=PROBE_AGENT_FORCE=true to suppress this warning.');
+      }
+    }
+
+    if (isProfile) {
+      // ignore: avoid_print
+      print('ProbeAgent: starting in profile mode (physical device testing)');
+    }
+
+    await _startInternal(port);
   }
 
   static Future<void> _startInternal(int port) async {
@@ -61,8 +109,10 @@ class ProbeAgent {
       );
       await _relayClient!.connect();
     } else {
-      // Local mode: listen on port (existing behavior)
-      _server = ProbeServer(port: port);
+      // Local mode: listen on port
+      // PROBE_WIFI=true enables binding to 0.0.0.0 for WiFi testing
+      const allowWifi = bool.fromEnvironment('PROBE_WIFI', defaultValue: false);
+      _server = ProbeServer(port: port, allowRemoteConnections: allowWifi);
       await _server!.start();
     }
   }

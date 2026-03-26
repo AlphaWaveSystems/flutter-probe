@@ -116,6 +116,7 @@ class ProbeMethods {
   static const copyClipboard = 'probe.copy_clipboard';
   static const pasteClipboard = 'probe.paste_clipboard';
   static const verifyBrowser = 'probe.verify_browser';
+  static const setNextToken = 'probe.set_next_token';
 
   // Notification methods (agent → CLI)
   static const notifyRecordedEvent = 'probe.recorded_event';
