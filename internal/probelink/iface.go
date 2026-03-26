@@ -35,4 +35,5 @@ type ProbeClient interface {
 	CopyToClipboard(ctx context.Context, text string) error
 	PasteFromClipboard(ctx context.Context) (string, error)
 	VerifyBrowser(ctx context.Context) error
+	SetNextToken(ctx context.Context, token string) error
 }

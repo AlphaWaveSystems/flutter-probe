@@ -276,6 +276,11 @@ func (c *HTTPClient) VerifyBrowser(ctx context.Context) error {
 	return err
 }
 
+func (c *HTTPClient) SetNextToken(ctx context.Context, token string) error {
+	_, err := c.Call(ctx, MethodSetNextToken, map[string]string{"token": token})
+	return err
+}
+
 // File helpers to avoid importing os/filepath in this file
 // (they delegate to the stdlib, matching client.go's Screenshot usage)
 func mkdirAll(path string) error {

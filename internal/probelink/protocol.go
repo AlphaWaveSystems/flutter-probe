@@ -184,6 +184,9 @@ const (
 	MethodPasteClipboard = "probe.paste_clipboard"
 	MethodVerifyBrowser  = "probe.verify_browser"
 
+	// Token management
+	MethodSetNextToken   = "probe.set_next_token"
+
 	// Notification methods (agent → CLI, no response expected)
 	NotifyRecordedEvent = "probe.recorded_event"
 	NotifyExecDart      = "probe.exec_dart"

@@ -28,6 +28,7 @@ type DeviceContext struct {
 	DevicePort              int             // on-device agent port (default: same as Port)
 	IsPhysical              bool            // true for physical devices (vs emulator/simulator)
 	UseHTTP                 bool            // if true, use HTTP POST instead of WebSocket for reconnection
+	AgentHost               string          // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
 	AllowClearData          bool            // if true, skip confirmation for clear app data (CI/CD mode)
 	Confirm                 ConfirmFunc     // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
 	GrantPermissionsOnClear bool            // if true, auto-grant all permissions after clearing data
@@ -35,6 +36,14 @@ type DeviceContext struct {
 	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
 	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
 	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
+}
+
+// agentHost returns the configured agent host or the default.
+func (dc *DeviceContext) agentHost() string {
+	if dc.AgentHost != "" {
+		return dc.AgentHost
+	}
+	return "127.0.0.1"
 }
 
 // reconnectDelay returns the configured reconnect delay or the default.
@@ -379,7 +388,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	}
 
 	dialOpts := probelink.DialOptions{
-		Host:        "127.0.0.1",
+		Host:        dc.agentHost(),
 		Port:        dc.Port,
 		Token:       token,
 		DialTimeout: dc.dialTimeoutVal(),
@@ -404,6 +413,44 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	}
 
 	return client, nil
+}
+
+// ReconnectWithToken reconnects using a pre-shared token (set via set_next_token
+// before restart). This skips token reading from device logs — critical for WiFi
+// mode where idevicesyslog is unavailable.
+func (dc *DeviceContext) ReconnectWithToken(ctx context.Context, token string) (probelink.ProbeClient, error) {
+	// Wait for the app to restart and the agent to initialize
+	time.Sleep(dc.reconnectDelay())
+
+	dialOpts := probelink.DialOptions{
+		Host:        dc.agentHost(),
+		Port:        dc.Port,
+		Token:       token,
+		DialTimeout: dc.dialTimeoutVal(),
+	}
+
+	// For WiFi: use the original host (not 127.0.0.1)
+	// The host is embedded in the HTTPClient's baseURL, but for reconnect
+	// we need to try multiple times as the app is still booting
+	deadline := time.Now().Add(dc.tokenTimeout())
+	for time.Now().Before(deadline) {
+		var client probelink.ProbeClient
+		var err error
+		if dc.UseHTTP {
+			client, err = probelink.DialHTTP(ctx, dialOpts)
+		} else {
+			client, err = probelink.DialWithOptions(ctx, dialOpts)
+		}
+		if err == nil {
+			return client, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return nil, fmt.Errorf("reconnect with pre-shared token: agent not reachable within %s", dc.tokenTimeout())
 }
 
 // iosTokenPath returns the path to the agent's token file on the simulator.

@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +15,13 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
+
+// generateToken creates a random 32-character hex token for pre-shared restart tokens.
+func generateToken() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
 type Executor struct {
@@ -423,13 +432,28 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping restart (cloud mode — not supported without ADB/simctl)")
 			return nil
 		}
+		// Pre-share a token before restart so we can reconnect without
+		// reading device logs (critical for WiFi mode where idevicesyslog
+		// is unavailable). The agent persists it and uses it after restart.
+		nextToken := generateToken()
+		if err := e.client.SetNextToken(ctx, nextToken); err != nil {
+			// Non-fatal: fall back to normal token reading
+			fmt.Printf("    \033[33m⚠\033[0m  pre-share token: %v (will read from logs)\n", err)
+			nextToken = ""
+		}
 		e.client.Close()
 		if err := e.deviceCtx.RestartApp(ctx); err != nil {
 			return err
 		}
-		newClient, err := e.deviceCtx.Reconnect(ctx)
-		if err != nil {
-			return fmt.Errorf("restart the app: %w", err)
+		var newClient probelink.ProbeClient
+		var reconnErr error
+		if nextToken != "" {
+			newClient, reconnErr = e.deviceCtx.ReconnectWithToken(ctx, nextToken)
+		} else {
+			newClient, reconnErr = e.deviceCtx.Reconnect(ctx)
+		}
+		if reconnErr != nil {
+			return fmt.Errorf("restart the app: %w", reconnErr)
 		}
 		e.client = newClient
 		if e.onReconnect != nil {

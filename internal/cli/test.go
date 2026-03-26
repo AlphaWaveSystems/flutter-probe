@@ -873,6 +873,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			DevicePort:              cfg.Agent.AgentDevicePort(),
 			IsPhysical:              isPhysical,
 			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
+			AgentHost:               agentHost,  // device IP for WiFi mode
 			AllowClearData:          autoYes,
 			Confirm:                 promptUserConfirm,
 			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,

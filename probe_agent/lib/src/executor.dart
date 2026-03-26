@@ -83,6 +83,15 @@ class ProbeExecutor {
         );
         return {'ok': true};
 
+      case ProbeMethods.setNextToken:
+        final token = req.params['token'] as String? ?? '';
+        if (token.length < 16) {
+          throw ProbeError(ProbeError.invalidParams, 'Token must be at least 16 characters');
+        }
+        // Access server via global to persist the token
+        await _persistNextToken(token);
+        return {'ok': true};
+
       // ---- Navigation ----
       case ProbeMethods.open:
         final screen = req.params['screen'] as String? ?? '';
@@ -695,6 +704,27 @@ class ProbeExecutor {
     // Signal the app to restart
     _send(ProbeNotification(ProbeMethods.notifyRestartApp, {}).encode());
     await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  /// Persists a token to disk so the agent uses it after restart.
+  Future<void> _persistNextToken(String token) async {
+    try {
+      String path;
+      if (Platform.isIOS) {
+        path = '${Directory.systemTemp.path}/probe/next_token';
+      } else if (Platform.isAndroid) {
+        final cmdline = File('/proc/self/cmdline').readAsStringSync();
+        final pkg = cmdline.split('\x00').first;
+        path = '/data/data/$pkg/cache/probe/next_token';
+      } else {
+        path = '${Directory.systemTemp.path}/probe/next_token';
+      }
+      final file = File(path);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(token);
+    } catch (e) {
+      throw ProbeError(ProbeError.internalError, 'Failed to persist token: $e');
+    }
   }
 }
 

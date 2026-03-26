@@ -453,3 +453,8 @@ func (c *Client) VerifyBrowser(ctx context.Context) error {
 	_, err := c.Call(ctx, MethodVerifyBrowser, nil)
 	return err
 }
+
+func (c *Client) SetNextToken(ctx context.Context, token string) error {
+	_, err := c.Call(ctx, MethodSetNextToken, map[string]string{"token": token})
+	return err
+}

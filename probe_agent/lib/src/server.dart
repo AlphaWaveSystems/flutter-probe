@@ -34,8 +34,11 @@ class ProbeServer {
   Timer? _tokenTimer;
 
   /// Starts the WebSocket server and prints the session token.
+  /// If a pre-shared token was persisted (via `set_next_token`), uses that
+  /// instead of generating a random one. This enables reconnection after
+  /// `restart the app` in WiFi mode where the CLI can't read device logs.
   Future<void> start() async {
-    _token = _generateToken();
+    _token = await _readPersistedToken() ?? _generateToken();
     final bindAddress = allowRemoteConnections
         ? InternetAddress.anyIPv4
         : InternetAddress.loopbackIPv4;
@@ -209,6 +212,48 @@ class ProbeServer {
   }
 
   ProbeExecutor? get executor => _executor;
+
+  /// Persists a token to disk so the agent uses it after restart.
+  /// Called by the CLI via `probe.set_next_token` before `restart the app`.
+  Future<void> setNextToken(String token) async {
+    try {
+      final file = File(_nextTokenPath());
+      await file.parent.create(recursive: true);
+      await file.writeAsString(token);
+      // ignore: avoid_print
+      print('ProbeAgent: next token persisted for restart');
+    } catch (e) {
+      // ignore: avoid_print
+      print('ProbeAgent: failed to persist next token: $e');
+    }
+  }
+
+  /// Reads a persisted next-token from disk (set before restart).
+  /// Deletes the file after reading so it's only used once.
+  Future<String?> _readPersistedToken() async {
+    try {
+      final file = File(_nextTokenPath());
+      if (await file.exists()) {
+        final token = (await file.readAsString()).trim();
+        await file.delete();
+        if (token.length >= 16) {
+          // ignore: avoid_print
+          print('ProbeAgent: using pre-shared token from restart');
+          return token;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String _nextTokenPath() {
+    if (Platform.isIOS) {
+      return '${Directory.systemTemp.path}/probe/next_token';
+    } else if (Platform.isAndroid) {
+      return '/data/data/${_resolvePackageName()}/cache/probe/next_token';
+    }
+    return '${Directory.systemTemp.path}/probe/next_token';
+  }
 
   static String _generateToken() {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
