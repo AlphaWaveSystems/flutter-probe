@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-03-28
+
+### Added
+
+- Automated pub.dev publishing via GitHub Actions using official `dart-lang/setup-dart` reusable workflow
+- FAQ section on landing page (WiFi testing, physical devices, CI/CD, setup)
+- ProbeScript Dictionary — complete reference of all keywords, commands, and modifiers
+- Comprehensive third-party tool requirements documentation
+
+### Changed
+
+- Renamed Dart package from `probe_agent` to `flutter_probe_agent` for pub.dev branding
+- Publish workflow chains after Release workflow (prevents publishing broken versions)
+- Version badge auto-updates from git tags (no more hardcoded versions)
+
+### Fixed
+
+- Broken wiki link on landing page (`AlphaWaveSystems/wiki` → `flutter-probe/wiki`)
+- Old domain references (`flutterprobe.com` → `flutterprobe.dev`)
+- Old package name references in vscode README and docs
+- pub.dev score: shorter description, dartdoc warning, clean public API
+
 ## [0.5.1] - 2026-03-26
 
 ### Added

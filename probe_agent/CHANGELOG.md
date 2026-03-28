@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- Automated publishing via GitHub Actions (OIDC, no secrets needed)
+- Publish workflow chains after Release workflow success
+
 ## 0.5.2
 
 - Fix pub.dev score: shorten description to under 180 chars
