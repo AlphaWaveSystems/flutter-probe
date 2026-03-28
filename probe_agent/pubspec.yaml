@@ -5,7 +5,6 @@ description: >
   Write tests in plain English, execute with sub-50ms widget-tree access.
 
 version: 0.5.1
-publish_to: https://pub.dev
 homepage: https://flutterprobe.dev
 repository: https://github.com/AlphaWaveSystems/flutter-probe
 issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
