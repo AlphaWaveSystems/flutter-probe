@@ -1,13 +1,15 @@
 name: Publish to pub.dev
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
     permissions:
       id-token: write # Required for OIDC token for pub.dev
     defaults:
@@ -15,6 +17,8 @@ jobs:
         working-directory: probe_agent
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
 
       - uses: subosito/flutter-action@v2
         with:
