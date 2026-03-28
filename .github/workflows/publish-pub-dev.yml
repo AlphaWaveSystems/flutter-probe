@@ -3,32 +3,12 @@ name: Publish to pub.dev
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
     permissions:
-      id-token: write # Required for OIDC token for pub.dev
-    defaults:
-      run:
-        working-directory: probe_agent
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.5'
-          channel: stable
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: dart analyze lib/
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Publish to pub.dev
-        run: dart pub publish --force
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: probe_agent
