@@ -24,7 +24,7 @@ import 'protocol.dart';
 /// ```
 abstract class ProbePlugin {
   /// The JSON-RPC method name this plugin handles.
-  /// Convention: probe.plugin.<name>
+  /// Convention: `probe.plugin.name`
   String get command;
 
   /// Human-readable description shown in probe lint --list-plugins.

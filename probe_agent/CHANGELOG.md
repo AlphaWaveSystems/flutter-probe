@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2
+
+- Fix pub.dev score: shorten description to under 180 chars
+- Fix dartdoc angle bracket warning in plugin.dart
+- Reduce public API to `ProbeAgent` and `isProbeEnabled` only
+
 ## 0.5.1
 
 - HTTP POST endpoint (`POST /probe/rpc`) — stateless fallback transport for physical devices

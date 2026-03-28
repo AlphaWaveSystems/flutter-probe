@@ -1,10 +1,9 @@
 name: flutter_probe_agent
-description: >
-  On-device E2E test agent for FlutterProbe. Embeds in your Flutter app
-  and receives test commands via WebSocket or HTTP from the probe CLI.
-  Write tests in plain English, execute with sub-50ms widget-tree access.
+description: >-
+  On-device E2E test agent for FlutterProbe. Embeds in your Flutter app and
+  executes test commands via direct widget-tree access with sub-50ms latency.
 
-version: 0.5.1
+version: 0.5.2
 homepage: https://flutterprobe.dev
 repository: https://github.com/AlphaWaveSystems/flutter-probe
 issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
