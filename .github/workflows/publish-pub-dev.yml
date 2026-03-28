@@ -1,40 +1,14 @@
 name: Publish to pub.dev
 
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types:
-      - completed
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       id-token: write
-    defaults:
-      run:
-        working-directory: probe_agent
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_branch }}
-
-      - uses: dart-lang/setup-dart@v1
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.5'
-          channel: stable
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: dart analyze lib/
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Publish
-        run: flutter pub publish --force
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: probe_agent
