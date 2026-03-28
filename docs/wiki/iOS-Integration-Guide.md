@@ -7,14 +7,14 @@
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  probe_agent:
+  flutter_probe_agent:
     path: ../FlutterProbe/probe_agent  # or from pub.dev
 ```
 
 ### 2. Initialize in main.dart
 
 ```dart
-import 'package:probe_agent/probe_agent.dart';
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

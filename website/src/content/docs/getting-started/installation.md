@@ -37,14 +37,14 @@ In your Flutter app's `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  probe_agent:
+  flutter_probe_agent:
     path: /path/to/FlutterProbe/probe_agent
 ```
 
 ### 2. Initialize in main.dart
 
 ```dart
-import 'package:probe_agent/probe_agent.dart';
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,10 +1,20 @@
-name: probe_agent
+name: flutter_probe_agent
 description: >
-  FlutterProbe on-device agent. Connects to the probe CLI via WebSocket
-  and executes test commands against the live Flutter widget tree.
-  Add as a dev dependency only — stripped from release builds.
+  On-device E2E test agent for FlutterProbe. Embeds in your Flutter app
+  and receives test commands via WebSocket or HTTP from the probe CLI.
+  Write tests in plain English, execute with sub-50ms widget-tree access.
 
-version: 0.2.0
+version: 0.5.1
+publish_to: https://pub.dev
+homepage: https://flutterprobe.dev
+repository: https://github.com/AlphaWaveSystems/flutter-probe
+issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
+
+topics:
+  - testing
+  - e2e
+  - flutter
+  - automation
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -17,7 +27,3 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  web_socket_channel: ^3.0.0
-  shelf: ^1.4.2
-  shelf_web_socket: ^2.0.0
-  http: ^1.2.2

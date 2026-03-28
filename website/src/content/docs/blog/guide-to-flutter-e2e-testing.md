@@ -43,14 +43,14 @@ Add the FlutterProbe Dart agent to your app's dev dependencies:
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  probe_agent:
-    path: /path/to/flutter-probe/probe_agent
+  flutter_probe_agent:
+    ^0.5.1
 ```
 
 Initialize the agent in your app's main function:
 
 ```dart
-import 'package:probe_agent/probe_agent.dart';
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -592,6 +592,7 @@ class ProbeExecutor {
   Future<String> _screenshot(String name) async {
     // ignore: deprecated_member_use
     final renderView = WidgetsBinding.instance.renderView;
+    // ignore: invalid_use_of_protected_member
     final layer = renderView.layer;
     if (layer == null || layer is! OffsetLayer) {
       throw ProbeError(ProbeError.internalError, 'No renderable layer for screenshot');

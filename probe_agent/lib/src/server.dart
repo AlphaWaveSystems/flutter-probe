@@ -201,9 +201,7 @@ class ProbeServer {
   static String _resolvePackageName() {
     // Extract package name from the app's data directory path
     try {
-      final dataDir = Directory.current.path;
-      // On Android, cwd or isolate info may contain the package name
-      // Fallback: read from /proc/self/cmdline
+      // Read from /proc/self/cmdline
       final cmdline = File('/proc/self/cmdline').readAsStringSync();
       final pkg = cmdline.split('\x00').first;
       if (pkg.contains('.')) return pkg;

@@ -110,14 +110,14 @@ In your app's `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  probe_agent:
+  flutter_probe_agent:
     path: /path/to/flutter-probe/probe_agent
 ```
 
 In your `main.dart`, start the agent before `runApp`:
 
 ```dart
-import 'package:probe_agent/probe_agent.dart';
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
