@@ -35,7 +35,7 @@ Three primary options exist for Flutter E2E testing:
 Install the FlutterProbe CLI:
 
 ```bash
-curl -sSL https://get.flutterprobe.com | sh
+curl -sSL https://flutterprobe.dev/install | sh
 ```
 
 Add the FlutterProbe Dart agent to your app's dev dependencies:

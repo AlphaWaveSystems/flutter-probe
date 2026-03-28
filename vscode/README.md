@@ -100,7 +100,7 @@ Sidebar tree view of all tests and recipes in your workspace:
 
 ```bash
 # macOS / Linux
-curl -fsSL https://flutterprobe.com/install.sh | sh
+curl -fsSL https://flutterprobe.dev/install.sh | sh
 
 # Or build from source
 git clone https://github.com/AlphaWaveSystems/flutter-probe.git
@@ -120,7 +120,7 @@ dependencies:
 3. Initialize the agent in your `main.dart`:
 
 ```dart
-import 'package:probe_agent/probe_agent.dart';
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
 void main() {
   ProbeAgent.start(); // Only active in debug/profile builds

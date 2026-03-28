@@ -52,7 +52,7 @@ jobs:
           flutter-version: '3.27.0'
       - name: Install FlutterProbe
         run: |
-          curl -sSL https://get.flutterprobe.com | sh
+          curl -sSL https://flutterprobe.dev/install | sh
       - name: Build and test
         run: |
           flutter build apk --debug
