@@ -24,11 +24,5 @@
 /// Documentation at [flutterprobe.dev](https://flutterprobe.dev).
 library flutter_probe_agent;
 
-export 'src/agent.dart' show ProbeAgent;
-export 'src/relay_client.dart' show ProbeRelayClient;
-export 'src/server.dart' show ProbeServer;
-export 'src/finder.dart' show ProbeFinder;
-export 'src/executor.dart' show ProbeExecutor;
-export 'src/sync.dart' show ProbeSync;
-export 'src/recorder.dart' show ProbeRecorder;
-export 'src/protocol.dart' show ProbeRequest, ProbeResponse, ProbeError, ProbeMethods;
+// Public API — only what app developers need
+export 'src/agent.dart' show ProbeAgent, isProbeEnabled;
