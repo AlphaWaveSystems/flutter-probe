@@ -1,6 +1,6 @@
 # FlutterProbe Wiki
 
-Welcome to the FlutterProbe wiki. This documentation covers architecture details, development guides, and operational procedures that complement the main docs at [flutterprobe.com](https://flutterprobe.dev).
+Welcome to the FlutterProbe wiki. This documentation covers architecture details, development guides, and operational procedures that complement the main docs at [flutterprobe.dev](https://flutterprobe.dev).
 
 ## Quick Links
 
