@@ -5,35 +5,49 @@ On-device E2E test agent for [FlutterProbe](https://flutterprobe.dev). Embeds in
 [![pub package](https://img.shields.io/pub/v/flutter_probe_agent.svg)](https://pub.dev/packages/flutter_probe_agent)
 [![Publisher](https://img.shields.io/pub/publisher/flutter_probe_agent.svg)](https://pub.dev/publishers/alphawavesystems.com)
 
-## What is FlutterProbe?
+## How FlutterProbe Works
 
-FlutterProbe lets you write E2E tests in plain English:
+FlutterProbe is a **two-part system**:
+
+1. **This package** (`flutter_probe_agent`) — embeds in your Flutter app, listens for test commands
+2. **The CLI** (`probe`) — a Go binary that parses `.probe` test files and sends commands to the agent
+
+Both are required. The agent alone does nothing without the CLI to drive it.
 
 ```
-test "user can log in"
-  tap "Email"
-  type "user@test.com" into "Email"
-  tap "Password"
-  type "secret123" into "Password"
-  tap "Sign In"
-  wait until "Dashboard" appears
-  see "Welcome"
+┌──────────────┐    WebSocket / HTTP    ┌─────────────────────┐
+│  probe CLI   │ ◄──────────────────► │  flutter_probe_agent  │
+│  (Go binary) │    JSON-RPC 2.0       │  (in your app)        │
+└──────────────┘                        └─────────────────────┘
 ```
 
-Tests execute with sub-50ms command round-trips via direct widget-tree access — no UI automation layer, no WebDriver, no accessibility bridge.
+## Step 1: Install the CLI
 
-## Installation
+The `probe` CLI is a Go binary. Install via one of:
 
-Add to your `pubspec.yaml`:
+```bash
+# Option A: Go install
+go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+
+# Option B: Download from GitHub Releases
+# https://github.com/AlphaWaveSystems/flutter-probe/releases/latest
+```
+
+Verify:
+
+```bash
+probe --version
+```
+
+## Step 2: Add the Agent to Your App
 
 ```yaml
+# pubspec.yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.5.1
+  flutter_probe_agent: ^0.5.3
 ```
 
-## Setup
-
-Initialize the agent in your app's `main.dart`:
+Initialize in your `main.dart`:
 
 ```dart
 import 'package:flutter_probe_agent/flutter_probe_agent.dart';
@@ -50,17 +64,38 @@ Future<void> main() async {
 }
 ```
 
-Build with the agent enabled:
+The agent is **completely inactive** unless `PROBE_AGENT=true` is passed at build time. It adds zero overhead to your production app.
 
-```bash
-flutter run --dart-define=PROBE_AGENT=true
+## Step 3: Write a Test
+
+Create `tests/login.probe`:
+
+```
+test "user can log in"
+  tap "Email"
+  type "user@test.com" into "Email"
+  tap "Password"
+  type "secret123" into "Password"
+  tap "Sign In"
+  wait until "Dashboard" appears
+  see "Welcome"
 ```
 
-The agent is **completely inactive** unless `PROBE_AGENT=true` is passed at build time. It adds zero overhead to your production app.
+## Step 4: Run It
+
+```bash
+# Start your app with the agent enabled
+flutter run --dart-define=PROBE_AGENT=true
+
+# In another terminal, run the test
+probe test tests/login.probe --device <your-device> -v
+```
+
+Tests execute with sub-50ms command round-trips via direct widget-tree access — no UI automation layer, no WebDriver, no accessibility bridge.
 
 ## Physical Device Testing
 
-For physical iOS devices, WiFi testing is recommended:
+For physical iOS devices, **WiFi is recommended** (USB-C causes intermittent connection drops):
 
 ```bash
 # Build with WiFi enabled
@@ -68,8 +103,12 @@ flutter build ios --profile \
   --dart-define=PROBE_AGENT=true \
   --dart-define=PROBE_WIFI=true
 
-# Run tests over WiFi
-probe test tests/ --host <device-ip> --token <probe-token>
+# Install and launch on device
+xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device <UDID> <bundle-id>
+
+# Run tests over WiFi (find token in app console: PROBE_TOKEN=...)
+probe test tests/ --host <device-ip> --token <probe-token> -v
 ```
 
 ## Features
@@ -77,23 +116,23 @@ probe test tests/ --host <device-ip> --token <probe-token>
 - **WebSocket + HTTP transports** — persistent connection for simulators, stateless HTTP for physical devices
 - **Profile mode support** — works on physical iOS devices (not just debug)
 - **Release mode safeguards** — blocked by default, opt-in with `allowReleaseBuild: true`
-- **Ping/pong keepalive** — prevents idle connection drops
 - **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing
 - **Pre-shared restart token** — `restart the app` works over WiFi without USB log reading
+- **`tap "X" if visible`** — conditional actions that skip silently when widget is not found
+
+## Requirements
+
+- **Flutter** 3.19+ (tested up to 3.41)
+- **Dart** 3.3+
+- **FlutterProbe CLI** — [install instructions](https://github.com/AlphaWaveSystems/flutter-probe#installation)
 
 ## Documentation
 
 - [Getting Started](https://flutterprobe.dev/getting-started/installation/)
 - [ProbeScript Syntax](https://flutterprobe.dev/probescript/syntax/)
 - [ProbeScript Dictionary](https://flutterprobe.dev/probescript/dictionary/)
-- [iOS Integration Guide](https://flutterprobe.dev/platform/ios/)
 - [CLI Reference](https://flutterprobe.dev/tools/cli-reference/)
-
-## Requirements
-
-- Flutter 3.19+ (tested up to 3.41)
-- Dart 3.3+
-- [FlutterProbe CLI](https://github.com/AlphaWaveSystems/flutter-probe) (`probe` binary)
+- [iOS Integration Guide](https://flutterprobe.dev/platform/ios/)
 
 ## License
 

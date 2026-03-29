@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4
+
+- Restructured README: clear two-part system explanation (CLI + agent)
+- Added CLI installation instructions (go install, GitHub Releases)
+- Step-by-step getting started guide (install CLI → add agent → write test → run)
+- Architecture diagram showing CLI ↔ agent communication
+
 ## 0.5.3
 
 - Automated publishing via GitHub Actions (OIDC, no secrets needed)
