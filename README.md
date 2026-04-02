@@ -5,6 +5,8 @@ A high-performance E2E testing framework for Flutter mobile apps. Write tests in
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/github/v/tag/AlphaWaveSystems/flutter-probe?label=version&color=green)](CHANGELOG.md)
 [![GitHub stars](https://img.shields.io/github/stars/AlphaWaveSystems/flutter-probe)](https://github.com/AlphaWaveSystems/flutter-probe/stargazers)
+[![CLI downloads](https://img.shields.io/github/downloads/AlphaWaveSystems/flutter-probe/total?label=CLI%20downloads)](https://github.com/AlphaWaveSystems/flutter-probe/releases)
+[![pub.dev downloads](https://img.shields.io/pub/dm/flutter_probe_agent?label=pub.dev%20downloads%2Fmo)](https://pub.dev/packages/flutter_probe_agent)
 
 ```
 test "user can log in"
