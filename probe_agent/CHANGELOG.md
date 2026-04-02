@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.6 - 2026-04-02
+
+- Add Homebrew tap support (`brew tap AlphaWaveSystems/tap && brew install probe`)
+
 ## 0.5.5 - 2026-04-02
 
 - License changed from BSL 1.1 to MIT — free to embed in any Flutter app, including commercial and proprietary

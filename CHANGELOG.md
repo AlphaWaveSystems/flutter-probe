@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-04-02
+
+### Added
+- Homebrew tap: `brew tap AlphaWaveSystems/tap && brew install probe` (macOS + Linux)
+- Homebrew formula auto-updates on every release tag via `HOMEBREW_TAP_TOKEN`
+
 ## [0.5.5] - 2026-04-02
 
 ### Changed
