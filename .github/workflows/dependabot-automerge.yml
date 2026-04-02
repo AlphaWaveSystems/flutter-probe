@@ -1,7 +1,7 @@
 name: Dependabot Auto-merge (2-day soak)
 
 # Runs daily. For any open Dependabot PR that is >= 2 days old, approved, and
-# has passing CI — enables auto-merge so the merge queue picks it up.
+# has passing CI — adds it directly to the merge queue.
 
 on:
   schedule:
@@ -31,18 +31,18 @@ jobs:
             --repo "$REPO" \
             --author "app/dependabot" \
             --state open \
-            --json number,title,createdAt,reviewDecision,autoMergeRequest \
+            --json number,title,createdAt,reviewDecision,mergeStateStatus \
             | jq -c '.[]' \
             | while IFS= read -r pr; do
                 NUMBER=$(echo "$pr" | jq -r '.number')
                 TITLE=$(echo "$pr"  | jq -r '.title')
                 CREATED=$(echo "$pr" | jq -r '.createdAt')
                 REVIEW=$(echo "$pr"  | jq -r '.reviewDecision')
-                ALREADY=$(echo "$pr" | jq -r '.autoMergeRequest')
+                MERGE_STATE=$(echo "$pr" | jq -r '.mergeStateStatus')
 
-                # Skip if already queued for auto-merge
-                if [ "$ALREADY" != "null" ]; then
-                  echo "PR #$NUMBER — already has auto-merge set, skipping"
+                # Skip if already in the merge queue
+                if [ "$MERGE_STATE" = "BEHIND" ] || [ "$MERGE_STATE" = "UNKNOWN" ]; then
+                  echo "PR #$NUMBER — merge state is $MERGE_STATE, skipping"
                   continue
                 fi
 
@@ -58,7 +58,7 @@ jobs:
                   continue
                 fi
 
-                echo "PR #$NUMBER ($TITLE) — eligible, enabling auto-merge"
-                gh pr merge --auto --squash "$NUMBER" --repo "$REPO" || \
-                  echo "PR #$NUMBER — auto-merge failed (may already be queued)"
+                echo "PR #$NUMBER ($TITLE) — eligible, adding to merge queue"
+                gh pr merge --squash "$NUMBER" --repo "$REPO" || \
+                  echo "PR #$NUMBER — merge queue failed (may already be queued)"
               done
