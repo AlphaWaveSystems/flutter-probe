@@ -1,6 +1,6 @@
-name: Dependabot Auto-merge (7-day soak)
+name: Dependabot Auto-merge (2-day soak)
 
-# Runs daily. For any open Dependabot PR that is >= 7 days old, approved, and
+# Runs daily. For any open Dependabot PR that is >= 2 days old, approved, and
 # has passing CI — enables auto-merge so the merge queue picks it up.
 
 on:
@@ -22,8 +22,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          SEVEN_DAYS_AGO=$(date -u -d '7 days ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || \
-                           date -u -v-7d '+%Y-%m-%dT%H:%M:%SZ')
+          SEVEN_DAYS_AGO=$(date -u -d '2 days ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || \
+                           date -u -v-2d '+%Y-%m-%dT%H:%M:%SZ')
 
           echo "Looking for Dependabot PRs opened before $SEVEN_DAYS_AGO ..."
 
@@ -52,9 +52,9 @@ jobs:
                   continue
                 fi
 
-                # Skip if less than 7 days old
+                # Skip if less than 2 days old
                 if [[ "$CREATED" > "$SEVEN_DAYS_AGO" ]]; then
-                  echo "PR #$NUMBER — opened $CREATED, not yet 7 days old, skipping"
+                  echo "PR #$NUMBER — opened $CREATED, not yet 2 days old, skipping"
                   continue
                 fi
 
