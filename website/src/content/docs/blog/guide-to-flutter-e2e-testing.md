@@ -35,7 +35,12 @@ Three primary options exist for Flutter E2E testing:
 Install the FlutterProbe CLI:
 
 ```bash
-curl -sSL https://flutterprobe.dev/install | sh
+# macOS + Linux (recommended)
+brew tap AlphaWaveSystems/tap
+brew install probe
+
+# Or via go install (good for CI)
+go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
 ```
 
 Add the FlutterProbe Dart agent to your app's dev dependencies:
@@ -43,8 +48,7 @@ Add the FlutterProbe Dart agent to your app's dev dependencies:
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_probe_agent:
-    ^0.5.1
+  flutter_probe_agent: ^0.5.3
 ```
 
 Initialize the agent in your app's main function:
@@ -192,7 +196,7 @@ The `wait for` command polls the widget tree until the condition is met or the t
 Configure FlutterProbe to take screenshots and capture device logs on test failure. This transforms CI failures from "test X failed" into actionable reports with visual context:
 
 ```bash
-flutterprobe run --suite tests/ --screenshot-on-failure --capture-logs
+probe test tests/ --screenshot-on-failure --capture-logs
 ```
 
 ## Common Pitfalls

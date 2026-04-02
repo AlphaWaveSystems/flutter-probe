@@ -1,47 +1,59 @@
 ---
 title: Installation
-description: Build FlutterProbe from source and integrate the Dart agent into your Flutter app.
+description: Install the probe CLI and integrate the Dart agent into your Flutter app.
 ---
 
-## Prerequisites
+## Step 1: Install the CLI
 
-- **Go 1.26+** — for building the probe CLI
-- **Dart 3.3+ / Flutter 3.19+** — for the probe_agent package (tested up to Flutter 3.41 / Dart 3.11)
-- **Android**: ADB + Android SDK (for Android emulator testing)
-- **iOS Simulator**: Xcode + `xcrun simctl` (for iOS simulator testing)
-- **iOS Physical Device**: All of the above, plus `iproxy` from `libimobiledevice` for USB port forwarding (`brew install libimobiledevice`)
-
-## Build the CLI
-
-Clone the repository and build the `probe` binary:
+### Option A — Homebrew (macOS + Linux, recommended)
 
 ```bash
-git clone https://github.com/AlphaWaveSystems/flutter-probe.git
-cd FlutterProbe
-make build          # outputs bin/probe
+brew tap AlphaWaveSystems/tap
+brew install probe
 ```
 
-To install to your `$GOPATH/bin` (so `probe` is available globally):
+### Option B — Pre-built binary (all platforms, good for CI)
+
+Download the binary for your platform from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
+
+| Platform | Binary |
+|---|---|
+| macOS (Apple Silicon) | `probe-darwin-arm64` |
+| macOS (Intel) | `probe-darwin-amd64` |
+| Linux (x86-64) | `probe-linux-amd64` |
+| Windows (x86-64) | `probe-windows-amd64.exe` |
+
+Make the binary executable and place it on your `PATH`:
 
 ```bash
-make install
+chmod +x probe-darwin-arm64
+mv probe-darwin-arm64 /usr/local/bin/probe
 ```
 
-## Add ProbeAgent to Your Flutter App
+### Option C — `go install` (requires Go 1.26+)
 
-The Dart agent runs inside your Flutter app and provides the WebSocket server that the CLI connects to.
+```bash
+go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+```
 
-### 1. Add the dependency
+This is a good option for CI environments that already have Go set up.
 
-In your Flutter app's `pubspec.yaml`:
+Verify:
+
+```bash
+probe version
+```
+
+## Step 2: Add the Agent to Your App
+
+Add `flutter_probe_agent` to your Flutter app's `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  flutter_probe_agent:
-    path: /path/to/FlutterProbe/probe_agent
+  flutter_probe_agent: ^0.5.3
 ```
 
-### 2. Initialize in main.dart
+Initialize in your `main.dart`:
 
 ```dart
 import 'package:flutter_probe_agent/flutter_probe_agent.dart';
@@ -58,16 +70,16 @@ Future<void> main() async {
 }
 ```
 
-The `PROBE_AGENT` flag is compiled into the binary via `--dart-define`. It must be set at build time — it cannot be toggled at runtime.
+The `bool.fromEnvironment` check ensures the agent is only active when built with `--dart-define=PROBE_AGENT=true`. It adds zero overhead to your production app.
 
-### 3. Build with the flag enabled
+## Step 3: Build and Run
 
 **iOS Simulator:**
 
 ```bash
-flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
-xcrun simctl install <UDID> build/ios/iphonesimulator/YourApp.app
-xcrun simctl launch <UDID> com.example.myapp
+flutter run --dart-define=PROBE_AGENT=true
+# In another terminal:
+probe test tests/login.probe --device <your-device> -v
 ```
 
 **Android Emulator:**
@@ -76,6 +88,17 @@ xcrun simctl launch <UDID> com.example.myapp
 flutter build apk --debug --dart-define=PROBE_AGENT=true
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
 adb shell am start -n com.example.myapp/.MainActivity
+probe test tests/login.probe --device emulator-5554 -v
+```
+
+**Physical iOS (WiFi mode — recommended):**
+
+```bash
+flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true
+xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device <UDID> <bundle-id>
+# Find PROBE_TOKEN in app console, then:
+probe test tests/ --host <device-ip> --token <probe-token> -v
 ```
 
 ## Initialize Your Project
@@ -90,12 +113,18 @@ This creates:
 - `probe.yaml` — project configuration
 - `tests/` — directory for `.probe` test files with samples
 
-## Build the Test Converter (Optional)
+## Prerequisites
 
-If you want to migrate tests from other frameworks:
+| Requirement | When needed |
+|---|---|
+| Dart 3.3+ / Flutter 3.19+ | Always (for the agent) |
+| Android SDK + ADB | Android emulator/device testing |
+| Xcode + `xcrun simctl` | iOS simulator testing |
+| `libimobiledevice` (`brew install libimobiledevice`) | Physical iOS device testing via USB |
 
-```bash
-make build-convert    # outputs bin/probe-convert
-```
+## Next Steps
 
-See [probe-convert](/tools/probe-convert/) for details.
+- [Write your first test](/probescript/syntax/)
+- [ProbeScript Dictionary](/probescript/dictionary/) — all commands and modifiers
+- [iOS Integration Guide](/platform/ios/) — physical device setup
+- [CI/CD with GitHub Actions](/ci-cd/github-actions/)
