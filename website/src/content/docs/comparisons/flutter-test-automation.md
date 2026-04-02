@@ -51,12 +51,11 @@ jobs:
         with:
           flutter-version: '3.27.0'
       - name: Install FlutterProbe
-        run: |
-          curl -sSL https://flutterprobe.dev/install | sh
+        run: go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
       - name: Build and test
         run: |
-          flutter build apk --debug
-          flutterprobe run --target android --suite tests/
+          flutter build apk --debug --dart-define=PROBE_AGENT=true
+          probe test tests/ -y
 ```
 
 The key steps are: check out the code, set up Flutter, install FlutterProbe, build the app, and run the test suite. For iOS, replace the build step with `flutter build ios --simulator --debug` and adjust the target flag.
@@ -73,10 +72,10 @@ FlutterProbe supports parallel execution via the `--shard` flag:
 
 ```bash
 # Split the suite across 4 parallel shards
-flutterprobe run --suite tests/ --shard 1/4 &
-flutterprobe run --suite tests/ --shard 2/4 &
-flutterprobe run --suite tests/ --shard 3/4 &
-flutterprobe run --suite tests/ --shard 4/4 &
+probe test tests/ --shard 1/4 &
+probe test tests/ --shard 2/4 &
+probe test tests/ --shard 3/4 &
+probe test tests/ --shard 4/4 &
 wait
 ```
 
@@ -89,7 +88,7 @@ jobs:
       matrix:
         shard: [1/4, 2/4, 3/4, 4/4]
     steps:
-      - run: flutterprobe run --suite tests/ --shard ${{ matrix.shard }}
+      - run: probe test tests/ --shard ${{ matrix.shard }}
 ```
 
 Four shards typically reduce a 12-minute suite to roughly 3 minutes of wall-clock time. The speedup is linear because E2E tests are independent by design — each test starts from a known app state.
@@ -137,7 +136,7 @@ Automated tests are only useful if failures are actionable. FlutterProbe generat
 Reports can be output as JUnit XML for CI integration or as HTML for human review. JUnit XML integrates directly with GitHub Actions, GitLab CI, and most CI dashboards to surface test results in pull request checks.
 
 ```bash
-flutterprobe run --suite tests/ --report junit --output results.xml
+probe test tests/ --report junit --output results.xml
 ```
 
 When a test fails in CI, the combination of the failure screenshot, the step-level log, and the device log usually provides enough context to diagnose the issue without reproducing it locally.
