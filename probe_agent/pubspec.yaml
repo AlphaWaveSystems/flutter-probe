@@ -3,7 +3,7 @@ description: >-
   On-device E2E test agent for FlutterProbe. Embeds in your Flutter app and
   executes test commands via direct widget-tree access with sub-50ms latency.
 
-version: 0.5.5
+version: 0.5.6
 homepage: https://flutterprobe.dev
 repository: https://github.com/AlphaWaveSystems/flutter-probe
 issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
