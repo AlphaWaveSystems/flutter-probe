@@ -59,7 +59,16 @@ The **ProbeAgent** is a Dart package you add to your Flutter app as a dev depend
 
 ## Installation
 
-### Option A — Download pre-built binary (recommended for CI/CD)
+### Option A — Homebrew (macOS + Linux, recommended)
+
+```bash
+brew tap AlphaWaveSystems/tap
+brew install probe
+```
+
+Upgrades are handled automatically with `brew upgrade probe`.
+
+### Option B — Download pre-built binary (recommended for CI/CD)
 
 Pre-built binaries for Linux, macOS (Intel + Apple Silicon), and Windows are attached to every [GitHub Release](https://github.com/AlphaWaveSystems/flutter-probe/releases).
 
@@ -77,7 +86,7 @@ curl -Lo probe https://github.com/AlphaWaveSystems/flutter-probe/releases/latest
 chmod +x probe && sudo mv probe /usr/local/bin/
 ```
 
-### Option B — Build from source
+### Option C — Build from source
 
 ```bash
 git clone https://github.com/AlphaWaveSystems/flutter-probe.git
