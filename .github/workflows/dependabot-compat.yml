@@ -254,8 +254,11 @@ jobs:
           }
           echo "✓ No incompatible npm licenses detected"
 
-  # ---- Auto-approve and auto-merge safe updates ----
-  auto-merge:
+  # ---- Auto-approve safe updates ----
+  # Auto-merge is intentionally NOT triggered here — the 7-day soak period is
+  # enforced by dependabot-automerge.yml (scheduled daily). Major updates are
+  # left for manual review regardless.
+  auto-approve:
     name: Auto-merge
     needs: [go-compat, npm-compat, actions-compat, security, license]
     if: |
@@ -273,15 +276,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Approve PR
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auto-merge patch and minor updates
+      - name: Approve patch and minor updates
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

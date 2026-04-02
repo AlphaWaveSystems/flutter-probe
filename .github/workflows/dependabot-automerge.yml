@@ -1,0 +1,64 @@
+name: Dependabot Auto-merge (7-day soak)
+
+# Runs daily. For any open Dependabot PR that is >= 7 days old, approved, and
+# has passing CI — enables auto-merge so the merge queue picks it up.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # 09:00 UTC daily
+  workflow_dispatch:      # allow manual trigger for testing
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    name: Auto-merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge eligible Dependabot PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          SEVEN_DAYS_AGO=$(date -u -d '7 days ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || \
+                           date -u -v-7d '+%Y-%m-%dT%H:%M:%SZ')
+
+          echo "Looking for Dependabot PRs opened before $SEVEN_DAYS_AGO ..."
+
+          gh pr list \
+            --repo "$REPO" \
+            --author "app/dependabot" \
+            --state open \
+            --json number,title,createdAt,reviewDecision,autoMergeRequest \
+            | jq -c '.[]' \
+            | while IFS= read -r pr; do
+                NUMBER=$(echo "$pr" | jq -r '.number')
+                TITLE=$(echo "$pr"  | jq -r '.title')
+                CREATED=$(echo "$pr" | jq -r '.createdAt')
+                REVIEW=$(echo "$pr"  | jq -r '.reviewDecision')
+                ALREADY=$(echo "$pr" | jq -r '.autoMergeRequest')
+
+                # Skip if already queued for auto-merge
+                if [ "$ALREADY" != "null" ]; then
+                  echo "PR #$NUMBER — already has auto-merge set, skipping"
+                  continue
+                fi
+
+                # Skip if not yet approved
+                if [ "$REVIEW" != "APPROVED" ]; then
+                  echo "PR #$NUMBER — not approved yet ($REVIEW), skipping"
+                  continue
+                fi
+
+                # Skip if less than 7 days old
+                if [[ "$CREATED" > "$SEVEN_DAYS_AGO" ]]; then
+                  echo "PR #$NUMBER — opened $CREATED, not yet 7 days old, skipping"
+                  continue
+                fi
+
+                echo "PR #$NUMBER ($TITLE) — eligible, enabling auto-merge"
+                gh pr merge --auto --squash "$NUMBER" --repo "$REPO" || \
+                  echo "PR #$NUMBER — auto-merge failed (may already be queued)"
+              done
