@@ -136,7 +136,9 @@ probe test tests/ --host <device-ip> --token <probe-token> -v
 
 ## License
 
-[Business Source License 1.1](LICENSE)
+[MIT](LICENSE) — free to embed in any app, including commercial and proprietary.
+
+The FlutterProbe CLI (the Go binary that drives tests) is licensed separately under [BSL 1.1](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/LICENSE).
 
 ## Publisher
 

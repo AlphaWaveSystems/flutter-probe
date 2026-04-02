@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- `flutter_probe_agent` Dart package re-licensed from BSL 1.1 to MIT (Go CLI remains BSL 1.1)
+- CI: added Dart agent validation job — `dart analyze`, `flutter test`, `dart pub publish --dry-run`, CHANGELOG enforcement
+- CI: added PR template with pub.dev and docs checklist
+
 ## [0.5.3] - 2026-03-28
 
 ### Added
