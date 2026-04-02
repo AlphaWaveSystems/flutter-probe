@@ -86,3 +86,52 @@ jobs:
         with:
           body: ${{ steps.changelog.outputs.body }}
           files: artifacts/*
+
+  homebrew:
+    name: Update Homebrew tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHA256 checksums
+        id: sha
+        run: |
+          echo "darwin_arm64=$(shasum -a 256 artifacts/probe-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "darwin_amd64=$(shasum -a 256 artifacts/probe-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_amd64=$(shasum -a 256 artifacts/probe-linux-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Update formula in homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+
+          # Fetch current formula
+          CONTENT=$(gh api repos/AlphaWaveSystems/homebrew-tap/contents/Formula/probe.rb \
+            --jq '{sha: .sha, content: (.content | @base64d)}')
+          FILE_SHA=$(echo "$CONTENT" | jq -r '.sha')
+
+          # Update version and checksums using Python for reliable multi-line editing
+          FORMULA=$(echo "$CONTENT" | jq -r '.content' | python3 - <<PYEOF
+import sys, re
+
+text = sys.stdin.read()
+text = re.sub(r'version "\d+\.\d+\.\d+"', f'version "${VERSION}"', text)
+text = re.sub(r'(probe-darwin-arm64"\n\s+sha256 )"[a-f0-9]+"', r'\g<1>"${{ steps.sha.outputs.darwin_arm64 }}"', text)
+text = re.sub(r'(probe-darwin-amd64"\n\s+sha256 )"[a-f0-9]+"', r'\g<1>"${{ steps.sha.outputs.darwin_amd64 }}"', text)
+text = re.sub(r'(probe-linux-amd64"\n\s+sha256 )"[a-f0-9]+"', r'\g<1>"${{ steps.sha.outputs.linux_amd64 }}"', text)
+print(text, end="")
+PYEOF
+)
+
+          # Push updated formula
+          gh api repos/AlphaWaveSystems/homebrew-tap/contents/Formula/probe.rb \
+            --method PUT \
+            --field message="chore: update probe to v${VERSION}" \
+            --field content="$(echo "$FORMULA" | base64)" \
+            --field sha="$FILE_SHA"
