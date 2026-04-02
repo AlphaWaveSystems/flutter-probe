@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.5 - 2026-04-02
 
 - License changed from BSL 1.1 to MIT — free to embed in any Flutter app, including commercial and proprietary
 
