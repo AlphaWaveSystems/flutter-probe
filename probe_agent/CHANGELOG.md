@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- License changed from BSL 1.1 to MIT — free to embed in any Flutter app, including commercial and proprietary
+
 ## 0.5.4
 
 - Restructured README: clear two-part system explanation (CLI + agent)

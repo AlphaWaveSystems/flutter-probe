@@ -76,6 +76,46 @@ jobs:
           name: probe-linux-amd64
           path: bin/probe
 
+  # ---- Dart agent validation ----
+  dart-agent:
+    name: Dart agent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # needed for CHANGELOG diff check
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.x"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: cd probe_agent && flutter pub get
+
+      - name: Analyze
+        run: cd probe_agent && dart analyze lib/ --fatal-infos
+
+      - name: Test
+        run: cd probe_agent && flutter test
+
+      - name: pub.dev dry run
+        run: cd probe_agent && dart pub publish --dry-run
+
+      - name: Enforce CHANGELOG entry when lib/ changes
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE=${{ github.event.pull_request.base.sha }}
+          HEAD=${{ github.event.pull_request.head.sha }}
+          LIB_CHANGED=$(git diff --name-only "$BASE" "$HEAD" -- probe_agent/lib/ | wc -l | tr -d ' ')
+          CHANGELOG_CHANGED=$(git diff --name-only "$BASE" "$HEAD" -- probe_agent/CHANGELOG.md | wc -l | tr -d ' ')
+          if [ "$LIB_CHANGED" -gt 0 ] && [ "$CHANGELOG_CHANGED" -eq 0 ]; then
+            echo "ERROR: probe_agent/lib/ changed but probe_agent/CHANGELOG.md was not updated."
+            echo "Add a changelog entry under the [Unreleased] section before merging."
+            exit 1
+          fi
+
   # ---- probe-convert tests ----
   convert-tests:
     name: probe-convert tests
