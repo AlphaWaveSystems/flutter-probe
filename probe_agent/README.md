@@ -26,21 +26,21 @@ Both are required. The agent alone does nothing without the CLI to drive it.
 The `probe` CLI is a Go binary. Install via one of:
 
 ```bash
-# Option A: Homebrew (macOS + Linux)
+# Option A: Homebrew (macOS + Linux — recommended)
 brew tap AlphaWaveSystems/tap
 brew install probe
 
-# Option B: Go install
+# Option B: Go install (requires Go 1.26+)
 go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
 
-# Option C: Download from GitHub Releases
+# Option C: Download from GitHub Releases (all platforms)
 # https://github.com/AlphaWaveSystems/flutter-probe/releases/latest
 ```
 
 Verify:
 
 ```bash
-probe --version
+probe version
 ```
 
 ## Step 2: Add the Agent to Your App
