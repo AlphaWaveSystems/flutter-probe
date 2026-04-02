@@ -107,31 +107,28 @@ jobs:
       - name: Update formula in homebrew-tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ github.ref_name }}
         run: |
-          VERSION="${VERSION#v}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA_ARM64="${{ steps.sha.outputs.darwin_arm64 }}"
+          SHA_AMD64="${{ steps.sha.outputs.darwin_amd64 }}"
+          SHA_LINUX="${{ steps.sha.outputs.linux_amd64 }}"
 
-          # Fetch current formula
-          CONTENT=$(gh api repos/AlphaWaveSystems/homebrew-tap/contents/Formula/probe.rb \
-            --jq '{sha: .sha, content: (.content | @base64d)}')
-          FILE_SHA=$(echo "$CONTENT" | jq -r '.sha')
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/AlphaWaveSystems/homebrew-tap.git"
+          cd homebrew-tap
+          git config user.name "Patrick Bertsch"
+          git config user.email "patrick@alphawavesystems.com"
 
-          # Update version and checksums using Python for reliable multi-line editing
-          FORMULA=$(echo "$CONTENT" | jq -r '.content' | python3 - <<PYEOF
-import sys, re
+          # Update version
+          sed -i "s/version \"[0-9.]*\"/version \"${VERSION}\"/" Formula/probe.rb
 
-text = sys.stdin.read()
-text = re.sub(r'version "\d+\.\d+\.\d+"', f'version "${VERSION}"', text)
-text = re.sub(r'(probe-darwin-arm64"\n\s+sha256 )"[a-f0-9]+"', r'\g<1>"${{ steps.sha.outputs.darwin_arm64 }}"', text)
-text = re.sub(r'(probe-darwin-amd64"\n\s+sha256 )"[a-f0-9]+"', r'\g<1>"${{ steps.sha.outputs.darwin_amd64 }}"', text)
-text = re.sub(r'(probe-linux-amd64"\n\s+sha256 )"[a-f0-9]+"', r'\g<1>"${{ steps.sha.outputs.linux_amd64 }}"', text)
-print(text, end="")
-PYEOF
-)
+          # Update SHA256s — find asset URL line, update the sha256 on the next line
+          awk -v arm64="$SHA_ARM64" -v amd64="$SHA_AMD64" -v linux="$SHA_LINUX" '
+            /probe-darwin-arm64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" arm64 "\""); print; next }
+            /probe-darwin-amd64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" amd64 "\""); print; next }
+            /probe-linux-amd64/  { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" linux "\""); print; next }
+            { print }
+          ' Formula/probe.rb > Formula/probe.rb.tmp && mv Formula/probe.rb.tmp Formula/probe.rb
 
-          # Push updated formula
-          gh api repos/AlphaWaveSystems/homebrew-tap/contents/Formula/probe.rb \
-            --method PUT \
-            --field message="chore: update probe to v${VERSION}" \
-            --field content="$(echo "$FORMULA" | base64)" \
-            --field sha="$FILE_SHA"
+          git add Formula/probe.rb
+          git commit -m "chore: update probe to v${VERSION}"
+          git push
