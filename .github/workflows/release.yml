@@ -106,7 +106,13 @@ jobs:
         working-directory: studio
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          $(go env GOPATH)/bin/wails build -ldflags "-X main.Version=${VERSION}" -platform "${OS}/${ARCH}"
+          # Linux runners ship webkit2gtk-4.1 (Ubuntu 24.04 dropped 4.0).
+          # Wails 2.12 picks 4.1 when the webkit2_41 build tag is set.
+          TAGS=""
+          if [ "${OS}" = "linux" ]; then
+            TAGS="-tags webkit2_41"
+          fi
+          $(go env GOPATH)/bin/wails build -ldflags "-X main.Version=${VERSION}" -platform "${OS}/${ARCH}" ${TAGS}
         shell: bash
 
       - name: Package Studio (macOS)
