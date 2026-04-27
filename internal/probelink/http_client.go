@@ -48,11 +48,27 @@ func DialHTTP(ctx context.Context, opts DialOptions) (*HTTPClient, error) {
 		},
 	}
 
-	// Verify connectivity
+	// Verify connectivity, retrying on transient errors within DialTimeout.
+	// Physical iOS writes the token file slightly before the HTTP server is
+	// ready, so the first ping can fail with connection refused.
 	pingCtx, cancel := context.WithTimeout(ctx, opts.DialTimeout)
 	defer cancel()
-	if err := c.Ping(pingCtx); err != nil {
-		return nil, fmt.Errorf("probelink: http dial %s: ping failed: %w", c.addr, err)
+	const retryInterval = time.Second
+	var lastErr error
+	for {
+		if err := c.Ping(pingCtx); err == nil {
+			break
+		} else {
+			lastErr = err
+		}
+		if !isTransientDialError(lastErr) {
+			return nil, fmt.Errorf("probelink: http dial %s: ping failed: %w", c.addr, lastErr)
+		}
+		select {
+		case <-pingCtx.Done():
+			return nil, fmt.Errorf("probelink: http dial %s: ping failed: %w", c.addr, lastErr)
+		case <-time.After(retryInterval):
+		}
 	}
 
 	return c, nil
@@ -279,6 +295,28 @@ func (c *HTTPClient) VerifyBrowser(ctx context.Context) error {
 func (c *HTTPClient) SetNextToken(ctx context.Context, token string) error {
 	_, err := c.Call(ctx, MethodSetNextToken, map[string]string{"token": token})
 	return err
+}
+
+func (c *HTTPClient) OpenLink(ctx context.Context, url string) error {
+	_, err := c.Call(ctx, MethodOpenLink, map[string]string{"url": url})
+	return err
+}
+
+func (c *HTTPClient) SetTimeDilation(ctx context.Context, factor float64) error {
+	_, err := c.Call(ctx, MethodSetTimeDilation, map[string]float64{"factor": factor})
+	return err
+}
+
+func (c *HTTPClient) DrainOutput(ctx context.Context) (map[string]string, error) {
+	raw, err := c.Call(ctx, MethodDrainOutput, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]string
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // File helpers to avoid importing os/filepath in this file

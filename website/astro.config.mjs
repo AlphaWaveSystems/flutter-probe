@@ -49,6 +49,8 @@ export default defineConfig({
             { label: 'CLI Reference', slug: 'tools/cli-reference' },
             { label: 'probe-convert', slug: 'tools/probe-convert' },
             { label: 'VS Code Extension', slug: 'tools/vscode' },
+            { label: 'Studio (Beta)', slug: 'tools/studio' },
+            { label: 'MCP Server', slug: 'tools/mcp' },
             { label: 'Recording', slug: 'tools/recording' },
             { label: 'Plugins', slug: 'tools/plugins' },
           ],

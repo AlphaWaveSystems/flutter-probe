@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 - 2026-04-26
+
+- Version bump to keep in sync with CLI v0.6.0
+- New RPCs: `probe.open_link`, `probe.set_time_dilation`, `probe.set_output`, `probe.drain_output`
+- Relational selectors: `findRelational` resolves widgets by spatial relation (`below`, `above`, `left of`, `right of`) using `RenderBox` positions
+- New asserts: `see "X" is focused` (FocusManager.primaryFocus check)
+- New waits: `wait for animations to end` (polls `SchedulerBinding.hasScheduledFrame`)
+
+## 0.5.7 - 2026-04-26
+
+- No agent changes — version bump to keep in sync with CLI
+
 ## 0.5.6 - 2026-04-02
 
 - Add Homebrew tap support (`brew tap AlphaWaveSystems/tap && brew install probe`)

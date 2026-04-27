@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton, TextField;
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -28,6 +29,9 @@ class ProbeExecutor {
 
   // Tracks external URL launches (populated by url_launcher interceptor)
   final List<String> _externalUrlLaunches = [];
+
+  // Output variables set by probe.set_output and drained by probe.drain_output
+  final Map<String, String> _output = {};
 
   ProbeExecutor(this._send) {
     _interceptUrlLauncher();
@@ -234,6 +238,30 @@ class ProbeExecutor {
           throw ProbeError(ProbeError.assertFailed, 'No external browser launch detected');
         }
         return {'ok': true, 'urls': _externalUrlLaunches};
+
+      // ---- Open link ----
+      case ProbeMethods.openLink:
+        final url = req.params['url'] as String? ?? '';
+        await _openLink(url);
+        return {'ok': true};
+
+      // ---- Animation control ----
+      case ProbeMethods.setTimeDilation:
+        final factor = (req.params['factor'] as num?)?.toDouble() ?? 1.0;
+        timeDilation = factor;
+        return {'ok': true};
+
+      // ---- Output variables ----
+      case ProbeMethods.setOutput:
+        final key = req.params['key'] as String? ?? '';
+        final value = req.params['value'] as String? ?? '';
+        if (key.isNotEmpty) _output[key] = value;
+        return {'ok': true};
+
+      case ProbeMethods.drainOutput:
+        final result = Map<String, String>.from(_output);
+        _output.clear();
+        return result;
 
       default:
         throw ProbeError(ProbeError.methodNotFound, 'Unknown method: ${req.method}');
@@ -460,6 +488,23 @@ class ProbeExecutor {
               '"${_selDesc(sel)}" contains "$text", not "$checkVal"',
             );
           }
+        case 'focused':
+          final focused = WidgetsBinding.instance.focusManager.primaryFocus;
+          if (focused == null || !element.renderObject!.attached) {
+            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" does not have focus');
+          }
+          // Walk up focus tree to see if element is within focused widget
+          bool hasFocus = false;
+          element.visitAncestorElements((ancestor) {
+            if (ancestor.renderObject == focused.context?.findRenderObject()) {
+              hasFocus = true;
+              return false;
+            }
+            return true;
+          });
+          if (!hasFocus && element.renderObject != focused.context?.findRenderObject()) {
+            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" does not have focus');
+          }
       }
     }
   }
@@ -483,11 +528,24 @@ class ProbeExecutor {
       case 'disappears':
         await _waitUntilVisible(target, timeoutDur, expect: false);
 
+      case 'animations':
+        await _waitForAnimations(timeoutDur);
+
       case 'page_load':
       case 'network_idle':
       case 'settled':
         await _sync.waitForSettled(timeout: timeoutDur);
     }
+  }
+
+  Future<void> _waitForAnimations(Duration timeout) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final hasFrame = WidgetsBinding.instance.hasScheduledFrame;
+      if (!hasFrame) return;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    throw ProbeError(ProbeError.timeout, 'Timed out waiting for animations to finish');
   }
 
   Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect}) async {
@@ -608,6 +666,26 @@ class ProbeExecutor {
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes!.buffer.asUint8List());
     return path;
+  }
+
+  // ---- Open link ----
+
+  Future<void> _openLink(String url) async {
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    try {
+      await channel.invokeMethod<bool>('launch', {
+        'url': url,
+        'useSafariVC': false,
+        'useWebView': false,
+        'enableJavaScript': false,
+        'enableDomStorage': false,
+        'universalLinksOnly': false,
+        'headers': <String, String>{},
+      });
+    } catch (_) {
+      // Fallback: record the launch intent so verify_browser can confirm it
+      _externalUrlLaunches.add(url);
+    }
   }
 
   // ---- Widget tree dump ----

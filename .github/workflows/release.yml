@@ -36,26 +36,122 @@ jobs:
         with:
           go-version: "1.26"
 
-      - name: Build binary
+      - name: Build binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           EXT=""
-          if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
-          BINARY="probe-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
-          go build -ldflags "-s -w -X github.com/alphawavesystems/flutter-probe/internal/cli.Version=${VERSION}" -o "${BINARY}" ./cmd/probe/
-          echo "BINARY=${BINARY}" >> "$GITHUB_ENV"
+          if [ "${GOOS}" = "windows" ]; then EXT=".exe"; fi
+          PROBE_BINARY="probe-${GOOS}-${GOARCH}${EXT}"
+          MCP_BINARY="probe-mcp-${GOOS}-${GOARCH}${EXT}"
+          go build -ldflags "-s -w -X github.com/alphawavesystems/flutter-probe/internal/cli.Version=${VERSION}" -o "${PROBE_BINARY}" ./cmd/probe/
+          go build -ldflags "-s -w -X main.Version=${VERSION}" -o "${MCP_BINARY}" ./cmd/probe-mcp/
+          echo "PROBE_BINARY=${PROBE_BINARY}" >> "$GITHUB_ENV"
+          echo "MCP_BINARY=${MCP_BINARY}" >> "$GITHUB_ENV"
         shell: bash
 
       - uses: actions/upload-artifact@v7
         with:
           name: probe-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.BINARY }}
+          path: |
+            ${{ env.PROBE_BINARY }}
+            ${{ env.MCP_BINARY }}
+
+  build-studio:
+    name: Build Studio
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+          - os: darwin
+            arch: amd64
+            runner: macos-13
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Linux WebKitGTK
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+        shell: bash
+
+      - name: Build Studio
+        env:
+          OS: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
+        working-directory: studio
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          $(go env GOPATH)/bin/wails build -ldflags "-X main.Version=${VERSION}" -platform "${OS}/${ARCH}"
+        shell: bash
+
+      - name: Package Studio (macOS)
+        if: matrix.os == 'darwin'
+        env:
+          ARCH: ${{ matrix.arch }}
+        working-directory: studio/build/bin
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP="flutter-probe-studio-${VERSION}-darwin-${ARCH}.zip"
+          ditto -c -k --keepParent flutter-probe-studio.app "${ZIP}"
+          echo "STUDIO_ASSET=studio/build/bin/${ZIP}" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Package Studio (Windows)
+        if: matrix.os == 'windows'
+        env:
+          ARCH: ${{ matrix.arch }}
+        working-directory: studio/build/bin
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP="flutter-probe-studio-${VERSION}-windows-${ARCH}.zip"
+          7z a "${ZIP}" flutter-probe-studio.exe
+          echo "STUDIO_ASSET=studio/build/bin/${ZIP}" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Package Studio (Linux)
+        if: matrix.os == 'linux'
+        env:
+          ARCH: ${{ matrix.arch }}
+        working-directory: studio/build/bin
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAR="flutter-probe-studio-${VERSION}-linux-${ARCH}.tar.gz"
+          tar -czf "${TAR}" flutter-probe-studio
+          echo "STUDIO_ASSET=studio/build/bin/${TAR}" >> "$GITHUB_ENV"
+        shell: bash
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: studio-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.STUDIO_ASSET }}
 
   release:
-    needs: build
+    needs: [build, build-studio]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -103,6 +199,9 @@ jobs:
           echo "darwin_arm64=$(shasum -a 256 artifacts/probe-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "darwin_amd64=$(shasum -a 256 artifacts/probe-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_amd64=$(shasum -a 256 artifacts/probe-linux-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "mcp_darwin_arm64=$(shasum -a 256 artifacts/probe-mcp-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "mcp_darwin_amd64=$(shasum -a 256 artifacts/probe-mcp-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "mcp_linux_amd64=$(shasum -a 256 artifacts/probe-mcp-linux-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Update formula in homebrew-tap
         env:
@@ -112,6 +211,9 @@ jobs:
           SHA_ARM64="${{ steps.sha.outputs.darwin_arm64 }}"
           SHA_AMD64="${{ steps.sha.outputs.darwin_amd64 }}"
           SHA_LINUX="${{ steps.sha.outputs.linux_amd64 }}"
+          MCP_SHA_ARM64="${{ steps.sha.outputs.mcp_darwin_arm64 }}"
+          MCP_SHA_AMD64="${{ steps.sha.outputs.mcp_darwin_amd64 }}"
+          MCP_SHA_LINUX="${{ steps.sha.outputs.mcp_linux_amd64 }}"
 
           git clone "https://x-access-token:${GH_TOKEN}@github.com/AlphaWaveSystems/homebrew-tap.git"
           cd homebrew-tap
@@ -121,11 +223,18 @@ jobs:
           # Update version
           sed -i "s/version \"[0-9.]*\"/version \"${VERSION}\"/" Formula/probe.rb
 
-          # Update SHA256s — find asset URL line, update the sha256 on the next line
-          awk -v arm64="$SHA_ARM64" -v amd64="$SHA_AMD64" -v linux="$SHA_LINUX" '
-            /probe-darwin-arm64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" arm64 "\""); print; next }
-            /probe-darwin-amd64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" amd64 "\""); print; next }
-            /probe-linux-amd64/  { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" linux "\""); print; next }
+          # Update SHA256s — find asset URL line, update the sha256 on the next line.
+          # The formula installs both the probe CLI and probe-mcp; each pair of
+          # asset URLs is followed by its own sha256 line on the next line.
+          awk \
+            -v arm64="$SHA_ARM64" -v amd64="$SHA_AMD64" -v linux="$SHA_LINUX" \
+            -v mcp_arm64="$MCP_SHA_ARM64" -v mcp_amd64="$MCP_SHA_AMD64" -v mcp_linux="$MCP_SHA_LINUX" '
+            /probe-mcp-darwin-arm64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" mcp_arm64 "\""); print; next }
+            /probe-mcp-darwin-amd64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" mcp_amd64 "\""); print; next }
+            /probe-mcp-linux-amd64/  { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" mcp_linux "\""); print; next }
+            /probe-darwin-arm64/     { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" arm64 "\""); print; next }
+            /probe-darwin-amd64/     { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" amd64 "\""); print; next }
+            /probe-linux-amd64/      { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" linux "\""); print; next }
             { print }
           ' Formula/probe.rb > Formula/probe.rb.tmp && mv Formula/probe.rb.tmp Formula/probe.rb
 

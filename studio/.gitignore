@@ -1,0 +1,7 @@
+build/bin
+node_modules
+frontend/dist
+
+# Wails-generated binary at studio root (from `wails dev`)
+/studio
+/flutter-probe-studio

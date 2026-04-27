@@ -25,6 +25,8 @@ test "user can log in"
 - [Installation](#installation)
 - [ProbeScript Language](#probescript-language)
 - [CLI Commands](#cli-commands)
+- [Studio (Beta Preview)](#studio-beta-preview)
+- [MCP Server](#mcp-server)
 - [Visual Regression](#visual-regression)
 - [Test Recording](#test-recording)
 - [CI/CD Integration](#cicd-integration)
@@ -325,6 +327,38 @@ run dart:
 | `--tag <tag>` | — | Run only tests with this tag |
 | `--name <pattern>` | — | Run only tests matching name |
 | `--adb <path>` | PATH | Custom ADB binary |
+
+## Studio (Beta Preview)
+
+`v0.6.0` ships **FlutterProbe Studio** — a cross-platform desktop app for visual ProbeScript test authoring with an embedded device view, live widget-tree inspector, and in-process test execution. Built with Wails 2.12; macOS / Windows / Linux.
+
+```bash
+# From the repo
+cd studio
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+wails build
+# → studio/build/bin/flutter-probe-studio.app (macOS)
+```
+
+Studio binaries also ship as part of every GitHub release. See the dedicated [Studio docs](https://flutterprobe.dev/tools/studio/) for screenshots, architecture, system requirements, and known limitations.
+
+## MCP Server
+
+For AI agents (Claude Desktop, Cursor, any MCP-compatible client), v0.6.0 ships **`probe-mcp`** as a standalone binary alongside `probe`. It exposes 10 tools: `get_widget_tree`, `take_screenshot`, `read_test`, `write_test`, `run_script`, `run_tests`, `list_files`, `lint`, `get_report`, `generate_test`.
+
+Configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "flutter-probe": {
+      "command": "probe-mcp"
+    }
+  }
+}
+```
+
+The legacy `probe mcp-server` subcommand still works for backwards compatibility but prints a one-time deprecation notice. Full setup guide for Claude Desktop, Cursor, and other MCP clients: [MCP Server docs](https://flutterprobe.dev/tools/mcp/).
 
 ## Visual Regression
 

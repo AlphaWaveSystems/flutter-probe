@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,16 +77,37 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		Path:     "/probe",
 		RawQuery: "token=" + opts.Token,
 	}
+	safeURL := fmt.Sprintf("ws://%s:%d/probe?token=***", opts.Host, opts.Port)
 
-	dialCtx, cancel := context.WithTimeout(ctx, opts.DialTimeout)
+	deadline := time.Now().Add(opts.DialTimeout)
+	dialCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 
+	// Retry until DialTimeout expires. The agent writes its token file
+	// slightly before its WebSocket server is ready to accept connections,
+	// so the first dial attempt can hit "connection refused". Retrying every
+	// second within the window handles that race without a hard failure.
 	dialer := websocket.DefaultDialer
-	conn, _, err := dialer.DialContext(dialCtx, u.String(), nil)
-	if err != nil {
-		// Mask token in error message to prevent leaking into CI logs
-		safeURL := fmt.Sprintf("ws://%s:%d/probe?token=***", opts.Host, opts.Port)
-		return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
+	var conn *websocket.Conn
+	var lastErr error
+	const retryInterval = time.Second
+	for {
+		var err error
+		conn, _, err = dialer.DialContext(dialCtx, u.String(), nil)
+		if err == nil {
+			break
+		}
+		lastErr = err
+		// Only retry on transient network errors (refused, reset, timeout).
+		// Stop immediately on auth/protocol errors (e.g. 401 from agent).
+		if !isTransientDialError(err) {
+			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
+		}
+		select {
+		case <-dialCtx.Done():
+			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, lastErr)
+		case <-time.After(retryInterval):
+		}
 	}
 
 	// Store address without token for safe logging
@@ -109,6 +131,18 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	go c.readLoop()
 	go c.pingLoop()
 	return c, nil
+}
+
+// isTransientDialError returns true for connection errors that are worth
+// retrying (refused, reset, i/o timeout). Protocol or auth errors are not
+// transient and should surface immediately.
+func isTransientDialError(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "i/o timeout") ||
+		strings.Contains(s, "no route to host") ||
+		strings.Contains(s, "network is unreachable")
 }
 
 // DialRelay connects to the ProbeAgent via a ProbeRelay server.
@@ -457,4 +491,26 @@ func (c *Client) VerifyBrowser(ctx context.Context) error {
 func (c *Client) SetNextToken(ctx context.Context, token string) error {
 	_, err := c.Call(ctx, MethodSetNextToken, map[string]string{"token": token})
 	return err
+}
+
+func (c *Client) OpenLink(ctx context.Context, url string) error {
+	_, err := c.Call(ctx, MethodOpenLink, map[string]string{"url": url})
+	return err
+}
+
+func (c *Client) SetTimeDilation(ctx context.Context, factor float64) error {
+	_, err := c.Call(ctx, MethodSetTimeDilation, map[string]float64{"factor": factor})
+	return err
+}
+
+func (c *Client) DrainOutput(ctx context.Context) (map[string]string, error) {
+	raw, err := c.Call(ctx, MethodDrainOutput, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]string
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

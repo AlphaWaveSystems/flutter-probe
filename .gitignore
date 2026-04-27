@@ -4,6 +4,15 @@ coverage.out
 *.exe
 *.test
 *.prof
+# Local CLI binaries built into repo root (use -o to control output otherwise)
+/probe
+/probe-mcp
+
+# Studio (Wails) build artifacts
+studio/build/bin/
+studio/frontend/node_modules/
+studio/frontend/dist/
+studio/frontend/.vite/
 
 # Sensitive/private documents
 LAUNCH_PLAN.md

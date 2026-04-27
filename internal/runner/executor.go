@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	mathrand "math/rand"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -35,7 +38,10 @@ type Executor struct {
 	depth       int      // indentation depth for verbose logging
 	artifacts   []string // collected screenshot paths (on-device)
 	visual      *visual.Comparator // nil if visual regression is not configured
-	maxReconnectAttempts int // max auto-reconnect attempts per call (default 2)
+	maxReconnectAttempts int           // max auto-reconnect attempts per call (default 4)
+	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
+	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
+	clientGen            atomic.Uint64 // incremented on each successful reconnect
 }
 
 // NewExecutor creates an Executor.
@@ -49,6 +55,14 @@ func NewExecutor(client probelink.ProbeClient, deviceCtx *DeviceContext, onRecon
 		vars:        make(map[string]string),
 		verbose:     verbose,
 	}
+}
+
+// SetReconnectPolicy configures the auto-reconnect behavior. Both values are taken
+// from agent.reconnect_attempts and agent.reconnect_backoff in probe.yaml.
+// Zero values fall back to defaults (4 attempts, 1s base) when first used.
+func (e *Executor) SetReconnectPolicy(attempts int, backoff time.Duration) {
+	e.maxReconnectAttempts = attempts
+	e.reconnectBackoff = backoff
 }
 
 // RegisterRecipe adds a recipe to the executor's scope.
@@ -129,13 +143,14 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
+	// Uses exponential backoff with jitter — see tryReconnect for the formula.
 	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil {
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {
-			maxAttempts = 2
+			maxAttempts = 4
 		}
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			if reconnErr := e.tryReconnect(ctx); reconnErr != nil {
+			if reconnErr := e.tryReconnect(ctx, attempt); reconnErr != nil {
 				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
 				break
 			}
@@ -413,7 +428,10 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return nil
 
 	case parser.VerbDumpTree:
-		_, err := e.client.DumpWidgetTree(ctx)
+		tree, err := e.client.DumpWidgetTree(ctx)
+		if err == nil {
+			fmt.Printf("[widget_tree]\n%s\n[/widget_tree]\n", tree)
+		}
 		return err
 
 	case parser.VerbSaveLogs:
@@ -539,6 +557,13 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbVerifyBrowser:
 		return e.client.VerifyBrowser(ctx)
+
+	case parser.VerbOpenLink:
+		return e.client.OpenLink(ctx, e.resolve(a.Name))
+
+	case parser.VerbStore:
+		e.vars[a.Name] = e.resolve(a.Text)
+		return nil
 	}
 
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)
@@ -557,6 +582,8 @@ func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 		checkStr = "checked"
 	case parser.StateContains:
 		checkStr = "contains"
+	case parser.StateFocused:
+		checkStr = "focused"
 	}
 	// Resolve variables in selector text (for data-driven tests)
 	sel := a.Sel
@@ -576,12 +603,13 @@ func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	kindStr := map[parser.WaitKind]string{
-		parser.WaitDuration:   "duration",
-		parser.WaitAppears:    "appears",
-		parser.WaitDisappears: "disappears",
-		parser.WaitPageLoad:   "page_load",
+		parser.WaitDuration:    "duration",
+		parser.WaitAppears:     "appears",
+		parser.WaitDisappears:  "disappears",
+		parser.WaitPageLoad:    "page_load",
 		parser.WaitNetworkIdle: "network_idle",
-		parser.WaitSelector:   "selector",
+		parser.WaitSelector:    "selector",
+		parser.WaitAnimations:  "animations",
 	}[w.Kind]
 
 	return e.client.Wait(ctx, probelink.WaitParams{
@@ -687,30 +715,78 @@ func isConnectionError(err error) bool {
 		strings.Contains(msg, "rpc error -32000")
 }
 
-// tryReconnect attempts to re-establish the WebSocket connection to the agent.
-// This is used when the connection drops mid-test (e.g., physical device via iproxy).
-// It does NOT restart the app — the app is still running, we just lost the TCP connection.
-func (e *Executor) tryReconnect(ctx context.Context) error {
+// tryReconnect attempts to re-establish the connection to the agent. The app
+// is still running — we just lost the TCP connection (e.g., physical device
+// via iproxy, USB-C cable mode-flip). It does NOT restart the app.
+//
+// The attempt parameter (1-indexed) drives the backoff:
+//
+//	delay = min(reconnectBackoff << (attempt-1), 8s) + jitter (±20%)
+//
+// Concurrent callers are serialized via reconnectMu. If a newer client was
+// already established while this caller waited for the lock, it returns
+// immediately without re-dialing — the caller's e.client reference is
+// already up-to-date because the previous winner called e.onReconnect.
+func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	if e.deviceCtx == nil {
 		return fmt.Errorf("reconnect: no device context (cloud mode)")
 	}
-	fmt.Printf("    \033[33m⟳\033[0m  Connection lost — attempting to reconnect...\n")
+
+	// Capture the generation before locking. If somebody else reconnects while
+	// we wait for the lock, we'll see a higher gen on the other side and skip.
+	gen := e.clientGen.Load()
+	e.reconnectMu.Lock()
+	defer e.reconnectMu.Unlock()
+	if e.clientGen.Load() > gen {
+		return nil
+	}
+
+	base := e.reconnectBackoff
+	if base == 0 {
+		base = 1 * time.Second
+	}
+	delay := reconnectDelay(base, attempt)
+
+	fmt.Printf("    \033[33m⟳\033[0m  Connection lost — attempt %d (waiting %s)...\n", attempt, delay.Round(100*time.Millisecond))
 	e.client.Close()
 
-	// The app is still running — we just need to re-dial.
-	// Give the agent a moment, then reconnect.
-	time.Sleep(1 * time.Second)
+	select {
+	case <-time.After(delay):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	newClient, err := e.deviceCtx.Reconnect(ctx)
 	if err != nil {
 		return fmt.Errorf("auto-reconnect failed: %w", err)
 	}
 	e.client = newClient
+	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)
 	}
-	fmt.Printf("    \033[32m⟳\033[0m  Reconnected successfully\n")
+	fmt.Printf("    \033[32m⟳\033[0m  Reconnected successfully (attempt %d)\n", attempt)
 	return nil
+}
+
+// reconnectDelay returns base << (attempt-1), capped at 8s, plus ±20% jitter.
+// Exposed (unexported) so tests can verify the math without invoking reconnect.
+func reconnectDelay(base time.Duration, attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	const cap = 8 * time.Second
+	d := base << (attempt - 1)
+	if d <= 0 || d > cap {
+		d = cap
+	}
+	fifth := int64(d) / 5
+	if fifth <= 0 {
+		return d
+	}
+	// Jitter in [-fifth, +fifth) — i.e. [-20%, +20%) of d.
+	jitter := time.Duration(mathrand.Int63n(2*fifth) - fifth)
+	return d + jitter
 }
 
 // ---- Helpers ----
@@ -818,11 +894,14 @@ func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 		parser.SelectorType:        "type",
 		parser.SelectorOrdinal:     "ordinal",
 		parser.SelectorPositional:  "positional",
+		parser.SelectorRelational:  "relational",
 	}
 	return probelink.SelectorParam{
 		Kind:      kinds[s.Kind],
 		Text:      s.Text,
 		Ordinal:   s.Ordinal,
 		Container: s.Container,
+		Relation:  s.Relation,
+		Anchor:    s.Anchor,
 	}
 }

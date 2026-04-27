@@ -118,6 +118,12 @@ class ProbeMethods {
   static const verifyBrowser = 'probe.verify_browser';
   static const setNextToken = 'probe.set_next_token';
 
+  // New methods (v0.5.7)
+  static const openLink = 'probe.open_link';
+  static const setTimeDilation = 'probe.set_time_dilation';
+  static const setOutput = 'probe.set_output';
+  static const drainOutput = 'probe.drain_output';
+
   // Notification methods (agent → CLI)
   static const notifyRecordedEvent = 'probe.recorded_event';
   static const notifyExecDart = 'probe.exec_dart';

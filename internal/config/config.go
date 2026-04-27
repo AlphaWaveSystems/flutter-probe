@@ -69,22 +69,25 @@ type ProjectConfig struct {
 }
 
 type DefaultsConfig struct {
-	Platform                string        `yaml:"platform"`                  // android | ios | both
-	Timeout                 time.Duration `yaml:"timeout"`                   // per-step timeout
-	Screenshots             string        `yaml:"screenshots"`               // always | on_failure | never
-	VideoEnabled            bool          `yaml:"video"`                     // enable video recording
-	RetryFailedTests        int           `yaml:"retry_failed_tests"`        // number of retries for failed tests
+	Platform                string        `yaml:"platform"`                   // android | ios | both
+	Timeout                 time.Duration `yaml:"timeout"`                    // per-step timeout
+	Screenshots             string        `yaml:"screenshots"`                // always | on_failure | never
+	VideoEnabled            bool          `yaml:"video"`                      // enable video recording
+	RetryFailedTests        int           `yaml:"retry_failed_tests"`         // number of retries for failed tests
 	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
+	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation=0 to disable Flutter animations
 }
 
 // AgentConfig controls the ProbeAgent WebSocket connection.
 type AgentConfig struct {
-	Port             int           `yaml:"port"`               // host-side WebSocket port for connecting to the agent (default: 48686)
-	DevicePort       int           `yaml:"device_port"`        // on-device port the agent listens on (default: same as port). Set differently for parallel runs with adb forward.
-	DialTimeout      time.Duration `yaml:"dial_timeout"`       // max time to establish a WebSocket connection (default: 30s)
-	PingInterval     time.Duration `yaml:"ping_interval"`      // interval between WebSocket keepalive pings (default: 5s)
-	TokenReadTimeout time.Duration `yaml:"token_read_timeout"` // max time to wait for the agent to emit its auth token (default: 30s)
-	ReconnectDelay   time.Duration `yaml:"reconnect_delay"`    // delay after app restart before attempting WebSocket reconnect (default: 2s)
+	Port              int           `yaml:"port"`                // host-side WebSocket port for connecting to the agent (default: 48686)
+	DevicePort        int           `yaml:"device_port"`         // on-device port the agent listens on (default: same as port). Set differently for parallel runs with adb forward.
+	DialTimeout       time.Duration `yaml:"dial_timeout"`        // max time to establish a WebSocket connection (default: 30s)
+	PingInterval      time.Duration `yaml:"ping_interval"`       // interval between WebSocket keepalive pings (default: 5s)
+	TokenReadTimeout  time.Duration `yaml:"token_read_timeout"`  // max time to wait for the agent to emit its auth token (default: 30s)
+	ReconnectDelay    time.Duration `yaml:"reconnect_delay"`     // delay after app restart before attempting WebSocket reconnect (default: 2s)
+	ReconnectAttempts int           `yaml:"reconnect_attempts"`  // max auto-reconnect attempts after a connection drop mid-test (default: 4)
+	ReconnectBackoff  time.Duration `yaml:"reconnect_backoff"`   // base delay for exponential reconnect backoff: delay = base << (attempt-1), capped at 8s, ±20% jitter (default: 1s)
 }
 
 // DeviceConfig controls emulator/simulator startup and polling.
@@ -94,6 +97,8 @@ type DeviceConfig struct {
 	BootPollInterval     time.Duration `yaml:"boot_poll_interval"`     // how often to check if the device is ready (default: 2s)
 	TokenFileRetries     int           `yaml:"token_file_retries"`     // number of attempts to read the token from file before falling back to log stream (default: 5)
 	RestartDelay         time.Duration `yaml:"restart_delay"`          // delay after force-stopping an app before relaunching (default: 500ms)
+	IOSDeviceID          string        `yaml:"ios_device_id"`          // preferred iOS simulator/device UDID (overridden by --device flag)
+	AndroidDeviceID      string        `yaml:"android_device_id"`      // preferred Android emulator/device serial (overridden by --device flag)
 }
 
 // VideoConfig controls device screen recording.
@@ -123,11 +128,13 @@ var defaultConfig = Config{
 		RetryFailedTests: 1,
 	},
 	Agent: AgentConfig{
-		Port:             48686,
-		DialTimeout:      30 * time.Second,
-		PingInterval:     5 * time.Second,
-		TokenReadTimeout: 30 * time.Second,
-		ReconnectDelay:   2 * time.Second,
+		Port:              48686,
+		DialTimeout:       30 * time.Second,
+		PingInterval:      5 * time.Second,
+		TokenReadTimeout:  30 * time.Second,
+		ReconnectDelay:    2 * time.Second,
+		ReconnectAttempts: 4,
+		ReconnectBackoff:  1 * time.Second,
 	},
 	Device: DeviceConfig{
 		EmulatorBootTimeout:  120 * time.Second,
@@ -232,6 +239,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Agent.ReconnectDelay == 0 {
 		cfg.Agent.ReconnectDelay = d.Agent.ReconnectDelay
 	}
+	if cfg.Agent.ReconnectAttempts == 0 {
+		cfg.Agent.ReconnectAttempts = d.Agent.ReconnectAttempts
+	}
+	if cfg.Agent.ReconnectBackoff == 0 {
+		cfg.Agent.ReconnectBackoff = d.Agent.ReconnectBackoff
+	}
 
 	if cfg.Device.EmulatorBootTimeout == 0 {
 		cfg.Device.EmulatorBootTimeout = d.Device.EmulatorBootTimeout
@@ -326,6 +339,8 @@ device:
   boot_poll_interval: 2s        # polling interval while waiting for boot
   token_file_retries: 5         # file-read attempts before falling back to log stream
   restart_delay: 500ms          # delay after force-stop before relaunch
+  # ios_device_id: ""           # preferred iOS simulator/device UDID (overridden by --device)
+  # android_device_id: ""       # preferred Android emulator/device serial (overridden by --device)
 
 # Video recording settings
 video:

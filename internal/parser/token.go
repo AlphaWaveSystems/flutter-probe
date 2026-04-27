@@ -144,6 +144,18 @@ const (
 	TOKEN_SET_LOCATION    // compound: "set location"
 	TOKEN_VERIFY_BROWSER  // compound: "verify external browser"
 	TOKEN_CALL            // "call"
+
+	// Relational selectors (v0.5.7)
+	TOKEN_BELOW  // "below"
+	TOKEN_ABOVE  // "above"
+	TOKEN_LEFT   // "left"
+	TOKEN_RIGHT  // "right"
+
+	// New keywords (v0.5.7)
+	TOKEN_FOCUSED    // "focused" — state check in see
+	TOKEN_LINK       // "link" — open link "url"
+	TOKEN_ANIMATIONS // "animations" — wait for animations to end
+	TOKEN_STORE      // "store" — store "value" as varName
 )
 
 // Token is a single lexical unit.
@@ -264,6 +276,17 @@ var keywords = map[string]TokenType{
 	"set":          TOKEN_IDENT,
 	"location":     TOKEN_IDENT,
 	"clipboard":    TOKEN_IDENT,
+
+	// Relational / new keywords (v0.5.7)
+	"below":      TOKEN_BELOW,
+	"above":      TOKEN_ABOVE,
+	"left":       TOKEN_LEFT,
+	"right":      TOKEN_RIGHT,
+	"focused":    TOKEN_FOCUSED,
+	"link":       TOKEN_LINK,
+	"animations": TOKEN_ANIMATIONS,
+	"animation":  TOKEN_ANIMATIONS,
+	"store":      TOKEN_STORE,
 }
 
 // fillerWords are stripped by the forgiving parser.

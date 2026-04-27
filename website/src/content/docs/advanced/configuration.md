@@ -33,6 +33,8 @@ agent:
   ping_interval: 5s
   token_read_timeout: 30s
   reconnect_delay: 2s
+  reconnect_attempts: 4
+  reconnect_backoff: 1s
 
 device:
   emulator_boot_timeout: 120s
@@ -40,6 +42,8 @@ device:
   boot_poll_interval: 2s
   token_file_retries: 5
   restart_delay: 500ms
+  ios_device_id: A1B2C3D4-E5F6-7890-ABCD-EF1234567890  # optional: pin to a simulator UDID
+  android_device_id: emulator-5554                      # optional: pin to an emulator serial
 
 video:
   resolution: 720x1280
@@ -103,6 +107,8 @@ WebSocket connection settings:
 | `ping_interval` | duration | `5s` | WebSocket keepalive interval |
 | `token_read_timeout` | duration | `30s` | Max time to wait for auth token |
 | `reconnect_delay` | duration | `2s` | Delay before reconnecting after app restart |
+| `reconnect_attempts` | int | `4` | Max auto-reconnect attempts after a connection drop mid-test |
+| `reconnect_backoff` | duration | `1s` | Base for exponential reconnect backoff: `delay = base << (attempt-1)` capped at 8s, ±20% jitter |
 
 ### device
 
@@ -115,6 +121,8 @@ Device/emulator management:
 | `boot_poll_interval` | duration | `2s` | Polling interval during boot |
 | `token_file_retries` | int | `5` | Retries for reading token file |
 | `restart_delay` | duration | `500ms` | Delay after force-stop before relaunch |
+| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag |
+| `android_device_id` | string | — | Preferred Android emulator serial or device serial. Overridden by `--device` flag |
 
 ### video
 

@@ -387,6 +387,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseActionVerifyBrowser()
 	case TOKEN_CALL:
 		return p.parseHTTPCall()
+	case TOKEN_STORE:
+		return p.parseStore()
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -396,20 +398,20 @@ func (p *Parser) parseStep() (Step, error) {
 	}
 }
 
-// checkIfVisible checks for a trailing "if visible" suffix before the newline.
-// Returns true if "if visible" was consumed.
+// checkIfVisible checks for a trailing "if visible" / "if present" suffix before the newline.
+// Returns true if the suffix was consumed.
 func (p *Parser) checkIfVisible() bool {
 	if p.peek().Type != TOKEN_IF {
 		return false
 	}
-	// Save position to restore if next word isn't "visible"
 	saved := p.pos
 	p.advance() // if
-	if p.peek().Literal == "visible" {
-		p.advance() // visible
+	lit := p.peek().Literal
+	if lit == "visible" || lit == "present" {
+		p.advance()
 		return true
 	}
-	p.pos = saved // restore — this was a regular "if", not "if visible"
+	p.pos = saved // restore — this was a regular "if", not "if visible/present"
 	return false
 }
 
@@ -423,6 +425,13 @@ func (p *Parser) parseActionOpen() (Step, error) {
 		p.advance()
 		p.consumeNewline()
 		return ActionStep{Verb: VerbOpen, Line: line}, nil
+	}
+	if p.peek().Type == TOKEN_LINK {
+		p.advance()
+		p.skipFillers()
+		url := p.expectString("URL to open")
+		p.consumeNewline()
+		return ActionStep{Verb: VerbOpenLink, Name: url, Line: line}, nil
 	}
 	sel := p.parseSelector()
 	p.consumeNewline()
@@ -741,6 +750,9 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		p.advance()
 		checkVal = p.expectString("value to check")
 		check = StateContains
+	case TOKEN_FOCUSED:
+		p.advance()
+		check = StateFocused
 	}
 
 	// regex pattern "matching ..."
@@ -799,10 +811,16 @@ func (p *Parser) parseWait() (Step, error) {
 		}
 	}
 
-	// "wait for the page to load"
+	// "wait for animations to end" / "wait for the page to load"
 	if tok.Type == TOKEN_FOR_KW || p.peekLiteral("for") {
 		p.advance()
 		p.skipFillers()
+		if p.peek().Type == TOKEN_ANIMATIONS {
+			p.advance()
+			p.skipFillers() // "to end" / "to finish"
+			p.consumeNewline()
+			return WaitStep{Kind: WaitAnimations, Line: line}, nil
+		}
 		p.consumeNewline()
 		return WaitStep{Kind: WaitPageLoad, Line: line}, nil
 	}
@@ -1096,16 +1114,39 @@ func (p *Parser) parseSelector() Selector {
 		p.advance()
 		text := tok.Literal
 		// "in the 'Container'"
-		container := ""
 		if p.peek().Type == TOKEN_IN {
 			p.advance()
 			p.skipFillers()
 			if p.peek().Type == TOKEN_STRING {
-				container = p.advance().Literal
+				container := p.advance().Literal
+				return Selector{Kind: SelectorPositional, Text: text, Container: container}
 			}
 		}
-		if container != "" {
-			return Selector{Kind: SelectorPositional, Text: text, Container: container}
+		// Relational: "text" below/above/left of/right of "anchor"
+		rel := ""
+		switch p.peek().Type {
+		case TOKEN_BELOW:
+			p.advance()
+			rel = "below"
+		case TOKEN_ABOVE:
+			p.advance()
+			rel = "above"
+		case TOKEN_LEFT:
+			p.advance()
+			p.skipIf(TOKEN_OF)
+			rel = "left_of"
+		case TOKEN_RIGHT:
+			p.advance()
+			p.skipIf(TOKEN_OF)
+			rel = "right_of"
+		}
+		if rel != "" {
+			p.skipFillers()
+			anchor := ""
+			if p.peek().Type == TOKEN_STRING {
+				anchor = p.advance().Literal
+			}
+			return Selector{Kind: SelectorRelational, Text: text, Relation: rel, Anchor: anchor}
 		}
 		return Selector{Kind: SelectorText, Text: text}
 	}
@@ -1366,4 +1407,23 @@ func (p *Parser) parseHTTPCall() (Step, error) {
 
 	p.consumeNewline()
 	return HTTPCallStep{Method: method, URL: url, Body: body, Line: line}, nil
+}
+
+// parseStore parses: store "value" as varName
+func (p *Parser) parseStore() (Step, error) {
+	line := p.peek().Line
+	p.advance() // store
+	p.skipFillers()
+	value := p.expectString("value to store")
+	p.skipFillers()
+	if p.peek().Type == TOKEN_AS {
+		p.advance()
+	}
+	p.skipFillers()
+	varName := ""
+	if p.peek().Type == TOKEN_IDENT || p.peek().Type == TOKEN_STRING {
+		varName = p.advance().Literal
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbStore, Text: value, Name: varName, Line: line}, nil
 }

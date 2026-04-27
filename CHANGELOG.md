@@ -6,6 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-26
+
+### Added
+- **Configurable auto-reconnect policy** — `agent.reconnect_attempts` (default 4) and `agent.reconnect_backoff` (default 1s base) in `probe.yaml`. Replaces the previous fixed 2-attempt, 1s-sleep policy with capped exponential backoff plus jitter (1s → 2s → 4s → 8s, ±20%, ~15s total budget). Slow devices and brief USB-C cable mode flips now recover transparently instead of failing the step.
+- **iproxy tunnel TCP health check** — physical iOS startup now verifies the iproxy tunnel is actually forwarding via a 127.0.0.1 probe (up to 3s) before the first dial. Dead-tunnel-on-live-process is detected immediately instead of failing later as a 30s WebSocket handshake timeout.
+- **`probe-mcp` standalone binary** — the MCP (Model Context Protocol) server now ships as its own binary alongside `probe`. Configure your MCP client (Claude Desktop, Cursor, etc.) to call `probe-mcp` directly. Same 10 tools, same protocol, smaller per-binary surface. Available via Homebrew (`brew install probe`) and GitHub release artifacts.
+- **`probe test --stream`** — when combined with `--format json`, emits one ndjson line per test as it completes (`{"type":"test_result","result":{...}}`), in addition to the final report. Built for live consumption by Studio, CI dashboards, and other tooling that wants real-time progress.
+- **FlutterProbe Studio (Beta Preview)** — new `studio/` directory containing a [Wails 2.12+](https://wails.io/) desktop app for visual ProbeScript test authoring. Cross-platform (macOS / Windows / Linux). Marked Beta Preview because the surface area (editor, lint, device pane, run integration) is feature-complete but stability work is ongoing. Features:
+  - Monaco editor with ProbeScript syntax highlighting (keywords, strings, variables, tags, comments) and live lint markers driven by the runner's parser
+  - File browser with workspace folder picker (persists across sessions in localStorage)
+  - Device picker backed by `internal/device.Manager` (simulators and emulators)
+  - **Live device view** at ~10 FPS via the existing `take_screenshot` RPC — no new agent code, works on all sim/emu platforms
+  - **In-process test execution** by importing `internal/runner` directly — no subprocess shell-out, no JSON wire format
+  - Live results timeline streamed via Wails event bus as tests complete
+  - Widget tree inspector (refresh on demand)
+  - Connection status indicator with semantic colors (connected / connecting / error / disconnected)
+  - Toast notifications, keyboard shortcuts (⌘R run, ⌘S save, ⌘B connect, ⌘P workspace, ⌘K refresh devices, `?` help)
+  - Native macOS dark appearance, draggable title bar, About panel
+  Build with `cd studio && wails build`. Physical device support, scrcpy/simctl native video, multi-device side-by-side, time-travel debugging, and AI chat pane via MCP are deferred to follow-ups.
+
+### Changed
+- **`probe mcp-server` is deprecated** — the subcommand still works for backwards compatibility (runs the same server code embedded in `probe`) but prints a one-time deprecation notice on stderr. Migrate your MCP client config to `probe-mcp`. Will be removed in a future release.
+- **MCP server reports binary version** — the `initialize` response's `serverInfo.version` now reflects the installed binary version (set at build time) instead of a hardcoded `0.5.7`.
+
+### Fixed
+- **Ctrl-C no longer leaks iproxy / `idevicesyslog` / ADB forwards.** The `probe test` command now installs a `SIGINT` / `SIGTERM` handler that cancels the run context so deferred cleanup actually runs. Press Ctrl-C twice to force-exit.
+- **Reconnect serialization** — concurrent steps (loops, conditionals) that both observe a dropped connection no longer race on the executor's client reference. A generation counter ensures only one reconnect runs at a time and late callers reuse the new client.
+
+## [0.5.7] - 2026-04-26
+
+### Added
+- **Relational selectors** — `tap "Submit" below "Username"`, `see "Price" right of "Label"` — spatial anchoring via Flutter `RenderBox` positions (`below`, `above`, `left of`, `right of`)
+- **`open link "url"`** — opens a URL in the default external browser via `url_launcher` platform channel
+- **`wait for animations to end`** — polls `SchedulerBinding.hasScheduledFrame` until animations complete
+- **`see "Field" is focused`** — asserts that a widget holds keyboard focus via `FocusManager.primaryFocus`
+- **`store "value" as varName`** — stores a literal or `${variable}` value for use in later steps
+- **`probe mcp-server`** — stdio MCP server (10 tools) for AI agent integration with Claude Desktop, Cursor, etc.: `get_widget_tree`, `take_screenshot`, `read_test`, `write_test`, `run_script`, `run_tests`, `list_files`, `lint`, `get_report`, `generate_test`; see [MCP Server docs](https://flutterprobe.dev/tools/mcp/)
+- **`--disable-animations`** flag (also `defaults.disable_animations` in `probe.yaml`) — sets Flutter `timeDilation = 0` after connecting to skip animations and speed up tests
+- **`probe.open_link`** RPC — agent-side handler that invokes url_launcher or records the URL for `verify_browser`
+- **`probe.set_time_dilation`** RPC — sets `timeDilation` on the agent at runtime
+- **`probe.set_output` / `probe.drain_output`** RPCs — inter-step output variable exchange between Dart and CLI
+- `device.ios_device_id` / `device.android_device_id` in `probe.yaml` — set a preferred simulator UDID or emulator serial without requiring `--device` on every run
+
+### Fixed
+- Token acquisition reliability: `simctl` token reader now globs all app data containers, resolving stale-container mismatches after reinstalls or clear-data operations
+- WebSocket dial now retries on transient errors (`connection refused`, reset, timeout) within the configured `dial_timeout` window, eliminating the race between token file write and agent server startup
+
 ## [0.5.6] - 2026-04-02
 
 ### Added

@@ -131,12 +131,15 @@ device:
   boot_poll_interval: 2s
   token_file_retries: 5
   restart_delay: 500ms
+  ios_device_id: A1B2C3D4-E5F6-7890-ABCD-EF1234567890  # pin to a simulator UDID (skips auto-detection)
 
 agent:
   port: 48686
   dial_timeout: 30s
   token_read_timeout: 30s
 ```
+
+Set `ios_device_id` to avoid passing `--device <UDID>` on every run. The `--device` flag takes precedence when provided.
 
 ## Troubleshooting
 
