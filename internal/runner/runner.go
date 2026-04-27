@@ -39,6 +39,7 @@ type Runner struct {
 	opts      RunOptions
 	recipes   map[string]parser.RecipeDef
 	visual    *visual.Comparator // nil if visual regression is not configured
+	onResult  func(TestResult)   // optional per-result callback for streaming
 }
 
 // RunOptions configures a test run.
@@ -72,6 +73,23 @@ func New(cfg *config.Config, client probelink.ProbeClient, deviceCtx *DeviceCont
 // SetVisual configures visual regression comparison for this runner.
 func (r *Runner) SetVisual(c *visual.Comparator) {
 	r.visual = c
+}
+
+// OnResult registers a callback fired after each test completes. Used for
+// live streaming output (e.g. ndjson via Reporter.StreamResult). Must be
+// safe to call from the goroutine that runs tests.
+func (r *Runner) OnResult(cb func(TestResult)) {
+	r.onResult = cb
+}
+
+// newExecutor builds an Executor preconfigured with this Runner's reconnect
+// policy from probe.yaml (agent.reconnect_attempts and agent.reconnect_backoff).
+func (r *Runner) newExecutor() *Executor {
+	exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
+		r.client = newClient
+	}, r.opts.Timeout, r.opts.Verbose)
+	exec.SetReconnectPolicy(r.cfg.Agent.ReconnectAttempts, r.cfg.Agent.ReconnectBackoff)
+	return exec
 }
 
 // Run executes all specified test files and returns results.
@@ -132,9 +150,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	// Run beforeAll hooks (fail-fast: if beforeAll fails, skip all tests in file)
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeAll {
-			exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
-				r.client = newClient
-			}, r.opts.Timeout, r.opts.Verbose)
+			exec := r.newExecutor()
 			if err := exec.RunBody(ctx, hook.Body); err != nil {
 				// Mark all tests as failed due to beforeAll failure
 				for _, t := range tests {
@@ -163,9 +179,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	// Run afterAll hooks (always, best-effort)
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookAfterAll {
-			exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
-				r.client = newClient
-			}, r.opts.Timeout, r.opts.Verbose)
+			exec := r.newExecutor()
 			_ = exec.RunBody(ctx, hook.Body)
 		}
 	}
@@ -189,6 +203,9 @@ func (r *Runner) runTest(ctx context.Context, prog *parser.Program, t parser.Tes
 		return r.runDataDriven(ctx, prog, t, file)
 	}
 	res := r.runSingleTest(ctx, prog, t, file, nil, -1)
+	if r.onResult != nil {
+		r.onResult(res)
+	}
 	return []TestResult{res}, nil
 }
 
@@ -202,6 +219,9 @@ func (r *Runner) runDataDriven(ctx context.Context, prog *parser.Program, t pars
 			}
 		}
 		res := r.runSingleTest(ctx, prog, t, file, vars, rowIdx)
+		if r.onResult != nil {
+			r.onResult(res)
+		}
 		results = append(results, res)
 	}
 	return results, nil
@@ -209,9 +229,7 @@ func (r *Runner) runDataDriven(ctx context.Context, prog *parser.Program, t pars
 
 func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
 	start := time.Now()
-	exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
-		r.client = newClient
-	}, r.opts.Timeout, r.opts.Verbose)
+	exec := r.newExecutor()
 	for name, rec := range r.recipes {
 		exec.RegisterRecipe(rec)
 		_ = name

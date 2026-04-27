@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
@@ -19,6 +22,11 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 	"github.com/spf13/cobra"
 )
+
+// errTestFailed signals to cobra that one or more tests failed. The runner
+// has already printed the failures; this just causes a non-zero exit code
+// while letting deferred cleanup (iproxy, ADB forward, idevicesyslog) run.
+var errTestFailed = errors.New("one or more tests failed")
 
 var testCmd = &cobra.Command{
 	Use:   "test [file|dir]...",
@@ -40,7 +48,11 @@ Resolution order: CLI flag > probe.yaml > built-in default.`,
   probe test --port 9999                    # custom agent port
   probe test --token-timeout 60s            # longer token wait (slow CI)
   probe test --dial-timeout 45s             # longer connection timeout`,
-	RunE: runTests,
+	// errTestFailed (returned on failed tests) carries no useful message — the
+	// runner already printed per-test failures. Silence cobra's default "Error: ..."
+	// output to avoid a duplicate trailing line.
+	SilenceErrors: true,
+	RunE:          runTests,
 }
 
 func init() {
@@ -52,6 +64,7 @@ func init() {
 	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
+	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
 	// Device selection
@@ -111,10 +124,34 @@ func init() {
 	f.String("relay-url", "", "reuse an existing relay session (WebSocket URL) — skips relay creation")
 	f.String("relay-token", "", "CLI auth token for the existing relay session (used with --relay-url)")
 	f.String("relay-session-id", "", "existing relay session ID for status polling and cleanup")
+
+	// Animation control
+	f.Bool("disable-animations", false, "disable Flutter animations by setting timeDilation=0 (speeds up tests)")
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	// Cancel the run on Ctrl-C / SIGTERM so deferred cleanup (iproxy, ADB
+	// forwards, idevicesyslog) actually runs. A second signal force-exits in
+	// case shutdown stalls; the user shouldn't have to wait for a hung test.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigCh:
+			fmt.Fprintln(os.Stderr, "\n  ⚠  interrupt received — shutting down (press Ctrl-C again to force exit)")
+			cancel()
+		}
+		// Second signal — force exit. Defers won't run on os.Exit, but at
+		// this point the user has explicitly asked us to bail immediately.
+		<-sigCh
+		fmt.Fprintln(os.Stderr, "  ⚠  forced exit")
+		os.Exit(130)
+	}()
 
 	// Load config (respects --config flag for platform-specific configs)
 	cfg, err := loadConfig(cmd)
@@ -615,6 +652,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 			// Pick device and detect platform
 			platform = device.Platform(cfg.Defaults.Platform)
+			// Apply probe.yaml device preference when --device flag not provided
+			if deviceSerial == "" {
+				if platform == device.PlatformIOS && cfg.Device.IOSDeviceID != "" {
+					deviceSerial = cfg.Device.IOSDeviceID
+				} else if platform == device.PlatformAndroid && cfg.Device.AndroidDeviceID != "" {
+					deviceSerial = cfg.Device.AndroidDeviceID
+				}
+			}
 			if deviceSerial == "" {
 				devices, err := dm.List(ctx)
 				if err != nil || len(devices) == 0 {
@@ -781,6 +826,15 @@ func runTests(cmd *cobra.Command, args []string) error {
 		report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 	}
 
+	// Streaming ndjson output during the run (JSON format only).
+	stream, _ := cmd.Flags().GetBool("stream")
+	if stream {
+		if format != string(runner.FormatJSON) {
+			return fmt.Errorf("--stream requires --format json")
+		}
+		report.SetStreaming(true)
+	}
+
 	// Attach run metadata for JSON/HTML reports (also used for cloud upload)
 	var runMeta runner.RunMetadata
 	if !dryRun && dm != nil { //nolint:nestif
@@ -911,10 +965,23 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	r := runner.New(cfg, client, devCtx, opts)
 
+	// Wire ndjson streaming if --stream was passed.
+	if stream {
+		r.OnResult(report.StreamResult)
+	}
+
 	// Configure visual regression if threshold is set.
 	if !dryRun {
 		vc := visual.NewComparatorWithConfig(".", cfg.Visual.Threshold, cfg.Visual.PixelDelta)
 		r.SetVisual(vc)
+	}
+
+	// Disable animations if requested (--disable-animations flag or probe.yaml)
+	disableAnimationsFlag, _ := cmd.Flags().GetBool("disable-animations")
+	if (disableAnimationsFlag || cfg.Defaults.DisableAnimations) && client != nil && !dryRun {
+		if err := client.SetTimeDilation(ctx, 0); err != nil {
+			fmt.Fprintf(statusW, "  ⚠  disable-animations: %v\n", err)
+		}
 	}
 
 	statusInfo(statusW, "Running %d test file(s)...", len(files))
@@ -1050,7 +1117,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	if !runner.AllPassed(results) {
-		os.Exit(1)
+		return errTestFailed
 	}
 	return nil
 }

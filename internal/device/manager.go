@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
 	"time"
@@ -200,15 +201,45 @@ func (m *Manager) EnsureIProxy(ctx context.Context, udid string, hostPort, devic
 		return nil, fmt.Errorf("iproxy start: %w", err)
 	}
 
-	// Give iproxy time to bind the port
-	time.Sleep(1 * time.Second)
-
 	cleanup = func() {
 		if cmd.Process != nil {
 			cmd.Process.Kill()
 		}
 	}
+
+	// Verify the tunnel is actually forwarding TCP. iproxy can be alive as a
+	// process while the tunnel is dead (USB stack stuck, port not yet bound,
+	// device disconnected mid-spawn). Probe the host port directly so a dead
+	// tunnel surfaces here rather than as a 30s WebSocket handshake timeout.
+	if err := waitIProxyReady(ctx, hostPort, 3*time.Second); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("iproxy tunnel not forwarding on 127.0.0.1:%d: %w", hostPort, err)
+	}
+
 	return cleanup, nil
+}
+
+// waitIProxyReady polls 127.0.0.1:port with short TCP connects until either a
+// connection succeeds or the deadline expires. It does not exchange any data;
+// the connect itself is the readiness signal.
+func waitIProxyReady(ctx context.Context, port int, total time.Duration) error {
+	deadline := time.Now().Add(total)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	for {
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s: %w", total, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // KillStaleIProxy kills all iproxy processes that match the given UDID.

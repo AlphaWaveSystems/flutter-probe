@@ -40,6 +40,7 @@ type Reporter struct {
 	verbose   bool
 	outputDir string // directory of the output file, used to relativize artifact paths
 	metadata  *RunMetadata
+	streaming bool // when true, StreamResult emits one JSON line per result as tests complete
 }
 
 // NewReporter creates a reporter writing to the given writer.
@@ -63,6 +64,57 @@ func NewFileReporter(format Format, path string, verbose bool) (*Reporter, error
 // SetMetadata attaches run metadata that will be included in JSON reports.
 func (r *Reporter) SetMetadata(m RunMetadata) {
 	r.metadata = &m
+}
+
+// SetStreaming enables newline-delimited JSON event emission during a run.
+// When true, callers can invoke StreamResult after each test completes to
+// emit a single JSON line on the reporter's output. The final Report() call
+// still writes the full report. Streaming is JSON-format only; calling this
+// with a non-JSON reporter is a no-op.
+func (r *Reporter) SetStreaming(on bool) {
+	r.streaming = on && r.format == FormatJSON
+}
+
+// StreamResult writes one newline-delimited JSON event for a completed test.
+// No-op unless streaming is enabled. Safe to call from a goroutine that owns
+// the result; the underlying writer is expected to be thread-safe (os.Stdout
+// and os.Stderr are; *os.File generally is for line-sized writes on POSIX).
+func (r *Reporter) StreamResult(res TestResult) {
+	if !r.streaming {
+		return
+	}
+	jr := jsonResult{
+		Name:       res.TestName,
+		File:       res.File,
+		Passed:     res.Passed,
+		Skipped:    res.Skipped,
+		Duration:   float64(res.Duration.Milliseconds()),
+		Row:        res.Row,
+		DeviceID:   res.DeviceID,
+		DeviceName: res.DeviceName,
+	}
+	for _, art := range res.Artifacts {
+		if r.outputDir != "" && filepath.IsAbs(art) {
+			if rel, err := filepath.Rel(r.outputDir, art); err == nil {
+				jr.Artifacts = append(jr.Artifacts, rel)
+				continue
+			}
+		}
+		jr.Artifacts = append(jr.Artifacts, art)
+	}
+	if res.Error != nil {
+		jr.Error = res.Error.Error()
+	}
+	evt := struct {
+		Type   string     `json:"type"`
+		Result jsonResult `json:"result"`
+	}{Type: "test_result", Result: jr}
+	// Manual encoding to ensure single-line output (no SetIndent).
+	b, err := json.Marshal(evt)
+	if err != nil {
+		return
+	}
+	_, _ = r.out.Write(append(b, '\n'))
 }
 
 // Report writes results to the output.

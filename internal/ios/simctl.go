@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -160,6 +161,16 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	if len(bundleID) > 0 && bundleID[0] != "" {
 		if containerPath := s.appContainerDataPath(tCtx, udid, bundleID[0]); containerPath != "" {
 			tokenPaths = append(tokenPaths, containerPath+"/tmp/probe/token")
+		}
+	}
+
+	// Secondary: glob ALL data containers for this simulator — handles the case
+	// where multiple installs exist and get_app_container returns a stale container
+	// that doesn't match the one the currently running app is writing to.
+	allContainerGlob := filepath.Join(s.simDataPath(udid), "Containers", "Data", "Application", "*", "tmp", "probe", "token")
+	if matches, err := filepath.Glob(allContainerGlob); err == nil {
+		for _, m := range matches {
+			tokenPaths = append(tokenPaths, m)
 		}
 	}
 
