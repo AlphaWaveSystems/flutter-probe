@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlutterProbe Studio</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <div class="brand">
+        <span class="brand-mark">FP</span>
+        <span class="brand-text">FlutterProbe Studio</span>
+        <span class="brand-tag">beta preview</span>
+      </div>
+      <div class="toolbar">
+        <button id="btn-run" class="btn btn-primary" disabled title="Run the open file">
+          <span class="btn-icon">▶</span><span class="btn-label">Run</span>
+        </button>
+        <button id="btn-save" class="btn" disabled title="Save (⌘S)">
+          <span class="btn-icon">💾</span><span class="btn-label">Save</span>
+        </button>
+        <span class="sep"></span>
+        <select id="device-picker" class="select" title="Select device"></select>
+        <button id="btn-refresh" class="btn btn-icon-only" title="Refresh devices">↻</button>
+        <button id="btn-connect" class="btn" disabled title="Connect to selected device">Connect</button>
+      </div>
+      <div class="status">
+        <span id="status-dot" class="status-dot status-disconnected"></span>
+        <span id="status-text" class="status-text">disconnected</span>
+      </div>
+    </header>
+
+    <main id="layout">
+      <aside id="files">
+        <div class="pane-title">
+          <span>Workspace</span>
+          <span class="pane-actions">
+            <button id="btn-pick-workspace" class="btn-mini" title="Open folder">📂</button>
+            <button id="btn-files-up" class="btn-mini" title="Up one directory">↑</button>
+            <button id="btn-files-refresh" class="btn-mini" title="Refresh">↻</button>
+          </span>
+        </div>
+        <div id="file-path" class="file-path"></div>
+        <ul id="file-list"></ul>
+      </aside>
+
+      <section id="editor-pane">
+        <div class="pane-title">
+          <span id="editor-filename">untitled.probe</span>
+          <span id="editor-dirty" class="dirty-marker"></span>
+        </div>
+        <div id="editor"></div>
+      </section>
+
+      <section id="device-pane">
+        <div class="pane-title">
+          <span>Device</span>
+          <span id="device-fps" class="fps-label"></span>
+        </div>
+        <div id="device-view">
+          <div class="placeholder">
+            <div class="placeholder-icon">📱</div>
+            <div>Connect a device to see a live screen.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="inspector-pane">
+        <div class="pane-title">
+          <span>Inspector</span>
+          <span id="inspector-status" class="dim"></span>
+        </div>
+        <pre id="inspector-content" class="dim">Connect to load the widget tree.</pre>
+      </section>
+
+      <section id="results-pane">
+        <div class="pane-title">
+          <span>Results</span>
+          <span id="results-summary" class="dim"></span>
+        </div>
+        <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
+      </section>
+    </main>
+
+    <div id="toast-container" aria-live="polite"></div>
+
+    <div id="help-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2>Keyboard shortcuts</h2>
+          <button id="btn-help-close" class="btn-mini" title="Close">✕</button>
+        </div>
+        <table class="shortcut-table">
+          <tbody>
+            <tr><td><kbd>⌘</kbd> <kbd>S</kbd></td><td>Save the open file</td></tr>
+            <tr><td><kbd>⌘</kbd> <kbd>R</kbd></td><td>Run the open file</td></tr>
+            <tr><td><kbd>⌘</kbd> <kbd>B</kbd></td><td>Connect / disconnect device</td></tr>
+            <tr><td><kbd>⌘</kbd> <kbd>P</kbd></td><td>Open workspace folder</td></tr>
+            <tr><td><kbd>⌘</kbd> <kbd>K</kbd></td><td>Refresh device list</td></tr>
+            <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close this help</td></tr>
+          </tbody>
+        </table>
+        <p class="overlay-foot">
+          On Windows / Linux, use <kbd>Ctrl</kbd> in place of <kbd>⌘</kbd>.
+        </p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
