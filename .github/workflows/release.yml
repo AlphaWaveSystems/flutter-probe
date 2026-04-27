@@ -199,6 +199,9 @@ jobs:
           echo "darwin_arm64=$(shasum -a 256 artifacts/probe-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "darwin_amd64=$(shasum -a 256 artifacts/probe-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_amd64=$(shasum -a 256 artifacts/probe-linux-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "mcp_darwin_arm64=$(shasum -a 256 artifacts/probe-mcp-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "mcp_darwin_amd64=$(shasum -a 256 artifacts/probe-mcp-darwin-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "mcp_linux_amd64=$(shasum -a 256 artifacts/probe-mcp-linux-amd64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Update formula in homebrew-tap
         env:
@@ -208,6 +211,9 @@ jobs:
           SHA_ARM64="${{ steps.sha.outputs.darwin_arm64 }}"
           SHA_AMD64="${{ steps.sha.outputs.darwin_amd64 }}"
           SHA_LINUX="${{ steps.sha.outputs.linux_amd64 }}"
+          MCP_SHA_ARM64="${{ steps.sha.outputs.mcp_darwin_arm64 }}"
+          MCP_SHA_AMD64="${{ steps.sha.outputs.mcp_darwin_amd64 }}"
+          MCP_SHA_LINUX="${{ steps.sha.outputs.mcp_linux_amd64 }}"
 
           git clone "https://x-access-token:${GH_TOKEN}@github.com/AlphaWaveSystems/homebrew-tap.git"
           cd homebrew-tap
@@ -217,11 +223,18 @@ jobs:
           # Update version
           sed -i "s/version \"[0-9.]*\"/version \"${VERSION}\"/" Formula/probe.rb
 
-          # Update SHA256s — find asset URL line, update the sha256 on the next line
-          awk -v arm64="$SHA_ARM64" -v amd64="$SHA_AMD64" -v linux="$SHA_LINUX" '
-            /probe-darwin-arm64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" arm64 "\""); print; next }
-            /probe-darwin-amd64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" amd64 "\""); print; next }
-            /probe-linux-amd64/  { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" linux "\""); print; next }
+          # Update SHA256s — find asset URL line, update the sha256 on the next line.
+          # The formula installs both the probe CLI and probe-mcp; each pair of
+          # asset URLs is followed by its own sha256 line on the next line.
+          awk \
+            -v arm64="$SHA_ARM64" -v amd64="$SHA_AMD64" -v linux="$SHA_LINUX" \
+            -v mcp_arm64="$MCP_SHA_ARM64" -v mcp_amd64="$MCP_SHA_AMD64" -v mcp_linux="$MCP_SHA_LINUX" '
+            /probe-mcp-darwin-arm64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" mcp_arm64 "\""); print; next }
+            /probe-mcp-darwin-amd64/ { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" mcp_amd64 "\""); print; next }
+            /probe-mcp-linux-amd64/  { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" mcp_linux "\""); print; next }
+            /probe-darwin-arm64/     { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" arm64 "\""); print; next }
+            /probe-darwin-amd64/     { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" amd64 "\""); print; next }
+            /probe-linux-amd64/      { print; getline; gsub(/sha256 "[a-f0-9]+"/, "sha256 \"" linux "\""); print; next }
             { print }
           ' Formula/probe.rb > Formula/probe.rb.tmp && mv Formula/probe.rb.tmp Formula/probe.rb
 

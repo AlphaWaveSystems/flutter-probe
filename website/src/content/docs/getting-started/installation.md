@@ -14,26 +14,28 @@ brew install probe
 
 ### Option B — Pre-built binary (all platforms, good for CI)
 
-Download the binary for your platform from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
+Each release ships three artifacts per OS / architecture: `probe` (CLI test runner, always required), `probe-mcp` (optional standalone MCP server for AI agents), and a Studio Beta Preview archive (optional desktop app). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
 
-| Platform | Binary |
-|---|---|
-| macOS (Apple Silicon) | `probe-darwin-arm64` |
-| macOS (Intel) | `probe-darwin-amd64` |
-| Linux (x86-64) | `probe-linux-amd64` |
-| Windows (x86-64) | `probe-windows-amd64.exe` |
+| Platform | CLI | MCP server |
+|---|---|---|
+| macOS (Apple Silicon) | `probe-darwin-arm64` | `probe-mcp-darwin-arm64` |
+| macOS (Intel) | `probe-darwin-amd64` | `probe-mcp-darwin-amd64` |
+| Linux (x86-64) | `probe-linux-amd64` | `probe-mcp-linux-amd64` |
+| Windows (x86-64) | `probe-windows-amd64.exe` | `probe-mcp-windows-amd64.exe` |
 
-Make the binary executable and place it on your `PATH`:
+Make the binaries executable and place them on your `PATH`:
 
 ```bash
-chmod +x probe-darwin-arm64
-mv probe-darwin-arm64 /usr/local/bin/probe
+chmod +x probe-darwin-arm64 probe-mcp-darwin-arm64
+mv probe-darwin-arm64     /usr/local/bin/probe
+mv probe-mcp-darwin-arm64 /usr/local/bin/probe-mcp
 ```
 
 ### Option C — `go install` (requires Go 1.26+)
 
 ```bash
 go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe-mcp@latest   # optional
 ```
 
 This is a good option for CI environments that already have Go set up.
@@ -43,6 +45,24 @@ Verify:
 ```bash
 probe version
 ```
+
+## Optional: Install Studio
+
+[FlutterProbe Studio](/tools/studio/) is a cross-platform desktop app for visual test authoring with an embedded device view. Download the archive for your platform from the GitHub Release:
+
+```bash
+# macOS — extract the .app bundle and move to Applications
+unzip flutter-probe-studio-0.6.0-darwin-arm64.zip
+mv flutter-probe-studio.app /Applications/
+
+# Linux — single binary
+tar xzf flutter-probe-studio-0.6.0-linux-amd64.tar.gz
+mv flutter-probe-studio /usr/local/bin/
+
+# Windows — unzip and double-click the .exe
+```
+
+Studio is **Beta Preview** in v0.6.0 — production-ready for editor + lint workflows but expect rough edges around physical device support and parallel multi-device authoring.
 
 ## Step 2: Add the Agent to Your App
 
