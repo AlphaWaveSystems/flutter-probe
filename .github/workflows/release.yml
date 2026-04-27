@@ -68,10 +68,6 @@ jobs:
           - os: darwin
             arch: arm64
             runner: macos-latest
-          - os: darwin
-            arch: amd64
-            runner: macos-13
-            continue-on-error: true
           - os: windows
             arch: amd64
             runner: windows-latest
@@ -79,7 +75,6 @@ jobs:
             arch: amd64
             runner: ubuntu-latest
     runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ matrix.continue-on-error == true }}
     steps:
       - uses: actions/checkout@v6
 
