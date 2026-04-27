@@ -169,9 +169,7 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	// that doesn't match the one the currently running app is writing to.
 	allContainerGlob := filepath.Join(s.simDataPath(udid), "Containers", "Data", "Application", "*", "tmp", "probe", "token")
 	if matches, err := filepath.Glob(allContainerGlob); err == nil {
-		for _, m := range matches {
-			tokenPaths = append(tokenPaths, m)
-		}
+		tokenPaths = append(tokenPaths, matches...)
 	}
 
 	// Fallback: device-level tmp (legacy path)
