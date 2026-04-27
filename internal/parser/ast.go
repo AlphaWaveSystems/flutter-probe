@@ -5,11 +5,12 @@ package parser
 type SelectorKind int
 
 const (
-	SelectorText     SelectorKind = iota // "visible text"
-	SelectorID                           // #key_name
-	SelectorType                         // widget type name
-	SelectorOrdinal                      // 1st "text", 3rd item in "List"
-	SelectorPositional                   // "text" in "container"
+	SelectorText       SelectorKind = iota // "visible text"
+	SelectorID                             // #key_name
+	SelectorType                           // widget type name
+	SelectorOrdinal                        // 1st "text", 3rd item in "List"
+	SelectorPositional                     // "text" in "container"
+	SelectorRelational                     // "text" below/above/left of/right of "anchor"
 )
 
 // Selector describes how to locate a widget.
@@ -18,6 +19,8 @@ type Selector struct {
 	Text      string // text / id / type name
 	Ordinal   int    // used with SelectorOrdinal
 	Container string // used with SelectorPositional
+	Relation  string // used with SelectorRelational: below | above | left_of | right_of
+	Anchor    string // used with SelectorRelational: anchor element text
 }
 
 // ---- Target for wait/assertion state checks ----
@@ -30,6 +33,7 @@ const (
 	StateDisabled
 	StateChecked
 	StateContains // contains "text"
+	StateFocused  // has keyboard focus
 )
 
 // ---- Node interface ----
@@ -159,6 +163,8 @@ const (
 	VerbPasteClipboard  ActionVerb = "paste_clipboard"
 	VerbSetLocation     ActionVerb = "set_location"
 	VerbVerifyBrowser   ActionVerb = "verify_browser"
+	VerbOpenLink        ActionVerb = "open_link"   // open link "url"
+	VerbStore           ActionVerb = "store"        // store "value" as varName
 )
 
 type SwipeDirection string
@@ -212,6 +218,7 @@ const (
 	WaitPageLoad                   // wait for page to load
 	WaitNetworkIdle                // wait until network is idle
 	WaitSelector                   // wait until #id disappears/appears
+	WaitAnimations                 // wait for animations to end
 )
 
 type WaitStep struct {

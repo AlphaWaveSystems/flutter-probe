@@ -36,4 +36,7 @@ type ProbeClient interface {
 	PasteFromClipboard(ctx context.Context) (string, error)
 	VerifyBrowser(ctx context.Context) error
 	SetNextToken(ctx context.Context, token string) error
+	OpenLink(ctx context.Context, url string) error
+	SetTimeDilation(ctx context.Context, factor float64) error
+	DrainOutput(ctx context.Context) (map[string]string, error)
 }

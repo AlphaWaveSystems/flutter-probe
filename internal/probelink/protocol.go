@@ -111,10 +111,12 @@ type OpenParams struct {
 
 // SelectorParam describes a widget locator.
 type SelectorParam struct {
-	Kind      string `json:"kind"`               // text | id | type | ordinal | positional
+	Kind      string `json:"kind"`               // text | id | type | ordinal | positional | relational
 	Text      string `json:"text,omitempty"`
 	Ordinal   int    `json:"ordinal,omitempty"`
 	Container string `json:"container,omitempty"`
+	Relation  string `json:"relation,omitempty"` // below | above | left_of | right_of
+	Anchor    string `json:"anchor,omitempty"`   // anchor element text for relational selectors
 }
 
 // ScreenshotResult is returned by the take_screenshot command.
@@ -185,10 +187,16 @@ const (
 	MethodVerifyBrowser  = "probe.verify_browser"
 
 	// Token management
-	MethodSetNextToken   = "probe.set_next_token"
+	MethodSetNextToken = "probe.set_next_token"
+
+	// New commands (v0.5.7)
+	MethodOpenLink      = "probe.open_link"
+	MethodSetTimeDilation = "probe.set_time_dilation"
+	MethodSetOutput     = "probe.set_output"
+	MethodDrainOutput   = "probe.drain_output"
 
 	// Notification methods (agent → CLI, no response expected)
 	NotifyRecordedEvent = "probe.recorded_event"
 	NotifyExecDart      = "probe.exec_dart"
-	NotifyRestartApp     = "probe.restart_app"
+	NotifyRestartApp    = "probe.restart_app"
 )

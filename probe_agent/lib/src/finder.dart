@@ -15,6 +15,8 @@ class ProbeFinder {
     final text = sel['text'] as String? ?? '';
     final ordinal = (sel['ordinal'] as num?)?.toInt() ?? 1;
     final container = sel['container'] as String? ?? '';
+    final relation = sel['relation'] as String? ?? '';
+    final anchor = sel['anchor'] as String? ?? '';
 
     List<Element> raw;
     switch (kind) {
@@ -51,11 +53,43 @@ class ProbeFinder {
         }
         raw = _findByText(text);
 
+      case 'relational':
+        return _findRelational(text, relation, anchor);
+
       default:
         raw = _findByText(text);
     }
     // Filter to only visible elements
     return raw.where(_isVisible).toList();
+  }
+
+  /// Finds elements matching [text] that are spatially positioned relative
+  /// to the [anchor] element according to [relation] (below/above/left_of/right_of).
+  List<Element> _findRelational(String text, String relation, String anchor) {
+    final anchors = _findByText(anchor).where(_isVisible).toList();
+    if (anchors.isEmpty) return [];
+    final anchorBox = anchors.first.renderObject;
+    if (anchorBox is! RenderBox) return [];
+    final anchorPos = anchorBox.localToGlobal(anchorBox.size.center(Offset.zero));
+
+    final candidates = _findByText(text).where(_isVisible).toList();
+    return candidates.where((e) {
+      final ro = e.renderObject;
+      if (ro is! RenderBox) return false;
+      final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+      switch (relation) {
+        case 'below':
+          return pos.dy > anchorPos.dy;
+        case 'above':
+          return pos.dy < anchorPos.dy;
+        case 'left_of':
+          return pos.dx < anchorPos.dx;
+        case 'right_of':
+          return pos.dx > anchorPos.dx;
+        default:
+          return false;
+      }
+    }).toList();
   }
 
   List<Element> _findByText(String text) {
