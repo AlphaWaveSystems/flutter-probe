@@ -17,15 +17,17 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 
 ## Project Status
 
-FlutterProbe is in active development. Current version: **0.5.6**.
+FlutterProbe is in active development. Current version: **0.6.0**.
 
 ### Repository Structure
 
 | Directory | Description |
 |---|---|
 | `cmd/probe/` | CLI entry point |
-| `internal/` | Go packages (parser, runner, probelink, device, ios, cloud, ai, etc.) |
+| `cmd/probe-mcp/` | Standalone MCP server binary |
+| `internal/` | Go packages (parser, runner, probelink, device, ios, cloud, ai, mcp, etc.) |
 | `probe_agent/` | Dart package that runs on-device |
+| `studio/` | FlutterProbe Studio — Wails desktop app (beta preview) |
 | `tools/probe-convert/` | Multi-format test converter |
 | `website/` | Documentation site (Starlight/Astro) |
 | `tests/` | E2E test suites and health checks |
