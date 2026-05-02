@@ -115,14 +115,27 @@ studio/
 - Editor pane with Monaco + ProbeScript syntax highlighting
 - Device pane with ~10 FPS screenshot stream (via existing
   `take_screenshot` RPC — works on iOS sim, Android emu, physical iOS
-  over WiFi, physical Android with zero new agent code)
+  over USB, physical Android over USB with zero new agent code)
 - Tap forwarding (click in pane → coord translation → existing `tap_at`
   RPC)
 - Lint markers (live, on every edit)
 - "Run all" button → results timeline driven by in-process runner
 
+## Supported connections
+
+| Target | Transport | Notes |
+|---|---|---|
+| iOS Simulator | local | Token from simctl filesystem; no tunnel |
+| Android Emulator | adb forward | Token from cache, /data/local/tmp, or logcat |
+| Physical iOS (USB) | iproxy tunnel | Requires `brew install libimobiledevice`; token via idevicesyslog |
+| Physical Android (USB) | adb forward | Same path as emulator |
+| Physical iOS (WiFi) | direct | Coming via mDNS auto-discovery in a follow-up |
+| Physical Android (WiFi) | direct | Coming via mDNS auto-discovery in a follow-up |
+
 ## Deferred to v0.7.x
 
+- WiFi-attached physical devices (mDNS auto-discovery — needs an agent
+  package update)
 - Native scrcpy embed (Android, 60 FPS)
 - `simctl io recordVideo` H.264 stream (iOS sim, 60 FPS)
 - Multi-device side-by-side

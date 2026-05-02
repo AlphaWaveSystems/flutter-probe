@@ -327,6 +327,7 @@ type DeviceInfo = {
   id: string;
   name: string;
   platform: string;
+  kind: string; // "simulator" | "emulator" | "physical"
   state: string;
   osVersion: string;
   booted: boolean;
@@ -348,9 +349,10 @@ async function refreshDevices() {
       (a, b) => Number(b.booted) - Number(a.booted) || a.name.localeCompare(b.name)
     );
     for (const d of sorted) {
+      const tag = d.kind === "physical" ? "physical" : d.platform;
       const label = d.booted
-        ? `${d.name}  ·  ${d.platform}`
-        : `${d.name}  ·  ${d.platform}  · shutdown`;
+        ? `${d.name}  ·  ${tag}`
+        : `${d.name}  ·  ${tag}  · shutdown`;
       const opt = makeOption(d.id, label);
       if (!d.booted) opt.dataset.booted = "false";
       select.appendChild(opt);
