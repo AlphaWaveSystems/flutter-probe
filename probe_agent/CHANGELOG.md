@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 - 2026-05-02
+
+- **mDNS auto-discovery** — when running in WiFi mode (`PROBE_WIFI=true`), the
+  agent now advertises itself over Bonjour/NSD as `_flutterprobe._tcp` so
+  Studio (and any compatible client) can discover physical devices on the LAN
+  without manual IP entry. The token is deliberately NOT included in TXT
+  records — anyone on the same network would be able to read it. The agent
+  still prints `PROBE_TOKEN=...` to logs as before.
+- New dependency: `bonsoir: ^5.1.10`. Localhost-only deployments (no
+  `PROBE_WIFI`) skip mDNS bring-up entirely so apps that only test on
+  simulators pay zero overhead.
+
 ## 0.6.0 - 2026-04-26
 
 - Version bump to keep in sync with CLI v0.6.0

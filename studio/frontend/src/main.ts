@@ -7,6 +7,7 @@ import { toast } from "./toast";
 
 import {
   Connect,
+  ConnectWiFi,
   Disconnect,
   Lint,
   ListDevices,
@@ -14,7 +15,9 @@ import {
   PickWorkspace,
   ReadFile,
   RunFile,
+  StartWiFiDiscovery,
   Status,
+  StopWiFiDiscovery,
   WriteFile,
 } from "../wailsjs/go/main/App";
 import { EventsOn } from "../wailsjs/runtime/runtime";
@@ -300,6 +303,90 @@ $("btn-help-close").addEventListener("click", closeHelpOverlay);
 $("help-overlay").addEventListener("click", (e) => {
   // Click outside the card dismisses.
   if ((e.target as HTMLElement).id === "help-overlay") closeHelpOverlay();
+});
+
+// ---- WiFi discovery overlay --------------------------------------------
+
+type WiFiDevice = { name: string; host: string; port: number; version: string };
+
+let wifiSelected: WiFiDevice | null = null;
+const wifiSeen = new Map<string, WiFiDevice>();
+
+function openWiFiOverlay() {
+  wifiSelected = null;
+  wifiSeen.clear();
+  const list = $("wifi-devices");
+  clearChildren(list);
+  const empty = document.createElement("li");
+  empty.className = "empty";
+  empty.textContent = "Searching…";
+  list.appendChild(empty);
+  ($("wifi-token-row") as HTMLElement).hidden = true;
+  ($("wifi-token-input") as HTMLInputElement).value = "";
+  $("wifi-overlay").hidden = false;
+  StartWiFiDiscovery().catch((err) => toast(`mDNS browse failed: ${err}`, "error"));
+}
+
+function closeWiFiOverlay() {
+  $("wifi-overlay").hidden = true;
+  StopWiFiDiscovery();
+}
+
+function selectWiFiDevice(dev: WiFiDevice) {
+  wifiSelected = dev;
+  for (const li of Array.from($("wifi-devices").children) as HTMLElement[]) {
+    li.classList.toggle("selected", li.dataset.key === `${dev.host}:${dev.port}`);
+  }
+  $("wifi-selected-label").textContent = `Connecting to ${dev.name} (${dev.host}:${dev.port})`;
+  ($("wifi-token-row") as HTMLElement).hidden = false;
+  ($("wifi-token-input") as HTMLInputElement).focus();
+}
+
+EventsOn("wifi:device-found", (dev: WiFiDevice) => {
+  const key = `${dev.host}:${dev.port}`;
+  if (wifiSeen.has(key)) return;
+  wifiSeen.set(key, dev);
+  const list = $("wifi-devices");
+  // Drop the "Searching…" placeholder once we have at least one entry.
+  const placeholder = list.querySelector("li.empty");
+  if (placeholder) placeholder.remove();
+  const li = document.createElement("li");
+  li.dataset.key = key;
+  // Use DOM construction (not innerHTML) to keep agent-controlled strings
+  // out of the HTML parser.
+  const nameEl = document.createElement("strong");
+  nameEl.textContent = dev.name;
+  const hostEl = document.createElement("span");
+  hostEl.className = "wifi-host";
+  hostEl.textContent = `${dev.host}:${dev.port}${dev.version ? ` · v${dev.version}` : ""}`;
+  li.append(nameEl, hostEl);
+  li.addEventListener("click", () => selectWiFiDevice(dev));
+  list.appendChild(li);
+});
+
+$("btn-wifi").addEventListener("click", openWiFiOverlay);
+$("btn-wifi-close").addEventListener("click", closeWiFiOverlay);
+$("wifi-overlay").addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).id === "wifi-overlay") closeWiFiOverlay();
+});
+
+$("btn-wifi-connect").addEventListener("click", async () => {
+  if (!wifiSelected) return;
+  const token = ($("wifi-token-input") as HTMLInputElement).value.trim();
+  if (!token) {
+    toast("Token is required.", "error");
+    return;
+  }
+  setStatus("connecting", `Connecting to ${wifiSelected.host}…`);
+  try {
+    await ConnectWiFi(wifiSelected.host, wifiSelected.port, token);
+    setStatus("connected", `Connected · ${wifiSelected.name}`);
+    closeWiFiOverlay();
+    startStream();
+  } catch (err) {
+    setStatus("error", `WiFi connect failed: ${err}`);
+    toast(`Connect failed: ${err}`, "error");
+  }
 });
 
 // ---- Connection ---------------------------------------------------------

@@ -6,6 +6,10 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
+export function ConnectWiFi(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ConnectWiFi'](arg1, arg2, arg3);
+}
+
 export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }
@@ -38,8 +42,16 @@ export function RunFile(arg1) {
   return window['go']['main']['App']['RunFile'](arg1);
 }
 
+export function StartWiFiDiscovery() {
+  return window['go']['main']['App']['StartWiFiDiscovery']();
+}
+
 export function Status() {
   return window['go']['main']['App']['Status']();
+}
+
+export function StopWiFiDiscovery() {
+  return window['go']['main']['App']['StopWiFiDiscovery']();
 }
 
 export function TakeScreenshot() {

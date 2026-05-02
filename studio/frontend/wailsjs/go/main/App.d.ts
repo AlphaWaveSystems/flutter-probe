@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function Connect(arg1:string):Promise<main.ConnectionStatus>;
 
+export function ConnectWiFi(arg1:string,arg2:number,arg3:string):Promise<main.ConnectionStatus>;
+
 export function Disconnect():Promise<void>;
 
 export function GetWidgetTree():Promise<string>;
@@ -20,7 +22,11 @@ export function ReadFile(arg1:string):Promise<string>;
 
 export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
 
+export function StartWiFiDiscovery():Promise<void>;
+
 export function Status():Promise<main.ConnectionStatus>;
+
+export function StopWiFiDiscovery():Promise<void>;
 
 export function TakeScreenshot():Promise<string>;
 

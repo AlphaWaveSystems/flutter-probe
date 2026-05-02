@@ -115,7 +115,7 @@ studio/
 - Editor pane with Monaco + ProbeScript syntax highlighting
 - Device pane with ~10 FPS screenshot stream (via existing
   `take_screenshot` RPC — works on iOS sim, Android emu, physical iOS
-  over USB, physical Android over USB with zero new agent code)
+  over USB or WiFi, physical Android over USB or WiFi)
 - Tap forwarding (click in pane → coord translation → existing `tap_at`
   RPC)
 - Lint markers (live, on every edit)
@@ -129,13 +129,15 @@ studio/
 | Android Emulator | adb forward | Token from cache, /data/local/tmp, or logcat |
 | Physical iOS (USB) | iproxy tunnel | Requires `brew install libimobiledevice`; token via idevicesyslog |
 | Physical Android (USB) | adb forward | Same path as emulator |
-| Physical iOS (WiFi) | direct | Coming via mDNS auto-discovery in a follow-up |
-| Physical Android (WiFi) | direct | Coming via mDNS auto-discovery in a follow-up |
+| Physical iOS (WiFi) | direct | Auto-discovered via mDNS; user pastes token from app logs |
+| Physical Android (WiFi) | direct | Auto-discovered via mDNS; user pastes token from app logs |
+
+WiFi discovery requires `flutter_probe_agent` v0.7.0+ in your Flutter
+app's pubspec, and the app must run with `--dart-define=PROBE_WIFI=true`
+so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 
 ## Deferred to v0.7.x
 
-- WiFi-attached physical devices (mDNS auto-discovery — needs an agent
-  package update)
 - Native scrcpy embed (Android, 60 FPS)
 - `simctl io recordVideo` H.264 stream (iOS sim, 60 FPS)
 - Multi-device side-by-side

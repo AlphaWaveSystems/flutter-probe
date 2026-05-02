@@ -359,6 +359,33 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .shortcut-table td { padding: 5px 0; vertical-align: top; }
 .shortcut-table td:first-child { width: 40%; color: var(--fg-dim); }
 .overlay-foot { font-size: 11px; color: var(--fg-muted); margin: 12px 0 0; }
+
+/* WiFi discovery modal */
+.wifi-device-list {
+  list-style: none; margin: 8px 0; padding: 0;
+  max-height: 200px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.wifi-device-list li {
+  padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.wifi-device-list li:last-child { border-bottom: none; }
+.wifi-device-list li:hover { background: var(--bg-1); }
+.wifi-device-list li.selected { background: var(--border-strong); color: var(--fg-strong); }
+.wifi-device-list li.empty { color: var(--fg-muted); cursor: default; }
+.wifi-device-list li.empty:hover { background: transparent; }
+.wifi-device-list .wifi-host { color: var(--fg-dim); font-size: 11px; margin-left: 8px; }
+.wifi-selected { font-size: 12px; color: var(--fg-dim); margin: 4px 0 8px; }
+#wifi-token-input {
+  width: 100%; padding: 6px 10px; box-sizing: border-box;
+  background: var(--bg-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); color: var(--fg-strong);
+  font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 12px;
+  margin-top: 6px;
+}
+.wifi-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 kbd {
   display: inline-block;
   padding: 1px 6px;
