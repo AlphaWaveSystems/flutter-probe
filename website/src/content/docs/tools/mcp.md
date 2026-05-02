@@ -9,6 +9,18 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 
 ## What the MCP server exposes
 
+### Device lifecycle
+
+| Tool | Description |
+|---|---|
+| `list_devices` | List booted/connected simulators, emulators, and physical devices (id, name, platform, state, OS version) |
+| `list_simulators` | List all iOS simulators (booted + shutdown) so the agent can pick one to boot |
+| `list_avds` | List Android Virtual Device names available to launch |
+| `start_device` | Boot an Android emulator (by AVD name) or iOS simulator (by UDID) |
+| `shutdown_device` | Shut down an iOS simulator by UDID |
+
+### Test authoring & execution
+
 | Tool | Description |
 |---|---|
 | `get_widget_tree` | Dump the live Flutter widget tree from the running app |
@@ -22,7 +34,9 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `get_report` | Read the latest JSON test run report |
 | `generate_test` | AI-generate a test from a natural language prompt |
 
-The workflow this enables: `get_widget_tree` → `write_test` → `run_tests` → `get_report` — a complete AI-driven test authoring loop.
+`get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) so the agent can pin a specific target when more than one device is connected.
+
+The workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` — a complete AI-driven test authoring loop, including device bring-up.
 
 ## Requirements
 
@@ -194,6 +208,18 @@ Claude will:
 3. Call `write_test` to create `tests/login.probe`
 4. Call `run_tests` to execute it
 5. Call `get_report` to verify all steps passed
+
+### Device bring-up from chat
+
+You can also let Claude pick and start a simulator before the app is running:
+
+> "Boot an iOS simulator and run the smoke tests on it."
+
+Claude will:
+1. Call `list_simulators` to discover available UDIDs
+2. Call `start_device` with `{platform: "ios", udid: "<chosen>"}`
+3. Call `list_devices` to confirm it came online
+4. Call `run_tests` with `{tag: "smoke", device: "<udid>"}` to pin the run to the just-booted sim
 
 ## Troubleshooting
 

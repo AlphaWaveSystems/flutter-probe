@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 )
 
 // Version is reported in the MCP `initialize` response. Override at startup
@@ -86,11 +91,57 @@ type mcpProp struct {
 }
 
 var tools = []mcpTool{
+	// ---- Device lifecycle ----
+	{
+		Name:        "list_devices",
+		Description: "List all connected/booted simulators, emulators, and physical devices. Returns JSON array with id, name, platform (android|ios), state, and OS version. Use this before run_tests to discover which device id to target.",
+		InputSchema: mcpSchema{Type: "object"},
+	},
+	{
+		Name:        "list_simulators",
+		Description: "List all iOS simulators (booted AND shutdown). Use this to discover a UDID you can pass to start_device. Returns JSON array with udid, name, runtime, and state.",
+		InputSchema: mcpSchema{Type: "object"},
+	},
+	{
+		Name:        "list_avds",
+		Description: "List Android Virtual Device (AVD) names available on the host. Use the returned name with start_device to boot an Android emulator.",
+		InputSchema: mcpSchema{Type: "object"},
+	},
+	{
+		Name:        "start_device",
+		Description: "Boot an Android emulator (by AVD name) or iOS simulator (by UDID). Blocks until the device is online. Returns the booted device's id, name, platform, and state.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"platform"},
+			Properties: map[string]mcpProp{
+				"platform": {Type: "string", Description: "Target platform: android or ios"},
+				"avd":      {Type: "string", Description: "Android AVD name (required for android; use list_avds to discover)"},
+				"udid":     {Type: "string", Description: "iOS simulator UDID (optional for ios; auto-selects if omitted)"},
+				"timeout":  {Type: "string", Description: "Boot timeout as a Go duration, e.g. 90s (default 120s)"},
+			},
+		},
+	},
+	{
+		Name:        "shutdown_device",
+		Description: "Shut down an iOS simulator by UDID. Android emulator shutdown is not supported by this tool yet.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"udid"},
+			Properties: map[string]mcpProp{
+				"udid": {Type: "string", Description: "iOS simulator UDID to shut down"},
+			},
+		},
+	},
 	// ---- High value ----
 	{
 		Name:        "get_widget_tree",
 		Description: "Dump the live widget tree from the running Flutter app. Use this to understand the UI structure and discover correct selectors before writing tests.",
-		InputSchema: mcpSchema{Type: "object"},
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"device": {Type: "string", Description: "Target device id (serial or UDID; default: first available)"},
+			},
+		},
 	},
 	{
 		Name:        "read_test",
@@ -124,6 +175,7 @@ var tools = []mcpTool{
 			Properties: map[string]mcpProp{
 				"script": {Type: "string", Description: "Full ProbeScript content to run (e.g. 'test \"check\"\n  see \"Welcome\"')"},
 				"flags":  {Type: "string", Description: "Extra probe test flags (e.g. --timeout 10s)"},
+				"device": {Type: "string", Description: "Target device id (serial or UDID; default: first available)"},
 			},
 		},
 	},
@@ -157,9 +209,10 @@ var tools = []mcpTool{
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
-				"paths": {Type: "string", Description: "Space-separated list of .probe file paths or directories (default: tests/)"},
-				"tag":   {Type: "string", Description: "Only run tests with this tag (e.g. smoke)"},
-				"flags": {Type: "string", Description: "Additional probe test flags (e.g. --dry-run --format json)"},
+				"paths":  {Type: "string", Description: "Space-separated list of .probe file paths or directories (default: tests/)"},
+				"tag":    {Type: "string", Description: "Only run tests with this tag (e.g. smoke)"},
+				"flags":  {Type: "string", Description: "Additional probe test flags (e.g. --dry-run --format json)"},
+				"device": {Type: "string", Description: "Target device id (serial or UDID; default: first available)"},
 			},
 		},
 	},
@@ -189,7 +242,8 @@ var tools = []mcpTool{
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
-				"name": {Type: "string", Description: "Screenshot name (default: mcp_capture)"},
+				"name":   {Type: "string", Description: "Screenshot name (default: mcp_capture)"},
+				"device": {Type: "string", Description: "Target device id (serial or UDID; default: first available)"},
 			},
 		},
 	},
@@ -254,8 +308,23 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 	}
 
 	switch params.Name {
+	case "list_devices":
+		return s.listDevices(req.ID)
+
+	case "list_simulators":
+		return s.listSimulators(req.ID)
+
+	case "list_avds":
+		return s.listAVDs(req.ID)
+
+	case "start_device":
+		return s.startDevice(req.ID, params.Arguments)
+
+	case "shutdown_device":
+		return s.shutdownDevice(req.ID, args["udid"])
+
 	case "get_widget_tree":
-		return s.getWidgetTree(req.ID)
+		return s.getWidgetTree(req.ID, args["device"])
 
 	case "read_test":
 		return s.readTest(req.ID, args["path"])
@@ -264,7 +333,7 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.writeTest(req.ID, args["path"], args["content"])
 
 	case "run_script":
-		return s.runScript(req.ID, args["script"], args["flags"])
+		return s.runScript(req.ID, args["script"], args["flags"], args["device"])
 
 	case "get_report":
 		return s.getReport(req.ID, args["path"])
@@ -273,19 +342,19 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.generateTest(req.ID, args["prompt"], args["output"])
 
 	case "run_tests":
-		out, err := s.runProbe("test", args["paths"], args["tag"], args["flags"])
+		out, err := s.runProbe("test", args["paths"], args["tag"], args["flags"], args["device"])
 		return textResp(req.ID, out, err)
 
 	case "list_files":
-		out, err := s.runProbe("lint", args["path"], "", "--list")
+		out, err := s.runProbe("lint", args["path"], "", "--list", "")
 		return textResp(req.ID, out, err)
 
 	case "lint":
-		out, err := s.runProbe("lint", args["paths"], "", "")
+		out, err := s.runProbe("lint", args["paths"], "", "", "")
 		return textResp(req.ID, out, err)
 
 	case "take_screenshot":
-		return s.takeScreenshot(req.ID, args["name"])
+		return s.takeScreenshot(req.ID, args["name"], args["device"])
 
 	default:
 		return errResp(req.ID, -32602, "Unknown tool: "+params.Name)
@@ -294,9 +363,9 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 
 // ---- Tool implementations ----
 
-func (s *Server) getWidgetTree(id any) *mcpResponse {
+func (s *Server) getWidgetTree(id any, deviceID string) *mcpResponse {
 	script := "test \"mcp_widget_tree\"\n  dump widget tree\n"
-	out, err := s.runInlineScript(script, "")
+	out, err := s.runInlineScript(script, "", deviceID)
 	if err != nil {
 		return textResp(id, out, err)
 	}
@@ -344,11 +413,11 @@ func (s *Server) writeTest(id any, path, content string) *mcpResponse {
 	}}
 }
 
-func (s *Server) runScript(id any, script, flags string) *mcpResponse {
+func (s *Server) runScript(id any, script, flags, deviceID string) *mcpResponse {
 	if script == "" {
 		return errResp(id, -32602, "script is required")
 	}
-	out, err := s.runInlineScript(script, flags)
+	out, err := s.runInlineScript(script, flags, deviceID)
 	return textResp(id, out, err)
 }
 
@@ -385,12 +454,12 @@ func (s *Server) generateTest(id any, prompt, output string) *mcpResponse {
 	return textResp(id, string(out), err)
 }
 
-func (s *Server) takeScreenshot(id any, name string) *mcpResponse {
+func (s *Server) takeScreenshot(id any, name, deviceID string) *mcpResponse {
 	if name == "" {
 		name = "mcp_capture"
 	}
 	script := fmt.Sprintf("test \"mcp screenshot\"\n  take screenshot \"%s\"\n", name)
-	cmdOut, _ := s.runInlineScript(script, "")
+	cmdOut, _ := s.runInlineScript(script, "", deviceID)
 
 	pattern := filepath.Join("reports", "screenshots", name+"_*.png")
 	matches, err := filepath.Glob(pattern)
@@ -418,9 +487,152 @@ func (s *Server) takeScreenshot(id any, name string) *mcpResponse {
 	}
 }
 
+// ---- Device lifecycle ----
+
+// deviceManager is the function used to construct the device manager. Tests
+// override it to inject fakes.
+var deviceManager func() devManager = func() devManager { return device.NewManager() }
+
+// devManager is the subset of device.Manager that the MCP server uses.
+// Defined as an interface so tests can substitute fakes without spinning
+// up real adb/simctl.
+type devManager interface {
+	List(ctx context.Context) ([]device.Device, error)
+	Start(ctx context.Context, avdName string, bootTimeout, pollInterval time.Duration) (*device.Device, error)
+	StartIOS(ctx context.Context, udid string) (*device.Device, error)
+	SimCtl() *ios.SimCtl
+	ADB() *device.ADB
+}
+
+func (s *Server) listDevices(id any) *mcpResponse {
+	ctx := context.Background()
+	dm := deviceManager()
+	devices, err := dm.List(ctx)
+	if err != nil {
+		return textResp(id, "list devices: "+err.Error(), err)
+	}
+	type entry struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Platform  string `json:"platform"`
+		State     string `json:"state"`
+		OSVersion string `json:"osVersion,omitempty"`
+	}
+	out := make([]entry, 0, len(devices))
+	for _, d := range devices {
+		out = append(out, entry{
+			ID:        d.ID,
+			Name:      d.Name,
+			Platform:  string(d.Platform),
+			State:     d.State,
+			OSVersion: d.OSVersion,
+		})
+	}
+	return jsonResp(id, out)
+}
+
+func (s *Server) listSimulators(id any) *mcpResponse {
+	ctx := context.Background()
+	sims, err := deviceManager().SimCtl().List(ctx)
+	if err != nil {
+		return textResp(id, "list simulators: "+err.Error(), err)
+	}
+	type entry struct {
+		UDID    string `json:"udid"`
+		Name    string `json:"name"`
+		Runtime string `json:"runtime"`
+		State   string `json:"state"`
+	}
+	out := make([]entry, 0, len(sims))
+	for _, sim := range sims {
+		out = append(out, entry{
+			UDID:    sim.UDID,
+			Name:    sim.Name,
+			Runtime: sim.HumanRuntime(),
+			State:   sim.State,
+		})
+	}
+	return jsonResp(id, out)
+}
+
+func (s *Server) listAVDs(id any) *mcpResponse {
+	ctx := context.Background()
+	avds, err := deviceManager().ADB().ListAVDs(ctx)
+	if err != nil {
+		return textResp(id, "list avds: "+err.Error(), err)
+	}
+	if avds == nil {
+		avds = []string{}
+	}
+	return jsonResp(id, avds)
+}
+
+func (s *Server) startDevice(id any, raw json.RawMessage) *mcpResponse {
+	var args struct {
+		Platform string `json:"platform"`
+		AVD      string `json:"avd"`
+		UDID     string `json:"udid"`
+		Timeout  string `json:"timeout"`
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return errResp(id, -32602, "invalid arguments: "+err.Error())
+		}
+	}
+	platform := strings.ToLower(args.Platform)
+	if platform != "android" && platform != "ios" {
+		return errResp(id, -32602, "platform must be \"android\" or \"ios\"")
+	}
+
+	timeout := 120 * time.Second
+	if args.Timeout != "" {
+		d, err := time.ParseDuration(args.Timeout)
+		if err != nil {
+			return errResp(id, -32602, "invalid timeout: "+err.Error())
+		}
+		timeout = d
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	dm := deviceManager()
+	var booted *device.Device
+	var err error
+	switch platform {
+	case "android":
+		if args.AVD == "" {
+			return errResp(id, -32602, "avd is required for android (use list_avds)")
+		}
+		booted, err = dm.Start(ctx, args.AVD, timeout, 0)
+	case "ios":
+		booted, err = dm.StartIOS(ctx, args.UDID)
+	}
+	if err != nil {
+		return textResp(id, "start device: "+err.Error(), err)
+	}
+	return jsonResp(id, map[string]any{
+		"id":       booted.ID,
+		"name":     booted.Name,
+		"platform": string(booted.Platform),
+		"state":    booted.State,
+	})
+}
+
+func (s *Server) shutdownDevice(id any, udid string) *mcpResponse {
+	if udid == "" {
+		return errResp(id, -32602, "udid is required")
+	}
+	ctx := context.Background()
+	if err := deviceManager().SimCtl().Shutdown(ctx, udid); err != nil {
+		return textResp(id, "shutdown: "+err.Error(), err)
+	}
+	return jsonResp(id, map[string]any{"ok": true, "udid": udid})
+}
+
 // ---- Helpers ----
 
-func (s *Server) runProbe(subcommand, paths, tag, extra string) (string, error) {
+func (s *Server) runProbe(subcommand, paths, tag, extra, deviceID string) (string, error) {
 	cmdArgs := []string{subcommand}
 	if paths != "" {
 		cmdArgs = append(cmdArgs, strings.Fields(paths)...)
@@ -431,13 +643,16 @@ func (s *Server) runProbe(subcommand, paths, tag, extra string) (string, error) 
 	if extra != "" {
 		cmdArgs = append(cmdArgs, strings.Fields(extra)...)
 	}
+	if deviceID != "" {
+		cmdArgs = append(cmdArgs, "--device", deviceID)
+	}
 	cmd := exec.Command(probeBin(), cmdArgs...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
-func (s *Server) runInlineScript(script, flags string) (string, error) {
+func (s *Server) runInlineScript(script, flags, deviceID string) (string, error) {
 	tmp, err := os.CreateTemp("", "probe-mcp-*.probe")
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
@@ -451,6 +666,9 @@ func (s *Server) runInlineScript(script, flags string) (string, error) {
 	cmdArgs := []string{"test", tmp.Name()}
 	if flags != "" {
 		cmdArgs = append(cmdArgs, strings.Fields(flags)...)
+	}
+	if deviceID != "" {
+		cmdArgs = append(cmdArgs, "--device", deviceID)
 	}
 	cmd := exec.Command(probeBin(), cmdArgs...)
 	cmd.Env = os.Environ()
@@ -495,5 +713,22 @@ func errResp(id any, code int, msg string) *mcpResponse {
 		JSONRPC: "2.0",
 		ID:      id,
 		Error:   map[string]any{"code": code, "message": msg},
+	}
+}
+
+// jsonResp returns the value JSON-encoded inside a text content block. MCP
+// clients parse the text themselves; this is the convention for structured
+// data over a protocol that only ships text/image content blocks.
+func jsonResp(id any, value any) *mcpResponse {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return errResp(id, -32603, "encode result: "+err.Error())
+	}
+	return &mcpResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]any{
+			"content": []map[string]any{{"type": "text", "text": string(data)}},
+		},
 	}
 }

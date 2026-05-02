@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **MCP device lifecycle tools** — `probe-mcp` now exposes 5 new tools that let AI agents discover and manage simulators/emulators end-to-end without leaving chat: `list_devices` (booted/connected sims, emulators, physical devices), `list_simulators` (all iOS sims including shutdown), `list_avds` (Android Virtual Device names), `start_device` (boot Android emulator by AVD name or iOS simulator by UDID, blocks until ready), `shutdown_device` (iOS simulator only). Brings the total tool count from 10 to 15.
+- **`device` argument on existing MCP tools** — `get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` (serial or UDID) so the agent can pin a target when multiple devices are connected. Previously the agent had to smuggle this through the undocumented `flags` string.
+
 ## [0.6.0] - 2026-04-26
 
 ### Added
