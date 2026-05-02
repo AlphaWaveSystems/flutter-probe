@@ -3,7 +3,7 @@ description: >-
   On-device E2E test agent for FlutterProbe. Embeds in your Flutter app and
   executes test commands via direct widget-tree access with sub-50ms latency.
 
-version: 0.6.0
+version: 0.7.0
 homepage: https://flutterprobe.dev
 repository: https://github.com/AlphaWaveSystems/flutter-probe
 issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
@@ -21,6 +21,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Used to advertise the agent over mDNS/Bonjour when running in WiFi
+  # mode (PROBE_WIFI=true). Studio uses this for zero-config discovery
+  # of physical devices on the LAN. The dependency is conditional on the
+  # WiFi flag at runtime — apps not using WiFi mode pay no advertising
+  # cost.
+  bonsoir: ^5.1.10
 
 dev_dependencies:
   flutter_test:

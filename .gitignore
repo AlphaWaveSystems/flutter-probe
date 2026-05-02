@@ -29,6 +29,7 @@ probe_agent/.dart_tool/
 probe_agent/build/
 probe_agent/pubspec.lock
 probe_agent/.packages
+probe_agent/.flutter-plugins-dependencies
 
 # VS Code extension build output
 vscode/node_modules/

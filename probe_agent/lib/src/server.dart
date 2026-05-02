@@ -4,7 +4,12 @@ import 'dart:io';
 import 'dart:math';
 
 import 'executor.dart';
+import 'mdns_advertise.dart';
 import 'protocol.dart';
+
+/// Agent version used in mDNS TXT records so discovery clients can render
+/// version info next to each device. Bumped together with pubspec.yaml.
+const String probeAgentVersion = '0.7.0';
 
 /// ProbeServer is a WebSocket server that listens on localhost:48686.
 ///
@@ -25,6 +30,11 @@ class ProbeServer {
   /// Shared executor for HTTP mode — persists state (mocks, URL tracking)
   /// across stateless HTTP requests within the same session.
   ProbeExecutor? _httpExecutor;
+
+  /// mDNS broadcaster, only used when [allowRemoteConnections] is true.
+  /// Studio (and any other compatible client) browses for these records to
+  /// discover physical devices on the LAN without manual IP entry.
+  ProbeMDNS? _mdns;
 
   /// Creates a ProbeServer.
   /// Set [allowRemoteConnections] to true for WiFi testing (binds to 0.0.0.0
@@ -56,6 +66,22 @@ class ProbeServer {
       // ignore: avoid_print
       print('PROBE_TOKEN=$_token');
     });
+
+    // Advertise on mDNS only when we're actually reachable from off-host.
+    // Localhost-bound agents have no one to discover them.
+    if (allowRemoteConnections) {
+      _mdns = ProbeMDNS();
+      // Hostname makes a stable, recognizable label (e.g. "Patrick's iPhone").
+      // Falls back to a generic name when the OS doesn't expose one.
+      final host = Platform.localHostname.isNotEmpty
+          ? Platform.localHostname
+          : 'flutter-probe-agent';
+      await _mdns!.start(
+        name: host,
+        port: port,
+        agentVersion: probeAgentVersion,
+      );
+    }
 
     _serve();
   }
@@ -171,6 +197,8 @@ class ProbeServer {
   Future<void> stop() async {
     _tokenTimer?.cancel();
     _tokenTimer = null;
+    await _mdns?.stop();
+    _mdns = null;
     await _server?.close(force: true);
     _server = null;
   }

@@ -33,6 +33,7 @@ type App struct {
 	mu        sync.Mutex
 	conn      *connection // nil when disconnected
 	deviceMgr *device.Manager
+	wifi      *wifiDiscovery
 }
 
 // connection holds the active agent client and cleanup callback.
@@ -50,7 +51,7 @@ type connection struct {
 
 // NewApp creates a new App.
 func NewApp() *App {
-	return &App{deviceMgr: device.NewManager()}
+	return &App{deviceMgr: device.NewManager(), wifi: newWiFiDiscovery()}
 }
 
 // startup is called once when the Wails runtime is ready. The context is
@@ -61,6 +62,9 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown closes any active connection. Called by Wails on app exit.
 func (a *App) shutdown(_ context.Context) {
+	if a.wifi != nil {
+		a.wifi.Stop()
+	}
 	a.mu.Lock()
 	conn := a.conn
 	a.conn = nil
@@ -303,6 +307,99 @@ func (a *App) Status() ConnectionStatus {
 		DeviceName: a.conn.deviceName,
 		Platform:   string(a.conn.platform),
 	}
+}
+
+// ---- WiFi discovery ----
+
+// StartWiFiDiscovery begins browsing the local network for agents
+// advertising _flutterprobe._tcp via mDNS. Each discovered device is
+// emitted via the `wifi:device-found` event. Idempotent — calling Start
+// while a browse is already running is a no-op.
+//
+// The agent must be flutter_probe_agent v0.7.0+ AND running with
+// PROBE_WIFI=true to be discoverable. Older agents and localhost-bound
+// agents do not advertise.
+func (a *App) StartWiFiDiscovery() error {
+	if a.wifi == nil {
+		return fmt.Errorf("wifi discovery not initialized")
+	}
+	return a.wifi.Start(a.ctx)
+}
+
+// StopWiFiDiscovery cancels the active mDNS browse, if any.
+func (a *App) StopWiFiDiscovery() {
+	if a.wifi != nil {
+		a.wifi.Stop()
+	}
+}
+
+// ConnectWiFi establishes an agent connection to a WiFi-discovered (or
+// manually-entered) device by IP, port, and token. Unlike Connect, there
+// is no UDID lookup, no port forwarding, and no token auto-discovery —
+// the caller supplies everything because the device isn't physically
+// attached.
+//
+// Use the values from a wifi:device-found event, plus the token the user
+// reads from their app's logs (PROBE_TOKEN=...).
+func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus, error) {
+	if host == "" || port == 0 || token == "" {
+		return ConnectionStatus{}, fmt.Errorf("host, port, and token are all required")
+	}
+
+	cfg, _ := config.Load(".")
+	dialTimeout := 5 * time.Second
+
+	client, err := probelink.DialWithOptions(a.ctx, probelink.DialOptions{
+		Host:        host,
+		Port:        port,
+		Token:       token,
+		DialTimeout: dialTimeout,
+	})
+	if err != nil {
+		return ConnectionStatus{}, fmt.Errorf("dial: %w", err)
+	}
+	if err := client.Ping(a.ctx); err != nil {
+		_ = client.Close()
+		return ConnectionStatus{}, fmt.Errorf("ping: %w", err)
+	}
+
+	// WiFi connections have no host-side cleanup (no iproxy, no adb forward).
+	// The deviceID for runner/event purposes is host:port — unique enough
+	// for status display and disambiguation in logs. Platform is recorded as
+	// iOS as a best-effort default; the agent doesn't currently advertise
+	// platform in TXT records.
+	deviceID := fmt.Sprintf("%s:%d", host, port)
+	streamCtx, streamCancel := context.WithCancel(context.Background())
+	streamDone := make(chan struct{})
+	newConn := &connection{
+		client:       client,
+		cfg:          cfg,
+		deviceID:     deviceID,
+		deviceName:   fmt.Sprintf("WiFi %s", host),
+		platform:     device.PlatformIOS,
+		streamCancel: streamCancel,
+		streamDone:   streamDone,
+		deviceCtx: &runner.DeviceContext{
+			Manager:    a.deviceMgr,
+			Serial:     deviceID,
+			Platform:   device.PlatformIOS,
+			Port:       port,
+			DevicePort: port,
+		},
+	}
+
+	a.mu.Lock()
+	prev := a.conn
+	a.conn = newConn
+	a.mu.Unlock()
+	if prev != nil {
+		stopConnection(prev)
+	}
+
+	go a.streamLoop(streamCtx, streamDone, client)
+
+	wailsruntime.EventsEmit(a.ctx, "connection:changed", a.Status())
+	return a.Status(), nil
 }
 
 // Connect establishes an agent connection to a simulator, emulator, or

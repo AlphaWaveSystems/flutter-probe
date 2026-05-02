@@ -23,6 +23,7 @@
         <span class="sep"></span>
         <select id="device-picker" class="select" title="Select device"></select>
         <button id="btn-refresh" class="btn btn-icon-only" title="Refresh devices">↻</button>
+        <button id="btn-wifi" class="btn btn-icon-only" title="Discover WiFi devices">📡</button>
         <button id="btn-connect" class="btn" disabled title="Connect to selected device">Connect</button>
       </div>
       <div class="status">
@@ -84,6 +85,32 @@
     </main>
 
     <div id="toast-container" aria-live="polite"></div>
+
+    <div id="wifi-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2>WiFi devices</h2>
+          <button id="btn-wifi-close" class="btn-mini" title="Close">✕</button>
+        </div>
+        <p class="dim">
+          Discovering Flutter apps running with <code>PROBE_WIFI=true</code> on the local network.
+          Requires <code>flutter_probe_agent</code> v0.7.0 or later.
+        </p>
+        <ul id="wifi-devices" class="wifi-device-list">
+          <li class="empty">Searching…</li>
+        </ul>
+        <div id="wifi-token-row" hidden>
+          <div class="wifi-selected" id="wifi-selected-label"></div>
+          <label for="wifi-token-input" class="dim">
+            Paste the agent token (from your app's <code>PROBE_TOKEN=</code> log line):
+          </label>
+          <input id="wifi-token-input" type="password" placeholder="agent token" autocomplete="off" spellcheck="false" />
+          <div class="wifi-actions">
+            <button id="btn-wifi-connect" class="btn btn-primary">Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="help-overlay" class="overlay" hidden>
       <div class="overlay-card">
