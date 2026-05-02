@@ -218,14 +218,16 @@ type DeviceInfo struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Platform  string `json:"platform"`
+	Kind      string `json:"kind"` // "simulator" | "emulator" | "physical"
 	State     string `json:"state"`
 	OSVersion string `json:"osVersion"`
 	Booted    bool   `json:"booted"` // true when the device is ready to accept connections
 }
 
-// ListDevices returns connected emulators and simulators with a Booted flag
-// so the picker can disable Connect for shut-down devices instead of letting
-// the user wait for a token-read timeout.
+// ListDevices returns connected emulators, simulators, and USB-attached
+// physical devices, with a Booted flag so the picker can disable Connect
+// for shut-down devices instead of letting the user wait for a token-read
+// timeout.
 func (a *App) ListDevices() ([]DeviceInfo, error) {
 	devs, err := a.deviceMgr.List(a.ctx)
 	if err != nil {
@@ -237,12 +239,31 @@ func (a *App) ListDevices() ([]DeviceInfo, error) {
 			ID:        d.ID,
 			Name:      d.Name,
 			Platform:  string(d.Platform),
+			Kind:      a.deviceKind(d),
 			State:     d.State,
 			OSVersion: d.OSVersion,
 			Booted:    isDeviceReady(d),
 		})
 	}
 	return out, nil
+}
+
+// deviceKind classifies a device for the picker UI. Physical detection is
+// platform-specific: iOS uses simctl absence; Android uses ro.hardware.
+func (a *App) deviceKind(d device.Device) string {
+	switch d.Platform {
+	case device.PlatformIOS:
+		if a.deviceMgr.IsPhysicalIOS(a.ctx, d.ID) {
+			return "physical"
+		}
+		return "simulator"
+	case device.PlatformAndroid:
+		if a.deviceMgr.IsPhysicalAndroid(a.ctx, d.ID) {
+			return "physical"
+		}
+		return "emulator"
+	}
+	return ""
 }
 
 // isDeviceReady reports whether a device is in a state where the agent can
@@ -284,9 +305,10 @@ func (a *App) Status() ConnectionStatus {
 	}
 }
 
-// Connect establishes an agent connection to a simulator or emulator.
-// Physical devices are not supported in the MVP — they require iproxy
-// (iOS) and live token streaming, which the next milestone will add.
+// Connect establishes an agent connection to a simulator, emulator, or
+// USB-attached physical device. Physical iOS uses iproxy to forward the
+// agent port; physical Android uses adb forward (same path as emulators).
+// WiFi-attached physical devices are reached via ConnectWiFi instead.
 //
 // On success, subsequent calls (TakeScreenshot, GetWidgetTree, RunFile)
 // use this connection. Re-connecting replaces any prior connection.
@@ -311,23 +333,20 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		return ConnectionStatus{}, fmt.Errorf("device %q not found", deviceID)
 	}
 
-	// MVP: simulators and emulators only.
-	if dev.Platform == device.PlatformIOS && a.deviceMgr.IsPhysicalIOS(a.ctx, deviceID) {
-		return ConnectionStatus{}, fmt.Errorf("physical iOS devices are not supported in the Studio MVP")
-	}
-	if dev.Platform == device.PlatformAndroid && a.deviceMgr.IsPhysicalAndroid(a.ctx, deviceID) {
-		return ConnectionStatus{}, fmt.Errorf("physical Android devices are not supported in the Studio MVP")
-	}
-
 	// Studio MVP uses defaults; reading probe.yaml from the workspace is a
 	// future feature.
 	cfg, _ := config.Load(".")
 	port := cfg.Agent.Port
 	// Studio is interactive — clamp the token wait and dial budget tighter
 	// than the CLI defaults so a "no agent running" state surfaces in
-	// seconds, not the 30s + 30s headless-friendly defaults.
-	tokenTimeout := 8 * time.Second
+	// seconds, not the 30s + 30s headless-friendly defaults. Physical iOS
+	// over idevicesyslog is slower than the simctl filesystem read, so it
+	// gets a longer token wait.
 	dialTimeout := 5 * time.Second
+	tokenTimeout := 8 * time.Second
+	if dev.Platform == device.PlatformIOS && a.deviceMgr.IsPhysicalIOS(a.ctx, deviceID) {
+		tokenTimeout = 20 * time.Second
+	}
 
 	var (
 		client  probelink.ProbeClient
@@ -336,6 +355,10 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 
 	switch dev.Platform {
 	case device.PlatformAndroid:
+		// Same path for emulators and physical Android — adb handles both
+		// transparently. Token reads fall through cache → /data/local/tmp →
+		// logcat, so physical devices that lock down /data/local/tmp still
+		// resolve via the logcat fallback.
 		if err := a.deviceMgr.EnsureADB(a.ctx, deviceID, port); err != nil {
 			return ConnectionStatus{}, fmt.Errorf("android setup: %w", err)
 		}
@@ -362,9 +385,23 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		}
 
 	case device.PlatformIOS:
-		// Simulator: read token from the host filesystem; no port forward needed.
+		// Physical iOS needs an iproxy tunnel before we can dial the agent
+		// port over USB. Simulators read the token from the host filesystem
+		// via simctl and need no tunnel.
+		if a.deviceMgr.IsPhysicalIOS(a.ctx, deviceID) {
+			iproxyCleanup, err := a.deviceMgr.EnsureIProxy(a.ctx, deviceID, port, port)
+			if err != nil {
+				return ConnectionStatus{}, fmt.Errorf("iproxy: %w (install via: brew install libimobiledevice)", err)
+			}
+			cleanup = iproxyCleanup
+		}
+		// ReadTokenIOS tries simctl first (fast, file-based) then falls
+		// through to idevicesyslog for physical devices.
 		token, err := a.deviceMgr.ReadTokenIOS(a.ctx, deviceID, tokenTimeout, "")
 		if err != nil {
+			if cleanup != nil {
+				cleanup()
+			}
 			return ConnectionStatus{}, fmt.Errorf("agent token: %w (is the app running with PROBE_AGENT=true?)", err)
 		}
 		client, err = probelink.DialWithOptions(a.ctx, probelink.DialOptions{
@@ -374,6 +411,9 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 			DialTimeout: dialTimeout,
 		})
 		if err != nil {
+			if cleanup != nil {
+				cleanup()
+			}
 			return ConnectionStatus{}, fmt.Errorf("dial: %w", err)
 		}
 

@@ -22,19 +22,21 @@ export namespace main {
 	    id: string;
 	    name: string;
 	    platform: string;
+	    kind: string;
 	    state: string;
 	    osVersion: string;
 	    booted: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new DeviceInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.platform = source["platform"];
+	        this.kind = source["kind"];
 	        this.state = source["state"];
 	        this.osVersion = source["osVersion"];
 	        this.booted = source["booted"];
