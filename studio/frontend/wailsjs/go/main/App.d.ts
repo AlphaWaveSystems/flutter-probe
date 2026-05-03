@@ -26,9 +26,13 @@ export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
 
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
+export function StartRecording():Promise<void>;
+
 export function StartWiFiDiscovery():Promise<void>;
 
 export function Status():Promise<main.ConnectionStatus>;
+
+export function StopRecording():Promise<string>;
 
 export function StopWiFiDiscovery():Promise<void>;
 

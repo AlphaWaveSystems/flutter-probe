@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,6 +35,11 @@ type App struct {
 	conn      *connection // nil when disconnected
 	deviceMgr *device.Manager
 	wifi      *wifiDiscovery
+
+	recMu     sync.Mutex
+	recActive bool
+	recLines  []string
+	recLastAt time.Time
 }
 
 // connection holds the active agent client and cleanup callback.
@@ -792,4 +798,97 @@ func toRunResult(res runner.TestResult) RunResult {
 		rr.Error = res.Error.Error()
 	}
 	return rr
+}
+
+// ---- Recording ----------------------------------------------------------
+
+// StartRecording tells the agent to enter recording mode and begins capturing
+// interaction events as ProbeScript lines. Only WebSocket connections support
+// recording (simulators and emulators); physical-device HTTP connections return
+// an error.
+func (a *App) StartRecording() error {
+	a.mu.Lock()
+	conn := a.conn
+	a.mu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	wsClient, ok := conn.client.(*probelink.Client)
+	if !ok {
+		return fmt.Errorf("recording requires a WebSocket connection (simulators/emulators only)")
+	}
+
+	a.recMu.Lock()
+	a.recActive = true
+	a.recLines = nil
+	a.recLastAt = time.Now()
+	a.recMu.Unlock()
+
+	wsClient.OnNotify = func(method string, params json.RawMessage) {
+		if method != probelink.NotifyRecordedEvent {
+			return
+		}
+		var p map[string]interface{}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return
+		}
+
+		a.recMu.Lock()
+		now := time.Now()
+		gap := now.Sub(a.recLastAt)
+		a.recLastAt = now
+		a.recMu.Unlock()
+
+		var newLines []string
+		if gap > 2*time.Second {
+			newLines = append(newLines, fmt.Sprintf("  wait %d seconds", int(gap.Seconds())))
+		}
+		if line := eventToProbeScriptLine(p); line != "" {
+			newLines = append(newLines, line)
+		}
+
+		for _, l := range newLines {
+			a.recMu.Lock()
+			a.recLines = append(a.recLines, l)
+			a.recMu.Unlock()
+			wailsruntime.EventsEmit(a.ctx, "recorder:line", l)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := conn.client.Call(ctx, probelink.MethodStartRecording, nil); err != nil {
+		wsClient.OnNotify = nil
+		a.recMu.Lock()
+		a.recActive = false
+		a.recMu.Unlock()
+		return fmt.Errorf("start recording: %w", err)
+	}
+	return nil
+}
+
+// StopRecording stops the recording session and returns the full assembled
+// ProbeScript including the recorded steps.
+func (a *App) StopRecording() (string, error) {
+	a.mu.Lock()
+	conn := a.conn
+	a.mu.Unlock()
+
+	if conn != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = conn.client.Call(ctx, probelink.MethodStopRecording, nil)
+		if wsClient, ok := conn.client.(*probelink.Client); ok {
+			wsClient.OnNotify = nil
+		}
+	}
+
+	a.recMu.Lock()
+	lines := a.recLines
+	a.recActive = false
+	a.recLines = nil
+	a.recMu.Unlock()
+
+	return strings.Join(lines, "\n") + "\n", nil
 }

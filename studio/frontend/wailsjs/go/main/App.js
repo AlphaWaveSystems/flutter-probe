@@ -50,12 +50,20 @@ export function SaveWorkspaceSettings(arg1, arg2) {
   return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
 }
 
+export function StartRecording() {
+  return window['go']['main']['App']['StartRecording']();
+}
+
 export function StartWiFiDiscovery() {
   return window['go']['main']['App']['StartWiFiDiscovery']();
 }
 
 export function Status() {
   return window['go']['main']['App']['Status']();
+}
+
+export function StopRecording() {
+  return window['go']['main']['App']['StopRecording']();
 }
 
 export function StopWiFiDiscovery() {
