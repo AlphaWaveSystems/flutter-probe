@@ -126,6 +126,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .btn-primary:hover:not(:disabled) { background: var(--brand); border-color: var(--brand); }
 .btn-icon-only { padding: 5px 8px; }
 .btn-icon { font-size: 10px; }
+.btn-recording { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
+.btn-recording:hover:not(:disabled) { background: #991b1b; }
+.btn-recording .btn-record-icon { animation: pulse-record 1s ease-in-out infinite; }
+@keyframes pulse-record { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 .btn-label { line-height: 1; }
 
 .btn-mini {

@@ -17,8 +17,10 @@ import {
   ReadFile,
   RunFile,
   SaveWorkspaceSettings,
+  StartRecording,
   StartWiFiDiscovery,
   Status,
+  StopRecording,
   StopWiFiDiscovery,
   WriteFile,
 } from "../wailsjs/go/main/App";
@@ -281,7 +283,11 @@ window.addEventListener("keydown", (e) => {
       break;
     case "r":
       e.preventDefault();
-      ($("btn-run") as HTMLButtonElement).click();
+      if (e.shiftKey) {
+        ($("btn-record") as HTMLButtonElement).click();
+      } else {
+        ($("btn-run") as HTMLButtonElement).click();
+      }
       break;
     case "b":
       e.preventDefault();
@@ -546,6 +552,7 @@ function setStatus(
   $("status-text").title = tip;
   connected = state === "connected";
   updateRunButton();
+  updateRecordButton();
   const inspectorStatus = document.getElementById("inspector-status");
   if (inspectorStatus) {
     inspectorStatus.textContent = connected ? "live" : "";
@@ -581,6 +588,11 @@ function enrichError(raw: unknown): string {
 
 function updateRunButton() {
   ($("btn-run") as HTMLButtonElement).disabled = !connected || !currentPath;
+}
+
+function updateRecordButton() {
+  const btn = $("btn-record") as HTMLButtonElement;
+  btn.disabled = !connected;
 }
 
 type DeviceInfo = {
@@ -768,6 +780,73 @@ $("btn-run").addEventListener("click", async () => {
     toast(`Run failed: ${err}`, "error", 6000);
   } finally {
     btn.disabled = !connected || !currentPath;
+  }
+});
+
+// ---- Recorder -----------------------------------------------------------
+
+let recording = false;
+
+function setRecording(active: boolean) {
+  recording = active;
+  const btn = $("btn-record") as HTMLButtonElement;
+  const icon = btn.querySelector(".btn-record-icon") as HTMLElement;
+  const label = btn.querySelector(".btn-label") as HTMLElement;
+  if (active) {
+    icon.textContent = "■";
+    label.textContent = "Stop";
+    btn.classList.add("btn-recording");
+    btn.title = "Stop recording (⌘⇧R)";
+  } else {
+    icon.textContent = "●";
+    label.textContent = "Record";
+    btn.classList.remove("btn-recording");
+    btn.title = "Record interactions (⌘⇧R)";
+  }
+}
+
+EventsOn("recorder:line", (line: string) => {
+  if (!recording) return;
+  const m = editor.getModel()!;
+  const lastLine = m.getLineCount();
+  const lastCol = m.getLineMaxColumn(lastLine);
+  editor.executeEdits("recorder", [
+    {
+      range: new monaco.Range(lastLine, lastCol, lastLine, lastCol),
+      text: "\n" + line,
+    },
+  ]);
+  editor.revealLine(m.getLineCount());
+});
+
+$("btn-record").addEventListener("click", async () => {
+  if (!connected) return;
+
+  if (!recording) {
+    const now = new Date().toLocaleString();
+    const header = `# Recorded on ${now}\n\ntest "recorded flow"\n  open the app`;
+    model.setValue(header);
+    currentPath = null;
+    $("editor-filename").textContent = "recorded.probe";
+    setDirty(true);
+    setRecording(true);
+    try {
+      await StartRecording();
+    } catch (err) {
+      setRecording(false);
+      toast(`Recording failed: ${enrichError(err)}`, "error");
+    }
+  } else {
+    try {
+      const script = await StopRecording();
+      if (script && script.trim()) {
+        model.setValue(script);
+      }
+    } catch (err) {
+      toast(`Stop failed: ${enrichError(err)}`, "error");
+    } finally {
+      setRecording(false);
+    }
   }
 });
 
