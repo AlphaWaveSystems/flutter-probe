@@ -386,6 +386,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   margin-top: 6px;
 }
 .wifi-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.wifi-saved-tag { color: var(--fg-dim); font-size: 10px; margin-left: 8px; padding: 1px 6px; background: var(--bg-1); border-radius: var(--radius-sm); }
+.wifi-device-list .btn-mini.wifi-forget { float: right; opacity: 0.5; padding: 0 6px; font-size: 11px; }
+.wifi-device-list .btn-mini.wifi-forget:hover { opacity: 1; }
 kbd {
   display: inline-block;
   padding: 1px 6px;

@@ -309,6 +309,47 @@ $("help-overlay").addEventListener("click", (e) => {
 
 type WiFiDevice = { name: string; host: string; port: number; version: string };
 
+const WIFI_TOKENS_KEY = "fp.studio.wifi-tokens";
+
+// Token store: deviceName → token. Persisted in localStorage so a user who
+// has connected once doesn't need to paste the token again on subsequent
+// launches. Keyed by the Bonjour instance name (typically the device's
+// hostname) since the IP can change across DHCP leases but the name is
+// stable. Tokens for an LAN-only test agent inside a desktop app are an
+// acceptable trust boundary; this is not a credential vault.
+function loadTokenStore(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(WIFI_TOKENS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveTokenStore(store: Record<string, string>) {
+  try {
+    localStorage.setItem(WIFI_TOKENS_KEY, JSON.stringify(store));
+  } catch {
+    // localStorage full or denied — non-fatal, user just re-enters next time
+  }
+}
+
+function rememberToken(deviceName: string, token: string) {
+  const store = loadTokenStore();
+  store[deviceName] = token;
+  saveTokenStore(store);
+}
+
+function forgetToken(deviceName: string) {
+  const store = loadTokenStore();
+  delete store[deviceName];
+  saveTokenStore(store);
+}
+
+function recalledToken(deviceName: string): string | undefined {
+  return loadTokenStore()[deviceName];
+}
+
 let wifiSelected: WiFiDevice | null = null;
 const wifiSeen = new Map<string, WiFiDevice>();
 
@@ -337,9 +378,26 @@ function selectWiFiDevice(dev: WiFiDevice) {
   for (const li of Array.from($("wifi-devices").children) as HTMLElement[]) {
     li.classList.toggle("selected", li.dataset.key === `${dev.host}:${dev.port}`);
   }
+  const remembered = recalledToken(dev.name);
   $("wifi-selected-label").textContent = `Connecting to ${dev.name} (${dev.host}:${dev.port})`;
   ($("wifi-token-row") as HTMLElement).hidden = false;
-  ($("wifi-token-input") as HTMLInputElement).focus();
+  const input = $("wifi-token-input") as HTMLInputElement;
+  input.value = remembered ?? "";
+  input.focus();
+}
+
+function renderForgetButton(deviceName: string, container: HTMLElement) {
+  const btn = document.createElement("button");
+  btn.className = "btn-mini wifi-forget";
+  btn.title = `Forget remembered token for ${deviceName}`;
+  btn.textContent = "✕";
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    forgetToken(deviceName);
+    btn.remove();
+    toast(`Forgot token for ${deviceName}`, "info", 1500);
+  });
+  container.appendChild(btn);
 }
 
 EventsOn("wifi:device-found", (dev: WiFiDevice) => {
@@ -360,6 +418,14 @@ EventsOn("wifi:device-found", (dev: WiFiDevice) => {
   hostEl.className = "wifi-host";
   hostEl.textContent = `${dev.host}:${dev.port}${dev.version ? ` · v${dev.version}` : ""}`;
   li.append(nameEl, hostEl);
+  if (recalledToken(dev.name)) {
+    const savedTag = document.createElement("span");
+    savedTag.className = "wifi-saved-tag";
+    savedTag.textContent = "🔑 saved";
+    savedTag.title = "Token remembered from a previous connection";
+    li.appendChild(savedTag);
+    renderForgetButton(dev.name, li);
+  }
   li.addEventListener("click", () => selectWiFiDevice(dev));
   list.appendChild(li);
 });
@@ -380,6 +446,7 @@ $("btn-wifi-connect").addEventListener("click", async () => {
   setStatus("connecting", `Connecting to ${wifiSelected.host}…`);
   try {
     await ConnectWiFi(wifiSelected.host, wifiSelected.port, token);
+    rememberToken(wifiSelected.name, token);
     setStatus("connected", `Connected · ${wifiSelected.name}`);
     closeWiFiOverlay();
     startStream();

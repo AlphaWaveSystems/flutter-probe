@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Studio: WiFi token memory** — Studio now remembers the agent token per discovered device (keyed by Bonjour instance name) in localStorage. After a successful WiFi connect, subsequent mDNS-discovered sessions for that device prefill the token automatically and show a "🔑 saved" tag. Each remembered device gets a small "✕" button to forget the token.
+
 ## [0.7.0] - 2026-05-02
 
 ### Added
