@@ -440,3 +440,79 @@ kbd {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 5px; border: 2px solid var(--bg-1); }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ------------------------------------------------------------------
+   AI Chat pane (bottom panel, outside the grid)
+------------------------------------------------------------------ */
+#chat-pane {
+  flex-shrink: 0;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border);
+}
+#chat-pane[hidden] { display: none; }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-msg { display: flex; flex-direction: column; max-width: 90%; }
+.chat-msg-user { align-self: flex-end; }
+.chat-msg-assistant { align-self: flex-start; }
+.chat-msg-system { align-self: center; opacity: 0.6; }
+
+.chat-msg-text {
+  margin: 0;
+  font: 13px/1.5 ui-monospace, SF Mono, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+}
+.chat-msg-user .chat-msg-text {
+  background: var(--brand-strong);
+  color: white;
+  font-family: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.chat-msg-system .chat-msg-text { font-size: 11px; font-family: inherit; }
+
+.chat-input-row {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--bg-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  resize: none;
+  outline: none;
+}
+.chat-input:focus { border-color: var(--brand); }
+
+.chat-send-btn { align-self: flex-end; padding: 7px 12px; }
+
+.chat-cost {
+  font-size: 11px;
+  flex: 1;
+  text-align: center;
+}
+
+.btn-active { background: var(--brand-strong); border-color: var(--brand-strong); color: white; }

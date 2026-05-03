@@ -30,6 +30,7 @@
         <button id="btn-connect" class="btn" disabled title="Connect to selected device">Connect</button>
         <span class="sep"></span>
         <button id="btn-settings" class="btn btn-icon-only" title="Workspace settings (probe.yaml)">⚙</button>
+        <button id="btn-ai-toggle" class="btn btn-icon-only" title="Toggle AI chat (⌘⇧A)">✦</button>
       </div>
       <div class="status">
         <span id="status-dot" class="status-dot status-disconnected"></span>
@@ -96,6 +97,29 @@
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
       </section>
     </main>
+
+    <section id="chat-pane" hidden>
+      <div class="pane-title">
+        <span>AI Chat <span class="dim" style="font-size:10px;font-weight:normal">claude-sonnet-4-6 · BYOK</span></span>
+        <span id="chat-cost" class="dim chat-cost"></span>
+        <span class="pane-actions">
+          <button id="btn-chat-key" class="btn-mini" title="Set API key">🔑</button>
+          <button id="btn-chat-clear" class="btn-mini" title="Clear conversation">✕</button>
+        </span>
+      </div>
+      <div id="chat-messages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <textarea
+          id="chat-input"
+          class="chat-input"
+          placeholder="Ask about your test file… (Enter to send, Shift+Enter for newline)"
+          rows="2"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+        <button id="btn-chat-send" class="btn btn-primary chat-send-btn" title="Send (Enter)">▶</button>
+      </div>
+    </section>
 
     <div id="toast-container" aria-live="polite"></div>
 
@@ -175,6 +199,7 @@
             <tr><td><kbd>⌘</kbd> <kbd>B</kbd></td><td>Connect / disconnect device</td></tr>
             <tr><td><kbd>⌘</kbd> <kbd>P</kbd></td><td>Open workspace folder</td></tr>
             <tr><td><kbd>⌘</kbd> <kbd>K</kbd></td><td>Refresh device list</td></tr>
+            <tr><td><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>A</kbd></td><td>Toggle AI chat</td></tr>
             <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Close this help</td></tr>
           </tbody>
@@ -182,6 +207,27 @@
         <p class="overlay-foot">
           On Windows / Linux, use <kbd>Ctrl</kbd> in place of <kbd>⌘</kbd>.
         </p>
+      </div>
+    </div>
+
+    <div id="api-key-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2>Anthropic API key</h2>
+          <button id="btn-api-key-close" class="btn-mini" title="Close">✕</button>
+        </div>
+        <p class="dim">
+          Your key is stored in the <strong>system keychain</strong> (macOS Keychain / Windows Credential Manager /
+          Linux libsecret). It is never written to disk or sent anywhere other than <code>api.anthropic.com</code>.
+        </p>
+        <label class="settings-row">
+          <span>API key</span>
+          <input id="api-key-input" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="settings-actions">
+          <button id="btn-api-key-save" class="btn btn-primary">Save key</button>
+          <button id="btn-api-key-delete" class="btn">Remove key</button>
+        </div>
       </div>
     </div>
 
