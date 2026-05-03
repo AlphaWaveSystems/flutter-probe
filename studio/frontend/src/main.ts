@@ -512,12 +512,17 @@ $("btn-wifi-connect").addEventListener("click", async () => {
   try {
     await ConnectWiFi(wifiSelected.host, wifiSelected.port, token);
     rememberToken(wifiSelected.name, token);
-    setStatus("connected", `Connected · ${wifiSelected.name}`);
+    setStatus(
+      "connected",
+      `Connected · ${wifiSelected.name}`,
+      `${wifiSelected.name} (${wifiSelected.host}:${wifiSelected.port}) · WiFi transport`
+    );
     closeWiFiOverlay();
     startStream();
   } catch (err) {
-    setStatus("error", `WiFi connect failed: ${err}`);
-    toast(`Connect failed: ${err}`, "error");
+    const detail = enrichError(err);
+    setStatus("error", "WiFi connect failed", detail);
+    toast(`Connect failed: ${detail}`, "error", 8000);
   }
 });
 
@@ -525,17 +530,53 @@ $("btn-wifi-connect").addEventListener("click", async () => {
 
 let connected = false;
 
-function setStatus(state: "disconnected" | "connecting" | "connected" | "error", text: string) {
+function setStatus(
+  state: "disconnected" | "connecting" | "connected" | "error",
+  text: string,
+  tooltip?: string
+) {
   const dot = $("status-dot");
   dot.classList.remove("status-disconnected", "status-connecting", "status-connected", "status-error");
   dot.classList.add(`status-${state}`);
   $("status-text").textContent = text;
+  // Mirror the human-readable text in title attributes so a hover gives
+  // device id / transport / last error without taking up toolbar space.
+  const tip = tooltip ?? text;
+  dot.title = tip;
+  $("status-text").title = tip;
   connected = state === "connected";
   updateRunButton();
   const inspectorStatus = document.getElementById("inspector-status");
   if (inspectorStatus) {
     inspectorStatus.textContent = connected ? "live" : "";
   }
+}
+
+// enrichError maps known error fragments to a one-line actionable hint.
+// Connection failures often come from missing host tools (iproxy, adb) or
+// the app not being built with the agent flag — surfacing the fix inline
+// beats sending the user to a wiki page.
+function enrichError(raw: unknown): string {
+  const msg = String(raw);
+  if (/iproxy/i.test(msg)) {
+    return `${msg}\n\nFix: brew install libimobiledevice`;
+  }
+  if (/idevicesyslog/i.test(msg)) {
+    return `${msg}\n\nFix: brew install libimobiledevice (idevicesyslog ships with it)`;
+  }
+  if (/adb/i.test(msg) && /not found|not in PATH/i.test(msg)) {
+    return `${msg}\n\nFix: install Android SDK platform-tools and ensure adb is on your PATH`;
+  }
+  if (/token/i.test(msg) && /(not found|timeout)/i.test(msg)) {
+    return `${msg}\n\nFix: confirm your Flutter app is running with --dart-define=PROBE_AGENT=true`;
+  }
+  if (/PROBE_AGENT/.test(msg)) {
+    return `${msg}\n\nFix: rebuild your Flutter app with --dart-define=PROBE_AGENT=true`;
+  }
+  if (/refused|reset by peer|EOF/i.test(msg)) {
+    return `${msg}\n\nFix: the agent process likely isn't running. Start your Flutter app and try again.`;
+  }
+  return msg;
 }
 
 function updateRunButton() {
@@ -640,12 +681,17 @@ $("btn-connect").addEventListener("click", async () => {
   setStatus("connecting", "connecting…");
   try {
     const status = (await Connect(id)) as ConnectionStatus;
-    setStatus("connected", `${status.deviceName}  ·  ${status.platform}`);
+    setStatus(
+      "connected",
+      `${status.deviceName}  ·  ${status.platform}`,
+      `${status.deviceName} (${status.deviceId}) · ${status.platform} · USB transport`
+    );
     startStream();
     toast(`Connected to ${status.deviceName}`, "success");
   } catch (err) {
-    setStatus("error", "connection failed");
-    toast(`Connect failed: ${err}`, "error", 6000);
+    const detail = enrichError(err);
+    setStatus("error", "connection failed", detail);
+    toast(`Connect failed: ${detail}`, "error", 8000);
     setTimeout(() => setStatus("disconnected", "disconnected"), 2500);
   }
 });
@@ -663,6 +709,47 @@ EventsOn("connection:changed", (status: ConnectionStatus) => {
 // ---- Inspector ----------------------------------------------------------
 // The inspector pane is updated live by the device-stream module — every
 // frame from the backend includes a widget tree dump. No manual refresh.
+
+// Search input scrolls the <pre> to the first line containing the query.
+// Re-runs on every input AND every animation frame so live updates from
+// the device stream don't push the matched line off-screen. Cheap O(n)
+// over the visible widget tree text — acceptable for trees up to a few
+// thousand lines, which is the practical limit anyway.
+let inspectorQuery = "";
+
+function scrollInspectorToMatch() {
+  if (!inspectorQuery) return;
+  const pre = document.getElementById("inspector-content");
+  if (!pre) return;
+  const text = pre.textContent ?? "";
+  const idx = text.toLowerCase().indexOf(inspectorQuery.toLowerCase());
+  if (idx < 0) return;
+  // Approximate line number → scrollTop. The <pre> uses a monospace font
+  // with consistent line height; this is precise enough to put the match
+  // near the top of the visible area.
+  const lineNumber = text.slice(0, idx).split("\n").length - 1;
+  const lineHeight = parseFloat(getComputedStyle(pre).lineHeight) || 14;
+  pre.scrollTop = Math.max(0, lineNumber * lineHeight - 8);
+}
+
+const inspectorSearch = document.getElementById("inspector-search") as HTMLInputElement | null;
+if (inspectorSearch) {
+  inspectorSearch.addEventListener("input", () => {
+    inspectorQuery = inspectorSearch.value;
+    scrollInspectorToMatch();
+  });
+  // Re-anchor on each frame the inspector content updates. The device-stream
+  // module replaces innerHTML wholesale per frame; without a re-scroll the
+  // matched line jumps back to the top.
+  const inspectorEl = document.getElementById("inspector-content");
+  if (inspectorEl) {
+    new MutationObserver(() => scrollInspectorToMatch()).observe(inspectorEl, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  }
+}
 
 // ---- Run ----------------------------------------------------------------
 

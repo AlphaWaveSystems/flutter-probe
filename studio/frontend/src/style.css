@@ -404,6 +404,17 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 12px;
 }
 .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* Inspector search */
+.inspector-search {
+  flex: 1; max-width: 200px; margin-left: auto; margin-right: 8px;
+  padding: 2px 8px; box-sizing: border-box;
+  background: var(--bg-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); color: var(--fg-strong);
+  font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px;
+}
+.inspector-search:focus { outline: 1px solid var(--fg-dim); outline-offset: -1px; }
+
 kbd {
   display: inline-block;
   padding: 1px 6px;
