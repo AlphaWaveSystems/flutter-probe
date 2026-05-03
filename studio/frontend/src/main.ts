@@ -6,9 +6,12 @@ import { initResults } from "./results";
 import { toast } from "./toast";
 
 import {
+  Chat,
   Connect,
   ConnectWiFi,
+  DeleteAPIKey,
   Disconnect,
+  GetAPIKey,
   Lint,
   ListDevices,
   ListDir,
@@ -17,6 +20,7 @@ import {
   ReadFile,
   RunFile,
   SaveWorkspaceSettings,
+  SetAPIKey,
   StartRecording,
   StartWiFiDiscovery,
   Status,
@@ -25,6 +29,8 @@ import {
   WriteFile,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
+type ChatMessage = { role: string; content: string };
+type ChatResponse = { content: string; inputTokens: number; outputTokens: number; costUSD: number };
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 const WORKSPACE_KEY = "fp.studio.workspace";
@@ -300,6 +306,12 @@ window.addEventListener("keydown", (e) => {
     case "k":
       e.preventDefault();
       refreshDevices();
+      break;
+    case "a":
+      if (e.shiftKey) {
+        e.preventDefault();
+        showChatPane(!chatVisible);
+      }
       break;
   }
 });
@@ -885,3 +897,141 @@ runLint();
     setStatus("disconnected", "disconnected");
   }
 })();
+
+// ---- AI Chat ------------------------------------------------------------
+
+let chatHistory: ChatMessage[] = [];
+let chatTotalCost = 0;
+let chatInputTokens = 0;
+let chatOutputTokens = 0;
+let chatVisible = false;
+
+function showChatPane(visible: boolean) {
+  chatVisible = visible;
+  $("chat-pane").hidden = !visible;
+  $("btn-ai-toggle").classList.toggle("btn-active", visible);
+}
+
+function updateCostDisplay() {
+  const el = $("chat-cost");
+  if (chatTotalCost === 0) {
+    el.textContent = "";
+    return;
+  }
+  const cost = chatTotalCost < 0.01
+    ? `<$0.01`
+    : `$${chatTotalCost.toFixed(4)}`;
+  el.textContent = `${cost} · ${chatInputTokens.toLocaleString()} in / ${chatOutputTokens.toLocaleString()} out`;
+}
+
+function appendChatMessage(role: "user" | "assistant" | "system", text: string) {
+  const container = $("chat-messages");
+  const div = document.createElement("div");
+  div.className = `chat-msg chat-msg-${role}`;
+  const pre = document.createElement("pre");
+  pre.className = "chat-msg-text";
+  pre.textContent = text;
+  div.appendChild(pre);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChat() {
+  const input = $("chat-input") as HTMLTextAreaElement;
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+  input.disabled = true;
+  ($("btn-chat-send") as HTMLButtonElement).disabled = true;
+
+  chatHistory.push({ role: "user", content: text });
+  appendChatMessage("user", text);
+
+  const fileContent = model.getValue();
+
+  try {
+    const resp = (await Chat(chatHistory, fileContent)) as ChatResponse;
+    chatHistory.push({ role: "assistant", content: resp.content });
+    appendChatMessage("assistant", resp.content);
+    chatTotalCost += resp.costUSD;
+    chatInputTokens += resp.inputTokens;
+    chatOutputTokens += resp.outputTokens;
+    updateCostDisplay();
+  } catch (err) {
+    chatHistory.pop(); // remove failed user msg from history
+    appendChatMessage("system", `Error: ${err}`);
+  } finally {
+    input.disabled = false;
+    ($("btn-chat-send") as HTMLButtonElement).disabled = false;
+    input.focus();
+  }
+}
+
+$("btn-ai-toggle").addEventListener("click", () => showChatPane(!chatVisible));
+
+$("btn-chat-send").addEventListener("click", sendChat);
+
+$("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+$("btn-chat-clear").addEventListener("click", () => {
+  chatHistory = [];
+  chatTotalCost = 0;
+  chatInputTokens = 0;
+  chatOutputTokens = 0;
+  $("chat-messages").innerHTML = "";
+  updateCostDisplay();
+});
+
+$("btn-chat-key").addEventListener("click", openApiKeyOverlay);
+
+// ---- API key overlay ----------------------------------------------------
+
+async function openApiKeyOverlay() {
+  try {
+    const key = (await GetAPIKey()) as string;
+    ($("api-key-input") as HTMLInputElement).value = key || "";
+  } catch {
+    ($("api-key-input") as HTMLInputElement).value = "";
+  }
+  $("api-key-overlay").hidden = false;
+}
+
+function closeApiKeyOverlay() {
+  $("api-key-overlay").hidden = true;
+}
+
+$("btn-api-key-close").addEventListener("click", closeApiKeyOverlay);
+$("api-key-overlay").addEventListener("click", (e) => {
+  if (e.target === $("api-key-overlay")) closeApiKeyOverlay();
+});
+
+$("btn-api-key-save").addEventListener("click", async () => {
+  const key = ($("api-key-input") as HTMLInputElement).value.trim();
+  try {
+    await SetAPIKey(key);
+    toast(key ? "API key saved to keychain." : "API key cleared.", "success");
+    closeApiKeyOverlay();
+  } catch (err) {
+    toast(`Failed to save key: ${err}`, "error");
+  }
+});
+
+$("btn-api-key-delete").addEventListener("click", async () => {
+  try {
+    await DeleteAPIKey();
+    ($("api-key-input") as HTMLInputElement).value = "";
+    toast("API key removed from keychain.", "success");
+    closeApiKeyOverlay();
+  } catch (err) {
+    toast(`Failed to remove key: ${err}`, "error");
+  }
+});
+
+// Keyboard shortcut ⌘⇧A to toggle chat
+// (wired into the existing keydown handler via the 'a' case)

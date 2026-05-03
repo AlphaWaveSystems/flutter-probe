@@ -1,5 +1,37 @@
 export namespace main {
-	
+
+	export class ChatMessage {
+	    role: string;
+	    content: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ChatMessage(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.content = source["content"];
+	    }
+	}
+	export class ChatResponse {
+	    content: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    costUSD: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ChatResponse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.costUSD = source["costUSD"];
+	    }
+	}
 	export class ConnectionStatus {
 	    connected: boolean;
 	    deviceId: string;
