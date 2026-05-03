@@ -30,6 +30,10 @@ export function ListDir(arg1) {
   return window['go']['main']['App']['ListDir'](arg1);
 }
 
+export function LoadWorkspaceSettings(arg1) {
+  return window['go']['main']['App']['LoadWorkspaceSettings'](arg1);
+}
+
 export function PickWorkspace() {
   return window['go']['main']['App']['PickWorkspace']();
 }
@@ -40,6 +44,10 @@ export function ReadFile(arg1) {
 
 export function RunFile(arg1) {
   return window['go']['main']['App']['RunFile'](arg1);
+}
+
+export function SaveWorkspaceSettings(arg1, arg2) {
+  return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
 }
 
 export function StartWiFiDiscovery() {

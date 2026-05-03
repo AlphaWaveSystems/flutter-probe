@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **Studio: WiFi token memory** — Studio now remembers the agent token per discovered device (keyed by Bonjour instance name) in localStorage. After a successful WiFi connect, subsequent mDNS-discovered sessions for that device prefill the token automatically and show a "🔑 saved" tag. Each remembered device gets a small "✕" button to forget the token.
+- **Studio: workspace settings overlay** — new ⚙ button in the toolbar opens a small form for `agent.port`, `defaults.timeout`, `device.ios_device_id`, and `device.android_device_id`. Save writes back to `probe.yaml` in the active workspace. Other keys you've set in `probe.yaml` are preserved on save (loaded as a raw map; only the four managed keys are mutated).
 
 ## [0.7.0] - 2026-05-02
 

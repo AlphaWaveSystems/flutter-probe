@@ -389,6 +389,21 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .wifi-saved-tag { color: var(--fg-dim); font-size: 10px; margin-left: 8px; padding: 1px 6px; background: var(--bg-1); border-radius: var(--radius-sm); }
 .wifi-device-list .btn-mini.wifi-forget { float: right; opacity: 0.5; padding: 0 6px; font-size: 11px; }
 .wifi-device-list .btn-mini.wifi-forget:hover { opacity: 1; }
+
+/* Workspace settings form */
+.settings-form { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.settings-row {
+  display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 10px;
+  font-size: 12px;
+}
+.settings-row > span { color: var(--fg-dim); }
+.settings-row input {
+  padding: 6px 10px; box-sizing: border-box;
+  background: var(--bg-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); color: var(--fg-strong);
+  font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 12px;
+}
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 kbd {
   display: inline-block;
   padding: 1px 6px;

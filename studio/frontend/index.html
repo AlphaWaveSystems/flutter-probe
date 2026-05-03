@@ -25,6 +25,8 @@
         <button id="btn-refresh" class="btn btn-icon-only" title="Refresh devices">↻</button>
         <button id="btn-wifi" class="btn btn-icon-only" title="Discover WiFi devices">📡</button>
         <button id="btn-connect" class="btn" disabled title="Connect to selected device">Connect</button>
+        <span class="sep"></span>
+        <button id="btn-settings" class="btn btn-icon-only" title="Workspace settings (probe.yaml)">⚙</button>
       </div>
       <div class="status">
         <span id="status-dot" class="status-dot status-disconnected"></span>
@@ -85,6 +87,42 @@
     </main>
 
     <div id="toast-container" aria-live="polite"></div>
+
+    <div id="settings-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2>Workspace settings</h2>
+          <button id="btn-settings-close" class="btn-mini" title="Close">✕</button>
+        </div>
+        <p class="dim">
+          Edit <code>probe.yaml</code> in the current workspace. Other fields you've set in <code>probe.yaml</code> are preserved on save.
+        </p>
+        <div id="settings-no-workspace" class="dim" hidden>
+          <em>Pick a workspace first (📂 in the file pane).</em>
+        </div>
+        <form id="settings-form" class="settings-form">
+          <label class="settings-row">
+            <span>Agent port</span>
+            <input id="settings-port" type="number" min="0" max="65535" placeholder="48686" />
+          </label>
+          <label class="settings-row">
+            <span>Default step timeout</span>
+            <input id="settings-timeout" type="text" placeholder="30s" />
+          </label>
+          <label class="settings-row">
+            <span>Preferred iOS UDID</span>
+            <input id="settings-ios" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="settings-row">
+            <span>Preferred Android serial</span>
+            <input id="settings-android" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="settings-actions">
+            <button type="button" id="btn-settings-save" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <div id="wifi-overlay" class="overlay" hidden>
       <div class="overlay-card">

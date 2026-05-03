@@ -12,14 +12,17 @@ import {
   Lint,
   ListDevices,
   ListDir,
+  LoadWorkspaceSettings,
   PickWorkspace,
   ReadFile,
   RunFile,
+  SaveWorkspaceSettings,
   StartWiFiDiscovery,
   Status,
   StopWiFiDiscovery,
   WriteFile,
 } from "../wailsjs/go/main/App";
+import { main } from "../wailsjs/go/models";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 const WORKSPACE_KEY = "fp.studio.workspace";
@@ -259,6 +262,8 @@ window.addEventListener("keydown", (e) => {
 
   if (e.key === "Escape") {
     closeHelpOverlay();
+    closeSettingsOverlay();
+    closeWiFiOverlay();
     return;
   }
   if (e.key === "?" && !mod) {
@@ -303,6 +308,66 @@ $("btn-help-close").addEventListener("click", closeHelpOverlay);
 $("help-overlay").addEventListener("click", (e) => {
   // Click outside the card dismisses.
   if ((e.target as HTMLElement).id === "help-overlay") closeHelpOverlay();
+});
+
+// ---- Workspace settings overlay ----------------------------------------
+
+async function openSettingsOverlay() {
+  const overlay = $("settings-overlay");
+  const noWorkspace = $("settings-no-workspace") as HTMLElement;
+  const form = $("settings-form") as HTMLFormElement;
+  overlay.hidden = false;
+
+  if (!currentDir || currentDir === "tests" || currentDir === ".") {
+    noWorkspace.hidden = false;
+    form.hidden = true;
+    return;
+  }
+  noWorkspace.hidden = true;
+  form.hidden = false;
+
+  try {
+    const s = await LoadWorkspaceSettings(currentDir);
+    ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
+    ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
+    ($("settings-ios") as HTMLInputElement).value = s.iosDeviceId ?? "";
+    ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
+  } catch (err) {
+    toast(`Cannot load settings: ${err}`, "error");
+  }
+}
+
+function closeSettingsOverlay() {
+  $("settings-overlay").hidden = true;
+}
+
+$("btn-settings").addEventListener("click", openSettingsOverlay);
+$("btn-settings-close").addEventListener("click", closeSettingsOverlay);
+$("settings-overlay").addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).id === "settings-overlay") closeSettingsOverlay();
+});
+
+$("btn-settings-save").addEventListener("click", async () => {
+  if (!currentDir) return;
+  const portRaw = ($("settings-port") as HTMLInputElement).value.trim();
+  const port = portRaw === "" ? 0 : Number(portRaw);
+  if (Number.isNaN(port)) {
+    toast("Agent port must be a number.", "error");
+    return;
+  }
+  const settings = main.WorkspaceSettings.createFrom({
+    agentPort: port,
+    defaultsTimeout: ($("settings-timeout") as HTMLInputElement).value.trim(),
+    iosDeviceId: ($("settings-ios") as HTMLInputElement).value.trim(),
+    androidDeviceId: ($("settings-android") as HTMLInputElement).value.trim(),
+  });
+  try {
+    await SaveWorkspaceSettings(currentDir, settings);
+    toast(`Saved probe.yaml in ${currentDir}`, "success", 2200);
+    closeSettingsOverlay();
+  } catch (err) {
+    toast(`Save failed: ${err}`, "error");
+  }
 });
 
 // ---- WiFi discovery overlay --------------------------------------------
