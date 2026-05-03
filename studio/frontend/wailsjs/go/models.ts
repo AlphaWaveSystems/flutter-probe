@@ -102,6 +102,24 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class WorkspaceSettings {
+	    agentPort: number;
+	    defaultsTimeout: string;
+	    iosDeviceId: string;
+	    androidDeviceId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agentPort = source["agentPort"];
+	        this.defaultsTimeout = source["defaultsTimeout"];
+	        this.iosDeviceId = source["iosDeviceId"];
+	        this.androidDeviceId = source["androidDeviceId"];
+	    }
+	}
 
 }
 

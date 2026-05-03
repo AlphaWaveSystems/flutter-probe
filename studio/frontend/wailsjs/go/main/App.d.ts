@@ -16,11 +16,15 @@ export function ListDevices():Promise<Array<main.DeviceInfo>>;
 
 export function ListDir(arg1:string):Promise<Array<main.FileEntry>>;
 
+export function LoadWorkspaceSettings(arg1:string):Promise<main.WorkspaceSettings>;
+
 export function PickWorkspace():Promise<string>;
 
 export function ReadFile(arg1:string):Promise<string>;
 
 export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
+
+export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
 export function StartWiFiDiscovery():Promise<void>;
 
