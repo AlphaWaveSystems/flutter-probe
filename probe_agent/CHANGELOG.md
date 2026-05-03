@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0 - 2026-05-02
+
+- Version bump to keep in sync with FlutterProbe CLI v0.8.0. No agent-side changes.
+
 ## 0.7.0 - 2026-05-02
 
 - **mDNS auto-discovery** — when running in WiFi mode (`PROBE_WIFI=true`), the

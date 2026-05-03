@@ -6,10 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-02
+
 ### Added
-- **Studio: WiFi token memory** — Studio now remembers the agent token per discovered device (keyed by Bonjour instance name) in localStorage. After a successful WiFi connect, subsequent mDNS-discovered sessions for that device prefill the token automatically and show a "🔑 saved" tag. Each remembered device gets a small "✕" button to forget the token.
-- **Studio: workspace settings overlay** — new ⚙ button in the toolbar opens a small form for `agent.port`, `defaults.timeout`, `device.ios_device_id`, and `device.android_device_id`. Save writes back to `probe.yaml` in the active workspace. Other keys you've set in `probe.yaml` are preserved on save (loaded as a raw map; only the four managed keys are mutated).
-- **Studio: diagnostics polish** — connection error toasts now include actionable hints (e.g. `Fix: brew install libimobiledevice` for missing iproxy/idevicesyslog, `Fix: rebuild your Flutter app with --dart-define=PROBE_AGENT=true` for missing token). Status indicator gets a tooltip showing device id + transport. Inspector pane gets a search box that scrolls to the first matching line and re-anchors on each live frame.
+- **Studio: ProbeScript recorder** — new ● Record button (⌘⇧R) starts an interactive recording session. The agent streams `probe.recorded_event` notifications; Studio converts each interaction to a ProbeScript step in real time in the editor. Gaps >2 seconds between actions automatically insert `wait N seconds` steps. Requires a WebSocket connection (simulators and emulators); returns a clear error on physical-device (HTTP) connections.
+- **Studio: AI chat pane (BYOK)** — ✦ button (⌘⇧A) opens a 260px chat panel at the bottom of the Studio window. Chat with `claude-sonnet-4-6` about the open `.probe` file — the current file contents are injected into the system prompt for context. Your Anthropic API key is stored in the **platform keychain** (macOS Keychain, Windows Credential Manager, Linux libsecret) via `zalando/go-keyring`. Key is never written to disk or sent anywhere except `api.anthropic.com`. Running cost counter (input tokens / output tokens / estimated USD at Sonnet 4.6 rates).
+- **Studio: WiFi token memory** — Studio remembers the agent token per discovered device in localStorage. Subsequent mDNS sessions for that device prefill automatically with a "🔑 saved" tag and forget button.
+- **Studio: workspace settings overlay** — ⚙ button opens a form for `agent.port`, `defaults.timeout`, iOS UDID, Android serial. Saves back to `probe.yaml` preserving all other keys.
+- **Studio: diagnostics polish** — error toasts include actionable hints for missing `iproxy`, `adb`, or `PROBE_AGENT=true`. Status tooltip shows device ID and transport. Inspector search scrolls to first match.
+- **Security**: bumped 8 vulnerable dependencies (vite, @vscode/vsce, golang.org/x/crypto, net, sys, text).
 
 ## [0.7.0] - 2026-05-02
 
