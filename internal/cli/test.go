@@ -127,6 +127,9 @@ func init() {
 
 	// Animation control
 	f.Bool("disable-animations", false, "disable Flutter animations by setting timeDilation=0 (speeds up tests)")
+
+	// Composite test device aliases
+	f.StringArray("composite-device", nil, compositeDeviceUsage())
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
@@ -964,6 +967,19 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	r := runner.New(cfg, client, devCtx, opts)
+
+	// Set up composite runner if --composite-device flags or probe.yaml composite.devices are present.
+	compositeDeviceFlags, _ := cmd.Flags().GetStringArray("composite-device")
+	if len(compositeDeviceFlags) > 0 || len(cfg.Composite.Devices) > 0 {
+		cr, compositeCleanup, crErr := buildCompositeRunner(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose)
+		if crErr != nil {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite devices unavailable: %v\n", crErr)
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite tests will be skipped\n")
+		} else if cr != nil {
+			defer compositeCleanup()
+			r.SetCompositeRunner(cr)
+		}
+	}
 
 	// Wire ndjson streaming if --stream was passed.
 	if stream {

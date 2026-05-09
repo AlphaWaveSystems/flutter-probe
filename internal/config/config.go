@@ -15,21 +15,30 @@ var validAppID = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_.]*$`)
 // validDeviceSerial matches valid ADB serials (emulator-5554, IP:port) and iOS UDIDs.
 var validDeviceSerial = regexp.MustCompile(`^[a-zA-Z0-9._:/-]+$`)
 
+// CompositeConfig holds device alias mappings for composite tests.
+// Aliases configured here are used when no --composite-device CLI flags are provided.
+type CompositeConfig struct {
+	// Devices maps a short alias (e.g. "A", "B") to a device serial, UDID,
+	// or "host:port/token" spec for WiFi-connected devices.
+	Devices map[string]string `yaml:"devices"`
+}
+
 // Config represents probe.yaml at the project root.
 type Config struct {
-	Project  ProjectConfig     `yaml:"project"`
-	Defaults DefaultsConfig    `yaml:"defaults"`
-	Agent    AgentConfig       `yaml:"agent"`
-	Device   DeviceConfig      `yaml:"device"`
-	Video    VideoConfig       `yaml:"video"`
-	Visual   VisualConfig      `yaml:"visual"`
-	Devices  []DeviceEntry     `yaml:"devices"`
-	Tools    ToolsConfig       `yaml:"tools"`
-	Cloud    CloudConfig       `yaml:"cloud"`
-	AI       AIConfig          `yaml:"ai"`
-	Recipes  string            `yaml:"recipes_folder"`
-	Reports  string            `yaml:"reports_folder"`
-	Env      map[string]string `yaml:"environment"`
+	Project   ProjectConfig    `yaml:"project"`
+	Defaults  DefaultsConfig   `yaml:"defaults"`
+	Agent     AgentConfig      `yaml:"agent"`
+	Device    DeviceConfig     `yaml:"device"`
+	Video     VideoConfig      `yaml:"video"`
+	Visual    VisualConfig     `yaml:"visual"`
+	Devices   []DeviceEntry    `yaml:"devices"`
+	Composite CompositeConfig  `yaml:"composite"`
+	Tools     ToolsConfig      `yaml:"tools"`
+	Cloud     CloudConfig      `yaml:"cloud"`
+	AI        AIConfig         `yaml:"ai"`
+	Recipes   string           `yaml:"recipes_folder"`
+	Reports   string           `yaml:"reports_folder"`
+	Env       map[string]string `yaml:"environment"`
 }
 
 // CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.

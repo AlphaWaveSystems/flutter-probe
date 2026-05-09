@@ -156,6 +156,10 @@ const (
 	TOKEN_LINK       // "link" — open link "url"
 	TOKEN_ANIMATIONS // "animations" — wait for animations to end
 	TOKEN_STORE      // "store" — store "value" as varName
+
+	// Composite test keywords
+	TOKEN_COMPOSITE // "composite" — starts a composite test definition
+	TOKEN_SYNC      // "sync" — cross-device barrier step inside composite tests
 )
 
 // Token is a single lexical unit.
@@ -287,6 +291,8 @@ var keywords = map[string]TokenType{
 	"animations": TOKEN_ANIMATIONS,
 	"animation":  TOKEN_ANIMATIONS,
 	"store":      TOKEN_STORE,
+	"composite":  TOKEN_COMPOSITE,
+	"sync":       TOKEN_SYNC,
 }
 
 // fillerWords are stripped by the forgiving parser.

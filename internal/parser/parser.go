@@ -55,6 +55,12 @@ func (p *Parser) Parse() (*Program, error) {
 				return nil, err
 			}
 			prog.Tests = append(prog.Tests, t)
+		case TOKEN_COMPOSITE:
+			ct, err := p.parseCompositeTest()
+			if err != nil {
+				return nil, err
+			}
+			prog.CompositeTests = append(prog.CompositeTests, ct)
 		case TOKEN_BEFORE, TOKEN_AFTER, TOKEN_ON:
 			h, err := p.parseHook()
 			if err != nil {
@@ -1407,6 +1413,142 @@ func (p *Parser) parseHTTPCall() (Step, error) {
 
 	p.consumeNewline()
 	return HTTPCallStep{Method: method, URL: url, Body: body, Line: line}, nil
+}
+
+// ---- Composite test parsers ----
+
+// parseCompositeTest parses a "composite test ..." definition.
+// Syntax:
+//
+//	composite test "name"
+//	  devices            (optional block)
+//	    A: iPhone 15 Simulator
+//	    B: Pixel 9 Emulator
+//	  A:
+//	    tap "Login"
+//	  B:
+//	    tap "Login"
+//	  sync "both logged in"
+//	  ...
+func (p *Parser) parseCompositeTest() (CompositeTestDef, error) {
+	line := p.peek().Line
+	p.advance() // consume TOKEN_COMPOSITE
+	p.skipIf(TOKEN_TEST)
+	name := p.expectString("composite test name")
+
+	var tags []string
+	for p.peek().Type == TOKEN_IDENT && strings.HasPrefix(p.peek().Literal, "@") {
+		tags = append(tags, strings.TrimPrefix(p.advance().Literal, "@"))
+	}
+	p.consumeNewline()
+
+	if p.peek().Type != TOKEN_INDENT {
+		return CompositeTestDef{Name: name, Tags: tags, Line: line}, nil
+	}
+	p.advance() // consume INDENT
+
+	// Optional "devices" block — detected by the literal "devices" at this indent level.
+	var decls []DeviceDecl
+	if strings.ToLower(p.peek().Literal) == "devices" {
+		p.advance() // consume "devices"
+		p.skipIf(TOKEN_COLON)
+		p.consumeNewline()
+		if p.peek().Type == TOKEN_INDENT {
+			p.advance() // INDENT into device declarations
+			for p.peek().Type != TOKEN_DEDENT && !p.atEOF() {
+				p.skipNewlines()
+				if p.peek().Type == TOKEN_DEDENT || p.atEOF() {
+					break
+				}
+				// Any token followed by COLON is a device declaration.
+				if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TOKEN_COLON {
+					alias := p.advance().Literal
+					p.advance() // COLON
+					// Collect the rest of the line as the optional target.
+					var parts []string
+					for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_DEDENT && !p.atEOF() {
+						parts = append(parts, p.advance().Literal)
+					}
+					p.consumeNewline()
+					decls = append(decls, DeviceDecl{
+						Alias:  alias,
+						Target: strings.Join(parts, " "),
+						Line:   line,
+					})
+				} else {
+					p.advance()
+				}
+			}
+			if p.peek().Type == TOKEN_DEDENT {
+				p.advance()
+			}
+		}
+	}
+
+	body, err := p.parseCompositeBody()
+	if err != nil {
+		return CompositeTestDef{}, err
+	}
+
+	if p.peek().Type == TOKEN_DEDENT {
+		p.advance()
+	}
+
+	return CompositeTestDef{Name: name, Tags: tags, Devices: decls, Body: body, Line: line}, nil
+}
+
+// parseCompositeBody parses the step body of a composite test. Already inside
+// the INDENT block. Produces DeviceStep and SyncStep nodes interleaved.
+func (p *Parser) parseCompositeBody() ([]Step, error) {
+	var steps []Step
+	for p.peek().Type != TOKEN_DEDENT && !p.atEOF() {
+		p.skipNewlines()
+		if p.peek().Type == TOKEN_DEDENT || p.atEOF() {
+			break
+		}
+
+		tok := p.peek()
+
+		// sync "label" — cross-device barrier
+		if tok.Type == TOKEN_SYNC {
+			p.advance()
+			label := p.expectString("sync label")
+			p.consumeNewline()
+			steps = append(steps, SyncStep{Label: label, Line: tok.Line})
+			continue
+		}
+
+		// <ALIAS>: device block — any token immediately followed by COLON.
+		if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TOKEN_COLON {
+			alias := p.advance().Literal
+			p.advance() // COLON
+			p.consumeNewline()
+			if p.peek().Type == TOKEN_INDENT {
+				p.advance() // INDENT into device steps
+				for p.peek().Type != TOKEN_DEDENT && !p.atEOF() {
+					p.skipNewlines()
+					if p.peek().Type == TOKEN_DEDENT || p.atEOF() {
+						break
+					}
+					inner, err := p.parseStep()
+					if err != nil {
+						return nil, err
+					}
+					if inner != nil {
+						steps = append(steps, DeviceStep{Alias: alias, Step: inner, Line: inner.GetLine()})
+					}
+				}
+				if p.peek().Type == TOKEN_DEDENT {
+					p.advance()
+				}
+			}
+			continue
+		}
+
+		// Skip unknown tokens at composite body level.
+		p.advance()
+	}
+	return steps, nil
 }
 
 // parseStore parses: store "value" as varName

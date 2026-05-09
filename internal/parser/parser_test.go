@@ -899,3 +899,246 @@ test "t2"
 	}
 	assertTestCount(t, prog, 2)
 }
+
+// ---- Composite test parser tests ----
+
+func TestComposite_BasicParse(t *testing.T) {
+	src := `composite test "two devices"
+  devices
+    A: iPhone 15 Simulator
+    B: Pixel 9 Emulator
+
+  A:
+    tap "Login"
+    see "Dashboard"
+
+  B:
+    tap "Login"
+
+  sync "both logged in"
+
+  A:
+    tap "Send"
+
+  B:
+    see "Message"
+`
+	prog := mustParse(t, src)
+
+	if len(prog.CompositeTests) != 1 {
+		t.Fatalf("composite test count: got %d, want 1", len(prog.CompositeTests))
+	}
+	ct := prog.CompositeTests[0]
+	if ct.Name != "two devices" {
+		t.Errorf("name: got %q, want %q", ct.Name, "two devices")
+	}
+
+	// Device declarations
+	if len(ct.Devices) != 2 {
+		t.Fatalf("device decls: got %d, want 2", len(ct.Devices))
+	}
+	if ct.Devices[0].Alias != "A" {
+		t.Errorf("device[0] alias: got %q", ct.Devices[0].Alias)
+	}
+	if ct.Devices[1].Alias != "B" {
+		t.Errorf("device[1] alias: got %q", ct.Devices[1].Alias)
+	}
+
+	// Body should have: 2 DeviceSteps for A (Login+Dashboard), 1 DeviceStep for B (Login),
+	// SyncStep, 1 DeviceStep for A (Send), 1 DeviceStep for B (see Message) = 6 steps
+	if len(ct.Body) != 6 {
+		t.Errorf("body step count: got %d, want 6", len(ct.Body))
+		for i, s := range ct.Body {
+			t.Logf("  [%d] %T", i, s)
+		}
+	}
+
+	// Verify sync step is in the right position
+	syncIdx := -1
+	for i, step := range ct.Body {
+		if _, ok := step.(parser.SyncStep); ok {
+			syncIdx = i
+			break
+		}
+	}
+	if syncIdx != 3 {
+		t.Errorf("sync step index: got %d, want 3", syncIdx)
+	}
+	if s, ok := ct.Body[syncIdx].(parser.SyncStep); ok {
+		if s.Label != "both logged in" {
+			t.Errorf("sync label: got %q, want %q", s.Label, "both logged in")
+		}
+	}
+}
+
+func TestComposite_DeviceAliases(t *testing.T) {
+	src := `composite test "three devices"
+  devices
+    A: Simulator 1
+    B: Simulator 2
+    C: Emulator
+
+  A:
+    tap "button"
+  B:
+    tap "button"
+  C:
+    tap "button"
+  sync "all tapped"
+`
+	prog := mustParse(t, src)
+
+	if len(prog.CompositeTests) != 1 {
+		t.Fatalf("composite count: %d", len(prog.CompositeTests))
+	}
+	ct := prog.CompositeTests[0]
+
+	if len(ct.Devices) != 3 {
+		t.Errorf("device decl count: got %d, want 3", len(ct.Devices))
+	}
+
+	// Verify aliases
+	aliases := map[string]bool{"A": false, "B": false, "C": false}
+	for _, d := range ct.Devices {
+		aliases[d.Alias] = true
+	}
+	for a, found := range aliases {
+		if !found {
+			t.Errorf("alias %q not found in device decls", a)
+		}
+	}
+
+	// 3 DeviceSteps + 1 SyncStep = 4
+	if len(ct.Body) != 4 {
+		t.Errorf("body count: got %d, want 4", len(ct.Body))
+	}
+}
+
+func TestComposite_DeviceStepAliasAssignment(t *testing.T) {
+	src := `composite test "alias check"
+  B:
+    tap "Send"
+    see "Sent"
+  sync "done"
+`
+	prog := mustParse(t, src)
+
+	if len(prog.CompositeTests) != 1 {
+		t.Fatalf("composite count: %d", len(prog.CompositeTests))
+	}
+	ct := prog.CompositeTests[0]
+
+	// 2 DeviceSteps (B:tap, B:see) + 1 SyncStep = 3
+	if len(ct.Body) != 3 {
+		t.Errorf("body count: got %d, want 3", len(ct.Body))
+	}
+	for i := 0; i < 2; i++ {
+		ds, ok := ct.Body[i].(parser.DeviceStep)
+		if !ok {
+			t.Errorf("body[%d]: expected DeviceStep, got %T", i, ct.Body[i])
+			continue
+		}
+		if ds.Alias != "B" {
+			t.Errorf("body[%d] alias: got %q, want %q", i, ds.Alias, "B")
+		}
+	}
+}
+
+func TestComposite_NoDevicesBlock(t *testing.T) {
+	src := `composite test "no header"
+  A:
+    tap "Go"
+  sync "done"
+  B:
+    see "Result"
+`
+	prog := mustParse(t, src)
+
+	if len(prog.CompositeTests) != 1 {
+		t.Fatalf("composite count: %d", len(prog.CompositeTests))
+	}
+	ct := prog.CompositeTests[0]
+
+	// No device declarations in header
+	if len(ct.Devices) != 0 {
+		t.Errorf("device decls: got %d, want 0", len(ct.Devices))
+	}
+	// 1 DeviceStep + 1 SyncStep + 1 DeviceStep = 3
+	if len(ct.Body) != 3 {
+		t.Errorf("body count: got %d, want 3", len(ct.Body))
+	}
+}
+
+func TestComposite_CoexistsWithRegularTests(t *testing.T) {
+	src := `test "regular"
+  tap "button"
+
+composite test "multi-device"
+  A:
+    tap "Go"
+  sync "done"
+  B:
+    see "OK"
+`
+	prog := mustParse(t, src)
+
+	if len(prog.Tests) != 1 {
+		t.Errorf("regular test count: got %d, want 1", len(prog.Tests))
+	}
+	if len(prog.CompositeTests) != 1 {
+		t.Errorf("composite test count: got %d, want 1", len(prog.CompositeTests))
+	}
+}
+
+func TestComposite_MultipleSyncPoints(t *testing.T) {
+	src := `composite test "multi sync"
+  A:
+    tap "step 1"
+  B:
+    tap "step 1"
+  sync "phase 1"
+  A:
+    tap "step 2"
+  B:
+    tap "step 2"
+  sync "phase 2"
+`
+	prog := mustParse(t, src)
+	ct := prog.CompositeTests[0]
+
+	syncs := 0
+	for _, s := range ct.Body {
+		if _, ok := s.(parser.SyncStep); ok {
+			syncs++
+		}
+	}
+	if syncs != 2 {
+		t.Errorf("sync step count: got %d, want 2", syncs)
+	}
+}
+
+func TestComposite_DeviceTargetParsed(t *testing.T) {
+	src := `composite test "target check"
+  devices
+    Phone: iPhone 15 Pro Simulator
+    Tablet: iPad Pro 12.9 Simulator
+
+  Phone:
+    tap "Go"
+  sync "done"
+  Tablet:
+    see "OK"
+`
+	prog := mustParse(t, src)
+	ct := prog.CompositeTests[0]
+
+	if len(ct.Devices) != 2 {
+		t.Fatalf("device decl count: got %d, want 2", len(ct.Devices))
+	}
+	if ct.Devices[0].Target != "iPhone 15 Pro Simulator" {
+		t.Errorf("device[0] target: got %q, want %q", ct.Devices[0].Target, "iPhone 15 Pro Simulator")
+	}
+	if ct.Devices[1].Target != "iPad Pro 12.9 Simulator" {
+		t.Errorf("device[1] target: got %q, want %q", ct.Devices[1].Target, "iPad Pro 12.9 Simulator")
+	}
+}

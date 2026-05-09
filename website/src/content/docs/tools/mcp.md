@@ -26,7 +26,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `get_widget_tree` | Dump the live Flutter widget tree from the running app |
 | `take_screenshot` | Capture the current screen and return it as an image |
 | `read_test` | Read the contents of a `.probe` file |
-| `write_test` | Create or overwrite a `.probe` file |
+| `write_test` | Create or overwrite a `.probe` file (supports `composite test` syntax) |
 | `run_script` | Execute inline ProbeScript without creating a file |
 | `run_tests` | Run `.probe` test files against the connected app |
 | `list_files` | List all `.probe` files in a directory |
@@ -37,6 +37,21 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 `get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) so the agent can pin a specific target when more than one device is connected.
 
 The workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` — a complete AI-driven test authoring loop, including device bring-up.
+
+### Composite tests from AI agents
+
+`write_test` supports the full ProbeScript syntax including `composite test` blocks. An agent can author multi-device tests and have them executed via `run_tests` — the CLI handles barrier synchronization automatically.
+
+For composite tests to execute (rather than be reported as SKIPPED), the `probe.yaml` in the working directory must have a `composite.devices` section mapping aliases to real device specs, **or** the agent must pass `--composite-device` flags via the `flags` argument to `run_tests`.
+
+Example `probe.yaml` composite configuration an agent can write via the filesystem:
+
+```yaml
+composite:
+  devices:
+    A: "192.168.1.10:48686/token-for-device-A"
+    B: "00008030-001A34E40258002E"
+```
 
 ## Requirements
 
@@ -196,7 +211,9 @@ List all available tools:
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 ```
 
-## Example AI session
+## Example AI sessions
+
+### Single-device test authoring
 
 Once connected, you can prompt Claude to:
 
@@ -220,6 +237,38 @@ Claude will:
 2. Call `start_device` with `{platform: "ios", udid: "<chosen>"}`
 3. Call `list_devices` to confirm it came online
 4. Call `run_tests` with `{tag: "smoke", device: "<udid>"}` to pin the run to the just-booted sim
+
+### Composite (multi-device) test authoring
+
+> "Write a composite test that verifies push notifications are delivered between two simulators."
+
+Claude will:
+1. Call `list_simulators` to discover two available iOS simulators
+2. Call `start_device` for each if needed
+3. Call `get_widget_tree` on both devices (using the `device` argument) to understand the UI
+4. Call `write_test` to create `tests/push_notification.probe` with a `composite test` block, device aliases, and `sync` barriers
+5. Call `run_tests` with `--composite-device "A=<udid1>" --composite-device "B=<udid2>"` via the `flags` argument
+6. Call `get_report` to inspect per-device pass/fail results
+
+The composite test file Claude produces looks like:
+
+```
+composite test "push notification delivered"
+  devices
+    Sender: iPhone 15 Simulator
+    Receiver: iPhone 16 Simulator
+
+  Sender:
+    open app
+    tap "Notifications"
+    tap "Send Test Push"
+
+  sync "push sent"
+
+  Receiver:
+    wait until "Test notification" appears
+    see "Test notification"
+```
 
 ## Troubleshooting
 

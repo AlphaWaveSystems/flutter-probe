@@ -4,6 +4,7 @@
 - [Architecture Overview](Architecture-Overview)
 - [Development Setup](Development-Setup)
 - [iOS Integration Guide](iOS-Integration-Guide)
+- [Composite Tests](Composite-Tests)
 - [Troubleshooting](Troubleshooting)
 
 ### Resources

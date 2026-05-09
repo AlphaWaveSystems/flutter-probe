@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.8.0 - 2026-05-02
+## 0.9.0 - 2026-05-09
 
-- Version bump to keep in sync with FlutterProbe CLI v0.8.0. No agent-side changes.
+- Version bump to match CLI v0.9.0. No agent code changes in this release.
+  Composite tests are a CLI-only feature — the agent runs identically on each
+  participating device and is unaware of the multi-device coordination layer.
 
 ## 0.7.0 - 2026-05-02
 

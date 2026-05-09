@@ -33,13 +33,14 @@ type TestResult struct {
 
 // Runner coordinates parsing, connecting, and executing .probe files.
 type Runner struct {
-	cfg       *config.Config
-	client    probelink.ProbeClient
-	deviceCtx *DeviceContext // nil in dry-run mode
-	opts      RunOptions
-	recipes   map[string]parser.RecipeDef
-	visual    *visual.Comparator // nil if visual regression is not configured
-	onResult  func(TestResult)   // optional per-result callback for streaming
+	cfg             *config.Config
+	client          probelink.ProbeClient
+	deviceCtx       *DeviceContext  // nil in dry-run mode
+	opts            RunOptions
+	recipes         map[string]parser.RecipeDef
+	visual          *visual.Comparator  // nil if visual regression is not configured
+	onResult        func(TestResult)    // optional per-result callback for streaming
+	compositeRunner *CompositeRunner    // nil if composite tests are not configured
 }
 
 // RunOptions configures a test run.
@@ -80,6 +81,12 @@ func (r *Runner) SetVisual(c *visual.Comparator) {
 // safe to call from the goroutine that runs tests.
 func (r *Runner) OnResult(cb func(TestResult)) {
 	r.onResult = cb
+}
+
+// SetCompositeRunner attaches a CompositeRunner so that composite tests found
+// in .probe files are executed instead of skipped.
+func (r *Runner) SetCompositeRunner(cr *CompositeRunner) {
+	r.compositeRunner = cr
 }
 
 // newExecutor builds an Executor preconfigured with this Runner's reconnect
@@ -184,7 +191,53 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 		}
 	}
 
+	// Run composite tests. If no CompositeRunner is configured, skip them
+	// and report each as SKIPPED with a descriptive reason.
+	for _, ct := range prog.CompositeTests {
+		var res TestResult
+		if r.compositeRunner == nil {
+			res = TestResult{
+				TestName: ct.Name,
+				File:     path,
+				Skipped:  true,
+				Row:      -1,
+			}
+			fmt.Printf("  \033[33m⟳\033[0m  %s \033[2m(skipped: no composite devices configured — use --composite-device)\033[0m\n", ct.Name)
+		} else {
+			// Share recipes with the composite runner so recipe files loaded
+			// by this .probe file are available to all device goroutines.
+			for _, rec := range r.recipes {
+				r.compositeRunner.RegisterRecipe(rec)
+			}
+			ctr := r.compositeRunner.RunCompositeTest(ctx, ct, path)
+			res = ctr.ToTestResult()
+			printCompositeResult(ctr)
+		}
+		if r.onResult != nil {
+			r.onResult(res)
+		}
+		results = append(results, res)
+	}
+
 	return results, nil
+}
+
+// printCompositeResult prints the composite test outcome with per-device detail.
+func printCompositeResult(r CompositeTestResult) {
+	if r.Skipped {
+		fmt.Printf("  \033[33m⟳\033[0m  %s \033[2m(skipped)\033[0m\n", r.TestName)
+		return
+	}
+	icon := "\033[32m✓\033[0m"
+	if !r.Passed {
+		icon = "\033[31m✗\033[0m"
+	}
+	fmt.Printf("  %s  %s \033[2m(%s) [composite]\033[0m\n", icon, r.TestName, r.Duration.Round(time.Millisecond))
+	for alias, dr := range r.DeviceResults {
+		if dr.Error != nil {
+			fmt.Printf("       \033[31m[%s] %v\033[0m\n", alias, dr.Error)
+		}
+	}
 }
 
 func (r *Runner) runTest(ctx context.Context, prog *parser.Program, t parser.TestDef, file string) ([]TestResult, error) {

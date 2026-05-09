@@ -24,6 +24,7 @@ test "user can log in"
 - [How It Works](#how-it-works)
 - [Installation](#installation)
 - [ProbeScript Language](#probescript-language)
+- [Composite Tests](#composite-tests)
 - [CLI Commands](#cli-commands)
 - [Studio (Beta Preview)](#studio-beta-preview)
 - [MCP Server](#mcp-server)
@@ -279,6 +280,73 @@ clear app data          # wipe storage, relaunch, reconnect
 restart the app         # force-stop, relaunch, reconnect (data preserved)
 ```
 
+## Composite Tests
+
+Composite tests coordinate **multiple devices simultaneously** in a single `.probe` file. Designed for real-time features: chat, push notifications, multiplayer, sync.
+
+```
+composite test "alice sends bob a message"
+  devices
+    A: iPhone 15 Simulator
+    B: Pixel 9 Emulator
+
+  A:
+    open app
+    tap "Login"
+    type "alice@example.com" in "email"
+    tap "Continue"
+
+  B:
+    open app
+    tap "Login"
+    type "bob@example.com" in "email"
+    tap "Continue"
+
+  sync "both logged in"
+
+  A:
+    tap "New Message"
+    type "Hello Bob" in "compose"
+    tap "Send"
+
+  B:
+    wait until "Hello Bob" appears
+    see "Hello Bob"
+```
+
+**How it works:** FlutterProbe launches one goroutine per device. Steps tagged `A:` run concurrently with `B:` steps. `sync "label"` is a barrier — all goroutines block until the last one arrives, then all proceed together.
+
+**Failure semantics:** if one device fails, the shared context is cancelled immediately, all barriers are aborted, and other devices stop at their next step. The failing device is reported as FAIL; others as CANCELLED.
+
+**N devices:** add more aliases to `devices:` and write matching step blocks — no limit.
+
+Run composite tests by mapping aliases to real devices:
+
+```bash
+# WiFi (physical devices or cross-machine)
+probe test tests/ --composite-device "A=192.168.1.10:48686/token1" \
+                  --composite-device "B=192.168.1.11:48686/token2"
+
+# Local simulators (by UDID)
+probe test tests/ --composite-device "A=A1B2C3D4-..." \
+                  --composite-device "B=E5F6G7H8-..."
+
+# Android
+probe test tests/ --composite-device "A=emulator-5554" \
+                  --composite-device "B=emulator-5556"
+```
+
+Or pin them in `probe.yaml`:
+
+```yaml
+composite:
+  devices:
+    A: "192.168.1.10:48686/my-token"
+    B: "00008030-001A34E40258002E"
+```
+
+Composite tests without configured devices are reported as **SKIPPED**, so single-device pipelines are unaffected. Full reference: [Composite Tests wiki](docs/wiki/Composite-Tests.md).
+
 ### OS-level permissions
 
 ```
@@ -508,6 +576,13 @@ agent:
 device:
   boot_timeout: 120s
 
+# Composite test device aliases (optional — can also use --composite-device flag)
+composite:
+  devices:
+    A: "192.168.1.10:48686/my-token"   # WiFi: host:port/token
+    B: "00008030-001A34E40258002E"       # iOS simulator UDID
+    C: "emulator-5554"                   # Android serial
+
 visual:
   threshold: 0.5
   pixel_delta: 8
@@ -591,6 +666,18 @@ Wrap variables in quotes: `see "<expected>"` not `see <expected>`. The `<variabl
 ### Android emulator: app doesn't launch after restart
 
 FlutterProbe uses `am start -n {package}/.MainActivity` for Android. Ensure your app's `AndroidManifest.xml` has `MainActivity` as the launcher activity. This is the default for Flutter apps created with `flutter create`.
+
+### How do I test real-time features that need two devices?
+
+Use `composite test`. Write device-tagged step blocks (`A:`, `B:`) and use `sync "label"` as a barrier. See [Composite Tests](#composite-tests) above.
+
+### My composite test says "skipped: no composite devices configured"
+
+Add `--composite-device ALIAS=SPEC` flags (one per alias) or set `composite.devices` in `probe.yaml`. WiFi mode is recommended: `--composite-device "A=192.168.1.10:48686/token"`. The spec format is `host:port/token` for WiFi, a simulator UDID, or an ADB serial.
+
+### Can composite and regular tests be in the same file?
+
+Yes. `test "..."` and `composite test "..."` coexist in any `.probe` file. Regular tests run on the primary device; composite tests run multi-device. If composite devices are not configured, only the composite tests are skipped — regular tests run normally.
 
 ### How do I run tests in parallel?
 
