@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-09
+
+### Added
+- **Composite tests** — a new `composite test` keyword lets a single `.probe` file orchestrate multiple devices simultaneously. Declare device aliases (`A`, `B`, `C`, …), write per-device step blocks (`A: tap "Login"`), and use `sync "label"` as a cross-device barrier that all goroutines must reach before any proceeds. Supports N devices. Files with composite tests coexist with regular `test` blocks. Configure devices via `--composite-device A=host:port/token` (WiFi), `--composite-device B=<udid>` (iOS simulator), or `--composite-device C=emulator-5554` (Android). Probe.yaml can also set `composite.devices` for project-level defaults. If composite devices are not configured at runtime, composite tests are reported as SKIPPED.
+- **Failure semantics**: if one device fails mid-test, the shared context is cancelled immediately; all other devices are unblocked from any `sync` barrier they are waiting at and their next step returns a cancelled error. The final result marks the root cause device as FAIL and secondary devices as CANCELLED.
+
 ## [0.8.0] - 2026-05-02
 
 ### Added

@@ -100,6 +100,12 @@ func (e *Executor) RunBody(ctx context.Context, steps []parser.Step) error {
 	return nil
 }
 
+// RunStep executes a single step. CompositeRunner uses this to interleave
+// device steps with sync barrier coordination.
+func (e *Executor) RunStep(ctx context.Context, step parser.Step) error {
+	return e.runStep(ctx, step)
+}
+
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Use a longer timeout for restart/clear — they kill the app and reconnect
 	stepTimeout := e.timeout

@@ -47,10 +47,11 @@ type Node interface {
 // ---- Program ----
 
 type Program struct {
-	Uses    []UseStmt
-	Recipes []RecipeDef
-	Hooks   []HookDef
-	Tests   []TestDef
+	Uses           []UseStmt
+	Recipes        []RecipeDef
+	Hooks          []HookDef
+	Tests          []TestDef
+	CompositeTests []CompositeTestDef
 }
 
 // ---- UseStmt ----
@@ -293,6 +294,50 @@ type RecipeCall struct {
 func (r RecipeCall) nodeType() string { return "recipe_call" }
 func (r RecipeCall) GetLine() int     { return r.Line }
 func (r RecipeCall) stepType() string { return "recipe_call" }
+
+// ---- Composite test types ----
+
+// DeviceDecl declares a device alias in a composite test header.
+type DeviceDecl struct {
+	Alias  string // short alias: "A", "B", "Phone", etc.
+	Target string // optional device name/UDID/serial for auto-resolution (may be empty)
+	Line   int
+}
+
+// CompositeTestDef is a test that coordinates steps across multiple devices.
+type CompositeTestDef struct {
+	Name    string
+	Tags    []string
+	Devices []DeviceDecl // declared device aliases
+	Body    []Step       // mix of DeviceStep and SyncStep at the top level
+	Line    int
+}
+
+func (c CompositeTestDef) nodeType() string { return "composite_test" }
+func (c CompositeTestDef) GetLine() int     { return c.Line }
+
+// DeviceStep wraps a regular step and targets it at a specific device alias.
+// Only appears in CompositeTestDef.Body, never in TestDef.Body.
+type DeviceStep struct {
+	Alias string
+	Step  Step
+	Line  int
+}
+
+func (d DeviceStep) nodeType() string { return "device_step" }
+func (d DeviceStep) GetLine() int     { return d.Line }
+func (d DeviceStep) stepType() string { return "device_step" }
+
+// SyncStep is a cross-device barrier. All devices in a composite test must
+// reach the same sync label before any of them proceed past it.
+type SyncStep struct {
+	Label string
+	Line  int
+}
+
+func (s SyncStep) nodeType() string { return "sync" }
+func (s SyncStep) GetLine() int     { return s.Line }
+func (s SyncStep) stepType() string { return "sync" }
 
 // ---- HTTPCallStep ----
 
