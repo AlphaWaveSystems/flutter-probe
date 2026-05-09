@@ -11,13 +11,14 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 - [Android Integration Guide](Android-Integration-Guide) — Android-specific setup and ADB usage
 - [CI/CD Integration](CI-CD-Integration) — Running FlutterProbe in CI pipelines
 - [Cloud Providers](Cloud-Providers) — BrowserStack, SauceLabs, AWS Device Farm, Firebase Test Lab, LambdaTest
+- [Composite Tests](Composite-Tests) — Multi-device coordinated testing
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
 - [Release Process](Release-Process) — How to cut a release
 - [Security](Security) — Security practices and vulnerability reporting
 
 ## Project Status
 
-FlutterProbe is in active development. Current version: **0.8.0**.
+FlutterProbe is in active development. Current version: **0.9.0**.
 
 ### Repository Structure
 
