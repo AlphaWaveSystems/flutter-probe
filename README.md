@@ -412,7 +412,25 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-For AI agents (Claude Desktop, Cursor, any MCP-compatible client), v0.6.0 ships **`probe-mcp`** as a standalone binary alongside `probe`. It exposes 10 tools: `get_widget_tree`, `take_screenshot`, `read_test`, `write_test`, `run_script`, `run_tests`, `list_files`, `lint`, `get_report`, `generate_test`.
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 18 tools:
+
+| Category | Tools |
+|---|---|
+| Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
+| Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
+| Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
+| Reporting | `get_report`, `generate_report`, `generate_test` |
+| Project | `init_project`, `record` |
+
+Every CLI feature is accessible from MCP. Key capabilities an agent can use:
+
+- **Composite tests** — `write_test` supports the full `composite test` syntax; `run_tests` accepts a `composite_devices` parameter (`"A=host:port/token B=udid"`)
+- **Structured results** — pass `--format json` in `run_tests`'s `flags` to get machine-readable output, then call `get_report` or `generate_report` for HTML
+- **Parallel/shard** — `--parallel` or `--shard 1/3` via `flags`
+- **WiFi physical devices** — `--host <ip> --token <tok>` via `flags`
+- **Android + iOS shutdown** — `shutdown_device` accepts `udid` (iOS) or `serial` (Android)
+- **Pre-write validation** — `write_test` parses the content before writing; syntax errors are returned immediately without creating the file
+- **Interaction recording** — `record` captures gestures and returns a `.probe` file
 
 Configure your MCP client:
 
@@ -426,7 +444,7 @@ Configure your MCP client:
 }
 ```
 
-The legacy `probe mcp-server` subcommand still works for backwards compatibility but prints a one-time deprecation notice. Full setup guide for Claude Desktop, Cursor, and other MCP clients: [MCP Server docs](https://flutterprobe.dev/tools/mcp/).
+The legacy `probe mcp-server` subcommand still works but prints a deprecation notice. Full setup guide for Claude Desktop, Cursor, and other MCP clients: [MCP Server docs](https://flutterprobe.dev/tools/mcp/).
 
 ## Visual Regression
 
