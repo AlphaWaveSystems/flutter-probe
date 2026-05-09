@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-09
+
+### Added
+- **MCP: 3 new tools** — `init_project` (scaffold `probe.yaml` + `tests/`), `generate_report` (HTML from JSON results), `record` (record interactions → `.probe` file with configurable timeout)
+- **MCP: Android emulator shutdown** — `shutdown_device` now accepts `serial` for Android emulators in addition to `udid` for iOS simulators
+- **MCP: composite test support** — `run_tests` exposes a `composite_devices` parameter (`"A=host:port/token B=udid"`) that maps directly to `--composite-device` flags; `write_test` description documents the full `composite test` syntax
+- **MCP: `run_tests` flags documented** — tool description now enumerates key flags (`--timeout`, `--format`, `--parallel`, `--shard`, `--host/--token`, `--disable-animations`, `--video`, `--stream`)
+- **MCP: `write_test` validates before writing** — content is parsed in-process before the file is created; syntax errors are returned immediately without touching the filesystem
+
+### Fixed
+- **MCP: `get_report` used alphabetical order instead of modification time** — `get_report` and `generate_report` now find the most recently *modified* JSON file in `reports/`, not the lexicographically last one
+
 ## [0.9.0] - 2026-05-09
 
 ### Added

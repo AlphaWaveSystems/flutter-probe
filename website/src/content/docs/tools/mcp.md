@@ -3,59 +3,105 @@ title: MCP Server
 description: Connect FlutterProbe to Claude Desktop, Cursor, and other AI agents via the Model Context Protocol.
 ---
 
-FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary called `probe-mcp` that exposes your test suite as tools callable by AI agents. Once connected, Claude Desktop, Cursor, or any MCP-compatible client can read the live widget tree, write tests, run them, and inspect results — all without leaving the AI chat.
+FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary called `probe-mcp` that exposes your entire test suite as tools callable by AI agents. Once connected, Claude Desktop, Cursor, or any MCP-compatible client can manage devices, write and run tests, record interactions, generate reports, and inspect results — all without leaving the AI chat.
 
-> **As of v0.6.0**, the MCP server is a separate binary `probe-mcp`. The legacy `probe mcp-server` subcommand still works (it runs the same code embedded in the main binary) but prints a deprecation notice on stderr. Update your MCP client configuration to point at `probe-mcp` directly.
+> **As of v0.6.0**, the MCP server is a separate binary `probe-mcp`. The legacy `probe mcp-server` subcommand still works but prints a deprecation notice on stderr. Update your MCP client configuration to point at `probe-mcp` directly.
 
 ## What the MCP server exposes
 
-### Device lifecycle
+### Device lifecycle (5 tools)
 
 | Tool | Description |
 |---|---|
 | `list_devices` | List booted/connected simulators, emulators, and physical devices (id, name, platform, state, OS version) |
 | `list_simulators` | List all iOS simulators (booted + shutdown) so the agent can pick one to boot |
 | `list_avds` | List Android Virtual Device names available to launch |
-| `start_device` | Boot an Android emulator (by AVD name) or iOS simulator (by UDID) |
-| `shutdown_device` | Shut down an iOS simulator by UDID |
+| `start_device` | Boot an Android emulator (by AVD name) or iOS simulator (by UDID); blocks until online |
+| `shutdown_device` | Shut down an iOS simulator (`udid`) or Android emulator (`serial`) |
 
-### Test authoring & execution
+### Authoring & execution (9 tools)
 
 | Tool | Description |
 |---|---|
 | `get_widget_tree` | Dump the live Flutter widget tree from the running app |
 | `take_screenshot` | Capture the current screen and return it as an image |
 | `read_test` | Read the contents of a `.probe` file |
-| `write_test` | Create or overwrite a `.probe` file (supports `composite test` syntax) |
+| `write_test` | Create or overwrite a `.probe` file — content is validated before writing; syntax errors are returned without creating the file |
 | `run_script` | Execute inline ProbeScript without creating a file |
-| `run_tests` | Run `.probe` test files against the connected app |
+| `run_tests` | Run `.probe` test files (supports composite multi-device tests via `composite_devices`) |
 | `list_files` | List all `.probe` files in a directory |
 | `lint` | Validate `.probe` file syntax without running |
-| `get_report` | Read the latest JSON test run report |
-| `generate_test` | AI-generate a test from a natural language prompt |
+| `record` | Record user interactions and generate a `.probe` test file (runs for `timeout` duration, default 30s) |
 
-`get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) so the agent can pin a specific target when more than one device is connected.
+`get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) to pin a specific target.
 
-The workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` — a complete AI-driven test authoring loop, including device bring-up.
+### Reporting & generation (3 tools)
 
-### Composite tests from AI agents
+| Tool | Description |
+|---|---|
+| `get_report` | Read the most recently modified JSON test run report |
+| `generate_report` | Generate a standalone HTML report from a JSON results file |
+| `generate_test` | AI-generate a `.probe` test from a natural language prompt |
 
-`write_test` supports the full ProbeScript syntax including `composite test` blocks. An agent can author multi-device tests and have them executed via `run_tests` — the CLI handles barrier synchronization automatically.
+### Project management (1 tool)
 
-For composite tests to execute (rather than be reported as SKIPPED), the `probe.yaml` in the working directory must have a `composite.devices` section mapping aliases to real device specs, **or** the agent must pass `--composite-device` flags via the `flags` argument to `run_tests`.
+| Tool | Description |
+|---|---|
+| `init_project` | Initialize a new FlutterProbe project (creates `probe.yaml` and `tests/` scaffold) |
 
-Example `probe.yaml` composite configuration an agent can write via the filesystem:
+The full workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` → `generate_report` — a complete AI-driven test authoring loop, including device bring-up and HTML reporting.
 
-```yaml
-composite:
-  devices:
-    A: "192.168.1.10:48686/token-for-device-A"
-    B: "00008030-001A34E40258002E"
+## `run_tests` flags
+
+The `run_tests` tool has named parameters for common options (`paths`, `tag`, `device`, `composite_devices`) and a `flags` string for everything else. Key flags an agent should know:
+
+| Flag | What it does |
+|---|---|
+| `--timeout 60s` | Per-step timeout (default 30s) |
+| `--format json` | Structured JSON results (pipe to `get_report`) |
+| `--format junit` | JUnit XML for CI systems |
+| `--dry-run` | Validate syntax without a device connection |
+| `--parallel` | Distribute tests across all connected devices |
+| `--shard 1/3` | Run 1/3 of test files (for CI matrix builds) |
+| `--host <ip> --token <t>` | WiFi mode for physical devices |
+| `--disable-animations` | Set `timeDilation=0` for faster tests |
+| `-y` | Auto-approve destructive operations (CI mode) |
+| `--video` | Record device screen during the run |
+| `--stream` | Emit one ndjson line per test as it completes (requires `--format json`) |
+
+## Composite (multi-device) tests
+
+`write_test` supports the full `composite test` syntax for coordinating multiple devices:
+
 ```
+composite test "alice sends bob a message"
+  devices
+    A: iPhone 15 Simulator
+    B: Pixel 9 Emulator
+
+  A:
+    tap "New Message"
+    type "Hello Bob" in "compose"
+    tap "Send"
+
+  sync "message sent"
+
+  B:
+    wait until "Hello Bob" appears
+    see "Hello Bob"
+```
+
+Pass device connections to `run_tests` via `composite_devices` (space-separated `ALIAS=SPEC` pairs):
+
+- WiFi: `"A=192.168.1.10:48686/token"` 
+- iOS simulator: `"B=A1B2C3D4-E5F6-..."`
+- Android: `"C=emulator-5554"`
+
+Or configure them in `probe.yaml` under `composite.devices`.
 
 ## Requirements
 
-- `probe-mcp` binary v0.6.0+ installed and in `PATH` (legacy `probe mcp-server` v0.5.7+ also works but is deprecated)
+- `probe-mcp` binary v0.9.0+ installed and in `PATH`
 - Flutter app running with `--dart-define=PROBE_AGENT=true` (for live tools like `get_widget_tree`, `take_screenshot`, `run_tests`)
 - An MCP-compatible client (Claude Desktop, Cursor, etc.)
 
@@ -64,8 +110,6 @@ Verify the binary is accessible:
 ```bash
 which probe-mcp   # should print /opt/homebrew/bin/probe-mcp or similar
 ```
-
-`probe-mcp` reads JSON-RPC 2.0 messages from stdin and writes responses to stdout, so it has no `--version` flag of its own — verify by sending an `initialize` request (see [Verifying the connection](#verifying-the-connection)).
 
 ## Claude Desktop
 
@@ -95,11 +139,7 @@ If `probe-mcp` is not in your shell `PATH` (common when Claude Desktop doesn't i
 }
 ```
 
-Find the absolute path with:
-
-```bash
-which probe-mcp
-```
+Find the absolute path with `which probe-mcp`.
 
 ### Windows
 
@@ -133,52 +173,11 @@ In Cursor, open **Settings → MCP** (or edit `.cursor/mcp.json` at the repo roo
 
 Restart Cursor after saving.
 
-## Migrating from `probe mcp-server`
-
-If you previously used the legacy subcommand, change:
-
-```json
-{ "command": "probe", "args": ["mcp-server"] }
-```
-
-to:
-
-```json
-{ "command": "probe-mcp" }
-```
-
-The tools, protocol, and behavior are identical. The legacy form continues to work in v0.6.0 but prints a deprecation notice and will be removed in a future release.
-
-## Other MCP clients
-
-Any client that supports the MCP stdio transport works. The server command is:
-
-```bash
-probe-mcp
-```
-
-It reads JSON-RPC 2.0 messages from stdin and writes responses to stdout, one message per line (newline-delimited).
-
 ## Working directory
 
 The MCP server inherits the working directory from the client. For tools like `run_tests`, `list_files`, and `get_report` to find your test files, the working directory must be your Flutter project root (the folder containing `probe.yaml` and `tests/`).
 
-Claude Desktop launches the server with its own working directory, which may not be your project. Pass the correct directory explicitly:
-
-```json
-{
-  "mcpServers": {
-    "flutter-probe": {
-      "command": "probe-mcp",
-      "env": {
-        "PWD": "/Users/you/dev/my-flutter-app"
-      }
-    }
-  }
-}
-```
-
-Or use the `cwd` field if your client supports it:
+Claude Desktop launches the server with its own working directory, which may not be your project. Set it explicitly:
 
 ```json
 {
@@ -199,10 +198,10 @@ Test the server manually in your terminal:
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | probe-mcp
 ```
 
-Expected response (version reflects the installed binary):
+Expected response:
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.6.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.1"}}}
 ```
 
 List all available tools:
@@ -215,60 +214,66 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 
 ### Single-device test authoring
 
-Once connected, you can prompt Claude to:
-
 > "Look at the widget tree and write a test that verifies the login flow works."
 
-Claude will:
-1. Call `get_widget_tree` to inspect the running app's UI
-2. Call `take_screenshot` to see what is on screen
-3. Call `write_test` to create `tests/login.probe`
-4. Call `run_tests` to execute it
-5. Call `get_report` to verify all steps passed
+1. `get_widget_tree` — inspect the running app's UI
+2. `take_screenshot` — see what is on screen
+3. `write_test` — create `tests/login.probe` (content validated before writing)
+4. `run_tests` — execute it
+5. `get_report` — verify all steps passed
 
 ### Device bring-up from chat
 
-You can also let Claude pick and start a simulator before the app is running:
-
 > "Boot an iOS simulator and run the smoke tests on it."
 
-Claude will:
-1. Call `list_simulators` to discover available UDIDs
-2. Call `start_device` with `{platform: "ios", udid: "<chosen>"}`
-3. Call `list_devices` to confirm it came online
-4. Call `run_tests` with `{tag: "smoke", device: "<udid>"}` to pin the run to the just-booted sim
+1. `list_simulators` — discover available UDIDs
+2. `start_device` with `{platform: "ios", udid: "<chosen>"}`
+3. `list_devices` — confirm it came online
+4. `run_tests` with `{tag: "smoke", device: "<udid>"}`
 
 ### Composite (multi-device) test authoring
 
-> "Write a composite test that verifies push notifications are delivered between two simulators."
+> "Write a test that verifies push notifications are delivered between two simulators."
 
-Claude will:
-1. Call `list_simulators` to discover two available iOS simulators
-2. Call `start_device` for each if needed
-3. Call `get_widget_tree` on both devices (using the `device` argument) to understand the UI
-4. Call `write_test` to create `tests/push_notification.probe` with a `composite test` block, device aliases, and `sync` barriers
-5. Call `run_tests` with `--composite-device "A=<udid1>" --composite-device "B=<udid2>"` via the `flags` argument
-6. Call `get_report` to inspect per-device pass/fail results
+1. `list_simulators` — discover two available iOS simulators
+2. `start_device` for each if needed
+3. `get_widget_tree` on both devices (using the `device` argument) to understand the UI
+4. `write_test` — create a `composite test` block with device aliases and `sync` barriers
+5. `run_tests` with `composite_devices: "A=<udid1> B=<udid2>"`
+6. `get_report` — inspect per-device pass/fail results
+7. `generate_report` — produce a shareable HTML report
 
-The composite test file Claude produces looks like:
+### Record then refine
 
+> "Record my interactions for 30 seconds and turn them into a reusable test."
+
+1. `record` with `{timeout: "30s", output: "tests/recorded.probe"}` — returns the generated file
+2. `lint` on the recorded file to check for issues
+3. `write_test` to clean up and refine the generated steps
+4. `run_tests` to verify the refined test passes
+
+### HTML report from CI results
+
+> "The CI run produced JSON results. Generate a report I can share."
+
+1. `get_report` — reads the most recently modified JSON in `reports/`
+2. `generate_report` — produces `reports/report.html`
+
+## Migrating from `probe mcp-server`
+
+Change:
+
+```json
+{ "command": "probe", "args": ["mcp-server"] }
 ```
-composite test "push notification delivered"
-  devices
-    Sender: iPhone 15 Simulator
-    Receiver: iPhone 16 Simulator
 
-  Sender:
-    open app
-    tap "Notifications"
-    tap "Send Test Push"
+to:
 
-  sync "push sent"
-
-  Receiver:
-    wait until "Test notification" appears
-    see "Test notification"
+```json
+{ "command": "probe-mcp" }
 ```
+
+The tools, protocol, and behavior are identical. The legacy form continues to work but prints a deprecation notice.
 
 ## Troubleshooting
 
@@ -302,6 +307,16 @@ Then confirm the agent is reachable:
 probe test --dry-run
 ```
 
-### Screenshots saved to wrong directory
+### `write_test` returns a syntax error
 
-The MCP server looks for screenshots in `reports/screenshots/` relative to its working directory. Set `cwd` in your MCP config to your project root (see [Working directory](#working-directory) above).
+The content you provided failed ProbeScript validation. The file was **not** created. Check the error message for the line and column of the problem. Common issues:
+
+- Unterminated strings (`"` without closing `"`)
+- Wrong indentation (use 2 spaces, not tabs)
+- Unknown step keywords
+
+Run `lint` on a corrected version to verify before calling `write_test` again.
+
+### `record` returns "no output file"
+
+Recording requires a WebSocket-connected device (simulators or emulators). It does not work over HTTP (physical-device WiFi mode). Ensure the device is a simulator or emulator and the app is running.

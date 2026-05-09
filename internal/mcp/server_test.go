@@ -72,11 +72,15 @@ func TestToolsList(t *testing.T) {
 	}
 
 	want := []string{
-		// device lifecycle (new in this PR)
+		// device lifecycle
 		"list_devices", "list_simulators", "list_avds", "start_device", "shutdown_device",
-		// existing
-		"get_widget_tree", "read_test", "write_test", "run_script", "get_report",
-		"generate_test", "run_tests", "list_files", "lint", "take_screenshot",
+		// authoring & execution
+		"get_widget_tree", "read_test", "write_test", "run_script", "run_tests",
+		"list_files", "lint", "take_screenshot",
+		// reporting
+		"get_report", "generate_test", "generate_report",
+		// project management
+		"init_project", "record",
 	}
 	if len(got) != len(want) {
 		t.Errorf("tool count = %d, want %d (got names: %v)", len(got), len(want), keys(got))
@@ -178,7 +182,7 @@ func TestStartDeviceArgValidation(t *testing.T) {
 	}
 }
 
-func TestShutdownDeviceRequiresUDID(t *testing.T) {
+func TestShutdownDeviceRequiresUDIDOrSerial(t *testing.T) {
 	resp := roundTrip(t, map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
@@ -189,8 +193,86 @@ func TestShutdownDeviceRequiresUDID(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected error, got %+v", resp)
 	}
-	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "udid is required") {
-		t.Errorf("error message = %q, want udid is required", msg)
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "udid") || !strings.Contains(msg, "serial") {
+		t.Errorf("error message %q should mention both udid and serial", msg)
+	}
+}
+
+func TestWriteTestRejectsInvalidProbeScript(t *testing.T) {
+	resp := roundTrip(t, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "write_test",
+			"arguments": map[string]any{
+				"path":    "tests/invalid.probe",
+				"content": "this is not valid probescript @@@ !!!\n  unterminated \"string",
+			},
+		},
+	})
+	result, _ := resp["result"].(map[string]any)
+	isError, _ := result["isError"].(bool)
+	if !isError {
+		t.Error("write_test with invalid ProbeScript should return isError:true")
+	}
+	content, _ := result["content"].([]any)
+	if len(content) > 0 {
+		block, _ := content[0].(map[string]any)
+		text, _ := block["text"].(string)
+		if !strings.Contains(text, "syntax error") && !strings.Contains(text, "not written") {
+			t.Errorf("error message %q should mention syntax error or not written", text)
+		}
+	}
+}
+
+func TestRunTestsCompositeDevices(t *testing.T) {
+	// Verify that composite_devices is split into separate --composite-device flags.
+	// We can't run probe here, but we can verify the schema exposes the parameter.
+	resp := roundTrip(t, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/list",
+	})
+	result, _ := resp["result"].(map[string]any)
+	rawTools, _ := result["tools"].([]any)
+
+	for _, tool := range rawTools {
+		entry, _ := tool.(map[string]any)
+		if name, _ := entry["name"].(string); name != "run_tests" {
+			continue
+		}
+		schema, _ := entry["inputSchema"].(map[string]any)
+		props, _ := schema["properties"].(map[string]any)
+		if _, ok := props["composite_devices"]; !ok {
+			t.Error("run_tests tool missing composite_devices property")
+		}
+		return
+	}
+	t.Error("run_tests tool not found")
+}
+
+func TestNewToolsPresent(t *testing.T) {
+	resp := roundTrip(t, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/list",
+	})
+	result, _ := resp["result"].(map[string]any)
+	rawTools, _ := result["tools"].([]any)
+
+	got := map[string]bool{}
+	for _, tool := range rawTools {
+		entry, _ := tool.(map[string]any)
+		name, _ := entry["name"].(string)
+		got[name] = true
+	}
+
+	for _, name := range []string{"init_project", "generate_report", "record"} {
+		if !got[name] {
+			t.Errorf("new tool %q not found in tools/list", name)
+		}
 	}
 }
 

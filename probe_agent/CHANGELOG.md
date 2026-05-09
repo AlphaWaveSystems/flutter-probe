@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1 - 2026-05-09
+
+- Version bump to match CLI v0.9.1. No agent code changes in this release.
+  MCP parity improvements are CLI/server-side only.
+
 ## 0.9.0 - 2026-05-09
 
 - Version bump to match CLI v0.9.0. No agent code changes in this release.
