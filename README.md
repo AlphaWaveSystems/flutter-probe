@@ -390,7 +390,7 @@ run dart:
 | `--format terminal\|json\|junit` | `terminal` | Output format |
 | `-o <path>` | — | Output file for JSON/JUnit results |
 | `--video` | off | Record video during run |
-| `-v` | off | Verbose step output |
+| `-v` | off | Verbose step output — prints `→ step` before each step runs, overwrites with `✓/✗ step (Xs)` on completion; slow steps (>5s) also emit `⏱` progress ticks and a `⚠` warning at 80% of the timeout |
 | `-y` | off | Auto-confirm destructive operations |
 | `--tag <tag>` | — | Run only tests with this tag |
 | `--name <pattern>` | — | Run only tests matching name |
@@ -726,6 +726,10 @@ BrowserStack, Sauce Labs, AWS Device Farm, LambdaTest (interactive via WebSocket
 ### How do I debug a failing test?
 
 1. Run with `-v` for step-by-step output: `probe test tests/my_test.probe -v`
+   The runner prints `→ step` before each step runs and `✓/✗ step (Xs)` after. For steps
+   that take longer than 5 seconds a `⏱` progress tick is emitted every 5 seconds, and a
+   `⚠` warning appears at 80% of the timeout — so you see a slow or stuck step well before
+   it fails. Even without `-v`, a faint status line shows the current step on a TTY.
 2. Check failure screenshots in `reports/screenshots/`
 3. Add `pause` or `take a screenshot called "debug"` at the point of failure
 4. Use `dump the widget tree` to inspect what's on screen

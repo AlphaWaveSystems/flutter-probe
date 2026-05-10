@@ -58,6 +58,7 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | Flag | What it does |
 |---|---|
 | `--timeout 60s` | Per-step timeout (default 30s) |
+| `-v` | Verbose step output — prints `→ step` before each step and `✓/✗ step (Xs)` after; slow steps (>5s) emit `⏱` progress ticks and a `⚠` warning at 80% of timeout. Recommended when diagnosing failures. |
 | `--format json` | Structured JSON results (pipe to `get_report`) |
 | `--format junit` | JUnit XML for CI systems |
 | `--dry-run` | Validate syntax without a device connection |
@@ -68,6 +69,8 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `-y` | Auto-approve destructive operations (CI mode) |
 | `--video` | Record device screen during the run |
 | `--stream` | Emit one ndjson line per test as it completes (requires `--format json`) |
+
+> **Tip for agents:** pass `-v` in `flags` when a test is failing and you need to understand which step is slow or stuck. The `⏱` progress ticks and `⚠` timeout warnings appear in `run_tests` output and tell you exactly where time is being spent before the failure.
 
 ## Composite (multi-device) tests
 
