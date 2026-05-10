@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2 - 2026-05-09
+
+- Version bump to match CLI v0.9.2. No agent code changes in this release.
+  Step feedback improvements are CLI-side only.
+
 ## 0.9.1 - 2026-05-09
 
 - Version bump to match CLI v0.9.1. No agent code changes in this release.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -356,4 +357,119 @@ func AllPassed(results []TestResult) bool {
 		}
 	}
 	return true
+}
+
+// ---- Real-time step feedback ----
+
+// isTTY reports whether os.Stdout is an interactive terminal. The result is
+// computed once (via sync.OnceValue) and cached — no repeated syscalls.
+// Returns false in CI pipes, when stdout is redirected to a file, etc.
+var isTTY = sync.OnceValue(func() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+})
+
+// printStepBeforeW writes the "→ desc" pre-step line to w.
+// On a TTY the line will be overwritten by printStepAfterNW (when tickLines==0).
+func printStepBeforeW(w io.Writer, _ bool, depth int, desc string) {
+	if desc == "" {
+		return
+	}
+	indent := strings.Repeat("  ", depth)
+	fmt.Fprintf(w, "    %s\033[2m→\033[0m  %s\n", indent, desc)
+}
+
+// printStepAfterNW writes the ✓/✗ result line.
+// On a TTY with no tick lines printed below the "→" line, it moves the cursor
+// up one line and overwrites in place (clean single-line-per-step output).
+// When tickLines > 0 the "→" line has scrolled above the tick lines, so we
+// just append — attempting to erase N lines is more fragile than helpful.
+// On non-TTY output is always appended.
+func printStepAfterNW(w io.Writer, tty bool, depth int, desc string, elapsed time.Duration, err error, tickLines int) {
+	if desc == "" {
+		return
+	}
+	indent := strings.Repeat("  ", depth)
+	status := "\033[32m✓\033[0m"
+	if err != nil {
+		status = "\033[31m✗\033[0m"
+	}
+	line := fmt.Sprintf("    %s%s %s \033[2m(%.1fs)\033[0m", indent, status, desc, elapsed.Seconds())
+	if tty && tickLines == 0 {
+		// Cursor up one line, carriage return, erase to EOL, then print result.
+		fmt.Fprintf(w, "\033[1A\r\033[K%s\n", line)
+	} else {
+		fmt.Fprintln(w, line)
+	}
+}
+
+// printStepTickW writes a ⏱ progress line showing elapsed time.
+func printStepTickW(w io.Writer, depth int, desc string, elapsed time.Duration) {
+	indent := strings.Repeat("  ", depth)
+	fmt.Fprintf(w, "    %s\033[33m⏱\033[0m  %s... \033[2m(%ds)\033[0m\n",
+		indent, desc, int(elapsed.Seconds()))
+}
+
+// printStepWarningW writes a one-time ⚠ warning when a step is near its timeout.
+func printStepWarningW(w io.Writer, depth int, desc string, elapsed, timeout time.Duration) {
+	indent := strings.Repeat("  ", depth)
+	fmt.Fprintf(w, "    %s\033[33m⚠\033[0m  %s still running — %ds elapsed, %ds timeout\n",
+		indent, desc, int(elapsed.Seconds()), int(timeout.Seconds()))
+}
+
+// printCurrentStepW writes a transient \r-overwriting status line in non-verbose
+// mode. On non-TTY this is a no-op so CI output stays clean.
+func printCurrentStepW(w io.Writer, tty bool, desc string) {
+	if !tty || desc == "" {
+		return
+	}
+	const maxW = 80
+	label := "  \033[2m" + desc + "\033[0m"
+	// Pad to maxW so previous (longer) status is fully erased.
+	fmt.Fprintf(w, "\r%-*s", maxW, label)
+}
+
+// clearCurrentStepW erases the transient status line written by printCurrentStepW.
+func clearCurrentStepW(w io.Writer, tty bool) {
+	if !tty {
+		return
+	}
+	fmt.Fprintf(w, "\r%*s\r", 80, "")
+}
+
+// Public wrappers — called from executor.go. Each delegates to the testable
+// helper with os.Stdout and the cached isTTY result.
+
+// PrintStepBefore prints the "→ desc" line before a step runs (verbose mode).
+func PrintStepBefore(depth int, desc string) {
+	printStepBeforeW(os.Stdout, isTTY(), depth, desc)
+}
+
+// PrintStepAfterN prints the ✓/✗ result line after a step finishes.
+// tickLines is the number of ⏱/⚠ lines printed below the "→" line.
+func PrintStepAfterN(depth int, desc string, elapsed time.Duration, err error, tickLines int) {
+	printStepAfterNW(os.Stdout, isTTY(), depth, desc, elapsed, err, tickLines)
+}
+
+// PrintStepTick prints a ⏱ progress line during a long-running step.
+func PrintStepTick(depth int, desc string, elapsed time.Duration) {
+	printStepTickW(os.Stdout, depth, desc, elapsed)
+}
+
+// PrintStepWarning prints a one-time ⚠ warning when a step is near its timeout.
+func PrintStepWarning(depth int, desc string, elapsed, timeout time.Duration) {
+	printStepWarningW(os.Stdout, depth, desc, elapsed, timeout)
+}
+
+// PrintCurrentStep prints a transient \r-based status line (non-verbose, TTY only).
+func PrintCurrentStep(desc string) {
+	printCurrentStepW(os.Stdout, isTTY(), desc)
+}
+
+// ClearCurrentStep erases the transient status line (non-verbose, TTY only).
+func ClearCurrentStep() {
+	clearCurrentStepW(os.Stdout, isTTY())
 }
