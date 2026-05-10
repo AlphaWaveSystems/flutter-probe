@@ -6,9 +6,29 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  publish:
+  publish-agent:
+    name: Publish flutter_probe_agent
     permissions:
       id-token: write
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
     with:
       working-directory: probe_agent
+
+  publish-annotation:
+    name: Publish flutter_probe_annotation
+    permissions:
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: probe_annotation
+
+  publish-gen:
+    name: Publish flutter_probe_gen
+    # Must publish AFTER flutter_probe_annotation so the dependency
+    # constraint (flutter_probe_annotation: ^0.9.3) resolves on pub.dev.
+    needs: publish-annotation
+    permissions:
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: probe_gen

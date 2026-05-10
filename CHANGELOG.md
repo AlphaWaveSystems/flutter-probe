@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-05-09
+
+### Added
+- **Annotation-driven test generation** — two new Dart packages, `flutter_probe_annotation` and `flutter_probe_gen`, let you declare ProbeScript end-to-end tests as decorators on your Flutter screen classes. A `build_runner` builder reads the annotations at build time and emits matching `.probe` files into `tests/generated/`, picked up unchanged by `probe test`.
+  - **Annotation API**: `@ProbeSuite`, `@ProbeTest`, `@ProbeRecipe` plus a fully type-checked step DSL covering all 31 ProbeScript action verbs (Tap, Type, See, Wait, Swipe, Scroll, Drag, Restart, Kill, ClearAppData, permissions, clipboard, location, screenshots, etc.), all 6 selector kinds (text, id, type, ordinal, positional, relational), hooks (`beforeEach`, `afterEach`, `beforeAll`, `afterAll`, `onFailure`), loops (`Repeat`), conditionals (`If`/`otherwise`), recipes with named parameters, data-driven `Examples`, HTTP mocks (`Mock`), and inline Dart blocks (`RunDart`).
+  - **Builder**: declares `lib/{{}}.dart` → `tests/generated/{{}}.probe`. Cheap text pre-check skips files without annotations so it's safe to enable on a whole `lib/` tree. Each annotated class becomes a top-level `test "..."` block with optional tags and step body.
+  - **Cross-language validation**: every Dart-emitted golden is parsed by the Go-side parser in CI (`internal/parser/golden_integration_test.go`), so a malformed emitter line is caught immediately rather than at user runtime.
+  - **Docs**: see [`docs/wiki/Annotations.md`](docs/wiki/Annotations.md) for the full reference.
+
 ## [0.9.2] - 2026-05-09
 
 ### Added

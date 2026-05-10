@@ -102,6 +102,23 @@ Pass device connections to `run_tests` via `composite_devices` (space-separated 
 
 Or configure them in `probe.yaml` under `composite.devices`.
 
+## Annotation-driven tests (`flutter_probe_annotation` + `flutter_probe_gen`)
+
+When the user's Flutter project uses the new annotation packages
+(`flutter_probe_annotation` for the DSL and `flutter_probe_gen` for the
+build_runner generator), `.probe` test files appear under
+`tests/generated/` after `dart run build_runner build`. The MCP `run_tests`
+tool runs them like any other `.probe` file — pass `tests/` as the `paths`
+argument.
+
+For agents authoring tests in this style:
+- Don't use `write_test` to write to `tests/generated/` directly — those
+  files are regenerated. Use `write_test` to author the **annotated Dart
+  source** instead (the screen class with `@ProbeSuite`).
+- After the user runs `dart run build_runner build`, call `run_tests` as
+  usual. The generated `.probe` files are picked up automatically.
+- `read_test` works on either hand-written or generated files.
+
 ## Requirements
 
 - `probe-mcp` binary v0.9.0+ installed and in `PATH`
@@ -204,7 +221,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | probe-mcp
 Expected response:
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.2"}}}
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.3"}}}
 ```
 
 List all available tools:

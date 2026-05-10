@@ -1,0 +1,25 @@
+name: flutter_probe_annotation
+description: >-
+  Dart annotations for FlutterProbe — declare ProbeScript end-to-end tests as
+  decorators on your Flutter screen classes. Pair with flutter_probe_gen to
+  generate .probe test files at build time.
+version: 0.9.3
+homepage: https://flutterprobe.dev
+repository: https://github.com/AlphaWaveSystems/flutter-probe
+issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
+
+topics:
+  - testing
+  - e2e
+  - flutter
+  - annotations
+  - codegen
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+# Pure Dart package — no Flutter SDK dependency. The annotations are plain
+# const-data classes that can be authored anywhere and read at build time
+# by analyzer/source_gen.
+dev_dependencies:
+  test: ^1.25.0
