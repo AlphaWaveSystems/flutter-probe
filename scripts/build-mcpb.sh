@@ -56,6 +56,13 @@ case "$PLATFORM" in
 esac
 
 mkdir -p "$OUT_DIR"
+# Convert OUT_DIR (and BINARY) to absolute paths up-front so the subshell
+# below — which does `cd "$WORK_DIR"` before invoking mcpb — resolves them
+# correctly. Without this, a relative `mcpb-out/...` would land inside the
+# tempdir and the upload step couldn't find it.
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+BINARY="$(cd "$(dirname "$BINARY")" && pwd)/$(basename "$BINARY")"
+
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
