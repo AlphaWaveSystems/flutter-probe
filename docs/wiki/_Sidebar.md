@@ -5,6 +5,7 @@
 - [Development Setup](Development-Setup)
 - [iOS Integration Guide](iOS-Integration-Guide)
 - [Composite Tests](Composite-Tests)
+- [Annotation-driven Tests](Annotations)
 - [Troubleshooting](Troubleshooting)
 
 ### Resources

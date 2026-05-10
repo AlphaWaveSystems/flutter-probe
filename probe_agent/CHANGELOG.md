@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.3 - 2026-05-09
+
+- Version bump to match CLI v0.9.3. No agent code changes in this release.
+  Annotation-driven test generation is delivered by the new
+  flutter_probe_annotation and flutter_probe_gen packages.
+
 ## 0.9.2 - 2026-05-09
 
 - Version bump to match CLI v0.9.2. No agent code changes in this release.

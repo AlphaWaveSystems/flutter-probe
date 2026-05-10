@@ -1,0 +1,10 @@
+builders:
+  flutter_probe_gen:
+    import: 'package:flutter_probe_gen/builder.dart'
+    builder_factories:
+      - probeBuilder
+    build_extensions:
+      'lib/{{}}.dart':
+        - 'tests/generated/{{}}.probe'
+    auto_apply: dependents
+    build_to: source

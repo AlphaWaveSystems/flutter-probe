@@ -25,6 +25,7 @@ test "user can log in"
 - [Installation](#installation)
 - [ProbeScript Language](#probescript-language)
 - [Composite Tests](#composite-tests)
+- [Annotation-driven Tests](#annotation-driven-tests)
 - [CLI Commands](#cli-commands)
 - [Studio (Beta Preview)](#studio-beta-preview)
 - [MCP Server](#mcp-server)
@@ -363,6 +364,58 @@ run dart:
   final version = await PackageInfo.fromPlatform();
   print('App version: ${version.version}');
 ```
+
+## Annotation-driven Tests
+
+Co-locate `.probe` tests with the Flutter widgets they exercise. Two Dart packages handle this:
+
+- **`flutter_probe_annotation`** — `@ProbeSuite`, `@ProbeTest`, `@ProbeRecipe` decorators plus a fully type-checked step DSL (all 31 ProbeScript verbs, all 6 selector kinds, hooks, loops, conditionals, recipes, examples).
+- **`flutter_probe_gen`** — a `build_runner` builder that reads the annotations and emits matching `.probe` files into `tests/generated/`.
+
+Add to your Flutter app's `pubspec.yaml`:
+
+```yaml
+dependencies:
+  flutter_probe_annotation: ^0.9.3
+  flutter_probe_agent: ^0.9.3
+
+dev_dependencies:
+  flutter_probe_gen: ^0.9.3
+  build_runner: ^2.15.0
+```
+
+Annotate any screen class:
+
+```dart
+import 'package:flutter_probe_annotation/flutter_probe_annotation.dart';
+
+@ProbeSuite(
+  beforeEach: [Open()],
+  tests: [
+    ProbeTest('user can log in', tags: ['smoke'], steps: [
+      Tap(id: 'email_field'),
+      Type('alice@example.com'),
+      Tap(id: 'password_field'),
+      Type('hunter2'),
+      Tap(text: 'Sign In'),
+      WaitUntil.appears('Dashboard'),
+      See('Dashboard'),
+    ]),
+  ],
+)
+class LoginScreen extends StatelessWidget { /* … */ }
+```
+
+Run the builder:
+
+```bash
+dart run build_runner build
+probe test tests/        # picks up tests/generated/login_screen.probe
+```
+
+Test definitions are now type-checked by `flutter analyze` — a misspelt step name is a compile error rather than a runtime surprise. Selectors stay in sync with widget code because they live in the same file. The generated `.probe` file goes through the same parser, agent, and reporter as a hand-written one.
+
+Full reference: [`docs/wiki/Annotations.md`](docs/wiki/Annotations.md).
 
 ## CLI Commands
 

@@ -1,0 +1,39 @@
+name: flutter_probe_gen
+description: >-
+  build_runner code generator for FlutterProbe — reads
+  flutter_probe_annotation decorators on Flutter classes and emits .probe
+  test files into tests/generated/. Pair with flutter_probe_agent and the
+  probe CLI to run the generated end-to-end tests.
+version: 0.9.3
+homepage: https://flutterprobe.dev
+repository: https://github.com/AlphaWaveSystems/flutter-probe
+issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
+
+topics:
+  - testing
+  - e2e
+  - flutter
+  - codegen
+  - build-runner
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  analyzer: ">=8.0.0 <14.0.0"
+  build: ">=3.0.0 <5.0.0"
+  flutter_probe_annotation: ^0.9.3
+  source_gen: ^4.0.0
+
+dev_dependencies:
+  build_runner: ^2.15.0
+  build_test: ^3.5.0
+  test: ^1.26.0
+
+# Path-based reference to the local annotation package during development.
+# Removed automatically by `dart pub publish` (path: dependencies are not
+# allowed on pub.dev — the version constraint above is what's used after
+# publication).
+dependency_overrides:
+  flutter_probe_annotation:
+    path: ../probe_annotation
