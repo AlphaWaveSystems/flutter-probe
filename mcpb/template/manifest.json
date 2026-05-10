@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "flutter-probe",
+  "display_name": "FlutterProbe",
+  "version": "@@VERSION@@",
+  "description": "End-to-end testing for Flutter apps. Manage devices, author and run ProbeScript tests, capture screenshots, generate reports — directly from Claude Desktop.",
+  "long_description": "FlutterProbe is a high-performance E2E testing framework for Flutter mobile apps. This extension exposes 18 tools to Claude:\n\n- **Device lifecycle** — list, start, and shut down iOS simulators and Android emulators.\n- **Test authoring** — read and write `.probe` files, dump the live widget tree, take screenshots.\n- **Execution** — run tests on a single device, in parallel, or as multi-device composite tests.\n- **Reporting** — read JSON results, generate HTML reports.\n- **Project management** — initialize a new project, record interactions, AI-generate tests from a prompt.\n\nAfter install, Claude can read your widget tree and write tests that target real selectors — no manual JSON config or PATH setup required.",
+  "author": {
+    "name": "Alpha Wave Systems",
+    "url": "https://alphawavesystems.com"
+  },
+  "homepage": "https://flutterprobe.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlphaWaveSystems/flutter-probe"
+  },
+  "documentation": "https://flutterprobe.dev/tools/mcp/",
+  "support": "https://github.com/AlphaWaveSystems/flutter-probe/issues",
+  "license": "BSL-1.1",
+  "keywords": ["flutter", "testing", "e2e", "probe", "mobile", "android", "ios"],
+  "server": {
+    "type": "binary",
+    "entry_point": "@@ENTRY_POINT@@",
+    "mcp_config": {
+      "command": "@@COMMAND@@",
+      "args": [],
+      "env": {
+        "PROBE_PROJECT_DIR": "${user_config.projectRoot}"
+      }
+    }
+  },
+  "user_config": {
+    "projectRoot": {
+      "type": "directory",
+      "title": "Flutter project directory",
+      "description": "Path to the Flutter app you want to test. Should contain probe.yaml and a tests/ folder. Tools like run_tests and get_report resolve paths against this directory.",
+      "default": "${HOME}",
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["@@PLATFORM@@"]
+  },
+  "tools_generated": false,
+  "tools": [
+    {"name": "list_devices", "description": "List connected/booted simulators, emulators, and physical devices."},
+    {"name": "list_simulators", "description": "List all iOS simulators (booted + shutdown)."},
+    {"name": "list_avds", "description": "List Android Virtual Device names."},
+    {"name": "start_device", "description": "Boot an Android emulator or iOS simulator."},
+    {"name": "shutdown_device", "description": "Shut down an iOS simulator or Android emulator."},
+    {"name": "get_widget_tree", "description": "Dump the live Flutter widget tree from the running app."},
+    {"name": "take_screenshot", "description": "Capture the current screen and return it as an image."},
+    {"name": "read_test", "description": "Read the contents of a .probe test file."},
+    {"name": "write_test", "description": "Create or overwrite a .probe file. Validates ProbeScript syntax before writing."},
+    {"name": "run_script", "description": "Execute inline ProbeScript without creating a file."},
+    {"name": "run_tests", "description": "Run .probe test files. Supports composite multi-device tests."},
+    {"name": "list_files", "description": "List all .probe files in a directory."},
+    {"name": "lint", "description": "Validate .probe files for syntax errors."},
+    {"name": "get_report", "description": "Read the most recently modified JSON test run report."},
+    {"name": "generate_report", "description": "Generate a standalone HTML report from a JSON results file."},
+    {"name": "generate_test", "description": "AI-generate a .probe test from a natural language prompt."},
+    {"name": "init_project", "description": "Scaffold a new probe.yaml and tests/ directory."},
+    {"name": "record", "description": "Record user interactions and generate a .probe file."}
+  ]
+}

@@ -153,8 +153,60 @@ jobs:
           name: studio-${{ matrix.os }}-${{ matrix.arch }}
           path: ${{ env.STUDIO_ASSET }}
 
+  build-mcpb:
+    name: Build .mcpb extensions
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+            platform: darwin
+          - goos: darwin
+            goarch: amd64
+            platform: darwin
+          - goos: linux
+            goarch: amd64
+            platform: linux
+          - goos: windows
+            goarch: amd64
+            platform: win32
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Download probe-mcp binary
+        uses: actions/download-artifact@v8
+        with:
+          name: probe-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin
+
+      - name: Build .mcpb bundle
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          EXT=""
+          if [ "${GOOS}" = "windows" ]; then EXT=".exe"; fi
+          BINARY="bin/probe-mcp-${GOOS}-${GOARCH}${EXT}"
+          chmod +x "$BINARY" || true
+          mkdir -p mcpb-out
+          scripts/build-mcpb.sh "$BINARY" "$PLATFORM" "$VERSION" mcpb-out
+        shell: bash
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcpb-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: mcpb-out/*.mcpb
+
   release:
-    needs: [build, build-studio]
+    needs: [build, build-studio, build-mcpb]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

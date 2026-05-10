@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-05-09
+
+### Added
+- **Claude Desktop Extension (`.mcpb`)** — `probe-mcp` is now packaged as a one-click Claude Desktop Extension. Users drag `flutter-probe-<platform>-<arch>.mcpb` onto Claude Desktop's Extensions settings, pick their Flutter project directory, and all 18 MCP tools are available. No `brew install`, no JSON config editing, no PATH setup. CI builds and attaches `.mcpb` artifacts for darwin-arm64, darwin-amd64, linux-amd64, and windows-amd64 to every release.
+  - Manifest declares `server.type: "binary"` and bundles the platform-specific `probe-mcp` executable.
+  - `user_config.projectRoot` is a directory picker surfaced as the `PROBE_PROJECT_DIR` env var.
+  - `probe-mcp` reads `PROBE_PROJECT_DIR` at startup and `os.Chdir`s into it so `run_tests`, `list_files`, `get_report`, and `init_project` resolve paths against the user's Flutter project rather than Claude Desktop's working directory.
+  - `scripts/build-mcpb.sh` produces a bundle locally from any built `probe-mcp` binary; uses `npx @anthropic-ai/mcpb` for schema validation and packing.
+  - New `build-mcpb` job in `.github/workflows/release.yml` runs after `build`, downloads the per-platform `probe-mcp` artifacts, packs them into `.mcpb` bundles, and attaches them to the GitHub release.
+
 ## [0.9.3] - 2026-05-09
 
 ### Added

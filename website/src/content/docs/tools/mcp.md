@@ -121,9 +121,28 @@ For agents authoring tests in this style:
 
 ## Requirements
 
-- `probe-mcp` binary v0.9.0+ installed and in `PATH`
 - Flutter app running with `--dart-define=PROBE_AGENT=true` (for live tools like `get_widget_tree`, `take_screenshot`, `run_tests`)
 - An MCP-compatible client (Claude Desktop, Cursor, etc.)
+- For Option 2 below: `probe-mcp` binary v0.9.0+ installed and in `PATH`
+
+## Install — Option 1: one-click Claude Desktop Extension (recommended)
+
+As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bundles the `probe-mcp` binary. Installation is one click — no `brew`, no JSON config, no `PATH` setup.
+
+1. Open the [latest GitHub release](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest) and download the bundle for your platform:
+   - `flutter-probe-darwin-arm64.mcpb` — Apple Silicon Macs
+   - `flutter-probe-darwin-amd64.mcpb` — Intel Macs
+   - `flutter-probe-linux-amd64.mcpb` — Linux x86_64
+   - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
+2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
+3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
+4. Done — all 18 tools are immediately available in any new Claude conversation.
+
+Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
+
+## Install — Option 2: manual MCP server config
+
+Use this path for Cursor, Claude Code, or any MCP-compatible client other than Claude Desktop, or if you prefer to keep the binary on `$PATH`.
 
 Verify the binary is accessible:
 
@@ -131,9 +150,7 @@ Verify the binary is accessible:
 which probe-mcp   # should print /opt/homebrew/bin/probe-mcp or similar
 ```
 
-## Claude Desktop
-
-### macOS
+### Claude Desktop (manual config)
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -177,7 +194,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
 
 After editing the config, **restart Claude Desktop**. The flutter-probe tools appear in the tool picker (hammer icon) in any new conversation.
 
-## Cursor
+### Cursor
 
 In Cursor, open **Settings → MCP** (or edit `.cursor/mcp.json` at the repo root):
 
@@ -221,7 +238,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | probe-mcp
 Expected response:
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.3"}}}
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.4"}}}
 ```
 
 List all available tools:
