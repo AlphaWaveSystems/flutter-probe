@@ -485,7 +485,24 @@ Every CLI feature is accessible from MCP. Key capabilities an agent can use:
 - **Pre-write validation** — `write_test` parses the content before writing; syntax errors are returned immediately without creating the file
 - **Interaction recording** — `record` captures gestures and returns a `.probe` file
 
-Configure your MCP client:
+### Install — Option 1: Claude Desktop Extension (recommended)
+
+Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `brew install`, no JSON config, no PATH setup.
+
+1. Download the bundle for your platform from the [latest release](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
+   - `flutter-probe-darwin-arm64.mcpb` — Apple Silicon Macs
+   - `flutter-probe-darwin-amd64.mcpb` — Intel Macs
+   - `flutter-probe-linux-amd64.mcpb` — Linux x86_64
+   - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
+2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
+3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
+4. Done — all 18 tools appear in Claude.
+
+The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
+
+### Install — Option 2: manual MCP server config
+
+For Cursor or any other MCP-compatible client, install the binary and point your client at it:
 
 ```json
 {

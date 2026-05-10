@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.4 - 2026-05-09
+
+- Version bump to match CLI v0.9.4. No agent code changes — the .mcpb
+  Claude Desktop Extension is a CLI/server-side packaging change.
+
 ## 0.9.3 - 2026-05-09
 
 - Version bump to match CLI v0.9.3. No agent code changes in this release.
