@@ -124,8 +124,28 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 
 	start := time.Now()
 	desc := e.stepDescription(step)
-	var err error
 
+	// Real-time feedback: print the step description before it runs.
+	if desc != "" {
+		if e.verbose {
+			PrintStepBefore(e.depth, desc)
+		} else {
+			PrintCurrentStep(desc)
+		}
+	}
+
+	// Launch a ticker goroutine that prints progress lines every 5 seconds for
+	// slow steps. It also emits a one-time warning at 80% of the step timeout.
+	// The goroutine is always started when there's a description — it exits
+	// immediately via <-stopTicker if the step finishes fast (< 5s).
+	var extraLines atomic.Int32
+	stopTicker := make(chan struct{})
+	tickerDone := make(chan struct{})
+	if desc != "" {
+		go runStepTicker(stepCtx, desc, e.depth, 5*time.Second, stopTicker, tickerDone, &extraLines)
+	}
+
+	var err error
 	switch s := step.(type) {
 	case parser.ActionStep:
 		err = e.runAction(stepCtx, s)
@@ -181,17 +201,74 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		}
 	}
 
-	if e.verbose && desc != "" {
+	// Stop the ticker goroutine and wait for it to fully exit before reading
+	// extraLines or printing the result — this eliminates any output race.
+	if desc != "" {
+		close(stopTicker)
+		<-tickerDone
+	}
+
+	if desc != "" {
 		elapsed := time.Since(start)
-		indent := strings.Repeat("  ", e.depth)
-		status := "\033[32m✓\033[0m"
-		if err != nil {
-			status = "\033[31m✗\033[0m"
+		if e.verbose {
+			PrintStepAfterN(e.depth, desc, elapsed, err, int(extraLines.Load()))
+		} else {
+			ClearCurrentStep()
 		}
-		fmt.Printf("    %s%s %s \033[2m(%.1fs)\033[0m\n", indent, status, desc, elapsed.Seconds())
 	}
 
 	return err
+}
+
+// runStepTicker is run in a goroutine by runStep. It emits ⏱ progress lines
+// every tickInterval for slow steps and a one-time ⚠ warning at 80% of the
+// step's context deadline. It exits when stop is closed or ctx is cancelled.
+func runStepTicker(
+	ctx context.Context,
+	desc string,
+	depth int,
+	tickInterval time.Duration,
+	stop <-chan struct{},
+	done chan<- struct{},
+	extraLines *atomic.Int32,
+) {
+	defer close(done)
+
+	ticker := time.NewTicker(tickInterval)
+	defer ticker.Stop()
+
+	goroutineStart := time.Now()
+	warnPrinted := false
+
+	// Derive the total step timeout from the context deadline so we can emit
+	// the 80% warning at the right moment.
+	var timeoutDur time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		timeoutDur = deadline.Sub(goroutineStart)
+	}
+
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ctx.Done():
+			return
+		case t := <-ticker.C:
+			elapsed := t.Sub(goroutineStart)
+			PrintStepTick(depth, desc, elapsed)
+			extraLines.Add(1)
+
+			// Emit the 80% warning exactly once, after the threshold is crossed.
+			if !warnPrinted && timeoutDur > 0 {
+				threshold := time.Duration(float64(timeoutDur) * 0.80)
+				if elapsed >= threshold {
+					PrintStepWarning(depth, desc, elapsed, timeoutDur)
+					extraLines.Add(1)
+					warnPrinted = true
+				}
+			}
+		}
+	}
 }
 
 // stepDescription returns a human-readable description of the step.

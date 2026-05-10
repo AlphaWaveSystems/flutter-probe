@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-09
+
+### Added
+- **Real-time step feedback** — the runner now emits progress during test execution instead of staying silent until a step completes:
+  - **Pre-step indicator** (verbose mode): prints `→ step description` immediately before each step runs. On a TTY the line is overwritten in place by the `✓/✗` result when the step finishes (clean single-line-per-step output). On non-TTY (CI) both lines are appended.
+  - **Progress ticker** (all modes): a goroutine fires every 5 seconds while a step is still running and prints `⏱ step... (Ns)`. Stops immediately when the step completes — fast steps produce no ticker output.
+  - **Timeout warning** (all modes): when a step has consumed ≥ 80% of its context deadline, a one-time `⚠ step still running — Ns elapsed, Ns timeout` warning is printed. Gives time to react before the step times out.
+  - **Non-verbose TTY status line**: even without `--verbose`, a faint `\r`-overwriting status line shows the current step name while it runs and is cleared when it finishes. No output on non-TTY so CI logs stay clean.
+
 ## [0.9.1] - 2026-05-09
 
 ### Added
