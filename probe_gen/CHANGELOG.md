@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.9 - 2026-05-13
+
+- **`DeliverSignal` emitter** — renders `deliver signal "name" ["value"]` for the new
+  `DeliverSignal` annotation step. Omits the value argument when it equals the default
+  `"true"`.
+- New golden fixture `signal_delivery.probe.golden` verifying emitter output for both
+  default-value and explicit-value signal delivery steps.
+
+## 0.9.8 - 2026-05-12
+
+- Version bump to match CLI v0.9.8. No builder or emitter changes in this release.
+
 ## 0.9.7 - 2026-05-12
 
 ### Added

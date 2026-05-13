@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.9 - 2026-05-13
+
+- **`DeliverSignal(name, {value})` Step class** — emits `deliver signal "name" ["value"]`.
+  Use to unblock any OS-level interaction not in the Flutter widget tree: push permission
+  prompts, payment sheets, App Tracking Transparency, custom deep-link handlers, etc.
+
+## 0.9.8 - 2026-05-12
+
+- Version bump to match CLI v0.9.8. No annotation changes — biometric signal delivery is
+  handled by the agent (`awaitBiometricResult`) and CLI; no new annotation steps needed.
+
 ## 0.9.7 - 2026-05-12
 
 ### Added
