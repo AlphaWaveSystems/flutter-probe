@@ -127,6 +127,9 @@ class ProbeMethods {
   // Biometric simulation signal (v0.9.8)
   static const biometricSignal = 'probe.biometric_signal';
 
+  // Native-prompt signal API (v0.9.9)
+  static const signal = 'probe.signal';
+
   // Notification methods (agent → CLI)
   static const notifyRecordedEvent = 'probe.recorded_event';
   static const notifyExecDart = 'probe.exec_dart';

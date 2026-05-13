@@ -283,6 +283,15 @@ class ProbeEmitter {
       case 'BiometricNoMatch':
         _buf.writeln('${indent}biometric no match');
         break;
+      case 'DeliverSignal':
+        final sigName = _str(step, 'name') ?? '';
+        final sigValue = _str(step, 'value') ?? 'true';
+        if (sigValue == 'true') {
+          _buf.writeln('${indent}deliver signal "${_escape(sigName)}"');
+        } else {
+          _buf.writeln('${indent}deliver signal "${_escape(sigName)}" "${_escape(sigValue)}"');
+        }
+        break;
 
       // Diagnostics
       case 'TakeScreenshot':

@@ -14,6 +14,7 @@ import 'biometric.dart' as biometric;
 import 'finder.dart';
 import 'protocol.dart';
 import 'recorder.dart';
+import 'signal.dart' as signal_lib;
 import 'sync.dart';
 
 typedef SendFn = void Function(String message);
@@ -267,6 +268,12 @@ class ProbeExecutor {
       case ProbeMethods.biometricSignal:
         final result = (req.params['result'] as bool?) ?? false;
         biometric.completeBiometricResult(result);
+        return {};
+
+      case ProbeMethods.signal:
+        final name = (req.params['name'] as String?) ?? '';
+        final value = (req.params['value'] as String?) ?? 'true';
+        signal_lib.deliverSignal(name, value);
         return {};
 
       default:

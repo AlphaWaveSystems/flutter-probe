@@ -200,6 +200,11 @@ const (
 	// Dart Completer resolves without depending on LAContext behaviour.
 	MethodBiometricSignal = "probe.biometric_signal"
 
+	// Native-prompt signal API (v0.9.9)
+	// Sent by `deliver signal "name" ["value"]` — resolves a pending
+	// awaitSignal(name) call in the Flutter app.
+	MethodSignal = "probe.signal"
+
 	// Notification methods (agent → CLI, no response expected)
 	NotifyRecordedEvent = "probe.recorded_event"
 	NotifyExecDart      = "probe.exec_dart"

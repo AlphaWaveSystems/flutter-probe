@@ -1201,3 +1201,42 @@ func TestBiometric_NoMatch(t *testing.T) {
 		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbBiometricNoMatch)
 	}
 }
+
+func TestDeliverSignal(t *testing.T) {
+	prog := mustParse(t, `
+test "signal"
+  deliver signal "payment_confirmed"
+  deliver signal "push_token" "abc123"
+`)
+	steps := prog.Tests[0].Body
+	if len(steps) != 2 {
+		t.Fatalf("step count: got %d, want 2", len(steps))
+	}
+
+	// default value "true"
+	a0, ok := steps[0].(parser.ActionStep)
+	if !ok {
+		t.Fatalf("step 0: got %T", steps[0])
+	}
+	if a0.Verb != parser.VerbDeliverSignal {
+		t.Errorf("verb: got %q, want %q", a0.Verb, parser.VerbDeliverSignal)
+	}
+	if a0.Name != "payment_confirmed" {
+		t.Errorf("name: got %q, want %q", a0.Name, "payment_confirmed")
+	}
+	if a0.Text != "true" {
+		t.Errorf("value: got %q, want %q", a0.Text, "true")
+	}
+
+	// explicit value
+	a1, ok := steps[1].(parser.ActionStep)
+	if !ok {
+		t.Fatalf("step 1: got %T", steps[1])
+	}
+	if a1.Name != "push_token" {
+		t.Errorf("name: got %q, want %q", a1.Name, "push_token")
+	}
+	if a1.Text != "abc123" {
+		t.Errorf("value: got %q, want %q", a1.Text, "abc123")
+	}
+}

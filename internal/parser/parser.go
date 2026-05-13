@@ -399,6 +399,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseBiometric()
 	case TOKEN_ENROLL:
 		return p.parseEnrollBiometric()
+	case TOKEN_DELIVER:
+		return p.parseDeliverSignal()
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -821,13 +823,27 @@ func (p *Parser) parseWait() (Step, error) {
 		}
 	}
 
+	// "wait [for] animations to end" — TOKEN_FOR_KW is a filler so skipFillers()
+	// above may have already consumed it; check TOKEN_ANIMATIONS directly first.
+	if tok.Type == TOKEN_ANIMATIONS {
+		p.advance()
+		// consume trailing words ("to end", "to finish") up to the newline
+		for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+			p.advance()
+		}
+		p.consumeNewline()
+		return WaitStep{Kind: WaitAnimations, Line: line}, nil
+	}
+
 	// "wait for animations to end" / "wait for the page to load"
 	if tok.Type == TOKEN_FOR_KW || p.peekLiteral("for") {
 		p.advance()
 		p.skipFillers()
 		if p.peek().Type == TOKEN_ANIMATIONS {
 			p.advance()
-			p.skipFillers() // "to end" / "to finish"
+			for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+				p.advance()
+			}
 			p.consumeNewline()
 			return WaitStep{Kind: WaitAnimations, Line: line}, nil
 		}
@@ -1572,6 +1588,32 @@ func (p *Parser) parseStore() (Step, error) {
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbStore, Text: value, Name: varName, Line: line}, nil
+}
+
+// parseDeliverSignal parses:
+//
+//	deliver signal "name"
+//	deliver signal "name" "value"
+//
+// Resolves a pending awaitSignal(name) call in the Flutter app.
+// If value is omitted it defaults to "true".
+func (p *Parser) parseDeliverSignal() (Step, error) {
+	line := p.peek().Line
+	p.advance() // deliver
+	p.skipFillers()
+	if p.peek().Type != TOKEN_SIGNAL {
+		return nil, fmt.Errorf("line %d: expected 'signal' after 'deliver'", line)
+	}
+	p.advance() // signal
+	p.skipFillers()
+	name := p.expectString("signal name")
+	p.skipFillers()
+	value := "true"
+	if p.peek().Type == TOKEN_STRING {
+		value = p.advance().Literal
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbDeliverSignal, Name: name, Text: value, Line: line}, nil
 }
 
 // parseBiometric parses one of:
