@@ -1142,3 +1142,62 @@ func TestComposite_DeviceTargetParsed(t *testing.T) {
 		t.Errorf("device[1] target: got %q, want %q", ct.Devices[1].Target, "iPad Pro 12.9 Simulator")
 	}
 }
+
+// ---- Biometric action tests ----
+
+func TestBiometric_EnrollBiometric(t *testing.T) {
+	prog := mustParse(t, `test "auth"
+  enroll biometric
+  see "Dashboard"
+`)
+	assertTestCount(t, prog, 1)
+	body := prog.Tests[0].Body
+	if len(body) < 1 {
+		t.Fatal("missing enroll biometric step")
+	}
+	a, ok := body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatalf("first step: got %T, want ActionStep", body[0])
+	}
+	if a.Verb != parser.VerbEnrollBiometric {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbEnrollBiometric)
+	}
+}
+
+func TestBiometric_Match(t *testing.T) {
+	prog := mustParse(t, `test "auth"
+  tap "Sign in with Face ID"
+  biometric match
+  see "Dashboard"
+`)
+	steps := prog.Tests[0].Body
+	if len(steps) != 3 {
+		t.Fatalf("step count: got %d, want 3", len(steps))
+	}
+	a, ok := steps[1].(parser.ActionStep)
+	if !ok {
+		t.Fatalf("biometric step: got %T", steps[1])
+	}
+	if a.Verb != parser.VerbBiometricMatch {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbBiometricMatch)
+	}
+}
+
+func TestBiometric_NoMatch(t *testing.T) {
+	prog := mustParse(t, `test "auth fail"
+  tap "Sign in with Face ID"
+  biometric no match
+  see "Authentication failed"
+`)
+	steps := prog.Tests[0].Body
+	if len(steps) != 3 {
+		t.Fatalf("step count: got %d, want 3", len(steps))
+	}
+	a, ok := steps[1].(parser.ActionStep)
+	if !ok {
+		t.Fatalf("biometric step: got %T", steps[1])
+	}
+	if a.Verb != parser.VerbBiometricNoMatch {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbBiometricNoMatch)
+	}
+}

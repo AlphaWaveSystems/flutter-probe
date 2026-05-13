@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-05-12
+
+### Added
+- **Biometric authentication testing** — three new ProbeScript steps that drive Face ID / Touch ID / fingerprint flows on iOS Simulator and Android emulator without real hardware. Skipped on physical devices with a warning (same pattern as `set location` and other simulator-only ops).
+  - `enroll biometric` — marks the simulator/emulator as having an enrolled face or finger. iOS posts the `com.apple.BiometricKit.enrollmentChanged` Darwin notification via `xcrun simctl spawn booted notifyutil`. Android requires the fingerprint to be pre-enrolled in Settings.
+  - `biometric match` — simulates a successful capture, satisfying any pending biometric prompt. iOS posts `*_Sim.faceCapture.match` AND `*_Sim.fingerTouch.match` so the same step works on Face ID and Touch ID devices. Android runs `adb -s <serial> emu finger touch 1`.
+  - `biometric no match` — simulates a failed capture so the app's "authentication failed" path can be tested. iOS posts the `.no-match` variants; Android runs `adb emu finger touch 9999` (an unregistered id).
+  - **Annotation DSL**: matching `EnrollBiometric()`, `BiometricMatch()`, `BiometricNoMatch()` const Step classes in `flutter_probe_annotation`, with a new `biometric_auth` golden fixture in `flutter_probe_gen/test/fixtures/` that round-trips through the Go parser via the cross-language integration test.
+  - **Parser**: 2 new tokens (`TOKEN_BIOMETRIC`, `TOKEN_ENROLL`), 3 new `ActionVerb` constants, 2 new parser dispatch cases. 3 new unit tests in `parser_test.go`.
+  - **Runner**: `EnrollBiometric` / `BiometricMatch` / `BiometricNoMatch` methods on `DeviceContext`, dispatch cases in `Executor.runAction`, and human-readable strings in `stepDescription`.
+  - **Docs**: new section in [annotations.md](https://flutterprobe.dev/probescript/annotations/#biometric-authentication-v097) and [syntax.md](https://flutterprobe.dev/probescript/syntax/#biometric-authentication) on the website. Per-package CHANGELOGs updated.
+
 ## [0.9.6] - 2026-05-12
 
 ### Fixed

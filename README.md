@@ -417,6 +417,8 @@ Test definitions are now type-checked by `flutter analyze` — a misspelt step n
 
 **v0.9.6** completes the annotation surface: full composite-test DSL (`@ProbeCompositeTest`, `Device`, `OnDevice`, `Sync`), id/selector-based `See`/`DontSee`, `WaitUntil.idAppears`, and composable `state` + `containing` + `matching` assertions. Plus fixes for two emitter bugs (`Mock` paths and `See` suffix dropping).
 
+**v0.9.7** adds **biometric authentication testing** — `enroll biometric`, `biometric match`, `biometric no match` steps (and matching `EnrollBiometric()` / `BiometricMatch()` / `BiometricNoMatch()` annotation classes) drive Face ID / Touch ID / fingerprint flows on iOS Simulator and Android emulator. Skipped on physical devices.
+
 Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.dev/probescript/annotations/) (or [`docs/wiki/Annotations.md`](docs/wiki/Annotations.md) on GitHub).
 
 ## CLI Commands

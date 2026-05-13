@@ -155,6 +155,7 @@ All 31 ProbeScript actions have a matching `const` Dart class. Common ones:
 | `GrantAllPermissions()` / `RevokeAllPermissions()` | as named |
 | `CopyToClipboard('x')` / `PasteFromClipboard()` | clipboard ops |
 | `SetLocation(lat, lng)` / `VerifyExternalBrowser()` | as named |
+| `EnrollBiometric()` / `BiometricMatch()` / `BiometricNoMatch()` (v0.9.7+) | Face ID / Touch ID / fingerprint simulation — see Biometric section below |
 | `TakeScreenshot('name')` / `CompareScreenshot('name')` | screenshot ops |
 | `DumpWidgetTree()` / `SaveLogs()` / `Pause()` / `Log('msg')` | as named |
 | `Store('value', as: 'var')` | `store "value" as var` |
@@ -236,6 +237,51 @@ Both workflows are valid:
 - **Gitignore it** — single source of truth lives in the Dart code; CI runs `dart run build_runner build` before `probe test`.
 
 Pick whichever fits your team.
+
+## Biometric authentication (v0.9.7+)
+
+Test Face ID, Touch ID, and Android fingerprint flows end-to-end without
+real hardware. FlutterProbe drives the simulator/emulator's biometric
+controls via `xcrun simctl spawn notifyutil` (iOS) and
+`adb -s <serial> emu finger touch` (Android).
+
+```dart
+@ProbeSuite(
+  beforeAll: [EnrollBiometric()],
+  tests: [
+    ProbeTest('matching face unlocks app', steps: [
+      Open(),
+      Tap(text: 'Sign in with Face ID'),
+      BiometricMatch(),
+      WaitUntil.appears('Dashboard'),
+      See('Dashboard'),
+    ]),
+    ProbeTest('non-matching face is rejected', steps: [
+      Open(),
+      Tap(text: 'Sign in with Face ID'),
+      BiometricNoMatch(),
+      See('Authentication failed'),
+    ]),
+  ],
+)
+class BiometricAuthScreen {}
+```
+
+| Step | iOS Simulator | Android emulator |
+|---|---|---|
+| `EnrollBiometric()` | Posts `com.apple.BiometricKit.enrollmentChanged` Darwin notification | No-op (pre-enroll fingerprint ID 1 in Settings) |
+| `BiometricMatch()` | Posts `*_Sim.faceCapture.match` + `*_Sim.fingerTouch.match` | `adb emu finger touch 1` |
+| `BiometricNoMatch()` | Posts `*_Sim.faceCapture.no-match` + `*_Sim.fingerTouch.no-match` | `adb emu finger touch 9999` (unregistered id) |
+
+**Physical devices are skipped with a warning.** Real Face ID / Touch ID
+requires an actual face or finger and can't be programmatically driven —
+same constraint as `set location`, `allow permission`, and other
+simulator-only ops. Tests using these steps should target a simulator
+or emulator in CI.
+
+**Android prerequisite:** the emulator must have a fingerprint enrolled
+in Settings (Security & privacy → Fingerprint) with ID `1` before tests
+run. A typical CI bootstrap script enrolls it once during emulator setup.
 
 ## Cross-language validation
 

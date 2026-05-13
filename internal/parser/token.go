@@ -160,6 +160,10 @@ const (
 	// Composite test keywords
 	TOKEN_COMPOSITE // "composite" — starts a composite test definition
 	TOKEN_SYNC      // "sync" — cross-device barrier step inside composite tests
+
+	// Biometric authentication (v0.9.7+) — simulator/emulator only.
+	TOKEN_BIOMETRIC // "biometric" — head of `biometric match` / `biometric no match`
+	TOKEN_ENROLL    // "enroll" — head of `enroll biometric`
 )
 
 // Token is a single lexical unit.
@@ -293,6 +297,8 @@ var keywords = map[string]TokenType{
 	"store":      TOKEN_STORE,
 	"composite":  TOKEN_COMPOSITE,
 	"sync":       TOKEN_SYNC,
+	"biometric":  TOKEN_BIOMETRIC,
+	"enroll":     TOKEN_ENROLL,
 }
 
 // fillerWords are stripped by the forgiving parser.

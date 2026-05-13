@@ -77,6 +77,9 @@ void main() {
   test('kitchen sink — one of every step + selector + control flow',
       () => runGolden('kitchen_sink'));
 
+  test('biometric auth (Face ID / Touch ID / fingerprint)',
+      () => runGolden('biometric_auth'));
+
   test('skips files with no FlutterProbe annotations', () async {
     final annotation = await annotationPackageAssets();
     await testBuilder(

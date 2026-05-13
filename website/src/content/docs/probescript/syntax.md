@@ -168,6 +168,43 @@ set location 37.7749, -122.4194    # set GPS coordinates (lat, lng)
 verify external browser opened     # assert url_launcher was called
 ```
 
+## Biometric Authentication
+
+Drive Face ID / Touch ID / fingerprint prompts on the simulator or
+emulator. Skipped on physical devices.
+
+```
+enroll biometric                   # mark the device as having an enrolled face/finger
+biometric match                    # simulate a successful capture (unblocks a pending prompt)
+biometric no match                 # simulate a failed capture (triggers the failure path)
+```
+
+Typical pattern — wraps a Face ID prompt with a happy and unhappy path:
+
+```
+before all tests
+  enroll biometric
+
+test "matching face unlocks"
+  open the app
+  tap "Sign in with Face ID"
+  biometric match
+  wait until "Dashboard" appears
+
+test "non-matching face is rejected"
+  open the app
+  tap "Sign in with Face ID"
+  biometric no match
+  see "Authentication failed"
+```
+
+On iOS, this posts the `BiometricKit_Sim.faceCapture.match` / `.no-match`
+Darwin notifications (and the `fingerTouch.*` equivalents, so the same
+step works on Touch ID devices). On Android, this calls
+`adb -s <serial> emu finger touch <id>` — fingerprint ID `1` is
+matching by convention (must be pre-enrolled in Settings before tests
+run); any unregistered ID is no-match.
+
 ## HTTP Calls
 
 Make real HTTP requests to APIs (runs on the CLI, not the device):

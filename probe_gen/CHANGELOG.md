@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.7 - 2026-05-12
+
+### Added
+
+- **3 new emitter cases** for `EnrollBiometric`, `BiometricMatch`,
+  `BiometricNoMatch` — translate the corresponding Dart step classes
+  to `enroll biometric`, `biometric match`, and `biometric no match`
+  ProbeScript lines. New `biometric_auth` golden fixture exercises
+  the happy-path (Face ID match) and unhappy-path (no-match) flows.
+
 ## 0.9.6 - 2026-05-12
 
 ### Fixed

@@ -161,6 +161,9 @@ constructible.
 | `GrantAllPermissions()` / `RevokeAllPermissions()` | `grant all permissions` |
 | `CopyToClipboard('x')` / `PasteFromClipboard()` | `copy "x" to clipboard` |
 | `SetLocation(lat, lng)` | `set location lat, lng` |
+| `EnrollBiometric()` (v0.9.7+) | `enroll biometric` — see [Biometric auth](https://flutterprobe.dev/probescript/annotations/#biometric-authentication-v097) |
+| `BiometricMatch()` (v0.9.7+) | `biometric match` — simulate Face ID / Touch ID success |
+| `BiometricNoMatch()` (v0.9.7+) | `biometric no match` — simulate Face ID / Touch ID failure |
 | `VerifyExternalBrowser()` | `verify external browser opened` |
 | `TakeScreenshot('name')` / `CompareScreenshot('name')` | `take screenshot "name"` |
 | `DumpWidgetTree()` / `SaveLogs()` / `Pause()` / `Log('msg')` | as named |

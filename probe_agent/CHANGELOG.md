@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.7 - 2026-05-12
+
+- Version bump to match CLI v0.9.7. No agent code changes — biometric
+  authentication is driven via simctl/adb from the CLI, no on-device
+  agent involvement needed.
+
 ## 0.9.6 - 2026-05-12
 
 - Version bump to match CLI v0.9.6. No agent code changes — annotation DSL

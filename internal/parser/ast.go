@@ -166,6 +166,10 @@ const (
 	VerbVerifyBrowser   ActionVerb = "verify_browser"
 	VerbOpenLink        ActionVerb = "open_link"   // open link "url"
 	VerbStore           ActionVerb = "store"        // store "value" as varName
+	// Biometric (Face ID / Touch ID / fingerprint) — simulator/emulator only.
+	VerbEnrollBiometric  ActionVerb = "enroll_biometric"
+	VerbBiometricMatch   ActionVerb = "biometric_match"
+	VerbBiometricNoMatch ActionVerb = "biometric_no_match"
 )
 
 type SwipeDirection string

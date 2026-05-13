@@ -222,6 +222,43 @@ class VerifyExternalBrowser extends Step {
   const VerifyExternalBrowser();
 }
 
+// ---- Biometric authentication (simulator/emulator only) ----
+
+/// Emits: `enroll biometric`. Sets the simulator/emulator's biometric
+/// enrollment state to "enrolled" so subsequent [BiometricMatch] or
+/// [BiometricNoMatch] satisfy a pending Face ID / Touch ID / fingerprint
+/// prompt in the app under test.
+///
+/// On iOS this posts the `com.apple.BiometricKit.enrollmentChanged` Darwin
+/// notification via `xcrun simctl spawn booted notifyutil`. On Android the
+/// fingerprint must already be enrolled in Settings; the step is a no-op
+/// hint there. Skipped with a warning on physical devices.
+class EnrollBiometric extends Step {
+  const EnrollBiometric();
+}
+
+/// Emits: `biometric match`. Simulates a successful Face ID / Touch ID /
+/// fingerprint capture, satisfying a pending biometric prompt.
+///
+/// iOS Simulator: posts `*_Sim.faceCapture.match` and `*_Sim.fingerTouch.match`
+/// Darwin notifications so the same step works on Face ID and Touch ID
+/// devices. Android emulator: `adb -s <serial> emu finger touch 1` (matches
+/// the fingerprint enrolled with ID 1). Skipped on physical devices.
+class BiometricMatch extends Step {
+  const BiometricMatch();
+}
+
+/// Emits: `biometric no match`. Simulates a failed Face ID / Touch ID /
+/// fingerprint capture so the app's "authentication failed" path can be
+/// exercised.
+///
+/// iOS Simulator: posts `*_Sim.faceCapture.no-match` and `*_Sim.fingerTouch.no-match`.
+/// Android emulator: `adb emu finger touch 9999` (an unregistered id).
+/// Skipped on physical devices.
+class BiometricNoMatch extends Step {
+  const BiometricNoMatch();
+}
+
 // ---- Diagnostics ----
 
 /// Emits: `take screenshot "name"`.

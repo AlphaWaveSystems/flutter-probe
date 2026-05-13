@@ -3,7 +3,7 @@ description: >-
   Dart annotations for FlutterProbe — declare ProbeScript end-to-end tests as
   decorators on your Flutter screen classes. Pair with flutter_probe_gen to
   generate .probe test files at build time.
-version: 0.9.6
+version: 0.9.7
 homepage: https://flutterprobe.dev
 repository: https://github.com/AlphaWaveSystems/flutter-probe
 issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
