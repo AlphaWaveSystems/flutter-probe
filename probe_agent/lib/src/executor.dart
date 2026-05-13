@@ -648,24 +648,66 @@ class ProbeExecutor {
   // ---- Screenshot ----
 
   Future<String> _screenshot(String name) async {
-    // ignore: deprecated_member_use
-    final renderView = WidgetsBinding.instance.renderView;
-    // ignore: invalid_use_of_protected_member
-    final layer = renderView.layer;
-    if (layer == null || layer is! OffsetLayer) {
-      throw ProbeError(ProbeError.internalError, 'No renderable layer for screenshot');
+    // Wait for the latest frame to be fully rendered before capturing.
+    await WidgetsBinding.instance.endOfFrame;
+
+    // Primary path: RenderRepaintBoundary.toImage() — works on both Skia and
+    // Impeller. OffsetLayer.toImage() returns a GPU-backed texture on Impeller
+    // where toByteData(png) returns null, so we can't rely on it for iOS.
+    final pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+    if (pngBytes == null) {
+      throw ProbeError(ProbeError.internalError, 'Screenshot capture failed: no renderable surface');
     }
-    final image = await layer.toImage(
-      renderView.paintBounds,
-      pixelRatio: 2.0,
-    );
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+
     final dir = '${Directory.systemTemp.path}/probe_screenshots';
     final path = '$dir/${name}_${DateTime.now().millisecondsSinceEpoch}.png';
     final file = File(path);
     await file.parent.create(recursive: true);
-    await file.writeAsBytes(bytes!.buffer.asUint8List());
+    await file.writeAsBytes(pngBytes);
     return path;
+  }
+
+  /// Finds the largest [RenderRepaintBoundary] in the widget tree and captures
+  /// it. Impeller explicitly supports this path, unlike [OffsetLayer.toImage].
+  Future<Uint8List?> _captureViaRepaintBoundary() async {
+    RenderRepaintBoundary? best;
+    double bestArea = 0;
+
+    void visit(Element element) {
+      final ro = element.renderObject;
+      if (ro is RenderRepaintBoundary) {
+        final area = ro.size.width * ro.size.height;
+        if (area > bestArea && ro.size.width > 50) {
+          bestArea = area;
+          best = ro;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(visit);
+    if (best == null) return null;
+
+    final views = RendererBinding.instance.renderViews;
+    final pixelRatio = views.isNotEmpty
+        ? views.first.flutterView.devicePixelRatio
+        : ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+    final image = await best!.toImage(pixelRatio: pixelRatio);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return bytes?.buffer.asUint8List();
+  }
+
+  /// Fallback capture using the root [OffsetLayer]. Works on Skia; may return
+  /// null on Impeller if the GPU texture can't be read back to CPU memory.
+  Future<Uint8List?> _captureViaLayer() async {
+    // ignore: deprecated_member_use
+    final renderView = WidgetsBinding.instance.renderView;
+    // ignore: invalid_use_of_protected_member
+    final layer = renderView.layer;
+    if (layer == null || layer is! OffsetLayer) return null;
+    final image = await layer.toImage(renderView.paintBounds, pixelRatio: 2.0);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return bytes?.buffer.asUint8List();
   }
 
   // ---- Open link ----
