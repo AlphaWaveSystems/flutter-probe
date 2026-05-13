@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-05-12
+
+### Fixed
+- **`flutter_probe_gen`: `Mock` path silently truncated.** The emitter wrote the path unquoted (`when the app calls GET /api/products`), so the Go lexer split on `/` and the parser only recorded the first IDENT segment. Now emits the canonical quoted form. Caught by a new `mock_and_call` golden + the existing cross-language integration test.
+- **`flutter_probe_gen`: `See` suffixes silently dropped.** When `state`, `containing`, and `matching` were all set on a single assertion, only the last branch's text reached the output. Now composes all three suffixes additively: `see "x" is enabled contains "y" matching "z"`. Caught by a new `see_states` golden covering the matrix.
+
+### Added
+- **`flutter_probe_annotation`: `@ProbeCompositeTest` annotation.** The flagship multi-device composite testing feature finally has a DSL surface. Pair with `Device(alias, target: …)`, `OnDevice(alias, steps: […])` per-device groups, and `Sync(label)` cross-device barriers. Emitter generates standard `composite test` / `devices` / `<alias>:` / `sync` blocks that the existing CLI runner picks up unchanged.
+- **`flutter_probe_annotation`: `See.id` / `See.selector` factories** — assertions can now target by `ValueKey` or any rich selector (Ordinal, Below/Above/LeftOf/RightOf, InContainer, TypeSel) rather than only by literal visible text. Same factories on `DontSee`. The Go parser always supported this; the DSL just didn't expose it.
+- **`flutter_probe_annotation`: `WaitUntil.idAppears` / `.idDisappears`** — emits unquoted `#key` selector form (Go parser's WaitSelector branch), which is more reliable than text matching for stable `ValueKey`-tagged widgets.
+- **`flutter_probe_gen`: 6 new golden fixtures.** `mock_and_call`, `see_states`, `composite_chat`, `wait_variants`, `examples_inline`, `kitchen_sink`. The kitchen sink fixture exercises one of every step, selector kind, and control-flow construct. Every fixture round-trips through `internal/parser/golden_integration_test.go`. Total golden coverage went from 4 → 10 fixtures, builder tests from 5 → 11.
+
+### Changed
+- **`flutter_probe_annotation`: `Press` and `Pinch` are now `@Deprecated`.** The Go parser has no `press` or `pinch` case, so emitted text fell through to `parseRecipeCall` and was misinterpreted. Marked deprecated until runtime support lands. Use `GoBack()` in place of `Press('back')`.
+- **`flutter_probe_gen`: emitter no longer coupled to enum declaration order.** `_direction`, `_httpMethod`, and the `See` state lookup now read the enum constant identifier (`_name` field) instead of indexing a hard-coded array by `.index`. Reordering `Direction`, `HttpMethod`, or `SeeState` no longer silently corrupts emitted ProbeScript.
+
+### Docs
+- New website page: [Annotation-driven Tests](https://flutterprobe.dev/probescript/annotations/) — full reference for the annotation DSL with every step class, selector kind, and the new composite test syntax.
+
 ## [0.9.5] - 2026-05-12
 
 ### Fixed

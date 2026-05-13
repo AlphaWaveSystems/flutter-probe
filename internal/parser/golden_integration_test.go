@@ -49,9 +49,11 @@ func TestGoldenIntegration_DartEmittedFiles(t *testing.T) {
 				t.Fatalf("parser rejected golden %s:\n%v\n--- contents ---\n%s",
 					filepath.Base(path), err, string(data))
 			}
-			// Sanity: every golden defines at least one test, recipe, or hook.
-			if len(prog.Tests) == 0 && len(prog.Recipes) == 0 && len(prog.Hooks) == 0 {
-				t.Errorf("golden %s parsed but produced no tests/recipes/hooks",
+			// Sanity: every golden defines at least one test, composite test,
+			// recipe, or hook.
+			if len(prog.Tests) == 0 && len(prog.CompositeTests) == 0 &&
+				len(prog.Recipes) == 0 && len(prog.Hooks) == 0 {
+				t.Errorf("golden %s parsed but produced no tests/composite tests/recipes/hooks",
 					filepath.Base(path))
 			}
 		})

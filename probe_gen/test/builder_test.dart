@@ -59,6 +59,24 @@ void main() {
   test('emits loops and conditionals with nested bodies',
       () => runGolden('loops_and_conditionals'));
 
+  test('quotes Mock path and emits CallHttp correctly',
+      () => runGolden('mock_and_call'));
+
+  test('composes See state/contains/matching suffixes additively',
+      () => runGolden('see_states'));
+
+  test('emits every wait variant including id-based',
+      () => runGolden('wait_variants'));
+
+  test('emits inline Examples table',
+      () => runGolden('examples_inline'));
+
+  test('emits composite test with devices, OnDevice blocks, and Sync barriers',
+      () => runGolden('composite_chat'));
+
+  test('kitchen sink — one of every step + selector + control flow',
+      () => runGolden('kitchen_sink'));
+
   test('skips files with no FlutterProbe annotations', () async {
     final annotation = await annotationPackageAssets();
     await testBuilder(

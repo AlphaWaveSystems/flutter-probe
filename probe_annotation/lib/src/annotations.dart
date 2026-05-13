@@ -114,3 +114,70 @@ class ProbeRecipe {
     this.steps = const [],
   });
 }
+
+/// Declares a multi-device composite test. The annotated class becomes a
+/// `composite test "name"` block in the generated `.probe` file.
+///
+/// Devices are declared by alias (`A`, `B`, `Sender`, etc.) and steps are
+/// scoped per-device using [OnDevice]. [Sync] barriers between [OnDevice]
+/// groups force every device to reach the same checkpoint before any
+/// device proceeds.
+///
+/// Example — chat between two users on two simulators:
+///
+/// ```dart
+/// @ProbeCompositeTest(
+///   name: 'alice sends bob a message',
+///   tags: ['composite', 'smoke'],
+///   devices: [
+///     Device('A', target: 'iPhone 15 Simulator'),
+///     Device('B', target: 'Pixel 9 Emulator'),
+///   ],
+///   body: [
+///     OnDevice('A', steps: [
+///       Open(),
+///       Tap(text: 'Sign in as Alice'),
+///     ]),
+///     OnDevice('B', steps: [
+///       Open(),
+///       Tap(text: 'Sign in as Bob'),
+///     ]),
+///     Sync('both signed in'),
+///     OnDevice('A', steps: [
+///       Tap(text: 'New message'),
+///       Type('hello bob'),
+///       Tap(text: 'Send'),
+///     ]),
+///     OnDevice('B', steps: [
+///       WaitUntil.appears('hello bob'),
+///       See('hello bob'),
+///     ]),
+///   ],
+/// )
+/// class ChatComposite {}
+/// ```
+class ProbeCompositeTest {
+  final String name;
+  final List<String> tags;
+  final List<Device> devices;
+
+  /// Composite body — must contain only [OnDevice] and [Sync] elements.
+  final List<Step> body;
+
+  const ProbeCompositeTest({
+    required this.name,
+    this.tags = const [],
+    this.devices = const [],
+    this.body = const [],
+  });
+}
+
+/// One device entry in a [ProbeCompositeTest.devices] list. The [alias]
+/// is referenced by [OnDevice]; [target] is an optional human-readable
+/// device name shown in the generated `.probe` header and in failure
+/// messages.
+class Device {
+  final String alias;
+  final String? target;
+  const Device(this.alias, {this.target});
+}

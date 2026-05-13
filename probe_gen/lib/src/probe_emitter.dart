@@ -111,6 +111,53 @@ class ProbeEmitter {
     _hasContent = true;
   }
 
+  /// Emits a `composite test "name"` block from a `@ProbeCompositeTest`
+  /// annotation. Devices declaration, then a body of `<alias>:` blocks
+  /// (rendered from [OnDevice] entries) and `sync "label"` lines
+  /// (rendered from [Sync] entries).
+  void emitCompositeTest(DartObject composite) {
+    final name = _str(composite, 'name') ?? 'unnamed';
+    final tags = _strList(composite, 'tags');
+    final devices = _objList(composite, 'devices');
+    final body = _objList(composite, 'body');
+
+    _buf.writeln('composite test "${_escape(name)}"');
+    if (tags.isNotEmpty) {
+      _buf.writeln('  ${tags.map((t) => '@$t').join(' ')}');
+    }
+    if (devices.isNotEmpty) {
+      _buf.writeln('  devices');
+      for (final d in devices) {
+        final alias = _str(d, 'alias') ?? '';
+        final target = _str(d, 'target') ?? '';
+        if (target.isEmpty) {
+          _buf.writeln('    $alias:');
+        } else {
+          _buf.writeln('    $alias: $target');
+        }
+      }
+    }
+    for (final element in body) {
+      final t = _typeNameOf(element);
+      if (t == 'OnDevice') {
+        final alias = _str(element, 'alias') ?? '';
+        final steps = _objList(element, 'steps');
+        if (alias.isEmpty || steps.isEmpty) continue;
+        _buf.writeln('  $alias:');
+        for (final s in steps) {
+          _emitStep(s, 2);
+        }
+      } else if (t == 'Sync') {
+        final label = _str(element, 'label') ?? '';
+        _buf.writeln('  sync "${_escape(label)}"');
+      }
+      // Other Step types in a composite body are ignored — DSL doc says
+      // body must contain only OnDevice and Sync.
+    }
+    _buf.writeln();
+    _hasContent = true;
+  }
+
   // ---- Step dispatch ----
 
   void _emitStep(DartObject step, int depth) {
@@ -258,7 +305,7 @@ class ProbeEmitter {
         _emitSee(step, depth);
         break;
       case 'DontSee':
-        _buf.writeln('${indent}don\'t see "${_escape(_str(step, 'text') ?? '')}"');
+        _emitSee(step, depth, negated: true);
         break;
 
       // Wait
@@ -277,7 +324,12 @@ class ProbeEmitter {
       case 'WaitUntil':
         final target = _str(step, 'target') ?? '';
         final appears = _bool(step, 'appears');
-        _buf.writeln('${indent}wait until "${_escape(target)}" '
+        final byId = _bool(step, 'byId');
+        // byId factories emit unquoted #key so the Go parser's WaitSelector
+        // branch (parser.go:846) matches; text factories emit quoted form
+        // for the WaitAppears/WaitDisappears branch.
+        final rendered = byId ? '#$target' : '"${_escape(target)}"';
+        _buf.writeln('${indent}wait until $rendered '
             '${appears ? 'appears' : 'disappears'}');
         break;
 
@@ -321,7 +373,11 @@ class ProbeEmitter {
         final path = _str(step, 'path') ?? '';
         final status = _int(step, 'status');
         final body = _str(step, 'body') ?? '';
-        _buf.writeln('${indent}when the app calls $method $path');
+        // Path must be quoted so the lexer doesn't split on `/` and lose
+        // segments after the first IDENT. Parser test fixture at
+        // internal/parser/parser_test.go shows quoted form is canonical.
+        _buf.writeln(
+            '${indent}when the app calls $method "${_escape(path)}"');
         if (body.isNotEmpty) {
           _buf.writeln(
               '${'  ' * (depth + 1)}respond with $status and body "${_escape(body)}"');
@@ -384,34 +440,57 @@ class ProbeEmitter {
     _buf.writeln('$indent$verb $dirStr$tail');
   }
 
-  void _emitSee(DartObject step, int depth) {
+  void _emitSee(DartObject step, int depth, {bool negated = false}) {
     final indent = '  ' * depth;
-    final text = _str(step, 'text') ?? '';
     final exactly = step.getField('exactly');
+
+    // Target: text, id, or rich selector. Mirror the same priority order
+    // used by the tap-family target resolver.
+    final selector = step.getField('selector');
+    final id = _str(step, 'id');
+    final text = _str(step, 'text');
+    String target;
+    if (selector != null && !selector.isNull) {
+      target = _renderSelector(selector);
+    } else if (id != null && id.isNotEmpty) {
+      target = '#$id';
+    } else {
+      target = '"${_escape(text ?? '')}"';
+    }
+
     final containing = _str(step, 'containing');
     final matching = _str(step, 'matching');
-    final stateField = step.getField('state');
-    final stateIdx = stateField?.getField('index')?.toIntValue() ?? 0;
-    // SeeState: 0=none, 1=enabled, 2=disabled, 3=checked, 4=focused
-    const stateNames = [null, 'enabled', 'disabled', 'checked', 'focused'];
-    final stateName =
-        (stateIdx >= 0 && stateIdx < stateNames.length) ? stateNames[stateIdx] : null;
+    final stateName = _seeStateName(step.getField('state'));
 
     final countStr = (exactly == null || exactly.isNull)
         ? ''
         : 'exactly ${exactly.toIntValue()} ';
-    final base = '${countStr}"${_escape(text)}"';
-    var line = 'see $base';
-    if (stateName != null) {
-      line = 'see $base is $stateName';
-    }
+    final verb = negated ? "don't see" : 'see';
+
+    // Compose suffixes additively — state, contains, and matching can ALL
+    // appear in a single assertion. The Go parser at parser.go:728-769
+    // parses them sequentially after the selector, so we emit in the same
+    // canonical order: <state> contains <X> matching <Y>.
+    final parts = <String>['$verb $countStr$target'.replaceAll('  ', ' ')];
+    if (stateName != null) parts.add('is $stateName');
     if (containing != null && containing.isNotEmpty) {
-      line = 'see $base contains "${_escape(containing)}"';
+      parts.add('contains "${_escape(containing)}"');
     }
     if (matching != null && matching.isNotEmpty) {
-      line = 'see $base matching "${_escape(matching)}"';
+      parts.add('matching "${_escape(matching)}"');
     }
-    _buf.writeln('$indent$line');
+    _buf.writeln('$indent${parts.join(' ')}');
+  }
+
+  /// Maps a SeeState enum DartObject to its parser keyword, or null if
+  /// SeeState.none. Reads the enum constant identifier rather than trusting
+  /// the index so reordering the enum doesn't silently corrupt output.
+  String? _seeStateName(DartObject? stateField) {
+    if (stateField == null || stateField.isNull) return null;
+    final name = _enumName(stateField);
+    // Map DSL enum name → parser keyword. 'none' means no state suffix.
+    const valid = {'enabled', 'disabled', 'checked', 'focused'};
+    return valid.contains(name) ? name : null;
   }
 
   void _emitExamples(DartObject examples) {
@@ -516,18 +595,30 @@ class ProbeEmitter {
   }
 
   String _httpMethod(DartObject obj, String field) {
-    final f = obj.getField(field);
-    if (f == null) return 'GET';
-    final idx = f.getField('index')?.toIntValue() ?? 0;
-    const names = ['GET', 'POST', 'PUT', 'DELETE'];
-    return idx >= 0 && idx < names.length ? names[idx] : 'GET';
+    final name = _enumName(obj.getField(field));
+    // HttpMethod enum: get | post | put | delete → uppercase.
+    if (name == null || name.isEmpty) return 'GET';
+    return name.toUpperCase();
   }
 
   String _direction(DartObject? d) {
     if (d == null) return 'down';
-    final idx = d.getField('index')?.toIntValue() ?? 0;
-    const names = ['up', 'down', 'left', 'right'];
-    return idx >= 0 && idx < names.length ? names[idx] : 'down';
+    final name = _enumName(d);
+    // Direction enum names map 1:1 to ProbeScript keywords.
+    if (name == null || name.isEmpty) return 'down';
+    return name;
+  }
+
+  /// Returns the Dart enum constant identifier (e.g. "up" for Direction.up).
+  /// Works on Dart 2.15+ where every enum value has an auto-generated `_name`
+  /// field. Decouples emitter correctness from enum *declaration order* —
+  /// reordering a DSL enum no longer silently corrupts emitted ProbeScript.
+  String? _enumName(DartObject? value) {
+    if (value == null || value.isNull) return null;
+    final n = value.getField('_name')?.toStringValue();
+    if (n != null) return n;
+    // Older Dart versions exposed the name via `name`; try that next.
+    return value.getField('name')?.toStringValue();
   }
 
   String _ordinal(int n) {

@@ -369,18 +369,18 @@ run dart:
 
 Co-locate `.probe` tests with the Flutter widgets they exercise. Two Dart packages handle this:
 
-- **`flutter_probe_annotation`** — `@ProbeSuite`, `@ProbeTest`, `@ProbeRecipe` decorators plus a fully type-checked step DSL (all 31 ProbeScript verbs, all 6 selector kinds, hooks, loops, conditionals, recipes, examples).
+- **`flutter_probe_annotation`** — `@ProbeSuite`, `@ProbeTest`, `@ProbeRecipe`, `@ProbeCompositeTest` decorators plus a fully type-checked step DSL (all 31 ProbeScript verbs, all 6 selector kinds, hooks, loops, conditionals, recipes, examples, multi-device composite tests).
 - **`flutter_probe_gen`** — a `build_runner` builder that reads the annotations and emits matching `.probe` files into `tests/generated/`.
 
 Add to your Flutter app's `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_probe_annotation: ^0.9.3
-  flutter_probe_agent: ^0.9.3
+  flutter_probe_annotation: ^0.9.6
+  flutter_probe_agent: ^0.9.6
 
 dev_dependencies:
-  flutter_probe_gen: ^0.9.3
+  flutter_probe_gen: ^0.9.6
   build_runner: ^2.15.0
 ```
 
@@ -415,7 +415,9 @@ probe test tests/        # picks up tests/generated/login_screen.probe
 
 Test definitions are now type-checked by `flutter analyze` — a misspelt step name is a compile error rather than a runtime surprise. Selectors stay in sync with widget code because they live in the same file. The generated `.probe` file goes through the same parser, agent, and reporter as a hand-written one.
 
-Full reference: [`docs/wiki/Annotations.md`](docs/wiki/Annotations.md).
+**v0.9.6** completes the annotation surface: full composite-test DSL (`@ProbeCompositeTest`, `Device`, `OnDevice`, `Sync`), id/selector-based `See`/`DontSee`, `WaitUntil.idAppears`, and composable `state` + `containing` + `matching` assertions. Plus fixes for two emitter bugs (`Mock` paths and `See` suffix dropping).
+
+Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.dev/probescript/annotations/) (or [`docs/wiki/Annotations.md`](docs/wiki/Annotations.md) on GitHub).
 
 ## CLI Commands
 

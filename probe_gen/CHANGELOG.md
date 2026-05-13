@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.9.6 - 2026-05-12
+
+### Fixed
+
+- **`Mock` path is now quoted** in the emitted `when the app calls ...`
+  line. Previously the path was unquoted, so the Go lexer split on `/`
+  and the parser recorded only the first IDENT segment — `Mock(path:
+  '/api/products')` silently became `/api`. Now emits `when the app
+  calls GET "/api/products"` which round-trips correctly.
+- **`See` state/containing/matching suffixes compose additively.**
+  `See('x', state: SeeState.enabled, containing: 'y')` previously
+  emitted only `see "x" contains "y"` (state silently dropped). Now
+  emits `see "x" is enabled contains "y"` — all suffixes coexist as
+  the parser supports.
+
+### Added
+
+- **`@ProbeCompositeTest` emission** — new `emitCompositeTest` walks
+  `devices`, `OnDevice` groups, and `Sync` barriers, producing the
+  standard `composite test` / `devices` / `<alias>:` / `sync` block
+  layout.
+- **`See.id` / `See.selector` rendering** — the emitter now reads the
+  optional `id` and `selector` fields on `See`/`DontSee` and renders
+  the appropriate target form. Text remains the default when no id
+  or selector is provided.
+- **`WaitUntil.idAppears` / `.idDisappears` rendering** — emits
+  unquoted `#key` (selector form) when the DSL's `byId` flag is set.
+- **6 new golden fixtures** in `probe_gen/test/fixtures/`:
+  `mock_and_call`, `see_states`, `composite_chat`, `wait_variants`,
+  `examples_inline`, `kitchen_sink`. The kitchen sink fixture
+  exercises one of every step, selector kind, and control-flow
+  construct. Every fixture round-trips through the Go-side parser
+  via `internal/parser/golden_integration_test.go`.
+
+### Changed
+
+- **Emitter is no longer coupled to enum declaration order.**
+  `_direction`, `_httpMethod`, and the `See` state name lookup now
+  read the enum constant identifier (`_name` field) rather than
+  indexing into a hard-coded array by `.index`. Reordering or
+  inserting values in `Direction`, `HttpMethod`, or `SeeState` no
+  longer silently corrupts emitted ProbeScript.
+
 ## 0.9.5 - 2026-05-12
 
 - Version bump to match CLI v0.9.5. No annotation API changes.
