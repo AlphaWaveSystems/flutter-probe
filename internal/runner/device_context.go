@@ -612,6 +612,10 @@ func (dc *DeviceContext) biometricCapture(ctx context.Context, match bool) error
 		// Post both fingerprint and face notifications so the same step
 		// works on Touch ID devices and Face ID devices alike — the simulator
 		// ignores the one that doesn't match its hardware profile.
+		// Note: on iOS 26+ simulator, no-match notifications no longer resolve
+		// LAContext.evaluatePolicy. Apps using flutter_probe_agent should call
+		// awaitBiometricResult() instead of local_auth.authenticate() when
+		// PROBE_AGENT=true; the CLI sends probe.biometric_signal to resolve it.
 		notifications := []string{
 			fmt.Sprintf("com.apple.BiometricKit_Sim.fingerTouch.%s", verb),
 			fmt.Sprintf("com.apple.BiometricKit_Sim.faceCapture.%s", verb),

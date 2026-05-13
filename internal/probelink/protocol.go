@@ -195,6 +195,11 @@ const (
 	MethodSetOutput     = "probe.set_output"
 	MethodDrainOutput   = "probe.drain_output"
 
+	// Biometric simulation signal (v0.9.8)
+	// Sent by CLI after firing platform biometric commands so the agent-side
+	// Dart Completer resolves without depending on LAContext behaviour.
+	MethodBiometricSignal = "probe.biometric_signal"
+
 	// Notification methods (agent → CLI, no response expected)
 	NotifyRecordedEvent = "probe.recorded_event"
 	NotifyExecDart      = "probe.exec_dart"

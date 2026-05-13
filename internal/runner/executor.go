@@ -666,14 +666,22 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping biometric match (cloud mode)")
 			return nil
 		}
-		return e.deviceCtx.BiometricMatch(ctx)
+		if err := e.deviceCtx.BiometricMatch(ctx); err != nil {
+			return err
+		}
+		_, err := e.client.Call(ctx, probelink.MethodBiometricSignal, map[string]any{"result": true})
+		return err
 
 	case parser.VerbBiometricNoMatch:
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping biometric no-match (cloud mode)")
 			return nil
 		}
-		return e.deviceCtx.BiometricNoMatch(ctx)
+		if err := e.deviceCtx.BiometricNoMatch(ctx); err != nil {
+			return err
+		}
+		_, err := e.client.Call(ctx, probelink.MethodBiometricSignal, map[string]any{"result": false})
+		return err
 	}
 
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)

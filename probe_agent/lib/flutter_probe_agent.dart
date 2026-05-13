@@ -26,3 +26,4 @@ library flutter_probe_agent;
 
 // Public API — only what app developers need
 export 'src/agent.dart' show ProbeAgent, isProbeEnabled;
+export 'src/biometric.dart' show awaitBiometricResult;

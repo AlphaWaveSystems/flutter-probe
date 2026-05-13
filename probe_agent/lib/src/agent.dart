@@ -128,8 +128,10 @@ class ProbeAgent {
   /// Whether the agent is currently running.
   static bool get isRunning => _server != null || _relayClient != null;
 
-  /// The port the agent is listening on (0 in relay mode).
-  static int get port => _server?.port ?? 0;
+  /// The port the agent is actually listening on (0 in relay mode).
+  /// May differ from the [port] parameter passed to [start] if the preferred
+  /// port was busy and the server fell back to the next available port.
+  static int get port => _server?.actualPort ?? 0;
 
   /// Whether the agent is running in relay mode.
   static bool get isRelayMode => _relayClient != null;
