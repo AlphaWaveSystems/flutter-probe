@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-05-13
+
+### Added
+- **`deliver signal "name" ["value"]`** — new ProbeScript step that resolves
+  a pending `awaitSignal(name)` call in the Flutter app. Use to unblock any
+  OS-level interaction that isn't in the Flutter widget tree: push permission
+  dialogs, payment sheets, App Tracking Transparency, deep-link handlers, etc.
+  The value defaults to `"true"` when omitted.
+- **`awaitSignal(String name)`** — new public function exported from
+  `flutter_probe_agent`. Returns a `Future<String>` that resolves with the
+  value sent by the CLI. Generalises the `awaitBiometricResult()` pattern to
+  any named signal.
+- **`DeliverSignal(String name, {String value})`** — new annotation step class
+  in `flutter_probe_annotation`. Emits `deliver signal "name"` or
+  `deliver signal "name" "value"`.
+- Parser: `TOKEN_DELIVER`, `TOKEN_SIGNAL`, `VerbDeliverSignal`.
+- Agent: `probe.signal` JSON-RPC method, `ProbeMethods.signal` constant.
+
 ## [0.9.8] - 2026-05-12
 
 ### Fixed

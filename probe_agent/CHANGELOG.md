@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.9 - 2026-05-13
+
+- **`awaitSignal(String name)`** — new public function. Blocks until the CLI
+  delivers `deliver signal "name"`. Returns the value string sent with the
+  step (default `"true"`). Use to unblock any OS-level interaction not in
+  the Flutter widget tree: push permission prompts, payment sheets, App
+  Tracking Transparency, custom deep-link handlers, etc.
+- New `probe.signal` JSON-RPC method handled by `ProbeExecutor`.
+
 ## 0.9.8 - 2026-05-12
 
 - **`awaitBiometricResult()`** — new public function exported from

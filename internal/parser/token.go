@@ -164,6 +164,10 @@ const (
 	// Biometric authentication (v0.9.7+) — simulator/emulator only.
 	TOKEN_BIOMETRIC // "biometric" — head of `biometric match` / `biometric no match`
 	TOKEN_ENROLL    // "enroll" — head of `enroll biometric`
+
+	// Native-prompt signal API (v0.9.9+)
+	TOKEN_DELIVER // "deliver" — head of `deliver signal "name"`
+	TOKEN_SIGNAL  // "signal"  — second word of deliver signal
 )
 
 // Token is a single lexical unit.
@@ -299,6 +303,8 @@ var keywords = map[string]TokenType{
 	"sync":       TOKEN_SYNC,
 	"biometric":  TOKEN_BIOMETRIC,
 	"enroll":     TOKEN_ENROLL,
+	"deliver":    TOKEN_DELIVER,
+	"signal":     TOKEN_SIGNAL,
 }
 
 // fillerWords are stripped by the forgiving parser.

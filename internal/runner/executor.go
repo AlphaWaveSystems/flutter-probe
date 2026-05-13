@@ -346,6 +346,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "biometric match"
 		case parser.VerbBiometricNoMatch:
 			return "biometric no match"
+		case parser.VerbDeliverSignal:
+			return fmt.Sprintf("deliver signal %q", s.Name)
 		default:
 			return string(s.Verb)
 		}
@@ -367,6 +369,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "wait for page to load"
 		case parser.WaitNetworkIdle:
 			return "wait for network idle"
+		case parser.WaitAnimations:
+			return "wait for animations to end"
 		default:
 			return "wait"
 		}
@@ -681,6 +685,17 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return err
 		}
 		_, err := e.client.Call(ctx, probelink.MethodBiometricSignal, map[string]any{"result": false})
+		return err
+
+	case parser.VerbDeliverSignal:
+		value := a.Text
+		if value == "" {
+			value = "true"
+		}
+		_, err := e.client.Call(ctx, probelink.MethodSignal, map[string]any{
+			"name":  a.Name,
+			"value": value,
+		})
 		return err
 	}
 

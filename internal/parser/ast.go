@@ -170,6 +170,11 @@ const (
 	VerbEnrollBiometric  ActionVerb = "enroll_biometric"
 	VerbBiometricMatch   ActionVerb = "biometric_match"
 	VerbBiometricNoMatch ActionVerb = "biometric_no_match"
+
+	// Native-prompt signal API (v0.9.9+)
+	// deliver signal "name" ["value"]
+	// Name = signal name, Text = value (default "true")
+	VerbDeliverSignal ActionVerb = "deliver_signal"
 )
 
 type SwipeDirection string

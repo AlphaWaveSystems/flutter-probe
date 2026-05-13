@@ -259,6 +259,30 @@ class BiometricNoMatch extends Step {
   const BiometricNoMatch();
 }
 
+// ---- Native-prompt signal API ----
+
+/// Emits: `deliver signal "name"` or `deliver signal "name" "value"`.
+///
+/// Resolves a pending [awaitSignal] call in the Flutter app. Use to unblock
+/// any OS-level interaction the probe cannot tap directly — permission dialogs
+/// not in the widget tree, payment sheets, push notification prompts, etc.
+///
+/// ```dart
+/// @ProbeSuite(tests: [
+///   ProbeTest('push permission granted', steps: [
+///     Open(),
+///     DeliverSignal('push_permission'),
+///     See('Notifications enabled'),
+///   ]),
+/// ])
+/// class NotificationScreen extends StatelessWidget {}
+/// ```
+class DeliverSignal extends Step {
+  final String name;
+  final String value;
+  const DeliverSignal(this.name, {this.value = 'true'});
+}
+
 // ---- Diagnostics ----
 
 /// Emits: `take screenshot "name"`.
