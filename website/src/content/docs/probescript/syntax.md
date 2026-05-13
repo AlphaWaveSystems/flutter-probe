@@ -199,11 +199,18 @@ test "non-matching face is rejected"
 ```
 
 On iOS, this posts the `BiometricKit_Sim.faceCapture.match` / `.no-match`
-Darwin notifications (and the `fingerTouch.*` equivalents, so the same
-step works on Touch ID devices). On Android, this calls
-`adb -s <serial> emu finger touch <id>` — fingerprint ID `1` is
-matching by convention (must be pre-enrolled in Settings before tests
+Darwin notifications (and the `fingerTouch.*` equivalents for Touch ID
+devices), then sends `probe.biometric_signal` to the agent. On Android,
+this calls `adb -s <serial> emu finger touch <id>` — fingerprint ID `1`
+is matching by convention (must be pre-enrolled in Settings before tests
 run); any unregistered ID is no-match.
+
+:::caution[iOS 26+ — use `awaitBiometricResult()` in your app]
+On iOS 26+ simulator the `no-match` notification no longer resolves
+`LAContext.evaluatePolicy`. Use `awaitBiometricResult()` from
+`flutter_probe_agent` in PROBE_AGENT builds — the CLI resolves it via
+`probe.biometric_signal`. See the [iOS platform guide](/platform/ios/#biometric-authentication-face-id--touch-id) for the code pattern.
+:::
 
 ## HTTP Calls
 

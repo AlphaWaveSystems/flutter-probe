@@ -115,6 +115,26 @@ xcrun devicectl device process launch --device <UDID> <bundle-id>
 probe test tests/ --host <device-ip> --token <probe-token> -v
 ```
 
+## Biometric Authentication Testing (v0.9.7+)
+
+`enroll biometric`, `biometric match`, and `biometric no match` ProbeScript steps drive Face ID / Touch ID / fingerprint flows on iOS Simulator and Android emulator. On iOS 26+ simulator, the notifyutil `no-match` notification no longer resolves `LAContext.evaluatePolicy`. Use `awaitBiometricResult()` in your screen widget to receive the result from the CLI via a Dart `Completer`:
+
+```dart
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
+import 'package:local_auth/local_auth.dart';
+
+Future<bool> _signIn() async {
+  if (const bool.fromEnvironment('PROBE_AGENT')) {
+    // CLI delivers true (match) or false (no-match) via probe.biometric_signal.
+    // Works on all iOS simulator versions including iOS 26+.
+    return awaitBiometricResult();
+  }
+  return LocalAuthentication().authenticate(localizedReason: 'Sign in');
+}
+```
+
+The CLI automatically sends `probe.biometric_signal` after every `biometric match` / `biometric no match` step — no changes to `.probe` test files are needed.
+
 ## Features
 
 - **WebSocket + HTTP transports** — persistent connection for simulators, stateless HTTP for physical devices
@@ -123,6 +143,7 @@ probe test tests/ --host <device-ip> --token <probe-token> -v
 - **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing
 - **Pre-shared restart token** — `restart the app` works over WiFi without USB log reading
 - **`tap "X" if visible`** — conditional actions that skip silently when widget is not found
+- **Port-range fallback** — auto-tries ports 48686–48695 if preferred port is busy; logs `PROBE_PORT_BUSY=N (another probe agent is running)` when collision is with a sibling agent
 
 ## Requirements
 

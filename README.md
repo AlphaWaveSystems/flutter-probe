@@ -419,6 +419,8 @@ Test definitions are now type-checked by `flutter analyze` — a misspelt step n
 
 **v0.9.7** adds **biometric authentication testing** — `enroll biometric`, `biometric match`, `biometric no match` steps (and matching `EnrollBiometric()` / `BiometricMatch()` / `BiometricNoMatch()` annotation classes) drive Face ID / Touch ID / fingerprint flows on iOS Simulator and Android emulator. Skipped on physical devices.
 
+**v0.9.8** fixes biometric no-match on **iOS 26+ simulator** where `notifyutil` no-match notifications no longer resolve `LAContext.evaluatePolicy`. The CLI now delivers results via `probe.biometric_signal`; use `awaitBiometricResult()` from `flutter_probe_agent` instead of `local_auth.authenticate()` in PROBE_AGENT builds. Also adds a **port-range fallback**: the agent auto-tries ports 48686–48695 and logs `PROBE_PORT_BUSY=N (another probe agent is running)` when a collision is with a sibling agent.
+
 Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.dev/probescript/annotations/) (or [`docs/wiki/Annotations.md`](docs/wiki/Annotations.md) on GitHub).
 
 ## CLI Commands
