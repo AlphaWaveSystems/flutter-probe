@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-05-12
+
+### Fixed
+- **Biometric no-match on iOS 26+ simulator** — `notifyutil` no-match notifications
+  no longer resolve `LAContext.evaluatePolicy` on iOS 26 / Xcode 26.5. The CLI now
+  sends a `probe.biometric_signal {result: bool}` JSON-RPC command to the agent
+  after firing platform-level notifications. Test apps call `awaitBiometricResult()`
+  from `flutter_probe_agent` instead of `local_auth.authenticate()` in PROBE_AGENT
+  builds; the agent resolves a Dart `Completer` with the CLI-delivered result, making
+  biometric no-match reliable on all iOS simulator versions.
+
+### Added
+- **`awaitBiometricResult()`** — new public function in `flutter_probe_agent`.
+  Returns a `Future<bool>` that resolves when the CLI delivers
+  `probe.biometric_signal`. Usage pattern in test apps:
+  ```dart
+  final ok = const bool.fromEnvironment('PROBE_AGENT')
+      ? await awaitBiometricResult()
+      : await localAuth.authenticate(...);
+  ```
+- **`probe.biometric_signal`** — new JSON-RPC method. Sent by the CLI after
+  the platform-level biometric simulation commands so the result is always
+  delivered regardless of simulator version behavior.
+
 ## [0.9.7] - 2026-05-12
 
 ### Added

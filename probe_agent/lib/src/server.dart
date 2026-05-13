@@ -20,8 +20,17 @@ const String probeAgentVersion = '0.7.0';
 /// Supports two transport modes:
 /// - **WebSocket** (default): persistent connection at `ws://host:port/probe?token=<token>`
 /// - **HTTP POST** (fallback for physical devices): stateless `POST /probe/rpc?token=<token>`
+///
+/// If the preferred port is in use, the server tries successive ports up to
+/// [portRange] candidates. When a busy port is occupied by another probe agent
+/// (detected via `GET /probe/status`), a `PROBE_PORT_BUSY` log line is emitted
+/// so the CLI can surface a clear error instead of a silent connection refusal.
 class ProbeServer {
   final int port;
+
+  /// Maximum number of consecutive ports to try when the preferred port is busy.
+  /// Range: [port, port + portRange). Default 10 tries (48686–48695).
+  final int portRange;
   final bool allowRemoteConnections;
   HttpServer? _server;
   String? _token;
@@ -39,9 +48,14 @@ class ProbeServer {
   /// Creates a ProbeServer.
   /// Set [allowRemoteConnections] to true for WiFi testing (binds to 0.0.0.0
   /// instead of localhost). Only use in debug/profile builds — never in release.
-  ProbeServer({this.port = 48686, this.allowRemoteConnections = false});
+  ProbeServer({this.port = 48686, this.portRange = 10, this.allowRemoteConnections = false});
 
   Timer? _tokenTimer;
+
+  /// Starts the WebSocket server and prints the session token.
+  /// The port the server is actually listening on after [start].
+  /// May differ from [port] if the preferred port was busy.
+  int get actualPort => _server?.port ?? port;
 
   /// Starts the WebSocket server and prints the session token.
   /// If a pre-shared token was persisted (via `set_next_token`), uses that
@@ -52,11 +66,15 @@ class ProbeServer {
     final bindAddress = allowRemoteConnections
         ? InternetAddress.anyIPv4
         : InternetAddress.loopbackIPv4;
-    _server = await HttpServer.bind(bindAddress, port);
+    _server = await _bindWithFallback(bindAddress);
 
-    // Emit token so the CLI (via adb logcat / simctl log) can read it
+    // Emit token (and port when non-default) so the CLI can read them.
     // ignore: avoid_print
     print('PROBE_TOKEN=$_token');
+    if (actualPort != port) {
+      // ignore: avoid_print
+      print('PROBE_PORT=$actualPort');
+    }
 
     // Write token to a file so the CLI can read it directly
     await _writeTokenFile();
@@ -86,8 +104,59 @@ class ProbeServer {
     _serve();
   }
 
+  /// Tries [port], then [port+1] … [port+portRange-1] until one binds.
+  ///
+  /// For each busy port, checks whether it is occupied by another probe agent
+  /// (via GET /probe/status). Emits `PROBE_PORT_BUSY=<port> (probe agent)` or
+  /// `PROBE_PORT_BUSY=<port>` so the CLI / developer can distinguish a port
+  /// collision from two probe instances running simultaneously.
+  Future<HttpServer> _bindWithFallback(InternetAddress bindAddress) async {
+    for (var i = 0; i < portRange; i++) {
+      final candidate = port + i;
+      try {
+        return await HttpServer.bind(bindAddress, candidate);
+      } on SocketException catch (e) {
+        final code = e.osError?.errorCode ?? 0;
+        // EADDRINUSE = 48 on macOS/iOS, 98 on Linux/Android.
+        if (code != 48 && code != 98) rethrow;
+        final isAgent = await _probePing(candidate);
+        // ignore: avoid_print
+        print('PROBE_PORT_BUSY=$candidate${isAgent ? " (another probe agent is running)" : ""}');
+        if (i + 1 < portRange) continue;
+        rethrow;
+      }
+    }
+    // Unreachable: the final iteration either returns or rethrows.
+    throw StateError('port range exhausted');
+  }
+
+  /// Returns true when [p] responds to `GET /probe/status` with a probe-agent
+  /// signature, identifying a concurrent agent on that port.
+  Future<bool> _probePing(int p) async {
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+      final req = await client.get('127.0.0.1', p, '/probe/status');
+      final res = await req.close().timeout(const Duration(seconds: 1));
+      final body = await res.transform(utf8.decoder).join();
+      client.close();
+      return body.contains('"agent":"flutter_probe"');
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _serve() async {
     await for (final req in _server!) {
+      // Status endpoint — no token required; used for port-collision detection.
+      if (req.method == 'GET' && req.uri.path == '/probe/status') {
+        req.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType.json
+          ..write('{"agent":"flutter_probe","version":"$probeAgentVersion"}');
+        await req.response.close();
+        continue;
+      }
+
       // Validate token (shared by both WebSocket and HTTP paths)
       final queryToken = req.uri.queryParameters['token'] ??
           req.headers.value('x-probe-token');

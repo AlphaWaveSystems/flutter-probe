@@ -124,6 +124,9 @@ class ProbeMethods {
   static const setOutput = 'probe.set_output';
   static const drainOutput = 'probe.drain_output';
 
+  // Biometric simulation signal (v0.9.8)
+  static const biometricSignal = 'probe.biometric_signal';
+
   // Notification methods (agent → CLI)
   static const notifyRecordedEvent = 'probe.recorded_event';
   static const notifyExecDart = 'probe.exec_dart';

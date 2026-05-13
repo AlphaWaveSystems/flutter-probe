@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'biometric.dart' as biometric;
 import 'finder.dart';
 import 'protocol.dart';
 import 'recorder.dart';
@@ -262,6 +263,11 @@ class ProbeExecutor {
         final result = Map<String, String>.from(_output);
         _output.clear();
         return result;
+
+      case ProbeMethods.biometricSignal:
+        final result = (req.params['result'] as bool?) ?? false;
+        biometric.completeBiometricResult(result);
+        return {};
 
       default:
         throw ProbeError(ProbeError.methodNotFound, 'Unknown method: ${req.method}');

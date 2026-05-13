@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.8 - 2026-05-12
+
+- **`awaitBiometricResult()`** — new public function exported from
+  `flutter_probe_agent`. Test apps in PROBE_AGENT builds call this instead
+  of `local_auth.authenticate()` to receive the biometric match/no-match
+  result from the CLI via the new `probe.biometric_signal` JSON-RPC command.
+  Required on iOS 26+ simulator where `notifyutil` no-match notifications
+  no longer resolve `LAContext.evaluatePolicy`.
+- New `probe.biometric_signal` JSON-RPC method (`ProbeMethods.biometricSignal`)
+  that delivers `true` (match) or `false` (no-match) to a pending
+  `awaitBiometricResult()` Dart Completer.
+
 ## 0.9.7 - 2026-05-12
 
 - Version bump to match CLI v0.9.7. No agent code changes — biometric
