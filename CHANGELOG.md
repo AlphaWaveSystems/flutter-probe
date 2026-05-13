@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-05-12
+
+### Fixed
+- **Dart agent: iOS / Impeller screenshots** — `take_screenshot` previously called `OffsetLayer.toImage()` on the root render view. On iOS with the Impeller renderer (Flutter's default on iOS 17+), that returns a GPU-backed texture whose `toByteData(ImageByteFormat.png)` is `null`, so capture silently produced nothing. The agent now primarily captures via the largest visible `RenderRepaintBoundary` in the widget tree (Impeller-supported); the legacy `OffsetLayer` path is only used as a fallback when no boundary is found (Skia). Also awaits `WidgetsBinding.instance.endOfFrame` before capture so the latest frame is always in the image, and uses the actual `View.devicePixelRatio` rather than a hard-coded `2.0`.
+
 ## [0.9.4] - 2026-05-09
 
 ### Added

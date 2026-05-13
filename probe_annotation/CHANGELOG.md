@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.5 - 2026-05-12
+
+- Version bump to match CLI v0.9.5. No annotation API changes.
+
 ## 0.9.4 - 2026-05-09
 
 - Version bump to match CLI v0.9.4. No annotation API changes.

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.5 - 2026-05-12
+
+- **Fix: iOS/Impeller screenshots** — `take_screenshot` previously called
+  `OffsetLayer.toImage()` on the root render view, which on iOS with the
+  Impeller renderer returns a GPU-backed texture whose `toByteData(png)`
+  is `null` — silently breaking screenshot capture. The agent now
+  primarily captures via the largest visible `RenderRepaintBoundary` in
+  the widget tree (Impeller-supported), and falls back to the old
+  `OffsetLayer.toImage()` path only when no boundary is found (Skia).
+  Awaits `WidgetsBinding.instance.endOfFrame` before capture so the
+  latest frame is always in the image. Uses the actual view's
+  `devicePixelRatio` rather than a hard-coded `2.0`.
+
 ## 0.9.4 - 2026-05-09
 
 - Version bump to match CLI v0.9.4. No agent code changes — the .mcpb
