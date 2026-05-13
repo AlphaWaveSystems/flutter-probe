@@ -24,10 +24,13 @@ jobs:
       - name: Publish
         working-directory: probe_agent
         run: |
-          out=$(dart pub publish -f 2>&1); code=$?
-          echo "$out"
-          echo "$out" | grep -q "already exists" && exit 0
-          exit $code
+          pkg=$(grep '^name:' pubspec.yaml | awk '{print $2}')
+          ver=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          if curl -sf "https://pub.dev/packages/$pkg/versions/$ver" > /dev/null 2>&1; then
+            echo "$pkg $ver already published — skipping"
+            exit 0
+          fi
+          dart pub publish -f
 
   publish-annotation:
     name: Publish flutter_probe_annotation
@@ -44,10 +47,13 @@ jobs:
       - name: Publish
         working-directory: probe_annotation
         run: |
-          out=$(dart pub publish -f 2>&1); code=$?
-          echo "$out"
-          echo "$out" | grep -q "already exists" && exit 0
-          exit $code
+          pkg=$(grep '^name:' pubspec.yaml | awk '{print $2}')
+          ver=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          if curl -sf "https://pub.dev/packages/$pkg/versions/$ver" > /dev/null 2>&1; then
+            echo "$pkg $ver already published — skipping"
+            exit 0
+          fi
+          dart pub publish -f
 
   publish-gen:
     name: Publish flutter_probe_gen
@@ -65,7 +71,10 @@ jobs:
       - name: Publish
         working-directory: probe_gen
         run: |
-          out=$(dart pub publish -f 2>&1); code=$?
-          echo "$out"
-          echo "$out" | grep -q "already exists" && exit 0
-          exit $code
+          pkg=$(grep '^name:' pubspec.yaml | awk '{print $2}')
+          ver=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          if curl -sf "https://pub.dev/packages/$pkg/versions/$ver" > /dev/null 2>&1; then
+            echo "$pkg $ver already published — skipping"
+            exit 0
+          fi
+          dart pub publish -f
