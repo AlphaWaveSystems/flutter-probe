@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.7 - 2026-05-12
+
+### Added
+
+- **`EnrollBiometric`, `BiometricMatch`, `BiometricNoMatch` Step classes** —
+  drive Face ID / Touch ID / fingerprint flows on iOS Simulator and
+  Android emulator from annotation-authored tests. Skipped on physical
+  devices with a warning. See https://flutterprobe.dev/probescript/annotations/#biometric-authentication-v097.
+
 ## 0.9.6 - 2026-05-12
 
 ### Added

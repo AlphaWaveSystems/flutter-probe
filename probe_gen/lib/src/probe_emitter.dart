@@ -273,6 +273,17 @@ class ProbeEmitter {
         _buf.writeln('${indent}verify external browser opened');
         break;
 
+      // Biometric (Face ID / Touch ID / fingerprint) — simulator/emulator only
+      case 'EnrollBiometric':
+        _buf.writeln('${indent}enroll biometric');
+        break;
+      case 'BiometricMatch':
+        _buf.writeln('${indent}biometric match');
+        break;
+      case 'BiometricNoMatch':
+        _buf.writeln('${indent}biometric no match');
+        break;
+
       // Diagnostics
       case 'TakeScreenshot':
         _buf.writeln('${indent}take screenshot "${_escape(_str(step, 'name') ?? '')}"');

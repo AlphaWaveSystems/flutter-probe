@@ -238,7 +238,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | probe-mcp
 Expected response:
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.6"}}}
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"0.9.7"}}}
 ```
 
 List all available tools:

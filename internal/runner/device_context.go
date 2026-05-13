@@ -537,3 +537,101 @@ func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error
 	}
 	return nil
 }
+
+// EnrollBiometric sets the simulator/emulator's biometric enrollment state
+// to "enrolled" so the app under test sees a registered Face ID / Touch ID /
+// fingerprint when it requests biometric authentication.
+//
+//   - iOS Simulator: sends the Darwin notification
+//     `com.apple.BiometricKit.enrollmentChanged` (toggles state).
+//   - Android emulator: no-op — fingerprints are enrolled in Settings before
+//     the test runs (typically via a CI bootstrap script).
+//   - Physical devices: skipped with a warning.
+func (dc *DeviceContext) EnrollBiometric(ctx context.Context) error {
+	if dc.IsPhysical {
+		fmt.Println("    \033[33m⚠\033[0m  enroll biometric is not supported on physical devices — skipping")
+		return nil
+	}
+	fmt.Println("    \033[36m🔐\033[0m  Enrolling biometric")
+	switch dc.Platform {
+	case device.PlatformIOS:
+		if _, err := dc.Manager.SimCtl().Spawn(ctx, dc.Serial,
+			"notifyutil", "-s", "com.apple.BiometricKit.enrollmentChanged", "1"); err != nil {
+			return fmt.Errorf("enroll biometric: set enrollment flag: %w", err)
+		}
+		if _, err := dc.Manager.SimCtl().Spawn(ctx, dc.Serial,
+			"notifyutil", "-p", "com.apple.BiometricKit.enrollmentChanged"); err != nil {
+			return fmt.Errorf("enroll biometric: post enrollment notification: %w", err)
+		}
+	case device.PlatformAndroid:
+		// Android fingerprints are enrolled in Settings, not via adb. We
+		// document the requirement in the .probe error message rather than
+		// failing here — the user's CI script should pre-enroll.
+		fmt.Println("       (Android: ensure fingerprint ID 1 is pre-enrolled in Settings)")
+	}
+	return nil
+}
+
+// BiometricMatch simulates a successful biometric capture, satisfying a
+// pending Face ID / Touch ID / fingerprint prompt.
+//
+//   - iOS Simulator: posts `com.apple.BiometricKit_Sim.fingerTouch.match`
+//     and `.faceCapture.match` so the same step works regardless of the
+//     simulator's biometric kind.
+//   - Android emulator: `adb -s <serial> emu finger touch 1` (matches the
+//     fingerprint enrolled with ID 1).
+//   - Physical devices: skipped with a warning.
+func (dc *DeviceContext) BiometricMatch(ctx context.Context) error {
+	return dc.biometricCapture(ctx, true)
+}
+
+// BiometricNoMatch simulates a failed biometric capture so the app's
+// "authentication failed" path can be tested.
+//
+//   - iOS Simulator: posts `*_Sim.fingerTouch.no-match` and `.faceCapture.no-match`.
+//   - Android emulator: `adb emu finger touch 9999` (an unregistered id).
+//   - Physical devices: skipped with a warning.
+func (dc *DeviceContext) BiometricNoMatch(ctx context.Context) error {
+	return dc.biometricCapture(ctx, false)
+}
+
+func (dc *DeviceContext) biometricCapture(ctx context.Context, match bool) error {
+	if dc.IsPhysical {
+		fmt.Println("    \033[33m⚠\033[0m  biometric capture is not supported on physical devices — skipping")
+		return nil
+	}
+	verb := "match"
+	icon := "✓"
+	if !match {
+		verb = "no-match"
+		icon = "✗"
+	}
+	fmt.Printf("    \033[36m🔐\033[0m  Biometric capture: %s %s\n", icon, verb)
+	switch dc.Platform {
+	case device.PlatformIOS:
+		// Post both fingerprint and face notifications so the same step
+		// works on Touch ID devices and Face ID devices alike — the simulator
+		// ignores the one that doesn't match its hardware profile.
+		notifications := []string{
+			fmt.Sprintf("com.apple.BiometricKit_Sim.fingerTouch.%s", verb),
+			fmt.Sprintf("com.apple.BiometricKit_Sim.faceCapture.%s", verb),
+		}
+		for _, n := range notifications {
+			if _, err := dc.Manager.SimCtl().Spawn(ctx, dc.Serial, "notifyutil", "-p", n); err != nil {
+				return fmt.Errorf("biometric %s: post %s: %w", verb, n, err)
+			}
+		}
+	case device.PlatformAndroid:
+		// Fingerprint ID 1 is matching by convention; any unregistered ID
+		// (we use 9999) returns no-match. The user's CI bootstrap script
+		// enrolls fingerprint ID 1 before tests run.
+		fingerID := "1"
+		if !match {
+			fingerID = "9999"
+		}
+		if _, err := dc.Manager.ADB().Run(ctx, dc.Serial, "emu", "finger", "touch", fingerID); err != nil {
+			return fmt.Errorf("biometric %s: adb emu finger touch %s: %w", verb, fingerID, err)
+		}
+	}
+	return nil
+}

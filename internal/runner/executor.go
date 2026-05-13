@@ -340,6 +340,12 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("set location %s", s.Name)
 		case parser.VerbVerifyBrowser:
 			return "verify external browser opened"
+		case parser.VerbEnrollBiometric:
+			return "enroll biometric"
+		case parser.VerbBiometricMatch:
+			return "biometric match"
+		case parser.VerbBiometricNoMatch:
+			return "biometric no match"
 		default:
 			return string(s.Verb)
 		}
@@ -647,6 +653,27 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	case parser.VerbStore:
 		e.vars[a.Name] = e.resolve(a.Text)
 		return nil
+
+	case parser.VerbEnrollBiometric:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping enroll biometric (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.EnrollBiometric(ctx)
+
+	case parser.VerbBiometricMatch:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping biometric match (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.BiometricMatch(ctx)
+
+	case parser.VerbBiometricNoMatch:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping biometric no-match (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.BiometricNoMatch(ctx)
 	}
 
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)

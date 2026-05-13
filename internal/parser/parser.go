@@ -395,6 +395,10 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseHTTPCall()
 	case TOKEN_STORE:
 		return p.parseStore()
+	case TOKEN_BIOMETRIC:
+		return p.parseBiometric()
+	case TOKEN_ENROLL:
+		return p.parseEnrollBiometric()
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -1568,4 +1572,49 @@ func (p *Parser) parseStore() (Step, error) {
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbStore, Text: value, Name: varName, Line: line}, nil
+}
+
+// parseBiometric parses one of:
+//
+//	biometric match
+//	biometric no match
+//
+// Simulator/emulator only — `xcrun simctl spawn booted notifyutil ...`
+// on iOS and `adb emu finger touch <id>` on Android.
+func (p *Parser) parseBiometric() (Step, error) {
+	line := p.peek().Line
+	p.advance() // biometric
+	p.skipFillers()
+	verb := VerbBiometricMatch
+	// "no match" — the lexer emits "no" as TOKEN_IDENT (not a keyword).
+	if p.peek().Type == TOKEN_IDENT && strings.ToLower(p.peek().Literal) == "no" {
+		p.advance()
+		p.skipFillers()
+		verb = VerbBiometricNoMatch
+	}
+	// Match is optional after `no` to allow either `no match` or `no-match`-ish
+	// patterns. Consume it if present.
+	if p.peek().Type == TOKEN_IDENT && strings.ToLower(p.peek().Literal) == "match" {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: verb, Line: line}, nil
+}
+
+// parseEnrollBiometric parses:
+//
+//	enroll biometric
+//
+// Sets the simulator/emulator's biometric enrollment state to "enrolled"
+// so subsequent `biometric match` / `biometric no match` operations
+// satisfy a pending biometric prompt in the app under test.
+func (p *Parser) parseEnrollBiometric() (Step, error) {
+	line := p.peek().Line
+	p.advance() // enroll
+	p.skipFillers()
+	if p.peek().Type == TOKEN_BIOMETRIC {
+		p.advance()
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbEnrollBiometric, Line: line}, nil
 }
