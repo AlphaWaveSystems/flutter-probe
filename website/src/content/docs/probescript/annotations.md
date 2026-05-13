@@ -238,12 +238,14 @@ Both workflows are valid:
 
 Pick whichever fits your team.
 
-## Biometric authentication (v0.9.7+)
+## Biometric authentication (v0.9.8+)
 
 Test Face ID, Touch ID, and Android fingerprint flows end-to-end without
-real hardware. FlutterProbe drives the simulator/emulator's biometric
-controls via `xcrun simctl spawn notifyutil` (iOS) and
-`adb -s <serial> emu finger touch` (Android).
+real hardware. The CLI fires platform-level biometric commands and then
+delivers the result to the agent via `probe.biometric_signal` so apps can
+use `awaitBiometricResult()` instead of `local_auth.authenticate()` — required
+on iOS 26+ simulator where `notifyutil` no-match notifications no longer
+resolve `LAContext.evaluatePolicy`.
 
 ```dart
 @ProbeSuite(
@@ -270,8 +272,18 @@ class BiometricAuthScreen {}
 | Step | iOS Simulator | Android emulator |
 |---|---|---|
 | `EnrollBiometric()` | Posts `com.apple.BiometricKit.enrollmentChanged` Darwin notification | No-op (pre-enroll fingerprint ID 1 in Settings) |
-| `BiometricMatch()` | Posts `*_Sim.faceCapture.match` + `*_Sim.fingerTouch.match` | `adb emu finger touch 1` |
-| `BiometricNoMatch()` | Posts `*_Sim.faceCapture.no-match` + `*_Sim.fingerTouch.no-match` | `adb emu finger touch 9999` (unregistered id) |
+| `BiometricMatch()` | Posts `*_Sim.faceCapture.match` + sends `probe.biometric_signal {result: true}` | `adb emu finger touch 1` + signal |
+| `BiometricNoMatch()` | Posts `*_Sim.faceCapture.no-match` + sends `probe.biometric_signal {result: false}` | `adb emu finger touch 9999` + signal |
+
+After each biometric step the CLI sends `probe.biometric_signal` to the agent so the result is always delivered reliably — regardless of iOS version. Your screen widget should use `awaitBiometricResult()` from `flutter_probe_agent` in PROBE_AGENT builds:
+
+```dart
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
+
+final ok = const bool.fromEnvironment('PROBE_AGENT')
+    ? await awaitBiometricResult()           // resolved by CLI via probe.biometric_signal
+    : await localAuth.authenticate(...);     // production path
+```
 
 **Physical devices are skipped with a warning.** Real Face ID / Touch ID
 requires an actual face or finger and can't be programmatically driven —

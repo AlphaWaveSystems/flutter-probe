@@ -114,6 +114,51 @@ if (!probeEnabled) {
 Build with `--dart-define=PROBE_AGENT=true` to skip these requests during testing.
 :::
 
+## Biometric Authentication (Face ID / Touch ID)
+
+`enroll biometric`, `biometric match`, and `biometric no match` drive Face ID and Touch ID flows on iOS Simulator via `xcrun simctl spawn booted notifyutil`.
+
+```
+before all tests
+  enroll biometric
+
+test "Face ID unlocks the app"
+  open the app
+  tap "Sign in with Face ID"
+  wait until "Sign in with Face ID" appears
+  tap "Sign in with Face ID"
+  biometric match
+  wait until "Dashboard" appears
+  see "Dashboard"
+
+test "failed Face ID shows error"
+  open the app
+  tap "Sign in with Face ID"
+  wait until "Sign in with Face ID" appears
+  tap "Sign in with Face ID"
+  biometric no match
+  wait until "Authentication failed" appears
+  see "Authentication failed"
+```
+
+:::caution[iOS 26+ simulator — use `awaitBiometricResult()` in your app]
+On iOS 26 / Xcode 26.5, the `faceCapture.no-match` notifyutil notification **no longer resolves `LAContext.evaluatePolicy`**. If your app calls `local_auth.authenticate()` directly, no-match tests will hang indefinitely.
+
+**Fix:** In PROBE_AGENT builds, use `awaitBiometricResult()` from `flutter_probe_agent` instead. The CLI delivers the result via `probe.biometric_signal` after every `biometric match` / `biometric no match` step:
+
+```dart
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
+
+final ok = const bool.fromEnvironment('PROBE_AGENT')
+    ? await awaitBiometricResult()
+    : await LocalAuthentication().authenticate(localizedReason: 'Sign in');
+```
+
+This pattern works on all iOS versions and requires no changes to `.probe` test files.
+:::
+
+**Multiple simulators:** If more than one simulator is booted, the biometric notifyutil fires on `booted` (which selects an arbitrary device). Always boot only the target simulator, or pass `--device <UDID>` so the CLI targets the right one.
+
 ## Video Recording
 
 iOS simulator video is recorded via `xcrun simctl io <UDID> recordVideo`. Videos use the `h264` codec (not HEVC) for browser compatibility in HTML reports.
