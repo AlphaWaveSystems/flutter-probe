@@ -75,6 +75,11 @@ class LongPress extends Step {
 }
 
 /// Emits: `press home` / `press back` / `press <key>`.
+///
+/// Not yet supported by the FlutterProbe runtime — the Go-side parser has
+/// no `press` case and the emitted text will be misparsed as a recipe
+/// call. Will be re-enabled in a future release that wires runtime support.
+@Deprecated('Not yet supported by the runtime — coming in a future release')
 class Press extends Step {
   final String key; // home | back | volume_up | volume_down | …
   const Press(this.key);
@@ -139,6 +144,11 @@ class Drag extends Step {
 }
 
 /// Emits: `pinch in` / `pinch out`.
+///
+/// Not yet supported by the FlutterProbe runtime — the Go-side parser has
+/// no `pinch` case and the emitted text will be misparsed as a recipe
+/// call. Will be re-enabled in a future release that wires runtime support.
+@Deprecated('Not yet supported by the runtime — coming in a future release')
 class Pinch extends Step {
   final bool zoomIn;
   const Pinch({this.zoomIn = false});
@@ -261,27 +271,99 @@ class Store extends Step {
 /// State checks for [See] assertions.
 enum SeeState { none, enabled, disabled, checked, focused }
 
-/// Emits: `see "X"`, `see exactly N "X"`, `see "X" enabled`,
-/// `see "X" containing "Y"`, `see "X" matching "regex"`.
+/// Emits ProbeScript assertions of the form:
+///
+///   see "X"
+///   see exactly N "X"
+///   see "X" is enabled
+///   see "X" contains "Y"
+///   see "X" matching "regex"
+///   see #id is focused
+///
+/// `state`, `containing`, and `matching` are all suffixes that can coexist
+/// — `See('Welcome', state: SeeState.enabled, containing: 'world')` emits
+/// `see "Welcome" is enabled contains "world"`. Use the [See.id] /
+/// [See.selector] factories to target by `ValueKey` or arbitrary selector
+/// instead of visible text.
 class See extends Step {
-  final String text;
+  final String? text;
+  final String? id;
+  final Selector? selector;
   final SeeState state;
   final String? containing;
   final String? matching;
   final int? exactly;
   const See(
-    this.text, {
+    String this.text, {
     this.state = SeeState.none,
     this.containing,
     this.matching,
     this.exactly,
-  });
+  })  : id = null,
+        selector = null;
+
+  /// Target a widget by its `ValueKey` or `Semantics.identifier`.
+  const See.id(
+    String this.id, {
+    this.state = SeeState.none,
+    this.containing,
+    this.matching,
+    this.exactly,
+  })  : text = null,
+        selector = null;
+
+  /// Target a widget via an arbitrary [Selector] — ordinal, positional,
+  /// relational, or by widget type.
+  const See.selector(
+    Selector this.selector, {
+    this.state = SeeState.none,
+    this.containing,
+    this.matching,
+    this.exactly,
+  })  : text = null,
+        id = null;
 }
 
-/// Emits: `don't see "X"`.
+/// Emits negative assertions:
+///
+///   don't see "X"
+///   don't see #id
+///
+/// Like [See], supports targeting by text, id, or arbitrary [Selector].
 class DontSee extends Step {
-  final String text;
-  const DontSee(this.text);
+  final String? text;
+  final String? id;
+  final Selector? selector;
+  final SeeState state;
+  final String? containing;
+  final String? matching;
+  final int? exactly;
+  const DontSee(
+    String this.text, {
+    this.state = SeeState.none,
+    this.containing,
+    this.matching,
+    this.exactly,
+  })  : id = null,
+        selector = null;
+
+  const DontSee.id(
+    String this.id, {
+    this.state = SeeState.none,
+    this.containing,
+    this.matching,
+    this.exactly,
+  })  : text = null,
+        selector = null;
+
+  const DontSee.selector(
+    Selector this.selector, {
+    this.state = SeeState.none,
+    this.containing,
+    this.matching,
+    this.exactly,
+  })  : text = null,
+        id = null;
 }
 
 // ---- Wait variants ----
@@ -310,12 +392,25 @@ class WaitForAnimations extends Wait {
   const WaitForAnimations();
 }
 
+/// Wait until a target widget appears or disappears.
+///
+///   WaitUntil.appears('Dashboard')      → wait until "Dashboard" appears
+///   WaitUntil.disappears('Loading')     → wait until "Loading" disappears
+///   WaitUntil.idAppears('login_form')   → wait until #login_form appears
+///   WaitUntil.idDisappears('spinner')   → wait until #spinner disappears
+///
+/// The id-based factories emit unquoted `#key` selectors and exercise the
+/// Go parser's WaitSelector branch — more reliable than text matching
+/// for ValueKey-tagged widgets.
 class WaitUntil extends Wait {
   final String target;
-  final bool appears; // false → disappears
-  const WaitUntil._(this.target, this.appears);
-  const WaitUntil.appears(String target) : this._(target, true);
-  const WaitUntil.disappears(String target) : this._(target, false);
+  final bool appears;
+  final bool byId;
+  const WaitUntil._(this.target, this.appears, this.byId);
+  const WaitUntil.appears(String target) : this._(target, true, false);
+  const WaitUntil.disappears(String target) : this._(target, false, false);
+  const WaitUntil.idAppears(String key) : this._(key, true, true);
+  const WaitUntil.idDisappears(String key) : this._(key, false, true);
 }
 
 // ---- Control flow (block steps) ----
@@ -377,4 +472,28 @@ class RecipeStep extends Step {
   final String name;
   final List<String> args;
   const RecipeStep(this.name, {this.args = const []});
+}
+
+// ---- Composite test steps (only valid inside ProbeCompositeTest.body) ----
+
+/// Scopes a group of [steps] to a single device in a composite test. The
+/// [alias] must match a [Device.alias] declared in the enclosing
+/// `@ProbeCompositeTest.devices`.
+///
+/// Emits an `<alias>:` header followed by the indented step body. Multiple
+/// `OnDevice` entries for the same alias accumulate, separated by [Sync]
+/// barriers.
+class OnDevice extends Step {
+  final String alias;
+  final List<Step> steps;
+  const OnDevice(this.alias, {this.steps = const []});
+}
+
+/// Cross-device barrier in a composite test. All devices must reach the
+/// same [Sync] label before any device proceeds past it.
+///
+/// Emits `sync "label"` at the composite body level.
+class Sync extends Step {
+  final String label;
+  const Sync(this.label);
 }

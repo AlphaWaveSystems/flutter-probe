@@ -28,11 +28,11 @@ tests. Annotations:
 ```yaml
 # pubspec.yaml
 dependencies:
-  flutter_probe_annotation: ^0.9.3
-  flutter_probe_agent: ^0.9.3
+  flutter_probe_annotation: ^0.9.6
+  flutter_probe_agent: ^0.9.6
 
 dev_dependencies:
-  flutter_probe_gen: ^0.9.3
+  flutter_probe_gen: ^0.9.6
   build_runner: ^2.15.0
 ```
 

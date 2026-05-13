@@ -1,5 +1,6 @@
 /// The build_runner [Builder] that scans annotated Dart libraries for
-/// `@ProbeSuite` / `@ProbeTest` / `@ProbeRecipe` and emits matching `.probe`
+/// `@ProbeSuite` / `@ProbeTest` / `@ProbeRecipe` / `@ProbeCompositeTest`
+/// and emits matching `.probe`
 /// files into `tests/generated/`.
 library;
 
@@ -26,7 +27,8 @@ class ProbeBuilder implements Builder {
     final source = await buildStep.readAsString(buildStep.inputId);
     if (!source.contains('@ProbeSuite') &&
         !source.contains('@ProbeTest') &&
-        !source.contains('@ProbeRecipe')) {
+        !source.contains('@ProbeRecipe') &&
+        !source.contains('@ProbeCompositeTest')) {
       return;
     }
 
@@ -56,6 +58,9 @@ class ProbeBuilder implements Builder {
             break;
           case 'ProbeRecipe':
             emitter.emitRecipe(value);
+            break;
+          case 'ProbeCompositeTest':
+            emitter.emitCompositeTest(value);
             break;
         }
       }

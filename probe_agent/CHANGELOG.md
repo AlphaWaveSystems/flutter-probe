@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.6 - 2026-05-12
+
+- Version bump to match CLI v0.9.6. No agent code changes — annotation DSL
+  completeness work is in the flutter_probe_annotation &
+  flutter_probe_gen packages.
+
 ## 0.9.5 - 2026-05-12
 
 - **Fix: iOS/Impeller screenshots** — `take_screenshot` previously called

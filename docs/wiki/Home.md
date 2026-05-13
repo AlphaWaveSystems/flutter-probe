@@ -18,7 +18,7 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 
 ## Project Status
 
-FlutterProbe is in active development. Current version: **0.9.5**.
+FlutterProbe is in active development. Current version: **0.9.6**.
 
 ### Repository Structure
 
