@@ -4,7 +4,7 @@ description: >-
   flutter_probe_annotation decorators on Flutter classes and emits .probe
   test files into tests/generated/. Pair with flutter_probe_agent and the
   probe CLI to run the generated end-to-end tests.
-version: 0.9.4
+version: 0.9.5
 homepage: https://flutterprobe.dev
 repository: https://github.com/AlphaWaveSystems/flutter-probe
 issue_tracker: https://github.com/AlphaWaveSystems/flutter-probe/issues
@@ -22,7 +22,7 @@ environment:
 dependencies:
   analyzer: ">=8.0.0 <14.0.0"
   build: ">=3.0.0 <5.0.0"
-  flutter_probe_annotation: ^0.9.4
+  flutter_probe_annotation: ^0.9.5
   source_gen: ^4.0.0
 
 dev_dependencies:
