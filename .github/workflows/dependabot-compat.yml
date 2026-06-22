@@ -27,7 +27,7 @@ jobs:
       npm: ${{ steps.filter.outputs.npm }}
       actions: ${{ steps.filter.outputs.actions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -50,7 +50,7 @@ jobs:
     if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -111,7 +111,7 @@ jobs:
     if: needs.changes.outputs.npm == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -157,7 +157,7 @@ jobs:
     if: needs.changes.outputs.actions == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -177,7 +177,7 @@ jobs:
     if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         if: needs.changes.outputs.go == 'true'
@@ -214,7 +214,7 @@ jobs:
     if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         if: needs.changes.outputs.go == 'true'
