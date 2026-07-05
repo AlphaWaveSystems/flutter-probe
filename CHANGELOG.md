@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`wait until #id appears`/`disappears` always searched for the literal
+  text `"#my_button"` instead of resolving the id (PT-06).** `WaitStep`
+  only carries a raw target string, not a selector kind (unlike
+  `Selector`/`SelectorParam` used by `tap`/`type`), and the Dart agent's
+  wait loop never checked for the `#` prefix before building a selector —
+  it always built a *text* search, which can never match a non-text widget
+  like an icon button. This meant `wait until #id appears` timed out on
+  indisputably mounted, visible widgets every time, forcing real projects
+  to fall back to hardcoded `wait N seconds` sleeps instead. Fixed by
+  detecting the `#` prefix and dispatching an id selector, mirroring the
+  same pattern `if`/`otherwise` conditionals already use. (The originally
+  reported theory — that nesting inside `Material`/`Tooltip` breaks
+  Semantics-based resolution — didn't independently reproduce: id
+  resolution walks the full element tree unconditionally regardless of
+  wrapper widgets, and a plain text search never touches Semantics at all,
+  so nesting depth was never actually the cause.)
 - **`tap #id`'s fast direct-invoke path only recognized `GestureDetector`/
   `InkWell`, missing `InkResponse`-based buttons (PT-05).** `InkWell` is
   just an `InkResponse` subclass with a fixed splash shape, and modern

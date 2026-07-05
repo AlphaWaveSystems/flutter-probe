@@ -642,9 +642,19 @@ class ProbeExecutor {
   }
 
   Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect}) async {
+    // PT-06: WaitStep carries only a raw target string, not a selector kind
+    // (unlike Selector/SelectorParam used by tap/type), so an id target must
+    // be detected from its '#' prefix here — this previously always built a
+    // *text* selector regardless, meaning `wait until #my_button appears`
+    // searched for a widget whose visible text literally read "#my_button"
+    // and could never match, timing out on indisputably-mounted, visible
+    // widgets (icon buttons and other non-text elements) every time. Mirrors
+    // the same '#'-prefix check runConditional already uses for `if` steps.
+    final sel = text.startsWith('#')
+        ? {'kind': 'id', 'text': text}
+        : {'kind': 'text', 'text': text};
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      final sel = {'kind': 'text', 'text': text};
       final found = _finder.findElements(sel).isNotEmpty;
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
