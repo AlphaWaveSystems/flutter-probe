@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Documented an API stability/deprecation policy for `flutter_probe_agent`'s
+  public Dart API (PT-08)**, in `CONTRIBUTING.md`. Prompted by a past
+  breaking change (a minor bump silently removed `ProbePlugin`/
+  `ProbePluginRegistry`, which at least one downstream project had a
+  load-bearing test feature built on). Future removals/breaking changes now
+  require a `@Deprecated` window of at least one minor version plus an
+  explicit CHANGELOG migration note before actual removal. Whether
+  `ProbePlugin`/`ProbePluginRegistry` should be reintroduced under this
+  policy, or that removal should stand as a permanent scope decision, is
+  left as an open product question rather than resolved here.
+
 ### Fixed
 - **`tap #id`'s fast direct-invoke path only recognized `GestureDetector`/
   `InkWell`, missing `InkResponse`-based buttons (PT-05).** `InkWell` is
