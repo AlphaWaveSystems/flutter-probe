@@ -125,7 +125,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 
 	switch dr.Platform {
 	case device.PlatformAndroid:
-		token, err = po.manager.ReadTokenAndroid(ctx, dr.DeviceID, tokenTimeout, appID)
+		token, err = po.manager.ReadTokenAndroid(ctx, dr.DeviceID, tokenTimeout, appID, nil)
 	case device.PlatformIOS:
 		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
 	}

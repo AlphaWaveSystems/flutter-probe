@@ -724,10 +724,25 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if agentHost != "" {
 				host = agentHost
 			}
+
+			// trace prints step-by-step connect diagnostics when -v is set —
+			// dial attempts, port-forward setup/teardown, token-read attempts
+			// per source, and handshake accept/reject. See PT-01 in
+			// IMPROVEMENT_TASKS.md: connect failures (especially Android) were
+			// previously a total black box with no visibility into where
+			// things actually broke.
+			trace := func(format string, args ...any) {} // no-op unless -v is set
+			if verbose {
+				trace = func(format string, args ...any) {
+					fmt.Fprintf(statusW, "  \033[2mtrace: "+format+"\033[0m\n", args...)
+				}
+			}
+
 			dialOpts := probelink.DialOptions{
 				Host:        host,
 				Port:        cfg.Agent.Port,
 				DialTimeout: cfg.Agent.DialTimeout,
+				Trace:       trace,
 			}
 
 			if platform == device.PlatformIOS {
@@ -784,7 +799,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 			} else {
 				// Android: verify ADB is available and device is reachable,
 				// clean up stale port forwards
+				trace("android: ensuring adb + device %s reachable", deviceSerial)
 				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
+					trace("android: EnsureADB failed: %v", err)
 					return fmt.Errorf("android setup: %w", err)
 				}
 
@@ -800,13 +817,18 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 
 				// Android: forward port via ADB
+				trace("android: forwarding host:%d -> device:%d", cfg.Agent.Port, cfg.Agent.AgentDevicePort())
 				if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+					trace("android: ForwardPort failed: %v", err)
 					return fmt.Errorf("port forward: %w", err)
 				}
-				defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
+				defer func() {
+					trace("android: removing port forward for host:%d", cfg.Agent.Port)
+					_ = dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port)
+				}()
 
 				fmt.Fprintln(statusW, msgWaitingForToken)
-				token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+				token, err := dm.ReadTokenAndroid(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App, trace)
 				if err != nil {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 				}
@@ -818,10 +840,13 @@ func runTests(cmd *cobra.Command, args []string) error {
 				defer client.Close()
 			}
 
+			trace("handshake: comparing CLI v%s against agent", cfg.CLIVersion)
 			warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
 			if err != nil {
+				trace("handshake: rejected: %v", err)
 				return fmt.Errorf("agent handshake failed: %w", err)
 			}
+			trace("handshake: accepted")
 			if warning != "" {
 				statusWarn(statusW, "%s", warning)
 			}

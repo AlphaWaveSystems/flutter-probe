@@ -380,7 +380,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		token, err = dc.Manager.ReadTokenAndroid(ctx, dc.Serial, tokenTimeout, dc.AppID)
+		token, err = dc.Manager.ReadTokenAndroid(ctx, dc.Serial, tokenTimeout, dc.AppID, nil)
 	case device.PlatformIOS:
 		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
 	}
