@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`probe test` could fail with zero diagnostic output (PT-14).** `testCmd`
+  sets `SilenceErrors: true` so a failed *test* (already reported in detail
+  by the runner) doesn't print a redundant generic line — but this silenced
+  every other kind of error too (token read, connect, handshake failures),
+  leaving nothing printed beyond whatever progress lines ran before the
+  failure. Now only `errTestFailed` (and errors wrapping it) stay silent;
+  every other error is printed. Also fixed a related cosmetic bug this made
+  visible: the "is the app running with probe_agent?" suggestion was
+  appearing twice in token-read failure messages (once from the low-level
+  error, once from the wrapping call site).
+
 ### Added
 - **Verbose connect diagnostics (PT-01).** `-v`/`--verbose` on `probe test` now
   traces every step of the connect handshake — ADB setup, port forward

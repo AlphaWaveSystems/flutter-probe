@@ -440,7 +440,11 @@ func (m *Manager) readTokenPhysicalIOS(ctx context.Context, udid string, timeout
 			}
 		}
 	}
-	return "", fmt.Errorf("ios physical: token not found within %s — is the app running with probe_agent?", timeout)
+	// No "— is the app running with probe_agent?" suffix here: every caller
+	// (internal/cli/test.go) already appends that suggestion when wrapping
+	// this error, and PT-14 made these messages actually visible to users —
+	// duplicating the suffix on both sides reads as a copy-paste bug.
+	return "", fmt.Errorf("ios physical: token not found within %s", timeout)
 }
 
 // Tracer receives structured diagnostic messages during device connect
@@ -539,7 +543,9 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 	}
 
 	trace.log("android: giving up after %d attempt(s), %s elapsed — no source produced a token", attempt, timeout)
-	return "", fmt.Errorf("android: probe token not found within %s — is the app running with probe_agent?", timeout)
+	// No "— is the app running with probe_agent?" suffix here: the caller in
+	// internal/cli/test.go already appends this suggestion when wrapping.
+	return "", fmt.Errorf("android: probe token not found within %s", timeout)
 }
 
 // latestProbeToken scans a `logcat -d` dump for PROBE_TOKEN= lines and
