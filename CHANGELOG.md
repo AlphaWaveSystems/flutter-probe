@@ -7,6 +7,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`tap #id` could report success while leaving a text field genuinely
+  unfocused (PT-04).** A real pointer tap on a text field requests focus as
+  part of `EditableText`'s own internal tap handling; probe's tap paths
+  (both the Semantics-direct-invoke fallback and the synthetic pointer tap)
+  don't reliably reach that internal recognizer — a Semantics wrapper or a
+  surrounding `GestureDetector`/`InkWell` can intercept the tap first. Now
+  `tap #id` (and `type` when used without a preceding `tap`) explicitly
+  requests focus on the field's real `FocusNode`, found by resolving down
+  to the underlying `EditableText` the same way `type` already resolves its
+  `TextEditingController`.
+- **`see #id is focused` could never actually detect focus on a
+  `TextField`/`TextFormField`.** The check only walked *ancestors* of the
+  matched element looking for the focused widget — but a selector almost
+  always matches the `TextField` itself, and the actually-focused widget
+  (`EditableText`) is one of its *descendants*, not an ancestor. Fixed to
+  also walk down the subtree. Found while verifying the fix above — this
+  bug was blocking real-device verification of it.
+- **`don't see #id is focused` (and other negated state checks — `enabled`,
+  `disabled`, `contains`) silently ignored the state entirely**, reporting
+  a failure as soon as the element existed at all, regardless of whether it
+  was actually in the checked state. `don't see X is focused` now correctly
+  passes when X exists but isn't focused, and only fails when X genuinely
+  is focused. Found verifying the fix above (a negative-control test
+  against a real device failed until this was also fixed).
 - **`scroll`/`swipe` could report success while producing zero visible
   movement (PT-03).** Root-caused two independent bugs by reproducing
   against a real iOS simulator:

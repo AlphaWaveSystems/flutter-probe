@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton, TextField;
+import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -297,6 +297,19 @@ class ProbeExecutor {
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
 
+    // PT-04: a real pointer tap on (or inside) a text field requests focus
+    // as part of EditableText's own internal tap handling. Neither the
+    // direct-tap fallback below nor a synthetic pointer tap reliably
+    // reaches that internal recognizer — a Semantics wrapper or a
+    // surrounding GestureDetector/InkWell (invoked directly by
+    // _tryDirectTap, or hit first by the synthetic gesture) can intercept
+    // the tap before it gets there — so `tap #id` on a text field could
+    // report success while leaving the field genuinely unfocused. Request
+    // focus on the field's real FocusNode explicitly, the way a real tap
+    // would, regardless of which path below actually resolves the tap.
+    final editable = _findEditableTarget(element);
+    editable?.focusNode.requestFocus();
+
     // Check if the matched element is a Semantics wrapper — if so, the
     // synthetic gesture may not reach the GestureDetector child. In that
     // case, invoke onTap directly instead of using pointer events.
@@ -363,10 +376,14 @@ class ProbeExecutor {
   Future<void> _typeText(Map<String, dynamic> sel, String text) async {
     // Find the nearest EditableText in the widget tree near the selector
     final element = _requireElement(sel);
-    final controller = _findTextController(element);
-    if (controller != null) {
-      controller.text = text;
-      controller.selection = TextSelection.collapsed(offset: text.length);
+    final editable = _findEditableTarget(element);
+    if (editable != null) {
+      // PT-04: focus the field the way a real tap would before typing into
+      // it — matters when `type` is used without a preceding `tap`, and
+      // keeps behaviour consistent with the same fix in _tap.
+      editable.focusNode.requestFocus();
+      editable.controller.text = text;
+      editable.controller.selection = TextSelection.collapsed(offset: text.length);
     } else {
       // Fallback: tap to focus, then try to find any focused text field
       await _tap(sel);
@@ -382,36 +399,38 @@ class ProbeExecutor {
   }
 
   /// Walks up and down from an element to find a TextEditingController.
-  TextEditingController? _findTextController(Element element) {
-    // Search within the element's subtree for an EditableText
-    TextEditingController? result;
+  TextEditingController? _findTextController(Element element) =>
+      _findEditableTarget(element)?.controller;
+
+  /// Walks up and down from an element to find the underlying EditableText's
+  /// controller and FocusNode together. TextField/TextFormField don't expose
+  /// their FocusNode directly (they create one internally if none is given),
+  /// so unlike the old controller-only search, this always descends into the
+  /// matched TextField/TextFormField to find its actual EditableText child —
+  /// the one thing in the tree that genuinely owns the FocusNode a real tap
+  /// would request focus on.
+  _EditableTarget? _findEditableTarget(Element element) {
+    _EditableTarget? result;
     void visit(Element e) {
       if (result != null) return;
       if (e.widget is EditableText) {
-        result = (e.widget as EditableText).controller;
-        return;
-      }
-      if (e.widget is TextField) {
-        result = (e.widget as TextField).controller;
+        final w = e.widget as EditableText;
+        result = _EditableTarget(w.controller, w.focusNode);
         return;
       }
       e.visitChildren(visit);
     }
 
-    // First search in parent chain up to find a TextField ancestor
     Element? current = element;
     for (int i = 0; i < 20 && current != null; i++) {
-      if (current.widget is TextField) {
-        result = (current.widget as TextField).controller;
-        if (result != null) return result;
-      }
       if (current.widget is EditableText) {
-        return (current.widget as EditableText).controller;
+        final w = current.widget as EditableText;
+        return _EditableTarget(w.controller, w.focusNode);
       }
-      // Try searching children of current
+      // TextField/TextFormField (and design-system wrappers around them)
+      // always build an EditableText descendant — descend to find it.
       visit(current);
       if (result != null) return result;
-      // Go up
       Element? parent;
       current.visitAncestorElements((ancestor) {
         parent = ancestor;
@@ -458,10 +477,20 @@ class ProbeExecutor {
     final elements = _finder.findElements(sel);
 
     if (negated) {
-      if (elements.isNotEmpty) {
+      // PT-04 (related fix): a state check suffix (e.g. "don't see #id is
+      // focused") used to be silently ignored here — this branch returned
+      // as soon as *any* element existed, regardless of whether it actually
+      // satisfied the checked state. "don't see X in state Y" must fail
+      // only when X exists *and* is in state Y; if X exists but isn't in
+      // that state, the negation is correctly satisfied.
+      final matching = check.isEmpty
+          ? elements
+          : elements.where((e) => _stateCheckFailureReason(e, check, checkVal) == null).toList();
+      if (matching.isNotEmpty) {
+        final desc = check.isEmpty ? _selDesc(sel) : '${_selDesc(sel)} ($check)';
         throw ProbeError(
           ProbeError.assertFailed,
-          'Expected NOT to see "${_selDesc(sel)}" but found ${elements.length} element(s)',
+          'Expected NOT to see "$desc" but found ${matching.length} element(s)',
         );
       }
       return;
@@ -492,42 +521,70 @@ class ProbeExecutor {
 
     // State checks
     if (check.isNotEmpty && elements.isNotEmpty) {
-      final element = elements.first;
-      switch (check) {
-        case 'enabled':
-          if (_isDisabled(element)) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" is disabled');
-          }
-        case 'disabled':
-          if (!_isDisabled(element)) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" is enabled');
-          }
-        case 'contains':
-          final text = _textOf(element);
-          if (!text.contains(checkVal)) {
-            throw ProbeError(
-              ProbeError.assertFailed,
-              '"${_selDesc(sel)}" contains "$text", not "$checkVal"',
-            );
-          }
-        case 'focused':
-          final focused = WidgetsBinding.instance.focusManager.primaryFocus;
-          if (focused == null || !element.renderObject!.attached) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" does not have focus');
-          }
-          // Walk up focus tree to see if element is within focused widget
-          bool hasFocus = false;
+      final reason = _stateCheckFailureReason(elements.first, check, checkVal);
+      if (reason != null) {
+        throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" $reason');
+      }
+    }
+  }
+
+  /// Evaluates a `see`/`don't see` state check ("enabled", "disabled",
+  /// "contains", "focused") against [element]. Returns null if the state is
+  /// satisfied, or a human-readable reason (for the error message, without
+  /// the selector prefix) if it isn't. Shared by the positive and negated
+  /// paths in [_see] so a negated state check ("don't see X is focused")
+  /// evaluates the same state, instead of degrading to a bare existence
+  /// check.
+  String? _stateCheckFailureReason(Element element, String check, String checkVal) {
+    switch (check) {
+      case 'enabled':
+        if (_isDisabled(element)) return 'is disabled';
+        return null;
+      case 'disabled':
+        if (!_isDisabled(element)) return 'is enabled';
+        return null;
+      case 'contains':
+        final text = _textOf(element);
+        if (!text.contains(checkVal)) return 'contains "$text", not "$checkVal"';
+        return null;
+      case 'focused':
+        final focused = WidgetsBinding.instance.focusManager.primaryFocus;
+        if (focused == null || !element.renderObject!.attached) {
+          return 'does not have focus';
+        }
+        final focusedRenderObject = focused.context?.findRenderObject();
+        // A selector almost always matches a composite widget like
+        // TextField/TextFormField, not the EditableText it builds
+        // internally — the actually-focused widget is a *descendant* of
+        // the matched element, not an ancestor. An ancestor-only walk could
+        // never detect focus for that (extremely common) case.
+        bool hasFocus = element.renderObject == focusedRenderObject;
+        if (!hasFocus) {
           element.visitAncestorElements((ancestor) {
-            if (ancestor.renderObject == focused.context?.findRenderObject()) {
+            if (ancestor.renderObject == focusedRenderObject) {
               hasFocus = true;
               return false;
             }
             return true;
           });
-          if (!hasFocus && element.renderObject != focused.context?.findRenderObject()) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" does not have focus');
+        }
+        if (!hasFocus) {
+          // Full subtree walk — covers widgets that nest EditableText
+          // several levels deep (e.g. TextField -> InputDecorator -> ...
+          // -> EditableText).
+          void visit(Element e) {
+            if (hasFocus) return;
+            if (e.renderObject == focusedRenderObject) {
+              hasFocus = true;
+              return;
+            }
+            e.visitChildren(visit);
           }
-      }
+          element.visitChildren(visit);
+        }
+        return hasFocus ? null : 'does not have focus';
+      default:
+        return null;
     }
   }
 
@@ -882,6 +939,16 @@ class ProbeExecutor {
       throw ProbeError(ProbeError.internalError, 'Failed to persist token: $e');
     }
   }
+}
+
+// ---- Editable text resolution (PT-04) ----
+
+/// The controller and real FocusNode of an EditableText resolved near a
+/// selector — see [ProbeExecutor._findEditableTarget].
+class _EditableTarget {
+  const _EditableTarget(this.controller, this.focusNode);
+  final TextEditingController controller;
+  final FocusNode focusNode;
 }
 
 // ---- Minimal gesture wrapper ----
