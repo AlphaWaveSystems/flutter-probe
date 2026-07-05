@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`scroll` could lose the gesture arena to `Dismissible`-wrapped list rows
+  and never actually scroll (PT-15).** `scroll` was a thin delegate to
+  `swipe`'s pointer-gesture simulation, which has to *win* the gesture arena
+  against any competing recognizer along the way — a `Dismissible` row's own
+  `HorizontalDragGestureRecognizer` could still intercept it. Reproduced
+  against a real iOS simulator: a 50-item list with `Dismissible` rows never
+  scrolled past the first screen, while the identical verb worked fine on a
+  plain list. `scroll`'s job is "reveal more content," unlike `swipe` (which
+  tests a real gesture interaction like swipe-to-dismiss) — it doesn't need
+  to enter the gesture arena at all, so it now drives the nearest
+  `Scrollable`'s own `ScrollPosition` directly instead, sidestepping the
+  competition entirely. When no selector is given, picks the Scrollable with
+  the largest viewport (a `TextField`'s own internal cursor-scrolling
+  `Scrollable` could otherwise be found first in tree order and silently
+  "scroll" nothing visible).
 - **`open the app` after `kill the app` never actually relaunched the app
   (PT-09).** It always sent an RPC over the (now-closed) connection, which
   failed; the generic step-level auto-reconnect that kicked in afterward
