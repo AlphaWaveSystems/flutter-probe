@@ -93,5 +93,35 @@ void main() {
       expect(await isError(), isTrue,
           reason: 'expected an error since #field_a genuinely is focused, got: $lastSent');
     });
+
+    testWidgets(
+        'passes after unfocus(), even though the enclosing ModalRoute scope '
+        'becomes the fallback focus holder', (tester) async {
+      // PT-12: the 'focused' check used to also walk *ancestors* looking
+      // for a match. After FocusNode.unfocus(), Flutter falls back to the
+      // enclosing ModalRoute's own FocusScopeNode holding primary focus —
+      // and that scope is an ancestor of every widget on the current
+      // screen, so the old ancestor walk reported every one of them as
+      // "focused", including a field that plainly wasn't. This directly
+      // reproduces that false positive.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TextField(key: const ValueKey('field_a'), focusNode: focusNodeA),
+        ),
+      ));
+
+      focusNodeA.requestFocus();
+      await tester.pump();
+      expect(focusNodeA.hasFocus, isTrue);
+
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+      expect(focusNodeA.hasFocus, isFalse);
+
+      await seeNegatedFocused('#field_a');
+      expect(await isError(), isFalse,
+          reason: 'expected no error since #field_a was explicitly '
+              'unfocused, got: $lastSent');
+    });
   });
 }

@@ -570,18 +570,20 @@ class ProbeExecutor {
         // A selector almost always matches a composite widget like
         // TextField/TextFormField, not the EditableText it builds
         // internally — the actually-focused widget is a *descendant* of
-        // the matched element, not an ancestor. An ancestor-only walk could
-        // never detect focus for that (extremely common) case.
+        // the matched element, not an ancestor, so this only needs a direct
+        // match plus a subtree walk.
+        //
+        // PT-12: this used to also walk *ancestors* looking for a match,
+        // but that produces false positives for essentially any on-screen
+        // element: once nothing more specific is focused (e.g. right after
+        // FocusNode.unfocus()), Flutter falls back to the enclosing
+        // ModalRoute's own FocusScopeNode holding primary focus — and that
+        // scope is an ancestor of *every* widget on the current screen, so
+        // the ancestor walk would report every one of them as "focused".
+        // Found while verifying that `close keyboard` (PT-12) actually
+        // removes focus: `don't see #field is focused` kept failing right
+        // after a real unfocus() because of this ancestor false-positive.
         bool hasFocus = element.renderObject == focusedRenderObject;
-        if (!hasFocus) {
-          element.visitAncestorElements((ancestor) {
-            if (ancestor.renderObject == focusedRenderObject) {
-              hasFocus = true;
-              return false;
-            }
-            return true;
-          });
-        }
         if (!hasFocus) {
           // Full subtree walk — covers widgets that nest EditableText
           // several levels deep (e.g. TextField -> InputDecorator -> ...
@@ -747,6 +749,20 @@ class ProbeExecutor {
         final nav = _navigator;
         if (nav != null && nav.canPop()) {
           nav.pop();
+        } else {
+          await SystemNavigator.pop();
+        }
+      case 'close':
+        // PT-12: `close keyboard`/`close the app` (parser.VerbClose) both
+        // dispatch here with action='close' — this case never existed, so
+        // both were a silent no-op regardless of `value`. For keyboard
+        // dismissal specifically, unfocus the current FocusNode directly in
+        // the Flutter widget tree rather than an OS-level gesture — the
+        // suggested fix in PT-12 to avoid colliding with iOS's Back-swipe
+        // gesture recognition, and it also never depends on hit-testing a
+        // particular screen location the way a gesture would.
+        if (value == 'keyboard') {
+          FocusManager.instance.primaryFocus?.unfocus();
         } else {
           await SystemNavigator.pop();
         }

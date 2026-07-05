@@ -6,7 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
+### Fixed
+- **`close keyboard` and `close the app` were both complete no-ops (PT-12).**
+  Both parse to the same `ActionStep` (`close`/`close keyboard`/`close the
+  app` only differ in an argument name) and dispatch to
+  `probe.device_action` with `action:"close"` — but the Dart agent's
+  `_deviceAction` switch never had a `'close'` case at all, so neither did
+  anything, silently. (The originally reported theory — an OS-level gesture
+  colliding with iOS's Back-swipe — wasn't the actual cause: there was no
+  gesture-based implementation in the first place.) Fixed by adding the
+  missing case: `close keyboard` now calls
+  `FocusManager.instance.primaryFocus?.unfocus()` directly in the Flutter
+  widget tree (immune to any OS gesture collision, per the original PT-12
+  suggestion), and `close the app` calls `SystemNavigator.pop()`.
+- **The `focused` state check (`see`/`don't see #id is focused`) had a
+  false-positive: it also matched *ancestors* of the selected element**, not
+  just the element itself or its descendants. Once nothing more specific is
+  focused (e.g. immediately after `FocusNode.unfocus()`), Flutter falls back
+  to the enclosing `ModalRoute`'s own `FocusScopeNode` holding primary focus
+  — and that scope is an ancestor of every widget on the current screen, so
+  the old ancestor walk reported *all of them* as focused. Found while
+  verifying the `close keyboard` fix above: `don't see #field is focused`
+  kept failing right after a real, successful unfocus. Fixed by removing the
+  ancestor walk, keeping only the direct match and the subtree walk (which
+  already correctly handles a selector matching a composite widget like
+  `TextField`, not the `EditableText` it builds internally).
 - **Added regression test coverage confirming text selectors already resolve
   `ListTile` title/subtitle independently (PT-11).** The reported symptom —
   a title text selector failing on iOS 26.3+ because "the OS accessibility
