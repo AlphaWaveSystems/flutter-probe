@@ -722,7 +722,103 @@ class ProbeExecutor {
   }
 
   Future<void> _scroll(String direction, Map<String, dynamic>? sel) async {
-    await _swipe(direction, sel);
+    // PT-15: `scroll`'s job is "reveal more content," unlike `swipe`, which
+    // tests a real gesture interaction (swipe-to-dismiss, swipe-to-refresh,
+    // etc.) — it doesn't need to go through the gesture arena at all.
+    // Simulating scroll as a pointer drag (like swipe does) meant it had to
+    // *win* the arena against any competing recognizer along the way, and a
+    // `Dismissible`-wrapped row's horizontal drag recognizer could still
+    // intercept it even with an axis-pure delta — reproduced against a real
+    // iOS simulator (a 50-item list with `Dismissible` rows never scrolled
+    // past the first screen, while the same verb worked fine on a plain
+    // list). Driving the nearest Scrollable's own ScrollPosition directly
+    // sidesteps gesture-arena competition entirely.
+    final scrollable = _findScrollable(sel);
+    if (scrollable == null) {
+      // No Scrollable found (e.g. a custom scroll implementation that
+      // doesn't use the standard widget) — fall back to the old
+      // gesture-based approach.
+      await _swipe(direction, sel);
+      return;
+    }
+
+    final position = scrollable.position;
+    final extent = position.viewportDimension * 0.5;
+    // Matches _swipe's verb semantics: 'down'/'right' increase the scroll
+    // offset (reveal later content); 'up'/'left' decrease it.
+    final signedDelta = switch (direction) {
+      'up' || 'left' => -extent,
+      _ => extent,
+    };
+    final target = (position.pixels + signedDelta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    // jumpTo (not animateTo) — there's no user-facing transition to make
+    // smooth here, and animateTo's Future only resolves once its animation
+    // ticks to completion, which needs real frame scheduling that a test
+    // harness driving this through dispatch() won't naturally provide.
+    //
+    // jumpTo schedules a frame but returns before it runs — the RPC
+    // dispatcher's own _sync.waitForSettled() call right after this returns
+    // isn't enough on its own to guarantee that frame has actually happened
+    // yet (schedulerPhase can still read idle in the gap between
+    // "requested" and "started"), so a rapid sequence of scroll calls could
+    // race ahead of the ListView actually rebuilding to reveal newly
+    // visible rows. Wait for the frame explicitly here instead.
+    scrollable.position.jumpTo(target);
+    await WidgetsBinding.instance.endOfFrame;
+  }
+
+  /// Finds the Scrollable most relevant to a scroll verb: if [sel] resolves
+  /// to an element, the nearest enclosing Scrollable (walking up), or —
+  /// since a selector commonly targets the list widget itself rather than a
+  /// descendant inside it — the nearest one in its own subtree. With no
+  /// selector, the first Scrollable belonging to the current (topmost)
+  /// route, matching the route-awareness the rest of the finder already
+  /// applies (see ProbeFinder._isVisible).
+  ScrollableState? _findScrollable(Map<String, dynamic>? sel) {
+    if (sel != null) {
+      final element = _requireElement(sel);
+      final ancestor = Scrollable.maybeOf(element);
+      if (ancestor != null) return ancestor;
+      ScrollableState? descendant;
+      void visit(Element e) {
+        if (descendant != null) return;
+        if (e is StatefulElement && e.state is ScrollableState) {
+          descendant = e.state as ScrollableState;
+          return;
+        }
+        e.visitChildren(visit);
+      }
+      element.visitChildren(visit);
+      return descendant;
+    }
+
+    // No selector: several Scrollables can exist on one screen (e.g. a
+    // TextField's own internal cursor-scrolling Scrollable, alongside the
+    // actual content list) — the first one found in tree order isn't
+    // necessarily the one a bare `scroll down` should mean. Pick the one
+    // with the largest viewport area instead, since that's virtually always
+    // the main scrolling content, not an incidental one inside some other
+    // widget.
+    ScrollableState? best;
+    double bestArea = 0;
+    void visit(Element e) {
+      if (ModalRoute.of(e)?.isCurrent == false) return;
+      if (e is StatefulElement && e.state is ScrollableState) {
+        final state = e.state as ScrollableState;
+        final box = state.context.findRenderObject();
+        if (box is RenderBox && box.hasSize) {
+          final area = box.size.width * box.size.height;
+          if (area > bestArea) {
+            bestArea = area;
+            best = state;
+          }
+        }
+      }
+      e.visitChildren(visit);
+    }
+    WidgetsBinding.instance.rootElement?.visitChildren(visit);
+    return best;
   }
 
   Future<void> _drag(
