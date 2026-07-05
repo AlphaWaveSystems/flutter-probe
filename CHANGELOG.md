@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Verbose connect diagnostics (PT-01).** `-v`/`--verbose` on `probe test` now
+  traces every step of the connect handshake — ADB setup, port forward
+  setup/teardown, each Android token-read source attempted (run-as,
+  `/data/local/tmp`, logcat) with hit/miss detail, WebSocket dial attempts
+  (including transient retries), and handshake accept/reject. Connect
+  failures were previously a total black box with zero diagnostic output;
+  see PT-01 in `IMPROVEMENT_TASKS.md`.
 - **CLI↔agent version handshake (PT-07).** `probe.ping` now carries
   `client_version` (CLI → agent) and `agent_version` (agent → CLI) alongside
   the existing `{"ok":true}` response. Every connect path (WebSocket dial,
@@ -20,6 +27,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   until now.
 
 ### Fixed
+- **Android token read could pick up a stale token from a dead process,
+  causing an immediate non-retryable connection failure (PT-01).** `logcat -d`
+  dumps the entire ring buffer since it was last cleared/the device booted;
+  on any device that's run more than one probe session it can contain
+  `PROBE_TOKEN=` lines from multiple app-process generations, including
+  already-exited ones. The token-read fallback took the *first* matching
+  line, which could belong to a dead process — the live agent then rejects
+  that token with a non-retryable "bad handshake." Fixed to take the *last*
+  (most recent) matching line instead, since the agent reprints its token
+  every ~3s. Reproduced and confirmed fixed against a real Android emulator
+  — a leftover process from an earlier test run was still present in the
+  log buffer, and the CLI connected successfully once the fix was applied.
+  This is a confirmed root cause for at least one of PT-01's two reported
+  failure shapes ("instant exit ~0.5-0.6s"); the other shape (hangs the
+  full configured timeout) was not reproduced in this environment and
+  remains open — the tracing above should make it diagnosable if it recurs.
+- **Android `probe test` never passed the app's bundle ID into token
+  reading (PT-01)**, so the fastest, most reliable token source (`run-as
+  <appID> cat cache/probe/token`) was silently dead code in the main
+  `probe test` path — only the slower `/data/local/tmp` and `logcat`
+  fallbacks ever ran. Now threads `project.app` through.
 - **`flutter_probe_agent`'s reported version had drifted to 0.7.0** while
   `pubspec.yaml` moved on to 0.9.9 across several releases — the agent's
   mDNS advertisement and `GET /probe/status` endpoint were both silently

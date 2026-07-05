@@ -443,59 +443,130 @@ func (m *Manager) readTokenPhysicalIOS(ctx context.Context, udid string, timeout
 	return "", fmt.Errorf("ios physical: token not found within %s — is the app running with probe_agent?", timeout)
 }
 
+// Tracer receives structured diagnostic messages during device connect
+// operations. A nil Tracer disables tracing — every call site below is
+// nil-safe via the Tracer.log method, so passing nil (the common case) costs
+// nothing. See PT-01 in IMPROVEMENT_TASKS.md: Android connect failures were
+// previously a total black box, with no visibility into which token source
+// was tried, whether it hit, or where in the handshake things actually broke.
+type Tracer func(format string, args ...any)
+
+// log calls t with the given message, or does nothing if t is nil.
+func (t Tracer) log(format string, args ...any) {
+	if t != nil {
+		t(format, args...)
+	}
+}
+
 // ReadToken reads the ProbeAgent token from the Android device.
 // It tries multiple sources: app cache file (via run-as), /data/local/tmp,
 // and logcat streaming as fallback.
 func (m *Manager) ReadToken(ctx context.Context, serial string, timeout time.Duration) (string, error) {
-	return m.ReadTokenAndroid(ctx, serial, timeout, "")
+	return m.ReadTokenAndroid(ctx, serial, timeout, "", nil)
 }
 
-// ReadTokenAndroid reads the token with an optional app ID for run-as access.
-func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout time.Duration, appID string) (string, error) {
+// ReadTokenAndroid reads the token with an optional app ID for run-as access
+// and an optional Tracer for step-by-step diagnostic logging (nil disables it).
+func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout time.Duration, appID string, trace Tracer) (string, error) {
 	deadline := time.Now().Add(timeout)
+	trace.log("android: reading token on %s (appID=%q, timeout=%s)", serial, appID, timeout)
 
+	attempt := 0
 	for time.Now().Before(deadline) {
+		attempt++
+
 		// Try 1: read from app cache via run-as (most reliable)
 		if appID != "" {
 			out, err := m.adb.Shell(ctx, serial, "run-as", appID, "cat", "cache/probe/token")
-			if err == nil {
+			if err != nil {
+				trace.log("android: [attempt %d] run-as read failed: %v", attempt, err)
+			} else {
 				token := strings.TrimSpace(string(out))
 				if len(token) >= 16 {
+					trace.log("android: [attempt %d] run-as token accepted (len=%d)", attempt, len(token))
 					return token, nil
 				}
+				trace.log("android: [attempt %d] run-as returned no usable token (len=%d)", attempt, len(token))
 			}
+		} else {
+			trace.log("android: [attempt %d] skipping run-as source — no appID configured (project.app not set)", attempt)
 		}
 
 		// Try 2: read from /data/local/tmp (world-readable, works on some devices)
 		out, err := m.adb.Shell(ctx, serial, "cat", "/data/local/tmp/probe/token")
-		if err == nil {
+		if err != nil {
+			trace.log("android: [attempt %d] /data/local/tmp read failed: %v", attempt, err)
+		} else {
 			token := strings.TrimSpace(string(out))
 			if len(token) >= 16 {
+				trace.log("android: [attempt %d] /data/local/tmp token accepted (len=%d)", attempt, len(token))
 				return token, nil
 			}
+			trace.log("android: [attempt %d] /data/local/tmp returned no usable token (len=%d)", attempt, len(token))
 		}
 
-		// Try 3: scan logcat dump for PROBE_TOKEN=
+		// Try 3: scan logcat dump for PROBE_TOKEN=. `logcat -d` dumps the
+		// entire ring buffer since it was last cleared/the device booted, so
+		// on any device that's run more than one probe session it can
+		// contain tokens from multiple app-process generations — including
+		// dead ones. Taking the *first* match (as this used to) can return a
+		// stale token belonging to an already-exited process, causing the WS
+		// handshake to fail immediately with a non-retryable "bad handshake"
+		// (401 from the *current*, different-token agent) — a real,
+		// confirmed trigger for PT-01's "fails almost instantly" symptom,
+		// reproduced against a real Android emulator with a leftover process
+		// from an earlier run still in the log buffer. The agent reprints
+		// its token every ~3s, so the *last* match in the dump is always the
+		// most recent — and therefore the live process's token, if one exists.
 		logOut, err := m.adb.Shell(ctx, serial, "logcat", "-d", "-s", "flutter:I")
-		if err == nil {
-			for _, line := range strings.Split(string(logOut), "\n") {
-				if idx := strings.Index(line, "PROBE_TOKEN="); idx >= 0 {
-					token := strings.TrimSpace(string(line[idx+len("PROBE_TOKEN="):]))
-					if len(token) >= 16 {
-						return token, nil
-					}
-				}
+		if err != nil {
+			trace.log("android: [attempt %d] logcat read failed: %v", attempt, err)
+		} else {
+			lastToken, matches := latestProbeToken(string(logOut))
+			if lastToken != "" {
+				trace.log("android: [attempt %d] logcat token accepted (len=%d, %d total token line(s) in buffer, using most recent)", attempt, len(lastToken), matches)
+				return lastToken, nil
 			}
+			trace.log("android: [attempt %d] logcat dump had no PROBE_TOKEN= line", attempt)
 		}
 
 		select {
 		case <-ctx.Done():
+			trace.log("android: context cancelled after %d attempt(s): %v", attempt, ctx.Err())
 			return "", ctx.Err()
 		case <-time.After(1 * time.Second):
 		}
 	}
 
+	trace.log("android: giving up after %d attempt(s), %s elapsed — no source produced a token", attempt, timeout)
 	return "", fmt.Errorf("android: probe token not found within %s — is the app running with probe_agent?", timeout)
+}
+
+// latestProbeToken scans a `logcat -d` dump for PROBE_TOKEN= lines and
+// returns the last (i.e. most recent — logcat -d outputs chronologically,
+// oldest first) valid match, plus the total number of matching lines found.
+// Returns ("", 0) if none are found.
+//
+// Taking the *last* match instead of the first matters: `logcat -d` dumps
+// the entire ring buffer since it was last cleared or the device booted, so
+// on any device that's run more than one probe session it can contain
+// tokens from multiple app-process generations, including already-dead
+// ones. The agent reprints its token every ~3s, so the most recent matching
+// line is always the live process's token, if one is currently running.
+func latestProbeToken(logOutput string) (token string, matches int) {
+	const marker = "PROBE_TOKEN="
+	for _, line := range strings.Split(logOutput, "\n") {
+		idx := strings.Index(line, marker)
+		if idx < 0 {
+			continue
+		}
+		candidate := strings.TrimSpace(line[idx+len(marker):])
+		if len(candidate) >= 16 {
+			token = candidate
+			matches++
+		}
+	}
+	return token, matches
 }
 
 // RunFlutter launches flutter run with ProbeAgent in debug mode.

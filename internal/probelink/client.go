@@ -35,6 +35,20 @@ type DialOptions struct {
 	Port        int           // default 48686
 	Token       string        // one-time auth token
 	DialTimeout time.Duration // max time to establish connection (default 30s)
+
+	// Trace, if non-nil, receives a message for every dial attempt (success,
+	// transient retry, or non-transient failure). Nil (the default) disables
+	// tracing entirely. See PT-01 in IMPROVEMENT_TASKS.md — Android connect
+	// failures were previously a black box with no visibility into whether
+	// the CLI ever actually reached the agent's WebSocket server.
+	Trace func(format string, args ...any)
+}
+
+// trace calls opts.Trace with the given message, or does nothing if it's nil.
+func (opts DialOptions) trace(format string, args ...any) {
+	if opts.Trace != nil {
+		opts.Trace(format, args...)
+	}
 }
 
 // Client is a ProbeLink WebSocket client connecting to the ProbeAgent.
@@ -91,20 +105,27 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	var conn *websocket.Conn
 	var lastErr error
 	const retryInterval = time.Second
+	attempt := 0
+	opts.trace("probelink: dialing %s (timeout=%s)", safeURL, opts.DialTimeout)
 	for {
+		attempt++
 		var err error
 		conn, _, err = dialer.DialContext(dialCtx, u.String(), nil)
 		if err == nil {
+			opts.trace("probelink: [attempt %d] dial succeeded", attempt)
 			break
 		}
 		lastErr = err
 		// Only retry on transient network errors (refused, reset, timeout).
 		// Stop immediately on auth/protocol errors (e.g. 401 from agent).
 		if !isTransientDialError(err) {
+			opts.trace("probelink: [attempt %d] dial failed (non-transient): %v — giving up", attempt, err)
 			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
 		}
+		opts.trace("probelink: [attempt %d] dial failed (transient): %v — retrying in %s", attempt, err, retryInterval)
 		select {
 		case <-dialCtx.Done():
+			opts.trace("probelink: dial deadline exceeded after %d attempt(s): %v", attempt, lastErr)
 			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, lastErr)
 		case <-time.After(retryInterval):
 		}
