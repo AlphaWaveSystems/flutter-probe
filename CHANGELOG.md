@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`tap #id`'s fast direct-invoke path only recognized `GestureDetector`/
+  `InkWell`, missing `InkResponse`-based buttons (PT-05).** `InkWell` is
+  just an `InkResponse` subclass with a fixed splash shape, and modern
+  Material buttons (`IconButton`, `ElevatedButton`, etc.) commonly build an
+  `InkResponse` directly — the old check missed them, always falling
+  through to the slower synthetic-tap fallback. Verified (with new tests)
+  that PT-05's actual reported symptom — `tap #id` on a button with no
+  `onTap` `SemanticsAction`, or shadowed by an overlapping Semantics node —
+  already worked correctly via that fallback: `Semantics` doesn't
+  participate in hit-testing at all, so a real synthetic tap at the node's
+  geometric center reaches whatever is actually rendered there regardless
+  of Semantics-tree structure. No fix was needed for that path itself; this
+  change only broadens the faster path to cover more cases before falling
+  back to it.
 - **`tap #id` could report success while leaving a text field genuinely
   unfocused (PT-04).** A real pointer tap on a text field requests focus as
   part of `EditableText`'s own internal tap handling; probe's tap paths
