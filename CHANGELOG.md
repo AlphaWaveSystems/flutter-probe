@@ -7,6 +7,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`wait for network idle`/`wait for the page to load`/`wait for page to
+  load` always misparsed, silently splitting into a no-op plus a stray,
+  broken statement (PT-20).** `"for"` (and `"the"`) are both global filler
+  words that `parseWait`'s initial filler-strip consumes immediately after
+  `"wait"` — by the time the code checked for `"for"` specifically to
+  distinguish this verb family, it was already gone, so that check could
+  never match. The parser fell through to a default case that produced a
+  `WaitPageLoad` step (the right kind, by coincidence) but never consumed
+  "network idle"/"page to load" — those leftover words became a second,
+  separate statement that then failed at runtime as an unknown recipe
+  call. Invisible to `probe lint`, since both halves parse as individually
+  valid syntax; only surfaces when the test actually runs. This bug has
+  existed since the project's very first commit — not a regression from
+  any recent release, despite surfacing during this release's own
+  verification pass. Fixed by detecting the network/page-load cases
+  directly (mirroring the pattern `wait for animations to end` already
+  used for the same underlying issue) and consuming the full phrase before
+  the next token is checked.
 - **`.github/workflows/e2e.yml`'s CI E2E suite failed `flutter pub get` outright
   on every run** (`"name" field doesn't match expected name "probe_agent"`).
   The workflow's `dependency_overrides` block still referenced the package's

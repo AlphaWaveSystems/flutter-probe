@@ -505,12 +505,62 @@ func TestParser_WaitPageLoad(t *testing.T) {
   wait for the page to load
 `
 	prog := mustParse(t, src)
-	for _, s := range prog.Tests[0].Body {
-		if w, ok := s.(parser.WaitStep); ok {
-			if w.Kind != parser.WaitPageLoad {
-				t.Errorf("kind: got %v, want page_load", w.Kind)
-			}
-		}
+	// PT-20: this used to also pass with the bug present, because it only
+	// asserted the Kind of whatever WaitStep happened to appear — it never
+	// checked that "for the page to load" was fully consumed as PART of
+	// that one step, rather than leaking "page to load" as a second, stray
+	// statement. Assert the body has exactly one step.
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1 (leftover tokens leaking "+
+			"into a stray statement?): %+v", len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.WaitStep", prog.Tests[0].Body[0])
+	}
+	if w.Kind != parser.WaitPageLoad {
+		t.Errorf("kind: got %v, want page_load", w.Kind)
+	}
+}
+
+// TestParser_WaitForPageToLoadNoThe covers PT-20: the same verb without
+// "the" ("wait for page to load", also documented on flutterprobe.dev).
+func TestParser_WaitForPageToLoadNoThe(t *testing.T) {
+	src := `test "t"
+  wait for page to load
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v", len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.WaitStep", prog.Tests[0].Body[0])
+	}
+	if w.Kind != parser.WaitPageLoad {
+		t.Errorf("kind: got %v, want page_load", w.Kind)
+	}
+}
+
+// TestParser_WaitForNetworkIdle covers PT-20: "wait for network idle" used
+// to produce a WaitPageLoad step (wrong kind) plus a stray, unconsumed
+// "network idle" statement that failed at runtime as an unknown recipe
+// call — invisible to `probe lint`, since both halves parse as
+// individually-valid syntax.
+func TestParser_WaitForNetworkIdle(t *testing.T) {
+	src := `test "t"
+  wait for network idle
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v", len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.WaitStep", prog.Tests[0].Body[0])
+	}
+	if w.Kind != parser.WaitNetworkIdle {
+		t.Errorf("kind: got %v, want network_idle", w.Kind)
 	}
 }
 

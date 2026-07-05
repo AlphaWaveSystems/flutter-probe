@@ -823,8 +823,15 @@ func (p *Parser) parseWait() (Step, error) {
 		}
 	}
 
-	// "wait [for] animations to end" — TOKEN_FOR_KW is a filler so skipFillers()
-	// above may have already consumed it; check TOKEN_ANIMATIONS directly first.
+	// "wait [for] animations to end" — TOKEN_FOR_KW (and "the") are fillers,
+	// so the skipFillers() call above already consumed them; check
+	// TOKEN_ANIMATIONS/TOKEN_NETWORK/TOKEN_PAGE directly instead of testing
+	// for "for" itself, which can never match here again. (PT-20: a
+	// preceding branch here used to test `tok.Type == TOKEN_FOR_KW` — always
+	// false, since "for" is always gone by this point — leaving "network
+	// idle"/"page to load" completely unconsumed and misparsed as a
+	// separate, unrelated statement. Present since the very first commit,
+	// not a v0.10.0 regression, despite v0.10.0 being where this surfaced.)
 	if tok.Type == TOKEN_ANIMATIONS {
 		p.advance()
 		// consume trailing words ("to end", "to finish") up to the newline
@@ -835,17 +842,21 @@ func (p *Parser) parseWait() (Step, error) {
 		return WaitStep{Kind: WaitAnimations, Line: line}, nil
 	}
 
-	// "wait for animations to end" / "wait for the page to load"
-	if tok.Type == TOKEN_FOR_KW || p.peekLiteral("for") {
+	// "wait for network idle"
+	if tok.Type == TOKEN_NETWORK {
 		p.advance()
-		p.skipFillers()
-		if p.peek().Type == TOKEN_ANIMATIONS {
+		for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
 			p.advance()
-			for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
-				p.advance()
-			}
-			p.consumeNewline()
-			return WaitStep{Kind: WaitAnimations, Line: line}, nil
+		}
+		p.consumeNewline()
+		return WaitStep{Kind: WaitNetworkIdle, Line: line}, nil
+	}
+
+	// "wait for the page to load" / "wait for page to load"
+	if tok.Type == TOKEN_PAGE {
+		p.advance()
+		for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+			p.advance()
 		}
 		p.consumeNewline()
 		return WaitStep{Kind: WaitPageLoad, Line: line}, nil
@@ -877,6 +888,13 @@ func (p *Parser) parseWait() (Step, error) {
 		return WaitStep{Kind: kind, Target: target, Line: line}, nil
 	}
 
+	// Defensive: consume any remaining tokens before the newline so an
+	// unrecognized "wait ..." phrasing never leaks leftover words as a
+	// separate, misparsed statement (the same class of bug just fixed
+	// above for "wait for ...").
+	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+		p.advance()
+	}
 	p.consumeNewline()
 	return WaitStep{Kind: WaitPageLoad, Line: line}, nil
 }
