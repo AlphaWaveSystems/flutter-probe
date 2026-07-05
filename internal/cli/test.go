@@ -108,6 +108,7 @@ func init() {
 	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
 	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
+	f.Duration("launch-timeout", 0, "max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — raise this for apps with an expensive cold-launch path (default: 120s)")
 
 	// Tool paths
 	f.String("adb", "", "path to adb binary (overrides probe.yaml and PATH)")
@@ -224,6 +225,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	dialTimeout, _ := cmd.Flags().GetDuration("dial-timeout")
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
+	launchTimeout, _ := cmd.Flags().GetDuration("launch-timeout")
 
 	// Video overrides
 	videoResolution, _ := cmd.Flags().GetString("video-resolution")
@@ -245,6 +247,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if reconnectDelay != 0 {
 		cfg.Agent.ReconnectDelay = reconnectDelay
+	}
+	if launchTimeout != 0 {
+		cfg.Agent.LaunchTimeout = launchTimeout
 	}
 	if videoResolution != "" {
 		cfg.Video.Resolution = videoResolution

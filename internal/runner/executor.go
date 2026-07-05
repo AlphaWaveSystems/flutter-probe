@@ -42,6 +42,7 @@ type Executor struct {
 	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64 // incremented on each successful reconnect
+	launchTimeout        time.Duration // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 }
 
 // NewExecutor creates an Executor.
@@ -63,6 +64,25 @@ func NewExecutor(client probelink.ProbeClient, deviceCtx *DeviceContext, onRecon
 func (e *Executor) SetReconnectPolicy(attempts int, backoff time.Duration) {
 	e.maxReconnectAttempts = attempts
 	e.reconnectBackoff = backoff
+}
+
+// defaultLaunchTimeout is used when SetLaunchTimeout is never called (e.g. dry-run mode)
+// or is called with a zero value.
+const defaultLaunchTimeout = 120 * time.Second
+
+// SetLaunchTimeout configures the timeout applied to `restart the app`/`clear app data`,
+// taken from agent.launch_timeout in probe.yaml. A zero value falls back to the default.
+func (e *Executor) SetLaunchTimeout(d time.Duration) {
+	e.launchTimeout = d
+}
+
+// launchTimeoutOrDefault returns the configured launch timeout, or defaultLaunchTimeout
+// if it was never set.
+func (e *Executor) launchTimeoutOrDefault() time.Duration {
+	if e.launchTimeout <= 0 {
+		return defaultLaunchTimeout
+	}
+	return e.launchTimeout
 }
 
 // RegisterRecipe adds a recipe to the executor's scope.
@@ -112,7 +132,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	isLifecycleAction := false
 	if a, ok := step.(parser.ActionStep); ok {
 		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData {
-			stepTimeout = 90 * time.Second
+			stepTimeout = e.launchTimeoutOrDefault()
 		}
 		// Don't auto-reconnect for actions that intentionally close the connection
 		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData || a.Verb == parser.VerbKill {

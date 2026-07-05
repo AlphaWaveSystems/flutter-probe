@@ -110,3 +110,25 @@ func TestResolve_RepeatedPlaceholderStillWorks(t *testing.T) {
 		t.Errorf("resolve() = %q, want %q", got, "5 5 5")
 	}
 }
+
+// TestLaunchTimeoutOrDefault_FallsBackWhenUnset covers PT-10: `restart the
+// app`/`clear app data` used to be bounded by a hardcoded, unconfigurable 90s
+// step timeout, which a real app's expensive cold-launch path could easily
+// exceed regardless of dial_timeout/token_read_timeout settings.
+func TestLaunchTimeoutOrDefault_FallsBackWhenUnset(t *testing.T) {
+	e := newTestExecutor()
+	if got := e.launchTimeoutOrDefault(); got != defaultLaunchTimeout {
+		t.Errorf("launchTimeoutOrDefault() = %v, want default %v", got, defaultLaunchTimeout)
+	}
+}
+
+// TestLaunchTimeoutOrDefault_UsesConfiguredValue confirms agent.launch_timeout
+// (threaded through via SetLaunchTimeout) actually takes effect instead of
+// the hardcoded default.
+func TestLaunchTimeoutOrDefault_UsesConfiguredValue(t *testing.T) {
+	e := newTestExecutor()
+	e.SetLaunchTimeout(5 * time.Minute)
+	if got := e.launchTimeoutOrDefault(); got != 5*time.Minute {
+		t.Errorf("launchTimeoutOrDefault() = %v, want %v", got, 5*time.Minute)
+	}
+}
