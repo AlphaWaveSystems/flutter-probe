@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'agent_version.dart';
 import 'biometric.dart' as biometric;
 import 'finder.dart';
 import 'protocol.dart';
@@ -80,7 +81,15 @@ class ProbeExecutor {
     switch (req.method) {
       // ---- Lifecycle ----
       case ProbeMethods.ping:
-        return {'ok': true};
+        // Doubles as the connect-time version handshake: an older CLI that
+        // doesn't send client_version, or an older agent build a CLI talks
+        // to that doesn't recognize agent_version, both degrade gracefully
+        // (missing/extra JSON fields are simply ignored on either side).
+        final clientVersion = req.params['client_version'] as String?;
+        if (clientVersion != null && clientVersion.isNotEmpty) {
+          stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
+        }
+        return {'ok': true, 'agent_version': probeAgentVersion};
 
       case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;

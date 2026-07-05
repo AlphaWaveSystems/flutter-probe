@@ -291,6 +291,24 @@ func (c *Client) Ping(ctx context.Context) error {
 	return err
 }
 
+// Handshake performs the initial connect-time version exchange (see
+// ProbeClient.Handshake).
+func (c *Client) Handshake(ctx context.Context, clientVersion string) (*HandshakeResult, error) {
+	raw, err := c.Call(ctx, MethodPing, PingParams{ClientVersion: clientVersion})
+	if err != nil {
+		return nil, err
+	}
+	var res PingResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		// An agent that predates this field still returns {"ok":true}, which
+		// unmarshals fine into PingResult (AgentVersion left as ""). A
+		// genuine decode failure here means something is badly wrong with
+		// the response, not a version mismatch.
+		return nil, fmt.Errorf("handshake: decoding ping result: %w", err)
+	}
+	return &HandshakeResult{AgentVersion: res.AgentVersion}, nil
+}
+
 // WaitSettled blocks until the agent reports the UI is fully settled (triple-signal).
 func (c *Client) WaitSettled(ctx context.Context, timeout time.Duration) error {
 	params := WaitParams{Kind: "settled", Timeout: timeout.Seconds()}

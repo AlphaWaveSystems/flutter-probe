@@ -567,8 +567,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 
-				if err := client.Ping(ctx); err != nil {
-					return fmt.Errorf("relay agent ping failed: %w", err)
+				warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+				if err != nil {
+					return fmt.Errorf("relay agent handshake failed: %w", err)
+				}
+				if warning != "" {
+					statusWarn(statusW, "%s", warning)
 				}
 				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", targetDevice, provider.Name())
 			} else {
@@ -623,8 +627,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 
-				if err := client.Ping(ctx); err != nil {
-					return fmt.Errorf("cloud agent ping failed: %w", err)
+				warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+				if err != nil {
+					return fmt.Errorf("cloud agent handshake failed: %w", err)
+				}
+				if warning != "" {
+					statusWarn(statusW, "%s", warning)
 				}
 				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
 			}
@@ -810,8 +818,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				defer client.Close()
 			}
 
-			if err := client.Ping(ctx); err != nil {
-				return fmt.Errorf("agent ping failed: %w", err)
+			warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+			if err != nil {
+				return fmt.Errorf("agent handshake failed: %w", err)
+			}
+			if warning != "" {
+				statusWarn(statusW, "%s", warning)
 			}
 			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
 		}

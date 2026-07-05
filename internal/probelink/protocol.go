@@ -144,6 +144,24 @@ type GenericResult struct {
 	Message string `json:"message,omitempty"`
 }
 
+// PingParams carries the CLI's version so the agent can log it and, in the
+// future, adjust behaviour for known-incompatible CLI versions. ClientVersion
+// is empty for `dev` builds without ldflags-injected version info — the
+// agent must treat that as "unknown," not as evidence of incompatibility.
+// Older agents that don't read this field simply ignore it (JSON-RPC params
+// are decoded leniently), so this is safe to send unconditionally.
+type PingParams struct {
+	ClientVersion string `json:"client_version,omitempty"`
+}
+
+// PingResult extends the plain {"ok":true} shape with the agent's own
+// version. AgentVersion is empty when talking to an agent built before this
+// field existed — that must be treated as "unknown," never as a mismatch.
+type PingResult struct {
+	OK           bool   `json:"ok"`
+	AgentVersion string `json:"agent_version,omitempty"`
+}
+
 // WidgetTreeResult contains the serialised widget tree.
 type WidgetTreeResult struct {
 	Tree string `json:"tree"`
