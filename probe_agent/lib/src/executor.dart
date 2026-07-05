@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton;
+import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkResponse, TextButton, OutlinedButton;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -322,10 +322,24 @@ class ProbeExecutor {
     await gesture.up();
   }
 
-  /// Walks down from [element] to find a GestureDetector or InkWell child
-  /// and invokes its onTap directly. Only used when the matched element is
-  /// a Semantics wrapper where synthetic pointer events are unreliable.
-  /// Returns true if onTap was invoked.
+  /// Walks down from [element] to find a GestureDetector or InkResponse
+  /// child and invokes its onTap directly. Only used when the matched
+  /// element is a Semantics wrapper where synthetic pointer events are
+  /// unreliable. Returns true if onTap was invoked.
+  ///
+  /// PT-05: checks `InkResponse` rather than only `InkWell` — `InkWell` is
+  /// just a subclass of `InkResponse` with a fixed splash shape, and modern
+  /// Material buttons (IconButton, ElevatedButton, etc.) commonly build an
+  /// `InkResponse` directly rather than an `InkWell`, so the old `is InkWell`
+  /// check missed them, always falling through to the slower synthetic-tap
+  /// path below even though it also works). Buttons with neither widget
+  /// findable in the subtree (or any other case this direct-tap heuristic
+  /// misses) already fall through to a real hit-tested pointer tap via
+  /// _createGesture, which is unaffected by Semantics-tree structure —
+  /// verified this already correctly handles PT-05's literal scenario (a
+  /// Semantics-wrapped button with no onTap SemanticsAction, or shadowed by
+  /// an overlapping Semantics node) since Semantics doesn't participate in
+  /// hit-testing at all.
   bool _tryDirectTap(Element element) {
     bool found = false;
     void visit(Element e) {
@@ -337,7 +351,7 @@ class ProbeExecutor {
           found = true;
           return;
         }
-        if (widget is InkWell && widget.onTap != null) {
+        if (widget is InkResponse && widget.onTap != null) {
           widget.onTap!();
           found = true;
           return;
