@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Added regression test coverage confirming text selectors already resolve
+  `ListTile` title/subtitle independently (PT-11).** The reported symptom —
+  a title text selector failing on iOS 26.3+ because "the OS accessibility
+  layer merges the title and subtitle into one combined node" — describes
+  real platform (VoiceOver/XCUITest) behavior, but doesn't apply to probe:
+  `_findByText` walks the live Flutter element tree directly and never
+  touches the platform accessibility tree. `ListTile` builds title/subtitle
+  as fully independent `Text` widgets with no merging anywhere in the
+  element tree, so each already resolves correctly regardless of platform.
+  No code fix was needed; added a test locking in this behavior since it
+  wasn't previously covered.
 - **Documented an API stability/deprecation policy for `flutter_probe_agent`'s
   public Dart API (PT-08)**, in `CONTRIBUTING.md`. Prompted by a past
   breaking change (a minor bump silently removed `ProbePlugin`/
