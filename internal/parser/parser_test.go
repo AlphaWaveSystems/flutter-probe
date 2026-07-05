@@ -438,6 +438,30 @@ func TestParser_WaitUntilAppears(t *testing.T) {
 	}
 }
 
+// TestParser_WaitUntilIDAppears mirrors TestParser_WaitUntilAppears but for
+// an id target — locks in that the '#' prefix survives parsing intact
+// (PT-06: the Dart agent detects the prefix at runtime to dispatch an id
+// selector instead of a text one; if the parser ever stripped or mangled it,
+// that detection would silently break again).
+func TestParser_WaitUntilIDAppears(t *testing.T) {
+	src := `test "t"
+  wait until #refresh_button appears
+`
+	prog := mustParse(t, src)
+	var w parser.WaitStep
+	for _, s := range prog.Tests[0].Body {
+		if ws, ok := s.(parser.WaitStep); ok {
+			w = ws
+		}
+	}
+	if w.Kind != parser.WaitAppears {
+		t.Errorf("wait kind: got %v", w.Kind)
+	}
+	if w.Target != "#refresh_button" {
+		t.Errorf("wait target: got %q, want %q", w.Target, "#refresh_button")
+	}
+}
+
 func TestParser_WaitDuration(t *testing.T) {
 	src := `test "t"
   wait 2 seconds
