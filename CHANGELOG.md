@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`drag <selector> to <selector>` — the documented syntax — always failed
+  to parse (PT-19).** `"to"` was lexed as its own token but was never
+  actually consumable anywhere: it was missing from the parser's
+  filler-word list and used nowhere else in the grammar. The parser choked
+  on `to` where it expected the second selector to start, and the rest of
+  the line got misparsed as an unrelated recipe call. Found during a final
+  regression pass across the full e2e suite before this release — this bug
+  has always existed; PT-02's error-loudly fix (this same release) is what
+  first surfaced it, since it previously failed silently instead.
+
 ### Documentation
 - **Documented the native (non-Flutter) UI boundary explicitly (PT-13)**:
   image/file pickers, share sheets, and the handful of permission prompts

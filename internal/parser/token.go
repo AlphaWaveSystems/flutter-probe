@@ -330,6 +330,15 @@ var fillerWords = map[TokenType]bool{
 	TOKEN_THIS:   true,
 	TOKEN_IT:     true,
 	TOKEN_FOR_KW: true,
+	// PT-19: "to" (drag <sel> to <sel>) is used nowhere else in the
+	// grammar — it was lexed as its own token but never actually consumed
+	// anywhere, so parseActionDrag's skipFillers() call between the two
+	// selectors never stripped it. The parser then choked on "to" where it
+	// expected the second selector to start, and the rest of the line got
+	// misparsed as an unrelated recipe call. This has always been broken;
+	// PT-02's error-loudly fix (this session) is what first surfaced it —
+	// previously it silently no-op'd instead.
+	TOKEN_TO: true,
 }
 
 // IsFiller returns true if the token is a filler word.

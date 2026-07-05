@@ -419,6 +419,27 @@ func TestParser_SeeEnabled(t *testing.T) {
 
 // ---- Parser: wait steps ----
 
+// TestParser_Drag covers PT-19: "to" was never actually consumable anywhere
+// in the grammar (missing from fillerWords, and used nowhere else), so
+// `drag <sel> to <sel>` — the documented syntax — always failed to parse
+// the second selector correctly.
+func TestParser_Drag(t *testing.T) {
+	src := `test "t"
+  drag #drag_source to #drag_target
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbDrag {
+		t.Fatalf("verb: got %q, want %q", a.Verb, parser.VerbDrag)
+	}
+	if a.Sel == nil || a.Sel.Kind != parser.SelectorID || a.Sel.Text != "#drag_source" {
+		t.Errorf("from selector: got %+v", a.Sel)
+	}
+	if a.To == nil || a.To.Kind != parser.SelectorID || a.To.Text != "#drag_target" {
+		t.Errorf("to selector: got %+v", a.To)
+	}
+}
+
 func TestParser_WaitUntilAppears(t *testing.T) {
 	src := `test "t"
   wait until "Home" appears
