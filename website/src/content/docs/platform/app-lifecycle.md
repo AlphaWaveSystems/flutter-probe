@@ -114,6 +114,8 @@ FlutterProbe's `tap`, `type`, `see`, and every other selector-based verb operate
 - Design the test to stop just short of the native surface (e.g. assert the picker/share sheet opened via a screenshot, without completing the flow through it)
 - Have the app under test support a test-only bypass for that specific flow (e.g. a debug-mode "skip picker, use a fixture image" path), the same pattern already used for the iOS notification permission prompt
 
+A design proposal for closing part of this gap (an Android-first `tap native`/`see native` verb pair via `uiautomator`, with iOS deferred to its own future proposal) is written up in [`docs/proposals/pt13-native-ui-bridging.md`](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/docs/proposals/pt13-native-ui-bridging.md) — not yet implemented.
+
 ## Configuration
 
 ```yaml
