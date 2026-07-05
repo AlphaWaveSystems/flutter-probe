@@ -58,6 +58,7 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | Flag | What it does |
 |---|---|
 | `--timeout 60s` | Per-step timeout (default 30s) |
+| `--launch-timeout 3m` | Timeout for `restart the app`/`clear app data` specifically (default 120s) — raise this if those steps time out on an app with an expensive cold-launch path (e.g. Firebase App Check init) |
 | `-v` | Verbose step output — prints `→ step` before each step and `✓/✗ step (Xs)` after; slow steps (>5s) emit `⏱` progress ticks and a `⚠` warning at 80% of timeout. Recommended when diagnosing failures. |
 | `--format json` | Structured JSON results (pipe to `get_report`) |
 | `--format junit` | JUnit XML for CI systems |
