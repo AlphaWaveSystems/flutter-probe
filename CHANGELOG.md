@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-07-06
+
+A small release with no functional changes — a reported regression was
+re-investigated and re-closed, with a regression test added to lock in the
+verified-correct behavior going forward.
+
 ### Testing
 - **Locked in sequential tap+type behavior when one field auto-focuses on
   page load (PT-21, reopened and re-closed).** A report claimed sequential

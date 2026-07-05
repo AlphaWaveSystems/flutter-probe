@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.2 - 2026-07-06
+
+No functional changes — a test-only addition (`test/sequential_focus_autofocus_test.dart`)
+locking in correct sequential tap+type behavior when a field auto-focuses on page load,
+after a reported regression (PT-21, reopened) was re-investigated and found not to
+reproduce. Full detail in the root CHANGELOG's `[0.10.2]` section. Version bumped purely
+to stay in lockstep with the CLI's version.
+
 ## 0.10.1 - 2026-07-05
 
 No changes to this package's own code — bumped to stay in lockstep with the
