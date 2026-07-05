@@ -196,6 +196,11 @@ class ProbeExecutor {
       // ---- Diagnostics ----
       case ProbeMethods.screenshot:
         final name = req.params['name'] as String? ?? 'screenshot';
+        // PT-16: every other verb calls this before acting/capturing —
+        // screenshot didn't, so a capture taken right after navigation
+        // could land mid-route-transition (the push/pop AnimationController
+        // still ticking) instead of waiting for the new route to settle.
+        await _sync.waitForSettled();
         final path = await _screenshot(name);
         // Include base64-encoded PNG data so CLI can save locally (essential for cloud mode
         // where the file is on a remote device and can't be pulled via ADB).
@@ -902,6 +907,15 @@ class ProbeExecutor {
     double bestArea = 0;
 
     void visit(Element element) {
+      // PT-16: Navigator keeps previous routes mounted underneath the
+      // current one, and both a pushed route and the one beneath it
+      // typically produce a same-size, screen-sized RepaintBoundary — the
+      // strict `area > bestArea` comparison below then keeps whichever one
+      // is visited first (the previous route, in Overlay insertion order),
+      // silently capturing stale content instead of the current screen.
+      // Skip anything belonging to a route that isn't current, mirroring
+      // ProbeFinder's own route-awareness fix (PT-03).
+      if (ModalRoute.of(element)?.isCurrent == false) return;
       final ro = element.renderObject;
       if (ro is RenderRepaintBoundary) {
         final area = ro.size.width * ro.size.height;

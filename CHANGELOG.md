@@ -7,6 +7,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`take screenshot` could capture stale content from the previous route
+  instead of the current screen (PT-16).** Found while investigating a
+  scroll bug (PT-03): a screenshot taken right after navigating sometimes
+  looked unchanged, even though `see`/`don't see` assertions confirmed real
+  navigation had happened. Two independent causes:
+  - Unlike every other verb, `screenshot` never called
+    `_sync.waitForSettled()` before capturing — a capture taken right after
+    navigation could land mid-route-transition instead of waiting for the
+    push/pop animation to finish.
+  - `_captureViaRepaintBoundary` picked the largest `RenderRepaintBoundary`
+    in the *entire* element tree with no route-awareness — since `Navigator`
+    keeps the previous route mounted underneath the current one, and both
+    routes typically produce a same-size, screen-sized boundary, the strict
+    `area > bestArea` comparison kept whichever one was visited first (the
+    previous route, in `Overlay` insertion order), silently capturing the
+    old screen instead. Same class of bug as PT-03/PT-15, just in the
+    screenshot path instead of `ProbeFinder`/`scroll`. Fixed by skipping
+    boundaries belonging to a non-current route, mirroring `ProbeFinder`'s
+    existing fix.
 - **`scroll` could lose the gesture arena to `Dismissible`-wrapped list rows
   and never actually scroll (PT-15).** `scroll` was a thin delegate to
   `swipe`'s pointer-gesture simulation, which has to *win* the gesture arena
