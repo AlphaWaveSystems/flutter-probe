@@ -35,6 +35,7 @@ agent:
   reconnect_delay: 2s
   reconnect_attempts: 4
   reconnect_backoff: 1s
+  launch_timeout: 120s
 
 device:
   emulator_boot_timeout: 120s
@@ -109,6 +110,7 @@ WebSocket connection settings:
 | `reconnect_delay` | duration | `2s` | Delay before reconnecting after app restart |
 | `reconnect_attempts` | int | `4` | Max auto-reconnect attempts after a connection drop mid-test |
 | `reconnect_backoff` | duration | `1s` | Base for exponential reconnect backoff: `delay = base << (attempt-1)` capped at 8s, ±20% jitter |
+| `launch_timeout` | duration | `120s` | Max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — distinct from `dial_timeout` since a real app's cold-launch path (e.g. Firebase App Check init) can cost far more than a warm reconnect. Raise this if `restart the app` times out on a slow-starting app. Also settable per-run with `--launch-timeout` |
 
 ### device
 

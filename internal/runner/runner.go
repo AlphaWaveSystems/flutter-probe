@@ -96,6 +96,7 @@ func (r *Runner) newExecutor() *Executor {
 		r.client = newClient
 	}, r.opts.Timeout, r.opts.Verbose)
 	exec.SetReconnectPolicy(r.cfg.Agent.ReconnectAttempts, r.cfg.Agent.ReconnectBackoff)
+	exec.SetLaunchTimeout(r.cfg.Agent.LaunchTimeout)
 	return exec
 }
 

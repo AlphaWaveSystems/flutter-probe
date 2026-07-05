@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`agent.launch_timeout` config option (and `--launch-timeout` flag)
+  (PT-10).** `restart the app`/`clear app data` used to be bounded by a
+  hardcoded, unconfigurable 90s step timeout — no amount of raising
+  `dial_timeout`/`token_read_timeout` could help an app whose actual
+  cold-launch path does non-trivial async work (e.g. Firebase App Check
+  re-initialization costing 90-100s) before becoming interactive. Defaults
+  to 120s; raise it for apps with an expensive startup path.
+
 ### Fixed
 - **`close keyboard` and `close the app` were both complete no-ops (PT-12).**
   Both parse to the same `ActionStep` (`close`/`close keyboard`/`close the
