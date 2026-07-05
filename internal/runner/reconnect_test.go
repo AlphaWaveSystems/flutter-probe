@@ -1,6 +1,8 @@
 package runner
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -67,5 +69,30 @@ func TestReconnectDelay_BudgetUnderCap(t *testing.T) {
 		if total < minBudget || total > maxBudget {
 			t.Errorf("4-attempt total %s outside [%s, %s]", total, minBudget, maxBudget)
 		}
+	}
+}
+
+// TestIsConnectionRefused covers PT-18: tryReconnect only relaunches the app
+// when a dial fails because nothing is listening at all (ECONNREFUSED) — a
+// transient drop on a still-alive process shows up as a different error
+// (timeout, reset, EOF) and must not trigger a relaunch.
+func TestIsConnectionRefused(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"connection refused", errors.New("dial tcp 127.0.0.1:48686: connect: connection refused"), true},
+		{"wrapped connection refused", fmt.Errorf("reconnect: dial: %w", errors.New("connect: connection refused")), true},
+		{"timeout", errors.New("dial tcp 127.0.0.1:48686: i/o timeout"), false},
+		{"connection reset", errors.New("read: connection reset by peer"), false},
+		{"EOF", errors.New("EOF"), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isConnectionRefused(tc.err); got != tc.want {
+				t.Errorf("isConnectionRefused(%q) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
