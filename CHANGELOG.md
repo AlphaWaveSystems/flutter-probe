@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`scroll`/`swipe` could report success while producing zero visible
+  movement (PT-03).** Root-caused two independent bugs by reproducing
+  against a real iOS simulator:
+  - The synthetic drag gesture sent a single `PointerMoveEvent` covering the
+    entire distance in one jump. Real touches (and Flutter's own gesture
+    arena / scroll physics) expect a sequence of incremental moves — a
+    single jump could fail to register as a scroll at all. Now split into
+    10 incremental steps, matching a real drag.
+  - The widget-tree finder had no concept of "which mounted route is
+    actually the current one." Flutter's `Navigator` keeps previous routes
+    mounted underneath the current one by default (no `Offstage` wrapper),
+    so a screen reached via a stacked push could have several live
+    `Scrollable`s (and other matching widgets) simultaneously — one per
+    mounted route — and every selector-based verb (not just scroll/swipe)
+    could silently resolve to a widget on a route the user can no longer
+    see. Fixed by checking `ModalRoute.of(element)?.isCurrent` in the
+    finder's core visibility check, so this also fixes false-positive
+    `see`/`wait until` matches against stale content underneath the current
+    screen — confirmed via a real-device repro where `don't see "<home page
+    text>"` incorrectly found 2 elements after navigating away from Home,
+    and now correctly finds none.
+
+  A third, narrower issue was found but is **not** fixed here: list rows
+  wrapped in a swipe-to-dismiss widget (`Dismissible`) can still win the
+  gesture arena over a vertical scroll started at that row's center,
+  causing `scroll` to fail specifically on lists with swipeable rows even
+  after the two fixes above. Tracked separately (see IMPROVEMENT_TASKS.md).
+
+  A `scroll until #id visible` verb (combining corrected scroll targeting
+  with polling) was in PT-03's original scope but is intentionally not part
+  of this change — it's a larger, separate feature addition; see the
+  CHANGELOG note under PT-02 for the same kind of scoping decision.
+
 ### Changed
 - **ProbeScript now errors loudly instead of silently no-oping on several
   classes of malformed script (PT-02):**

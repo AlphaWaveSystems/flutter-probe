@@ -620,8 +620,21 @@ class ProbeExecutor {
         delta = Offset(size.width * 0.5, 0);
     }
 
+    // PT-03: a single giant PointerMoveEvent covering the whole delta in one
+    // jump can fail to register as a scroll at all — reproduced against a
+    // real iOS simulator (Settings screen: 8 single-jump `scroll down` calls
+    // produced zero movement; the same gesture split into incremental steps,
+    // matching how a real touch/drag is delivered, scrolled correctly).
+    // Likely cause: gesture-arena resolution (and scroll physics, which
+    // apply delta per pointer-move event) expect a sequence of small moves
+    // building up displacement, not one large jump.
     final gesture = await _createGesture(center);
-    await gesture.moveBy(delta, timeStamp: const Duration(milliseconds: 300));
+    const steps = 10;
+    for (var i = 1; i <= steps; i++) {
+      await gesture.moveBy(delta / steps.toDouble(),
+          timeStamp: Duration(milliseconds: (300 * i / steps).round()));
+      await Future.delayed(const Duration(milliseconds: 8));
+    }
     await gesture.up();
   }
 

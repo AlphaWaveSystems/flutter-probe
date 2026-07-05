@@ -146,7 +146,21 @@ class ProbeFinder {
 
   /// Returns true if the element is currently visible on screen.
   /// Checks that the render object is painted and not hidden behind
-  /// Offstage or Visibility widgets.
+  /// Offstage or Visibility widgets, and — PT-03 — belongs to the current
+  /// (topmost) route of its nearest Navigator.
+  ///
+  /// Flutter's Navigator keeps previous routes mounted underneath the
+  /// current one by default (no Offstage wrapper), so a screen reached via
+  /// a stacked push can have several live Scrollables/widgets matching the
+  /// same selector simultaneously — one per mounted route. Without this
+  /// check, every selector-based verb (tap, see, wait, scroll, swipe, ...)
+  /// could resolve to a widget on a route the user can no longer see,
+  /// producing an action that "succeeds" with no visible effect (see the
+  /// scroll/swipe symptom in IMPROVEMENT_TASKS.md PT-03) or a false-positive
+  /// `see`/`wait until` match against stale content underneath the current
+  /// screen. `ModalRoute.of(element)` returns null for content with no
+  /// Navigator ancestor at all (e.g. the root scaffold) — that case is
+  /// treated as visible, since there's no ambiguity to resolve.
   bool _isVisible(Element element) {
     final ro = element.renderObject;
     if (ro == null || !ro.attached) return false;
@@ -156,6 +170,7 @@ class ProbeFinder {
       // Check if the widget is actually painted (not behind Offstage etc.)
       if (!ro.hasSize) return false;
     }
+    if (ModalRoute.of(element)?.isCurrent == false) return false;
     // Walk up the tree to check for Offstage / Visibility ancestors
     Element? current = element;
     while (current != null) {
