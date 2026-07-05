@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **The daily Dependabot auto-merge workflow never actually merged anything,
+  for months.** Its skip condition treated `mergeStateStatus == "UNKNOWN"`
+  as "already in the merge queue" — but `UNKNOWN` just means GitHub hasn't
+  finished computing mergeability yet (the common case on a fresh poll), not
+  "already queued." Every eligible PR was silently skipped every single day
+  since at least mid-May, despite the workflow itself reporting "success."
+  Separately, even a PR that had passed that check would have hit a second,
+  compounding bug: the merge command itself (`gh pr merge --squash`, no
+  `--auto`) doesn't work for a merge-queue-gated branch — it just prints a
+  warning and does nothing, the same issue found and fixed earlier this
+  release for this repo's own CI (see PT-19-adjacent commit history). Fixed
+  both: only skip on `DIRTY`/`BLOCKED` (states that definitively block a
+  merge), and let a merge attempt happen and fail on its own terms
+  otherwise; added `--auto` to the merge command. Verified by manually
+  invoking the corrected logic against the real backlog — 9 previously
+  stuck PRs (some open since May) are now genuinely in the merge queue.
 - **`wait for network idle`/`wait for the page to load`/`wait for page to
   load` always misparsed, silently splitting into a no-op plus a stray,
   broken statement (PT-20).** `"for"` (and `"the"`) are both global filler
