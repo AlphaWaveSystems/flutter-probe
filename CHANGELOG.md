@@ -6,17 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Fixed
-- **`probe test` could fail with zero diagnostic output (PT-14).** `testCmd`
-  sets `SilenceErrors: true` so a failed *test* (already reported in detail
-  by the runner) doesn't print a redundant generic line — but this silenced
-  every other kind of error too (token read, connect, handshake failures),
-  leaving nothing printed beyond whatever progress lines ran before the
-  failure. Now only `errTestFailed` (and errors wrapping it) stay silent;
-  every other error is printed. Also fixed a related cosmetic bug this made
-  visible: the "is the app running with probe_agent?" suggestion was
-  appearing twice in token-read failure messages (once from the low-level
-  error, once from the wrapping call site).
+### Changed
+- **ProbeScript now errors loudly instead of silently no-oping on several
+  classes of malformed script (PT-02):**
+  - An **unknown recipe call** (typo, or the recipe was never defined/isn't
+    loaded from `recipes_folder`/`use`) is now a runtime error, not a silent
+    skip. This was the single highest-leverage fix in `IMPROVEMENT_TASKS.md`
+    — a silently-skipped call could mask a completely broken flow (e.g. a
+    sign-in recipe that never actually signs anyone in) indefinitely, with
+    every downstream test still reporting green.
+  - An **unquoted `<placeholder>`** (e.g. `type <email>` instead of
+    `type "<email>"`) is now a parse error. Angle brackets have no meaning
+    outside a quoted string in ProbeScript's grammar; unquoted, both brackets
+    were silently dropped by the lexer, leaving a bare identifier that gets
+    typed/matched as literal text with no indication anything was wrong.
+  - **`else` is now accepted as an alias for `otherwise`.** Previously `else`
+    lexed as a plain identifier, was silently treated as an unknown recipe
+    call (a sibling step of the `if`, not nested inside it), and its body ran
+    **unconditionally** on every run regardless of the `if` condition —
+    exactly the opposite of what the test author intended, with no error
+    anywhere.
+  - `resolve()`'s placeholder-substitution loop is now bounded. A variable
+    bound to a value containing its own placeholder marker (e.g. passing the
+    unquoted literal `<email>` as a recipe argument) previously looped
+    forever substituting the same text for itself, hanging the CLI with no
+    error; it now terminates, leaving the placeholder unresolved. (Full
+    positional/named argument forwarding into nested recipe calls — a
+    larger, separate redesign of how recipe calls are matched against
+    definitions — is intentionally not part of this change; see PT-02's
+    "Update" note in `IMPROVEMENT_TASKS.md`.)
 
 ### Added
 - **Verbose connect diagnostics (PT-01).** `-v`/`--verbose` on `probe test` now
@@ -39,6 +57,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   until now.
 
 ### Fixed
+- **`probe test` could fail with zero diagnostic output (PT-14).** `testCmd`
+  sets `SilenceErrors: true` so a failed *test* (already reported in detail
+  by the runner) doesn't print a redundant generic line — but this silenced
+  every other kind of error too (token read, connect, handshake failures),
+  leaving nothing printed beyond whatever progress lines ran before the
+  failure. Now only `errTestFailed` (and errors wrapping it) stay silent;
+  every other error is printed. Also fixed a related cosmetic bug this made
+  visible: the "is the app running with probe_agent?" suggestion was
+  appearing twice in token-read failure messages (once from the low-level
+  error, once from the wrapping call site).
 - **Android token read could pick up a stale token from a dead process,
   causing an immediate non-retryable connection failure (PT-01).** `logcat -d`
   dumps the entire ring buffer since it was last cleared/the device booted;

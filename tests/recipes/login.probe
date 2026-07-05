@@ -2,14 +2,14 @@ use "tests/recipes/common.probe"
 
 recipe "activate code" (d1, d2, d3, d4, d5)
   navigate to keypad
-  tap 2nd <d1>
+  tap 2nd "<d1>"
   wait 1 seconds
-  tap 2nd <d2>
+  tap 2nd "<d2>"
   wait 1 seconds
-  tap 2nd <d3>
+  tap 2nd "<d3>"
   wait 1 seconds
-  tap 2nd <d4>
+  tap 2nd "<d4>"
   wait 1 seconds
-  tap 2nd <d5>
+  tap 2nd "<d5>"
   wait 1 seconds
   tap "Activar"

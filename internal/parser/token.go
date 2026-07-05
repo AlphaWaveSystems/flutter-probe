@@ -207,6 +207,12 @@ var keywords = map[string]TokenType{
 	"press":        TOKEN_PRESS,
 	"if":           TOKEN_IF,
 	"otherwise":    TOKEN_OTHERWISE,
+	// "else" is accepted as an alias for "otherwise" (PT-02(d)): before this,
+	// an "else" line lexed as a plain identifier, was silently treated as an
+	// unknown recipe call, and its body ran unconditionally as a sibling step
+	// of the "if" instead of being gated by it — the exact opposite of what
+	// the test author intended, with no error anywhere.
+	"else": TOKEN_OTHERWISE,
 	"repeat":       TOKEN_REPEAT,
 	"times":        TOKEN_TIMES,
 	"for":          TOKEN_FOR_KW,
