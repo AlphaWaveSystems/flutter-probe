@@ -1,15 +1,44 @@
 # Changelog
 
-## 0.9.10 - 2026-07-05
+## 0.10.0 - 2026-07-05
+
+A hardening release — every fix below was found and verified against a real
+device, working through a backlog of real E2E test issues surfaced by driver
+projects. Full detail on each is in the root CHANGELOG's `[Unreleased]`
+section (also being cut as part of this release); this is the summary
+relevant to apps embedding this package directly.
 
 - `probe.ping` now returns `agent_version` (this package's version) alongside
   `ok`, and accepts an optional `client_version` field from the CLI. Part of
-  the CLI↔agent version-compatibility handshake (see root CHANGELOG PT-07).
-  Both fields are additive and ignored by older CLIs/agents that don't know
-  about them.
+  the CLI↔agent version-compatibility handshake. Both fields are additive and
+  ignored by older CLIs/agents that don't know about them.
 - Fixed: the version reported in mDNS advertisements and `GET /probe/status`
   had drifted to `0.7.0` while this file's version moved on — corrected to
   match `pubspec.yaml` and moved into its own `agent_version.dart` file.
+- Fixed: `scroll`/`swipe` could report success while producing zero visible
+  movement (a single-jump synthetic drag, and stale content from a route
+  mounted underneath the current one both resolving as visible).
+- Fixed: `tap #id` could leave a text field genuinely unfocused, and the
+  `focused` state check (`see`/`don't see #id is focused`) had a false
+  positive matching ancestors of the selected element.
+- Fixed: `tap #id`'s fast direct-invoke path now recognizes `InkResponse`
+  (not just `InkWell`), covering more Material buttons before falling back
+  to a real hit-tested pointer tap.
+- Fixed: `wait until #id appears`/`disappears` always searched for the
+  literal text `"#my_button"` instead of resolving the id — timed out on
+  every non-text widget (icon buttons, etc.) regardless of visibility.
+- Fixed: `close keyboard` and `close the app` were both complete no-ops.
+  `close keyboard` now calls `FocusManager.instance.primaryFocus?.unfocus()`
+  directly; `close the app` calls `SystemNavigator.pop()`.
+- Fixed: `don't see #id is <state>` (negated state checks — `focused`,
+  `enabled`, `disabled`, `contains`) silently ignored the checked state,
+  degrading to a bare existence check.
+- Fixed: `scroll` could lose the gesture arena to `Dismissible`-wrapped list
+  rows and never actually scroll — now drives the nearest `Scrollable`'s own
+  `ScrollPosition` directly instead of simulating a pointer gesture.
+- Fixed: `take screenshot` could capture stale content from a previous route
+  instead of the current screen (missing `waitForSettled()` call, and
+  `_captureViaRepaintBoundary` had no route-awareness).
 
 ## 0.9.9 - 2026-05-13
 

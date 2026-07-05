@@ -4,7 +4,70 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.10.0] - 2026-07-05
+
+A hardening release working through a backlog of real E2E test issues
+surfaced by driver projects (`IMPROVEMENT_TASKS.md`, PT-01 through PT-19).
+Every fix was reproduced and verified against a real device before shipping,
+and several turned out to have a different (or larger) root cause than
+originally reported — noted inline below.
+
+### Added
+- **`agent.launch_timeout` config option (and `--launch-timeout` flag)
+  (PT-10).** `restart the app`/`clear app data` used to be bounded by a
+  hardcoded, unconfigurable 90s step timeout — no amount of raising
+  `dial_timeout`/`token_read_timeout` could help an app whose actual
+  cold-launch path does non-trivial async work (e.g. Firebase App Check
+  re-initialization costing 90-100s) before becoming interactive. Defaults
+  to 120s; raise it for apps with an expensive startup path.
+- **Verbose connect diagnostics (PT-01).** `-v`/`--verbose` on `probe test` now
+  traces every step of the connect handshake — ADB setup, port forward
+  setup/teardown, each Android token-read source attempted (run-as,
+  `/data/local/tmp`, logcat) with hit/miss detail, WebSocket dial attempts
+  (including transient retries), and handshake accept/reject. Connect
+  failures were previously a total black box with zero diagnostic output;
+  see PT-01 in `IMPROVEMENT_TASKS.md`.
+- **CLI↔agent version handshake (PT-07).** `probe.ping` now carries
+  `client_version` (CLI → agent) and `agent_version` (agent → CLI) alongside
+  the existing `{"ok":true}` response. Every connect path (WebSocket dial,
+  HTTP dial, relay, and reconnect-after-restart) now logs a warning when the
+  CLI and agent versions differ, and hard-fails with a clear error when they
+  have different major versions. Older CLIs/agents that don't send or
+  recognize these fields degrade gracefully — an empty/missing version is
+  always treated as "unknown," never as a mismatch. Addresses PT-07 in
+  `IMPROVEMENT_TASKS.md` — CLI/agent version drift was a standing suspect in
+  unexplained connection failures with zero signal from the tool itself
+  until now.
+
+### Changed
+- **ProbeScript now errors loudly instead of silently no-oping on several
+  classes of malformed script (PT-02):**
+  - An **unknown recipe call** (typo, or the recipe was never defined/isn't
+    loaded from `recipes_folder`/`use`) is now a runtime error, not a silent
+    skip. This was the single highest-leverage fix in `IMPROVEMENT_TASKS.md`
+    — a silently-skipped call could mask a completely broken flow (e.g. a
+    sign-in recipe that never actually signs anyone in) indefinitely, with
+    every downstream test still reporting green.
+  - An **unquoted `<placeholder>`** (e.g. `type <email>` instead of
+    `type "<email>"`) is now a parse error. Angle brackets have no meaning
+    outside a quoted string in ProbeScript's grammar; unquoted, both brackets
+    were silently dropped by the lexer, leaving a bare identifier that gets
+    typed/matched as literal text with no indication anything was wrong.
+  - **`else` is now accepted as an alias for `otherwise`.** Previously `else`
+    lexed as a plain identifier, was silently treated as an unknown recipe
+    call (a sibling step of the `if`, not nested inside it), and its body ran
+    **unconditionally** on every run regardless of the `if` condition —
+    exactly the opposite of what the test author intended, with no error
+    anywhere.
+  - `resolve()`'s placeholder-substitution loop is now bounded. A variable
+    bound to a value containing its own placeholder marker (e.g. passing the
+    unquoted literal `<email>` as a recipe argument) previously looped
+    forever substituting the same text for itself, hanging the CLI with no
+    error; it now terminates, leaving the placeholder unresolved. (Full
+    positional/named argument forwarding into nested recipe calls — a
+    larger, separate redesign of how recipe calls are matched against
+    definitions — is intentionally not part of this change; see PT-02's
+    "Update" note in `IMPROVEMENT_TASKS.md`.)
 
 ### Fixed
 - **`drag <selector> to <selector>` — the documented syntax — always failed
@@ -14,21 +77,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on `to` where it expected the second selector to start, and the rest of
   the line got misparsed as an unrelated recipe call. Found during a final
   regression pass across the full e2e suite before this release — this bug
-  has always existed; PT-02's error-loudly fix (this same release) is what
+  has always existed; PT-02's error-loudly fix (above, same release) is what
   first surfaced it, since it previously failed silently instead.
-
-### Documentation
-- **Documented the native (non-Flutter) UI boundary explicitly (PT-13)**:
-  image/file pickers, share sheets, and the handful of permission prompts
-  that can't be bypassed by an OS-level grant are invisible to every
-  selector-based verb, by design — probe drives the Flutter widget tree via
-  an in-process Dart agent, and native OS UI never enters it. Noted that
-  `take screenshot`/video recording already capture this content (the full
-  physical screen, not just the Flutter view) even though no verb can
-  select or tap inside it yet, and documented the current workarounds
-  (design around it, or a test-only in-app bypass).
-
-### Fixed
 - **`kill the app` followed by any step other than `open the app`/
   `restart the app` (a `wait`, `tap`, `see`, etc.) still hung and then
   permanently failed (PT-18, follow-on from PT-09's `open the app` fix).**
@@ -40,6 +90,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   which a transient network drop would produce) and relaunches the app
   before retrying, the same way the `open the app` fix does, but from the
   generic reconnect path so it now covers every verb, not just `open`.
+- **`open the app` after `kill the app` never actually relaunched the app
+  (PT-09).** It always sent an RPC over the (now-closed) connection, which
+  failed; the generic step-level auto-reconnect that kicked in afterward
+  only re-dials assuming the app process is already running — it never
+  relaunches one that was genuinely force-stopped. In practice this meant
+  the documented `kill the app` → `open the app` pattern hung through the
+  full reconnect-retry window and then failed with a connection-refused
+  error. `open the app` now detects a dead connection and relaunches the
+  app the same way `restart the app` does, before reconnecting. Found
+  while documenting cross-`test`-block state behavior (see Documentation
+  below) — not what that investigation originally set out to find, but
+  blocking anyone who'd try to use `kill the app`/`open the app` for
+  exactly the per-test isolation those docs describe as the supported way
+  to opt out of the default shared-state behavior.
 - **`take screenshot` could capture stale content from the previous route
   instead of the current screen (PT-16).** Found while investigating a
   scroll bug (PT-03): a screenshot taken right after navigating sometimes
@@ -74,45 +138,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the largest viewport (a `TextField`'s own internal cursor-scrolling
   `Scrollable` could otherwise be found first in tree order and silently
   "scroll" nothing visible).
-- **`open the app` after `kill the app` never actually relaunched the app
-  (PT-09).** It always sent an RPC over the (now-closed) connection, which
-  failed; the generic step-level auto-reconnect that kicked in afterward
-  only re-dials assuming the app process is already running — it never
-  relaunches one that was genuinely force-stopped. In practice this meant
-  the documented `kill the app` → `open the app` pattern hung through the
-  full reconnect-retry window and then failed with a connection-refused
-  error. `open the app` now detects a dead connection and relaunches the
-  app the same way `restart the app` does, before reconnecting. Found
-  while documenting cross-`test`-block state behavior (see below) — not
-  what that investigation originally set out to find, but blocking anyone
-  who'd try to use `kill the app`/`open the app` for exactly the per-test
-  isolation the docs below describe as the supported way to opt out of the
-  default shared-state behavior.
+- **`scroll`/`swipe` could report success while producing zero visible
+  movement (PT-03).** Root-caused two independent bugs by reproducing
+  against a real iOS simulator:
+  - The synthetic drag gesture sent a single `PointerMoveEvent` covering the
+    entire distance in one jump. Real touches (and Flutter's own gesture
+    arena / scroll physics) expect a sequence of incremental moves — a
+    single jump could fail to register as a scroll at all. Now split into
+    10 incremental steps, matching a real drag.
+  - The widget-tree finder had no concept of "which mounted route is
+    actually the current one." Flutter's `Navigator` keeps previous routes
+    mounted underneath the current one by default (no `Offstage` wrapper),
+    so a screen reached via a stacked push could have several live
+    `Scrollable`s (and other matching widgets) simultaneously — one per
+    mounted route — and every selector-based verb (not just scroll/swipe)
+    could silently resolve to a widget on a route the user can no longer
+    see. Fixed by checking `ModalRoute.of(element)?.isCurrent` in the
+    finder's core visibility check, so this also fixes false-positive
+    `see`/`wait until` matches against stale content underneath the current
+    screen — confirmed via a real-device repro where `don't see "<home page
+    text>"` incorrectly found 2 elements after navigating away from Home,
+    and now correctly finds none.
 
-### Documentation
-- **Clarified that all `test` blocks (and hooks) in a `.probe` file share
-  one continuous app instance and connection by default — nothing resets
-  app/session state between them (PT-09).** Investigated the reported
-  symptom (a later test failing as if session state had been silently
-  reset) and it doesn't reproduce: there is no code path that resets
-  anything between blocks. Documented this explicitly in `hooks.md`, along
-  with how to opt into per-test isolation (`restart the app`/
-  `clear app data`/`kill the app` in `before each`) for projects that want
-  it. Also corrected an inaccurate claim in `app-lifecycle.md` that
-  `open the app` always launches via ADB/simctl "not through the Dart
-  agent" — true only when there's no live connection yet; otherwise it's a
-  no-op RPC to the already-running agent.
-
-### Added
-- **`agent.launch_timeout` config option (and `--launch-timeout` flag)
-  (PT-10).** `restart the app`/`clear app data` used to be bounded by a
-  hardcoded, unconfigurable 90s step timeout — no amount of raising
-  `dial_timeout`/`token_read_timeout` could help an app whose actual
-  cold-launch path does non-trivial async work (e.g. Firebase App Check
-  re-initialization costing 90-100s) before becoming interactive. Defaults
-  to 120s; raise it for apps with an expensive startup path.
-
-### Fixed
+  A `scroll until #id visible` verb (combining corrected scroll targeting
+  with polling) was in PT-03's original scope but is intentionally not part
+  of this change — it's a larger, separate feature addition.
 - **`close keyboard` and `close the app` were both complete no-ops (PT-12).**
   Both parse to the same `ActionStep` (`close`/`close keyboard`/`close the
   app` only differ in an argument name) and dispatch to
@@ -137,29 +187,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ancestor walk, keeping only the direct match and the subtree walk (which
   already correctly handles a selector matching a composite widget like
   `TextField`, not the `EditableText` it builds internally).
-- **Added regression test coverage confirming text selectors already resolve
-  `ListTile` title/subtitle independently (PT-11).** The reported symptom —
-  a title text selector failing on iOS 26.3+ because "the OS accessibility
-  layer merges the title and subtitle into one combined node" — describes
-  real platform (VoiceOver/XCUITest) behavior, but doesn't apply to probe:
-  `_findByText` walks the live Flutter element tree directly and never
-  touches the platform accessibility tree. `ListTile` builds title/subtitle
-  as fully independent `Text` widgets with no merging anywhere in the
-  element tree, so each already resolves correctly regardless of platform.
-  No code fix was needed; added a test locking in this behavior since it
-  wasn't previously covered.
-- **Documented an API stability/deprecation policy for `flutter_probe_agent`'s
-  public Dart API (PT-08)**, in `CONTRIBUTING.md`. Prompted by a past
-  breaking change (a minor bump silently removed `ProbePlugin`/
-  `ProbePluginRegistry`, which at least one downstream project had a
-  load-bearing test feature built on). Future removals/breaking changes now
-  require a `@Deprecated` window of at least one minor version plus an
-  explicit CHANGELOG migration note before actual removal. Whether
-  `ProbePlugin`/`ProbePluginRegistry` should be reintroduced under this
-  policy, or that removal should stand as a permanent scope decision, is
-  left as an open product question rather than resolved here.
-
-### Fixed
 - **`wait until #id appears`/`disappears` always searched for the literal
   text `"#my_button"` instead of resolving the id (PT-06).** `WaitStep`
   only carries a raw target string, not a selector kind (unlike
@@ -200,104 +227,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   requests focus on the field's real `FocusNode`, found by resolving down
   to the underlying `EditableText` the same way `type` already resolves its
   `TextEditingController`.
-- **`see #id is focused` could never actually detect focus on a
-  `TextField`/`TextFormField`.** The check only walked *ancestors* of the
-  matched element looking for the focused widget — but a selector almost
-  always matches the `TextField` itself, and the actually-focused widget
-  (`EditableText`) is one of its *descendants*, not an ancestor. Fixed to
-  also walk down the subtree. Found while verifying the fix above — this
-  bug was blocking real-device verification of it.
-- **`don't see #id is focused` (and other negated state checks — `enabled`,
-  `disabled`, `contains`) silently ignored the state entirely**, reporting
-  a failure as soon as the element existed at all, regardless of whether it
-  was actually in the checked state. `don't see X is focused` now correctly
-  passes when X exists but isn't focused, and only fails when X genuinely
-  is focused. Found verifying the fix above (a negative-control test
-  against a real device failed until this was also fixed).
-- **`scroll`/`swipe` could report success while producing zero visible
-  movement (PT-03).** Root-caused two independent bugs by reproducing
-  against a real iOS simulator:
-  - The synthetic drag gesture sent a single `PointerMoveEvent` covering the
-    entire distance in one jump. Real touches (and Flutter's own gesture
-    arena / scroll physics) expect a sequence of incremental moves — a
-    single jump could fail to register as a scroll at all. Now split into
-    10 incremental steps, matching a real drag.
-  - The widget-tree finder had no concept of "which mounted route is
-    actually the current one." Flutter's `Navigator` keeps previous routes
-    mounted underneath the current one by default (no `Offstage` wrapper),
-    so a screen reached via a stacked push could have several live
-    `Scrollable`s (and other matching widgets) simultaneously — one per
-    mounted route — and every selector-based verb (not just scroll/swipe)
-    could silently resolve to a widget on a route the user can no longer
-    see. Fixed by checking `ModalRoute.of(element)?.isCurrent` in the
-    finder's core visibility check, so this also fixes false-positive
-    `see`/`wait until` matches against stale content underneath the current
-    screen — confirmed via a real-device repro where `don't see "<home page
-    text>"` incorrectly found 2 elements after navigating away from Home,
-    and now correctly finds none.
-
-  A third, narrower issue was found but is **not** fixed here: list rows
-  wrapped in a swipe-to-dismiss widget (`Dismissible`) can still win the
-  gesture arena over a vertical scroll started at that row's center,
-  causing `scroll` to fail specifically on lists with swipeable rows even
-  after the two fixes above. Tracked separately (see IMPROVEMENT_TASKS.md).
-
-  A `scroll until #id visible` verb (combining corrected scroll targeting
-  with polling) was in PT-03's original scope but is intentionally not part
-  of this change — it's a larger, separate feature addition; see the
-  CHANGELOG note under PT-02 for the same kind of scoping decision.
-
-### Changed
-- **ProbeScript now errors loudly instead of silently no-oping on several
-  classes of malformed script (PT-02):**
-  - An **unknown recipe call** (typo, or the recipe was never defined/isn't
-    loaded from `recipes_folder`/`use`) is now a runtime error, not a silent
-    skip. This was the single highest-leverage fix in `IMPROVEMENT_TASKS.md`
-    — a silently-skipped call could mask a completely broken flow (e.g. a
-    sign-in recipe that never actually signs anyone in) indefinitely, with
-    every downstream test still reporting green.
-  - An **unquoted `<placeholder>`** (e.g. `type <email>` instead of
-    `type "<email>"`) is now a parse error. Angle brackets have no meaning
-    outside a quoted string in ProbeScript's grammar; unquoted, both brackets
-    were silently dropped by the lexer, leaving a bare identifier that gets
-    typed/matched as literal text with no indication anything was wrong.
-  - **`else` is now accepted as an alias for `otherwise`.** Previously `else`
-    lexed as a plain identifier, was silently treated as an unknown recipe
-    call (a sibling step of the `if`, not nested inside it), and its body ran
-    **unconditionally** on every run regardless of the `if` condition —
-    exactly the opposite of what the test author intended, with no error
-    anywhere.
-  - `resolve()`'s placeholder-substitution loop is now bounded. A variable
-    bound to a value containing its own placeholder marker (e.g. passing the
-    unquoted literal `<email>` as a recipe argument) previously looped
-    forever substituting the same text for itself, hanging the CLI with no
-    error; it now terminates, leaving the placeholder unresolved. (Full
-    positional/named argument forwarding into nested recipe calls — a
-    larger, separate redesign of how recipe calls are matched against
-    definitions — is intentionally not part of this change; see PT-02's
-    "Update" note in `IMPROVEMENT_TASKS.md`.)
-
-### Added
-- **Verbose connect diagnostics (PT-01).** `-v`/`--verbose` on `probe test` now
-  traces every step of the connect handshake — ADB setup, port forward
-  setup/teardown, each Android token-read source attempted (run-as,
-  `/data/local/tmp`, logcat) with hit/miss detail, WebSocket dial attempts
-  (including transient retries), and handshake accept/reject. Connect
-  failures were previously a total black box with zero diagnostic output;
-  see PT-01 in `IMPROVEMENT_TASKS.md`.
-- **CLI↔agent version handshake (PT-07).** `probe.ping` now carries
-  `client_version` (CLI → agent) and `agent_version` (agent → CLI) alongside
-  the existing `{"ok":true}` response. Every connect path (WebSocket dial,
-  HTTP dial, relay, and reconnect-after-restart) now logs a warning when the
-  CLI and agent versions differ, and hard-fails with a clear error when they
-  have different major versions. Older CLIs/agents that don't send or
-  recognize these fields degrade gracefully — an empty/missing version is
-  always treated as "unknown," never as a mismatch. Addresses PT-07 in
-  `IMPROVEMENT_TASKS.md` — CLI/agent version drift was a standing suspect in
-  unexplained connection failures with zero signal from the tool itself
-  until now.
-
-### Fixed
+  - `see #id is focused` could never actually detect focus on a
+    `TextField`/`TextFormField` for the same underlying reason: the check
+    only walked *ancestors* looking for the focused widget, but the
+    actually-focused widget (`EditableText`) is a *descendant*. Fixed to
+    also walk down the subtree.
+  - `don't see #id is focused` (and other negated state checks — `enabled`,
+    `disabled`, `contains`) silently ignored the state entirely, reporting a
+    failure as soon as the element existed at all. Now correctly passes when
+    the element exists but isn't in that state.
+- **Added regression test coverage confirming text selectors already resolve
+  `ListTile` title/subtitle independently (PT-11).** The reported symptom —
+  a title text selector failing on iOS 26.3+ because "the OS accessibility
+  layer merges the title and subtitle into one combined node" — describes
+  real platform (VoiceOver/XCUITest) behavior, but doesn't apply to probe:
+  `_findByText` walks the live Flutter element tree directly and never
+  touches the platform accessibility tree. `ListTile` builds title/subtitle
+  as fully independent `Text` widgets with no merging anywhere in the
+  element tree, so each already resolves correctly regardless of platform.
+  No code fix was needed; added a test locking in this behavior since it
+  wasn't previously covered.
 - **`probe test` could fail with zero diagnostic output (PT-14).** `testCmd`
   sets `SilenceErrors: true` so a failed *test* (already reported in detail
   by the runner) doesn't print a redundant generic line — but this silenced
@@ -335,6 +284,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reporting a stale version. Fixed to match `pubspec.yaml`, and moved into
   its own `agent_version.dart` file with a comment documenting that it must
   be bumped by hand alongside `pubspec.yaml` going forward.
+
+### Documentation
+- **Clarified that all `test` blocks (and hooks) in a `.probe` file share
+  one continuous app instance and connection by default — nothing resets
+  app/session state between them (PT-09).** Investigated the reported
+  symptom (a later test failing as if session state had been silently
+  reset) and it doesn't reproduce: there is no code path that resets
+  anything between blocks. Documented this explicitly in `hooks.md`, along
+  with how to opt into per-test isolation (`restart the app`/
+  `clear app data`/`kill the app` in `before each`) for projects that want
+  it. Also corrected an inaccurate claim in `app-lifecycle.md` that
+  `open the app` always launches via ADB/simctl "not through the Dart
+  agent" — true only when there's no live connection yet; otherwise it's a
+  no-op RPC to the already-running agent.
+- **Documented an API stability/deprecation policy for `flutter_probe_agent`'s
+  public Dart API (PT-08)**, in `CONTRIBUTING.md`. Prompted by a past
+  breaking change (a minor bump silently removed `ProbePlugin`/
+  `ProbePluginRegistry`, which at least one downstream project had a
+  load-bearing test feature built on). Future removals/breaking changes now
+  require a `@Deprecated` window of at least one minor version plus an
+  explicit CHANGELOG migration note before actual removal. Whether
+  `ProbePlugin`/`ProbePluginRegistry` should be reintroduced under this
+  policy, or that removal should stand as a permanent scope decision, is
+  left as an open product question rather than resolved here.
+- **Documented the native (non-Flutter) UI boundary explicitly (PT-13)**:
+  image/file pickers, share sheets, and the handful of permission prompts
+  that can't be bypassed by an OS-level grant are invisible to every
+  selector-based verb, by design — probe drives the Flutter widget tree via
+  an in-process Dart agent, and native OS UI never enters it. Noted that
+  `take screenshot`/video recording already capture this content (the full
+  physical screen, not just the Flutter view) even though no verb can
+  select or tap inside it yet, and documented the current workarounds
+  (design around it, or a test-only in-app bypass). A design proposal for a
+  full native-UI bridging mode was written up separately, not implemented
+  in this release.
 
 ## [0.9.9] - 2026-05-13
 
