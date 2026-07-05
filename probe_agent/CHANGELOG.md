@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.1 - 2026-07-05
+
+No changes to this package's own code — bumped to stay in lockstep with the
+CLI's version (used for the `probe.ping` version-mismatch check). This patch
+release's fixes (ProbeScript's `wait for ...` parsing, plus two CI-only
+automation fixes) are entirely on the Go CLI/tooling side. Full detail in the
+root CHANGELOG's `[0.10.1]` section.
+
 ## 0.10.0 - 2026-07-05
 
 A hardening release — every fix below was found and verified against a real

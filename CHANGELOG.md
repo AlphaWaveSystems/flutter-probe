@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-07-05
+
+A quick patch release for regressions surfaced during v0.10.0's own
+verification pass, plus an unrelated CI-automation fix found along the way.
+
 ### Fixed
 - **The daily Dependabot auto-merge workflow never actually merged anything,
   for months.** Its skip condition treated `mergeStateStatus == "UNKNOWN"`
