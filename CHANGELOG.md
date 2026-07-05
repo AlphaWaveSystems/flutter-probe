@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation
+- **Documented the native (non-Flutter) UI boundary explicitly (PT-13)**:
+  image/file pickers, share sheets, and the handful of permission prompts
+  that can't be bypassed by an OS-level grant are invisible to every
+  selector-based verb, by design — probe drives the Flutter widget tree via
+  an in-process Dart agent, and native OS UI never enters it. Noted that
+  `take screenshot`/video recording already capture this content (the full
+  physical screen, not just the Flutter view) even though no verb can
+  select or tap inside it yet, and documented the current workarounds
+  (design around it, or a test-only in-app bypass).
+
 ### Fixed
 - **`kill the app` followed by any step other than `open the app`/
   `restart the app` (a `wait`, `tap`, `see`, etc.) still hung and then
