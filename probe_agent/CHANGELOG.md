@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.10 - 2026-07-05
+
+- `probe.ping` now returns `agent_version` (this package's version) alongside
+  `ok`, and accepts an optional `client_version` field from the CLI. Part of
+  the CLI↔agent version-compatibility handshake (see root CHANGELOG PT-07).
+  Both fields are additive and ignored by older CLIs/agents that don't know
+  about them.
+- Fixed: the version reported in mDNS advertisements and `GET /probe/status`
+  had drifted to `0.7.0` while this file's version moved on — corrected to
+  match `pubspec.yaml` and moved into its own `agent_version.dart` file.
+
 ## 0.9.9 - 2026-05-13
 
 - **`awaitSignal(String name)`** — new public function. Blocks until the CLI

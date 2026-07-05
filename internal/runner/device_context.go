@@ -36,6 +36,7 @@ type DeviceContext struct {
 	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
 	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
 	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
+	CLIVersion              string          // running probe binary's version, sent during the reconnect handshake
 }
 
 // agentHost returns the configured agent host or the default.
@@ -407,9 +408,13 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		return nil, fmt.Errorf("reconnect: dial: %w", err)
 	}
 
-	if err := client.Ping(ctx); err != nil {
+	warning, err := probelink.CheckHandshake(ctx, client, dc.CLIVersion)
+	if err != nil {
 		client.Close()
-		return nil, fmt.Errorf("reconnect: ping: %w", err)
+		return nil, fmt.Errorf("reconnect: handshake: %w", err)
+	}
+	if warning != "" {
+		fmt.Printf("  \033[33m⚠\033[0m  %s\n", warning)
 	}
 
 	return client, nil

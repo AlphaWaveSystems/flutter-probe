@@ -39,6 +39,12 @@ type Config struct {
 	Recipes   string           `yaml:"recipes_folder"`
 	Reports   string           `yaml:"reports_folder"`
 	Env       map[string]string `yaml:"environment"`
+
+	// CLIVersion is the running probe binary's version (internal/cli.Version).
+	// Not a probe.yaml field — populated programmatically by the cli package
+	// after loading, so runner/probelink code can include it in the connect
+	// handshake without importing internal/cli (which would be a cycle).
+	CLIVersion string `yaml:"-"`
 }
 
 // CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.

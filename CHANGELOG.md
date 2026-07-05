@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **CLI↔agent version handshake (PT-07).** `probe.ping` now carries
+  `client_version` (CLI → agent) and `agent_version` (agent → CLI) alongside
+  the existing `{"ok":true}` response. Every connect path (WebSocket dial,
+  HTTP dial, relay, and reconnect-after-restart) now logs a warning when the
+  CLI and agent versions differ, and hard-fails with a clear error when they
+  have different major versions. Older CLIs/agents that don't send or
+  recognize these fields degrade gracefully — an empty/missing version is
+  always treated as "unknown," never as a mismatch. Addresses PT-07 in
+  `IMPROVEMENT_TASKS.md` — CLI/agent version drift was a standing suspect in
+  unexplained connection failures with zero signal from the tool itself
+  until now.
+
+### Fixed
+- **`flutter_probe_agent`'s reported version had drifted to 0.7.0** while
+  `pubspec.yaml` moved on to 0.9.9 across several releases — the agent's
+  mDNS advertisement and `GET /probe/status` endpoint were both silently
+  reporting a stale version. Fixed to match `pubspec.yaml`, and moved into
+  its own `agent_version.dart` file with a comment documenting that it must
+  be bumped by hand alongside `pubspec.yaml` going forward.
+
 ## [0.9.9] - 2026-05-13
 
 ### Added
