@@ -123,7 +123,7 @@ jobs:
           cd e2e-app/mobile
           cat > pubspec_overrides.yaml << 'EOF'
           dependency_overrides:
-            probe_agent:
+            flutter_probe_agent:
               path: ../../probe_agent
           EOF
 
@@ -237,7 +237,7 @@ jobs:
           cd e2e-app/mobile
           cat > pubspec_overrides.yaml << 'EOF'
           dependency_overrides:
-            probe_agent:
+            flutter_probe_agent:
               path: ../../probe_agent
           EOF
 
