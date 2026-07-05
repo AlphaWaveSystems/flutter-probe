@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **`.github/workflows/e2e.yml`'s CI E2E suite failed `flutter pub get` outright
+  on every run** (`"name" field doesn't match expected name "probe_agent"`).
+  The workflow's `dependency_overrides` block still referenced the package's
+  old pre-rename name (`probe_agent`) instead of `flutter_probe_agent` — a
+  stale reference to a rename that happened well before this release. Found
+  when the `v0.10.0` tag push triggered this workflow directly (it isn't
+  gated on regular PRs, only tag pushes, which is why it went unnoticed
+  through several prior releases). Unrelated to this release's own changes;
+  fixed by updating the override key to the current package name.
+
 ## [0.10.0] - 2026-07-05
 
 A hardening release working through a backlog of real E2E test issues
