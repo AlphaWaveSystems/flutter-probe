@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Testing
+- **Locked in sequential tap+type behavior when one field auto-focuses on
+  page load (PT-21, reopened and re-closed).** A report claimed sequential
+  multi-field text entry breaks specifically when a field requests focus
+  during `initState`/first frame (e.g. a "remember last email" convenience
+  feature) — text supposedly keeps landing in that auto-focused field
+  regardless of which field is tapped afterward. Re-investigated with the
+  exact discriminator described: a widget test with one field auto-focusing
+  via a post-frame `requestFocus()`, plus real-device verification against
+  the actual login screen with the same pattern temporarily added, in both
+  tap orders. Both pass cleanly — focus correctly shifts to whichever field
+  is tapped, and each field retains only its own typed value. Added a
+  regression test locking this in.
+
 ## [0.10.1] - 2026-07-05
 
 A quick patch release for regressions surfaced during v0.10.0's own
