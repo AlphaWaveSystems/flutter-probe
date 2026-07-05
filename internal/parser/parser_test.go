@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -465,6 +466,83 @@ func TestParser_Conditional(t *testing.T) {
 	}
 }
 
+// TestParser_ElseIsAcceptedAsOtherwiseAlias covers PT-02(d): "else" previously
+// lexed as a plain identifier, was silently treated as an unknown recipe
+// call (a sibling step of the "if", not nested inside it), and its body ran
+// unconditionally regardless of the "if" condition. "else" must now behave
+// exactly like "otherwise".
+func TestParser_ElseIsAcceptedAsOtherwiseAlias(t *testing.T) {
+	src := `test "t"
+  open the app
+  if "Allow Notifications" appears
+    tap "Not Now"
+  else
+    tap "Continue"
+  see "Home"
+`
+	prog := mustParse(t, src)
+	var cond *parser.ConditionalStep
+	for _, s := range prog.Tests[0].Body {
+		if c, ok := s.(parser.ConditionalStep); ok {
+			cond = &c
+		}
+	}
+	if cond == nil {
+		t.Fatal("no conditional step found")
+	}
+	if len(cond.Then) == 0 {
+		t.Error("then branch is empty")
+	}
+	if len(cond.Else) == 0 {
+		t.Fatal("else branch is empty — 'else' was not recognized as an alias for 'otherwise'")
+	}
+}
+
+// TestParser_UnquotedPlaceholderIsParseError covers PT-02(b): an unquoted
+// <email>-style placeholder previously had both angle brackets silently
+// dropped by the lexer, leaving a bare identifier that gets typed/matched as
+// literal text with zero indication anything went wrong.
+func TestParser_UnquotedPlaceholderIsParseError(t *testing.T) {
+	src := `test "t"
+  open the app
+  type <email> into the "Email" field
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for an unquoted placeholder, got nil")
+	}
+	if !strings.Contains(err.Error(), "<email>") {
+		t.Errorf("error should name the placeholder, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "quot") {
+		t.Errorf("error should suggest quoting the placeholder, got: %v", err)
+	}
+}
+
+// TestParser_QuotedPlaceholderStillWorks confirms the fix for (b) didn't
+// break the correct, already-documented quoted-placeholder pattern.
+func TestParser_QuotedPlaceholderStillWorks(t *testing.T) {
+	src := `test "t"
+  open the app
+  type "<email>" into the "Email" field
+`
+	mustParse(t, src)
+}
+
+// TestParser_LoneAngleBracketIsParseError covers the case where '<' isn't
+// placeholder-shaped at all (no matching '>' on the line) — it should still
+// be a clear parse error rather than a silently-dropped character.
+func TestParser_LoneAngleBracketIsParseError(t *testing.T) {
+	src := `test "t"
+  open the app
+  tap < "Something"
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for a lone '<' with no matching '>', got nil")
+	}
+}
+
 func TestParser_Loop(t *testing.T) {
 	src := `test "t"
   open the app
@@ -522,10 +600,10 @@ func TestParser_DataDrivenTest(t *testing.T) {
 	src := `test "login validation"
   open the app
   tap "Sign In"
-  type <email> into the "Email" field
-  type <password> into the "Password" field
+  type "<email>" into the "Email" field
+  type "<password>" into the "Password" field
   tap "Continue"
-  see <expected>
+  see "<expected>"
 
 with examples:
   email               password   expected

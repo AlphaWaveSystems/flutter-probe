@@ -147,9 +147,9 @@ func TestParseIntegration_LoginFlow(t *testing.T) {
 func TestParseIntegration_DataDriven(t *testing.T) {
 	src := `test "login validation"
   open the app
-  type <email> into the "Email" field
+  type "<email>" into the "Email" field
   tap "Continue"
-  see <expected>
+  see "<expected>"
 
 with examples:
   email              expected
@@ -173,8 +173,8 @@ func TestParseIntegration_RecipeFile(t *testing.T) {
 	src := `recipe "log in as" (email, password)
   open the app
   tap "Sign In"
-  type <email> into the "Email" field
-  type <password> into the "Password" field
+  type "<email>" into the "Email" field
+  type "<password>" into the "Password" field
   tap "Continue"
   see "Dashboard"
 `

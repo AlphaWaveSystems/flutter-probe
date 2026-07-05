@@ -810,15 +810,24 @@ func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
 
 func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
 	recipe, ok := e.recipes[rc.Name]
+	stripped := rc.Name
 	if !ok {
 		// Try matching by stripping <arg> placeholders and filler words from the call name.
 		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
-		stripped := stripRecipeCallArgs(rc.Name)
+		stripped = stripRecipeCallArgs(rc.Name)
 		recipe, ok = e.recipes[stripped]
 	}
 	if !ok {
-		// Unknown recipe — skip rather than error (may be a filler line)
-		return nil
+		// PT-02(a): an unrecognized recipe call used to silently no-op ("may
+		// be a filler line"), which masked genuine typos and broken recipe
+		// references for as long as no test ever surfaced the resulting
+		// missing behavior. Every other "no matching case" fallthrough in
+		// this executor already errors loudly (see runAction's default
+		// case) — this was the sole silent exception.
+		if stripped != rc.Name {
+			return fmt.Errorf("line %d: unknown recipe call %q (also tried %q with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name, stripped)
+		}
+		return fmt.Errorf("line %d: unknown recipe call %q — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name)
 	}
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
@@ -932,8 +941,21 @@ func (e *Executor) resolve(s string) string {
 	// Then: substitute data-driven and recipe variables
 	for k, v := range e.vars {
 		old := "<" + k + ">"
-		for len(s) > 0 && containsSubstr(s, old) {
-			s = replaceFirst(s, old, v)
+		// PT-02(c): a variable can end up bound to a value that itself
+		// contains its own placeholder marker — e.g. passing the unquoted
+		// literal "<email>" as the argument for a recipe param named email
+		// (runRecipeCall binds it verbatim). Substituting "<email>" for
+		// "<email>" makes no progress and previously looped forever, hanging
+		// the CLI with no error. maxSubstitutions bounds the loop so this
+		// terminates; the `next == s` check exits immediately for the exact
+		// self-reference case (v == old) without waiting out the full cap.
+		const maxSubstitutions = 1000
+		for i := 0; i < maxSubstitutions && len(s) > 0 && containsSubstr(s, old); i++ {
+			next := replaceFirst(s, old, v)
+			if next == s {
+				break
+			}
+			s = next
 		}
 	}
 	return s
