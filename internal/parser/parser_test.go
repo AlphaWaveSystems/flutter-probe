@@ -316,6 +316,36 @@ func TestParser_Swipe(t *testing.T) {
 	}
 }
 
+// TestParser_Scroll mirrors TestParser_Swipe — scroll's grammar was
+// previously untested even though it shares the same parse function shape
+// (direction + optional selector-scoping via "in"/"on").
+func TestParser_Scroll(t *testing.T) {
+	tests := []struct {
+		src string
+		dir parser.SwipeDirection
+	}{
+		{`test "t"
+  scroll down
+`, parser.SwipeDown},
+		{`test "t"
+  scroll down in #my_list
+`, parser.SwipeDown},
+		{`test "t"
+  scroll up on the "Feed" list
+`, parser.SwipeUp},
+	}
+	for _, tc := range tests {
+		prog := mustParse(t, tc.src)
+		a := firstAction(t, prog.Tests[0].Body)
+		if a.Verb != parser.VerbScroll {
+			t.Errorf("verb: got %q", a.Verb)
+		}
+		if a.Direction != tc.dir {
+			t.Errorf("direction: got %q, want %q", a.Direction, tc.dir)
+		}
+	}
+}
+
 func TestParser_GoBack(t *testing.T) {
 	src := `test "t"
   go back
