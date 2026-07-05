@@ -146,3 +146,12 @@ test "user can update name"
 Hooks are file-scoped. Each `.probe` file can define its own set of hooks. There are no global hooks — if you need the same hooks across multiple files, define them in a recipe and call it from each file's `before each`.
 
 `before all` and `after all` share a separate executor from the per-test hooks, so state set in `before all` (like variables) does not carry into individual tests.
+
+## Shared App State Across Tests
+
+All `test` blocks in a `.probe` file run against **one continuous app instance and connection** — nothing resets the app, navigator, or session state between blocks (or hooks) by default. If `before all` (or an earlier test) signs in, every later test in that file starts from wherever the app was left, still signed in — the same as if a person kept using the app without closing it.
+
+This means:
+- A later test failing with "widget not found" for something that should obviously be on screen is a real bug in your test flow (wrong screen, wrong timing, an earlier step left a dialog open) — it is **not** the framework silently resetting your session. Nothing implicit resets state between tests.
+- If you want each test to start from a clean, logged-out state, do it explicitly — `restart the app`, `clear app data`, or `kill the app` followed by `open the app` in `before each` (or at the start of the specific test that needs it). Only these verbs actually reset app state; a bare `open the app` when the agent is already connected is a no-op if the app is already running.
+- Conversely, if you're relying on shared state (e.g. `before all` logs in once and every test in the file assumes it's still signed in), no special opt-in is needed — this is already the default behavior described above.

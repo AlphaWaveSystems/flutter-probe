@@ -3,7 +3,7 @@ title: App Lifecycle
 description: Control app state with kill, open, restart, clear data, and permission management commands.
 ---
 
-FlutterProbe provides commands to manage the app's lifecycle during tests. These run at the platform level (ADB or simctl), not through the Dart agent.
+FlutterProbe provides commands to manage the app's lifecycle during tests.
 
 ## Kill the App
 
@@ -23,8 +23,8 @@ The WebSocket connection is closed. Use `open the app` to relaunch and reconnect
 open the app
 ```
 
-Launches the app from the CLI side and reconnects the WebSocket:
-- Android: `adb shell monkey -p <package> -c android.intent.category.LAUNCHER 1`
+If the app is already running and connected, this is a no-op (nothing to do). If the connection is down — most commonly right after `kill the app` — it launches the app and reconnects:
+- Android: `adb shell am start -n <package>/<launcher-activity>`
 - iOS: `xcrun simctl launch <udid> <bundle-id>`
 
 Use this after `kill the app` to restart from a cold state, or at the beginning of a test to ensure the app is running.

@@ -431,7 +431,30 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if a.Sel != nil {
 			screen = a.Sel.Text
 		}
-		return e.client.Open(ctx, screen)
+		err := e.client.Open(ctx, screen)
+		if err == nil || !isConnectionError(err) || e.deviceCtx == nil {
+			return err
+		}
+		// PT-09 (found while documenting cross-test state behavior): `open the
+		// app` after `kill the app` closes the connection but never actually
+		// relaunches — this just sent an RPC over the now-dead client, which
+		// failed, and runStep's generic reconnect-on-error path only re-dials
+		// assuming the app process is already running again on its own. It
+		// never was (kill force-stopped it), so this used to retry a dial to
+		// a genuinely dead process until it gave up. Launch the app for real
+		// here, the same way `restart the app` does, before reconnecting.
+		if err := e.deviceCtx.RestartApp(ctx); err != nil {
+			return fmt.Errorf("open the app: %w", err)
+		}
+		newClient, reconnErr := e.deviceCtx.Reconnect(ctx)
+		if reconnErr != nil {
+			return fmt.Errorf("open the app: %w", reconnErr)
+		}
+		e.client = newClient
+		if e.onReconnect != nil {
+			e.onReconnect(newClient)
+		}
+		return nil
 
 	case parser.VerbTap:
 		if a.Sel == nil {

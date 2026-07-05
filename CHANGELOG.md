@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`open the app` after `kill the app` never actually relaunched the app
+  (PT-09).** It always sent an RPC over the (now-closed) connection, which
+  failed; the generic step-level auto-reconnect that kicked in afterward
+  only re-dials assuming the app process is already running — it never
+  relaunches one that was genuinely force-stopped. In practice this meant
+  the documented `kill the app` → `open the app` pattern hung through the
+  full reconnect-retry window and then failed with a connection-refused
+  error. `open the app` now detects a dead connection and relaunches the
+  app the same way `restart the app` does, before reconnecting. Found
+  while documenting cross-`test`-block state behavior (see below) — not
+  what that investigation originally set out to find, but blocking anyone
+  who'd try to use `kill the app`/`open the app` for exactly the per-test
+  isolation the docs below describe as the supported way to opt out of the
+  default shared-state behavior.
+
+### Documentation
+- **Clarified that all `test` blocks (and hooks) in a `.probe` file share
+  one continuous app instance and connection by default — nothing resets
+  app/session state between them (PT-09).** Investigated the reported
+  symptom (a later test failing as if session state had been silently
+  reset) and it doesn't reproduce: there is no code path that resets
+  anything between blocks. Documented this explicitly in `hooks.md`, along
+  with how to opt into per-test isolation (`restart the app`/
+  `clear app data`/`kill the app` in `before each`) for projects that want
+  it. Also corrected an inaccurate claim in `app-lifecycle.md` that
+  `open the app` always launches via ADB/simctl "not through the Dart
+  agent" — true only when there's no live connection yet; otherwise it's a
+  no-op RPC to the already-running agent.
+
 ### Added
 - **`agent.launch_timeout` config option (and `--launch-timeout` flag)
   (PT-10).** `restart the app`/`clear app data` used to be bounded by a
