@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`kill the app` followed by any step other than `open the app`/
+  `restart the app` (a `wait`, `tap`, `see`, etc.) still hung and then
+  permanently failed (PT-18, follow-on from PT-09's `open the app` fix).**
+  The generic step-level auto-reconnect only re-dials, assuming the app
+  process is already running — after a genuine `kill the app`, nothing is
+  listening at all, so re-dialing could never succeed regardless of
+  remaining attempts. Detects a connection-refused dial failure
+  specifically (as opposed to a timeout/reset on a still-alive process,
+  which a transient network drop would produce) and relaunches the app
+  before retrying, the same way the `open the app` fix does, but from the
+  generic reconnect path so it now covers every verb, not just `open`.
 - **`take screenshot` could capture stale content from the previous route
   instead of the current screen (PT-16).** Found while investigating a
   scroll bug (PT-03): a screenshot taken right after navigating sometimes

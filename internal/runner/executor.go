@@ -942,6 +942,24 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	}
 
 	newClient, err := e.deviceCtx.Reconnect(ctx)
+	if err != nil && isConnectionRefused(err) {
+		// PT-18: a plain re-dial only helps if the app process is still
+		// running and the connection merely dropped (e.g. a transient
+		// network blip) — Reconnect never relaunches anything. If the
+		// process itself is gone (most commonly because a prior
+		// `kill the app` step was followed by something other than
+		// `open the app`/`restart the app`), nothing is listening at all
+		// and re-dialing can never succeed no matter how many attempts are
+		// left. A connection-refused dial failure specifically indicates
+		// that — a transient drop would show up as a timeout or reset on a
+		// socket that's still accepting connections, not "refused" on a
+		// fresh dial. Relaunch once and retry immediately instead of
+		// wasting the remaining attempts on a doomed re-dial.
+		fmt.Printf("    \033[33m⟳\033[0m  Nothing listening — relaunching before retrying...\n")
+		if restartErr := e.deviceCtx.RestartApp(ctx); restartErr == nil {
+			newClient, err = e.deviceCtx.Reconnect(ctx)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("auto-reconnect failed: %w", err)
 	}
@@ -952,6 +970,13 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	}
 	fmt.Printf("    \033[32m⟳\033[0m  Reconnected successfully (attempt %d)\n", attempt)
 	return nil
+}
+
+// isConnectionRefused reports whether err indicates a dial found nothing
+// listening at all (ECONNREFUSED), as opposed to a timeout or reset on a
+// connection to a process that's still alive.
+func isConnectionRefused(err error) bool {
+	return strings.Contains(err.Error(), "connection refused")
 }
 
 // reconnectDelay returns base << (attempt-1), capped at 8s, plus ±20% jitter.
