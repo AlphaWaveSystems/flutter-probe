@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -50,9 +51,34 @@ Resolution order: CLI flag > probe.yaml > built-in default.`,
   probe test --dial-timeout 45s             # longer connection timeout`,
 	// errTestFailed (returned on failed tests) carries no useful message — the
 	// runner already printed per-test failures. Silence cobra's default "Error: ..."
-	// output to avoid a duplicate trailing line.
+	// output to avoid a duplicate trailing line for that one case — but every
+	// other error runTests can return (token read, connect, handshake, etc.)
+	// carries a real, otherwise-unreported message, so runTestsAndReportError
+	// explicitly prints anything that isn't errTestFailed. Without this,
+	// SilenceErrors:true suppressed those messages entirely: `probe test`
+	// could fail with zero diagnostic output beyond whatever progress lines
+	// were printed before the failure (found while verifying PT-01/PT-07).
 	SilenceErrors: true,
-	RunE:          runTests,
+	RunE:          runTestsAndReportError,
+}
+
+// runTestsAndReportError wraps runTests so that any error other than
+// errTestFailed (which the runner has already reported in detail) is printed
+// before being returned — see the SilenceErrors comment above.
+func runTestsAndReportError(cmd *cobra.Command, args []string) error {
+	err := runTests(cmd, args)
+	reportIfNotTestFailure(cmd.ErrOrStderr(), err)
+	return err
+}
+
+// reportIfNotTestFailure prints err to w, unless it's nil or errTestFailed
+// (whose message is a placeholder — the runner already reported the actual
+// per-test failures in detail, so printing it again would just add a
+// redundant, uninformative trailing line).
+func reportIfNotTestFailure(w io.Writer, err error) {
+	if err != nil && !errors.Is(err, errTestFailed) {
+		fmt.Fprintln(w, "Error:", err)
+	}
 }
 
 func init() {
