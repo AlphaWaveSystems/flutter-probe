@@ -308,7 +308,16 @@ func (p *Parser) parseStep() (Step, error) {
 
 	switch tok.Type {
 	case TOKEN_OPEN:
-		return p.parseActionOpen()
+		// PT-23: "open" is also a legal first word of a user-defined recipe
+		// name (e.g. a recipe literally named "open most recent post").
+		// Only claim it for the built-in open verb when what follows
+		// actually looks like "the app" or a link — the only two
+		// documented forms — otherwise let it fall through to a recipe
+		// call so the whole phrase is preserved as the call's name.
+		if p.looksLikeOpenVerb() {
+			return p.parseActionOpen()
+		}
+		return p.parseRecipeCall()
 	case TOKEN_TAP:
 		return p.parseActionTap()
 	case TOKEN_TYPE:
@@ -425,6 +434,24 @@ func (p *Parser) checkIfVisible() bool {
 	}
 	p.pos = saved // restore — this was a regular "if", not "if visible/present"
 	return false
+}
+
+// looksLikeOpenVerb reports whether the tokens following "open" match one
+// of the two documented forms — "open the app" / "open app", or "open link
+// <url>" — without consuming anything. Anything else (including a bare
+// selector) is left for parseRecipeCall to claim as a recipe name, since an
+// undocumented "open <selector>" fallback would otherwise swallow any
+// recipe whose name happens to start with "open" (PT-23).
+func (p *Parser) looksLikeOpenVerb() bool {
+	saved := p.pos
+	defer func() { p.pos = saved }()
+
+	p.advance() // open
+	p.skipFillers()
+	if p.peek().Type == TOKEN_APP || p.peekLiteral("app") {
+		return true
+	}
+	return p.peek().Type == TOKEN_LINK
 }
 
 // ---- Action parsers ----

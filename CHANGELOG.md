@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **A recipe named starting with the word "open" (e.g. `open most recent
+  post`) always misparsed (PT-23).** `open` is a reserved keyword for the
+  built-in `open the app`/`open link` verbs, and the parser claimed any
+  step starting with it unconditionally — an undocumented fallback then
+  swallowed the next bare word as a selector and left the rest of the line
+  to misparse as a second, stray, unknown recipe call. Fixed by only
+  treating `open` as the built-in verb when what follows actually matches
+  one of its two documented forms (`the app`/`app`, or a link) via a
+  backtracking lookahead; anything else now falls through to a normal
+  recipe call, preserving the whole phrase as the call's name.
+- **A recipe with a hyphenated name (e.g. `create looking-for post`)
+  always misparsed (PT-24).** The lexer tokenized a word-internal hyphen
+  as its own standalone token unconditionally — fine for the recipe
+  *definition* (a quoted string, hyphen preserved as-is), but at the
+  *call* site the recipe name is built by rejoining bare word tokens with
+  spaces, so the hyphen came back out padded (`"looking - for"`), and the
+  two representations could never match. Fixed by keeping a hyphen that's
+  directly between two word characters part of the same identifier token.
+  A standalone hyphen (e.g. the negative sign in `set location -33.8,
+  151.2`) is unaffected, since it's only ever reached preceded by a space,
+  never mid-identifier.
+
 ## [0.10.2] - 2026-07-06
 
 A small release with no functional changes — a reported regression was

@@ -275,6 +275,21 @@ func (l *Lexer) lexIdent() {
 		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '\'' {
 			l.pos++
 			l.col++
+		} else if ch == '-' && l.pos+1 < len(l.src) &&
+			(unicode.IsLetter(l.src[l.pos+1]) || unicode.IsDigit(l.src[l.pos+1])) {
+			// PT-24: a word-internal hyphen (e.g. "looking-for") stays part
+			// of the identifier rather than splitting into its own token —
+			// otherwise a hyphenated recipe name tokenizes differently at
+			// the call site (bare words rejoined with spaces around the
+			// hyphen) than at its quoted-string definition site (hyphen
+			// preserved as-is), and the two never match. A standalone "-"
+			// (e.g. the negative sign in `set location -33.8, 151.2`) is
+			// unaffected: it's only ever reached here when it directly
+			// follows another identifier character, never at the start of
+			// a token — a leading "-" is lexed separately (see the
+			// '-' case in nextToken), on its own.
+			l.pos++
+			l.col++
 		} else {
 			break
 		}

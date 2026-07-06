@@ -230,6 +230,104 @@ func TestParser_OpenApp(t *testing.T) {
 	}
 }
 
+// TestParser_OpenLink covers the other documented "open" form, to make sure
+// the PT-23 fix's lookahead doesn't regress it.
+func TestParser_OpenLink(t *testing.T) {
+	src := `test "t"
+  open link "https://example.com"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbOpenLink {
+		t.Errorf("verb: got %q, want open_link", a.Verb)
+	}
+	if a.Name != "https://example.com" {
+		t.Errorf("url: got %q", a.Name)
+	}
+}
+
+// TestParser_RecipeCallStartingWithOpen covers PT-23: a recipe named
+// "open ..." used to be swallowed by the built-in open verb's undocumented
+// bare-selector fallback (only "the app"/"app"/a link are actually
+// documented forms), consuming just the next bare word as a selector and
+// leaving the rest of the line to misparse as a second, stray, unknown
+// recipe call.
+func TestParser_RecipeCallStartingWithOpen(t *testing.T) {
+	src := `recipe "open most recent post"
+  tap "Feed"
+
+test "t"
+  open most recent post
+`
+	prog := mustParse(t, src)
+	if len(prog.Recipes) != 1 || prog.Recipes[0].Name != "open most recent post" {
+		t.Fatalf("recipe: got %+v", prog.Recipes)
+	}
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	call, ok := prog.Tests[0].Body[0].(parser.RecipeCall)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.RecipeCall", prog.Tests[0].Body[0])
+	}
+	if call.Name != "open most recent post" {
+		t.Errorf("recipe call name: got %q, want %q", call.Name, "open most recent post")
+	}
+}
+
+// TestParser_HyphenatedRecipeCall covers PT-24: a recipe defined with a
+// hyphenated name used to tokenize differently at the call site (bare
+// words, hyphen lexed as its own token and rejoined with surrounding
+// spaces: "looking - for") than at the definition site (a quoted string,
+// hyphen preserved as-is: "looking-for") — so the two could never match.
+func TestParser_HyphenatedRecipeCall(t *testing.T) {
+	src := `recipe "create looking-for post" (title, description)
+  log title
+
+test "t"
+  create looking-for post "X" "Y"
+`
+	prog := mustParse(t, src)
+	if len(prog.Recipes) != 1 || prog.Recipes[0].Name != "create looking-for post" {
+		t.Fatalf("recipe: got %+v", prog.Recipes)
+	}
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	call, ok := prog.Tests[0].Body[0].(parser.RecipeCall)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.RecipeCall", prog.Tests[0].Body[0])
+	}
+	if call.Name != "create looking-for post <arg> <arg>" {
+		t.Errorf("recipe call name: got %q", call.Name)
+	}
+	if len(call.Args) != 2 || call.Args[0] != "X" || call.Args[1] != "Y" {
+		t.Errorf("recipe call args: got %+v", call.Args)
+	}
+}
+
+// TestParser_SetLocationNegativeCoordinates guards against a regression in
+// the PT-24 fix above: a standalone "-" (the negative sign in `set
+// location`) must still lex as its own token, since it's preceded by a
+// space, not another identifier character.
+func TestParser_SetLocationNegativeCoordinates(t *testing.T) {
+	src := `test "t"
+  set location -33.8688, 151.2093
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbSetLocation {
+		t.Fatalf("verb: got %q, want set_location", a.Verb)
+	}
+	if a.Name != "-33.8688,151.2093" {
+		t.Errorf("coordinates: got %q", a.Name)
+	}
+}
+
 func TestParser_TapTextSelector(t *testing.T) {
 	src := `test "t"
   tap on "Sign In"
