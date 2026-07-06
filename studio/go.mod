@@ -10,7 +10,7 @@ replace github.com/alphawavesystems/flutter-probe => ..
 require (
 	github.com/alphawavesystems/flutter-probe v0.5.6
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/wailsapp/wails/v2 v2.12.0
+	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/zalando/go-keyring v0.2.8
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -43,10 +43,10 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )
 
 // replace github.com/wailsapp/wails/v2 v2.12.0 => /Users/patrickbertsch/go/pkg/mod
