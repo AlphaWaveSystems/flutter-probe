@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.3 - 2026-07-06
+
+No changes to this package's own code — bumped to stay in lockstep with the CLI's
+version. This release's fixes (PT-23: recipe calls starting with "open" misparsed;
+PT-24: hyphenated recipe names misparsed) are entirely in the Go CLI's parser/lexer.
+Full detail in the root CHANGELOG's `[0.10.3]` section.
+
 ## 0.10.2 - 2026-07-06
 
 No functional changes — a test-only addition (`test/sequential_focus_autofocus_test.dart`)

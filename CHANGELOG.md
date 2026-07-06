@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-07-06
+
 ### Fixed
 - **A recipe named starting with the word "open" (e.g. `open most recent
   post`) always misparsed (PT-23).** `open` is a reserved keyword for the

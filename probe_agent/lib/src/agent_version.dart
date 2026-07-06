@@ -9,4 +9,4 @@
 /// Lives in its own file (rather than server.dart, where it previously
 /// lived) so executor.dart can read it too without an executor.dart <->
 /// server.dart import cycle.
-const String probeAgentVersion = '0.10.2';
+const String probeAgentVersion = '0.10.3';
