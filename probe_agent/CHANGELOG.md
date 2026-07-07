@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.4 - 2026-07-06
 
 - Fixed: the `ordinal` selector kind (`tap 1st ...`, `tap 2nd ...`, etc.) always matched
   by displayed text only, even when combined with an `#id` selector — `1st #card_id`

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-07-06
+
 ### Fixed
 - **A hung reconnect attempt could leave the CLI silently stuck with no way
   to recover other than manually interrupting it (part of PT-25).** The
