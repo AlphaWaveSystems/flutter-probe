@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **A hung reconnect attempt could leave the CLI silently stuck with no way
+  to recover other than manually interrupting it (part of PT-25).** The
+  auto-reconnect retry loop passed the *outer*, per-run context into each
+  reconnect attempt — that context has no deadline of its own (only
+  Ctrl-C/SIGTERM cancels it), unlike the per-step timeout the CLI otherwise
+  honors. If a device call during reconnect (e.g. an `adb` command) ever
+  hung, there was nothing to force it to give up. Each reconnect attempt is
+  now bounded by the same step timeout the CLI already uses everywhere
+  else. This addresses one confirmed, independently-reproducible
+  contributing factor reported alongside PT-25's WebSocket-drop
+  investigation; the drop itself is still open — see PT-25 in
+  `IMPROVEMENT_TASKS.md` for what's resolved vs. still outstanding.
 - **`tap 1st #id` (an ordinal modifier combined with an id-selector) always
   misparsed (PT-26).** The parser's ordinal-selector branch only checked for
   quoted text or a bare identifier after the ordinal, never an `#id` token —
