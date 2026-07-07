@@ -56,10 +56,10 @@ jobs:
     steps:
       # ── Checkout repos ──
       - name: Checkout FlutterProbe
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout E2E test app
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.E2E_REPO }}
           path: e2e-app
@@ -191,10 +191,10 @@ jobs:
     steps:
       # ── Checkout repos ──
       - name: Checkout FlutterProbe
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout E2E test app
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.E2E_REPO }}
           path: e2e-app
