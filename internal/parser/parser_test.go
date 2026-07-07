@@ -370,6 +370,32 @@ func TestParser_TapOrdinalSelector(t *testing.T) {
 	}
 }
 
+// TestParser_TapOrdinalIDSelector covers PT-26: an ordinal combined with an
+// id-selector (rather than quoted text) used to leave the "#id" token
+// completely unconsumed — parseSelector's ordinal branch only checked for
+// TOKEN_STRING/TOKEN_IDENT after the ordinal, never TOKEN_ID — so the
+// dangling "#id" token misparsed as a second, stray, unknown recipe call.
+func TestParser_TapOrdinalIDSelector(t *testing.T) {
+	src := `test "t"
+  tap 1st #post_list_card
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Sel == nil || a.Sel.Kind != parser.SelectorOrdinal {
+		t.Fatalf("expected ordinal selector, got %v", a.Sel)
+	}
+	if a.Sel.Ordinal != 1 {
+		t.Errorf("ordinal: got %d, want 1", a.Sel.Ordinal)
+	}
+	if a.Sel.Text != "#post_list_card" {
+		t.Errorf("ordinal text: got %q, want %q", a.Sel.Text, "#post_list_card")
+	}
+}
+
 func TestParser_TypeIntoField(t *testing.T) {
 	src := `test "t"
   type "hello@test.com" into the "Email" field

@@ -1157,6 +1157,12 @@ func (p *Parser) parseSelector() Selector {
 		text := ""
 		if p.peek().Type == TOKEN_STRING {
 			text = p.advance().Literal
+		} else if p.peek().Type == TOKEN_ID {
+			// PT-26: "1st #card_id" — an id-selector combined with an
+			// ordinal. Literal keeps its "#" prefix; the Dart-side finder
+			// checks for that prefix to decide whether to match by key
+			// instead of by text (mirroring the plain "id" selector kind).
+			text = p.advance().Literal
 		} else if p.peek().Type == TOKEN_IDENT {
 			text = p.advance().Literal
 		}

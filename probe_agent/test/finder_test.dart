@@ -115,4 +115,51 @@ void main() {
       );
     });
   });
+
+  group('ordinal + id selector (PT-26)', () {
+    // Several widgets share the same test id on purpose (a repeated list
+    // row template, e.g. cards in a feed) — the ordinal picks the Nth one
+    // by position rather than matching by displayed text. Flutter itself
+    // enforces unique Keys among direct siblings, so a real app sharing one
+    // id across repeated rows uses Semantics.identifier instead of a
+    // ValueKey — _findByKey already supports both.
+    testWidgets('picks the Nth widget by id, not by matching literal text',
+        (tester) async {
+      Widget card(String label) => Semantics(
+            identifier: 'post_list_card',
+            child: Card(child: Text(label)),
+          );
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              card('Post A'),
+              card('Post B'),
+              card('Post C'),
+            ],
+          ),
+        ),
+      ));
+
+      final finder = ProbeFinder.instance;
+
+      final first = finder.findElements(
+          {'kind': 'ordinal', 'text': '#post_list_card', 'ordinal': 1});
+      expect(first, hasLength(1));
+
+      final second = finder.findElements(
+          {'kind': 'ordinal', 'text': '#post_list_card', 'ordinal': 2});
+      expect(second, hasLength(1));
+      expect(second.single, isNot(same(first.single)),
+          reason: 'the 2nd ordinal match must be a different element than the 1st');
+
+      final third = finder.findElements(
+          {'kind': 'ordinal', 'text': '#post_list_card', 'ordinal': 3});
+      expect(third, hasLength(1));
+
+      final fourth = finder.findElements(
+          {'kind': 'ordinal', 'text': '#post_list_card', 'ordinal': 4});
+      expect(fourth, isEmpty, reason: 'only 3 cards exist');
+    });
+  });
 }

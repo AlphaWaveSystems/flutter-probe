@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: the `ordinal` selector kind (`tap 1st ...`, `tap 2nd ...`, etc.) always matched
+  by displayed text only, even when combined with an `#id` selector — `1st #card_id`
+  silently matched nothing, since `#card_id` isn't real on-screen text. Now checks for
+  the `#` prefix and matches by key instead when present, mirroring the plain `id`
+  selector kind (PT-26).
+
 ## 0.10.3 - 2026-07-06
 
 No changes to this package's own code — bumped to stay in lockstep with the CLI's

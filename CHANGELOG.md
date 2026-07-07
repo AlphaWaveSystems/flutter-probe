@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`tap 1st #id` (an ordinal modifier combined with an id-selector) always
+  misparsed (PT-26).** The parser's ordinal-selector branch only checked for
+  quoted text or a bare identifier after the ordinal, never an `#id` token —
+  so `tap 1st #post_list_card` left `#post_list_card` completely unconsumed,
+  and it misparsed as a second, stray, unknown recipe call. Fixed by
+  accepting an id-selector after an ordinal too. Since Flutter itself
+  enforces unique `Key`s among direct siblings, disambiguating repeated
+  same-id rows by position also required a matching fix on the Dart agent
+  side: the `ordinal` selector kind was hardcoded to always match by
+  displayed text, never by id — now it checks for the `#` prefix (matching
+  the plain `id` selector kind's existing convention) and matches by key
+  instead when present.
+
 ## [0.10.3] - 2026-07-06
 
 ### Fixed

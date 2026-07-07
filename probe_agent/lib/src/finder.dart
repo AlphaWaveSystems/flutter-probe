@@ -31,7 +31,14 @@ class ProbeFinder {
         raw = _findByType(text);
 
       case 'ordinal':
-        final matches = _findByText(text).where(_isVisible).toList();
+        // PT-26: "1st #card_id" carries its id with the "#" prefix intact
+        // (mirroring the plain 'id' selector kind above) so multiple
+        // same-id widgets can be disambiguated by position, not just by
+        // matching text.
+        final ordinalCandidates = text.startsWith('#')
+            ? _findByKey(text.substring(1))
+            : _findByText(text);
+        final matches = ordinalCandidates.where(_isVisible).toList();
         if (ordinal > 0 && ordinal <= matches.length) {
           return [matches[ordinal - 1]];
         }
