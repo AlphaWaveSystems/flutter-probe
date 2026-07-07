@@ -196,7 +196,15 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 			maxAttempts = 4
 		}
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			if reconnErr := e.tryReconnect(ctx, attempt); reconnErr != nil {
+			// PT-25: the outer ctx passed into runStep has no deadline of its
+			// own (only Ctrl-C cancels it) — bound each reconnect attempt to
+			// stepTimeout so a hung adb/device call during reconnect can't
+			// leave the CLI sitting silent indefinitely, only recoverable by
+			// manually interrupting it.
+			reconnectCtx, reconnectCancel := context.WithTimeout(ctx, stepTimeout)
+			reconnErr := e.tryReconnect(reconnectCtx, attempt)
+			reconnectCancel()
+			if reconnErr != nil {
 				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
 				break
 			}
