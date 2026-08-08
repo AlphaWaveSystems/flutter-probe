@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -110,15 +112,25 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	for {
 		attempt++
 		var err error
-		conn, _, err = dialer.DialContext(dialCtx, u.String(), nil)
+		var resp *http.Response
+		conn, resp, err = dialer.DialContext(dialCtx, u.String(), nil)
 		if err == nil {
 			opts.trace("probelink: [attempt %d] dial succeeded", attempt)
 			break
 		}
 		lastErr = err
-		// Only retry on transient network errors (refused, reset, timeout).
-		// Stop immediately on auth/protocol errors (e.g. 401 from agent).
-		if !isTransientDialError(err) {
+		// A real HTTP auth rejection from the agent is fatal — retrying with
+		// the same token cannot succeed.
+		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+			opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — giving up", attempt, resp.StatusCode)
+			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w", safeURL, resp.StatusCode, err)
+		}
+		// "bad handshake" without an auth response is transient on Android:
+		// adb forward accepts the host-side TCP connection before the
+		// device-side socket is plumbed, so an upgrade attempted right after
+		// creating the forward dies mid-handshake even though the agent is
+		// healthy. Retry it like any other startup race.
+		if !errors.Is(err, websocket.ErrBadHandshake) && !isTransientDialError(err) {
 			opts.trace("probelink: [attempt %d] dial failed (non-transient): %v — giving up", attempt, err)
 			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
 		}
@@ -155,15 +167,18 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 }
 
 // isTransientDialError returns true for connection errors that are worth
-// retrying (refused, reset, i/o timeout). Protocol or auth errors are not
-// transient and should surface immediately.
+// retrying (refused, reset, timeout, EOF). Protocol or auth errors are not
+// transient and should surface immediately. EOF is transient because an adb
+// forward with no device-side listener accepts the TCP connection and then
+// closes it, which surfaces as (unexpected) EOF rather than refused.
 func isTransientDialError(err error) bool {
 	s := err.Error()
 	return strings.Contains(s, "connection refused") ||
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "i/o timeout") ||
 		strings.Contains(s, "no route to host") ||
-		strings.Contains(s, "network is unreachable")
+		strings.Contains(s, "network is unreachable") ||
+		strings.Contains(s, "EOF")
 }
 
 // DialRelay connects to the ProbeAgent via a ProbeRelay server.
