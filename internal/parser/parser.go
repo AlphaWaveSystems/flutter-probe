@@ -308,7 +308,16 @@ func (p *Parser) parseStep() (Step, error) {
 
 	switch tok.Type {
 	case TOKEN_OPEN:
-		return p.parseActionOpen()
+		// PT-23: "open" is also a legal first word of a user-defined recipe
+		// name (e.g. a recipe literally named "open most recent post").
+		// Only claim it for the built-in open verb when what follows
+		// actually looks like "the app" or a link — the only two
+		// documented forms — otherwise let it fall through to a recipe
+		// call so the whole phrase is preserved as the call's name.
+		if p.looksLikeOpenVerb() {
+			return p.parseActionOpen()
+		}
+		return p.parseRecipeCall()
 	case TOKEN_TAP:
 		return p.parseActionTap()
 	case TOKEN_TYPE:
@@ -425,6 +434,24 @@ func (p *Parser) checkIfVisible() bool {
 	}
 	p.pos = saved // restore — this was a regular "if", not "if visible/present"
 	return false
+}
+
+// looksLikeOpenVerb reports whether the tokens following "open" match one
+// of the two documented forms — "open the app" / "open app", or "open link
+// <url>" — without consuming anything. Anything else (including a bare
+// selector) is left for parseRecipeCall to claim as a recipe name, since an
+// undocumented "open <selector>" fallback would otherwise swallow any
+// recipe whose name happens to start with "open" (PT-23).
+func (p *Parser) looksLikeOpenVerb() bool {
+	saved := p.pos
+	defer func() { p.pos = saved }()
+
+	p.advance() // open
+	p.skipFillers()
+	if p.peek().Type == TOKEN_APP || p.peekLiteral("app") {
+		return true
+	}
+	return p.peek().Type == TOKEN_LINK
 }
 
 // ---- Action parsers ----
@@ -823,8 +850,15 @@ func (p *Parser) parseWait() (Step, error) {
 		}
 	}
 
-	// "wait [for] animations to end" — TOKEN_FOR_KW is a filler so skipFillers()
-	// above may have already consumed it; check TOKEN_ANIMATIONS directly first.
+	// "wait [for] animations to end" — TOKEN_FOR_KW (and "the") are fillers,
+	// so the skipFillers() call above already consumed them; check
+	// TOKEN_ANIMATIONS/TOKEN_NETWORK/TOKEN_PAGE directly instead of testing
+	// for "for" itself, which can never match here again. (PT-20: a
+	// preceding branch here used to test `tok.Type == TOKEN_FOR_KW` — always
+	// false, since "for" is always gone by this point — leaving "network
+	// idle"/"page to load" completely unconsumed and misparsed as a
+	// separate, unrelated statement. Present since the very first commit,
+	// not a v0.10.0 regression, despite v0.10.0 being where this surfaced.)
 	if tok.Type == TOKEN_ANIMATIONS {
 		p.advance()
 		// consume trailing words ("to end", "to finish") up to the newline
@@ -835,17 +869,21 @@ func (p *Parser) parseWait() (Step, error) {
 		return WaitStep{Kind: WaitAnimations, Line: line}, nil
 	}
 
-	// "wait for animations to end" / "wait for the page to load"
-	if tok.Type == TOKEN_FOR_KW || p.peekLiteral("for") {
+	// "wait for network idle"
+	if tok.Type == TOKEN_NETWORK {
 		p.advance()
-		p.skipFillers()
-		if p.peek().Type == TOKEN_ANIMATIONS {
+		for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
 			p.advance()
-			for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
-				p.advance()
-			}
-			p.consumeNewline()
-			return WaitStep{Kind: WaitAnimations, Line: line}, nil
+		}
+		p.consumeNewline()
+		return WaitStep{Kind: WaitNetworkIdle, Line: line}, nil
+	}
+
+	// "wait for the page to load" / "wait for page to load"
+	if tok.Type == TOKEN_PAGE {
+		p.advance()
+		for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+			p.advance()
 		}
 		p.consumeNewline()
 		return WaitStep{Kind: WaitPageLoad, Line: line}, nil
@@ -877,6 +915,13 @@ func (p *Parser) parseWait() (Step, error) {
 		return WaitStep{Kind: kind, Target: target, Line: line}, nil
 	}
 
+	// Defensive: consume any remaining tokens before the newline so an
+	// unrecognized "wait ..." phrasing never leaks leftover words as a
+	// separate, misparsed statement (the same class of bug just fixed
+	// above for "wait for ...").
+	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+		p.advance()
+	}
 	p.consumeNewline()
 	return WaitStep{Kind: WaitPageLoad, Line: line}, nil
 }
@@ -1111,6 +1156,12 @@ func (p *Parser) parseSelector() Selector {
 		p.skipFillers()
 		text := ""
 		if p.peek().Type == TOKEN_STRING {
+			text = p.advance().Literal
+		} else if p.peek().Type == TOKEN_ID {
+			// PT-26: "1st #card_id" — an id-selector combined with an
+			// ordinal. Literal keeps its "#" prefix; the Dart-side finder
+			// checks for that prefix to decide whether to match by key
+			// instead of by text (mirroring the plain "id" selector kind).
 			text = p.advance().Literal
 		} else if p.peek().Type == TOKEN_IDENT {
 			text = p.advance().Literal

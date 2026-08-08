@@ -4,12 +4,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkWell, TextButton, OutlinedButton, TextField;
+import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkResponse, TextButton, OutlinedButton;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'agent_version.dart';
 import 'biometric.dart' as biometric;
 import 'finder.dart';
 import 'protocol.dart';
@@ -80,7 +81,15 @@ class ProbeExecutor {
     switch (req.method) {
       // ---- Lifecycle ----
       case ProbeMethods.ping:
-        return {'ok': true};
+        // Doubles as the connect-time version handshake: an older CLI that
+        // doesn't send client_version, or an older agent build a CLI talks
+        // to that doesn't recognize agent_version, both degrade gracefully
+        // (missing/extra JSON fields are simply ignored on either side).
+        final clientVersion = req.params['client_version'] as String?;
+        if (clientVersion != null && clientVersion.isNotEmpty) {
+          stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
+        }
+        return {'ok': true, 'agent_version': probeAgentVersion};
 
       case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;
@@ -187,6 +196,11 @@ class ProbeExecutor {
       // ---- Diagnostics ----
       case ProbeMethods.screenshot:
         final name = req.params['name'] as String? ?? 'screenshot';
+        // PT-16: every other verb calls this before acting/capturing —
+        // screenshot didn't, so a capture taken right after navigation
+        // could land mid-route-transition (the push/pop AnimationController
+        // still ticking) instead of waiting for the new route to settle.
+        await _sync.waitForSettled();
         final path = await _screenshot(name);
         // Include base64-encoded PNG data so CLI can save locally (essential for cloud mode
         // where the file is on a remote device and can't be pulled via ADB).
@@ -288,6 +302,19 @@ class ProbeExecutor {
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
 
+    // PT-04: a real pointer tap on (or inside) a text field requests focus
+    // as part of EditableText's own internal tap handling. Neither the
+    // direct-tap fallback below nor a synthetic pointer tap reliably
+    // reaches that internal recognizer — a Semantics wrapper or a
+    // surrounding GestureDetector/InkWell (invoked directly by
+    // _tryDirectTap, or hit first by the synthetic gesture) can intercept
+    // the tap before it gets there — so `tap #id` on a text field could
+    // report success while leaving the field genuinely unfocused. Request
+    // focus on the field's real FocusNode explicitly, the way a real tap
+    // would, regardless of which path below actually resolves the tap.
+    final editable = _findEditableTarget(element);
+    editable?.focusNode.requestFocus();
+
     // Check if the matched element is a Semantics wrapper — if so, the
     // synthetic gesture may not reach the GestureDetector child. In that
     // case, invoke onTap directly instead of using pointer events.
@@ -300,10 +327,24 @@ class ProbeExecutor {
     await gesture.up();
   }
 
-  /// Walks down from [element] to find a GestureDetector or InkWell child
-  /// and invokes its onTap directly. Only used when the matched element is
-  /// a Semantics wrapper where synthetic pointer events are unreliable.
-  /// Returns true if onTap was invoked.
+  /// Walks down from [element] to find a GestureDetector or InkResponse
+  /// child and invokes its onTap directly. Only used when the matched
+  /// element is a Semantics wrapper where synthetic pointer events are
+  /// unreliable. Returns true if onTap was invoked.
+  ///
+  /// PT-05: checks `InkResponse` rather than only `InkWell` — `InkWell` is
+  /// just a subclass of `InkResponse` with a fixed splash shape, and modern
+  /// Material buttons (IconButton, ElevatedButton, etc.) commonly build an
+  /// `InkResponse` directly rather than an `InkWell`, so the old `is InkWell`
+  /// check missed them, always falling through to the slower synthetic-tap
+  /// path below even though it also works). Buttons with neither widget
+  /// findable in the subtree (or any other case this direct-tap heuristic
+  /// misses) already fall through to a real hit-tested pointer tap via
+  /// _createGesture, which is unaffected by Semantics-tree structure —
+  /// verified this already correctly handles PT-05's literal scenario (a
+  /// Semantics-wrapped button with no onTap SemanticsAction, or shadowed by
+  /// an overlapping Semantics node) since Semantics doesn't participate in
+  /// hit-testing at all.
   bool _tryDirectTap(Element element) {
     bool found = false;
     void visit(Element e) {
@@ -315,7 +356,7 @@ class ProbeExecutor {
           found = true;
           return;
         }
-        if (widget is InkWell && widget.onTap != null) {
+        if (widget is InkResponse && widget.onTap != null) {
           widget.onTap!();
           found = true;
           return;
@@ -354,10 +395,14 @@ class ProbeExecutor {
   Future<void> _typeText(Map<String, dynamic> sel, String text) async {
     // Find the nearest EditableText in the widget tree near the selector
     final element = _requireElement(sel);
-    final controller = _findTextController(element);
-    if (controller != null) {
-      controller.text = text;
-      controller.selection = TextSelection.collapsed(offset: text.length);
+    final editable = _findEditableTarget(element);
+    if (editable != null) {
+      // PT-04: focus the field the way a real tap would before typing into
+      // it — matters when `type` is used without a preceding `tap`, and
+      // keeps behaviour consistent with the same fix in _tap.
+      editable.focusNode.requestFocus();
+      editable.controller.text = text;
+      editable.controller.selection = TextSelection.collapsed(offset: text.length);
     } else {
       // Fallback: tap to focus, then try to find any focused text field
       await _tap(sel);
@@ -373,36 +418,38 @@ class ProbeExecutor {
   }
 
   /// Walks up and down from an element to find a TextEditingController.
-  TextEditingController? _findTextController(Element element) {
-    // Search within the element's subtree for an EditableText
-    TextEditingController? result;
+  TextEditingController? _findTextController(Element element) =>
+      _findEditableTarget(element)?.controller;
+
+  /// Walks up and down from an element to find the underlying EditableText's
+  /// controller and FocusNode together. TextField/TextFormField don't expose
+  /// their FocusNode directly (they create one internally if none is given),
+  /// so unlike the old controller-only search, this always descends into the
+  /// matched TextField/TextFormField to find its actual EditableText child —
+  /// the one thing in the tree that genuinely owns the FocusNode a real tap
+  /// would request focus on.
+  _EditableTarget? _findEditableTarget(Element element) {
+    _EditableTarget? result;
     void visit(Element e) {
       if (result != null) return;
       if (e.widget is EditableText) {
-        result = (e.widget as EditableText).controller;
-        return;
-      }
-      if (e.widget is TextField) {
-        result = (e.widget as TextField).controller;
+        final w = e.widget as EditableText;
+        result = _EditableTarget(w.controller, w.focusNode);
         return;
       }
       e.visitChildren(visit);
     }
 
-    // First search in parent chain up to find a TextField ancestor
     Element? current = element;
     for (int i = 0; i < 20 && current != null; i++) {
-      if (current.widget is TextField) {
-        result = (current.widget as TextField).controller;
-        if (result != null) return result;
-      }
       if (current.widget is EditableText) {
-        return (current.widget as EditableText).controller;
+        final w = current.widget as EditableText;
+        return _EditableTarget(w.controller, w.focusNode);
       }
-      // Try searching children of current
+      // TextField/TextFormField (and design-system wrappers around them)
+      // always build an EditableText descendant — descend to find it.
       visit(current);
       if (result != null) return result;
-      // Go up
       Element? parent;
       current.visitAncestorElements((ancestor) {
         parent = ancestor;
@@ -449,10 +496,20 @@ class ProbeExecutor {
     final elements = _finder.findElements(sel);
 
     if (negated) {
-      if (elements.isNotEmpty) {
+      // PT-04 (related fix): a state check suffix (e.g. "don't see #id is
+      // focused") used to be silently ignored here — this branch returned
+      // as soon as *any* element existed, regardless of whether it actually
+      // satisfied the checked state. "don't see X in state Y" must fail
+      // only when X exists *and* is in state Y; if X exists but isn't in
+      // that state, the negation is correctly satisfied.
+      final matching = check.isEmpty
+          ? elements
+          : elements.where((e) => _stateCheckFailureReason(e, check, checkVal) == null).toList();
+      if (matching.isNotEmpty) {
+        final desc = check.isEmpty ? _selDesc(sel) : '${_selDesc(sel)} ($check)';
         throw ProbeError(
           ProbeError.assertFailed,
-          'Expected NOT to see "${_selDesc(sel)}" but found ${elements.length} element(s)',
+          'Expected NOT to see "$desc" but found ${matching.length} element(s)',
         );
       }
       return;
@@ -483,42 +540,72 @@ class ProbeExecutor {
 
     // State checks
     if (check.isNotEmpty && elements.isNotEmpty) {
-      final element = elements.first;
-      switch (check) {
-        case 'enabled':
-          if (_isDisabled(element)) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" is disabled');
-          }
-        case 'disabled':
-          if (!_isDisabled(element)) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" is enabled');
-          }
-        case 'contains':
-          final text = _textOf(element);
-          if (!text.contains(checkVal)) {
-            throw ProbeError(
-              ProbeError.assertFailed,
-              '"${_selDesc(sel)}" contains "$text", not "$checkVal"',
-            );
-          }
-        case 'focused':
-          final focused = WidgetsBinding.instance.focusManager.primaryFocus;
-          if (focused == null || !element.renderObject!.attached) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" does not have focus');
-          }
-          // Walk up focus tree to see if element is within focused widget
-          bool hasFocus = false;
-          element.visitAncestorElements((ancestor) {
-            if (ancestor.renderObject == focused.context?.findRenderObject()) {
-              hasFocus = true;
-              return false;
-            }
-            return true;
-          });
-          if (!hasFocus && element.renderObject != focused.context?.findRenderObject()) {
-            throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" does not have focus');
-          }
+      final reason = _stateCheckFailureReason(elements.first, check, checkVal);
+      if (reason != null) {
+        throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" $reason');
       }
+    }
+  }
+
+  /// Evaluates a `see`/`don't see` state check ("enabled", "disabled",
+  /// "contains", "focused") against [element]. Returns null if the state is
+  /// satisfied, or a human-readable reason (for the error message, without
+  /// the selector prefix) if it isn't. Shared by the positive and negated
+  /// paths in [_see] so a negated state check ("don't see X is focused")
+  /// evaluates the same state, instead of degrading to a bare existence
+  /// check.
+  String? _stateCheckFailureReason(Element element, String check, String checkVal) {
+    switch (check) {
+      case 'enabled':
+        if (_isDisabled(element)) return 'is disabled';
+        return null;
+      case 'disabled':
+        if (!_isDisabled(element)) return 'is enabled';
+        return null;
+      case 'contains':
+        final text = _textOf(element);
+        if (!text.contains(checkVal)) return 'contains "$text", not "$checkVal"';
+        return null;
+      case 'focused':
+        final focused = WidgetsBinding.instance.focusManager.primaryFocus;
+        if (focused == null || !element.renderObject!.attached) {
+          return 'does not have focus';
+        }
+        final focusedRenderObject = focused.context?.findRenderObject();
+        // A selector almost always matches a composite widget like
+        // TextField/TextFormField, not the EditableText it builds
+        // internally — the actually-focused widget is a *descendant* of
+        // the matched element, not an ancestor, so this only needs a direct
+        // match plus a subtree walk.
+        //
+        // PT-12: this used to also walk *ancestors* looking for a match,
+        // but that produces false positives for essentially any on-screen
+        // element: once nothing more specific is focused (e.g. right after
+        // FocusNode.unfocus()), Flutter falls back to the enclosing
+        // ModalRoute's own FocusScopeNode holding primary focus — and that
+        // scope is an ancestor of *every* widget on the current screen, so
+        // the ancestor walk would report every one of them as "focused".
+        // Found while verifying that `close keyboard` (PT-12) actually
+        // removes focus: `don't see #field is focused` kept failing right
+        // after a real unfocus() because of this ancestor false-positive.
+        bool hasFocus = element.renderObject == focusedRenderObject;
+        if (!hasFocus) {
+          // Full subtree walk — covers widgets that nest EditableText
+          // several levels deep (e.g. TextField -> InputDecorator -> ...
+          // -> EditableText).
+          void visit(Element e) {
+            if (hasFocus) return;
+            if (e.renderObject == focusedRenderObject) {
+              hasFocus = true;
+              return;
+            }
+            e.visitChildren(visit);
+          }
+          element.visitChildren(visit);
+        }
+        return hasFocus ? null : 'does not have focus';
+      default:
+        return null;
     }
   }
 
@@ -562,9 +649,19 @@ class ProbeExecutor {
   }
 
   Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect}) async {
+    // PT-06: WaitStep carries only a raw target string, not a selector kind
+    // (unlike Selector/SelectorParam used by tap/type), so an id target must
+    // be detected from its '#' prefix here — this previously always built a
+    // *text* selector regardless, meaning `wait until #my_button appears`
+    // searched for a widget whose visible text literally read "#my_button"
+    // and could never match, timing out on indisputably-mounted, visible
+    // widgets (icon buttons and other non-text elements) every time. Mirrors
+    // the same '#'-prefix check runConditional already uses for `if` steps.
+    final sel = text.startsWith('#')
+        ? {'kind': 'id', 'text': text}
+        : {'kind': 'text', 'text': text};
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      final sel = {'kind': 'text', 'text': text};
       final found = _finder.findElements(sel).isNotEmpty;
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
@@ -611,13 +708,122 @@ class ProbeExecutor {
         delta = Offset(size.width * 0.5, 0);
     }
 
+    // PT-03: a single giant PointerMoveEvent covering the whole delta in one
+    // jump can fail to register as a scroll at all — reproduced against a
+    // real iOS simulator (Settings screen: 8 single-jump `scroll down` calls
+    // produced zero movement; the same gesture split into incremental steps,
+    // matching how a real touch/drag is delivered, scrolled correctly).
+    // Likely cause: gesture-arena resolution (and scroll physics, which
+    // apply delta per pointer-move event) expect a sequence of small moves
+    // building up displacement, not one large jump.
     final gesture = await _createGesture(center);
-    await gesture.moveBy(delta, timeStamp: const Duration(milliseconds: 300));
+    const steps = 10;
+    for (var i = 1; i <= steps; i++) {
+      await gesture.moveBy(delta / steps.toDouble(),
+          timeStamp: Duration(milliseconds: (300 * i / steps).round()));
+      await Future.delayed(const Duration(milliseconds: 8));
+    }
     await gesture.up();
   }
 
   Future<void> _scroll(String direction, Map<String, dynamic>? sel) async {
-    await _swipe(direction, sel);
+    // PT-15: `scroll`'s job is "reveal more content," unlike `swipe`, which
+    // tests a real gesture interaction (swipe-to-dismiss, swipe-to-refresh,
+    // etc.) — it doesn't need to go through the gesture arena at all.
+    // Simulating scroll as a pointer drag (like swipe does) meant it had to
+    // *win* the arena against any competing recognizer along the way, and a
+    // `Dismissible`-wrapped row's horizontal drag recognizer could still
+    // intercept it even with an axis-pure delta — reproduced against a real
+    // iOS simulator (a 50-item list with `Dismissible` rows never scrolled
+    // past the first screen, while the same verb worked fine on a plain
+    // list). Driving the nearest Scrollable's own ScrollPosition directly
+    // sidesteps gesture-arena competition entirely.
+    final scrollable = _findScrollable(sel);
+    if (scrollable == null) {
+      // No Scrollable found (e.g. a custom scroll implementation that
+      // doesn't use the standard widget) — fall back to the old
+      // gesture-based approach.
+      await _swipe(direction, sel);
+      return;
+    }
+
+    final position = scrollable.position;
+    final extent = position.viewportDimension * 0.5;
+    // Matches _swipe's verb semantics: 'down'/'right' increase the scroll
+    // offset (reveal later content); 'up'/'left' decrease it.
+    final signedDelta = switch (direction) {
+      'up' || 'left' => -extent,
+      _ => extent,
+    };
+    final target = (position.pixels + signedDelta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    // jumpTo (not animateTo) — there's no user-facing transition to make
+    // smooth here, and animateTo's Future only resolves once its animation
+    // ticks to completion, which needs real frame scheduling that a test
+    // harness driving this through dispatch() won't naturally provide.
+    //
+    // jumpTo schedules a frame but returns before it runs — the RPC
+    // dispatcher's own _sync.waitForSettled() call right after this returns
+    // isn't enough on its own to guarantee that frame has actually happened
+    // yet (schedulerPhase can still read idle in the gap between
+    // "requested" and "started"), so a rapid sequence of scroll calls could
+    // race ahead of the ListView actually rebuilding to reveal newly
+    // visible rows. Wait for the frame explicitly here instead.
+    scrollable.position.jumpTo(target);
+    await WidgetsBinding.instance.endOfFrame;
+  }
+
+  /// Finds the Scrollable most relevant to a scroll verb: if [sel] resolves
+  /// to an element, the nearest enclosing Scrollable (walking up), or —
+  /// since a selector commonly targets the list widget itself rather than a
+  /// descendant inside it — the nearest one in its own subtree. With no
+  /// selector, the first Scrollable belonging to the current (topmost)
+  /// route, matching the route-awareness the rest of the finder already
+  /// applies (see ProbeFinder._isVisible).
+  ScrollableState? _findScrollable(Map<String, dynamic>? sel) {
+    if (sel != null) {
+      final element = _requireElement(sel);
+      final ancestor = Scrollable.maybeOf(element);
+      if (ancestor != null) return ancestor;
+      ScrollableState? descendant;
+      void visit(Element e) {
+        if (descendant != null) return;
+        if (e is StatefulElement && e.state is ScrollableState) {
+          descendant = e.state as ScrollableState;
+          return;
+        }
+        e.visitChildren(visit);
+      }
+      element.visitChildren(visit);
+      return descendant;
+    }
+
+    // No selector: several Scrollables can exist on one screen (e.g. a
+    // TextField's own internal cursor-scrolling Scrollable, alongside the
+    // actual content list) — the first one found in tree order isn't
+    // necessarily the one a bare `scroll down` should mean. Pick the one
+    // with the largest viewport area instead, since that's virtually always
+    // the main scrolling content, not an incidental one inside some other
+    // widget.
+    ScrollableState? best;
+    double bestArea = 0;
+    void visit(Element e) {
+      if (ModalRoute.of(e)?.isCurrent == false) return;
+      if (e is StatefulElement && e.state is ScrollableState) {
+        final state = e.state as ScrollableState;
+        final box = state.context.findRenderObject();
+        if (box is RenderBox && box.hasSize) {
+          final area = box.size.width * box.size.height;
+          if (area > bestArea) {
+            bestArea = area;
+            best = state;
+          }
+        }
+      }
+      e.visitChildren(visit);
+    }
+    WidgetsBinding.instance.rootElement?.visitChildren(visit);
+    return best;
   }
 
   Future<void> _drag(
@@ -644,6 +850,20 @@ class ProbeExecutor {
         final nav = _navigator;
         if (nav != null && nav.canPop()) {
           nav.pop();
+        } else {
+          await SystemNavigator.pop();
+        }
+      case 'close':
+        // PT-12: `close keyboard`/`close the app` (parser.VerbClose) both
+        // dispatch here with action='close' — this case never existed, so
+        // both were a silent no-op regardless of `value`. For keyboard
+        // dismissal specifically, unfocus the current FocusNode directly in
+        // the Flutter widget tree rather than an OS-level gesture — the
+        // suggested fix in PT-12 to avoid colliding with iOS's Back-swipe
+        // gesture recognition, and it also never depends on hit-testing a
+        // particular screen location the way a gesture would.
+        if (value == 'keyboard') {
+          FocusManager.instance.primaryFocus?.unfocus();
         } else {
           await SystemNavigator.pop();
         }
@@ -687,6 +907,15 @@ class ProbeExecutor {
     double bestArea = 0;
 
     void visit(Element element) {
+      // PT-16: Navigator keeps previous routes mounted underneath the
+      // current one, and both a pushed route and the one beneath it
+      // typically produce a same-size, screen-sized RepaintBoundary — the
+      // strict `area > bestArea` comparison below then keeps whichever one
+      // is visited first (the previous route, in Overlay insertion order),
+      // silently capturing stale content instead of the current screen.
+      // Skip anything belonging to a route that isn't current, mirroring
+      // ProbeFinder's own route-awareness fix (PT-03).
+      if (ModalRoute.of(element)?.isCurrent == false) return;
       final ro = element.renderObject;
       if (ro is RenderRepaintBoundary) {
         final area = ro.size.width * ro.size.height;
@@ -860,6 +1089,16 @@ class ProbeExecutor {
       throw ProbeError(ProbeError.internalError, 'Failed to persist token: $e');
     }
   }
+}
+
+// ---- Editable text resolution (PT-04) ----
+
+/// The controller and real FocusNode of an EditableText resolved near a
+/// selector — see [ProbeExecutor._findEditableTarget].
+class _EditableTarget {
+  const _EditableTarget(this.controller, this.focusNode);
+  final TextEditingController controller;
+  final FocusNode focusNode;
 }
 
 // ---- Minimal gesture wrapper ----

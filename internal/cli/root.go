@@ -57,10 +57,18 @@ func init() {
 // If --config is set, loads that specific file. Otherwise loads probe.yaml from cwd.
 func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 	cfgPath, _ := cmd.Flags().GetString("config")
+	var cfg *config.Config
+	var err error
 	if cfgPath != "" {
-		return config.LoadFile(cfgPath)
+		cfg, err = config.LoadFile(cfgPath)
+	} else {
+		cfgDir, _ := os.Getwd()
+		cfg, err = config.Load(cfgDir)
 	}
-	cfgDir, _ := os.Getwd()
-	return config.Load(cfgDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg.CLIVersion = Version
+	return cfg, nil
 }
 

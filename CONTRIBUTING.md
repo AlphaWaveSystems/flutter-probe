@@ -72,6 +72,42 @@ If your change affects the ProbeScript language (new syntax, modified parsing):
 4. Update golden files if converter output changes (`make update-golden`)
 5. Run `make lint` to verify all `.probe` files still parse correctly
 
+## API Stability & Deprecation Policy
+
+`flutter_probe_agent`'s public Dart API (anything exported from
+`package:flutter_probe_agent/flutter_probe_agent.dart`) is used directly by
+downstream apps' test code, so removing or changing it breaks real projects
+without warning if done carelessly. This happened once already: a minor
+version bump reduced the public API surface down to just `ProbeAgent` and
+`isProbeEnabled`, silently deleting a plugin-registration API
+(`ProbePlugin`/`ProbePluginRegistry`) that at least one downstream project
+had a load-bearing test-automation feature built on top of, with no
+deprecation cycle and no CHANGELOG migration note beyond "reduced public
+API."
+
+To prevent a repeat, any removal or breaking change to the public API must
+follow this sequence:
+
+1. **Deprecate first.** Mark the old API `@Deprecated('...')` with a message
+   naming the replacement, for at least one minor version before removal.
+2. **Document the migration.** The CHANGELOG entry for the deprecation must
+   name the replacement pattern explicitly — not just "deprecated X" or
+   "reduced public API."
+3. **Remove in a later minor version**, with its own CHANGELOG entry
+   referencing the original deprecation.
+
+If a use case the current public API supports (e.g. extending/customizing
+agent behavior from the app side) is intentionally being dropped rather than
+replaced, say so explicitly in the CHANGELOG and in the PR description —
+don't let it read as an oversight.
+
+`ProbePlugin`/`ProbePluginRegistry` specifically: whether that capability
+should be reintroduced (under a deprecation-safe path this time) or the
+removal should stand as a permanent, intentional scope decision is a product
+call for the maintainer, not something this policy resolves on its own —
+it's tracked as an open question in `IMPROVEMENT_TASKS.md` (PT-08) pending
+that decision.
+
 ## Questions?
 
 If you are unsure about anything, open an issue to discuss before starting work. We are happy to help guide contributions.

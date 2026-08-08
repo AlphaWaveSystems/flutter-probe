@@ -28,12 +28,19 @@ Update your MCP client configuration to call that binary directly:
 This subcommand is kept for backwards compatibility and runs the same server
 embedded in the main `+"`probe`"+` binary. It will be removed in a future release.`,
 	// SilenceErrors keeps stdout clean for MCP JSON-RPC traffic; deprecation
-	// notice is written to stderr only.
+	// notice is written to stderr only. A server error is still printed
+	// explicitly below (to stderr, never stdout) — SilenceErrors only
+	// suppresses cobra's own automatic "Error: ..." print, it doesn't mean
+	// the error should vanish entirely.
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr,
 			"⚠  `probe mcp-server` is deprecated. Configure your MCP client to call `probe-mcp` directly.")
-		return mcp.NewServer().Run()
+		if err := mcp.NewServer().Run(); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			return err
+		}
+		return nil
 	},
 }
 

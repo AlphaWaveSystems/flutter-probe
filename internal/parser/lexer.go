@@ -99,6 +99,10 @@ func (l *Lexer) nextLine() error {
 			if err := l.lexString(); err != nil {
 				return err
 			}
+		case ch == '<':
+			if err := l.lexBarePlaceholder(); err != nil {
+				return err
+			}
 		case ch == ':':
 			l.emit(TOKEN_COLON, ":")
 			l.pos++
@@ -131,6 +135,35 @@ func (l *Lexer) nextLine() error {
 	l.emit(TOKEN_NEWLINE, "\n")
 	l.consumeNewline()
 	return nil
+}
+
+// lexBarePlaceholder handles an unquoted '<' encountered outside a string
+// literal. PT-02(b): angle brackets have no meaning anywhere in ProbeScript
+// grammar except as a placeholder marker (<email>, <random.uuid>, etc.), and
+// that marker only survives lexing when quoted (type "<email>") — the
+// resolver substitutes placeholders found inside string literals. An
+// unquoted <email> previously had both angle brackets silently dropped
+// character-by-character here, leaving the bare identifier "email" to be
+// typed/matched as ordinary literal text with no indication anything was
+// wrong. This is now a parse error pointing the author at the fix.
+func (l *Lexer) lexBarePlaceholder() error {
+	startCol := l.col
+	start := l.pos
+	l.pos++ // skip '<'
+	l.col++
+	for l.pos < len(l.src) && l.src[l.pos] != '>' && l.src[l.pos] != '\n' {
+		l.pos++
+		l.col++
+	}
+	if l.pos >= len(l.src) || l.src[l.pos] == '\n' {
+		// No matching '>' on this line — not placeholder-shaped, just a
+		// stray character with no meaning in this grammar.
+		return fmt.Errorf("line %d: unexpected character '<' at col %d", l.line, startCol)
+	}
+	name := string(l.src[start+1 : l.pos])
+	return fmt.Errorf(
+		"line %d: unquoted placeholder <%s> at col %d — placeholders must be quoted to be substituted (write \"<%s>\" instead of <%s>); an unquoted placeholder is silently typed/matched as literal text",
+		l.line, name, startCol, name, name)
 }
 
 func (l *Lexer) lexString() error {
@@ -240,6 +273,21 @@ func (l *Lexer) lexIdent() {
 	for l.pos < len(l.src) {
 		ch := l.src[l.pos]
 		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '\'' {
+			l.pos++
+			l.col++
+		} else if ch == '-' && l.pos+1 < len(l.src) &&
+			(unicode.IsLetter(l.src[l.pos+1]) || unicode.IsDigit(l.src[l.pos+1])) {
+			// PT-24: a word-internal hyphen (e.g. "looking-for") stays part
+			// of the identifier rather than splitting into its own token —
+			// otherwise a hyphenated recipe name tokenizes differently at
+			// the call site (bare words rejoined with spaces around the
+			// hyphen) than at its quoted-string definition site (hyphen
+			// preserved as-is), and the two never match. A standalone "-"
+			// (e.g. the negative sign in `set location -33.8, 151.2`) is
+			// unaffected: it's only ever reached here when it directly
+			// follows another identifier character, never at the start of
+			// a token — a leading "-" is lexed separately (see the
+			// '-' case in nextToken), on its own.
 			l.pos++
 			l.col++
 		} else {

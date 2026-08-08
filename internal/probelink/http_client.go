@@ -132,6 +132,20 @@ func (c *HTTPClient) Ping(ctx context.Context) error {
 	return err
 }
 
+// Handshake performs the initial connect-time version exchange (see
+// ProbeClient.Handshake).
+func (c *HTTPClient) Handshake(ctx context.Context, clientVersion string) (*HandshakeResult, error) {
+	raw, err := c.Call(ctx, MethodPing, PingParams{ClientVersion: clientVersion})
+	if err != nil {
+		return nil, err
+	}
+	var res PingResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, fmt.Errorf("handshake: decoding ping result: %w", err)
+	}
+	return &HandshakeResult{AgentVersion: res.AgentVersion}, nil
+}
+
 // Close marks the client as closed.
 func (c *HTTPClient) Close() error {
 	c.mu.Lock()

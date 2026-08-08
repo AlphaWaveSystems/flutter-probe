@@ -39,6 +39,12 @@ type Config struct {
 	Recipes   string           `yaml:"recipes_folder"`
 	Reports   string           `yaml:"reports_folder"`
 	Env       map[string]string `yaml:"environment"`
+
+	// CLIVersion is the running probe binary's version (internal/cli.Version).
+	// Not a probe.yaml field — populated programmatically by the cli package
+	// after loading, so runner/probelink code can include it in the connect
+	// handshake without importing internal/cli (which would be a cycle).
+	CLIVersion string `yaml:"-"`
 }
 
 // CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.
@@ -97,6 +103,7 @@ type AgentConfig struct {
 	ReconnectDelay    time.Duration `yaml:"reconnect_delay"`     // delay after app restart before attempting WebSocket reconnect (default: 2s)
 	ReconnectAttempts int           `yaml:"reconnect_attempts"`  // max auto-reconnect attempts after a connection drop mid-test (default: 4)
 	ReconnectBackoff  time.Duration `yaml:"reconnect_backoff"`   // base delay for exponential reconnect backoff: delay = base << (attempt-1), capped at 8s, ±20% jitter (default: 1s)
+	LaunchTimeout     time.Duration `yaml:"launch_timeout"`      // max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — distinct from dial_timeout/token_read_timeout since a real app's cold-launch path (e.g. Firebase App Check init) can cost far more than a warm reconnect (default: 120s)
 }
 
 // DeviceConfig controls emulator/simulator startup and polling.
@@ -144,6 +151,7 @@ var defaultConfig = Config{
 		ReconnectDelay:    2 * time.Second,
 		ReconnectAttempts: 4,
 		ReconnectBackoff:  1 * time.Second,
+		LaunchTimeout:     120 * time.Second,
 	},
 	Device: DeviceConfig{
 		EmulatorBootTimeout:  120 * time.Second,
@@ -254,6 +262,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Agent.ReconnectBackoff == 0 {
 		cfg.Agent.ReconnectBackoff = d.Agent.ReconnectBackoff
 	}
+	if cfg.Agent.LaunchTimeout == 0 {
+		cfg.Agent.LaunchTimeout = d.Agent.LaunchTimeout
+	}
 
 	if cfg.Device.EmulatorBootTimeout == 0 {
 		cfg.Device.EmulatorBootTimeout = d.Device.EmulatorBootTimeout
@@ -340,6 +351,7 @@ agent:
   ping_interval: 5s        # WebSocket keepalive ping interval
   token_read_timeout: 30s  # max time to wait for the agent auth token
   reconnect_delay: 2s      # delay after app restart before reconnecting
+  launch_timeout: 120s     # max time for restart/clear-data to force-stop, relaunch, and reconnect — raise this if your app has an expensive cold-launch path (e.g. Firebase App Check init)
 
 # Emulator / simulator startup settings
 device:

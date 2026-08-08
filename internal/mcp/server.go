@@ -204,6 +204,8 @@ Named parameters cover the most common options. Any probe test flag can be passe
 
 Key flags for the flags parameter:
   --timeout 60s               per-step timeout (default 30s)
+  --launch-timeout 3m         timeout for restart the app/clear app data specifically (default 120s) -
+                               raise this if those steps time out on an app with an expensive cold-launch path
   --format json|junit         structured output (default: terminal)
   --dry-run                   validate syntax without connecting to a device
   --parallel                  distribute tests across all connected devices

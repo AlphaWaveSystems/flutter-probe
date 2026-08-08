@@ -3,13 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'agent_version.dart';
 import 'executor.dart';
 import 'mdns_advertise.dart';
 import 'protocol.dart';
 
-/// Agent version used in mDNS TXT records so discovery clients can render
-/// version info next to each device. Bumped together with pubspec.yaml.
-const String probeAgentVersion = '0.7.0';
+export 'agent_version.dart' show probeAgentVersion;
 
 /// ProbeServer is a WebSocket server that listens on localhost:48686.
 ///

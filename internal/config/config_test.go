@@ -66,6 +66,38 @@ defaults:
 	if cfg.Agent.Port != 48686 {
 		t.Errorf("agent port should default: got %d", cfg.Agent.Port)
 	}
+	if cfg.Agent.LaunchTimeout != 120*time.Second {
+		t.Errorf("launch timeout should default: got %v", cfg.Agent.LaunchTimeout)
+	}
+}
+
+// TestLoadFile_LaunchTimeoutOverride confirms agent.launch_timeout (PT-10) is
+// read from probe.yaml — the distinct, generously-sized timeout for
+// restart/clear-data cold-launch+reconnect, separate from dial_timeout.
+func TestLoadFile_LaunchTimeoutOverride(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "probe.yaml")
+	yaml := `project:
+  name: "Test App"
+  app: com.test.app
+agent:
+  launch_timeout: 5m
+`
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Agent.LaunchTimeout != 5*time.Minute {
+		t.Errorf("launch timeout: got %v, want %v", cfg.Agent.LaunchTimeout, 5*time.Minute)
+	}
+	// Untouched fields should still default normally.
+	if cfg.Agent.DialTimeout != 30*time.Second {
+		t.Errorf("dial timeout should default: got %v", cfg.Agent.DialTimeout)
+	}
 }
 
 func TestLoadFile_InvalidAppID(t *testing.T) {

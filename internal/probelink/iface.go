@@ -11,6 +11,12 @@ import (
 type ProbeClient interface {
 	Call(ctx context.Context, method string, params any) (json.RawMessage, error)
 	Ping(ctx context.Context) error
+	// Handshake performs the initial connect-time version exchange: sends
+	// clientVersion to the agent and returns whatever version the agent
+	// reports (AgentVersion is "" if the agent predates this field). It does
+	// not compare versions itself — see VersionMismatchWarning and
+	// MajorVersionIncompatible for that.
+	Handshake(ctx context.Context, clientVersion string) (*HandshakeResult, error)
 	Close() error
 	Connected() bool
 	WaitSettled(ctx context.Context, timeout time.Duration) error

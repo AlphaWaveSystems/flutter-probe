@@ -42,6 +42,7 @@ type Executor struct {
 	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64 // incremented on each successful reconnect
+	launchTimeout        time.Duration // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 }
 
 // NewExecutor creates an Executor.
@@ -63,6 +64,25 @@ func NewExecutor(client probelink.ProbeClient, deviceCtx *DeviceContext, onRecon
 func (e *Executor) SetReconnectPolicy(attempts int, backoff time.Duration) {
 	e.maxReconnectAttempts = attempts
 	e.reconnectBackoff = backoff
+}
+
+// defaultLaunchTimeout is used when SetLaunchTimeout is never called (e.g. dry-run mode)
+// or is called with a zero value.
+const defaultLaunchTimeout = 120 * time.Second
+
+// SetLaunchTimeout configures the timeout applied to `restart the app`/`clear app data`,
+// taken from agent.launch_timeout in probe.yaml. A zero value falls back to the default.
+func (e *Executor) SetLaunchTimeout(d time.Duration) {
+	e.launchTimeout = d
+}
+
+// launchTimeoutOrDefault returns the configured launch timeout, or defaultLaunchTimeout
+// if it was never set.
+func (e *Executor) launchTimeoutOrDefault() time.Duration {
+	if e.launchTimeout <= 0 {
+		return defaultLaunchTimeout
+	}
+	return e.launchTimeout
 }
 
 // RegisterRecipe adds a recipe to the executor's scope.
@@ -112,7 +132,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	isLifecycleAction := false
 	if a, ok := step.(parser.ActionStep); ok {
 		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData {
-			stepTimeout = 90 * time.Second
+			stepTimeout = e.launchTimeoutOrDefault()
 		}
 		// Don't auto-reconnect for actions that intentionally close the connection
 		if a.Verb == parser.VerbRestart || a.Verb == parser.VerbClearAppData || a.Verb == parser.VerbKill {
@@ -176,7 +196,15 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 			maxAttempts = 4
 		}
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			if reconnErr := e.tryReconnect(ctx, attempt); reconnErr != nil {
+			// PT-25: the outer ctx passed into runStep has no deadline of its
+			// own (only Ctrl-C cancels it) — bound each reconnect attempt to
+			// stepTimeout so a hung adb/device call during reconnect can't
+			// leave the CLI sitting silent indefinitely, only recoverable by
+			// manually interrupting it.
+			reconnectCtx, reconnectCancel := context.WithTimeout(ctx, stepTimeout)
+			reconnErr := e.tryReconnect(reconnectCtx, attempt)
+			reconnectCancel()
+			if reconnErr != nil {
 				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
 				break
 			}
@@ -411,7 +439,30 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if a.Sel != nil {
 			screen = a.Sel.Text
 		}
-		return e.client.Open(ctx, screen)
+		err := e.client.Open(ctx, screen)
+		if err == nil || !isConnectionError(err) || e.deviceCtx == nil {
+			return err
+		}
+		// PT-09 (found while documenting cross-test state behavior): `open the
+		// app` after `kill the app` closes the connection but never actually
+		// relaunches — this just sent an RPC over the now-dead client, which
+		// failed, and runStep's generic reconnect-on-error path only re-dials
+		// assuming the app process is already running again on its own. It
+		// never was (kill force-stopped it), so this used to retry a dial to
+		// a genuinely dead process until it gave up. Launch the app for real
+		// here, the same way `restart the app` does, before reconnecting.
+		if err := e.deviceCtx.RestartApp(ctx); err != nil {
+			return fmt.Errorf("open the app: %w", err)
+		}
+		newClient, reconnErr := e.deviceCtx.Reconnect(ctx)
+		if reconnErr != nil {
+			return fmt.Errorf("open the app: %w", reconnErr)
+		}
+		e.client = newClient
+		if e.onReconnect != nil {
+			e.onReconnect(newClient)
+		}
+		return nil
 
 	case parser.VerbTap:
 		if a.Sel == nil {
@@ -810,15 +861,24 @@ func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
 
 func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
 	recipe, ok := e.recipes[rc.Name]
+	stripped := rc.Name
 	if !ok {
 		// Try matching by stripping <arg> placeholders and filler words from the call name.
 		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
-		stripped := stripRecipeCallArgs(rc.Name)
+		stripped = stripRecipeCallArgs(rc.Name)
 		recipe, ok = e.recipes[stripped]
 	}
 	if !ok {
-		// Unknown recipe — skip rather than error (may be a filler line)
-		return nil
+		// PT-02(a): an unrecognized recipe call used to silently no-op ("may
+		// be a filler line"), which masked genuine typos and broken recipe
+		// references for as long as no test ever surfaced the resulting
+		// missing behavior. Every other "no matching case" fallthrough in
+		// this executor already errors loudly (see runAction's default
+		// case) — this was the sole silent exception.
+		if stripped != rc.Name {
+			return fmt.Errorf("line %d: unknown recipe call %q (also tried %q with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name, stripped)
+		}
+		return fmt.Errorf("line %d: unknown recipe call %q — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name)
 	}
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
@@ -890,6 +950,24 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	}
 
 	newClient, err := e.deviceCtx.Reconnect(ctx)
+	if err != nil && isConnectionRefused(err) {
+		// PT-18: a plain re-dial only helps if the app process is still
+		// running and the connection merely dropped (e.g. a transient
+		// network blip) — Reconnect never relaunches anything. If the
+		// process itself is gone (most commonly because a prior
+		// `kill the app` step was followed by something other than
+		// `open the app`/`restart the app`), nothing is listening at all
+		// and re-dialing can never succeed no matter how many attempts are
+		// left. A connection-refused dial failure specifically indicates
+		// that — a transient drop would show up as a timeout or reset on a
+		// socket that's still accepting connections, not "refused" on a
+		// fresh dial. Relaunch once and retry immediately instead of
+		// wasting the remaining attempts on a doomed re-dial.
+		fmt.Printf("    \033[33m⟳\033[0m  Nothing listening — relaunching before retrying...\n")
+		if restartErr := e.deviceCtx.RestartApp(ctx); restartErr == nil {
+			newClient, err = e.deviceCtx.Reconnect(ctx)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("auto-reconnect failed: %w", err)
 	}
@@ -900,6 +978,13 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	}
 	fmt.Printf("    \033[32m⟳\033[0m  Reconnected successfully (attempt %d)\n", attempt)
 	return nil
+}
+
+// isConnectionRefused reports whether err indicates a dial found nothing
+// listening at all (ECONNREFUSED), as opposed to a timeout or reset on a
+// connection to a process that's still alive.
+func isConnectionRefused(err error) bool {
+	return strings.Contains(err.Error(), "connection refused")
 }
 
 // reconnectDelay returns base << (attempt-1), capped at 8s, plus ±20% jitter.
@@ -932,8 +1017,21 @@ func (e *Executor) resolve(s string) string {
 	// Then: substitute data-driven and recipe variables
 	for k, v := range e.vars {
 		old := "<" + k + ">"
-		for len(s) > 0 && containsSubstr(s, old) {
-			s = replaceFirst(s, old, v)
+		// PT-02(c): a variable can end up bound to a value that itself
+		// contains its own placeholder marker — e.g. passing the unquoted
+		// literal "<email>" as the argument for a recipe param named email
+		// (runRecipeCall binds it verbatim). Substituting "<email>" for
+		// "<email>" makes no progress and previously looped forever, hanging
+		// the CLI with no error. maxSubstitutions bounds the loop so this
+		// terminates; the `next == s` check exits immediately for the exact
+		// self-reference case (v == old) without waiting out the full cap.
+		const maxSubstitutions = 1000
+		for i := 0; i < maxSubstitutions && len(s) > 0 && containsSubstr(s, old); i++ {
+			next := replaceFirst(s, old, v)
+			if next == s {
+				break
+			}
+			s = next
 		}
 	}
 	return s

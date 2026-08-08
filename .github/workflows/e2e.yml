@@ -56,17 +56,17 @@ jobs:
     steps:
       # ── Checkout repos ──
       - name: Checkout FlutterProbe
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout E2E test app
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.E2E_REPO }}
           path: e2e-app
 
       # ── Tool setup ──
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.26"
           cache: true
@@ -97,7 +97,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: AVD cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         id: avd-cache
         with:
           path: |
@@ -123,7 +123,7 @@ jobs:
           cd e2e-app/mobile
           cat > pubspec_overrides.yaml << 'EOF'
           dependency_overrides:
-            probe_agent:
+            flutter_probe_agent:
               path: ../../probe_agent
           EOF
 
@@ -191,17 +191,17 @@ jobs:
     steps:
       # ── Checkout repos ──
       - name: Checkout FlutterProbe
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout E2E test app
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.E2E_REPO }}
           path: e2e-app
 
       # ── Tool setup ──
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.26"
           cache: true
@@ -237,7 +237,7 @@ jobs:
           cd e2e-app/mobile
           cat > pubspec_overrides.yaml << 'EOF'
           dependency_overrides:
-            probe_agent:
+            flutter_probe_agent:
               path: ../../probe_agent
           EOF
 

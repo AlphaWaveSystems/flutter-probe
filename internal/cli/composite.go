@@ -113,9 +113,13 @@ func connectCompositeDevice(
 		if err != nil {
 			return runner.CompositeDevice{}, nil, fmt.Errorf("dial: %w", err)
 		}
-		if err := client.Ping(ctx); err != nil {
+		warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+		if err != nil {
 			client.Close()
-			return runner.CompositeDevice{}, nil, fmt.Errorf("ping: %w", err)
+			return runner.CompositeDevice{}, nil, fmt.Errorf("handshake: %w", err)
+		}
+		if warning != "" {
+			fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", alias, warning)
 		}
 
 		dev := runner.CompositeDevice{
@@ -194,6 +198,7 @@ func connectCompositeDevice(
 			RestartDelay:     cfg.Device.RestartDelay,
 			TokenReadTimeout: cfg.Agent.TokenReadTimeout,
 			DialTimeout:      cfg.Agent.DialTimeout,
+			CLIVersion:       cfg.CLIVersion,
 		}
 
 	default: // Android
@@ -223,12 +228,17 @@ func connectCompositeDevice(
 			RestartDelay:     cfg.Device.RestartDelay,
 			TokenReadTimeout: cfg.Agent.TokenReadTimeout,
 			DialTimeout:      cfg.Agent.DialTimeout,
+			CLIVersion:       cfg.CLIVersion,
 		}
 	}
 
-	if err := client.Ping(ctx); err != nil {
+	warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+	if err != nil {
 		client.Close()
-		return runner.CompositeDevice{}, nil, fmt.Errorf("ping: %w", err)
+		return runner.CompositeDevice{}, nil, fmt.Errorf("handshake: %w", err)
+	}
+	if warning != "" {
+		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", alias, warning)
 	}
 
 	dev := runner.CompositeDevice{

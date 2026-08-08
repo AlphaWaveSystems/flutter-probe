@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -229,6 +230,104 @@ func TestParser_OpenApp(t *testing.T) {
 	}
 }
 
+// TestParser_OpenLink covers the other documented "open" form, to make sure
+// the PT-23 fix's lookahead doesn't regress it.
+func TestParser_OpenLink(t *testing.T) {
+	src := `test "t"
+  open link "https://example.com"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbOpenLink {
+		t.Errorf("verb: got %q, want open_link", a.Verb)
+	}
+	if a.Name != "https://example.com" {
+		t.Errorf("url: got %q", a.Name)
+	}
+}
+
+// TestParser_RecipeCallStartingWithOpen covers PT-23: a recipe named
+// "open ..." used to be swallowed by the built-in open verb's undocumented
+// bare-selector fallback (only "the app"/"app"/a link are actually
+// documented forms), consuming just the next bare word as a selector and
+// leaving the rest of the line to misparse as a second, stray, unknown
+// recipe call.
+func TestParser_RecipeCallStartingWithOpen(t *testing.T) {
+	src := `recipe "open most recent post"
+  tap "Feed"
+
+test "t"
+  open most recent post
+`
+	prog := mustParse(t, src)
+	if len(prog.Recipes) != 1 || prog.Recipes[0].Name != "open most recent post" {
+		t.Fatalf("recipe: got %+v", prog.Recipes)
+	}
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	call, ok := prog.Tests[0].Body[0].(parser.RecipeCall)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.RecipeCall", prog.Tests[0].Body[0])
+	}
+	if call.Name != "open most recent post" {
+		t.Errorf("recipe call name: got %q, want %q", call.Name, "open most recent post")
+	}
+}
+
+// TestParser_HyphenatedRecipeCall covers PT-24: a recipe defined with a
+// hyphenated name used to tokenize differently at the call site (bare
+// words, hyphen lexed as its own token and rejoined with surrounding
+// spaces: "looking - for") than at the definition site (a quoted string,
+// hyphen preserved as-is: "looking-for") — so the two could never match.
+func TestParser_HyphenatedRecipeCall(t *testing.T) {
+	src := `recipe "create looking-for post" (title, description)
+  log title
+
+test "t"
+  create looking-for post "X" "Y"
+`
+	prog := mustParse(t, src)
+	if len(prog.Recipes) != 1 || prog.Recipes[0].Name != "create looking-for post" {
+		t.Fatalf("recipe: got %+v", prog.Recipes)
+	}
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	call, ok := prog.Tests[0].Body[0].(parser.RecipeCall)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.RecipeCall", prog.Tests[0].Body[0])
+	}
+	if call.Name != "create looking-for post <arg> <arg>" {
+		t.Errorf("recipe call name: got %q", call.Name)
+	}
+	if len(call.Args) != 2 || call.Args[0] != "X" || call.Args[1] != "Y" {
+		t.Errorf("recipe call args: got %+v", call.Args)
+	}
+}
+
+// TestParser_SetLocationNegativeCoordinates guards against a regression in
+// the PT-24 fix above: a standalone "-" (the negative sign in `set
+// location`) must still lex as its own token, since it's preceded by a
+// space, not another identifier character.
+func TestParser_SetLocationNegativeCoordinates(t *testing.T) {
+	src := `test "t"
+  set location -33.8688, 151.2093
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbSetLocation {
+		t.Fatalf("verb: got %q, want set_location", a.Verb)
+	}
+	if a.Name != "-33.8688,151.2093" {
+		t.Errorf("coordinates: got %q", a.Name)
+	}
+}
+
 func TestParser_TapTextSelector(t *testing.T) {
 	src := `test "t"
   tap on "Sign In"
@@ -271,6 +370,32 @@ func TestParser_TapOrdinalSelector(t *testing.T) {
 	}
 }
 
+// TestParser_TapOrdinalIDSelector covers PT-26: an ordinal combined with an
+// id-selector (rather than quoted text) used to leave the "#id" token
+// completely unconsumed — parseSelector's ordinal branch only checked for
+// TOKEN_STRING/TOKEN_IDENT after the ordinal, never TOKEN_ID — so the
+// dangling "#id" token misparsed as a second, stray, unknown recipe call.
+func TestParser_TapOrdinalIDSelector(t *testing.T) {
+	src := `test "t"
+  tap 1st #post_list_card
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Sel == nil || a.Sel.Kind != parser.SelectorOrdinal {
+		t.Fatalf("expected ordinal selector, got %v", a.Sel)
+	}
+	if a.Sel.Ordinal != 1 {
+		t.Errorf("ordinal: got %d, want 1", a.Sel.Ordinal)
+	}
+	if a.Sel.Text != "#post_list_card" {
+		t.Errorf("ordinal text: got %q, want %q", a.Sel.Text, "#post_list_card")
+	}
+}
+
 func TestParser_TypeIntoField(t *testing.T) {
 	src := `test "t"
   type "hello@test.com" into the "Email" field
@@ -307,6 +432,36 @@ func TestParser_Swipe(t *testing.T) {
 		prog := mustParse(t, tc.src)
 		a := firstAction(t, prog.Tests[0].Body)
 		if a.Verb != parser.VerbSwipe {
+			t.Errorf("verb: got %q", a.Verb)
+		}
+		if a.Direction != tc.dir {
+			t.Errorf("direction: got %q, want %q", a.Direction, tc.dir)
+		}
+	}
+}
+
+// TestParser_Scroll mirrors TestParser_Swipe — scroll's grammar was
+// previously untested even though it shares the same parse function shape
+// (direction + optional selector-scoping via "in"/"on").
+func TestParser_Scroll(t *testing.T) {
+	tests := []struct {
+		src string
+		dir parser.SwipeDirection
+	}{
+		{`test "t"
+  scroll down
+`, parser.SwipeDown},
+		{`test "t"
+  scroll down in #my_list
+`, parser.SwipeDown},
+		{`test "t"
+  scroll up on the "Feed" list
+`, parser.SwipeUp},
+	}
+	for _, tc := range tests {
+		prog := mustParse(t, tc.src)
+		a := firstAction(t, prog.Tests[0].Body)
+		if a.Verb != parser.VerbScroll {
 			t.Errorf("verb: got %q", a.Verb)
 		}
 		if a.Direction != tc.dir {
@@ -388,6 +543,27 @@ func TestParser_SeeEnabled(t *testing.T) {
 
 // ---- Parser: wait steps ----
 
+// TestParser_Drag covers PT-19: "to" was never actually consumable anywhere
+// in the grammar (missing from fillerWords, and used nowhere else), so
+// `drag <sel> to <sel>` — the documented syntax — always failed to parse
+// the second selector correctly.
+func TestParser_Drag(t *testing.T) {
+	src := `test "t"
+  drag #drag_source to #drag_target
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbDrag {
+		t.Fatalf("verb: got %q, want %q", a.Verb, parser.VerbDrag)
+	}
+	if a.Sel == nil || a.Sel.Kind != parser.SelectorID || a.Sel.Text != "#drag_source" {
+		t.Errorf("from selector: got %+v", a.Sel)
+	}
+	if a.To == nil || a.To.Kind != parser.SelectorID || a.To.Text != "#drag_target" {
+		t.Errorf("to selector: got %+v", a.To)
+	}
+}
+
 func TestParser_WaitUntilAppears(t *testing.T) {
 	src := `test "t"
   wait until "Home" appears
@@ -404,6 +580,30 @@ func TestParser_WaitUntilAppears(t *testing.T) {
 	}
 	if w.Target != "Home" {
 		t.Errorf("wait target: %q", w.Target)
+	}
+}
+
+// TestParser_WaitUntilIDAppears mirrors TestParser_WaitUntilAppears but for
+// an id target — locks in that the '#' prefix survives parsing intact
+// (PT-06: the Dart agent detects the prefix at runtime to dispatch an id
+// selector instead of a text one; if the parser ever stripped or mangled it,
+// that detection would silently break again).
+func TestParser_WaitUntilIDAppears(t *testing.T) {
+	src := `test "t"
+  wait until #refresh_button appears
+`
+	prog := mustParse(t, src)
+	var w parser.WaitStep
+	for _, s := range prog.Tests[0].Body {
+		if ws, ok := s.(parser.WaitStep); ok {
+			w = ws
+		}
+	}
+	if w.Kind != parser.WaitAppears {
+		t.Errorf("wait kind: got %v", w.Kind)
+	}
+	if w.Target != "#refresh_button" {
+		t.Errorf("wait target: got %q, want %q", w.Target, "#refresh_button")
 	}
 }
 
@@ -429,12 +629,62 @@ func TestParser_WaitPageLoad(t *testing.T) {
   wait for the page to load
 `
 	prog := mustParse(t, src)
-	for _, s := range prog.Tests[0].Body {
-		if w, ok := s.(parser.WaitStep); ok {
-			if w.Kind != parser.WaitPageLoad {
-				t.Errorf("kind: got %v, want page_load", w.Kind)
-			}
-		}
+	// PT-20: this used to also pass with the bug present, because it only
+	// asserted the Kind of whatever WaitStep happened to appear — it never
+	// checked that "for the page to load" was fully consumed as PART of
+	// that one step, rather than leaking "page to load" as a second, stray
+	// statement. Assert the body has exactly one step.
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1 (leftover tokens leaking "+
+			"into a stray statement?): %+v", len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.WaitStep", prog.Tests[0].Body[0])
+	}
+	if w.Kind != parser.WaitPageLoad {
+		t.Errorf("kind: got %v, want page_load", w.Kind)
+	}
+}
+
+// TestParser_WaitForPageToLoadNoThe covers PT-20: the same verb without
+// "the" ("wait for page to load", also documented on flutterprobe.dev).
+func TestParser_WaitForPageToLoadNoThe(t *testing.T) {
+	src := `test "t"
+  wait for page to load
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v", len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.WaitStep", prog.Tests[0].Body[0])
+	}
+	if w.Kind != parser.WaitPageLoad {
+		t.Errorf("kind: got %v, want page_load", w.Kind)
+	}
+}
+
+// TestParser_WaitForNetworkIdle covers PT-20: "wait for network idle" used
+// to produce a WaitPageLoad step (wrong kind) plus a stray, unconsumed
+// "network idle" statement that failed at runtime as an unknown recipe
+// call — invisible to `probe lint`, since both halves parse as
+// individually-valid syntax.
+func TestParser_WaitForNetworkIdle(t *testing.T) {
+	src := `test "t"
+  wait for network idle
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v", len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.WaitStep", prog.Tests[0].Body[0])
+	}
+	if w.Kind != parser.WaitNetworkIdle {
+		t.Errorf("kind: got %v, want network_idle", w.Kind)
 	}
 }
 
@@ -462,6 +712,83 @@ func TestParser_Conditional(t *testing.T) {
 	}
 	if !hasConditional {
 		t.Error("no conditional step found")
+	}
+}
+
+// TestParser_ElseIsAcceptedAsOtherwiseAlias covers PT-02(d): "else" previously
+// lexed as a plain identifier, was silently treated as an unknown recipe
+// call (a sibling step of the "if", not nested inside it), and its body ran
+// unconditionally regardless of the "if" condition. "else" must now behave
+// exactly like "otherwise".
+func TestParser_ElseIsAcceptedAsOtherwiseAlias(t *testing.T) {
+	src := `test "t"
+  open the app
+  if "Allow Notifications" appears
+    tap "Not Now"
+  else
+    tap "Continue"
+  see "Home"
+`
+	prog := mustParse(t, src)
+	var cond *parser.ConditionalStep
+	for _, s := range prog.Tests[0].Body {
+		if c, ok := s.(parser.ConditionalStep); ok {
+			cond = &c
+		}
+	}
+	if cond == nil {
+		t.Fatal("no conditional step found")
+	}
+	if len(cond.Then) == 0 {
+		t.Error("then branch is empty")
+	}
+	if len(cond.Else) == 0 {
+		t.Fatal("else branch is empty — 'else' was not recognized as an alias for 'otherwise'")
+	}
+}
+
+// TestParser_UnquotedPlaceholderIsParseError covers PT-02(b): an unquoted
+// <email>-style placeholder previously had both angle brackets silently
+// dropped by the lexer, leaving a bare identifier that gets typed/matched as
+// literal text with zero indication anything went wrong.
+func TestParser_UnquotedPlaceholderIsParseError(t *testing.T) {
+	src := `test "t"
+  open the app
+  type <email> into the "Email" field
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for an unquoted placeholder, got nil")
+	}
+	if !strings.Contains(err.Error(), "<email>") {
+		t.Errorf("error should name the placeholder, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "quot") {
+		t.Errorf("error should suggest quoting the placeholder, got: %v", err)
+	}
+}
+
+// TestParser_QuotedPlaceholderStillWorks confirms the fix for (b) didn't
+// break the correct, already-documented quoted-placeholder pattern.
+func TestParser_QuotedPlaceholderStillWorks(t *testing.T) {
+	src := `test "t"
+  open the app
+  type "<email>" into the "Email" field
+`
+	mustParse(t, src)
+}
+
+// TestParser_LoneAngleBracketIsParseError covers the case where '<' isn't
+// placeholder-shaped at all (no matching '>' on the line) — it should still
+// be a clear parse error rather than a silently-dropped character.
+func TestParser_LoneAngleBracketIsParseError(t *testing.T) {
+	src := `test "t"
+  open the app
+  tap < "Something"
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for a lone '<' with no matching '>', got nil")
 	}
 }
 
@@ -522,10 +849,10 @@ func TestParser_DataDrivenTest(t *testing.T) {
 	src := `test "login validation"
   open the app
   tap "Sign In"
-  type <email> into the "Email" field
-  type <password> into the "Password" field
+  type "<email>" into the "Email" field
+  type "<password>" into the "Password" field
   tap "Continue"
-  see <expected>
+  see "<expected>"
 
 with examples:
   email               password   expected

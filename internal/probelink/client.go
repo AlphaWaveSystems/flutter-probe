@@ -37,6 +37,20 @@ type DialOptions struct {
 	Port        int           // default 48686
 	Token       string        // one-time auth token
 	DialTimeout time.Duration // max time to establish connection (default 30s)
+
+	// Trace, if non-nil, receives a message for every dial attempt (success,
+	// transient retry, or non-transient failure). Nil (the default) disables
+	// tracing entirely. See PT-01 in IMPROVEMENT_TASKS.md — Android connect
+	// failures were previously a black box with no visibility into whether
+	// the CLI ever actually reached the agent's WebSocket server.
+	Trace func(format string, args ...any)
+}
+
+// trace calls opts.Trace with the given message, or does nothing if it's nil.
+func (opts DialOptions) trace(format string, args ...any) {
+	if opts.Trace != nil {
+		opts.Trace(format, args...)
+	}
 }
 
 // Client is a ProbeLink WebSocket client connecting to the ProbeAgent.
@@ -93,17 +107,22 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	var conn *websocket.Conn
 	var lastErr error
 	const retryInterval = time.Second
+	attempt := 0
+	opts.trace("probelink: dialing %s (timeout=%s)", safeURL, opts.DialTimeout)
 	for {
+		attempt++
 		var err error
 		var resp *http.Response
 		conn, resp, err = dialer.DialContext(dialCtx, u.String(), nil)
 		if err == nil {
+			opts.trace("probelink: [attempt %d] dial succeeded", attempt)
 			break
 		}
 		lastErr = err
 		// A real HTTP auth rejection from the agent is fatal — retrying with
 		// the same token cannot succeed.
 		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+			opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — giving up", attempt, resp.StatusCode)
 			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w", safeURL, resp.StatusCode, err)
 		}
 		// "bad handshake" without an auth response is transient on Android:
@@ -112,10 +131,13 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// creating the forward dies mid-handshake even though the agent is
 		// healthy. Retry it like any other startup race.
 		if !errors.Is(err, websocket.ErrBadHandshake) && !isTransientDialError(err) {
+			opts.trace("probelink: [attempt %d] dial failed (non-transient): %v — giving up", attempt, err)
 			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
 		}
+		opts.trace("probelink: [attempt %d] dial failed (transient): %v — retrying in %s", attempt, err, retryInterval)
 		select {
 		case <-dialCtx.Done():
+			opts.trace("probelink: dial deadline exceeded after %d attempt(s): %v", attempt, lastErr)
 			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, lastErr)
 		case <-time.After(retryInterval):
 		}
@@ -303,6 +325,24 @@ func (c *Client) Call(ctx context.Context, method string, params any) (json.RawM
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.Call(ctx, MethodPing, nil)
 	return err
+}
+
+// Handshake performs the initial connect-time version exchange (see
+// ProbeClient.Handshake).
+func (c *Client) Handshake(ctx context.Context, clientVersion string) (*HandshakeResult, error) {
+	raw, err := c.Call(ctx, MethodPing, PingParams{ClientVersion: clientVersion})
+	if err != nil {
+		return nil, err
+	}
+	var res PingResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		// An agent that predates this field still returns {"ok":true}, which
+		// unmarshals fine into PingResult (AgentVersion left as ""). A
+		// genuine decode failure here means something is badly wrong with
+		// the response, not a version mismatch.
+		return nil, fmt.Errorf("handshake: decoding ping result: %w", err)
+	}
+	return &HandshakeResult{AgentVersion: res.AgentVersion}, nil
 }
 
 // WaitSettled blocks until the agent reports the UI is fully settled (triple-signal).

@@ -40,8 +40,18 @@ jobs:
                 REVIEW=$(echo "$pr"  | jq -r '.reviewDecision')
                 MERGE_STATE=$(echo "$pr" | jq -r '.mergeStateStatus')
 
-                # Skip if already in the merge queue
-                if [ "$MERGE_STATE" = "BEHIND" ] || [ "$MERGE_STATE" = "UNKNOWN" ]; then
+                # Skip only on states that definitively mean "can't merge
+                # right now": real conflicts (DIRTY) or failing
+                # required-checks/review (BLOCKED — reviewDecision is
+                # checked separately below anyway). UNKNOWN is NOT one of
+                # these — it just means GitHub hasn't finished computing
+                # mergeability yet (very common right after a PR updates),
+                # not "already queued." Treating it as "skip" meant every
+                # PR here was skipped forever, since gh pr list almost
+                # always returns UNKNOWN on a fresh poll. Let a merge
+                # attempt happen and fail on its own terms instead of
+                # pre-filtering on a stale/transient field.
+                if [ "$MERGE_STATE" = "DIRTY" ] || [ "$MERGE_STATE" = "BLOCKED" ]; then
                   echo "PR #$NUMBER — merge state is $MERGE_STATE, skipping"
                   continue
                 fi
@@ -59,6 +69,12 @@ jobs:
                 fi
 
                 echo "PR #$NUMBER ($TITLE) — eligible, adding to merge queue"
-                gh pr merge --squash "$NUMBER" --repo "$REPO" || \
+                # --auto is required here, not optional: this repo's main
+                # branch only accepts merges via the merge queue, and a
+                # bare `gh pr merge --squash` (no --auto) just prints
+                # "the merge strategy for main is set by the merge queue"
+                # and does nothing — it was never actually enqueuing
+                # anything even on the rare PR that got this far.
+                gh pr merge --squash --auto "$NUMBER" --repo "$REPO" || \
                   echo "PR #$NUMBER — merge queue failed (may already be queued)"
               done

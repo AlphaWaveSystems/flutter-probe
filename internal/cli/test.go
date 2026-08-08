@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -50,9 +51,34 @@ Resolution order: CLI flag > probe.yaml > built-in default.`,
   probe test --dial-timeout 45s             # longer connection timeout`,
 	// errTestFailed (returned on failed tests) carries no useful message — the
 	// runner already printed per-test failures. Silence cobra's default "Error: ..."
-	// output to avoid a duplicate trailing line.
+	// output to avoid a duplicate trailing line for that one case — but every
+	// other error runTests can return (token read, connect, handshake, etc.)
+	// carries a real, otherwise-unreported message, so runTestsAndReportError
+	// explicitly prints anything that isn't errTestFailed. Without this,
+	// SilenceErrors:true suppressed those messages entirely: `probe test`
+	// could fail with zero diagnostic output beyond whatever progress lines
+	// were printed before the failure (found while verifying PT-01/PT-07).
 	SilenceErrors: true,
-	RunE:          runTests,
+	RunE:          runTestsAndReportError,
+}
+
+// runTestsAndReportError wraps runTests so that any error other than
+// errTestFailed (which the runner has already reported in detail) is printed
+// before being returned — see the SilenceErrors comment above.
+func runTestsAndReportError(cmd *cobra.Command, args []string) error {
+	err := runTests(cmd, args)
+	reportIfNotTestFailure(cmd.ErrOrStderr(), err)
+	return err
+}
+
+// reportIfNotTestFailure prints err to w, unless it's nil or errTestFailed
+// (whose message is a placeholder — the runner already reported the actual
+// per-test failures in detail, so printing it again would just add a
+// redundant, uninformative trailing line).
+func reportIfNotTestFailure(w io.Writer, err error) {
+	if err != nil && !errors.Is(err, errTestFailed) {
+		fmt.Fprintln(w, "Error:", err)
+	}
 }
 
 func init() {
@@ -82,6 +108,7 @@ func init() {
 	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
 	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
+	f.Duration("launch-timeout", 0, "max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — raise this for apps with an expensive cold-launch path (default: 120s)")
 
 	// Tool paths
 	f.String("adb", "", "path to adb binary (overrides probe.yaml and PATH)")
@@ -198,6 +225,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	dialTimeout, _ := cmd.Flags().GetDuration("dial-timeout")
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
+	launchTimeout, _ := cmd.Flags().GetDuration("launch-timeout")
 
 	// Video overrides
 	videoResolution, _ := cmd.Flags().GetString("video-resolution")
@@ -219,6 +247,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if reconnectDelay != 0 {
 		cfg.Agent.ReconnectDelay = reconnectDelay
+	}
+	if launchTimeout != 0 {
+		cfg.Agent.LaunchTimeout = launchTimeout
 	}
 	if videoResolution != "" {
 		cfg.Video.Resolution = videoResolution
@@ -567,8 +598,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 
-				if err := client.Ping(ctx); err != nil {
-					return fmt.Errorf("relay agent ping failed: %w", err)
+				warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+				if err != nil {
+					return fmt.Errorf("relay agent handshake failed: %w", err)
+				}
+				if warning != "" {
+					statusWarn(statusW, "%s", warning)
 				}
 				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", targetDevice, provider.Name())
 			} else {
@@ -623,8 +658,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 
-				if err := client.Ping(ctx); err != nil {
-					return fmt.Errorf("cloud agent ping failed: %w", err)
+				warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+				if err != nil {
+					return fmt.Errorf("cloud agent handshake failed: %w", err)
+				}
+				if warning != "" {
+					statusWarn(statusW, "%s", warning)
 				}
 				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
 			}
@@ -716,10 +755,25 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if agentHost != "" {
 				host = agentHost
 			}
+
+			// trace prints step-by-step connect diagnostics when -v is set —
+			// dial attempts, port-forward setup/teardown, token-read attempts
+			// per source, and handshake accept/reject. See PT-01 in
+			// IMPROVEMENT_TASKS.md: connect failures (especially Android) were
+			// previously a total black box with no visibility into where
+			// things actually broke.
+			trace := func(format string, args ...any) {} // no-op unless -v is set
+			if verbose {
+				trace = func(format string, args ...any) {
+					fmt.Fprintf(statusW, "  \033[2mtrace: "+format+"\033[0m\n", args...)
+				}
+			}
+
 			dialOpts := probelink.DialOptions{
 				Host:        host,
 				Port:        cfg.Agent.Port,
 				DialTimeout: cfg.Agent.DialTimeout,
+				Trace:       trace,
 			}
 
 			if platform == device.PlatformIOS {
@@ -776,7 +830,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 			} else {
 				// Android: verify ADB is available and device is reachable,
 				// clean up stale port forwards
+				trace("android: ensuring adb + device %s reachable", deviceSerial)
 				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
+					trace("android: EnsureADB failed: %v", err)
 					return fmt.Errorf("android setup: %w", err)
 				}
 
@@ -792,13 +848,18 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 
 				// Android: forward port via ADB
+				trace("android: forwarding host:%d -> device:%d", cfg.Agent.Port, cfg.Agent.AgentDevicePort())
 				if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+					trace("android: ForwardPort failed: %v", err)
 					return fmt.Errorf("port forward: %w", err)
 				}
-				defer dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port) //nolint:errcheck
+				defer func() {
+					trace("android: removing port forward for host:%d", cfg.Agent.Port)
+					_ = dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port)
+				}()
 
 				fmt.Fprintln(statusW, msgWaitingForToken)
-				token, err := dm.ReadToken(ctx, deviceSerial, cfg.Agent.TokenReadTimeout)
+				token, err := dm.ReadTokenAndroid(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App, trace)
 				if err != nil {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 				}
@@ -810,8 +871,15 @@ func runTests(cmd *cobra.Command, args []string) error {
 				defer client.Close()
 			}
 
-			if err := client.Ping(ctx); err != nil {
-				return fmt.Errorf("agent ping failed: %w", err)
+			trace("handshake: comparing CLI v%s against agent", cfg.CLIVersion)
+			warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+			if err != nil {
+				trace("handshake: rejected: %v", err)
+				return fmt.Errorf("agent handshake failed: %w", err)
+			}
+			trace("handshake: accepted")
+			if warning != "" {
+				statusWarn(statusW, "%s", warning)
 			}
 			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
 		}

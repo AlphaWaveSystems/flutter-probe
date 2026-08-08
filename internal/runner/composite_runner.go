@@ -163,6 +163,7 @@ func (cr *CompositeRunner) RunCompositeTest(ctx context.Context, test parser.Com
 		go func(d CompositeDevice, steps []parser.Step) {
 			exec := NewExecutor(d.Client, d.DeviceCtx, nil, cr.opts.Timeout, cr.opts.Verbose)
 			exec.SetReconnectPolicy(cr.cfg.Agent.ReconnectAttempts, cr.cfg.Agent.ReconnectBackoff)
+			exec.SetLaunchTimeout(cr.cfg.Agent.LaunchTimeout)
 			for _, rec := range cr.recipes {
 				exec.RegisterRecipe(rec)
 			}
