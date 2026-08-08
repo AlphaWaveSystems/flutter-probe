@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Android connect race: `websocket: bad handshake` on first dial** — the CLI
+  dialed immediately after creating the adb port forward, but adb accepts the
+  host-side TCP connection before the device-side socket is plumbed, so the
+  WebSocket upgrade could fail mid-handshake. `bad handshake` (and `EOF`) were
+  treated as fatal protocol errors, bypassing the retry loop and ignoring
+  `--dial-timeout`. Both are now retried within the dial-timeout window; a real
+  HTTP 401/403 token rejection from the agent still fails immediately.
+
 ## [0.9.9] - 2026-05-13
 
 ### Added
