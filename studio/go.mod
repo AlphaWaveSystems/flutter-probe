@@ -10,7 +10,7 @@ replace github.com/alphawavesystems/flutter-probe => ..
 require (
 	github.com/alphawavesystems/flutter-probe v0.5.6
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/wailsapp/wails/v2 v2.12.0
+	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/zalando/go-keyring v0.2.8
 	gopkg.in/yaml.v3 v3.0.1
 )
