@@ -54,6 +54,17 @@ func firstAssert(t *testing.T, steps []parser.Step) parser.AssertStep {
 	return parser.AssertStep{}
 }
 
+func firstAssertNoDefects(t *testing.T, steps []parser.Step) parser.AssertNoDefectsStep {
+	t.Helper()
+	for _, s := range steps {
+		if a, ok := s.(parser.AssertNoDefectsStep); ok {
+			return a
+		}
+	}
+	t.Fatal("no AssertNoDefectsStep found")
+	return parser.AssertNoDefectsStep{}
+}
+
 // ---- Lexer tests ----
 
 func TestLexer_BasicTokens(t *testing.T) {
@@ -583,6 +594,86 @@ func TestParser_DontSeeWithAIIsParseError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "with ai") {
 		t.Errorf("error should mention \"with ai\", got: %v", err)
+	}
+}
+
+func TestParser_AssertNoVisualDefectsWithAI(t *testing.T) {
+	src := `test "t"
+  assert no visual defects with ai
+`
+	prog := mustParse(t, src)
+	firstAssertNoDefects(t, prog.Tests[0].Body) // fatals if not found
+}
+
+// TestParser_AssertNoDefectsWithAI_VisualIsOptional confirms "visual" is an
+// optional filler word — "assert no defects with ai" parses the same as
+// "assert no visual defects with ai".
+func TestParser_AssertNoDefectsWithAI_VisualIsOptional(t *testing.T) {
+	src := `test "t"
+  assert no defects with ai
+`
+	prog := mustParse(t, src)
+	firstAssertNoDefects(t, prog.Tests[0].Body)
+}
+
+// TestParser_AssertNoDefectsWithoutWithAIIsParseError: unlike "see", there
+// is no non-AI form of "assert no visual defects" — omitting "with ai" must
+// be a parse error, not a silent no-op.
+func TestParser_AssertNoDefectsWithoutWithAIIsParseError(t *testing.T) {
+	src := `test "t"
+  assert no visual defects
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for \"assert no visual defects\" without \"with ai\", got nil")
+	}
+	if !strings.Contains(err.Error(), "with ai") {
+		t.Errorf("error should mention \"with ai\", got: %v", err)
+	}
+}
+
+// TestParser_AssertWrongWordIsParseError confirms only the documented
+// "assert no [visual] defects with ai" phrase is accepted — anything else
+// after "assert" errors instead of silently matching as a recipe call or
+// similar.
+func TestParser_AssertWrongWordIsParseError(t *testing.T) {
+	src := `test "t"
+  assert no such thing with ai
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for an unsupported \"assert\" phrase, got nil")
+	}
+}
+
+func TestProgram_UsesAI_TrueForAssertNoDefects(t *testing.T) {
+	src := `test "t"
+  assert no visual defects with ai
+`
+	prog := mustParse(t, src)
+	if !prog.UsesAI() {
+		t.Error("UsesAI() should be true for a program containing assert no visual defects with ai")
+	}
+}
+
+func TestProgram_UsesAI_TrueForSeeWithAI(t *testing.T) {
+	src := `test "t"
+  see "x" with ai
+`
+	prog := mustParse(t, src)
+	if !prog.UsesAI() {
+		t.Error("UsesAI() should be true for a program containing see ... with ai")
+	}
+}
+
+func TestProgram_UsesAI_FalseWithoutAI(t *testing.T) {
+	src := `test "t"
+  see "Dashboard"
+  tap "Sign In"
+`
+	prog := mustParse(t, src)
+	if prog.UsesAI() {
+		t.Error("UsesAI() should be false for a program with no AI-backed steps")
 	}
 }
 

@@ -326,6 +326,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseAssertSee(false)
 	case TOKEN_DONT_SEE:
 		return p.parseAssertSee(true)
+	case TOKEN_ASSERT:
+		return p.parseAssertNoDefects()
 	case TOKEN_WAIT:
 		return p.parseWait()
 	case TOKEN_SWIPE:
@@ -833,6 +835,38 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		WithAI:   withAI,
 		Line:     line,
 	}, nil
+}
+
+// parseAssertNoDefects handles "assert no [visual] defects with ai" — a
+// fixed AI-powered visual-defect smoke check. Unlike "see ... with ai",
+// there is no non-AI form here: "with ai" is mandatory, not optional.
+func (p *Parser) parseAssertNoDefects() (Step, error) {
+	line := p.peek().Line
+	p.advance() // assert
+	p.skipFillers()
+
+	if p.peek().Literal != "no" {
+		return nil, fmt.Errorf(`line %d: expected "no" after "assert" — only "assert no [visual] defects with ai" is supported`, line)
+	}
+	p.advance()
+	p.skipFillers()
+
+	if p.peek().Literal == "visual" {
+		p.advance()
+		p.skipFillers()
+	}
+
+	if p.peek().Literal != "defects" {
+		return nil, fmt.Errorf(`line %d: expected "defects" — only "assert no [visual] defects with ai" is supported`, line)
+	}
+	p.advance()
+
+	if !p.checkWithAI() {
+		return nil, fmt.Errorf(`line %d: "assert no visual defects" requires "with ai" — there is no non-AI equivalent`, line)
+	}
+
+	p.consumeNewline()
+	return AssertNoDefectsStep{Line: line}, nil
 }
 
 // ---- Wait ----

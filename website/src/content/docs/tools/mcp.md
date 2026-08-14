@@ -300,6 +300,8 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 4. `run_tests` — execute it; a failing AI assertion reports the model's reasoning, not just pass/fail
 5. `get_report` — the (possibly redacted, per `ai.redact` in probe.yaml) screenshot sent to the provider is attached as an artifact for that step
 
+For a generic "does this screen look right" smoke check instead of a specific claim, use `assert no visual defects with ai` — same `ai:` config requirement, but no assertion text to write; it flags cut-off, overlapping, or mis-centered elements on its own. Unlike `see ... with ai`, there's no non-AI form of this command.
+
 ### HTML report from CI results
 
 > "The CI run produced JSON results. Generate a report I can share."

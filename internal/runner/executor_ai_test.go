@@ -235,3 +235,77 @@ func TestRunAssertWithAI_RedactionBlacksOutConfiguredRegion(t *testing.T) {
 		t.Errorf("pixel outside redacted region = (%d,%d,%d,%d), want original red", r>>8, g>>8, b>>8, a>>8)
 	}
 }
+
+// ---- assert no visual defects with ai ----
+
+func TestRunAssertNoDefects_NoProviderConfigured(t *testing.T) {
+	e := newTestExecutor()
+	err := e.runAssertNoDefects(context.Background(), parser.AssertNoDefectsStep{Line: 1})
+	if err == nil {
+		t.Fatal("expected an error when no ai provider is configured")
+	}
+	if !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("error should say the provider isn't configured, got: %v", err)
+	}
+}
+
+func TestRunAssertNoDefects_Pass(t *testing.T) {
+	e := newTestExecutor()
+	path := writeSolidPNGFixture(t)
+	e.client = &fakeAIClient{screenshotPath: path}
+	fp := &fakeVisionProvider{verdict: ai.VisionVerdict{True: true}}
+	e.aiProvider = fp
+
+	err := e.runAssertNoDefects(context.Background(), parser.AssertNoDefectsStep{Line: 1})
+	if err != nil {
+		t.Fatalf("expected a passing no-defects check to return nil, got: %v", err)
+	}
+	if fp.gotAssertion != ai.NoDefectsAssertion {
+		t.Errorf("assertion passed to provider = %q, want the fixed NoDefectsAssertion prompt", fp.gotAssertion)
+	}
+	if len(e.artifacts) != 1 || e.artifacts[0] != path {
+		t.Errorf("expected the screenshot path to be recorded as an artifact, got: %v", e.artifacts)
+	}
+}
+
+func TestRunAssertNoDefects_Fail(t *testing.T) {
+	e := newTestExecutor()
+	e.client = &fakeAIClient{screenshotPath: writeSolidPNGFixture(t)}
+	e.aiProvider = &fakeVisionProvider{verdict: ai.VisionVerdict{True: false, Reasoning: "the submit button is cut off at the bottom edge"}}
+
+	err := e.runAssertNoDefects(context.Background(), parser.AssertNoDefectsStep{Line: 1})
+	if err == nil {
+		t.Fatal("expected an error when the AI finds defects")
+	}
+	if !strings.Contains(err.Error(), "cut off at the bottom edge") {
+		t.Errorf("error should include the AI's reasoning, got: %v", err)
+	}
+}
+
+func TestRunAssertNoDefects_RedactionApplied(t *testing.T) {
+	e := newTestExecutor()
+	client := &fakeAIClient{
+		screenshotPath: writeSolidPNGFixture(t),
+		bounds:         probelink.BoundsResult{X: 5, Y: 5, Width: 10, Height: 10},
+	}
+	e.client = client
+	e.aiCfg.Redact = []config.RedactRule{{Selector: "#credit_card_field"}}
+	fp := &fakeVisionProvider{verdict: ai.VisionVerdict{True: true}}
+	e.aiProvider = fp
+
+	if err := e.runAssertNoDefects(context.Background(), parser.AssertNoDefectsStep{Line: 1}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(client.boundsCalls) != 1 {
+		t.Fatalf("expected exactly one SelectorBounds call, got %d", len(client.boundsCalls))
+	}
+
+	got, err := png.Decode(bytes.NewReader(fp.gotImage))
+	if err != nil {
+		t.Fatalf("decode image passed to provider: %v", err)
+	}
+	r, g, b, a := got.At(10, 10).RGBA()
+	if r != 0 || g != 0 || b != 0 || a>>8 != 255 {
+		t.Errorf("pixel inside redacted region = (%d,%d,%d,%d), want black", r>>8, g>>8, b>>8, a>>8)
+	}
+}

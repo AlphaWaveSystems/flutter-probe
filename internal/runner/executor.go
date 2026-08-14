@@ -200,6 +200,8 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		err = e.runAction(stepCtx, s)
 	case parser.AssertStep:
 		err = e.runAssert(stepCtx, s)
+	case parser.AssertNoDefectsStep:
+		err = e.runAssertNoDefects(stepCtx, s)
 	case parser.WaitStep:
 		err = e.runWait(stepCtx, s)
 	case parser.ConditionalStep:
@@ -244,6 +246,8 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 				err = e.runAction(retryCtx, s)
 			case parser.AssertStep:
 				err = e.runAssert(retryCtx, s)
+			case parser.AssertNoDefectsStep:
+				err = e.runAssertNoDefects(retryCtx, s)
 			case parser.WaitStep:
 				err = e.runWait(retryCtx, s)
 			case parser.DartBlock:
@@ -414,6 +418,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			neg = "don't "
 		}
 		return fmt.Sprintf("%ssee %q", neg, s.Sel.Text)
+	case parser.AssertNoDefectsStep:
+		return "assert no visual defects with ai"
 	case parser.WaitStep:
 		switch s.Kind {
 		case parser.WaitDuration:
@@ -830,34 +836,9 @@ func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) err
 	}
 	assertion := e.resolve(a.Sel.Text)
 
-	path, err := e.client.Screenshot(ctx, "with_ai")
+	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "with_ai")
 	if err != nil {
-		return fmt.Errorf("with ai: capture screenshot: %w", err)
-	}
-	imgBytes, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("with ai: read screenshot: %w", err)
-	}
-
-	if len(e.aiCfg.Redact) > 0 {
-		rects := make([]image.Rectangle, 0, len(e.aiCfg.Redact))
-		for _, rule := range e.aiCfg.Redact {
-			bounds, err := e.client.SelectorBounds(ctx, toSelectorParam(redactSelector(rule.Selector)))
-			if err != nil {
-				return fmt.Errorf("with ai: resolve redact selector %q: %w", rule.Selector, err)
-			}
-			rects = append(rects, image.Rect(
-				int(bounds.X), int(bounds.Y),
-				int(bounds.X+bounds.Width), int(bounds.Y+bounds.Height),
-			))
-		}
-		imgBytes, err = redact.Redact(imgBytes, rects)
-		if err != nil {
-			return fmt.Errorf("with ai: redact screenshot: %w", err)
-		}
-		if err := os.WriteFile(path, imgBytes, 0644); err != nil {
-			return fmt.Errorf("with ai: write redacted screenshot: %w", err)
-		}
+		return fmt.Errorf("with ai: %w", err)
 	}
 	e.artifacts = append(e.artifacts, path)
 
@@ -869,6 +850,72 @@ func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) err
 		return fmt.Errorf("AI assertion failed: %q — %s", assertion, verdict.Reasoning)
 	}
 	return nil
+}
+
+// runAssertNoDefects handles `assert no visual defects with ai` — a fixed
+// smoke check (see ai.NoDefectsAssertion), as opposed to runAssertWithAI's
+// free-text assertion.
+func (e *Executor) runAssertNoDefects(ctx context.Context, a parser.AssertNoDefectsStep) error {
+	if e.aiProvider == nil {
+		if e.aiConfigErr != nil {
+			return fmt.Errorf("assert no visual defects: %w", e.aiConfigErr)
+		}
+		return fmt.Errorf(`"assert no visual defects with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+
+	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "no_defects")
+	if err != nil {
+		return fmt.Errorf("assert no visual defects: %w", err)
+	}
+	e.artifacts = append(e.artifacts, path)
+
+	verdict, err := e.aiProvider.AssertScreen(ctx, imgBytes, ai.NoDefectsAssertion)
+	if err != nil {
+		return fmt.Errorf("assert no visual defects: %w", err)
+	}
+	if !verdict.True {
+		return fmt.Errorf("AI found visual defects: %s", verdict.Reasoning)
+	}
+	return nil
+}
+
+// captureRedactedScreenshot takes a screenshot and applies any configured
+// ai.redact rules to it before any AI provider ever sees the bytes. Shared
+// by runAssertWithAI and runAssertNoDefects. Does not touch e.artifacts —
+// callers append the returned path themselves once the step's outcome is known.
+func (e *Executor) captureRedactedScreenshot(ctx context.Context, name string) (string, []byte, error) {
+	path, err := e.client.Screenshot(ctx, name)
+	if err != nil {
+		return "", nil, fmt.Errorf("capture screenshot: %w", err)
+	}
+	imgBytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("read screenshot: %w", err)
+	}
+
+	if len(e.aiCfg.Redact) == 0 {
+		return path, imgBytes, nil
+	}
+
+	rects := make([]image.Rectangle, 0, len(e.aiCfg.Redact))
+	for _, rule := range e.aiCfg.Redact {
+		bounds, err := e.client.SelectorBounds(ctx, toSelectorParam(redactSelector(rule.Selector)))
+		if err != nil {
+			return "", nil, fmt.Errorf("resolve redact selector %q: %w", rule.Selector, err)
+		}
+		rects = append(rects, image.Rect(
+			int(bounds.X), int(bounds.Y),
+			int(bounds.X+bounds.Width), int(bounds.Y+bounds.Height),
+		))
+	}
+	imgBytes, err = redact.Redact(imgBytes, rects)
+	if err != nil {
+		return "", nil, fmt.Errorf("redact screenshot: %w", err)
+	}
+	if err := os.WriteFile(path, imgBytes, 0644); err != nil {
+		return "", nil, fmt.Errorf("write redacted screenshot: %w", err)
+	}
+	return path, imgBytes, nil
 }
 
 // redactSelector turns a raw ai.redact[].selector string from probe.yaml

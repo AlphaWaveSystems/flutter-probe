@@ -557,6 +557,16 @@ test "checkout screen looks right"
   see "checkout total, tax, and shipping are visible and add up correctly" with ai
 ```
 
+For a generic "does this screen look broken" smoke check — no specific claim to write,
+just cut-off/overlapping/mis-centered elements:
+
+```
+  assert no visual defects with ai
+```
+
+Unlike `see ... with ai`, `with ai` is mandatory here — there's no non-AI equivalent of
+"assert no visual defects."
+
 This requires a provider you configure yourself in `probe.yaml` — there is no default
 provider and nothing is sent anywhere unless you set this up. Unlike tools that route
 screenshots through a vendor-operated cloud service, FlutterProbe calls the provider you
