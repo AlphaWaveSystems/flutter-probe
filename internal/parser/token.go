@@ -30,6 +30,7 @@ const (
 	TOKEN_TYPE
 	TOKEN_SEE
 	TOKEN_DONT_SEE // "don't see"
+	TOKEN_ASSERT   // "assert" — currently only "assert no [visual] defects with ai"
 	TOKEN_WAIT
 	TOKEN_SWIPE
 	TOKEN_SCROLL
@@ -194,6 +195,7 @@ var keywords = map[string]TokenType{
 	"tap":          TOKEN_TAP,
 	"type":         TOKEN_TYPE,
 	"see":          TOKEN_SEE,
+	"assert":       TOKEN_ASSERT,
 	"wait":         TOKEN_WAIT,
 	"swipe":        TOKEN_SWIPE,
 	"scroll":       TOKEN_SCROLL,

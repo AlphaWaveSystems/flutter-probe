@@ -24,6 +24,13 @@ type VisionVerdict struct {
 	Reasoning string
 }
 
+// NoDefectsAssertion is the fixed prompt for "assert no visual defects with
+// ai" — passed to VisionProvider.AssertScreen like any other assertion, so
+// the command needs no dedicated provider method or request shape.
+const NoDefectsAssertion = "This screen has no visual defects: no text or UI elements are " +
+	"cut off, overlapping, or noticeably mis-centered within their containers. If there " +
+	"are any such defects, describe them specifically in your reasoning."
+
 // VisionProvider evaluates a natural-language assertion against a screenshot.
 // Implementations call the vendor directly — never through a FlutterProbe-
 // operated relay, per the project's AI-assertions PRD.

@@ -218,6 +218,20 @@ func (a AssertStep) nodeType() string { return "assert" }
 func (a AssertStep) GetLine() int     { return a.Line }
 func (a AssertStep) stepType() string { return "assert" }
 
+// ---- AssertNoDefectsStep ----
+
+// AssertNoDefectsStep is `assert no visual defects with ai` — a fixed
+// "does this screen look broken" smoke check, distinct from AssertStep's
+// free-text `see "..." with ai` since it has no selector and no assertion
+// text of its own.
+type AssertNoDefectsStep struct {
+	Line int
+}
+
+func (a AssertNoDefectsStep) nodeType() string { return "assert_no_defects" }
+func (a AssertNoDefectsStep) GetLine() int     { return a.Line }
+func (a AssertNoDefectsStep) stepType() string { return "assert_no_defects" }
+
 // ---- WaitStep ----
 
 type WaitKind int
@@ -384,6 +398,8 @@ func stepsUseAI(steps []Step) bool {
 			if st.WithAI {
 				return true
 			}
+		case AssertNoDefectsStep:
+			return true
 		case ConditionalStep:
 			if stepsUseAI(st.Then) || stepsUseAI(st.Else) {
 				return true

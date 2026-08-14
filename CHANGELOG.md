@@ -20,6 +20,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   provider. See `docs/research/maestro-ai-assertions-investigation.md` for
   why this is BYO-key/direct-to-vendor by design, in contrast to Maestro's
   `assertWithAI`.
+- **`assert no visual defects with ai` — Phase 2 of the same PRD.** A fixed
+  "does this screen look broken" smoke check (cut-off/overlapping/
+  mis-centered elements), reusing Phase 1's `ai:` config, redaction, and
+  provider clients as-is — no new config fields, no new agent RPC. Unlike
+  `see ... with ai`, `with ai` is mandatory here (no non-AI form).
 
 ### Fixed
 - **Android connect race: `websocket: bad handshake` on first dial** — the CLI
