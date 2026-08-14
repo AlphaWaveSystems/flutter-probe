@@ -37,7 +37,7 @@ var generatePromptCmd = &cobra.Command{
 		// Load config to pick up ai.api_key / ai.model defaults
 		cfg, _ := config.Load(".")
 		if apiKey == "" && cfg != nil {
-			apiKey = resolveEnvVar(cfg.AI.APIKey)
+			apiKey = config.ResolveEnvVar(cfg.AI.APIKey)
 		}
 		if model == "" && cfg != nil && cfg.AI.Model != "" {
 			model = cfg.AI.Model
@@ -103,7 +103,7 @@ var generateFromRecordingCmd = &cobra.Command{
 
 		cfg, _ := config.Load(".")
 		if apiKey == "" && cfg != nil {
-			apiKey = resolveEnvVar(cfg.AI.APIKey)
+			apiKey = config.ResolveEnvVar(cfg.AI.APIKey)
 		}
 		if model == "" && cfg != nil && cfg.AI.Model != "" {
 			model = cfg.AI.Model
@@ -270,15 +270,4 @@ func writeGeneratedOutput(output, defaultFilename, content string) error {
 	}
 	statusOK(os.Stdout, "Generated → %s", output)
 	return nil
-}
-
-// resolveEnvVar expands ${ENV_VAR} syntax in a string value.
-func resolveEnvVar(s string) string {
-	if strings.HasPrefix(s, "${") && strings.HasSuffix(s, "}") {
-		envName := s[2 : len(s)-1]
-		if v := os.Getenv(envName); v != "" {
-			return v
-		}
-	}
-	return s
 }

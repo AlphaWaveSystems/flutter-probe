@@ -5,17 +5,22 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"image"
 	"io"
 	mathrand "math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/redact"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
@@ -38,6 +43,9 @@ type Executor struct {
 	depth       int      // indentation depth for verbose logging
 	artifacts   []string // collected screenshot paths (on-device)
 	visual      *visual.Comparator // nil if visual regression is not configured
+	aiCfg       config.AIConfig    // from probe.yaml's ai: block
+	aiProvider  ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
+	aiConfigErr error              // set by SetAI when ai.provider has an unrecognized value
 	maxReconnectAttempts int           // max auto-reconnect attempts per call (default 4)
 	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
@@ -98,6 +106,27 @@ func (e *Executor) SetVar(key, value string) {
 // SetVisual configures visual regression comparison for this executor.
 func (e *Executor) SetVisual(c *visual.Comparator) {
 	e.visual = c
+}
+
+// SetAI configures the vision provider for "with ai" assertions from
+// probe.yaml's ai: block. Leaves aiProvider nil when ai.provider/ai.api_key
+// aren't set — probe.RunTests already fails fast on that combination before
+// any device connects (see internal/cli/test.go's validateAIConfig), so
+// reaching here with a "with ai" step and no provider means a caller drove
+// the executor directly. An unrecognized ai.provider value is recorded in
+// aiConfigErr and surfaced only if a "with ai" step actually runs, rather
+// than failing every test in the run for a config that may go unused.
+func (e *Executor) SetAI(cfg config.AIConfig) {
+	e.aiCfg = cfg
+	if cfg.Provider == "" || cfg.APIKey == "" {
+		return
+	}
+	provider, err := ai.NewVisionProvider(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model)
+	if err != nil {
+		e.aiConfigErr = err
+		return
+	}
+	e.aiProvider = provider
 }
 
 // Artifacts returns the list of screenshot paths collected during execution.
@@ -756,6 +785,10 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 // ---- Assert execution ----
 
 func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
+	if a.WithAI {
+		return e.runAssertWithAI(ctx, a)
+	}
+
 	checkStr := ""
 	switch a.Check {
 	case parser.StateEnabled:
@@ -781,6 +814,71 @@ func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 		Pattern:  a.Pattern,
 	}
 	return e.client.See(ctx, params)
+}
+
+// runAssertWithAI handles `see "<assertion>" with ai`: captures a
+// screenshot, redacts any widgets configured in ai.redact, and asks the
+// configured VisionProvider whether the natural-language assertion holds.
+// The (possibly redacted) screenshot is always kept as a report artifact —
+// never the pre-redaction original once redaction rules are configured.
+func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) error {
+	if e.aiProvider == nil {
+		if e.aiConfigErr != nil {
+			return fmt.Errorf("with ai: %w", e.aiConfigErr)
+		}
+		return fmt.Errorf(`"with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	assertion := e.resolve(a.Sel.Text)
+
+	path, err := e.client.Screenshot(ctx, "with_ai")
+	if err != nil {
+		return fmt.Errorf("with ai: capture screenshot: %w", err)
+	}
+	imgBytes, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("with ai: read screenshot: %w", err)
+	}
+
+	if len(e.aiCfg.Redact) > 0 {
+		rects := make([]image.Rectangle, 0, len(e.aiCfg.Redact))
+		for _, rule := range e.aiCfg.Redact {
+			bounds, err := e.client.SelectorBounds(ctx, toSelectorParam(redactSelector(rule.Selector)))
+			if err != nil {
+				return fmt.Errorf("with ai: resolve redact selector %q: %w", rule.Selector, err)
+			}
+			rects = append(rects, image.Rect(
+				int(bounds.X), int(bounds.Y),
+				int(bounds.X+bounds.Width), int(bounds.Y+bounds.Height),
+			))
+		}
+		imgBytes, err = redact.Redact(imgBytes, rects)
+		if err != nil {
+			return fmt.Errorf("with ai: redact screenshot: %w", err)
+		}
+		if err := os.WriteFile(path, imgBytes, 0644); err != nil {
+			return fmt.Errorf("with ai: write redacted screenshot: %w", err)
+		}
+	}
+	e.artifacts = append(e.artifacts, path)
+
+	verdict, err := e.aiProvider.AssertScreen(ctx, imgBytes, assertion)
+	if err != nil {
+		return fmt.Errorf("with ai: %w", err)
+	}
+	if !verdict.True {
+		return fmt.Errorf("AI assertion failed: %q — %s", assertion, verdict.Reasoning)
+	}
+	return nil
+}
+
+// redactSelector turns a raw ai.redact[].selector string from probe.yaml
+// into a Selector, using the same "#id" convention as ProbeScript's own
+// selector syntax (see parser.parseSelector's TOKEN_ID handling).
+func redactSelector(raw string) parser.Selector {
+	if strings.HasPrefix(raw, "#") {
+		return parser.Selector{Kind: parser.SelectorID, Text: raw}
+	}
+	return parser.Selector{Kind: parser.SelectorText, Text: raw}
 }
 
 // ---- Wait execution ----

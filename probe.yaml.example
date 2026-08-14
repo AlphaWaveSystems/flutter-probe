@@ -55,6 +55,18 @@ device:
 #     service_account: /path/to/service-account.json
 #     project_id: my-firebase-project
 
+# AI-powered visual assertions (optional — bring your own provider key).
+# `see "<assertion>" with ai` only works once this is configured; there is
+# no default provider and nothing is sent anywhere unless you set this AND
+# use `with ai` explicitly in a test. Direct calls to the provider you pick
+# below — never relayed through a FlutterProbe-operated service.
+# ai:
+#   provider: anthropic                # openai | anthropic — required, no default
+#   api_key: ${ANTHROPIC_API_KEY}      # or OPENAI_API_KEY for provider: openai
+#   redact:                            # black out these widgets before any screenshot leaves the device
+#     - selector: "#credit_card_field"
+#     - selector: "Account Balance"
+
 reports_folder: reports
 recipes_folder: tests/recipes
 

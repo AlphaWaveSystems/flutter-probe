@@ -161,6 +161,12 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
+  AI assertions:   see "<natural-language assertion>" with ai — for checks that are
+                     hard to express structurally (e.g. see "checkout total looks
+                     correct" with ai). Requires ai.provider/ai.api_key configured
+                     in probe.yaml (openai | anthropic, bring your own key — never
+                     sent to a FlutterProbe-operated service); fails fast with a
+                     clear error at parse time if unconfigured. Cannot be negated.
   Composite tests: composite test "name" for multi-device coordination:
                      devices
                        A: iPhone 15 Simulator

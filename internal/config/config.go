@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -65,10 +66,32 @@ type RelayConfig struct {
 	ConnectTimeout time.Duration `yaml:"connect_timeout"` // max time to wait for agent to connect to relay (default: 60s)
 }
 
-// AIConfig holds settings for LLM-powered features (test generation, self-healing).
+// AIConfig holds settings for LLM-powered features (test generation, self-healing,
+// `with ai` visual assertions).
 type AIConfig struct {
-	APIKey string `yaml:"api_key"` // Anthropic API key (supports ${ENV_VAR} syntax)
-	Model  string `yaml:"model"`   // model name (default: claude-sonnet-4-20250514)
+	APIKey   string       `yaml:"api_key"`  // provider API key (supports ${ENV_VAR} syntax)
+	Model    string       `yaml:"model"`    // model name (default: claude-sonnet-4-20250514)
+	Provider string       `yaml:"provider"` // "with ai" assertion provider: openai | anthropic — no default, must be set explicitly
+	Redact   []RedactRule `yaml:"redact"`   // screenshot regions to black out before any "with ai" call
+}
+
+// RedactRule identifies a widget whose on-screen bounding box is blacked out
+// in the screenshot before it's sent to an AI provider for a "with ai" assertion.
+type RedactRule struct {
+	Selector string `yaml:"selector"` // ProbeScript selector text, e.g. "#credit_card_field" or "Card Number"
+}
+
+// ResolveEnvVar expands ${ENV_VAR} syntax in a string value. Used for
+// probe.yaml fields that accept secrets (ai.api_key, cloud.token, etc.) so
+// they can be supplied via environment rather than committed to the file.
+func ResolveEnvVar(s string) string {
+	if strings.HasPrefix(s, "${") && strings.HasSuffix(s, "}") {
+		envName := s[2 : len(s)-1]
+		if v := os.Getenv(envName); v != "" {
+			return v
+		}
+	}
+	return s
 }
 
 // ToolsConfig holds paths to external tools. Empty means "find in PATH".
@@ -383,6 +406,17 @@ devices:
 tools:
   adb: ""                  # path to adb binary (empty = find in PATH)
   flutter: ""              # path to flutter binary (empty = find in PATH)
+
+# AI-powered visual assertions (optional — bring your own provider key).
+# "see "<assertion>" with ai" only works once this is configured; there is
+# no default provider and nothing is sent anywhere unless you set this AND
+# use "with ai" explicitly in a test. Direct calls to the provider you pick
+# below — never relayed through a FlutterProbe-operated service.
+# ai:
+#   provider: anthropic                # openai | anthropic — required, no default
+#   api_key: ${ANTHROPIC_API_KEY}      # or OPENAI_API_KEY for provider: openai
+#   redact:                            # black out these widgets before any screenshot leaves the device
+#     - selector: "#credit_card_field"
 
 recipes_folder: tests/recipes
 reports_folder: reports

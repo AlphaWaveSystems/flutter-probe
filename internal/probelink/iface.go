@@ -34,6 +34,7 @@ type ProbeClient interface {
 	Clear(ctx context.Context, sel SelectorParam) error
 	Screenshot(ctx context.Context, name string) (string, error)
 	DumpWidgetTree(ctx context.Context) (string, error)
+	SelectorBounds(ctx context.Context, sel SelectorParam) (BoundsResult, error)
 	RunDart(ctx context.Context, code string) error
 	RegisterMock(ctx context.Context, m MockParam) error
 	DeviceAction(ctx context.Context, action, value string) error

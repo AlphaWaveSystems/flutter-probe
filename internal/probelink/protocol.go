@@ -68,6 +68,11 @@ type TapParams struct {
 	Selector SelectorParam `json:"selector"`
 }
 
+// SelectorBoundsParams requests a widget's on-screen bounding box.
+type SelectorBoundsParams struct {
+	Selector SelectorParam `json:"selector"`
+}
+
 // TypeParams enters text into a widget.
 type TypeParams struct {
 	Selector SelectorParam `json:"selector"`
@@ -167,6 +172,16 @@ type WidgetTreeResult struct {
 	Tree string `json:"tree"`
 }
 
+// BoundsResult is a widget's on-screen pixel bounding box (top-left origin).
+// Used to redact a widget's region from a screenshot before it's sent to an
+// AI provider for a "with ai" assertion.
+type BoundsResult struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
 // DeviceActionParams handles device-level actions.
 type DeviceActionParams struct {
 	Action string `json:"action"` // rotate_landscape | rotate_portrait | toggle_dark_mode | set_locale | ...
@@ -190,6 +205,7 @@ const (
 	MethodDrag         = "probe.drag"
 	MethodScreenshot   = "probe.screenshot"
 	MethodDumpTree     = "probe.dump_tree"
+	MethodSelectorBounds = "probe.selector_bounds"
 	MethodRunDart      = "probe.run_dart"
 	MethodMock         = "probe.mock"
 	MethodDeviceAction = "probe.device_action"

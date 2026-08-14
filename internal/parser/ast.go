@@ -210,6 +210,7 @@ type AssertStep struct {
 	Check    StateCheck // is enabled, contains, etc.
 	CheckVal string     // for contains
 	Pattern  string     // regex for "matching"
+	WithAI   bool       // see "<natural-language assertion>" with ai
 	Line     int
 }
 
@@ -347,6 +348,58 @@ type SyncStep struct {
 func (s SyncStep) nodeType() string { return "sync" }
 func (s SyncStep) GetLine() int     { return s.Line }
 func (s SyncStep) stepType() string { return "sync" }
+
+// UsesAI reports whether any step in the program — including steps nested in
+// conditionals, loops, hooks, composite device steps, and recipes — is a
+// "with ai" assertion. Used to fail fast (before any device connection) when
+// ai.provider/ai.api_key aren't configured in probe.yaml.
+func (p Program) UsesAI() bool {
+	for _, t := range p.Tests {
+		if stepsUseAI(t.Body) {
+			return true
+		}
+	}
+	for _, h := range p.Hooks {
+		if stepsUseAI(h.Body) {
+			return true
+		}
+	}
+	for _, r := range p.Recipes {
+		if stepsUseAI(r.Body) {
+			return true
+		}
+	}
+	for _, c := range p.CompositeTests {
+		if stepsUseAI(c.Body) {
+			return true
+		}
+	}
+	return false
+}
+
+func stepsUseAI(steps []Step) bool {
+	for _, s := range steps {
+		switch st := s.(type) {
+		case AssertStep:
+			if st.WithAI {
+				return true
+			}
+		case ConditionalStep:
+			if stepsUseAI(st.Then) || stepsUseAI(st.Else) {
+				return true
+			}
+		case LoopStep:
+			if stepsUseAI(st.Body) {
+				return true
+			}
+		case DeviceStep:
+			if stepsUseAI([]Step{st.Step}) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // ---- HTTPCallStep ----
 

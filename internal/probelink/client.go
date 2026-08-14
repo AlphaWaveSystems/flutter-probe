@@ -498,6 +498,18 @@ func (c *Client) DumpWidgetTree(ctx context.Context) (string, error) {
 	return result.Tree, nil
 }
 
+func (c *Client) SelectorBounds(ctx context.Context, sel SelectorParam) (BoundsResult, error) {
+	raw, err := c.Call(ctx, MethodSelectorBounds, SelectorBoundsParams{Selector: sel})
+	if err != nil {
+		return BoundsResult{}, err
+	}
+	var result BoundsResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return BoundsResult{}, err
+	}
+	return result, nil
+}
+
 func (c *Client) RunDart(ctx context.Context, code string) error {
 	_, err := c.Call(ctx, MethodRunDart, DartParam{Code: code})
 	return err

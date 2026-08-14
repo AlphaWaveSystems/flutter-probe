@@ -436,6 +436,22 @@ func (p *Parser) checkIfVisible() bool {
 	return false
 }
 
+// checkWithAI checks for a trailing "with ai" suffix before the newline.
+// Returns true if the suffix was consumed.
+func (p *Parser) checkWithAI() bool {
+	if p.peek().Type != TOKEN_WITH {
+		return false
+	}
+	saved := p.pos
+	p.advance() // with
+	if p.peek().Literal == "ai" {
+		p.advance()
+		return true
+	}
+	p.pos = saved // restore — this was "with" used some other way
+	return false
+}
+
 // looksLikeOpenVerb reports whether the tokens following "open" match one
 // of the two documented forms — "open the app" / "open app", or "open link
 // <url>" — without consuming anything. Anything else (including a bare
@@ -801,6 +817,11 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		pattern = p.expectString("regex pattern")
 	}
 
+	withAI := p.checkWithAI()
+	if negated && withAI {
+		return nil, fmt.Errorf("line %d: \"don't see ... with ai\" is not supported — AI assertions cannot be negated", line)
+	}
+
 	p.consumeNewline()
 	return AssertStep{
 		Negated:  negated,
@@ -809,6 +830,7 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		Check:    check,
 		CheckVal: checkVal,
 		Pattern:  pattern,
+		WithAI:   withAI,
 		Line:     line,
 	}, nil
 }

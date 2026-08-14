@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+- Added: `ProbeFinder.boundsFor` and a new `probe.selector_bounds` RPC method —
+  resolves a widget's full on-screen pixel bounding box (origin + size), not
+  just the center point `dump_tree`/`_elementInfo` already expose. Used by the
+  CLI to black out configured regions of a screenshot before it's sent to an
+  AI provider for `see "..." with ai` assertions (FP-1). No behavior change
+  for any existing selector/finder call.
+
 ## 0.10.4 - 2026-07-06
 
 - Fixed: the `ordinal` selector kind (`tap 1st ...`, `tap 2nd ...`, etc.) always matched

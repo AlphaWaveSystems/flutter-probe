@@ -108,6 +108,7 @@ class ProbeMethods {
   static const close = 'probe.close';
   static const screenshot = 'probe.screenshot';
   static const dumpTree = 'probe.dump_tree';
+  static const selectorBounds = 'probe.selector_bounds';
   static const saveLogs = 'probe.save_logs';
   static const runDart = 'probe.run_dart';
   static const mock = 'probe.mock';
