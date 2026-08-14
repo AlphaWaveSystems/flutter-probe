@@ -69,10 +69,27 @@ type RelayConfig struct {
 // AIConfig holds settings for LLM-powered features (test generation, self-healing,
 // `with ai` visual assertions).
 type AIConfig struct {
-	APIKey   string       `yaml:"api_key"`  // provider API key (supports ${ENV_VAR} syntax)
-	Model    string       `yaml:"model"`    // model name (default: claude-sonnet-4-20250514)
-	Provider string       `yaml:"provider"` // "with ai" assertion provider: openai | anthropic — no default, must be set explicitly
+	APIKey   string       `yaml:"api_key"`  // provider API key (supports ${ENV_VAR} syntax). Not required for provider: local.
+	Model    string       `yaml:"model"`    // model name (default: claude-sonnet-4-20250514). Required, no default, for provider: local.
+	Provider string       `yaml:"provider"` // "with ai" assertion provider: openai | anthropic | local — no default, must be set explicitly
+	Endpoint string       `yaml:"endpoint"` // OpenAI-compatible base URL (e.g. http://localhost:11434/v1) for provider: local; supports ${ENV_VAR}
 	Redact   []RedactRule `yaml:"redact"`   // screenshot regions to black out before any "with ai" call
+}
+
+// Configured reports whether enough of the ai: block is set for a "with ai"
+// step to actually run. A provider alone isn't enough for the cloud
+// providers (they need an api_key); provider: local needs no api_key since
+// the request never leaves the host, so it's "configured" with just a
+// provider set (an endpoint is required too, but that's checked separately
+// since a bad/missing endpoint is a distinct, more specific error).
+func (c AIConfig) Configured() bool {
+	if c.Provider == "" {
+		return false
+	}
+	if c.Provider == "local" {
+		return true
+	}
+	return c.APIKey != ""
 }
 
 // RedactRule identifies a widget whose on-screen bounding box is blacked out
@@ -413,10 +430,17 @@ tools:
 # use "with ai" explicitly in a test. Direct calls to the provider you pick
 # below — never relayed through a FlutterProbe-operated service.
 # ai:
-#   provider: anthropic                # openai | anthropic — required, no default
-#   api_key: ${ANTHROPIC_API_KEY}      # or OPENAI_API_KEY for provider: openai
+#   provider: anthropic                # openai | anthropic | local — required, no default
+#   api_key: ${ANTHROPIC_API_KEY}      # or OPENAI_API_KEY for provider: openai; not used for provider: local
 #   redact:                            # black out these widgets before any screenshot leaves the device
 #     - selector: "#credit_card_field"
+#
+# provider: local — nothing leaves the device/host at all. Points at any OpenAI-compatible
+# local server (e.g. Ollama, LM Studio):
+# ai:
+#   provider: local
+#   endpoint: http://localhost:11434/v1  # OpenAI-compatible base URL — required for provider: local
+#   model: llava                         # required — no default; must be a vision-capable model your server has loaded
 
 recipes_folder: tests/recipes
 reports_folder: reports

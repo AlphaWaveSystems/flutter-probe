@@ -574,12 +574,27 @@ pick **directly**, with your own key:
 
 ```yaml
 ai:
-  provider: anthropic                # openai | anthropic — required, no default
+  provider: anthropic                # openai | anthropic | local — required, no default
   api_key: ${ANTHROPIC_API_KEY}      # your own key; never sent to a FlutterProbe-operated service
   redact:                            # black out these widgets before any screenshot leaves the device
     - selector: "#credit_card_field"
     - selector: "Account Balance"
 ```
+
+For nothing to leave the device/host at all — not even to a BYO-key cloud vendor — point
+`provider: local` at any OpenAI-compatible local server (e.g. [Ollama](https://ollama.com)):
+
+```yaml
+ai:
+  provider: local
+  endpoint: http://localhost:11434/v1  # OpenAI-compatible base URL — required for provider: local
+  model: llava                         # required — no default; must be a vision-capable model your server has loaded
+```
+
+This is currently the only "fully local" option FlutterProbe ships. Native on-device model
+support (Apple Intelligence on iOS/macOS, Gemini Nano on Android) is **not** implemented —
+those are in-app, entitlement-gated platform SDKs a CLI process has no route to, a materially
+larger effort than this feature, tracked separately rather than folded in silently.
 
 `with ai` cannot be negated, and fails fast with a clear error at parse time — before any
 device connects — if `ai:` isn't configured. See

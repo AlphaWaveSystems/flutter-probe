@@ -61,11 +61,18 @@ device:
 # use `with ai` explicitly in a test. Direct calls to the provider you pick
 # below — never relayed through a FlutterProbe-operated service.
 # ai:
-#   provider: anthropic                # openai | anthropic — required, no default
-#   api_key: ${ANTHROPIC_API_KEY}      # or OPENAI_API_KEY for provider: openai
+#   provider: anthropic                # openai | anthropic | local — required, no default
+#   api_key: ${ANTHROPIC_API_KEY}      # or OPENAI_API_KEY for provider: openai; not used for provider: local
 #   redact:                            # black out these widgets before any screenshot leaves the device
 #     - selector: "#credit_card_field"
 #     - selector: "Account Balance"
+#
+# provider: local — nothing leaves the device/host at all, not even to a BYO-key cloud
+# vendor. Points at any OpenAI-compatible local server (e.g. Ollama, LM Studio):
+# ai:
+#   provider: local
+#   endpoint: http://localhost:11434/v1  # OpenAI-compatible base URL — required for provider: local
+#   model: llava                         # required — no default; must be a vision-capable model your server has loaded
 
 reports_folder: reports
 recipes_folder: tests/recipes

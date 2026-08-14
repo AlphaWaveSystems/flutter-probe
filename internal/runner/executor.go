@@ -109,19 +109,21 @@ func (e *Executor) SetVisual(c *visual.Comparator) {
 }
 
 // SetAI configures the vision provider for "with ai" assertions from
-// probe.yaml's ai: block. Leaves aiProvider nil when ai.provider/ai.api_key
-// aren't set — probe.RunTests already fails fast on that combination before
-// any device connects (see internal/cli/test.go's validateAIConfig), so
-// reaching here with a "with ai" step and no provider means a caller drove
-// the executor directly. An unrecognized ai.provider value is recorded in
-// aiConfigErr and surfaced only if a "with ai" step actually runs, rather
-// than failing every test in the run for a config that may go unused.
+// probe.yaml's ai: block. Leaves aiProvider nil when AIConfig.Configured()
+// is false — probe.RunTests already fails fast on that (plus provider:
+// local's endpoint requirement) before any device connects (see
+// internal/cli/test.go's validateAIConfig), so reaching here with a "with
+// ai" step and no provider means a caller drove the executor directly. An
+// unrecognized ai.provider value, or a provider: local missing its
+// endpoint/model, is recorded in aiConfigErr and surfaced only if a "with
+// ai" step actually runs, rather than failing every test in the run for a
+// config that may go unused.
 func (e *Executor) SetAI(cfg config.AIConfig) {
 	e.aiCfg = cfg
-	if cfg.Provider == "" || cfg.APIKey == "" {
+	if !cfg.Configured() {
 		return
 	}
-	provider, err := ai.NewVisionProvider(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model)
+	provider, err := ai.NewVisionProvider(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model, config.ResolveEnvVar(cfg.Endpoint))
 	if err != nil {
 		e.aiConfigErr = err
 		return

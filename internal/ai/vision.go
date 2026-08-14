@@ -39,18 +39,41 @@ type VisionProvider interface {
 }
 
 // NewVisionProvider builds a VisionProvider for the given provider name.
-// Returns an error for anything other than "openai"/"anthropic" — including
-// "local", not implemented yet (PRD Phase 3) — a "with ai" step must never
-// silently no-op or fall back to a different provider than configured.
-func NewVisionProvider(provider, apiKey, model string) (VisionProvider, error) {
+// Returns an error for anything other than "openai"/"anthropic"/"local" — a
+// "with ai" step must never silently no-op or fall back to a different
+// provider than configured.
+//
+// "local" points at any OpenAI-compatible local inference server (Ollama,
+// LM Studio, etc.) via endpoint — nothing leaves the device/host at all,
+// not even to a BYO-key cloud vendor. It reuses openAIVision's request
+// shape since that's the protocol these servers already speak; api_key is
+// optional (most local servers don't require one), but model is required
+// with no default — there's no universally-sensible local vision model
+// name to fall back to.
+func NewVisionProvider(provider, apiKey, model, endpoint string) (VisionProvider, error) {
 	client := &http.Client{Timeout: defaultVisionTimeout}
 	switch provider {
 	case "openai":
-		return &openAIVision{apiKey: apiKey, model: orDefault(model, defaultOpenAIModel), client: client}, nil
+		if apiKey == "" {
+			return nil, fmt.Errorf("ai: OpenAI API key is required (ai.api_key in probe.yaml)")
+		}
+		return &openAIVision{apiKey: apiKey, model: orDefault(model, defaultOpenAIModel), client: client, baseURL: openAIVisionURL}, nil
 	case "anthropic":
+		if apiKey == "" {
+			return nil, fmt.Errorf("ai: Anthropic API key is required (ai.api_key in probe.yaml)")
+		}
 		return &anthropicVision{apiKey: apiKey, model: orDefault(model, defaultModel), client: client}, nil
+	case "local":
+		if endpoint == "" {
+			return nil, fmt.Errorf("ai: ai.endpoint is required for provider: local (e.g. http://localhost:11434/v1 for Ollama)")
+		}
+		if model == "" {
+			return nil, fmt.Errorf("ai: ai.model is required for provider: local — no default vision model to fall back to")
+		}
+		baseURL := strings.TrimSuffix(endpoint, "/") + "/chat/completions"
+		return &openAIVision{apiKey: apiKey, model: model, client: client, baseURL: baseURL}, nil
 	default:
-		return nil, fmt.Errorf("ai: unknown provider %q — must be \"openai\" or \"anthropic\"", provider)
+		return nil, fmt.Errorf("ai: unknown provider %q — must be \"openai\", \"anthropic\", or \"local\"", provider)
 	}
 }
 
@@ -103,16 +126,13 @@ func parseVisionAnswer(raw string) (VisionVerdict, error) {
 // ---- OpenAI vision ----
 
 type openAIVision struct {
-	apiKey string
-	model  string
-	client *http.Client
+	apiKey  string
+	model   string
+	client  *http.Client
+	baseURL string // full chat-completions URL — OpenAI's endpoint, or a local server's per NewVisionProvider's "local" case
 }
 
 func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion string) (VisionVerdict, error) {
-	if o.apiKey == "" {
-		return VisionVerdict{}, fmt.Errorf("ai: OpenAI API key is required (ai.api_key in probe.yaml)")
-	}
-
 	b64 := base64.StdEncoding.EncodeToString(image)
 	reqBody := map[string]any{
 		"model": o.model,
@@ -133,28 +153,32 @@ func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion
 		return VisionVerdict{}, fmt.Errorf("ai: marshal openai request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, openAIVisionURL, bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL, bytes.NewReader(payload))
 	if err != nil {
 		return VisionVerdict{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
+	// Most local inference servers (Ollama, LM Studio) don't require auth;
+	// only send the header when a key was actually configured.
+	if o.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
+	}
 
 	resp, err := o.client.Do(httpReq)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: openai request failed: %w", err)
+		return VisionVerdict{}, fmt.Errorf("ai: request to %s failed: %w", o.baseURL, err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: reading openai response: %w", err)
+		return VisionVerdict{}, fmt.Errorf("ai: reading response from %s: %w", o.baseURL, err)
 	}
 	if resp.StatusCode == 429 {
-		return VisionVerdict{}, fmt.Errorf("ai: openai API rate limited (429) — try again shortly")
+		return VisionVerdict{}, fmt.Errorf("ai: %s rate limited (429) — try again shortly", o.baseURL)
 	}
 	if resp.StatusCode != 200 {
-		return VisionVerdict{}, fmt.Errorf("ai: openai API returned %d: %s", resp.StatusCode, string(respBytes))
+		return VisionVerdict{}, fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, string(respBytes))
 	}
 
 	var apiResp struct {
@@ -168,13 +192,13 @@ func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(respBytes, &apiResp); err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: parsing openai response: %w", err)
+		return VisionVerdict{}, fmt.Errorf("ai: parsing response from %s: %w", o.baseURL, err)
 	}
 	if apiResp.Error != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: openai API error: %s", apiResp.Error.Message)
+		return VisionVerdict{}, fmt.Errorf("ai: %s error: %s", o.baseURL, apiResp.Error.Message)
 	}
 	if len(apiResp.Choices) == 0 {
-		return VisionVerdict{}, fmt.Errorf("ai: openai API returned no choices")
+		return VisionVerdict{}, fmt.Errorf("ai: %s returned no choices", o.baseURL)
 	}
 
 	return parseVisionAnswer(apiResp.Choices[0].Message.Content)

@@ -113,6 +113,57 @@ func TestLoadFile_AIConfig(t *testing.T) {
 	}
 }
 
+// TestLoadFile_AIConfig_LocalProvider confirms provider: local's endpoint
+// field (no api_key needed) round-trips through YAML.
+func TestLoadFile_AIConfig_LocalProvider(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "probe.yaml")
+	yaml := `ai:
+  provider: local
+  endpoint: http://localhost:11434/v1
+  model: llava
+`
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.AI.Provider != "local" {
+		t.Errorf("ai.provider: got %q, want %q", cfg.AI.Provider, "local")
+	}
+	if cfg.AI.Endpoint != "http://localhost:11434/v1" {
+		t.Errorf("ai.endpoint: got %q, want %q", cfg.AI.Endpoint, "http://localhost:11434/v1")
+	}
+	if cfg.AI.APIKey != "" {
+		t.Errorf("ai.api_key should be empty when not set, got %q", cfg.AI.APIKey)
+	}
+}
+
+func TestAIConfig_Configured(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  config.AIConfig
+		want bool
+	}{
+		{"no provider", config.AIConfig{}, false},
+		{"cloud provider with key", config.AIConfig{Provider: "anthropic", APIKey: "sk-x"}, true},
+		{"cloud provider without key", config.AIConfig{Provider: "anthropic"}, false},
+		{"local provider without key", config.AIConfig{Provider: "local", Endpoint: "http://localhost:11434/v1"}, true},
+		{"local provider with key too", config.AIConfig{Provider: "local", Endpoint: "http://localhost:11434/v1", APIKey: "sk-x"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.cfg.Configured(); got != c.want {
+				t.Errorf("Configured() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
 // TestLoadFile_AIConfig_NoDefaultProvider confirms an unconfigured ai: block
 // has no default provider — "with ai" must never work out of the box.
 func TestLoadFile_AIConfig_NoDefaultProvider(t *testing.T) {
