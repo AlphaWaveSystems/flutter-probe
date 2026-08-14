@@ -162,4 +162,47 @@ void main() {
       expect(fourth, isEmpty, reason: 'only 3 cards exist');
     });
   });
+
+  group('boundsFor (AI-assertion redaction)', () {
+    // Used to black out a widget's on-screen region before a screenshot is
+    // sent to an AI provider for a "with ai" assertion — must return the
+    // full pixel box (origin + size), not just the center point that
+    // _elementInfo/dump_tree already expose.
+    testWidgets('returns the full pixel bounding box of the matched widget',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 120,
+              height: 40,
+              child: Center(child: Text('Card Number')),
+            ),
+          ),
+        ),
+      ));
+
+      final bounds = ProbeFinder.instance
+          .boundsFor({'kind': 'text', 'text': 'Card Number'});
+
+      expect(bounds, isNotNull);
+      expect(bounds!['width'], closeTo(120, 0.5));
+      expect(bounds['height'], closeTo(40, 0.5));
+      expect(bounds['x'], greaterThanOrEqualTo(0));
+      expect(bounds['y'], greaterThanOrEqualTo(0));
+    });
+
+    testWidgets('returns null when the selector matches nothing',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: Text('Something else')),
+      ));
+
+      final bounds = ProbeFinder.instance
+          .boundsFor({'kind': 'text', 'text': 'Does Not Exist'});
+
+      expect(bounds, isNull);
+    });
+  });
 }

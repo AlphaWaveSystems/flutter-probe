@@ -219,6 +219,25 @@ class ProbeFinder {
     return elements.map((e) => _elementInfo(e)).toList();
   }
 
+  /// Returns the on-screen pixel bounding box of the first element matching
+  /// [sel] ({x, y, width, height}, device pixels, top-left origin), or null
+  /// if the selector matches nothing visible. Used to redact a widget's
+  /// region from a screenshot before it's sent to an AI provider.
+  Map<String, double>? boundsFor(Map<String, dynamic> sel) {
+    final elements = findElements(sel);
+    if (elements.isEmpty) return null;
+    final renderObject = elements.first.renderObject;
+    if (renderObject is! RenderBox) return null;
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final size = renderObject.size;
+    return {
+      'x': origin.dx,
+      'y': origin.dy,
+      'width': size.width,
+      'height': size.height,
+    };
+  }
+
   Map<String, dynamic> _elementInfo(Element e) {
     final rect = e.renderObject is RenderBox
         ? (e.renderObject as RenderBox)

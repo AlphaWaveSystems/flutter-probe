@@ -212,6 +212,17 @@ class ProbeExecutor {
         final tree = _dumpWidgetTree();
         return {'tree': tree};
 
+      case ProbeMethods.selectorBounds:
+        final sel = req.params['selector'] as Map<String, dynamic>;
+        final bounds = _finder.boundsFor(sel);
+        if (bounds == null) {
+          throw ProbeError(
+            ProbeError.widgetNotFound,
+            'Widget not found: ${_selDesc(sel)}',
+          );
+        }
+        return bounds;
+
       case ProbeMethods.saveLogs:
         return {'ok': true}; // device logs collected by CLI via adb logcat
 

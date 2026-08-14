@@ -34,6 +34,7 @@ test "user can log in"
 - [Studio (Beta Preview)](#studio-beta-preview)
 - [MCP Server](#mcp-server)
 - [Visual Regression](#visual-regression)
+- [AI-Powered Visual Assertions](#ai-powered-visual-assertions)
 - [Test Recording](#test-recording)
 - [CI/CD Integration](#cicd-integration)
 - [Cloud Device Farms](#cloud-device-farms)
@@ -544,6 +545,37 @@ visual:
   threshold: 0.5    # max % of pixels allowed to differ
   pixel_delta: 8    # per-pixel color tolerance (0–255)
 ```
+
+## AI-Powered Visual Assertions
+
+For checks that are hard to express with a plain selector — "does this screen look right,"
+dynamic content, generated charts:
+
+```
+test "checkout screen looks right"
+  open the app
+  see "checkout total, tax, and shipping are visible and add up correctly" with ai
+```
+
+This requires a provider you configure yourself in `probe.yaml` — there is no default
+provider and nothing is sent anywhere unless you set this up. Unlike tools that route
+screenshots through a vendor-operated cloud service, FlutterProbe calls the provider you
+pick **directly**, with your own key:
+
+```yaml
+ai:
+  provider: anthropic                # openai | anthropic — required, no default
+  api_key: ${ANTHROPIC_API_KEY}      # your own key; never sent to a FlutterProbe-operated service
+  redact:                            # black out these widgets before any screenshot leaves the device
+    - selector: "#credit_card_field"
+    - selector: "Account Balance"
+```
+
+`with ai` cannot be negated, and fails fast with a clear error at parse time — before any
+device connects — if `ai:` isn't configured. See
+[`docs/prd/ai-visual-assertions-prd.md`](docs/prd/ai-visual-assertions-prd.md) and
+[`docs/research/maestro-ai-assertions-investigation.md`](docs/research/maestro-ai-assertions-investigation.md)
+for the design rationale.
 
 ## Test Recording
 

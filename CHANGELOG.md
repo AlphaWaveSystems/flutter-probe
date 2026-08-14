@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`see "<assertion>" with ai` — AI-powered visual assertions (Phase 1 of
+  `docs/prd/ai-visual-assertions-prd.md`).** For checks that are hard to
+  express structurally (does this screen look right, dynamic/generated
+  content). Requires an `ai:` block in `probe.yaml` (`provider: openai |
+  anthropic`, your own API key) — there is no default provider, and every
+  call goes directly from the CLI to the provider you configure, never
+  through a FlutterProbe-operated relay. Fails fast, before any device
+  connection, if `with ai` is used without `ai:` configured. Supports
+  `ai.redact` to black out named widgets' on-screen regions (via a new
+  `probe.selector_bounds` agent RPC) before any screenshot is sent to a
+  provider. See `docs/research/maestro-ai-assertions-investigation.md` for
+  why this is BYO-key/direct-to-vendor by design, in contrast to Maestro's
+  `assertWithAI`.
+
 ### Fixed
 - **Android connect race: `websocket: bad handshake` on first dial** — the CLI
   dialed immediately after creating the adb port forward, but adb accepts the

@@ -18,6 +18,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
@@ -281,6 +282,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if len(files) == 0 {
 		fmt.Fprintln(statusW, msgNoProbeFiles)
 		return nil
+	}
+
+	// Fail fast, before any device connection, if a test uses "with ai" but
+	// no AI provider is configured. Never a silent no-op or implicit cloud call.
+	if err := validateAIConfig(files, cfg); err != nil {
+		return err
 	}
 
 	// Shard filtering: --shard "1/3" runs a deterministic subset of files
@@ -1290,6 +1297,27 @@ func generateCloudJSON(results []runner.TestResult, meta runner.RunMetadata) ([]
 	rpt.Duration = totalDuration
 
 	return json.Marshal(rpt)
+}
+
+// validateAIConfig fails fast, before any device connection, if a test file
+// uses "with ai" but ai.provider/ai.api_key aren't set in probe.yaml. Read
+// and parse errors are ignored here — the normal run below will hit and
+// report the same error when it parses these files for execution.
+func validateAIConfig(files []string, cfg *config.Config) error {
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		prog, err := parser.ParseFile(string(src))
+		if err != nil {
+			continue
+		}
+		if prog.UsesAI() && (cfg.AI.Provider == "" || cfg.AI.APIKey == "") {
+			return fmt.Errorf("%s: uses \"with ai\" but ai.provider/ai.api_key is not configured in probe.yaml", f)
+		}
+	}
+	return nil
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.

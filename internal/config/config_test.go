@@ -74,6 +74,79 @@ defaults:
 // TestLoadFile_LaunchTimeoutOverride confirms agent.launch_timeout (PT-10) is
 // read from probe.yaml — the distinct, generously-sized timeout for
 // restart/clear-data cold-launch+reconnect, separate from dial_timeout.
+// TestLoadFile_AIConfig confirms the ai: block (provider/api_key/model/redact)
+// used by "with ai" assertions round-trips through YAML.
+func TestLoadFile_AIConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "probe.yaml")
+	yaml := `ai:
+  provider: anthropic
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-sonnet-4-6
+  redact:
+    - selector: "#credit_card_field"
+    - selector: "Account Balance"
+`
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.AI.Provider != "anthropic" {
+		t.Errorf("ai.provider: got %q, want %q", cfg.AI.Provider, "anthropic")
+	}
+	if cfg.AI.APIKey != "${ANTHROPIC_API_KEY}" {
+		t.Errorf("ai.api_key: got %q, want the raw ${VAR} form (resolved later, not at load time)", cfg.AI.APIKey)
+	}
+	if cfg.AI.Model != "claude-sonnet-4-6" {
+		t.Errorf("ai.model: got %q, want %q", cfg.AI.Model, "claude-sonnet-4-6")
+	}
+	if len(cfg.AI.Redact) != 2 {
+		t.Fatalf("ai.redact: got %d rules, want 2", len(cfg.AI.Redact))
+	}
+	if cfg.AI.Redact[0].Selector != "#credit_card_field" {
+		t.Errorf("ai.redact[0].selector: got %q, want %q", cfg.AI.Redact[0].Selector, "#credit_card_field")
+	}
+}
+
+// TestLoadFile_AIConfig_NoDefaultProvider confirms an unconfigured ai: block
+// has no default provider — "with ai" must never work out of the box.
+func TestLoadFile_AIConfig_NoDefaultProvider(t *testing.T) {
+	cfg, err := config.LoadFile("/nonexistent/path/probe.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AI.Provider != "" {
+		t.Errorf("ai.provider should default to empty (no provider), got %q", cfg.AI.Provider)
+	}
+}
+
+func TestResolveEnvVar_ExpandsSetVar(t *testing.T) {
+	t.Setenv("PROBE_TEST_AI_KEY", "sk-test-123")
+	got := config.ResolveEnvVar("${PROBE_TEST_AI_KEY}")
+	if got != "sk-test-123" {
+		t.Errorf("ResolveEnvVar() = %q, want %q", got, "sk-test-123")
+	}
+}
+
+func TestResolveEnvVar_LeavesPlainValueUnchanged(t *testing.T) {
+	got := config.ResolveEnvVar("sk-literal-key")
+	if got != "sk-literal-key" {
+		t.Errorf("ResolveEnvVar() = %q, want unchanged plain value", got)
+	}
+}
+
+func TestResolveEnvVar_UnsetVarLeftAsPlaceholder(t *testing.T) {
+	got := config.ResolveEnvVar("${PROBE_TEST_DEFINITELY_UNSET_VAR}")
+	if got != "${PROBE_TEST_DEFINITELY_UNSET_VAR}" {
+		t.Errorf("ResolveEnvVar() = %q, want the placeholder left unchanged when unset", got)
+	}
+}
+
 func TestLoadFile_LaunchTimeoutOverride(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "probe.yaml")

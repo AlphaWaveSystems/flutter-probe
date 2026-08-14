@@ -541,6 +541,51 @@ func TestParser_SeeEnabled(t *testing.T) {
 	}
 }
 
+func TestParser_SeeWithAI(t *testing.T) {
+	src := `test "t"
+  see "checkout total looks correct" with ai
+`
+	prog := mustParse(t, src)
+	a := firstAssert(t, prog.Tests[0].Body)
+	if !a.WithAI {
+		t.Error("should have WithAI set")
+	}
+	if a.Sel.Text != "checkout total looks correct" {
+		t.Errorf("sel text: %q", a.Sel.Text)
+	}
+}
+
+// TestParser_SeeWithoutAISuffixUnaffected confirms plain "see" steps are
+// unaffected by the new "with ai" suffix — WithAI stays false and nothing
+// about ordinary parsing regresses.
+func TestParser_SeeWithoutAISuffixUnaffected(t *testing.T) {
+	src := `test "t"
+  see "Dashboard"
+`
+	prog := mustParse(t, src)
+	a := firstAssert(t, prog.Tests[0].Body)
+	if a.WithAI {
+		t.Error("should not have WithAI set")
+	}
+}
+
+// TestParser_DontSeeWithAIIsParseError: AI assertions cannot be negated —
+// "assert this natural-language claim is false" isn't a coherent primitive,
+// so this must fail to parse rather than silently ignoring the "with ai"
+// suffix or the negation.
+func TestParser_DontSeeWithAIIsParseError(t *testing.T) {
+	src := `test "t"
+  don't see "checkout total looks correct" with ai
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for \"don't see ... with ai\", got nil")
+	}
+	if !strings.Contains(err.Error(), "with ai") {
+		t.Errorf("error should mention \"with ai\", got: %v", err)
+	}
+}
+
 // ---- Parser: wait steps ----
 
 // TestParser_Drag covers PT-19: "to" was never actually consumable anywhere
