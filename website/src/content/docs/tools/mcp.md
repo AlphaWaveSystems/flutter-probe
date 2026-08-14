@@ -294,7 +294,7 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 
 > "Add a check that the checkout screen's total looks visually correct — it's hard to pin down with a plain selector."
 
-1. Confirm `probe.yaml` has an `ai:` block configured (`provider: openai` or `anthropic`, `api_key: ${...}`) — `write_test` will reject `with ai` steps at parse time if it's missing, so check this first rather than writing a test that can never pass
+1. Confirm `probe.yaml` has an `ai:` block configured — `provider: openai`/`anthropic` with `api_key: ${...}`, or `provider: local` with `endpoint`/`model` pointing at a local server like Ollama if nothing should leave the device/host at all — `write_test` will reject `with ai` steps at parse time if it's missing, so check this first rather than writing a test that can never pass
 2. `get_widget_tree` — understand the surrounding flow so the assertion is placed at the right step
 3. `write_test` — add `see "checkout total, tax, and shipping are all visible and add up correctly" with ai` to the relevant test
 4. `run_tests` — execute it; a failing AI assertion reports the model's reasoning, not just pass/fail

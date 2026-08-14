@@ -1313,8 +1313,14 @@ func validateAIConfig(files []string, cfg *config.Config) error {
 		if err != nil {
 			continue
 		}
-		if prog.UsesAI() && (cfg.AI.Provider == "" || cfg.AI.APIKey == "") {
+		if !prog.UsesAI() {
+			continue
+		}
+		if !cfg.AI.Configured() {
 			return fmt.Errorf("%s: uses \"with ai\" but ai.provider/ai.api_key is not configured in probe.yaml", f)
+		}
+		if cfg.AI.Provider == "local" && cfg.AI.Endpoint == "" {
+			return fmt.Errorf("%s: uses \"with ai\" with ai.provider: local, but ai.endpoint is not configured in probe.yaml", f)
 		}
 	}
 	return nil

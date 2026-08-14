@@ -25,6 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   mis-centered elements), reusing Phase 1's `ai:` config, redaction, and
   provider clients as-is — no new config fields, no new agent RPC. Unlike
   `see ... with ai`, `with ai` is mandatory here (no non-AI form).
+- **`ai.provider: local` — Phase 3 of the same PRD.** Both AI-assertion
+  commands can now run against any OpenAI-compatible local inference server
+  (e.g. Ollama, LM Studio) via `ai.endpoint` — nothing leaves the
+  device/host at all, not even to a BYO-key cloud vendor. `ai.api_key` is
+  not required for this provider. Native on-device model support (Apple
+  Intelligence, Gemini Nano), named in the PRD's design sketch, is
+  explicitly **not** implemented — see `docs/prd/ai-visual-assertions-prd.md`
+  §8 for why that's out of scope here rather than silently dropped.
 
 ### Fixed
 - **Android connect race: `websocket: bad handshake` on first dial** — the CLI

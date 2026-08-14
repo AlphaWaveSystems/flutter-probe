@@ -176,9 +176,21 @@ selector is a genuine differentiator, not just a privacy checkbox.
    not deferred.
 2a. Ship `docs/research/maestro-ai-assertions-investigation.md`'s comparison publicly (website
     docs) alongside this — the differentiation only matters if prospective users can see it.
-3. **Phase 2 — `assert no visual defects with ai`.**
-4. **Phase 3 — `local` provider tier.** Evaluate on-device model quality; decide go/no-go on
-   claiming parity with cloud tier.
+3. **Phase 2 — `assert no visual defects with ai`.** Shipped as pure reuse of Phase 1's
+   provider/redaction/config plumbing — a fixed prompt through the same `VisionProvider`, no
+   new RPC, no new config surface.
+4. **Phase 3 — `local` provider tier — shipped, scoped down from the original sketch.** §5.1
+   originally named two things under "local": platform on-device models (Apple Intelligence,
+   Gemini Nano) *or* a user-supplied OpenAI-compatible local endpoint (Ollama, LM Studio). Only
+   the local-endpoint path shipped. Platform on-device model bridging was evaluated and
+   explicitly deferred, not silently dropped: FlutterProbe's CLI is a Go binary with no route to
+   in-app, entitlement-gated platform SDKs like Apple's on-device Foundation Models framework or
+   Android's Gemini Nano — supporting those would mean shipping native companion apps/shims per
+   platform, a distinct and much larger effort than this feature, not something to fold in under
+   a "Phase 3" label. If it's ever pursued, it should be its own scoped initiative with its own
+   PRD, not an extension of this one. The on-device-model quality question §7 originally flagged
+   is therefore moot for what actually shipped — a local Ollama/LM Studio server's model quality
+   is the operator's own choice, not something this project evaluates or certifies.
 5. **Phase 4 — `read ... with ai into <var>` (OTP/dynamic text extraction).**
 
 Each phase ships behind the same non-default `ai:` config gate — there is no phase where AI
