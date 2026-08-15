@@ -2148,3 +2148,39 @@ test "signal"
 		t.Errorf("value: got %q, want %q", a1.Text, "abc123")
 	}
 }
+
+// ---- Full-feature campaign findings (2026-08-15) ----
+
+// TestParser_ToggleByID covers the campaign finding that `toggle #id` left
+// the #id token dangling to misparse as a junk recipe call (the PT-26/R-5
+// dangling-token class) — toggle now parses a real selector.
+func TestParser_ToggleByID(t *testing.T) {
+	src := `test "t"
+  toggle #unit_system_toggle
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbToggle {
+		t.Errorf("verb: got %q, want toggle", a.Verb)
+	}
+	if a.Sel == nil || a.Sel.Kind != parser.SelectorID || a.Sel.Text != "#unit_system_toggle" {
+		t.Errorf("selector: got %+v, want ID selector #unit_system_toggle", a.Sel)
+	}
+}
+
+// TestParser_ToggleByText is the regression guard for the pre-existing
+// quoted-text form.
+func TestParser_ToggleByText(t *testing.T) {
+	src := `test "t"
+  toggle "Dark Mode"
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbToggle {
+		t.Errorf("verb: got %q, want toggle", a.Verb)
+	}
+	if a.Sel == nil || a.Sel.Text != "Dark Mode" {
+		t.Errorf("selector: got %+v, want text Dark Mode", a.Sel)
+	}
+}
