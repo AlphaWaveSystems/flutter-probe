@@ -1101,6 +1101,67 @@ func TestParser_AssertOptional(t *testing.T) {
 	}
 }
 
+func TestParser_CompareShot_NoScope(t *testing.T) {
+	src := `test "t"
+  compare screenshot "home_screen"
+`
+	prog := mustParse(t, src)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbCompareShot {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbCompareShot)
+	}
+	if a.Name != "home_screen" {
+		t.Errorf("name: got %q, want %q", a.Name, "home_screen")
+	}
+	if a.Sel != nil {
+		t.Errorf("expected no scope selector, got %+v", a.Sel)
+	}
+}
+
+// TestParser_CompareShot_ElementScoped covers E-2: `compare screenshot "x"
+// of "Widget"` must parse the trailing "of <selector>" as a scope, even
+// though "of" is normally a filler word silently stripped everywhere else.
+func TestParser_CompareShot_ElementScoped(t *testing.T) {
+	src := `test "t"
+  compare screenshot "price_tag" of "Price Label"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Name != "price_tag" {
+		t.Errorf("name: got %q, want %q", a.Name, "price_tag")
+	}
+	if a.Sel == nil {
+		t.Fatal("expected a scope selector, got nil")
+	}
+	if a.Sel.Text != "Price Label" {
+		t.Errorf("scope selector text: got %q, want %q", a.Sel.Text, "Price Label")
+	}
+}
+
+func TestParser_CompareShot_ElementScopedByID(t *testing.T) {
+	src := `test "t"
+  compare screenshot "avatar" of #user_avatar
+`
+	prog := mustParse(t, src)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Sel == nil {
+		t.Fatal("expected a scope selector, got nil")
+	}
+	if a.Sel.Kind != parser.SelectorID || a.Sel.Text != "#user_avatar" {
+		t.Errorf("scope selector: got kind=%v text=%q, want id #user_avatar", a.Sel.Kind, a.Sel.Text)
+	}
+}
+
 // ---- Parser: dart blocks ----
 
 func TestParser_DartBlock(t *testing.T) {

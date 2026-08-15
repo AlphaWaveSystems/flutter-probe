@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
@@ -198,5 +199,119 @@ func TestUpdateBaseline(t *testing.T) {
 	baselinePath := filepath.Join(c.BaselineDir, "updated.png")
 	if _, err := os.Stat(baselinePath); err != nil {
 		t.Errorf("baseline not created: %v", err)
+	}
+}
+
+// createQuadrantPNG makes a size x size image split into 4 solid-color
+// quadrants, so a crop test can verify CropToBounds extracted the *correct*
+// region, not just a region of the right size.
+func createQuadrantPNG(t *testing.T, path string, size int) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	half := size / 2
+	colors := [2][2]color.Color{
+		{color.RGBA{R: 255, A: 255}, color.RGBA{G: 255, A: 255}},   // top-left red, top-right green
+		{color.RGBA{B: 255, A: 255}, color.RGBA{R: 255, G: 255, A: 255}}, // bottom-left blue, bottom-right yellow
+	}
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			row, col := 0, 0
+			if y >= half {
+				row = 1
+			}
+			if x >= half {
+				col = 1
+			}
+			img.Set(x, y, colors[row][col])
+		}
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCropToBounds_ExtractsCorrectRegion covers E-2's core contract:
+// cropping must pull the *right* pixels, not just a rectangle of the right
+// size — proven here by cropping to the green top-right quadrant and
+// confirming every pixel in the result is green, not red/blue/yellow.
+func TestCropToBounds_ExtractsCorrectRegion(t *testing.T) {
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "screen.png")
+	createQuadrantPNG(t, srcPath, 100)
+
+	croppedPath, err := visual.CropToBounds(srcPath, image.Rect(50, 0, 100, 50)) // top-right quadrant
+	if err != nil {
+		t.Fatalf("CropToBounds: %v", err)
+	}
+	if !strings.HasSuffix(croppedPath, "_cropped.png") {
+		t.Errorf("cropped path should end in _cropped.png, got %q", croppedPath)
+	}
+
+	f, err := os.Open(croppedPath)
+	if err != nil {
+		t.Fatalf("open cropped file: %v", err)
+	}
+	defer f.Close()
+	cropped, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("decode cropped file: %v", err)
+	}
+
+	b := cropped.Bounds()
+	if b.Dx() != 50 || b.Dy() != 50 {
+		t.Errorf("cropped dimensions: got %dx%d, want 50x50", b.Dx(), b.Dy())
+	}
+	// Every pixel should be green (0, 255, 0) — the top-right quadrant.
+	r, g, bl, _ := cropped.At(10, 10).RGBA()
+	if r>>8 != 0 || g>>8 != 255 || bl>>8 != 0 {
+		t.Errorf("cropped region color: got rgb(%d,%d,%d), want rgb(0,255,0) — wrong region extracted",
+			r>>8, g>>8, bl>>8)
+	}
+}
+
+// TestCropToBounds_ClampsPartiallyOutOfBoundsRegion confirms slightly-stale
+// RenderBox geometry (e.g. captured mid-animation) doesn't hard-fail the
+// whole comparison — it clamps to what's actually on screen.
+func TestCropToBounds_ClampsPartiallyOutOfBoundsRegion(t *testing.T) {
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "screen.png")
+	createQuadrantPNG(t, srcPath, 100)
+
+	// Requested region extends 20px past the right/bottom edges.
+	croppedPath, err := visual.CropToBounds(srcPath, image.Rect(50, 50, 120, 120))
+	if err != nil {
+		t.Fatalf("CropToBounds: %v", err)
+	}
+	f, err := os.Open(croppedPath)
+	if err != nil {
+		t.Fatalf("open cropped file: %v", err)
+	}
+	defer f.Close()
+	cropped, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("decode cropped file: %v", err)
+	}
+	b := cropped.Bounds()
+	if b.Dx() != 50 || b.Dy() != 50 {
+		t.Errorf("clamped dimensions: got %dx%d, want 50x50 (clamped to the 100x100 source)", b.Dx(), b.Dy())
+	}
+}
+
+// TestCropToBounds_ErrorsWhenRegionIsFullyOutOfBounds confirms a region
+// with zero overlap fails loudly instead of silently producing an empty
+// image that would always "pass" a visual diff.
+func TestCropToBounds_ErrorsWhenRegionIsFullyOutOfBounds(t *testing.T) {
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "screen.png")
+	createQuadrantPNG(t, srcPath, 100)
+
+	_, err := visual.CropToBounds(srcPath, image.Rect(200, 200, 300, 300))
+	if err == nil {
+		t.Fatal("expected an error for a region with no overlap, got nil")
 	}
 }

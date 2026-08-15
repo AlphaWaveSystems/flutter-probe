@@ -671,8 +671,19 @@ func (p *Parser) parseActionCompareShot() (Step, error) {
 	if name == "" {
 		return nil, fmt.Errorf("line %d: compare screenshot requires a name", line)
 	}
+	// Optional "of <selector>" suffix scopes the comparison to a single
+	// widget instead of the full screen. TOKEN_OF is a filler word (see
+	// fillerWords in token.go) and would otherwise have already been
+	// silently consumed by skipFillers() elsewhere — it's only meaningful
+	// here because we check for it explicitly, before any filler-skip.
+	var scope *Selector
+	if p.peek().Type == TOKEN_OF {
+		p.advance() // of
+		s := p.parseSelector()
+		scope = &s
+	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbCompareShot, Name: name, Line: line}, nil
+	return ActionStep{Verb: VerbCompareShot, Name: name, Sel: scope, Line: line}, nil
 }
 
 // parseActionDumpTree accepts both documented forms — "dump tree" and

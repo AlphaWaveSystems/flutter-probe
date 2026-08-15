@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `if visible` (a pre-check that skips the step entirely when the target isn't found), `optional`
   always attempts the step — a failure is logged as a warning and swallowed instead of failing the
   test. Matches Maestro's `optional: true` step property.
+- **Element-scoped visual regression: `compare screenshot "x" of "Widget"`.** Crops the screenshot
+  to the widget's on-screen bounds (via the existing `probe.selector_bounds` RPC) before comparing
+  — both the first-run baseline and every later actual image are the widget's region, not the full
+  screen. Matches Maestro's `assertScreenshot` + `cropOn`.
 
 ### Fixed
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown
