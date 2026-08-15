@@ -59,6 +59,18 @@ tools:
   adb: /usr/local/bin/adb
   flutter: /usr/local/bin/flutter
 
+# AI-powered assertions (see ... with ai, assert no visual defects with ai,
+# read ... with ai into <var>) — optional, no default provider. Nothing is
+# sent anywhere unless this block is configured AND a test actually uses
+# `with ai`.
+ai:
+  provider: anthropic       # openai | anthropic | local — no default, must be set explicitly
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-sonnet-4-20250514
+  timeout: 60s
+  redact:
+    - selector: "#credit_card_field"
+
 recipes_folder: tests/recipes
 reports_folder: reports
 
@@ -147,6 +159,34 @@ Device/emulator management:
 |-----|------|---------|-------------|
 | `adb` | string | `adb` (PATH) | Path to ADB binary |
 | `flutter` | string | `flutter` (PATH) | Path to Flutter binary |
+
+### ai
+
+Settings for the [AI-powered assertion commands](/probescript/dictionary/#ai-powered-assertions)
+(`see ... with ai`, `assert no visual defects with ai`, `read ... with ai into <var>`). Not
+required unless a test uses `with ai` — omitting this block entirely is the default, and no
+screenshot ever leaves the device/CI runner without it. There is no default provider by design:
+every "with ai" call goes directly from the CLI to whichever provider you configure, never through
+a FlutterProbe-operated relay (see `docs/research/maestro-ai-assertions-investigation.md` for why
+this is a deliberate departure from Maestro's mandatory-cloud-upload model).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `provider` | string | — | `openai`, `anthropic`, or `local`. No default — must be set explicitly, and a test using `with ai` fails fast (before any device connects) if this is unset |
+| `api_key` | string | — | Provider API key. Supports `${ENV_VAR}` syntax. Not required for `provider: local` |
+| `model` | string | `claude-sonnet-4-20250514` | Model name. Required, no default, for `provider: local` |
+| `endpoint` | string | — | OpenAI-compatible base URL (e.g. `http://localhost:11434/v1`) for `provider: local`. Supports `${ENV_VAR}`. Required when `provider: local` — a test using `with ai` fails fast if it's missing |
+| `timeout` | duration | `60s` | Per-request HTTP timeout for AI provider calls. Raise this for slow local models — the step timeout alone doesn't cover the provider HTTP call |
+| `redact` | list | — | Widgets to black out in the screenshot before it's sent to any provider (local or cloud). Each entry: `selector:` — a ProbeScript selector (`"#credit_card_field"` or `"Card Number"`) |
+
+```yaml
+ai:
+  provider: local
+  endpoint: http://localhost:11434/v1   # e.g. Ollama
+  redact:
+    - selector: "#credit_card_field"
+    - selector: "Email"
+```
 
 ### environment
 
