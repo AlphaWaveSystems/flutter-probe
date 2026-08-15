@@ -55,8 +55,13 @@ type VisionProvider interface {
 // optional (most local servers don't require one), but model is required
 // with no default — there's no universally-sensible local vision model
 // name to fall back to.
-func NewVisionProvider(provider, apiKey, model, endpoint string) (VisionProvider, error) {
-	client := &http.Client{Timeout: defaultVisionTimeout}
+//
+// timeout <= 0 falls back to defaultVisionTimeout. Local reasoning models
+// can genuinely take longer than that per call — confirmed against a real
+// LM Studio instance, where a fixed 60s was the actual binding constraint
+// even after raising the ProbeScript step timeout well past it.
+func NewVisionProvider(provider, apiKey, model, endpoint string, timeout time.Duration) (VisionProvider, error) {
+	client := &http.Client{Timeout: timeoutOrDefault(timeout)}
 	switch provider {
 	case "openai":
 		if apiKey == "" {
@@ -87,6 +92,13 @@ func orDefault(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+func timeoutOrDefault(d time.Duration) time.Duration {
+	if d <= 0 {
+		return defaultVisionTimeout
+	}
+	return d
 }
 
 // stripMarkdownFences removes a leading/trailing ``` fence pair, in case the

@@ -42,6 +42,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ai:` config, redaction, and all three providers (`openai`/`anthropic`/
   `local`) as the other two AI commands — no new config surface. `with ai`
   is mandatory (no non-AI form), same as `assert no visual defects with ai`.
+- **`ai.timeout` — configurable AI provider HTTP timeout (default: 60s).**
+  Found by manually testing `ai.provider: local` (Phase 3) against a real
+  LM Studio instance running a 31B local reasoning model:
+  `assert no visual defects with ai`'s richer prompt consistently took
+  longer than the previously-hardcoded 60s, and raising the ProbeScript
+  step timeout alone didn't help — the HTTP client's own timeout, not the
+  step timeout, was the actual binding constraint. Applies to all three
+  providers; matters most for slow local models.
 
 ### Fixed
 - **Android connect race: `websocket: bad handshake` on first dial** — the CLI

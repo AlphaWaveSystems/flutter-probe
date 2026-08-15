@@ -123,7 +123,7 @@ func (e *Executor) SetAI(cfg config.AIConfig) {
 	if !cfg.Configured() {
 		return
 	}
-	provider, err := ai.NewVisionProvider(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model, config.ResolveEnvVar(cfg.Endpoint))
+	provider, err := ai.NewVisionProvider(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model, config.ResolveEnvVar(cfg.Endpoint), cfg.Timeout)
 	if err != nil {
 		e.aiConfigErr = err
 		return
