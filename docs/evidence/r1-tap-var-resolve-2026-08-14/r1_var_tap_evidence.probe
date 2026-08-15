@@ -1,0 +1,17 @@
+# R-1 evidence: tap-family verbs must resolve <var> placeholders in their
+# selector (PT-02 addendum). Before the fix, `tap "<undo_label>"` searched
+# for the literal text "<undo_label>" and failed to find it; after the fix
+# it resolves to "Undo" and taps the real button.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "tap resolves a stored variable in its selector"
+  tap #today_quick_add_250
+  wait until "Undo" appears
+  store "Undo" as undo_label
+  tap "<undo_label>"
+  wait until "0 ml" appears
+  see "0 ml"
+  take a screenshot called "r1_evidence_undo_via_variable"

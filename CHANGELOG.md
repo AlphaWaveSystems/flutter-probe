@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Tap-family verbs (`tap`, `double tap`, `long press`, `clear`, `swipe`/`scroll` targets, and
+  `drag ... to ...`) never resolved `<var>` placeholders in their selector — the still-open half
+  of the PT-02 addendum.** `type`/`see` selectors were already routed through variable resolution
+  before dispatch; every other selector-taking verb sent its selector's raw, unresolved text
+  straight to the device, so `tap "<button_label>"` searched for the literal text
+  `"<button_label>"` instead of the stored variable's value. Fixed by adding a single
+  `resolveSelector()` helper and routing every selector-taking verb through it. Confirmed against
+  a real Android build: the pre-fix binary fails with `Widget not found: text("<undo_label>")`;
+  the fix resolves it correctly. See `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
+
 ## [0.11.0] - 2026-08-14
 
 ### Added

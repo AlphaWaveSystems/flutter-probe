@@ -461,7 +461,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	if a.IfVisible && a.Sel != nil {
 		checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 		err := e.client.See(checkCtx, probelink.SeeParams{
-			Selector: toSelectorParam(*a.Sel),
+			Selector: toSelectorParam(e.resolveSelector(*a.Sel)),
 		})
 		cancel()
 		if err != nil {
@@ -507,25 +507,25 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if a.Sel == nil {
 			return fmt.Errorf("tap: missing selector at line %d", a.Line)
 		}
-		return e.client.Tap(ctx, toSelectorParam(*a.Sel))
+		return e.client.Tap(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 
 	case parser.VerbDoubleTap:
 		if a.Sel == nil {
 			return fmt.Errorf("double tap: missing selector at line %d", a.Line)
 		}
-		return e.client.DoubleTap(ctx, toSelectorParam(*a.Sel))
+		return e.client.DoubleTap(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 
 	case parser.VerbLongPress:
 		if a.Sel == nil {
 			return fmt.Errorf("long press: missing selector at line %d", a.Line)
 		}
-		return e.client.LongPress(ctx, toSelectorParam(*a.Sel))
+		return e.client.LongPress(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 
 	case parser.VerbType:
 		text := e.resolve(a.Text)
 		var sel probelink.SelectorParam
 		if a.Sel != nil {
-			sel = toSelectorParam(*a.Sel)
+			sel = toSelectorParam(e.resolveSelector(*a.Sel))
 		}
 		return e.client.TypeText(ctx, sel, text)
 
@@ -533,12 +533,12 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if a.Sel == nil {
 			return nil
 		}
-		return e.client.Clear(ctx, toSelectorParam(*a.Sel))
+		return e.client.Clear(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 
 	case parser.VerbSwipe:
 		var sel *probelink.SelectorParam
 		if a.Sel != nil {
-			sp := toSelectorParam(*a.Sel)
+			sp := toSelectorParam(e.resolveSelector(*a.Sel))
 			sel = &sp
 		}
 		return e.client.Swipe(ctx, string(a.Direction), sel)
@@ -546,7 +546,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	case parser.VerbScroll:
 		var sel *probelink.SelectorParam
 		if a.Sel != nil {
-			sp := toSelectorParam(*a.Sel)
+			sp := toSelectorParam(e.resolveSelector(*a.Sel))
 			sel = &sp
 		}
 		return e.client.Scroll(ctx, string(a.Direction), sel)
@@ -566,8 +566,8 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			To   probelink.SelectorParam `json:"to"`
 		}
 		_, err := e.client.Call(ctx, probelink.MethodDrag, dragParams{
-			From: toSelectorParam(*a.Sel),
-			To:   toSelectorParam(*a.To),
+			From: toSelectorParam(e.resolveSelector(*a.Sel)),
+			To:   toSelectorParam(e.resolveSelector(*a.To)),
 		})
 		return err
 
@@ -816,8 +816,7 @@ func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 		checkStr = "focused"
 	}
 	// Resolve variables in selector text (for data-driven tests)
-	sel := a.Sel
-	sel.Text = e.resolve(sel.Text)
+	sel := e.resolveSelector(a.Sel)
 	params := probelink.SeeParams{
 		Selector: toSelectorParam(sel),
 		Negated:  a.Negated,
@@ -1298,6 +1297,19 @@ func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error
 }
 
 // toSelectorParam converts an AST Selector to a probelink SelectorParam.
+// resolveSelector returns a copy of s with <var> placeholders resolved in
+// its Text field, the same treatment every other user-supplied string
+// argument gets via e.resolve() before dispatch. Every selector-taking verb
+// must route through this before toSelectorParam — see the PT-02 addendum
+// in IMPROVEMENT_TASKS.md: tap/doubleTap/longPress/clear/swipe/scroll/drag
+// selectors were dispatched with their raw, unresolved text, so a selector
+// built from a stored variable or example-table column silently matched
+// nothing instead of the intended target.
+func (e *Executor) resolveSelector(s parser.Selector) parser.Selector {
+	s.Text = e.resolve(s.Text)
+	return s
+}
+
 func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 	kinds := map[parser.SelectorKind]string{
 		parser.SelectorText:        "text",
