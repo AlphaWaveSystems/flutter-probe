@@ -791,6 +791,13 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.VerifyBrowser(ctx)
 
 	case parser.VerbOpenLink:
+		if a.DeepLink {
+			if e.deviceCtx == nil {
+				fmt.Println("    \033[33m⚠\033[0m  Skipping open link into the app (cloud mode)")
+				return nil
+			}
+			return e.deviceCtx.OpenDeepLink(ctx, e.resolve(a.Name))
+		}
 		return e.client.OpenLink(ctx, e.resolve(a.Name))
 
 	case parser.VerbStore:

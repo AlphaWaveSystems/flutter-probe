@@ -19,6 +19,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   to the widget's on-screen bounds (via the existing `probe.selector_bounds` RPC) before comparing
   — both the first-run baseline and every later actual image are the widget's region, not the full
   screen. Matches Maestro's `assertScreenshot` + `cropOn`.
+- **`open link "url" in the app` / `... into the app`.** Routes the URL through the OS's own
+  intent/URL handling (`adb shell am start -a android.intent.action.VIEW`, `xcrun simctl openurl`)
+  instead of the Dart agent's `url_launcher`, so it actually opens inside the target app via a
+  registered custom scheme rather than always launching an external browser. The existing
+  `open link "url"` (no suffix) is unchanged. CLI-side only — skipped with a warning in cloud mode.
+  Matches Maestro's `openLink` with app-targeting. Note: on iOS Simulator, `simctl openurl` does
+  not cold-launch a fully-terminated app (it surfaces an "Open in App?" confirmation dialog it
+  can't dismiss); it reliably works on an app that's already running. No such caveat on Android.
+  See `docs/evidence/e3-deep-links-2026-08-15/`.
 
 ### Fixed
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown

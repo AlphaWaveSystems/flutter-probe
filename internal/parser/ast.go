@@ -200,6 +200,7 @@ type ActionStep struct {
 	To        *Selector   // for drag: destination
 	IfVisible bool        // if true, skip silently when selector is not found
 	Optional  bool        // if true, attempt the step but don't fail the test if it errors
+	DeepLink  bool        // for VerbOpenLink: "in/into the app" — route via OS intent handling, not url_launcher
 	Line      int
 }
 

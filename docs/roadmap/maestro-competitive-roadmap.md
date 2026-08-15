@@ -186,10 +186,16 @@ waiting.
   See `docs/evidence/e2-element-visual-regression-2026-08-15/`.
   PR: —
 
-- [ ] **E-3 — Deep links: `open link` into the app (not just external browser).** `simctl openurl`
+- [x] **E-3 — Deep links: `open link` into the app (not just external browser).** `simctl openurl`
   / `am start -a android.intent.action.VIEW` via `DeviceContext`, alongside the existing
-  external-browser `open link`. Evidence: nect-flutter or water-sip deep-link handler, if either
-  has one — otherwise a minimal test-app case.
+  external-browser `open link`. New `open link "url" in the app` / `into the app` / `in app`
+  suffix; CLI-side dispatch, cloud mode skips with a warning. Parser + executor unit tests.
+  Real-device evidence against water-sip's genuine `watersip://` scheme on both Android emulator
+  and iOS simulator — Android proves a full foreground-from-browser round trip; iOS proves the
+  running-app case and documents a real platform limitation: `simctl openurl` cannot cold-launch a
+  fully-terminated app (it raises an unactionable "Open in App?" confirmation dialog), unlike
+  Android's `am start`. `CHANGELOG.md` and `dictionary.md` updated.
+  See `docs/evidence/e3-deep-links-2026-08-15/`.
   PR: —
 
 - [ ] **E-4 — `add media` — seed camera roll / gallery.** `simctl addmedia` / `adb push` + media

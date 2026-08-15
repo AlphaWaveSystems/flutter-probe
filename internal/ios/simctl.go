@@ -309,3 +309,17 @@ func (s *SimCtl) SetLocation(ctx context.Context, udid, lat, lng string) error {
 	}
 	return nil
 }
+
+// OpenURL opens url via the simulator's OS-level URL handler — the same
+// mechanism a user tapping a link or notification would trigger. Unlike
+// the Dart agent's `probe.open_link` (which calls url_launcher from inside
+// the running app and always opens an external browser/app), this routes
+// through iOS itself, so a custom-scheme or universal link registered by
+// the app under test is delivered to *that app*, not launched externally.
+func (s *SimCtl) OpenURL(ctx context.Context, udid, url string) error {
+	cmd := exec.CommandContext(ctx, "xcrun", "simctl", "openurl", udid, url)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("simctl openurl: %s: %w", string(out), err)
+	}
+	return nil
+}

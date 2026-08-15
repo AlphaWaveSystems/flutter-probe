@@ -141,6 +141,18 @@ func (a *ADB) RevokePermission(ctx context.Context, serial, appID, permission st
 	return err
 }
 
+// OpenURL opens url via Android's OS-level intent resolution (am start -a
+// VIEW) — the same mechanism a user tapping a link or notification would
+// trigger. Unlike the Dart agent's `probe.open_link` (which calls
+// url_launcher from inside the running app and always opens an external
+// browser/app), this routes through the OS itself, so a custom-scheme or
+// App Links URL registered by the app under test is delivered to *that
+// app*, not launched externally.
+func (a *ADB) OpenURL(ctx context.Context, serial, url string) error {
+	_, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", url)
+	return err
+}
+
 // Install installs an APK on the given device, replacing any existing version.
 func (a *ADB) Install(ctx context.Context, serial, apkPath string) error {
 	_, err := a.run(ctx, "-s", serial, "install", "-r", apkPath)

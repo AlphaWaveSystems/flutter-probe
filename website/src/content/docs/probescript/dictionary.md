@@ -28,6 +28,7 @@ Commands that interact with the app's UI.
 | `shake` | `shake` | Simulate a device shake gesture |
 | `pause` | `pause` | Pause for 1 second |
 | `open link` | `open link "https://example.com"` | Open a URL in the external browser via `url_launcher` |
+| `open link ... in the app` | `open link "watersip://item/42" in the app` | Route a URL to the app itself via the OS's intent/URL handling (`adb`/`simctl`), not the external browser. Also accepts `into the app` / `in app`. CLI-side only — skipped in cloud mode. On iOS Simulator this reliably works only when the app is already running (see the CHANGELOG for the cold-launch caveat) |
 | `store` | `store "value" as myVar` | Store a literal or `<var>` value for use in later steps |
 | `log` | `log "message"` | Emit a message into the run output |
 
