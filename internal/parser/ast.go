@@ -180,6 +180,10 @@ const (
 	// read "<query>" with ai into <var>
 	// Text = query, Name = destination variable
 	VerbReadWithAI ActionVerb = "read_with_ai"
+
+	// Media seeding (E-4): add media "path/to/file.jpg"
+	// Name = local file path, resolved relative to the CLI's working directory.
+	VerbAddMedia ActionVerb = "add_media"
 )
 
 type SwipeDirection string

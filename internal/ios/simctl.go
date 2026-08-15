@@ -323,3 +323,14 @@ func (s *SimCtl) OpenURL(ctx context.Context, udid, url string) error {
 	}
 	return nil
 }
+
+// AddMedia adds a local photo/video file to the simulator's Photos library
+// (camera roll) via simctl's own addmedia command — no push-plus-scan
+// workaround needed, unlike Android.
+func (s *SimCtl) AddMedia(ctx context.Context, udid, localPath string) error {
+	cmd := exec.CommandContext(ctx, "xcrun", "simctl", "addmedia", udid, localPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("simctl addmedia: %s: %w", string(out), err)
+	}
+	return nil
+}

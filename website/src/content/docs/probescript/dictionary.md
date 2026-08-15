@@ -29,6 +29,7 @@ Commands that interact with the app's UI.
 | `pause` | `pause` | Pause for 1 second |
 | `open link` | `open link "https://example.com"` | Open a URL in the external browser via `url_launcher` |
 | `open link ... in the app` | `open link "watersip://item/42" in the app` | Route a URL to the app itself via the OS's intent/URL handling (`adb`/`simctl`), not the external browser. Also accepts `into the app` / `in app`. CLI-side only — skipped in cloud mode. On iOS Simulator this reliably works only when the app is already running (see the CHANGELOG for the cold-launch caveat) |
+| `add media` | `add media "path/to/photo.jpg"` | Seed a local file into the device's camera roll/gallery (`adb push` + media scan on Android, `simctl addmedia` on iOS). CLI-side only — skipped in cloud mode. Makes a photo available to pick, but does not drive the app's own native image-picker UI to select it |
 | `store` | `store "value" as myVar` | Store a literal or `<var>` value for use in later steps |
 | `log` | `log "message"` | Emit a message into the run output |
 

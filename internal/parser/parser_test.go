@@ -286,6 +286,51 @@ func TestParser_OpenLink_IntoApp(t *testing.T) {
 	}
 }
 
+// TestParser_AddMedia covers E-4: `add media "path"` seeds a local file into
+// the device's camera roll/gallery.
+func TestParser_AddMedia(t *testing.T) {
+	src := `test "t"
+  add media "testdata/photo.jpg"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbAddMedia {
+		t.Errorf("verb: got %q, want add_media", a.Verb)
+	}
+	if a.Name != "testdata/photo.jpg" {
+		t.Errorf("path: got %q", a.Name)
+	}
+}
+
+// TestParser_RecipeCallStartingWithAdd covers the same PT-23-style collision
+// risk "open" already had to guard against: a recipe whose name happens to
+// start with "add" (but isn't followed by "media") must fall through to a
+// normal recipe call rather than misparsing.
+func TestParser_RecipeCallStartingWithAdd(t *testing.T) {
+	src := `recipe "add item to cart"
+  tap "Add to Cart"
+
+test "t"
+  add item to cart
+`
+	prog := mustParse(t, src)
+	if len(prog.Recipes) != 1 || prog.Recipes[0].Name != "add item to cart" {
+		t.Fatalf("recipe: got %+v", prog.Recipes)
+	}
+	if len(prog.Tests[0].Body) != 1 {
+		t.Fatalf("body: got %d steps, want exactly 1: %+v",
+			len(prog.Tests[0].Body), prog.Tests[0].Body)
+	}
+	call, ok := prog.Tests[0].Body[0].(parser.RecipeCall)
+	if !ok {
+		t.Fatalf("step: got %T, want parser.RecipeCall", prog.Tests[0].Body[0])
+	}
+	if call.Name != "add item to cart" {
+		t.Errorf("call name: got %q", call.Name)
+	}
+}
+
 // TestParser_RecipeCallStartingWithOpen covers PT-23: a recipe named
 // "open ..." used to be swallowed by the built-in open verb's undocumented
 // bare-selector fallback (only "the app"/"app"/a link are actually

@@ -416,6 +416,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseDeliverSignal()
 	case TOKEN_READ:
 		return p.parseActionRead()
+	case TOKEN_ADD_MEDIA:
+		return p.parseActionAddMedia()
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -1569,6 +1571,16 @@ func (p *Parser) parseActionSetLocation() (Step, error) {
 	}
 	raw = strings.TrimSpace(raw)
 	return ActionStep{Verb: VerbSetLocation, Name: raw, Line: line}, nil
+}
+
+// parseActionAddMedia parses: add media "path/to/file.jpg"
+func (p *Parser) parseActionAddMedia() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compound "add media"
+	p.skipFillers()
+	path := p.expectString("file path to add")
+	p.consumeNewline()
+	return ActionStep{Verb: VerbAddMedia, Name: path, Line: line}, nil
 }
 
 func (p *Parser) parseActionVerifyBrowser() (Step, error) {
