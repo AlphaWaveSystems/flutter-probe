@@ -1,0 +1,46 @@
+# Native-verb suite against the purpose-built Probe Native Test app
+# (native-test-apps/android). Run pattern (same as the N-1 evidence runs):
+#
+#   1. water-sip (or any ProbeAgent host app) is running and connected —
+#      probe's session lives there; native verbs are CLI-side and don't
+#      touch the Dart agent at all.
+#   2. Bring this native app to the foreground BEFORE the run:
+#        adb shell am start -n com.alphawavesystems.probenativetest/.MainActivity
+#   3. No before-each restart hook here — restarting would foreground the
+#      host app and hide the native UI under test.
+#
+# Covers every native verb against every element type the app exposes:
+# text matching, resource-id matching, hidden-element negative assertions,
+# state changes driven purely through native taps, and native typing with
+# a live-echo verification.
+
+test "see native by visible text and by resource-id"
+  see native "Native Test App"
+  see native "native_title"
+  see native "Tap Me"
+  see native "native_counter"
+  see native "Taps: 0"
+
+test "hidden element is genuinely absent until revealed"
+  don't see native "Message Revealed"
+  tap native "Show Message"
+  wait 1 seconds
+  see native "Message Revealed"
+
+test "tap native drives real state"
+  tap native "Tap Me"
+  wait 1 seconds
+  see native "Taps: 1"
+  tap native "native_button"
+  wait 1 seconds
+  see native "Taps: 2"
+
+test "type native echoes into the live mirror"
+  type native "hello probe" into "native_input"
+  wait 1 seconds
+  see native "Echo: hello probe"
+
+test "toggle a native switch via tap native"
+  tap native "Native Switch"
+  wait 1 seconds
+  see native "Native Switch"
