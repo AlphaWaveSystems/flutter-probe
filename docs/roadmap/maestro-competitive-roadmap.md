@@ -109,11 +109,12 @@ speculative — every item has a documented repro or root cause already.
   link to a guide page for it since none exists yet.
   PR: —
 
-- [ ] **D-2 — document the `ai:` config block.** `advanced/configuration.md`'s `## Sections` list
-  (project/defaults/devices/agent/device/video/visual/tools/environment) has no `ai` entry at all,
-  despite v0.11.0 shipping the whole 4-command AI-assertion family gated behind it. Found while
-  doing D-1; add a `### ai` section covering `provider`, `api_key`, `model`, `endpoint`, `timeout`,
-  and `redact`, cross-referencing the dictionary's new "AI-Powered Assertions" section.
+- [x] **D-2 — document the `ai:` config block.** Added a `### ai` section (provider/api_key/model/
+  endpoint/timeout/redact, all pulled from `AIConfig`'s real field docs and `validateAIConfig`'s
+  actual fail-fast behavior, not guessed) plus an `ai:` block in the Full Example YAML, and a
+  cross-reference to the dictionary's "AI-Powered Assertions" section. Verified with `npm run
+  build` — the `#ai-powered-assertions` anchor exists in the built dictionary page and the link
+  resolves to it exactly.
   PR: —
 
 ---
