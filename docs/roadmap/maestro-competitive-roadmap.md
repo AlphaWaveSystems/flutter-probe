@@ -47,7 +47,7 @@ speculative — every item has a documented repro or root cause already.
   call site (including `runAssert`, for consistency with the rest). Regression tests:
   `TestResolveSelector_ResolvesVariablePlaceholder`, `TestResolveSelector_LeavesPlainTextUnchanged`.
   Real-device evidence (water-sip, Android emulator): `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
-  PR: #216
+  PR: #217
 
 - [ ] **R-2 / PT-25 — Android WebSocket drop (`close 1006`) root cause, still open.**
   `DONE.md` explicitly says this needs either the reporting app's real background load or a
