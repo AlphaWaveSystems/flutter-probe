@@ -50,7 +50,9 @@ const (
 	TOKEN_IF
 	TOKEN_OTHERWISE
 	TOKEN_REPEAT
+	TOKEN_RETRY
 	TOKEN_TIMES
+	TOKEN_OPTIONAL
 	TOKEN_FOR
 	TOKEN_EACH
 	TOKEN_WHEN
@@ -219,7 +221,9 @@ var keywords = map[string]TokenType{
 	// the test author intended, with no error anywhere.
 	"else": TOKEN_OTHERWISE,
 	"repeat":       TOKEN_REPEAT,
+	"retry":        TOKEN_RETRY,
 	"times":        TOKEN_TIMES,
+	"optional":     TOKEN_OPTIONAL,
 	"for":          TOKEN_FOR_KW,
 	"each":         TOKEN_EACH_KW,
 	"when":         TOKEN_WHEN,

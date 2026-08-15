@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`retry N times` block.** Wraps an indented block of steps: on failure, re-runs the whole
+  block from the top, up to N total attempts, stopping at the first success. Distinct from
+  `repeat N times`, which always runs every iteration regardless of failure. Matches Maestro's
+  `retry` block.
+- **`optional` step modifier**, on `tap`/`type`/`long press`/`double tap`/`clear`/`see`. Unlike
+  `if visible` (a pre-check that skips the step entirely when the target isn't found), `optional`
+  always attempts the step — a failure is logged as a warning and swallowed instead of failing the
+  test. Matches Maestro's `optional: true` step property.
+
 ### Fixed
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown
   recipe call (R-5).** Both verb parsers called `skipFillers()` then `consumeNewline()` without

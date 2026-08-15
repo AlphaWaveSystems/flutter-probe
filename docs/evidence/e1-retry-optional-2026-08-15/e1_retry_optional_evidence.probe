@@ -1,0 +1,22 @@
+# E-1 evidence: `retry N times` block + `optional` step modifier, run
+# against water-sip on a real Android emulator.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "retry N times executes its body end-to-end on a real device"
+  retry 3 times
+    tap #today_quick_add_250
+    wait until "250 ml" appears
+  see "250 ml"
+  take a screenshot called "e1_retry_success"
+
+test "optional swallows a real, genuine failure instead of failing the test"
+  tap "This Text Definitely Does Not Exist Anywhere" optional
+  see "Quick Add"
+  take a screenshot called "e1_optional_survived"
+
+test "non-optional identical failure still fails the test (regression guard)"
+  tap "This Text Definitely Does Not Exist Anywhere"
+  see "Quick Add"

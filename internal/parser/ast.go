@@ -199,6 +199,7 @@ type ActionStep struct {
 	Name      string      // for screenshot name, rotate direction, locale, etc.
 	To        *Selector   // for drag: destination
 	IfVisible bool        // if true, skip silently when selector is not found
+	Optional  bool        // if true, attempt the step but don't fail the test if it errors
 	Line      int
 }
 
@@ -216,6 +217,7 @@ type AssertStep struct {
 	CheckVal string     // for contains
 	Pattern  string     // regex for "matching"
 	WithAI   bool       // see "<natural-language assertion>" with ai
+	Optional bool       // if true, attempt the assertion but don't fail the test if it doesn't hold
 	Line     int
 }
 
@@ -286,6 +288,23 @@ type LoopStep struct {
 func (l LoopStep) nodeType() string { return "loop" }
 func (l LoopStep) GetLine() int     { return l.Line }
 func (l LoopStep) stepType() string { return "loop" }
+
+// ---- RetryStep ----
+
+// RetryStep wraps an indented block of steps: run it, and if it fails,
+// re-run the whole block from the top, up to Count total attempts. Unlike
+// LoopStep (repeat), which always runs every iteration, RetryStep stops at
+// the first successful attempt and only propagates an error after
+// exhausting Count attempts.
+type RetryStep struct {
+	Count int
+	Body  []Step
+	Line  int
+}
+
+func (r RetryStep) nodeType() string { return "retry" }
+func (r RetryStep) GetLine() int     { return r.Line }
+func (r RetryStep) stepType() string { return "retry" }
 
 // ---- DartBlock ----
 
@@ -414,6 +433,10 @@ func stepsUseAI(steps []Step) bool {
 				return true
 			}
 		case LoopStep:
+			if stepsUseAI(st.Body) {
+				return true
+			}
+		case RetryStep:
 			if stepsUseAI(st.Body) {
 				return true
 			}
