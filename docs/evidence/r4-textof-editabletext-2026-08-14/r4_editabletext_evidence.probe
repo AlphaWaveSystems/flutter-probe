@@ -1,0 +1,11 @@
+# R-4 evidence: `see #id contains "..."` must read TextField/TextFormField
+# content via the underlying EditableText, not just Text/RichText widgets.
+
+before each test
+  restart the app
+
+test "text field content is readable via contains check"
+  wait until "Login to NECT" appears
+  type "probe-r4-evidence@test.com" into #login_email_field
+  see #login_email_field contains "probe-r4-evidence@test.com"
+  take a screenshot called "r4_evidence_textfield_contains"

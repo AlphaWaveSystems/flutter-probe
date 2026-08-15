@@ -70,12 +70,14 @@ speculative — every item has a documented repro or root cause already.
   report against water-sip/nect-flutter with an ImagePicker screen, confirm no permanent gap.
   PR: —
 
-- [ ] **R-4 — `_textOf` doesn't read `EditableText`, so `see #field contains "…"` returns empty
-  for any `TextField`/`TextFormField`.** Locate `_textOf` in `probe_agent/lib/src/finder.dart`,
-  add an `EditableText` branch reading `controller.text` (or the rendered text if no controller).
-  Regression test: Dart widget test with a `TextFormField` pre-filled with text, asserting
-  `see #field contains "…"` passes. Real-device evidence: run against water-sip's settings screen
-  or nect-flutter's edit-profile form (has real text fields).
+- [x] **R-4 — `_textOf` doesn't read `EditableText`, so `see #field contains "…"` returns empty
+  for any `TextField`/`TextFormField`.** Actually in `probe_agent/lib/src/executor.dart` (not
+  `finder.dart` as originally noted). Fixed by reusing the existing `_findTextController` up/down
+  search rather than duplicating a tree walk. Regression tests:
+  `see_contains_editabletext_test.dart` (3 widget tests, confirmed to fail pre-fix). Real-device
+  attempt against nect-flutter hit an unrelated emulator/connectivity issue (`unexpected EOF` on
+  WS dial, likely same class as R-2/PT-25) — documented honestly rather than forced; see
+  `docs/evidence/r4-textof-editabletext-2026-08-14/`.
   PR: —
 
 - [ ] **V-1 / PT-03 — Re-verify scroll targeting holds.** Claimed fixed in v0.10.0 but never

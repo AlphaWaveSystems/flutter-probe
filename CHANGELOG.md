@@ -16,6 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `resolveSelector()` helper and routing every selector-taking verb through it. Confirmed against
   a real Android build: the pre-fix binary fails with `Widget not found: text("<undo_label>")`;
   the fix resolves it correctly. See `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
+- **`see #field contains "..."` always failed on `TextField`/`TextFormField` selectors.**
+  `_textOf` (in the Dart agent) only read `Text`/`RichText` widgets and returned `''` for
+  anything else, so the check reported `contains "", not "<expected>"` no matter what the field
+  actually contained. Fixed by reusing `_findTextController`'s existing up/down search (already
+  used for tap-to-focus and `clear()`) to find the underlying `EditableText`'s controller.
+  Confirmed with widget tests that fail against the pre-fix code and pass against the fix; see
+  `docs/evidence/r4-textof-editabletext-2026-08-14/` (including an honestly-documented
+  inconclusive real-device attempt, unrelated to this change).
 
 ## [0.11.0] - 2026-08-14
 

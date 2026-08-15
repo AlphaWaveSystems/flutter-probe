@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed: `_textOf` only read `Text`/`RichText` widgets, so `see #field contains "..."` silently
+  returned an empty string for any `TextField`/`TextFormField` selector (the check always failed,
+  reporting `contains "", not "<expected>"`). Now reuses the existing `_findTextController`
+  up/down search (already used for tap-to-focus and `clear()`) to find the underlying
+  `EditableText`'s controller when the matched widget isn't `Text`/`RichText`/`EditableText`
+  itself.
+
 ## 0.11.0 - 2026-08-14
 
 - Added: `ProbeFinder.boundsFor` and a new `probe.selector_bounds` RPC method —
