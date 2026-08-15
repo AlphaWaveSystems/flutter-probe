@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:meta/meta.dart';
-
 import 'agent_version.dart';
 import 'executor.dart';
 import 'mdns_advertise.dart';
@@ -283,12 +281,11 @@ class ProbeServer {
     _server = null;
   }
 
-  /// Number of times [_writeTokenFile] has been invoked. `_writeTokenFile`
-  /// itself is a no-op on the host test platform (neither Platform.isIOS
-  /// nor Platform.isAndroid), so this is the only way a test can observe
-  /// that the periodic re-print tick (PT-27) is actually re-attempting the
-  /// write, not just re-printing to the log.
-  @visibleForTesting
+  /// Number of times [_writeTokenFile] has been invoked. Test-only:
+  /// `_writeTokenFile` itself is a no-op on the host test platform (neither
+  /// Platform.isIOS nor Platform.isAndroid), so this is the only way a test
+  /// can observe that the periodic re-print tick (PT-27) is actually
+  /// re-attempting the write, not just re-printing to the log.
   int tokenFileWriteAttempts = 0;
 
   Future<void> _writeTokenFile() async {
