@@ -1,0 +1,242 @@
+{
+  "generated_at": "2026-08-15T20:03:07Z",
+  "metadata": {
+    "device_name": "sdk gphone64 arm64",
+    "device_id": "emulator-5556",
+    "platform": "android",
+    "os_version": "Android 15",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "1.1.3",
+    "probe_version": "",
+    "config_file": "probe.yaml"
+  },
+  "total_tests": 27,
+  "passed": 26,
+  "failed": 1,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "launch, see, don't see, see exactly",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5117,
+      "row": -1,
+      "artifacts": [
+        "screenshots/01_launch_1786823903128.png"
+      ]
+    },
+    {
+      "name": "tap and double tap register water",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6991,
+      "row": -1
+    },
+    {
+      "name": "undo via snackbar, wait until disappears",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6047,
+      "row": -1
+    },
+    {
+      "name": "gestures: swipe and scroll on scrollable screens",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8448,
+      "row": -1,
+      "artifacts": [
+        "screenshots/01_after_gestures_1786823924619.png"
+      ]
+    },
+    {
+      "name": "toggle unit system round trip",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6985,
+      "row": -1
+    },
+    {
+      "name": "navigation across all tabs with waits",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5165,
+      "row": -1
+    },
+    {
+      "name": "shake, pause, close keyboard are safe no-ops here",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5938,
+      "row": -1
+    },
+    {
+      "name": "wait for page load and network idle",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4961,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the then branch",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5879,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the otherwise branch",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5920,
+      "row": -1
+    },
+    {
+      "name": "repeat runs every iteration",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7960,
+      "row": -1
+    },
+    {
+      "name": "retry stops at first success",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5933,
+      "row": -1
+    },
+    {
+      "name": "optional swallows a genuine failure and continues",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8652,
+      "row": -1
+    },
+    {
+      "name": "store, variables, and log",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 9394,
+      "row": -1
+    },
+    {
+      "name": "recipe with argument and nested recipe",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 9393,
+      "row": -1
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 1]",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8345
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 2]",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8104,
+      "row": 1
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 3]",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7948,
+      "row": 2
+    },
+    {
+      "name": "add media seeds the gallery",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8689,
+      "row": -1
+    },
+    {
+      "name": "external browser then deep link back into the app",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 14284,
+      "row": -1
+    },
+    {
+      "name": "clipboard round trip",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8091,
+      "row": -1
+    },
+    {
+      "name": "set location",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8109,
+      "row": -1
+    },
+    {
+      "name": "grant all permissions",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 9146,
+      "row": -1
+    },
+    {
+      "name": "http mock rule and real http call",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8045,
+      "row": -1
+    },
+    {
+      "name": "diagnostics dump tree and save device logs",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8151,
+      "row": -1
+    },
+    {
+      "name": "kill and reopen the app",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 76615,
+      "error": "probelink: write: write tcp 127.0.0.1:60910-\u003e127.0.0.1:48690: use of closed network connection (auto-reconnect attempt 1 failed: auto-reconnect failed: reconnect: read token: android: probe token not found within 30s)",
+      "row": -1
+    },
+    {
+      "name": "clear app data relaunches clean",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 20489,
+      "row": -1
+    }
+  ]
+}

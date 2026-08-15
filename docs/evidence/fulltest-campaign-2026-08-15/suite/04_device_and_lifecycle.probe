@@ -1,0 +1,59 @@
+# Device control: media, deep links, browser, clipboard, location,
+# permissions, mocking, HTTP calls, diagnostics, lifecycle.
+
+on failure
+  take a screenshot called "fail_04_device"
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "add media seeds the gallery"
+  add media "fixtures/e4_test_photo.jpg"
+  see "Quick Add"
+
+test "external browser then deep link back into the app"
+  open link "https://example.com"
+  wait 3 seconds
+  verify external browser opened
+  open link "watersip://fulltest" in the app
+  wait 3 seconds
+  see "Quick Add"
+
+test "clipboard round trip"
+  copy "fulltest-clipboard-payload" to clipboard
+  paste from clipboard
+  log "clipboard contains: <clipboard>"
+
+test "set location"
+  set location 48.1351, 11.5820
+
+test "grant all permissions"
+  grant all permissions
+  # on iOS simulators the grant relaunches the app (simctl privacy kills
+  # it) -- give the cold start a moment before asserting
+  wait until "Quick Add" appears
+  see "Quick Add"
+
+test "http mock rule and real http call"
+  when the app calls GET "/api/fulltest-probe"
+    respond with 200 and body "{\"ok\":true}"
+  call GET "https://example.com"
+  see "Quick Add"
+
+test "diagnostics dump tree and save device logs"
+  dump tree
+  save device logs
+
+test "kill and reopen the app"
+  kill the app
+  wait 2 seconds
+  open the app
+  wait until "Quick Add" appears
+
+test "clear app data relaunches clean"
+  tap #today_quick_add_250
+  wait until "250 ml" appears
+  clear app data
+  wait until "Quick Add" appears
+  see "0 ml"

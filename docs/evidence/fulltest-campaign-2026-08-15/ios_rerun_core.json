@@ -1,0 +1,246 @@
+{
+  "generated_at": "2026-08-15T20:03:30Z",
+  "metadata": {
+    "device_name": "probe-fulltest-sim",
+    "device_id": "387B18E5-1A5A-4BE0-9751-891D884FB567",
+    "platform": "ios",
+    "os_version": "iOS 26.5",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "",
+    "probe_version": "",
+    "config_file": "probe.yaml"
+  },
+  "total_tests": 27,
+  "passed": 26,
+  "failed": 1,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "launch, see, don't see, see exactly",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4290,
+      "row": -1,
+      "artifacts": [
+        "screenshots/01_launch_1786824012093.png"
+      ]
+    },
+    {
+      "name": "tap and double tap register water",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6134,
+      "row": -1
+    },
+    {
+      "name": "undo via snackbar, wait until disappears",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5133,
+      "row": -1
+    },
+    {
+      "name": "gestures: swipe and scroll on scrollable screens",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7615,
+      "row": -1,
+      "artifacts": [
+        "screenshots/01_after_gestures_1786824030975.png"
+      ]
+    },
+    {
+      "name": "toggle unit system round trip",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6306,
+      "row": -1
+    },
+    {
+      "name": "navigation across all tabs with waits",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4459,
+      "row": -1
+    },
+    {
+      "name": "shake, pause, close keyboard are safe no-ops here",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5180,
+      "row": -1
+    },
+    {
+      "name": "wait for page load and network idle",
+      "file": "../tests_ios_fixed/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4167,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the then branch",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5146,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the otherwise branch",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5158,
+      "row": -1
+    },
+    {
+      "name": "repeat runs every iteration",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7250,
+      "row": -1
+    },
+    {
+      "name": "retry stops at first success",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5168,
+      "row": -1
+    },
+    {
+      "name": "optional swallows a genuine failure and continues",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4737,
+      "row": -1
+    },
+    {
+      "name": "store, variables, and log",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5153,
+      "row": -1
+    },
+    {
+      "name": "recipe with argument and nested recipe",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5134,
+      "row": -1
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 1]",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4178
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 2]",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4170,
+      "row": 1
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 3]",
+      "file": "../tests_ios_fixed/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4149,
+      "row": 2
+    },
+    {
+      "name": "add media seeds the gallery",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4314,
+      "row": -1
+    },
+    {
+      "name": "external browser then deep link back into the app",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 10282,
+      "row": -1
+    },
+    {
+      "name": "clipboard round trip",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4206,
+      "row": -1
+    },
+    {
+      "name": "set location",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4313,
+      "row": -1
+    },
+    {
+      "name": "grant all permissions",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 8420,
+      "error": "rpc error -32002: Expected to see \"text(\"Quick Add\")\" but it was not found",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_grant_all_permissions_1786824132780.png",
+        "screenshots/fail_04_device_1786824132877.png"
+      ]
+    },
+    {
+      "name": "http mock rule and real http call",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4281,
+      "row": -1
+    },
+    {
+      "name": "diagnostics dump tree and save device logs",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4216,
+      "row": -1
+    },
+    {
+      "name": "kill and reopen the app",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 58385,
+      "row": -1
+    },
+    {
+      "name": "clear app data relaunches clean",
+      "file": "../tests_ios_fixed/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 10652,
+      "row": -1
+    }
+  ]
+}
