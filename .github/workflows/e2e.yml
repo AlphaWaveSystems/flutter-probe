@@ -118,13 +118,76 @@ jobs:
           script: echo "AVD created"
 
       # ── Build and install test app ──
-      - name: Configure probe_agent dependency
+      - name: Configure local-path dependency overrides
         run: |
+          # nightowl_sdk is a local-only dev tool (session-recording
+          # instrumentation) with no CI-accessible distribution — generate a
+          # minimal stub matching its real public API so mobile/lib/main.dart's
+          # NightOwlBinding.ensureInitialized(...) call still compiles and
+          # runs (as a no-op, no session capture) in CI.
+          mkdir -p nightowl_stub/lib
+          cat > nightowl_stub/pubspec.yaml << 'EOF'
+          name: nightowl_sdk
+          version: 0.1.0
+          environment:
+            sdk: ">=3.0.0 <4.0.0"
+          dependencies:
+            flutter:
+              sdk: flutter
+          EOF
+          cat > nightowl_stub/lib/nightowl.dart << 'EOF'
+          import 'package:flutter/widgets.dart';
+
+          /// CI stub for nightowl_sdk's config API — field names/types
+          /// mirror the real NightOwlConfig closely enough to satisfy real
+          /// call sites without pulling in the actual (local-only) package.
+          class NightOwlConfig {
+            const NightOwlConfig({
+              required this.serverUrl,
+              this.sessionId,
+              this.captureInteractions = true,
+              this.captureRenderTree = true,
+              this.flushIntervalMs = 2000,
+              this.flushEventThreshold = 5,
+              this.interactionsPerKeyframe = 20,
+              this.compressionEnabled = true,
+              this.debugLogging = false,
+              this.appVersion,
+              this.bundleId,
+              this.deviceMetadata = const {},
+            });
+
+            final String serverUrl;
+            final String? sessionId;
+            final bool captureInteractions;
+            final bool captureRenderTree;
+            final int flushIntervalMs;
+            final int flushEventThreshold;
+            final int interactionsPerKeyframe;
+            final bool compressionEnabled;
+            final bool debugLogging;
+            final String? appVersion;
+            final String? bundleId;
+            final Map<String, dynamic> deviceMetadata;
+          }
+
+          /// CI stub for NightOwlBinding — just initializes the normal
+          /// Flutter widgets binding so runApp() still works. Nothing is
+          /// captured or sent anywhere in CI.
+          class NightOwlBinding {
+            static void ensureInitialized({required NightOwlConfig config}) {
+              WidgetsFlutterBinding.ensureInitialized();
+            }
+          }
+          EOF
+
           cd e2e-app/mobile
           cat > pubspec_overrides.yaml << 'EOF'
           dependency_overrides:
             flutter_probe_agent:
               path: ../../probe_agent
+            nightowl_sdk:
+              path: ../../nightowl_stub
           EOF
 
       - name: Install Flutter dependencies
@@ -149,15 +212,13 @@ jobs:
             adb shell am start -n ${{ env.ANDROID_APP_ID }}/.MainActivity
             sleep 10
 
-            # Run tests with sharding
-            bin/probe test e2e-app/mobile/tests/ \
-              --shard ${{ matrix.shard }} \
-              --device emulator-5554 \
-              --config e2e-app/mobile/tests/probe.yaml \
-              --format json \
-              --output reports/results-android-shard-${{ strategy.job-index }}.json \
-              -v -y \
-              || true
+            # Run tests with sharding. One line, not backslash-continued —
+            # reactivecircus/android-emulator-runner's `script:` input
+            # doesn't reliably join \-continued lines the way a normal
+            # `run: |` step does, and a stray backslash ends up passed to
+            # `probe test` as a bogus test-file argument ("stat \: no such
+            # file or directory").
+            bin/probe test e2e-app/mobile/tests/ --shard ${{ matrix.shard }} --device emulator-5554 --config e2e-app/mobile/tests/probe.yaml --format json --output reports/results-android-shard-${{ strategy.job-index }}.json -v -y || true
 
       # ── Reports ──
       - name: Generate HTML report
@@ -232,13 +293,76 @@ jobs:
           fi
 
       # ── Build and install test app ──
-      - name: Configure probe_agent dependency
+      - name: Configure local-path dependency overrides
         run: |
+          # nightowl_sdk is a local-only dev tool (session-recording
+          # instrumentation) with no CI-accessible distribution — generate a
+          # minimal stub matching its real public API so mobile/lib/main.dart's
+          # NightOwlBinding.ensureInitialized(...) call still compiles and
+          # runs (as a no-op, no session capture) in CI.
+          mkdir -p nightowl_stub/lib
+          cat > nightowl_stub/pubspec.yaml << 'EOF'
+          name: nightowl_sdk
+          version: 0.1.0
+          environment:
+            sdk: ">=3.0.0 <4.0.0"
+          dependencies:
+            flutter:
+              sdk: flutter
+          EOF
+          cat > nightowl_stub/lib/nightowl.dart << 'EOF'
+          import 'package:flutter/widgets.dart';
+
+          /// CI stub for nightowl_sdk's config API — field names/types
+          /// mirror the real NightOwlConfig closely enough to satisfy real
+          /// call sites without pulling in the actual (local-only) package.
+          class NightOwlConfig {
+            const NightOwlConfig({
+              required this.serverUrl,
+              this.sessionId,
+              this.captureInteractions = true,
+              this.captureRenderTree = true,
+              this.flushIntervalMs = 2000,
+              this.flushEventThreshold = 5,
+              this.interactionsPerKeyframe = 20,
+              this.compressionEnabled = true,
+              this.debugLogging = false,
+              this.appVersion,
+              this.bundleId,
+              this.deviceMetadata = const {},
+            });
+
+            final String serverUrl;
+            final String? sessionId;
+            final bool captureInteractions;
+            final bool captureRenderTree;
+            final int flushIntervalMs;
+            final int flushEventThreshold;
+            final int interactionsPerKeyframe;
+            final bool compressionEnabled;
+            final bool debugLogging;
+            final String? appVersion;
+            final String? bundleId;
+            final Map<String, dynamic> deviceMetadata;
+          }
+
+          /// CI stub for NightOwlBinding — just initializes the normal
+          /// Flutter widgets binding so runApp() still works. Nothing is
+          /// captured or sent anywhere in CI.
+          class NightOwlBinding {
+            static void ensureInitialized({required NightOwlConfig config}) {
+              WidgetsFlutterBinding.ensureInitialized();
+            }
+          }
+          EOF
+
           cd e2e-app/mobile
           cat > pubspec_overrides.yaml << 'EOF'
           dependency_overrides:
             flutter_probe_agent:
               path: ../../probe_agent
+            nightowl_sdk:
+              path: ../../nightowl_stub
           EOF
 
       - name: Install Flutter dependencies
