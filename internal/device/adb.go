@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -246,6 +247,40 @@ func (a *ADB) AddMedia(ctx context.Context, serial, localPath string) error {
 		return fmt.Errorf("media scanner broadcast: %w", err)
 	}
 	return nil
+}
+
+// UIAutomatorDump returns the current native (non-Flutter) UI hierarchy as
+// XML — the same surface `uiautomator dump` gives any Android UI test tool,
+// covering pickers, share sheets, and other OS-owned UI the Dart agent can
+// never see.
+func (a *ADB) UIAutomatorDump(ctx context.Context, serial string) (string, error) {
+	const dumpPath = "/sdcard/probe_uidump.xml"
+	if _, err := a.Shell(ctx, serial, "uiautomator", "dump", dumpPath); err != nil {
+		return "", fmt.Errorf("uiautomator dump: %w", err)
+	}
+	out, err := a.Shell(ctx, serial, "cat", dumpPath)
+	if err != nil {
+		return "", fmt.Errorf("uiautomator dump: reading %s: %w", dumpPath, err)
+	}
+	return string(out), nil
+}
+
+// Tap issues a raw coordinate tap via `input tap`. Used internally by
+// native-UI verbs after resolving a query to on-screen bounds via
+// UIAutomatorDump — ordinary Flutter taps go through the Dart agent
+// instead, never this.
+func (a *ADB) Tap(ctx context.Context, serial string, x, y int) error {
+	_, err := a.Shell(ctx, serial, "input", "tap", strconv.Itoa(x), strconv.Itoa(y))
+	return err
+}
+
+// InputText types text into whatever native element currently has focus via
+// `input text`. Android's shell tool treats a literal space as a token
+// separator, so spaces are escaped as %s per its own documented convention.
+func (a *ADB) InputText(ctx context.Context, serial, text string) error {
+	escaped := strings.ReplaceAll(text, " ", "%s")
+	_, err := a.Shell(ctx, serial, "input", "text", escaped)
+	return err
 }
 
 // run executes an adb command and returns combined stdout.

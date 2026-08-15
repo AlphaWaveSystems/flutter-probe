@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"image"
 	"os"
 	"strings"
 	"time"
@@ -594,6 +595,80 @@ func (dc *DeviceContext) AddMedia(ctx context.Context, localPath string) error {
 		if err := dc.Manager.SimCtl().AddMedia(ctx, dc.Serial, localPath); err != nil {
 			return fmt.Errorf("add media: %w", err)
 		}
+	}
+	return nil
+}
+
+// findNative dumps the current native (non-Flutter) UI hierarchy and
+// resolves query to its on-screen bounds, for the tap/see/type native verbs.
+func (dc *DeviceContext) findNative(ctx context.Context, query string) (image.Rectangle, bool, error) {
+	dump, err := dc.Manager.ADB().UIAutomatorDump(ctx, dc.Serial)
+	if err != nil {
+		return image.Rectangle{}, false, err
+	}
+	return device.FindNativeElement(dump, query)
+}
+
+// TapNative taps a native (non-Flutter) UI element — pickers, share sheets,
+// and other OS-owned surfaces the Dart agent can never see — matched by
+// uiautomator's text or resource-id. Android only: there's no simulator- or
+// device-side equivalent of uiautomator on iOS (see
+// docs/proposals/pt13-native-ui-bridging.md, which deferred that to its own
+// proposal, N-2) — errors clearly rather than silently no-op'ing, since a
+// native-UI tap is typically load-bearing mid-flow and a silent skip would
+// just surface as a confusing failure several steps later.
+func (dc *DeviceContext) TapNative(ctx context.Context, query string) error {
+	if dc.Platform != device.PlatformAndroid {
+		return fmt.Errorf("tap native: only supported on Android (see docs/proposals/pt13-native-ui-bridging.md — iOS is proposed in N-2, not yet implemented)")
+	}
+	rect, found, err := dc.findNative(ctx, query)
+	if err != nil {
+		return fmt.Errorf("tap native: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("tap native: no element matching %q in the current native UI", query)
+	}
+	center := rect.Min.Add(rect.Max).Div(2)
+	if err := dc.Manager.ADB().Tap(ctx, dc.Serial, center.X, center.Y); err != nil {
+		return fmt.Errorf("tap native: %w", err)
+	}
+	return nil
+}
+
+// SeeNative reports whether a native UI element matching query is currently
+// present, for `see native "..."` / `don't see native "..."`. Unlike
+// TapNative, non-Android platforms return (false, nil) rather than an
+// error: "not seen" is the honest, correct answer when there's no way it
+// could ever be seen, and it lets `don't see native "..."` pass cleanly
+// there instead of erroring on an assertion that's actually satisfied.
+func (dc *DeviceContext) SeeNative(ctx context.Context, query string) (bool, error) {
+	if dc.Platform != device.PlatformAndroid {
+		fmt.Printf("    \033[33m⚠\033[0m  native UI selectors are only supported on Android — treating as not found\n")
+		return false, nil
+	}
+	_, found, err := dc.findNative(ctx, query)
+	if err != nil {
+		return false, fmt.Errorf("see native: %w", err)
+	}
+	return found, nil
+}
+
+// TypeNative taps a native element matched by query to focus it, then types
+// text into it. Android only — see TapNative.
+//
+// Found during N-1's real-device evidence gathering: firing `input text`
+// immediately after the focus tap can lose the keystrokes entirely — the
+// tap lands and the field visibly focuses (cursor shown), but the IME
+// hasn't finished attaching yet, so the text never arrives. A brief settle
+// delay between the two fixes it reliably; 500ms matches this codebase's
+// existing default for other tap-then-settle sequences (see restartDelay).
+func (dc *DeviceContext) TypeNative(ctx context.Context, query, text string) error {
+	if err := dc.TapNative(ctx, query); err != nil {
+		return fmt.Errorf("type native: %w", err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if err := dc.Manager.ADB().InputText(ctx, dc.Serial, text); err != nil {
+		return fmt.Errorf("type native: %w", err)
 	}
 	return nil
 }

@@ -1,0 +1,16 @@
+# N-1 evidence: tap native / see native reach the Android system Share
+# sheet — a fully native UI surface with no Flutter widget tree at all,
+# triggered here via an external ACTION_SEND intent (not by tapping
+# anything inside water-sip, since water-sip has no share flow of its own —
+# this proves the mechanism against a genuine native UI regardless).
+#
+# No "restart the app" in a before-hook here — that would dismiss the
+# already-open native share sheet this test depends on.
+
+test "see native and tap native locate real elements in the Android share sheet"
+  see native "Chrome"
+  see native "Gmail"
+  don't see native "Nonexistent App XYZ 12345"
+  tap native "Bluetooth"
+  wait 2 seconds
+  take a screenshot called "n1_after_tap_native_bluetooth"

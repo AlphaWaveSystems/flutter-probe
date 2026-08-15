@@ -442,6 +442,10 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("read %q with ai into %s", s.Text, s.Name)
 		case parser.VerbAddMedia:
 			return fmt.Sprintf("add media %q", s.Name)
+		case parser.VerbTapNative:
+			return fmt.Sprintf("tap native %q", s.Name)
+		case parser.VerbTypeNative:
+			return fmt.Sprintf("type native %q into %q", s.Text, s.Name)
 		default:
 			return string(s.Verb)
 		}
@@ -449,6 +453,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		neg := ""
 		if s.Negated {
 			neg = "don't "
+		}
+		if s.Native {
+			return fmt.Sprintf("%ssee native %q", neg, s.Sel.Text)
 		}
 		return fmt.Sprintf("%ssee %q", neg, s.Sel.Text)
 	case parser.AssertNoDefectsStep:
@@ -816,6 +823,20 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		return e.deviceCtx.AddMedia(ctx, e.resolve(a.Name))
 
+	case parser.VerbTapNative:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping tap native (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.TapNative(ctx, e.resolve(a.Name))
+
+	case parser.VerbTypeNative:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping type native (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.TypeNative(ctx, e.resolve(a.Name), e.resolve(a.Text))
+
 	case parser.VerbEnrollBiometric:
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping enroll biometric (cloud mode)")
@@ -860,9 +881,36 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)
 }
 
+// runAssertNative handles `see native "..."` / `don't see native "..."`:
+// a native (non-Flutter) UI element matched by uiautomator's text or
+// resource-id, dispatched through DeviceContext instead of the Dart agent.
+func (e *Executor) runAssertNative(ctx context.Context, a parser.AssertStep) error {
+	if e.deviceCtx == nil {
+		fmt.Println("    \033[33m⚠\033[0m  Skipping see native (cloud mode)")
+		return nil
+	}
+	found, err := e.deviceCtx.SeeNative(ctx, e.resolve(a.Sel.Text))
+	if err != nil {
+		return err
+	}
+	if a.Negated {
+		if found {
+			return fmt.Errorf("expected NOT to see native element matching %q, but it was found", a.Sel.Text)
+		}
+		return nil
+	}
+	if !found {
+		return fmt.Errorf("expected to see native element matching %q, but it was not found", a.Sel.Text)
+	}
+	return nil
+}
+
 // ---- Assert execution ----
 
 func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
+	if a.Native {
+		return e.runAssertNative(ctx, a)
+	}
 	if a.WithAI {
 		return e.runAssertWithAI(ctx, a)
 	}

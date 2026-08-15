@@ -184,6 +184,14 @@ const (
 	// Media seeding (E-4): add media "path/to/file.jpg"
 	// Name = local file path, resolved relative to the CLI's working directory.
 	VerbAddMedia ActionVerb = "add_media"
+
+	// Native UI bridging (N-1, Android only) — reaches outside the Flutter
+	// widget tree via uiautomator, dispatched through DeviceContext instead
+	// of the Dart agent. See docs/proposals/pt13-native-ui-bridging.md.
+	// Name = query matched against uiautomator's text/resource-id.
+	VerbTapNative ActionVerb = "tap_native"
+	// Name = query, Text = value to type (type native "text" into "query").
+	VerbTypeNative ActionVerb = "type_native"
 )
 
 type SwipeDirection string
@@ -223,6 +231,7 @@ type AssertStep struct {
 	Pattern  string     // regex for "matching"
 	WithAI   bool       // see "<natural-language assertion>" with ai
 	Optional bool       // if true, attempt the assertion but don't fail the test if it doesn't hold
+	Native   bool       // see native "..." — matched against uiautomator's text/resource-id, not the Flutter agent
 	Line     int
 }
 

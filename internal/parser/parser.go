@@ -530,6 +530,13 @@ func (p *Parser) parseActionOpen() (Step, error) {
 func (p *Parser) parseActionTap() (Step, error) {
 	line := p.peek().Line
 	p.advance() // tap
+	if p.peekLiteral("native") {
+		p.advance() // native
+		p.skipFillers()
+		query := p.expectString("native UI element to tap")
+		p.consumeNewline()
+		return ActionStep{Verb: VerbTapNative, Name: query, Line: line}, nil
+	}
 	p.skipFillers()
 	sel := p.parseSelector()
 	ifVis := p.checkIfVisible()
@@ -541,6 +548,15 @@ func (p *Parser) parseActionTap() (Step, error) {
 func (p *Parser) parseActionType() (Step, error) {
 	line := p.peek().Line
 	p.advance() // type
+	if p.peekLiteral("native") {
+		p.advance() // native
+		p.skipFillers()
+		text := p.expectString("text to type")
+		p.skipFillers() // consumes "into"
+		query := p.expectString("native UI element to type into")
+		p.consumeNewline()
+		return ActionStep{Verb: VerbTypeNative, Text: text, Name: query, Line: line}, nil
+	}
 	text := p.expectString("text to type")
 	p.skipFillers()
 	var sel *Selector
@@ -830,6 +846,20 @@ func (p *Parser) parseActionToggle() (Step, error) {
 func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 	line := p.peek().Line
 	p.advance() // see / don't see
+
+	// "see native ..." / "don't see native ..." — a native (non-Flutter) UI
+	// element matched by uiautomator, not the Dart agent. Deliberately a
+	// much simpler grammar than the Flutter `see` (no exactly-N, no state
+	// checks, no regex/AI) — uiautomator matching doesn't support any of
+	// that, so exposing the syntax would just be a promise probe can't keep.
+	if p.peekLiteral("native") {
+		p.advance() // native
+		p.skipFillers()
+		query := p.expectString("native UI element")
+		p.consumeNewline()
+		return AssertStep{Negated: negated, Native: true, Sel: Selector{Kind: SelectorText, Text: query}, Line: line}, nil
+	}
+
 	p.skipFillers()
 
 	// "see exactly N ..."

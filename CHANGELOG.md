@@ -35,6 +35,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pick. Matches Maestro's `addMedia`. Note: this seeds the media store only — it does not drive
   the app's own native image-picker UI to select the photo, a Phase 2 (N-1/N-2) gap.
   See `docs/evidence/e4-add-media-2026-08-15/`.
+- **`tap native "..."` / `see native "..."` / `type native "text" into "..."` (Android only).**
+  Reaches outside the Flutter widget tree into native (OS-owned) UI — pickers, share sheets, and
+  anything else the Dart agent can never see — matched by uiautomator's text or resource-id.
+  CLI-side only (`uiautomator dump` + `input tap`/`input text`), dispatched through
+  `DeviceContext`, no Dart RPC — skipped with a warning in cloud mode. Fixes the exact gap
+  `add media` (E-4) called out as unclosed: a picker's contents can now actually be selected, not
+  just seeded into the media store. iOS has no `uiautomator` equivalent — `tap`/`type native`
+  error clearly rather than silently no-op'ing; `see native` reports "not found" (the honest
+  answer). Matches Maestro/Appium-style native selectors, scoped to Android per
+  `docs/proposals/pt13-native-ui-bridging.md`'s recommendation; iOS is N-2's own proposal.
+  See `docs/evidence/n1-native-ui-android-2026-08-15/`.
 
 ### Fixed
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown
