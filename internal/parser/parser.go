@@ -655,18 +655,38 @@ func (p *Parser) parseActionCompareShot() (Step, error) {
 	return ActionStep{Verb: VerbCompareShot, Name: name, Line: line}, nil
 }
 
+// parseActionDumpTree accepts both documented forms — "dump tree" and
+// "dump the widget tree" — by explicitly consuming TOKEN_WIDGET/TOKEN_TREE
+// if present, the same way parseActionClose explicitly checks for TOKEN_APP.
+// Without this, skipFillers()+consumeNewline() left "tree"/"widget tree"
+// completely unconsumed, so both documented forms misparsed as a second,
+// stray "unknown recipe call" on the same line.
 func (p *Parser) parseActionDumpTree() (Step, error) {
 	line := p.peek().Line
 	p.advance() // dump
 	p.skipFillers()
+	if p.peek().Type == TOKEN_WIDGET {
+		p.advance()
+	}
+	if p.peek().Type == TOKEN_TREE {
+		p.advance()
+	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbDumpTree, Line: line}, nil
 }
 
+// parseActionSaveLogs explicitly consumes TOKEN_DEVICE/TOKEN_LOGS — see
+// parseActionDumpTree's comment for why this is needed at all.
 func (p *Parser) parseActionSaveLogs() (Step, error) {
 	line := p.peek().Line
 	p.advance() // save
 	p.skipFillers()
+	if p.peek().Type == TOKEN_DEVICE {
+		p.advance()
+	}
+	if p.peek().Type == TOKEN_LOGS {
+		p.advance()
+	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbSaveLogs, Line: line}, nil
 }

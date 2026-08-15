@@ -88,15 +88,13 @@ speculative — every item has a documented repro or root cause already.
   See `docs/evidence/v1-scroll-pt03-2026-08-14/`.
   PR: —
 
-- [ ] **R-5 — `dump tree` / `dump the widget tree` / `save device logs` all misparse.** Found while
-  gathering V-1 evidence. `unknown recipe call "tree"` / `"widget tree"` / `"device logs"`
-  respectively — 100% reproducible, confirmed with minimal repro scripts. `parseActionDumpTree`/
-  `parseActionSaveLogs` in `internal/parser/parser.go` only call `skipFillers()` before
-  `consumeNewline()`, which never actually consumes the non-filler words after the verb — the same
-  class of bug `parseActionClose` avoids by explicitly checking for `TOKEN_APP`. Fix: mirror
-  `parseActionClose`'s pattern (explicitly consume the expected trailing token(s), or accept and
-  discard any bare identifiers up to newline). Regression tests: parser tests for both verbs, plus
-  the existing `dictionary.md` documented forms as the canonical syntax under test.
+- [x] **R-5 — `dump tree` / `dump the widget tree` / `save device logs` all misparse.** Fixed by
+  explicitly consuming `TOKEN_WIDGET`/`TOKEN_TREE`/`TOKEN_DEVICE`/`TOKEN_LOGS` when present,
+  mirroring `parseActionClose`'s existing pattern. Regression tests: `TestParser_DumpTree_Short`,
+  `TestParser_DumpTree_Long`, `TestParser_SaveDeviceLogs` (all confirmed to fail pre-fix with
+  "step count: got 2, want 1"). Real-device evidence against water-sip:
+  `docs/evidence/r5-dump-tree-save-logs-2026-08-14/`.
+  PR: —
   PR: —
 
 - [x] **D-1 — `dictionary.md` hygiene.** Added all missing rows: `store`, `open link`, `log`,

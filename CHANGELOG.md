@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown
+  recipe call (R-5).** Both verb parsers called `skipFillers()` then `consumeNewline()` without
+  ever explicitly consuming the trailing non-filler words ("tree", "widget tree", "device logs"),
+  so those words were left dangling and misparsed as a second, stray step on the same line — the
+  same class of bug `close the app`'s parser avoids by explicitly checking for its trailing
+  keyword. Fixed by mirroring that pattern. See `docs/evidence/r5-dump-tree-save-logs-2026-08-14/`.
 - **Android: the ProbeAgent's reconnection token lived in an OS-clearable app-cache directory and
   was only written once, at startup (PT-27).** Confirmed reproducible on a real device: the file
   disappeared permanently, mid-session, right after visiting a screen that touches `ImagePicker`
