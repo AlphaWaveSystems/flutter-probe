@@ -1,0 +1,19 @@
+# V-1/PT-03 evidence: `scroll` must genuinely move the ScrollPosition, not
+# fake a gesture. 18 quick-adds overflow one screen of History's ListView;
+# screenshots before/after `scroll down` show whether new content is
+# actually revealed.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "scroll down reveals more history entries than are visible at rest"
+  repeat 18 times
+    tap #today_quick_add_250
+    wait 1 seconds
+  tap #nav_tab_history
+  wait until "History" appears
+  take a screenshot called "v1_history_before_scroll"
+  scroll down
+  wait 1 seconds
+  take a screenshot called "v1_history_after_scroll"
