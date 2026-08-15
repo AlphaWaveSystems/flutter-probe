@@ -49,14 +49,16 @@ speculative — every item has a documented repro or root cause already.
   Real-device evidence (water-sip, Android emulator): `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
   PR: #217
 
-- [ ] **R-2 / PT-25 — Android WebSocket drop (`close 1006`) root cause, still open.**
-  `DONE.md` explicitly says this needs either the reporting app's real background load or a
-  synthetic heavy-background-work fixture — we now have exactly that in water-sip (Firebase/IAP)
-  and nect-flutter (Firestore). Plan: run an extended `.probe` session against one of these real
-  apps under normal background sync load, capturing `adb logcat` + CLI verbose output across a
-  drop if/when it occurs, to finally root-cause instead of just bounding the reconnect timeout
-  (already fixed in v0.10.4). This is a research/repro task before it's a code-fix task — evidence
-  first, then a targeted fix once the mechanism is known.
+- [!] **R-2 / PT-25 — Android WebSocket drop (`close 1006`) root cause, still open.** Attempted
+  with real background load against water-sip (Firebase Crashlytics/Analytics/RemoteConfig/
+  Performance/InAppMessaging + IAP billing calls): a ~100s continuous-foreground stress session
+  did **not** reproduce the drop — clean negative result, logcat-confirmed. A first attempt with
+  deliberate app backgrounding conflated an expected lifecycle disconnect with the actual bug and
+  wasn't a real test of the hypothesis. Rules out "background SDK chatter alone, ~100s" as
+  sufficient; next attempt should try longer duration (10+ min), genuine network-condition changes
+  (needs `toggle airplane mode`, tracked as Phase 1 E-6), or a physical device instead of an
+  emulator. See `docs/evidence/r2-pt25-ws-drop-2026-08-14/` for full writeup and reusable repro
+  scripts.
   PR: —
 
 - [x] **R-3 / PT-27 — Android reconnection token lives in an OS-clearable cache dir.**
