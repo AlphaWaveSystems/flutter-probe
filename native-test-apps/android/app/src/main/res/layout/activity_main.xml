@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:fitsSystemWindows="true"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/native_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Native Test App"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/native_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Tap Me" />
+
+        <TextView
+            android:id="@+id/native_counter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Taps: 0"
+            android:textSize="18sp" />
+
+        <EditText
+            android:id="@+id/native_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:hint="Enter text here"
+            android:inputType="text" />
+
+        <TextView
+            android:id="@+id/native_echo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Echo: (empty)"
+            android:textSize="18sp" />
+
+        <Switch
+            android:id="@+id/native_switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Native Switch" />
+
+        <Button
+            android:id="@+id/native_message_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Show Message" />
+
+        <TextView
+            android:id="@+id/native_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Message Revealed"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+</ScrollView>
