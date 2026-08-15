@@ -212,15 +212,13 @@ jobs:
             adb shell am start -n ${{ env.ANDROID_APP_ID }}/.MainActivity
             sleep 10
 
-            # Run tests with sharding
-            bin/probe test e2e-app/mobile/tests/ \
-              --shard ${{ matrix.shard }} \
-              --device emulator-5554 \
-              --config e2e-app/mobile/tests/probe.yaml \
-              --format json \
-              --output reports/results-android-shard-${{ strategy.job-index }}.json \
-              -v -y \
-              || true
+            # Run tests with sharding. One line, not backslash-continued —
+            # reactivecircus/android-emulator-runner's `script:` input
+            # doesn't reliably join \-continued lines the way a normal
+            # `run: |` step does, and a stray backslash ends up passed to
+            # `probe test` as a bogus test-file argument ("stat \: no such
+            # file or directory").
+            bin/probe test e2e-app/mobile/tests/ --shard ${{ matrix.shard }} --device emulator-5554 --config e2e-app/mobile/tests/probe.yaml --format json --output reports/results-android-shard-${{ strategy.job-index }}.json -v -y || true
 
       # ── Reports ──
       - name: Generate HTML report
