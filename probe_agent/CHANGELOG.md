@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.11.0 - 2026-08-14
+
 - Added: `ProbeFinder.boundsFor` and a new `probe.selector_bounds` RPC method —
   resolves a widget's full on-screen pixel bounding box (origin + size), not
   just the center point `dump_tree`/`_elementInfo` already expose. Used by the
