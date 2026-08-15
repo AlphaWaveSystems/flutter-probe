@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.13.0 - 2026-08-15
+
+- No agent-side changes — version kept in lockstep with the CLI's 0.13.0 release.
+
 ## 0.12.1 - 2026-08-15
 
 - No agent-side changes — version kept in lockstep with the CLI's 0.12.1 release.

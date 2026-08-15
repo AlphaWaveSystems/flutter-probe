@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/migrate"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,7 +21,7 @@ func TestDiscoverYAMLFiles_Recursive(t *testing.T) {
 	mustWriteFile(t, filepath.Join(root, "settings", "logout.yaml"), "- launchApp\n")
 	mustWriteFile(t, filepath.Join(root, "auth", "nested", "reset-password.yaml"), "- launchApp\n")
 
-	files, err := discoverYAMLFiles([]string{root})
+	files, err := migrate.DiscoverYAMLFiles([]string{root})
 	if err != nil {
 		t.Fatalf("discoverYAMLFiles: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestDiscoverYAMLFiles_PreservesRelativeDir(t *testing.T) {
 	mustWriteFile(t, filepath.Join(root, "auth", "login.yaml"), "- launchApp\n")
 	mustWriteFile(t, filepath.Join(root, "settings", "login.yaml"), "- launchApp\n")
 
-	files, err := discoverYAMLFiles([]string{root})
+	files, err := migrate.DiscoverYAMLFiles([]string{root})
 	if err != nil {
 		t.Fatalf("discoverYAMLFiles: %v", err)
 	}
@@ -49,7 +50,7 @@ func TestDiscoverYAMLFiles_PreservesRelativeDir(t *testing.T) {
 
 	relDirs := make([]string, len(files))
 	for i, f := range files {
-		relDirs[i] = f.relDir
+		relDirs[i] = f.RelDir
 	}
 	sort.Strings(relDirs)
 	want := []string{"auth", "settings"}
@@ -68,11 +69,11 @@ func TestDiscoverYAMLFiles_SingleFile(t *testing.T) {
 	yamlPath := filepath.Join(root, "solo.yaml")
 	mustWriteFile(t, yamlPath, "- launchApp\n")
 
-	files, err := discoverYAMLFiles([]string{yamlPath})
+	files, err := migrate.DiscoverYAMLFiles([]string{yamlPath})
 	if err != nil {
 		t.Fatalf("discoverYAMLFiles: %v", err)
 	}
-	if len(files) != 1 || files[0].path != yamlPath {
+	if len(files) != 1 || files[0].Path != yamlPath {
 		t.Fatalf("expected exactly the given file, got %+v", files)
 	}
 }
@@ -85,7 +86,7 @@ func TestDiscoverYAMLFiles_IgnoresNonYAML(t *testing.T) {
 	mustWriteFile(t, filepath.Join(root, "README.md"), "# not a flow\n")
 	mustWriteFile(t, filepath.Join(root, "screenshots", "shot.png"), "not really a png")
 
-	files, err := discoverYAMLFiles([]string{root})
+	files, err := migrate.DiscoverYAMLFiles([]string{root})
 	if err != nil {
 		t.Fatalf("discoverYAMLFiles: %v", err)
 	}

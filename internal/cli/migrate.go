@@ -16,58 +16,6 @@ var migrateCmd = &cobra.Command{
 	Short: "Migrate test files from other frameworks to ProbeScript",
 }
 
-// yamlFile is a discovered Maestro flow file paired with its directory
-// relative to whichever search root it was found under, so migration
-// output can mirror the source layout instead of flattening everything
-// into one directory.
-type yamlFile struct {
-	path   string
-	relDir string
-}
-
-// discoverYAMLFiles resolves the migrate command's [dir|file]... arguments
-// into concrete YAML files. Real Maestro suites commonly organize flows
-// into subdirectories (flows/auth/, flows/settings/, etc. — nect-flutter's
-// own real 76-flow suite is laid out exactly this way) — a single-level
-// os.ReadDir here used to silently find nothing at all for any project
-// organized that way, rather than erroring or partially converting. Walks
-// recursively instead, and records each file's directory relative to
-// whichever search root it was found under, so migration output can mirror
-// the source layout and files sharing a base name in different
-// subdirectories (e.g. two "login.yaml" under different features) don't
-// collide and overwrite each other in a flat output directory.
-func discoverYAMLFiles(args []string) ([]yamlFile, error) {
-	var yamlFiles []yamlFile
-	for _, path := range args {
-		info, err := os.Stat(path)
-		if err != nil {
-			return nil, fmt.Errorf("migrate: %w", err)
-		}
-		if !info.IsDir() {
-			yamlFiles = append(yamlFiles, yamlFile{path: path, relDir: "."})
-			continue
-		}
-		err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-			if !strings.HasSuffix(d.Name(), ".yaml") && !strings.HasSuffix(d.Name(), ".yml") {
-				return nil
-			}
-			relDir, relErr := filepath.Rel(path, filepath.Dir(p))
-			if relErr != nil {
-				relDir = "."
-			}
-			yamlFiles = append(yamlFiles, yamlFile{path: p, relDir: relDir})
-			return nil
-		})
-		if err != nil {
-			return nil, fmt.Errorf("migrate: %w", err)
-		}
-	}
-	return yamlFiles, nil
-}
-
 var migrateMaestroCmd = &cobra.Command{
 	Use:   "maestro [dir|file]...",
 	Short: "Convert Maestro YAML flows to ProbeScript .probe files",
@@ -81,7 +29,7 @@ var migrateMaestroCmd = &cobra.Command{
 			args = []string{".maestro"}
 		}
 
-		yamlFiles, err := discoverYAMLFiles(args)
+		yamlFiles, err := migrate.DiscoverYAMLFiles(args)
 		if err != nil {
 			return err
 		}
@@ -95,16 +43,16 @@ var migrateMaestroCmd = &cobra.Command{
 		for _, yf := range yamlFiles {
 			outPath := ""
 			if outputDir != "" {
-				base := strings.TrimSuffix(filepath.Base(yf.path), filepath.Ext(yf.path))
-				outPath = filepath.Join(outputDir, yf.relDir, base+".probe")
+				base := strings.TrimSuffix(filepath.Base(yf.Path), filepath.Ext(yf.Path))
+				outPath = filepath.Join(outputDir, yf.RelDir, base+".probe")
 			}
 
-			result, err := migrate.ConvertFile(yf.path, outPath)
+			result, err := migrate.ConvertFile(yf.Path, outPath)
 			if err != nil {
-				fmt.Printf("  \033[31m✗\033[0m  %s — %s\n", filepath.Base(yf.path), err)
+				fmt.Printf("  \033[31m✗\033[0m  %s — %s\n", filepath.Base(yf.Path), err)
 				continue
 			}
-			statusOK(os.Stdout, "%s → %s", filepath.Base(yf.path), result)
+			statusOK(os.Stdout, "%s → %s", filepath.Base(yf.Path), result)
 			converted++
 		}
 

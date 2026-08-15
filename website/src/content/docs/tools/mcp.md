@@ -28,6 +28,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `read_test` | Read the contents of a `.probe` file |
 | `write_test` | Create or overwrite a `.probe` file — content is validated before writing; syntax errors are returned without creating the file |
 | `run_script` | Execute inline ProbeScript without creating a file |
+| `migrate_maestro` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories, 2.x syntax) |
 | `run_tests` | Run `.probe` test files (supports composite multi-device tests via `composite_devices`) |
 | `list_files` | List all `.probe` files in a directory |
 | `lint` | Validate `.probe` file syntax without running |
