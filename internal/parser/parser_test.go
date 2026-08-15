@@ -303,6 +303,117 @@ func TestParser_AddMedia(t *testing.T) {
 	}
 }
 
+// TestParser_TapNative covers N-1: `tap native "..."` reaches outside the
+// Flutter widget tree via uiautomator, dispatched through DeviceContext
+// instead of the Dart agent.
+func TestParser_TapNative(t *testing.T) {
+	src := `test "t"
+  tap native "Choose from Gallery"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbTapNative {
+		t.Errorf("verb: got %q, want tap_native", a.Verb)
+	}
+	if a.Name != "Choose from Gallery" {
+		t.Errorf("query: got %q", a.Name)
+	}
+}
+
+// TestParser_TapNotNative is the regression guard: a plain `tap "X"` (no
+// "native") must still parse as the ordinary Flutter-agent tap, proving the
+// "native" lookahead doesn't accidentally claim the normal case.
+func TestParser_TapNotNative(t *testing.T) {
+	src := `test "t"
+  tap "Ordinary Button"
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbTap {
+		t.Errorf("verb: got %q, want tap", a.Verb)
+	}
+	if a.Sel == nil || a.Sel.Text != "Ordinary Button" {
+		t.Errorf("selector: got %+v", a.Sel)
+	}
+}
+
+// TestParser_TypeNative covers `type native "text" into "query"`.
+func TestParser_TypeNative(t *testing.T) {
+	src := `test "t"
+  type native "search term" into "Search"
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbTypeNative {
+		t.Errorf("verb: got %q, want type_native", a.Verb)
+	}
+	if a.Text != "search term" {
+		t.Errorf("text: got %q", a.Text)
+	}
+	if a.Name != "Search" {
+		t.Errorf("query: got %q", a.Name)
+	}
+}
+
+// TestParser_TypeNotNative is the regression guard for `type`, mirroring
+// TestParser_TapNotNative.
+func TestParser_TypeNotNative(t *testing.T) {
+	src := `test "t"
+  type "hello" into "Message"
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbType {
+		t.Errorf("verb: got %q, want type", a.Verb)
+	}
+}
+
+// TestParser_SeeNative covers `see native "..."` / `don't see native "..."`.
+func TestParser_SeeNative(t *testing.T) {
+	src := `test "t"
+  see native "IMG_0001.jpg"
+  don't see native "IMG_9999.jpg"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 2)
+
+	pos := firstAssert(t, prog.Tests[0].Body)
+	if !pos.Native {
+		t.Error("expected Native to be true")
+	}
+	if pos.Negated {
+		t.Error("expected Negated to be false for plain \"see native\"")
+	}
+	if pos.Sel.Text != "IMG_0001.jpg" {
+		t.Errorf("query: got %q", pos.Sel.Text)
+	}
+
+	neg, ok := prog.Tests[0].Body[1].(parser.AssertStep)
+	if !ok {
+		t.Fatalf("step 2: got %T, want parser.AssertStep", prog.Tests[0].Body[1])
+	}
+	if !neg.Native || !neg.Negated {
+		t.Errorf("expected Native=true, Negated=true, got %+v", neg)
+	}
+}
+
+// TestParser_SeeNotNative is the regression guard for `see`, mirroring
+// TestParser_TapNotNative.
+func TestParser_SeeNotNative(t *testing.T) {
+	src := `test "t"
+  see "Ordinary Label"
+`
+	prog := mustParse(t, src)
+	a := firstAssert(t, prog.Tests[0].Body)
+	if a.Native {
+		t.Error("expected Native to be false for a plain \"see\"")
+	}
+	if a.Sel.Text != "Ordinary Label" {
+		t.Errorf("query: got %q", a.Sel.Text)
+	}
+}
+
 // TestParser_RecipeCallStartingWithAdd covers the same PT-23-style collision
 // risk "open" already had to guard against: a recipe whose name happens to
 // start with "add" (but isn't followed by "media") must fall through to a

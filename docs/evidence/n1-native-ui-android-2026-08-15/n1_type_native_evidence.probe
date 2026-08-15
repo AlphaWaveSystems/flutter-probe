@@ -1,0 +1,15 @@
+# N-1 evidence: `type native "text" into "query"` — taps a native field to
+# focus it, then types via `input text`, against the Android Settings
+# search bar (another fully native surface, no Flutter widget tree).
+#
+# Tapping "Search settings" on the Settings home screen navigates to a
+# dedicated search screen (a real Activity transition, not an in-place
+# focus) — the same "wait after navigation" idiom this DSL already uses
+# for Flutter screens applies here too, so the transition gets its own
+# explicit wait before the type step runs against the now-stable screen.
+
+test "type native focuses and types into a real native text field"
+  tap native "Search settings"
+  wait 2 seconds
+  type native "wifi" into "Search settings"
+  wait 2 seconds

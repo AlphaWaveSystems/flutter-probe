@@ -218,10 +218,18 @@ solved via OS-level bypass; the real gap is image/file pickers and share sheets,
 bypass. Recommended path from the proposal: Android via `uiautomator`, iOS deferred to its own
 proposal.
 
-- [ ] **N-1 — `tap native "…"` / `see native "…"` / `type native "…"` on Android via
+- [x] **N-1 — `tap native "…"` / `see native "…"` / `type native "…"` on Android via
   `uiautomator`.** Dispatch through `DeviceContext` (same path as install/launch/force-stop/grant),
-  entirely outside the Dart agent. Regression test: a fixture app or water-sip/nect-flutter's
-  native image-picker/share-sheet surface.
+  entirely outside the Dart agent. XML-parsing unit tests plus parser/executor tests, including a
+  regression guard mirroring `open`'s PT-23-style lookahead. Real-device evidence against the
+  Android system Share sheet (`see native`, `tap native` — tap visually confirmed via the selected
+  row's highlight) and Settings' search field (`type native`). Found and fixed a real bug along the
+  way: `type native` lost keystrokes without a settle delay between the focus tap and `input text`
+  (fixed with the same 500ms default this codebase already uses for tap-then-settle sequences).
+  Also documented a real limitation: `take a screenshot` (the Dart-agent verb) can't capture native
+  UI, since it only renders Flutter's own tree — use a raw `adb screencap` externally instead.
+  `CHANGELOG.md` and `dictionary.md` updated.
+  See `docs/evidence/n1-native-ui-android-2026-08-15/`.
   PR: —
 
 - [ ] **N-2 — iOS native bridging proposal.** Write the proposal (own doc, per PT-13's

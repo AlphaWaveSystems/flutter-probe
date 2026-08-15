@@ -213,3 +213,40 @@ func TestRunStep_AddMedia_CloudModeSkips(t *testing.T) {
 		t.Fatalf("expected a graceful cloud-mode skip, got error: %v", err)
 	}
 }
+
+// TestRunStep_TapNative_CloudModeSkips and TestRunStep_TypeNative_CloudModeSkips
+// cover N-1's cloud-mode guard: both are CLI-side only (uiautomator via adb,
+// no Dart RPC), so with no DeviceContext available they must skip
+// gracefully rather than panicking on a nil deviceCtx.
+func TestRunStep_TapNative_CloudModeSkips(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client)
+
+	step := parser.ActionStep{Verb: parser.VerbTapNative, Name: "Choose from Gallery"}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("expected a graceful cloud-mode skip, got error: %v", err)
+	}
+}
+
+func TestRunStep_TypeNative_CloudModeSkips(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client)
+
+	step := parser.ActionStep{Verb: parser.VerbTypeNative, Name: "Search", Text: "query"}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("expected a graceful cloud-mode skip, got error: %v", err)
+	}
+}
+
+// TestRunStep_SeeNative_CloudModeSkips covers the assertion form: cloud
+// mode must skip with a warning rather than fail the assertion outright
+// (which would be a confusing false negative unrelated to the app itself).
+func TestRunStep_SeeNative_CloudModeSkips(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client)
+
+	step := parser.AssertStep{Native: true, Sel: parser.Selector{Kind: parser.SelectorText, Text: "IMG_0001.jpg"}}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("expected a graceful cloud-mode skip, got error: %v", err)
+	}
+}

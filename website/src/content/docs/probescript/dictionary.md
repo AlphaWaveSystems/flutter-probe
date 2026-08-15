@@ -32,6 +32,8 @@ Commands that interact with the app's UI.
 | `add media` | `add media "path/to/photo.jpg"` | Seed a local file into the device's camera roll/gallery (`adb push` + media scan on Android, `simctl addmedia` on iOS). CLI-side only — skipped in cloud mode. Makes a photo available to pick, but does not drive the app's own native image-picker UI to select it |
 | `store` | `store "value" as myVar` | Store a literal or `<var>` value for use in later steps |
 | `log` | `log "message"` | Emit a message into the run output |
+| `tap native` | `tap native "Choose from Gallery"` | Tap a native (non-Flutter) UI element — pickers, share sheets — matched by uiautomator's text or resource-id. Android only; errors clearly on other platforms. CLI-side only — skipped in cloud mode |
+| `type native` | `type native "text" into "query"` | Focus a native text field matched by query, then type into it. Android only. If the field is reached via a screen transition (not already visible), add a `wait` step first — the same idiom used for Flutter navigation |
 
 ## Assertions
 
@@ -41,6 +43,8 @@ Commands that verify the state of the UI.
 |---|---|---|
 | `see` | `see "Text"` | Assert that text is visible on screen |
 | `don't see` | `don't see "Text"` | Assert that text is NOT visible |
+| `see native` | `see native "..."` | Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as "not found" on other platforms |
+| `don't see native` | `don't see native "..."` | Assert a native UI element matching the query is NOT present |
 | `see exactly` | `see exactly 3 "Item"` | Assert exact count of matching widgets |
 | `see enabled` | `see "Submit" is enabled` | Assert widget is enabled |
 | `see disabled` | `see "Submit" is disabled` | Assert widget is disabled |
