@@ -1045,6 +1045,14 @@ class ProbeExecutor {
     final widget = e.widget;
     if (widget is Text) return widget.data ?? '';
     if (widget is RichText) return widget.text.toPlainText();
+    if (widget is EditableText) return widget.controller.text;
+    // TextField/TextFormField (and design-system wrappers around them) are
+    // neither Text nor EditableText themselves — they build an EditableText
+    // several layers down. Reuse the same up/down search _findTextController
+    // already does for tap-to-focus and clear(), instead of returning '' for
+    // every text field (see #field contains "..." always failed silently).
+    final controller = _findTextController(e);
+    if (controller != null) return controller.text;
     return '';
   }
 
