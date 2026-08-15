@@ -1,0 +1,40 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @358c99f5 (file:/Users/patrickbertsch/.maestro/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil$MemoryAccessor (file:/Users/patrickbertsch/.maestro/lib/protobuf-java-3.21.9.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil$MemoryAccessor
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+[Passed] navigate-history-tab (10s)
+[Passed] settings-unit-toggle (13s)
+[Failed] undo-last-entry (27s) (Element not found: Text matching regex: Undo)
+[Passed] quick-add-500 (9s)
+[Passed] app-launch-zero (7s)
+[Passed] quick-add-1l (10s)
+[Passed] goal-reached-100-percent (18s)
+[Failed] navigate-settings-tab (5s)
+[Failed] quick-add-250 (15ms)
+
+3/9 Flows Failed
+
+Exception in thread "Thread-5" java.io.IOException: Command failed (host:transport:emulator-5554): device offline
+	at dadb.adbserver.AdbServer.send$dadb(AdbServer.kt:103)
+	at dadb.adbserver.AdbServerDadb.open(AdbServer.kt:148)
+	at dadb.Dadb$DefaultImpls.openShell(Dadb.kt:42)
+	at dadb.adbserver.AdbServerDadb.openShell(AdbServer.kt:122)
+	at dadb.Dadb$DefaultImpls.shell(Dadb.kt:35)
+	at dadb.adbserver.AdbServerDadb.shell(AdbServer.kt:122)
+	at maestro.android.AndroidDeviceConnection.shell(AndroidDeviceConnection.kt:152)
+	at maestro.drivers.AndroidDriver.shell(AndroidDriver.kt:1335)
+	at maestro.drivers.AndroidDriver.isPackageInstalled(AndroidDriver.kt:1318)
+	at maestro.drivers.AndroidDriver.bestEffortUninstall(AndroidDriver.kt:1293)
+	at maestro.drivers.AndroidDriver.uninstallMaestroDriverApp$lambda$88(AndroidDriver.kt:1279)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.drivers.AndroidDriver.uninstallMaestroDriverApp(AndroidDriver.kt:1278)
+	at maestro.drivers.AndroidDriver.close(AndroidDriver.kt:176)
+	at maestro.Maestro.close(Maestro.kt:601)
+	at maestro.cli.session.MaestroSessionManager$MaestroSession.close(MaestroSessionManager.kt:470)
+	at maestro.cli.session.MaestroSessionManager.newSession$lambda$2(MaestroSessionManager.kt:131)
+	at kotlin.concurrent.ThreadsKt$thread$thread$1.run(Thread.kt:30)

@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="pixel_7" tests="9" failures="1" time="110.227" timestamp="2026-08-14T22:07:50">
+    <testcase id="navigate-history-tab" name="navigate-history-tab" classname="navigate-history-tab" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/navigate-history-tab.yaml" time="9.446" timestamp="2026-08-14T22:07:50" status="SUCCESS"/>
+    <testcase id="settings-unit-toggle" name="settings-unit-toggle" classname="settings-unit-toggle" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/settings-unit-toggle.yaml" time="12.811" timestamp="2026-08-14T22:08:00" status="SUCCESS"/>
+    <testcase id="undo-last-entry" name="undo-last-entry" classname="undo-last-entry" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/undo-last-entry.yaml" time="25.836" timestamp="2026-08-14T22:08:13" status="ERROR">
+      <failure>Element not found: Text matching regex: Undo</failure>
+    </testcase>
+    <testcase id="quick-add-500" name="quick-add-500" classname="quick-add-500" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/quick-add-500.yaml" time="10.056" timestamp="2026-08-14T22:08:39" status="SUCCESS"/>
+    <testcase id="app-launch-zero" name="app-launch-zero" classname="app-launch-zero" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/app-launch-zero.yaml" time="6.97" timestamp="2026-08-14T22:08:49" status="SUCCESS"/>
+    <testcase id="quick-add-1l" name="quick-add-1l" classname="quick-add-1l" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/quick-add-1l.yaml" time="9.481" timestamp="2026-08-14T22:08:56" status="SUCCESS"/>
+    <testcase id="goal-reached-100-percent" name="goal-reached-100-percent" classname="goal-reached-100-percent" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/goal-reached-100-percent.yaml" time="17.317" timestamp="2026-08-14T22:09:05" status="SUCCESS"/>
+    <testcase id="navigate-settings-tab" name="navigate-settings-tab" classname="navigate-settings-tab" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/navigate-settings-tab.yaml" time="8.689" timestamp="2026-08-14T22:09:22" status="SUCCESS"/>
+    <testcase id="quick-add-250" name="quick-add-250" classname="quick-add-250" file="/Users/patrickbertsch/dev/water-sip/.maestro/flows/smoke/quick-add-250.yaml" time="9.6" timestamp="2026-08-14T22:09:31" status="SUCCESS"/>
+  </testsuite>
+</testsuites>
