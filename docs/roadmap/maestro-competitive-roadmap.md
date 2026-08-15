@@ -139,10 +139,12 @@ waiting.
   Full writeup: `docs/evidence/b1-flow-mapping-2026-08-14/`.
   PR: —
 
-- [ ] **B-2 — Harness script.** A small script (`scripts/bench/run-comparison.sh` or similar) that
-  runs both suites N times (start with N=10) against the same booted simulator/emulator, records
-  wall-clock per run and pass/fail, and outputs a comparison table (median/p90 time, flake rate).
-  Keep it in this repo (not the app repos) so it's reusable across future comparison apps.
+- [x] **B-2 — Harness script.** `scripts/bench/run-comparison.sh` + `scripts/bench/summarize.py`
+  (stdlib-only) run both suites N times against the same device, capture wall-clock + probe's JSON
+  report + Maestro's JUnit XML per run, and print a median/P90/flake-rate comparison table.
+  End-to-end smoke-tested (N=2, water-sip) — correctly parsed both output formats and correctly
+  flagged the known `undo-last-entry` flake rather than reporting a false pass. See
+  `docs/evidence/b2-harness-smoketest-2026-08-14/`. A real N≥10 baseline is B-3.
   PR: —
 
 - [ ] **B-3 — Baseline run + published numbers.** Run B-2's harness against both apps, store raw
