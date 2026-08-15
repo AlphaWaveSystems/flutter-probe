@@ -147,10 +147,16 @@ waiting.
   `docs/evidence/b2-harness-smoketest-2026-08-14/`. A real N≥10 baseline is B-3.
   PR: —
 
-- [ ] **B-3 — Baseline run + published numbers.** Run B-2's harness against both apps, store raw
-  output under `docs/evidence/benchmark-baseline-<date>/`, summarize in this doc. This is the
-  number every subsequent phase either preserves or improves — re-run after any change that
-  touches the hot path (finder, executor, transport).
+- [x] **B-3 — Baseline run + published numbers.** N=10 per tool against water-sip's 9-flow suite.
+  **FlutterProbe: 10/10 clean, 59.6s median, 0% flake.** Maestro: 0/10 fully clean — runs 1–6 hit
+  only the known `undo-last-entry` timing flake (~122s median across those); run 7 added two more
+  failures and logged an `IOException: device offline` from Maestro's own driver-uninstall step;
+  runs 8–10 couldn't connect to the device at all, which **remained offline even after the
+  benchmark session ended** (`adb devices` confirmed empty independently). ~2.1x slower median
+  wall-clock on the runs that executed, before even counting the connectivity collapse. The
+  device-connectivity finding needs a reversed-order re-run before being cited as a general
+  Maestro-stability claim (documented honestly as a replication candidate, not overclaimed).
+  Full data + per-run raw logs: `docs/evidence/benchmark-baseline-2026-08-14/`.
   PR: —
 
 ---
@@ -207,7 +213,11 @@ proposal.
 
 - [ ] **G-1 — Publish the benchmark.** Once Phase 0/0.5/1 land, re-run B-2's harness, write up the
   comparison (blog post + flutterprobe.dev numbers), using the now-current data instead of the
-  Phase 0.5 baseline.
+  Phase 0.5 baseline. Before publishing, replicate B-3's device-connectivity finding with reversed
+  run order (Maestro first, then probe) — as recorded it can't distinguish "Maestro's own
+  driver/device management is less stable under sustained runs" from "the emulator happened to be
+  the one dying regardless of which tool was running." The ~2.1x median wall-clock gap on runs
+  that did execute doesn't have this confound and is safe to cite as-is.
   PR: —
 
 - [ ] **G-2 — Refresh `vs-maestro` comparison pages** with 2026 facts gathered in the gap analysis

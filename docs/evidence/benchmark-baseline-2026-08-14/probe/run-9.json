@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-08-15T04:06:41Z",
+  "metadata": {
+    "device_name": "sdk gphone64 arm64",
+    "device_id": "emulator-5554",
+    "platform": "android",
+    "os_version": "Android 15",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "1.1.3",
+    "probe_version": "",
+    "config_file": "/Users/patrickbertsch/dev/water-sip/probe.yaml"
+  },
+  "total_tests": 9,
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "app launches to today screen at zero",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5296,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_launch_zero_1786766747121.png"
+      ]
+    },
+    {
+      "name": "quick add 250 ml",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6300,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_250ml_1786766753420.png"
+      ]
+    },
+    {
+      "name": "quick add 500 ml",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6271,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_500ml_1786766759691.png"
+      ]
+    },
+    {
+      "name": "quick add 1 litre",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6281,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_1l_1786766765976.png"
+      ]
+    },
+    {
+      "name": "undo removes the last entry",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6291,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_undo_1786766772263.png"
+      ]
+    },
+    {
+      "name": "goal reached shows 100 percent",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 9286,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_goal_100_percent_1786766781548.png"
+      ]
+    },
+    {
+      "name": "navigate to history tab",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5453,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_history_tab_1786766787005.png"
+      ]
+    },
+    {
+      "name": "navigate to settings tab",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5382,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_settings_tab_1786766792385.png"
+      ]
+    },
+    {
+      "name": "settings unit toggle",
+      "file": "/Users/patrickbertsch/dev/water-sip/tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7786,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_unit_imperial_1786766798806.png",
+        "screenshots/smoke_unit_back_metric_1786766800177.png"
+      ]
+    }
+  ]
+}
