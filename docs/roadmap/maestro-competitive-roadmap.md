@@ -80,11 +80,23 @@ speculative — every item has a documented repro or root cause already.
   `docs/evidence/r4-textof-editabletext-2026-08-14/`.
   PR: —
 
-- [ ] **V-1 / PT-03 — Re-verify scroll targeting holds.** Claimed fixed in v0.10.0 but never
-  cleanly re-tested end-to-end. Run scroll-heavy flows against nect-flutter (long feed,
-  `06_filter_categories.probe`) and water-sip (History screen) and confirm `scroll up/down`
-  reliably reveals target content. If it holds: close with evidence, no code change. If not:
-  scope a fix.
+- [x] **V-1 / PT-03 — Re-verify scroll targeting holds.** Confirmed holding: a real-device test
+  against water-sip (18 quick-adds overflow one screen of History's lazy `ListView.builder`, then
+  `scroll down`) passes cleanly, consistent with the existing `scroll_scrollposition_test.dart`
+  widget-test evidence. No code change needed. nect-flutter's Android build has an unrelated
+  connectivity issue in this environment (see R-2/R-3/R-4 evidence) so water-sip stood in.
+  See `docs/evidence/v1-scroll-pt03-2026-08-14/`.
+  PR: —
+
+- [ ] **R-5 — `dump tree` / `dump the widget tree` / `save device logs` all misparse.** Found while
+  gathering V-1 evidence. `unknown recipe call "tree"` / `"widget tree"` / `"device logs"`
+  respectively — 100% reproducible, confirmed with minimal repro scripts. `parseActionDumpTree`/
+  `parseActionSaveLogs` in `internal/parser/parser.go` only call `skipFillers()` before
+  `consumeNewline()`, which never actually consumes the non-filler words after the verb — the same
+  class of bug `parseActionClose` avoids by explicitly checking for `TOKEN_APP`. Fix: mirror
+  `parseActionClose`'s pattern (explicitly consume the expected trailing token(s), or accept and
+  discard any bare identifiers up to newline). Regression tests: parser tests for both verbs, plus
+  the existing `dictionary.md` documented forms as the canonical syntax under test.
   PR: —
 
 - [x] **D-1 — `dictionary.md` hygiene.** Added all missing rows: `store`, `open link`, `log`,
