@@ -1,0 +1,238 @@
+--- adb starting (pid 93550) ---
+08-09 10:50:40.450 93550 1055443 I adb     : main.cpp:66 Android Debug Bridge version 1.0.41
+08-09 10:50:40.450 93550 1055443 I adb     : main.cpp:66 Version 37.0.0-14910828
+08-09 10:50:40.450 93550 1055443 I adb     : main.cpp:66 Installed as /Users/patrickbertsch/Library/Android/sdk/platform-tools/adb
+08-09 10:50:40.450 93550 1055443 I adb     : main.cpp:66 Running on Darwin 25.5.0 (arm64)
+08-09 10:50:40.450 93550 1055443 I adb     : main.cpp:66 
+08-09 23:33:17.347 93550 1055452 I adb     : transport.cpp:1170 emulator-5554: connection terminated: read failed
+08-13 21:35:29.689 93550 18184984 I adb     : transport.cpp:1170 emulator-5556: connection terminated: read failed
+08-13 22:11:14.712 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-13 22:12:29.860 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 06:40:31.127 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 07:10:24.328 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 07:12:25.034 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 07:13:37.963 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 07:24:04.500 93550 8054890 I adb     : transport.cpp:1170 emulator-5554: connection terminated: read failed
+08-14 07:24:05.500 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 07:43:32.224 93550 18218718 I adb     : transport.cpp:1170 emulator-5556: connection terminated: read failed
+08-14 08:04:34.692 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:18.724 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:19.359 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:19.450 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:19.469 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:19.605 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:19.743 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:19.895 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.009 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.176 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.294 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.474 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.642 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.809 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:20.969 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:21.142 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:21.290 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:21.471 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:21.652 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:21.819 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:21.935 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:22.099 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:22.278 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:22.449 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:22.615 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:22.793 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:22.925 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:23.105 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:23.281 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:23.457 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:23.636 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:23.810 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:23.951 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:24.125 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:24.298 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:24.475 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:24.626 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:24.783 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:24.932 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:25.092 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:25.250 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:25.410 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:25.577 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:25.754 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:25.881 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:26.059 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:26.237 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:26.409 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:26.582 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:26.755 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:26.884 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:27.061 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:27.230 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:27.404 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:27.582 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:27.740 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:27.875 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.049 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.222 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.381 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.513 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.634 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.807 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:28.986 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:29.164 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:29.343 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:29.507 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:29.616 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:29.732 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:29.858 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:30.035 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:30.178 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:30.350 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:30.497 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:30.675 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:30.842 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.010 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.187 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.305 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.447 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.608 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.738 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:31.892 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.019 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.123 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.302 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.464 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.622 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.786 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:32.907 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:33.069 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:33.196 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:33.352 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:33.525 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:33.699 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:33.878 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:34.056 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:34.235 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:09:34.350 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:18.491 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.295 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.385 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.399 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.518 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.672 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.845 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:19.964 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:20.140 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:20.304 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:20.478 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:20.646 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:20.759 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:20.938 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.079 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.248 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.395 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.537 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.716 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.867 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:21.986 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:22.160 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:22.328 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:22.448 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:22.625 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:22.804 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:22.942 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:23.122 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:23.255 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:23.432 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:23.605 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:23.713 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:23.849 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:24.028 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:24.202 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:24.316 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:24.484 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:24.663 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:24.839 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:25.011 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:25.168 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:25.345 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:25.519 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:25.678 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:25.853 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.022 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.151 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.274 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.449 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.629 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.798 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:26.905 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.062 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.229 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.406 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.574 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.754 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.863 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:27.967 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.098 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.272 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.377 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.493 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.614 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.722 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.859 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:28.969 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.081 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.189 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.310 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.464 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.621 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.764 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:29.938 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.053 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.218 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.377 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.517 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.631 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.804 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:30.963 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:31.072 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:31.248 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:31.422 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:31.597 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:31.771 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:31.885 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.054 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.178 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.351 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.502 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.611 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.736 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:32.854 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.037 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.189 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.354 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.529 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.670 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.795 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:33.907 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:34.049 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+08-14 08:10:34.169 93550 1055443 W adb     : sockets.cpp:310 timeout expired while flushing socket, closing
+adb server killed by remote request
+08-14 08:11:22.244 93550 1055443 I adb     : transport.cpp:1071 kicking transport 0x85b0ac000 emulator-5554
+08-14 08:11:22.244 93550 20332951 I adb     : transport.cpp:1170 emulator-5554: connection terminated: read failed
+--- adb starting (pid 36166) ---
+08-14 22:21:51.848 36166 23236760 I adb     : main.cpp:66 Android Debug Bridge version 1.0.41
+08-14 22:21:51.848 36166 23236760 I adb     : main.cpp:66 Version 37.0.0-14910828
+08-14 22:21:51.848 36166 23236760 I adb     : main.cpp:66 Installed as /Users/patrickbertsch/Library/Android/sdk/platform-tools/adb
+08-14 22:21:51.848 36166 23236760 I adb     : main.cpp:66 Running on Darwin 25.5.0 (arm64)
+08-14 22:21:51.848 36166 23236760 I adb     : main.cpp:66 
+adb server killed by remote request
+08-15 11:38:47.208 36166 23236760 I adb     : transport.cpp:1071 kicking transport 0xa2ac50200 emulator-5554
+08-15 11:38:47.208 36166 24325340 I adb     : transport.cpp:1170 emulator-5554: connection terminated: read failed
+--- adb starting (pid 29649) ---
+08-15 12:57:05.531 29649 25934259 I adb     : main.cpp:66 Android Debug Bridge version 1.0.41
+08-15 12:57:05.531 29649 25934259 I adb     : main.cpp:66 Version 37.0.0-14910828
+08-15 12:57:05.531 29649 25934259 I adb     : main.cpp:66 Installed as /Users/patrickbertsch/Library/Android/sdk/platform-tools/adb
+08-15 12:57:05.531 29649 25934259 I adb     : main.cpp:66 Running on Darwin 25.5.0 (arm64)
+08-15 12:57:05.531 29649 25934259 I adb     : main.cpp:66 
+08-15 12:57:56.624 29649 25934268 I adb     : transport.cpp:1170 emulator-5554: connection terminated: read failed
