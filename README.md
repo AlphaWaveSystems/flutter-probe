@@ -264,12 +264,33 @@ call GET "https://api.example.com/health"
 copy "user@test.com" to clipboard
 paste from clipboard
 set location 37.7749, -122.4194
+add media "fixtures/photo.jpg"            # seed the camera roll/gallery
 kill the app
 open the app
 verify external browser opened
+open link "myapp://profile/42" in the app  # deep link via OS intent handling
 ```
 
-### Conditionals and loops
+### Native UI (Android)
+
+Reach outside the Flutter widget tree into native, OS-owned UI — pickers, share sheets —
+matched by uiautomator's text or resource-id:
+
+```
+tap native "Choose from Gallery"
+see native "IMG_0001.jpg"
+type native "wifi" into "Search settings"
+```
+
+### Visual regression
+
+```
+take screenshot "checkout_page"                # capture
+compare screenshot "checkout_page"             # baseline on first run, diff after
+compare screenshot "total_price" of "Total"    # crop the comparison to one widget
+```
+
+### Conditionals, loops, and retries
 
 ```
 if "Onboarding" is visible
@@ -277,6 +298,10 @@ if "Onboarding" is visible
 repeat 3 times
   swipe up
   wait 1 seconds
+retry 3 times            # re-runs the block on failure, stops at first success
+  tap "Submit"
+  see "Success"
+tap "Rate this app" optional   # attempt, but don't fail the test if it errors
 ```
 
 ### App lifecycle
@@ -442,6 +467,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe device list` | List connected devices and simulators |
 | `probe studio` | Open interactive widget tree inspector |
 | `probe generate --prompt "test login flow"` | AI-generate a test from a description |
+| `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories) |
 | `probe version` | Print CLI version |
 | `probe-convert` | Convert tests from other frameworks |
 

@@ -108,6 +108,28 @@ repeat 3 times
   wait 1 second
 ```
 
+## Retry Blocks
+
+`retry N times` re-runs its whole block from the top on failure, up to N total attempts,
+stopping at the first success — unlike `repeat`, which always runs every iteration:
+
+```
+retry 3 times
+  tap "Submit"
+  see "Success"
+```
+
+## Optional Steps
+
+A trailing `optional` on `tap`/`type`/`long press`/`double tap`/`clear`/`see` attempts the step,
+but logs a warning and continues instead of failing the test when it errors. Unlike `if visible`
+(a pre-check that skips the step entirely when the target isn't found), `optional` always tries:
+
+```
+tap "Rate this app" optional
+see "Promo banner" optional
+```
+
 ## Dart Escape Hatch
 
 For anything ProbeScript doesn't cover natively, use a `dart:` block:
@@ -162,11 +184,47 @@ type "<clipboard>" into "Email"    # use the pasted value
 set location 37.7749, -122.4194    # set GPS coordinates (lat, lng)
 ```
 
-## External Browser
+## Device Media
 
 ```
-verify external browser opened     # assert url_launcher was called
+add media "fixtures/photo.jpg"     # seed a file into the camera roll/gallery
 ```
+
+Uses `adb push` + a media-scanner broadcast on Android and `simctl addmedia` on iOS simulators —
+the file becomes visible to image pickers. CLI-side only; skipped with a warning in cloud mode.
+Note: this makes a photo *available* to pick — driving the native picker UI itself to select it
+is `tap native` (Android, below).
+
+## External Browser and Deep Links
+
+```
+open link "https://example.com"              # external browser via url_launcher
+verify external browser opened               # assert url_launcher was called
+open link "myapp://profile/42" in the app    # route via OS intent handling to the
+                                             # app's own registered scheme instead
+```
+
+`in the app` (also `into the app` / `in app`) dispatches through the OS (`am start -a VIEW` /
+`simctl openurl`), so a custom scheme or App/Universal Link registered by the app under test is
+delivered to *that app*. On iOS Simulator this reliably works when the app is already running —
+`simctl openurl` cannot cold-launch a terminated app. No such caveat on Android.
+
+## Native UI (Android)
+
+Reach outside the Flutter widget tree into native, OS-owned UI — pickers, share sheets — matched
+against uiautomator's text or resource-id:
+
+```
+tap native "Choose from Gallery"
+see native "IMG_0001.jpg"
+don't see native "Error"
+type native "wifi" into "Search settings"
+```
+
+Android only (dispatched via `uiautomator`, no new dependencies). On iOS, `tap native`/`type
+native` error clearly rather than silently no-op'ing; `see native` reports "not found". If the
+native field is reached via a screen transition, add a `wait` step first — the same idiom used
+after Flutter navigation.
 
 ## Biometric Authentication
 

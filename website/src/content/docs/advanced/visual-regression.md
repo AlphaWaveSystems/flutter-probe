@@ -26,6 +26,34 @@ test "checkout page looks correct"
 
 Screenshots are saved as PNG files in the `reports/screenshots/` directory.
 
+## Comparing Screenshots
+
+`compare screenshot` is the verb that actually runs the regression check. The first run
+establishes the baseline; every later run compares against it and fails the step when the diff
+exceeds the configured threshold:
+
+```
+test "checkout page has not changed"
+  tap "Checkout"
+  wait for the page to load
+  compare screenshot "checkout_page"
+```
+
+### Element-scoped comparison
+
+Add `of <selector>` to crop the comparison to one widget's on-screen bounds — both the baseline
+and every later actual image are just that widget's region, not the full screen. Useful when the
+rest of the screen legitimately changes (timestamps, feeds) but one component must stay
+pixel-stable:
+
+```
+compare screenshot "total_price" of "Total"
+compare screenshot "avatar" of #profile_avatar
+```
+
+Failed comparisons write a diff image to `reports/visual-diff/` showing exactly which pixels
+changed.
+
 ## Configuration
 
 ### Threshold

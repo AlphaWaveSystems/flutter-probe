@@ -9,6 +9,7 @@
     { "include": "#action-keyword" },
     { "include": "#assert-keyword" },
     { "include": "#control-flow" },
+    { "include": "#modifier-keyword" },
     { "include": "#string" },
     { "include": "#selector-id" },
     { "include": "#ordinal" },
@@ -39,7 +40,7 @@
       "name": "keyword.control.hook.probe"
     },
     "action-keyword": {
-      "match": "\\b(open|tap|type|swipe|scroll|go back|long press|double tap|clear|close|drag|rotate|toggle|shake|press|take|dump|save|pause|log)\\b",
+      "match": "\\b(open|tap|type|swipe|scroll|go back|long press|double tap|clear|close|drag|rotate|toggle|shake|press|take|compare|dump|save|pause|log|add media)\\b",
       "name": "keyword.operator.action.probe"
     },
     "assert-keyword": {
@@ -47,8 +48,12 @@
       "name": "keyword.operator.assert.probe"
     },
     "control-flow": {
-      "match": "\\b(if|otherwise|repeat|times|for each|use|with examples|run dart|when the app calls|respond with)\\b",
+      "match": "\\b(if|otherwise|repeat|retry|times|for each|use|with examples|run dart|when the app calls|respond with)\\b",
       "name": "keyword.control.probe"
+    },
+    "modifier-keyword": {
+      "match": "\\b(optional|native|if visible|with ai|in the app|into the app)\\b",
+      "name": "storage.modifier.probe"
     },
     "string": {
       "match": "\"[^\"]*\"",
