@@ -1,0 +1,11 @@
+# E-4 evidence: `add media "path"` seeds a local file into the device's
+# camera roll/gallery via adb push + MEDIA_SCANNER_SCAN_FILE broadcast
+# (Android) or `simctl addmedia` (iOS) — CLI-side, no Dart agent RPC.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "add media seeds a file into the gallery"
+  add media "/private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/e4_test_photo.jpg"
+  wait 1 second

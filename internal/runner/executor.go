@@ -440,6 +440,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("deliver signal %q", s.Name)
 		case parser.VerbReadWithAI:
 			return fmt.Sprintf("read %q with ai into %s", s.Text, s.Name)
+		case parser.VerbAddMedia:
+			return fmt.Sprintf("add media %q", s.Name)
 		default:
 			return string(s.Verb)
 		}
@@ -806,6 +808,13 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbReadWithAI:
 		return e.runReadWithAI(ctx, a)
+
+	case parser.VerbAddMedia:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping add media (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.AddMedia(ctx, e.resolve(a.Name))
 
 	case parser.VerbEnrollBiometric:
 		if e.deviceCtx == nil {

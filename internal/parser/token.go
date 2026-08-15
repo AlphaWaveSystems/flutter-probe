@@ -174,6 +174,9 @@ const (
 
 	// AI-powered visual assertions, Phase 4: read "<query>" with ai into <var>
 	TOKEN_READ // "read"
+
+	// Media seeding (E-4): add media "path/to/file.jpg"
+	TOKEN_ADD_MEDIA // compound: "add media"
 )
 
 // Token is a single lexical unit.

@@ -28,6 +28,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   not cold-launch a fully-terminated app (it surfaces an "Open in App?" confirmation dialog it
   can't dismiss); it reliably works on an app that's already running. No such caveat on Android.
   See `docs/evidence/e3-deep-links-2026-08-15/`.
+- **`add media "path/to/file.jpg"`.** Seeds a local file into the device's camera roll/gallery —
+  `adb push` + `MEDIA_SCANNER_SCAN_FILE` broadcast on Android (confirmed MediaStore-indexed, not
+  just written to disk), `xcrun simctl addmedia` on iOS. CLI-side only — skipped with a warning
+  in cloud mode. Unblocks image-picker-adjacent flows that need an existing photo available to
+  pick. Matches Maestro's `addMedia`. Note: this seeds the media store only — it does not drive
+  the app's own native image-picker UI to select the photo, a Phase 2 (N-1/N-2) gap.
+  See `docs/evidence/e4-add-media-2026-08-15/`.
 
 ### Fixed
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown

@@ -199,3 +199,17 @@ func TestRunStep_OpenLink_DeepLink_CloudModeSkips(t *testing.T) {
 		t.Errorf("expected client.OpenLink NOT to be called for a DeepLink step, got %d calls", client.openLinkCalls)
 	}
 }
+
+// TestRunStep_AddMedia_CloudModeSkips covers E-4's cloud-mode guard: `add
+// media` is CLI-side only (adb/simctl, no Dart RPC), so with no
+// DeviceContext available it must skip gracefully with a warning instead of
+// panicking on a nil deviceCtx.
+func TestRunStep_AddMedia_CloudModeSkips(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client) // deviceCtx is nil — see newScriptedExecutor
+
+	step := parser.ActionStep{Verb: parser.VerbAddMedia, Name: "testdata/photo.jpg"}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("expected a graceful cloud-mode skip, got error: %v", err)
+	}
+}

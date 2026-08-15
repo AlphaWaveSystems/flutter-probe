@@ -574,6 +574,30 @@ func (dc *DeviceContext) OpenDeepLink(ctx context.Context, url string) error {
 	return nil
 }
 
+// AddMedia seeds a local photo/video file into the device's camera
+// roll/gallery — unblocks image-picker-adjacent flows that need an existing
+// photo to select. Not supported on physical iOS devices (no devicectl
+// equivalent to simctl's `addmedia` at time of writing) — skips with a
+// warning, matching the existing pattern (see SetLocation, OpenDeepLink).
+func (dc *DeviceContext) AddMedia(ctx context.Context, localPath string) error {
+	if dc.Platform == device.PlatformIOS && dc.IsPhysical {
+		fmt.Printf("    \033[33m⚠\033[0m  add media is not supported on physical iOS devices — skipping\n")
+		return nil
+	}
+	fmt.Printf("    \033[36m🖼\033[0m  Adding %s to the camera roll/gallery\n", localPath)
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		if err := dc.Manager.ADB().AddMedia(ctx, dc.Serial, localPath); err != nil {
+			return fmt.Errorf("add media: %w", err)
+		}
+	case device.PlatformIOS:
+		if err := dc.Manager.SimCtl().AddMedia(ctx, dc.Serial, localPath); err != nil {
+			return fmt.Errorf("add media: %w", err)
+		}
+	}
+	return nil
+}
+
 // EnrollBiometric sets the simulator/emulator's biometric enrollment state
 // to "enrolled" so the app under test sees a registered Face ID / Touch ID /
 // fingerprint when it requests biometric authentication.

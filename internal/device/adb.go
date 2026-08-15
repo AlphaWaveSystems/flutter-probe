@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -229,6 +230,22 @@ func (a *ADB) ClearLogcat(ctx context.Context, serial string) error {
 func (a *ADB) Pull(ctx context.Context, serial, remotePath, localPath string) error {
 	_, err := a.run(ctx, "-s", serial, "pull", remotePath, localPath)
 	return err
+}
+
+// AddMedia pushes a local file to the device's Pictures directory and
+// triggers a media-scanner broadcast so it's immediately visible to the
+// gallery/image picker — there's no Android equivalent of iOS's `simctl
+// addmedia` that does this in one step.
+func (a *ADB) AddMedia(ctx context.Context, serial, localPath string) error {
+	remotePath := "/sdcard/Pictures/" + filepath.Base(localPath)
+	if _, err := a.run(ctx, "-s", serial, "push", localPath, remotePath); err != nil {
+		return fmt.Errorf("adb push: %w", err)
+	}
+	if _, err := a.Shell(ctx, serial, "am", "broadcast", "-a",
+		"android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", "file://"+remotePath); err != nil {
+		return fmt.Errorf("media scanner broadcast: %w", err)
+	}
+	return nil
 }
 
 // run executes an adb command and returns combined stdout.

@@ -198,9 +198,15 @@ waiting.
   See `docs/evidence/e3-deep-links-2026-08-15/`.
   PR: —
 
-- [ ] **E-4 — `add media` — seed camera roll / gallery.** `simctl addmedia` / `adb push` + media
+- [x] **E-4 — `add media` — seed camera roll / gallery.** `simctl addmedia` / `adb push` + media
   scan broadcast. Unblocks image-picker-adjacent flows (relevant to R-3/PT-27's repro too).
-  Evidence: water-sip or nect-flutter's create-post flow (both likely touch image pickers).
+  Parser + executor unit tests, including the same PT-23-style recipe-name collision guard `open`
+  needed. Real-device evidence against water-sip on both Android emulator (confirmed
+  MediaStore-indexed via `content query`, not just written to disk) and iOS simulator (confirmed
+  visually via the Photos app). Documents a real scope limitation found along the way: seeding the
+  media store doesn't drive the app's own native image-picker UI to select the photo — that's
+  Phase 2's N-1/N-2 gap, not this feature's. `CHANGELOG.md` and `dictionary.md` updated.
+  See `docs/evidence/e4-add-media-2026-08-15/`.
   PR: —
 
 ---
