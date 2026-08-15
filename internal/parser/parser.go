@@ -352,6 +352,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseConditional()
 	case TOKEN_REPEAT:
 		return p.parseLoop()
+	case TOKEN_RETRY:
+		return p.parseRetry()
 	case TOKEN_RUN:
 		return p.parseDartBlock()
 	case TOKEN_WHEN:
@@ -440,6 +442,19 @@ func (p *Parser) checkIfVisible() bool {
 	return false
 }
 
+// checkOptional checks for a trailing "optional" suffix before the newline.
+// Unlike "if visible" (a pre-check that skips the step entirely when the
+// target isn't found), "optional" always attempts the step — it only
+// changes what happens if that attempt fails: the error is logged as a
+// warning and swallowed instead of failing the test.
+func (p *Parser) checkOptional() bool {
+	if p.peek().Type == TOKEN_OPTIONAL {
+		p.advance()
+		return true
+	}
+	return false
+}
+
 // checkWithAI checks for a trailing "with ai" suffix before the newline.
 // Returns true if the suffix was consumed.
 func (p *Parser) checkWithAI() bool {
@@ -503,8 +518,9 @@ func (p *Parser) parseActionTap() (Step, error) {
 	p.skipFillers()
 	sel := p.parseSelector()
 	ifVis := p.checkIfVisible()
+	opt := p.checkOptional()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbTap, Sel: &sel, IfVisible: ifVis, Line: line}, nil
+	return ActionStep{Verb: VerbTap, Sel: &sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
 }
 
 func (p *Parser) parseActionType() (Step, error) {
@@ -523,8 +539,9 @@ func (p *Parser) parseActionType() (Step, error) {
 		p.advance()
 	}
 	ifVis := p.checkIfVisible()
+	opt := p.checkOptional()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbType, Text: text, Sel: sel, IfVisible: ifVis, Line: line}, nil
+	return ActionStep{Verb: VerbType, Text: text, Sel: sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
 }
 
 func (p *Parser) parseActionSwipe() (Step, error) {
@@ -563,8 +580,9 @@ func (p *Parser) parseActionLongPress() (Step, error) {
 	p.skipFillers()
 	sel := p.parseSelector()
 	ifVis := p.checkIfVisible()
+	opt := p.checkOptional()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbLongPress, Sel: &sel, IfVisible: ifVis, Line: line}, nil
+	return ActionStep{Verb: VerbLongPress, Sel: &sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
 }
 
 func (p *Parser) parseActionDoubleTap() (Step, error) {
@@ -573,8 +591,9 @@ func (p *Parser) parseActionDoubleTap() (Step, error) {
 	p.skipFillers()
 	sel := p.parseSelector()
 	ifVis := p.checkIfVisible()
+	opt := p.checkOptional()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbDoubleTap, Sel: &sel, IfVisible: ifVis, Line: line}, nil
+	return ActionStep{Verb: VerbDoubleTap, Sel: &sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
 }
 
 func (p *Parser) parseActionClear() (Step, error) {
@@ -583,8 +602,9 @@ func (p *Parser) parseActionClear() (Step, error) {
 	p.skipFillers()
 	sel := p.parseSelector()
 	ifVis := p.checkIfVisible()
+	opt := p.checkOptional()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbClear, Sel: &sel, IfVisible: ifVis, Line: line}, nil
+	return ActionStep{Verb: VerbClear, Sel: &sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
 }
 
 func (p *Parser) parseActionClose() (Step, error) {
@@ -845,6 +865,7 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 	if negated && withAI {
 		return nil, fmt.Errorf("line %d: \"don't see ... with ai\" is not supported — AI assertions cannot be negated", line)
 	}
+	optional := p.checkOptional()
 
 	p.consumeNewline()
 	return AssertStep{
@@ -855,6 +876,7 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		CheckVal: checkVal,
 		Pattern:  pattern,
 		WithAI:   withAI,
+		Optional: optional,
 		Line:     line,
 	}, nil
 }
@@ -1052,6 +1074,27 @@ func (p *Parser) parseLoop() (Step, error) {
 		return nil, err
 	}
 	return LoopStep{Count: count, Body: body, Line: line}, nil
+}
+
+// ---- Retry ----
+
+func (p *Parser) parseRetry() (Step, error) {
+	line := p.peek().Line
+	p.advance() // retry
+	count := 1
+	if p.peek().Type == TOKEN_INT {
+		count, _ = strconv.Atoi(p.advance().Literal)
+	}
+	p.skipFillers()
+	if p.peek().Type == TOKEN_TIMES {
+		p.advance()
+	}
+	p.consumeNewline()
+	body, err := p.parseBody()
+	if err != nil {
+		return nil, err
+	}
+	return RetryStep{Count: count, Body: body, Line: line}, nil
 }
 
 // ---- Dart block ----

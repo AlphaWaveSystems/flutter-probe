@@ -137,6 +137,7 @@ Commands that control test execution flow.
 | `if appears` | `if "Dialog" appears` | Execute indented block only if widget is visible |
 | `otherwise` | `otherwise` | Else branch for `if` block |
 | `repeat N times` | `repeat 5 times` | Loop an indented block N times |
+| `retry N times` | `retry 3 times` | Re-run an indented block from the top on failure, up to N attempts, stopping at the first success |
 
 ## Conditional Actions (if visible)
 
@@ -149,6 +150,21 @@ Modifier that silently skips an action when the target widget is not found.
 | `clear if visible` | `clear "Field" if visible` | Clear only if field exists |
 | `long press if visible` | `long press "Item" if visible` | Long press only if present |
 | `double tap if visible` | `double tap "Item" if visible` | Double tap only if present |
+
+## Optional Steps
+
+Modifier that attempts a step, but treats a failure as non-fatal instead of failing the test.
+Unlike `if visible` above (a pre-check that never even attempts the step), `optional` always runs
+the step and only changes what happens after it fails.
+
+| Command | Syntax | Description |
+|---|---|---|
+| `tap optional` | `tap "Maybe There" optional` | Attempt the tap; log a warning and continue if it fails |
+| `type optional` | `type "text" into "Field" optional` | Attempt to type; continue if the field isn't found |
+| `clear optional` | `clear "Field" optional` | Attempt to clear; continue if not found |
+| `long press optional` | `long press "Item" optional` | Attempt a long press; continue if not found |
+| `double tap optional` | `double tap "Item" optional` | Attempt a double tap; continue if not found |
+| `see optional` | `see "Maybe There" optional` | Attempt the assertion; continue if it doesn't hold |
 
 ## Data Generators
 

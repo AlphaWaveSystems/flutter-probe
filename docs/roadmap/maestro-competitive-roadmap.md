@@ -164,11 +164,16 @@ waiting.
 
 ## Phase 1 — Flow ergonomics (AI assertions already shipped in v0.11.0 — removed from scope)
 
-- [ ] **E-1 — `retry N times` block + `optional` step modifier.** Parser + AST + executor support
-  for wrapping a step/block with bounded retries, and an `optional:`-equivalent per-step modifier
-  (we already have `if visible` — this is the complementary "run it, don't fail the test if it
-  errors" case). Regression tests in `internal/parser` + `internal/runner`. Real-device evidence:
-  a flaky-by-design step against water-sip or nect-flutter.
+- [x] **E-1 — `retry N times` block + `optional` step modifier.** New `RetryStep` AST node
+  (parser + executor, mirrors `LoopStep`/`repeat` but stops at first success); `Optional bool` on
+  `ActionStep`/`AssertStep`, handled generically in `runStep` (attempt the step, swallow non-
+  connection errors with a warning). Matches Maestro's `retry` block and `optional: true`.
+  Regression tests: 5 parser tests + 5 executor tests (scripted client failing N times then
+  succeeding, for `retry`; always-failing for `optional`'s swallow + the non-optional regression
+  guard). Real-device evidence against water-sip (Android emulator): all 3 designed outcomes
+  confirmed exactly (retry executes cleanly, optional swallows a genuine failure with the expected
+  warning, the non-optional identical case still fails). `dictionary.md` updated.
+  See `docs/evidence/e1-retry-optional-2026-08-15/`.
   PR: —
 
 - [ ] **E-2 — Element-scoped visual regression (`compare screenshot "x" of "Widget"`).** Reuse the

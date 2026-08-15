@@ -210,6 +210,8 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		err = e.runConditional(ctx, s) // pass parent ctx — conditional manages its own timeout
 	case parser.LoopStep:
 		err = e.runLoop(ctx, s)
+	case parser.RetryStep:
+		err = e.runRetry(ctx, s)
 	case parser.DartBlock:
 		err = e.runDart(stepCtx, s)
 	case parser.MockBlock:
@@ -280,7 +282,29 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		}
 	}
 
+	// "optional": the step already ran (or was retried above) — this only
+	// changes what happens after a genuine failure. Connection errors still
+	// propagate, since those mean the session itself is broken, not that
+	// the target simply wasn't there; that distinction is what separates
+	// this from "if visible", which never even attempts the step.
+	if err != nil && !isConnectionError(err) && stepIsOptional(step) {
+		fmt.Printf("    \033[33m⚠\033[0m  optional step failed, continuing: %v\n", err)
+		return nil
+	}
+
 	return err
+}
+
+// stepIsOptional reports whether step was parsed with a trailing "optional"
+// modifier. Only ActionStep and AssertStep currently support it.
+func stepIsOptional(step parser.Step) bool {
+	switch s := step.(type) {
+	case parser.ActionStep:
+		return s.Optional
+	case parser.AssertStep:
+		return s.Optional
+	}
+	return false
 }
 
 // runStepTicker is run in a goroutine by runStep. It emits ⏱ progress lines
@@ -447,6 +471,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		return s.Name
 	case parser.LoopStep:
 		return fmt.Sprintf("repeat %d times", s.Count)
+	case parser.RetryStep:
+		return fmt.Sprintf("retry %d times", s.Count)
 	case parser.HTTPCallStep:
 		return fmt.Sprintf("call %s %q", s.Method, s.URL)
 	}
@@ -1017,6 +1043,31 @@ func (e *Executor) runLoop(ctx context.Context, l parser.LoopStep) error {
 		}
 	}
 	return nil
+}
+
+// ---- Retry execution ----
+
+// runRetry runs a `retry N times` block: on failure, it re-runs the whole
+// block from the top, up to Count total attempts, stopping at the first
+// success. Only the last attempt's error is propagated — this is why
+// `retry` exists as a distinct construct from `repeat`, which runs every
+// iteration unconditionally regardless of failure.
+func (e *Executor) runRetry(ctx context.Context, r parser.RetryStep) error {
+	attempts := r.Count
+	if attempts < 1 {
+		attempts = 1 // "retry" with no count, or a malformed "retry 0 times", still tries once
+	}
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		lastErr = e.RunBody(ctx, r.Body)
+		if lastErr == nil {
+			return nil
+		}
+		if attempt < attempts {
+			fmt.Printf("    \033[33m⚠\033[0m  retry attempt %d/%d failed: %v — retrying\n", attempt, attempts, lastErr)
+		}
+	}
+	return fmt.Errorf("retry: all %d attempt(s) failed, last error: %w", attempts, lastErr)
 }
 
 // ---- Dart block execution ----

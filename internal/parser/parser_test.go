@@ -1013,6 +1013,94 @@ func TestParser_Loop(t *testing.T) {
 	}
 }
 
+func TestParser_Retry(t *testing.T) {
+	src := `test "t"
+  open the app
+  retry 3 times
+    tap "Flaky Button"
+    see "Success"
+  see "Done"
+`
+	prog := mustParse(t, src)
+	hasRetry := false
+	for _, s := range prog.Tests[0].Body {
+		if r, ok := s.(parser.RetryStep); ok {
+			hasRetry = true
+			if r.Count != 3 {
+				t.Errorf("retry count: got %d, want 3", r.Count)
+			}
+			if len(r.Body) != 2 {
+				t.Errorf("retry body: got %d steps, want 2", len(r.Body))
+			}
+		}
+	}
+	if !hasRetry {
+		t.Error("no retry step found")
+	}
+}
+
+func TestParser_Retry_DefaultCountIsOne(t *testing.T) {
+	src := `test "t"
+  retry
+    tap "X"
+`
+	prog := mustParse(t, src)
+	r, ok := prog.Tests[0].Body[0].(parser.RetryStep)
+	if !ok {
+		t.Fatal("expected RetryStep")
+	}
+	if r.Count != 1 {
+		t.Errorf("default retry count: got %d, want 1", r.Count)
+	}
+}
+
+func TestParser_ActionOptional(t *testing.T) {
+	src := `test "t"
+  tap "Maybe There" optional
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if !a.Optional {
+		t.Error("expected Optional to be true")
+	}
+	if a.IfVisible {
+		t.Error("expected IfVisible to be false — only \"optional\" was written")
+	}
+}
+
+func TestParser_ActionWithoutOptional_DefaultsFalse(t *testing.T) {
+	src := `test "t"
+  tap "Always There"
+`
+	prog := mustParse(t, src)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Optional {
+		t.Error("expected Optional to default to false")
+	}
+}
+
+func TestParser_AssertOptional(t *testing.T) {
+	src := `test "t"
+  see "Maybe There" optional
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.AssertStep)
+	if !ok {
+		t.Fatal("expected AssertStep")
+	}
+	if !a.Optional {
+		t.Error("expected Optional to be true")
+	}
+}
+
 // ---- Parser: dart blocks ----
 
 func TestParser_DartBlock(t *testing.T) {
