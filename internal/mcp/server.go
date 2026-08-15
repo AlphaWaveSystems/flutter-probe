@@ -15,6 +15,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/ios"
+	"github.com/alphawavesystems/flutter-probe/internal/migrate"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
@@ -270,6 +271,18 @@ For composite multi-device tests use the composite_devices parameter.`,
 		},
 	},
 	{
+		Name: "migrate_maestro",
+		Description: `Convert Maestro YAML flows to ProbeScript .probe files. Walks directories recursively (feature-subdirectory suites are the real-world norm) and mirrors the source layout in the output directory. Supports Maestro 2.x syntax (setPermissions, retry, assertScreenshot, extendedWaitUntil, scrollUntilVisible, eraseText, ...); constructs with no ProbeScript equivalent (e.g. relativePoint coordinate taps) become clearly-flagged TODO comments plus a warning rather than silently corrupted output.`,
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"source"},
+			Properties: map[string]mcpProp{
+				"source": {Type: "string", Description: "Maestro flow file or directory to convert (directories are walked recursively)"},
+				"output": {Type: "string", Description: "Output directory for .probe files (default: alongside each source file)"},
+			},
+		},
+	},
+	{
 		Name:        "lint",
 		Description: "Validate .probe files for syntax errors without running them against a device.",
 		InputSchema: mcpSchema{
@@ -426,6 +439,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 	case "list_files":
 		out, err := s.runProbe("lint", args["path"], "", "--list", "")
 		return textResp(req.ID, out, err)
+	case "migrate_maestro":
+		return s.migrateMaestro(req.ID, args["source"], args["output"])
 	case "lint":
 		out, err := s.runProbe("lint", args["paths"], "", "", "")
 		return textResp(req.ID, out, err)
@@ -447,6 +462,39 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 }
 
 // ---- Tool implementations ----
+
+// migrateMaestro converts Maestro YAML flows to ProbeScript, sharing the
+// exact discovery + conversion code the CLI's `probe migrate maestro` uses.
+func (s *Server) migrateMaestro(id any, source, output string) *mcpResponse {
+	if source == "" {
+		return errResp(id, -32602, "migrate_maestro: source is required")
+	}
+	files, err := migrate.DiscoverYAMLFiles([]string{source})
+	if err != nil {
+		return errResp(id, -32603, err.Error())
+	}
+	if len(files) == 0 {
+		return textResp(id, "No Maestro YAML files found under "+source, nil)
+	}
+	var b strings.Builder
+	converted := 0
+	for _, f := range files {
+		outPath := ""
+		if output != "" {
+			base := strings.TrimSuffix(filepath.Base(f.Path), filepath.Ext(f.Path))
+			outPath = filepath.Join(output, f.RelDir, base+".probe")
+		}
+		result, err := migrate.ConvertFile(f.Path, outPath)
+		if err != nil {
+			fmt.Fprintf(&b, "FAILED %s: %v\n", f.Path, err)
+			continue
+		}
+		fmt.Fprintf(&b, "%s -> %s\n", f.Path, result)
+		converted++
+	}
+	fmt.Fprintf(&b, "\nConverted %d/%d file(s)\n", converted, len(files))
+	return textResp(id, b.String(), nil)
+}
 
 func (s *Server) getWidgetTree(id any, deviceID string) *mcpResponse {
 	script := "test \"mcp_widget_tree\"\n  dump widget tree\n"

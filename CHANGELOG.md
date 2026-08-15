@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-15
+
+### Added
+- **`migrate_maestro` MCP tool.** The MCP surface audit found `probe migrate maestro` was the one
+  CLI capability with no MCP representation — an AI client couldn't run migrations
+  conversationally. The new tool shares the exact discovery + conversion code the CLI uses
+  (recursive directory walk, source-layout mirroring, the full G-3 2.x syntax hardening), and
+  `DiscoverYAMLFiles` moved to `internal/migrate` as its natural shared home. Live-verified
+  through the MCP protocol against a real 76-flow suite: 76/76 converted.
+
 ## [0.12.1] - 2026-08-15
 
 ### Fixed

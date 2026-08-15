@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"os"
+	"path/filepath"
 	"bufio"
 	"bytes"
 	"context"
@@ -76,7 +78,7 @@ func TestToolsList(t *testing.T) {
 		"list_devices", "list_simulators", "list_avds", "start_device", "shutdown_device",
 		// authoring & execution
 		"get_widget_tree", "read_test", "write_test", "run_script", "run_tests",
-		"list_files", "lint", "take_screenshot",
+		"list_files", "lint", "migrate_maestro", "take_screenshot",
 		// reporting
 		"get_report", "generate_test", "generate_report",
 		// project management
@@ -374,4 +376,55 @@ func keys(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// ---- migrate_maestro (MCP surface for `probe migrate maestro`) ----
+
+func TestMigrateMaestro_ConvertsRecursively(t *testing.T) {
+	src := t.TempDir()
+	out := t.TempDir()
+	sub := filepath.Join(src, "auth")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	flow := "appId: com.example.app\n---\n- launchApp\n- tapOn: \"Sign In\"\n- assertVisible: \"Dashboard\"\n"
+	if err := os.WriteFile(filepath.Join(src, "smoke.yaml"), []byte(flow), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "login.yaml"), []byte(flow), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := roundTrip(t, map[string]any{
+		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+		"params": map[string]any{"name": "migrate_maestro", "arguments": map[string]any{"source": src, "output": out}},
+	})
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected result, got %+v", resp)
+	}
+	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "Converted 2/2 file(s)") {
+		t.Errorf("expected 2/2 converted, got: %s", text)
+	}
+	// output mirrors the source subdirectory layout
+	for _, p := range []string{filepath.Join(out, "smoke.probe"), filepath.Join(out, "auth", "login.probe")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("expected converted file %s: %v", p, err)
+		}
+	}
+}
+
+func TestMigrateMaestro_RequiresSource(t *testing.T) {
+	resp := roundTrip(t, map[string]any{
+		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+		"params": map[string]any{"name": "migrate_maestro", "arguments": map[string]any{}},
+	})
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error, got %+v", resp)
+	}
+	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "source is required") {
+		t.Errorf("unexpected error message: %q", msg)
+	}
 }

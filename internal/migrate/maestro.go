@@ -493,3 +493,49 @@ func numToStr(v interface{}) (string, bool) {
 		return "", false
 	}
 }
+
+// YAMLFile is a discovered Maestro flow file paired with its directory
+// relative to whichever search root it was found under, so migration
+// output can mirror the source layout instead of flattening everything
+// into one directory.
+type YAMLFile struct {
+	Path   string
+	RelDir string
+}
+
+// DiscoverYAMLFiles resolves a set of [dir|file] arguments into concrete
+// Maestro YAML files, walking directories recursively — real Maestro suites
+// commonly organize flows into feature subdirectories, and a single-level
+// listing silently finds nothing for them (the G-3 finding). Shared by the
+// CLI's `probe migrate maestro` and the MCP server's migrate_maestro tool.
+func DiscoverYAMLFiles(args []string) ([]YAMLFile, error) {
+	var yamlFiles []YAMLFile
+	for _, path := range args {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("migrate: %w", err)
+		}
+		if !info.IsDir() {
+			yamlFiles = append(yamlFiles, YAMLFile{Path: path, RelDir: "."})
+			continue
+		}
+		err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			if !strings.HasSuffix(d.Name(), ".yaml") && !strings.HasSuffix(d.Name(), ".yml") {
+				return nil
+			}
+			relDir, relErr := filepath.Rel(path, filepath.Dir(p))
+			if relErr != nil {
+				relDir = "."
+			}
+			yamlFiles = append(yamlFiles, YAMLFile{Path: p, RelDir: relDir})
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("migrate: %w", err)
+		}
+	}
+	return yamlFiles, nil
+}
