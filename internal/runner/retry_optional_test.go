@@ -26,6 +26,13 @@ type scriptedClient struct {
 
 	openLinkCalls int
 	openLinkURLs  []string
+
+	waitRPCs int
+}
+
+func (f *scriptedClient) Wait(ctx context.Context, params probelink.WaitParams) error {
+	f.waitRPCs++
+	return nil
 }
 
 func (f *scriptedClient) Tap(ctx context.Context, sel probelink.SelectorParam) error {

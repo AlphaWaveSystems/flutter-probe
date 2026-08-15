@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-08-15
+
+### Fixed
+- **`toggle` never actually toggled anything, and `toggle #id` didn't even parse.** Found by the
+  full-feature test campaign: the agent's `toggle` DeviceAction has always been a no-op
+  (`case 'toggle': break;`), so every `toggle` step "passed" without touching the device — and the
+  parser only accepted a bare ident or quoted string, leaving `#id` selectors dangling to misparse
+  as a junk recipe call (the PT-26/R-5 class). `toggle` now parses a full selector (text, `#id`,
+  ordinal) and dispatches it as a real tap — which is how a Switch actually toggles.
+- **A recipe whose own name contains a filler word (e.g. `recipe "add and verify"`) was
+  unreachable by its exact written name.** Filler stripping was applied to the call name only —
+  `add and verify "x"` stripped to "add verify", which matched nothing because the definition
+  kept its "and". Both sides now normalize identically before matching.
+- **Android `set location` had never worked.** It ran `adb shell emu geo fix ...` — but `emu` is
+  an emulator *console* command (`adb emu ...`), not a device-shell binary, so every call failed
+  with "/system/bin/sh: emu: inaccessible or not found". Live-verified fixed against a real
+  emulator.
+- **iOS permission verbs left the session hanging until the step timeout.** `simctl privacy
+  grant/revoke/reset` silently terminates the target app (confirmed live via launchctl), but the
+  WebSocket lingered half-open with no error, so the next RPC hung for the full step timeout
+  instead of failing fast enough to auto-reconnect. All four permission verbs
+  (`allow`/`deny`/`grant all`/`revoke all`) now eagerly relaunch and reconnect on iOS simulators,
+  mirroring `restart the app`. Live-verified: grant → wait → assert now completes in ~4s.
+- **`wait N seconds` round-tripped through the agent as an RPC**, so `kill the app` followed by
+  any duration wait hit the dead connection and burned the whole step timeout in doomed reconnect
+  attempts (through an adb forward, "nothing listening" surfaces as accept-then-EOF rather than
+  ECONNREFUSED, so the PT-18 relaunch heuristic never fired either). Duration waits now sleep
+  CLI-side — waiting for wall-clock time needs no device. Live-verified: kill → wait → open now
+  completes in ~20s end-to-end.
+- **`close keyboard` printed "close the app" in progress output** (cosmetic).
+
 ## [0.12.0] - 2026-08-15
 
 ### Added

@@ -24,7 +24,7 @@ Commands that interact with the app's UI.
 | `close` | `close the app` | Close the app |
 | `close` | `close keyboard` | Dismiss the on-screen keyboard |
 | `rotate` | `rotate landscape` or `rotate portrait` | Rotate the device orientation |
-| `toggle` | `toggle "Dark Mode"` | Toggle a switch or checkbox |
+| `toggle` | `toggle "Dark Mode"` or `toggle #unit_toggle` | Toggle a switch or checkbox — accepts any selector (text, `#id`, ordinal) and dispatches it as a tap on the target |
 | `shake` | `shake` | Simulate a device shake gesture |
 | `pause` | `pause` | Pause for 1 second |
 | `open link` | `open link "https://example.com"` | Open a URL in the external browser via `url_launcher` |

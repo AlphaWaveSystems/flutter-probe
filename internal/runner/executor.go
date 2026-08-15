@@ -18,6 +18,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/redact"
@@ -407,6 +408,11 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbOpen:
 			return "open the app"
 		case parser.VerbClose:
+			// Campaign finding: `close keyboard` used to print "close the
+			// app" in progress output — Name distinguishes the two forms.
+			if s.Name == "keyboard" {
+				return "close keyboard"
+			}
 			return "close the app"
 		case parser.VerbGoBack:
 			return "go back"
@@ -439,6 +445,11 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			if s.Sel != nil {
 				return fmt.Sprintf("long press %q", s.Sel.Text)
 			}
+		case parser.VerbToggle:
+			if s.Sel != nil {
+				return fmt.Sprintf("toggle %q", s.Sel.Text)
+			}
+			return fmt.Sprintf("toggle %q", s.Name)
 		case parser.VerbKill:
 			return "kill the app"
 		case parser.VerbCopyClipboard:
@@ -632,7 +643,19 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.DeviceAction(ctx, "rotate", a.Name)
 
 	case parser.VerbToggle:
-		return e.client.DeviceAction(ctx, "toggle", a.Name)
+		// Campaign finding: the agent's `toggle` DeviceAction has always
+		// been a no-op (`case 'toggle': break;` in executor.dart) — every
+		// `toggle` step "passed" without touching the device. A Switch
+		// toggles on tap, so dispatch the parsed selector as a real tap.
+		// Name is the legacy pre-selector field, kept as a text-selector
+		// fallback for any step built programmatically the old way.
+		if a.Sel != nil {
+			return e.client.Tap(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
+		}
+		if a.Name != "" {
+			return e.client.Tap(ctx, probelink.SelectorParam{Kind: "text", Text: e.resolve(a.Name)})
+		}
+		return fmt.Errorf("toggle: missing selector at line %d", a.Line)
 
 	case parser.VerbShake:
 		return e.client.DeviceAction(ctx, "shake", "")
@@ -765,25 +788,37 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			// Cloud mode: permissions auto-granted via Appium capabilities
 			return nil
 		}
-		return e.deviceCtx.AllowPermission(ctx, a.Name)
+		if err := e.deviceCtx.AllowPermission(ctx, a.Name); err != nil {
+			return err
+		}
+		return e.relaunchAfterIOSPermissionChange(ctx)
 
 	case parser.VerbDenyPermission:
 		if e.deviceCtx == nil {
 			return nil
 		}
-		return e.deviceCtx.DenyPermission(ctx, a.Name)
+		if err := e.deviceCtx.DenyPermission(ctx, a.Name); err != nil {
+			return err
+		}
+		return e.relaunchAfterIOSPermissionChange(ctx)
 
 	case parser.VerbGrantAllPerms:
 		if e.deviceCtx == nil {
 			return nil
 		}
-		return e.deviceCtx.GrantAllPermissions(ctx)
+		if err := e.deviceCtx.GrantAllPermissions(ctx); err != nil {
+			return err
+		}
+		return e.relaunchAfterIOSPermissionChange(ctx)
 
 	case parser.VerbRevokeAllPerms:
 		if e.deviceCtx == nil {
 			return nil
 		}
-		return e.deviceCtx.RevokeAllPermissions(ctx)
+		if err := e.deviceCtx.RevokeAllPermissions(ctx); err != nil {
+			return err
+		}
+		return e.relaunchAfterIOSPermissionChange(ctx)
 
 	case parser.VerbKill:
 		if e.deviceCtx == nil {
@@ -898,6 +933,36 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	}
 
 	return fmt.Errorf("unknown action verb %q at line %d", a.Verb, a.Line)
+}
+
+// relaunchAfterIOSPermissionChange restores the session after any of the
+// permission verbs runs on an iOS simulator. Campaign finding (full-feature
+// run, 2026-08-15): `simctl privacy grant/revoke/reset` silently TERMINATES
+// the target app — confirmed live via launchctl after a grant — but the
+// CLI's WebSocket can linger half-open with no error, so the *next* RPC
+// hangs until its step timeout instead of failing fast enough to trigger
+// auto-reconnect. Relaunch and reconnect eagerly instead, mirroring what
+// `restart the app` already does. No-op on Android and physical iOS (their
+// permission paths don't kill the app).
+func (e *Executor) relaunchAfterIOSPermissionChange(ctx context.Context) error {
+	dc := e.deviceCtx
+	if dc == nil || dc.Platform != device.PlatformIOS || dc.IsPhysical {
+		return nil
+	}
+	e.client.Close()
+	if err := dc.RestartApp(ctx); err != nil {
+		return fmt.Errorf("relaunch after permission change: %w", err)
+	}
+	newClient, err := dc.Reconnect(ctx)
+	if err != nil {
+		return fmt.Errorf("reconnect after permission change: %w", err)
+	}
+	e.client = newClient
+	e.clientGen.Add(1)
+	if e.onReconnect != nil {
+		e.onReconnect(newClient)
+	}
+	return nil
 }
 
 // runAssertNative handles `see native "..."` / `don't see native "..."`:
@@ -1097,8 +1162,23 @@ func redactSelector(raw string) parser.Selector {
 // ---- Wait execution ----
 
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
+	// Campaign finding: a plain `wait N seconds` used to round-trip through
+	// the agent as an RPC — so `kill the app` followed by `wait 2 seconds`
+	// hit the dead connection, triggered auto-reconnect against an
+	// intentionally-killed app, and burned the whole step timeout (through
+	// an adb forward, "nothing listening" surfaces as accept-then-EOF, not
+	// ECONNREFUSED, so PT-18's relaunch heuristic never fired either).
+	// Waiting for wall-clock time needs no device at all — sleep CLI-side.
+	if w.Kind == parser.WaitDuration {
+		select {
+		case <-time.After(time.Duration(w.Duration * float64(time.Second))):
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	kindStr := map[parser.WaitKind]string{
-		parser.WaitDuration:    "duration",
 		parser.WaitAppears:     "appears",
 		parser.WaitDisappears:  "disappears",
 		parser.WaitPageLoad:    "page_load",
@@ -1215,6 +1295,21 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
 		stripped = stripRecipeCallArgs(rc.Name)
 		recipe, ok = e.recipes[stripped]
+	}
+	if !ok {
+		// Campaign finding: stripping was applied to the CALL name only,
+		// never the DEFINITION name — so a recipe whose own name contains a
+		// filler word, e.g. `recipe "add and verify" (x)`, was unreachable
+		// by its exact written name: the call `add and verify "v"` parses as
+		// "add and verify <arg>", strips to "add verify", and "add verify"
+		// matches nothing because the definition kept its "and". Normalize
+		// both sides the same way before comparing.
+		for defName, def := range e.recipes {
+			if stripRecipeCallArgs(defName) == stripped {
+				recipe, ok = def, true
+				break
+			}
+		}
 	}
 	if !ok {
 		// PT-02(a): an unrecognized recipe call used to silently no-op ("may

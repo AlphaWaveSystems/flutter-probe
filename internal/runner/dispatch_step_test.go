@@ -202,3 +202,81 @@ func TestDispatchStep_ActionAndAssert(t *testing.T) {
 		t.Errorf("assert executions: seeCalls=%d, want 1", client.seeCalls)
 	}
 }
+
+// ---- Full-feature campaign findings (2026-08-15) ----
+
+// TestRunStep_ToggleDispatchesAsTap covers the campaign finding that the
+// agent's `toggle` DeviceAction was a silent no-op — toggle now dispatches
+// its selector as a real tap (a Switch toggles on tap).
+func TestRunStep_ToggleDispatchesAsTap(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}, tapAlwaysOK: true}
+	e := newScriptedExecutor(client)
+
+	step := parser.ActionStep{Verb: parser.VerbToggle, Sel: &parser.Selector{Kind: parser.SelectorID, Text: "#unit_system_toggle"}}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client.tapCalls != 1 {
+		t.Errorf("toggle should dispatch exactly one tap, got %d", client.tapCalls)
+	}
+}
+
+// TestRunRecipeCall_DefinitionWithFillerWordMatches covers the campaign
+// finding that filler-word stripping was applied to the call name only:
+// `recipe "add and verify"` was unreachable because the call stripped its
+// "and" while the definition kept it. Both sides now normalize the same way.
+func TestRunRecipeCall_DefinitionWithFillerWordMatches(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}, tapAlwaysOK: true}
+	e := newScriptedExecutor(client)
+	e.RegisterRecipe(parser.RecipeDef{
+		Name:   "add and verify",
+		Params: []string{"label"},
+		Body: []parser.Step{
+			parser.ActionStep{Verb: parser.VerbTap, Sel: &parser.Selector{Kind: parser.SelectorText, Text: "X"}},
+		},
+	})
+
+	// The parser turns `add and verify "250 ml"` into this call shape.
+	call := parser.RecipeCall{Name: "add and verify <arg>", Args: []string{"250 ml"}}
+	if err := e.RunStep(context.Background(), call); err != nil {
+		t.Fatalf("recipe with filler word in its definition name should be reachable: %v", err)
+	}
+	if client.tapCalls != 1 {
+		t.Errorf("recipe body should have executed, tapCalls=%d", client.tapCalls)
+	}
+}
+
+// TestStepDescription_CloseKeyboard covers the cosmetic campaign finding
+// that `close keyboard` printed "close the app" in progress output.
+func TestStepDescription_CloseKeyboard(t *testing.T) {
+	e := newScriptedExecutor(&scriptedClient{fakeAIClient: &fakeAIClient{}})
+	kb := e.stepDescription(parser.ActionStep{Verb: parser.VerbClose, Name: "keyboard"})
+	if kb != "close keyboard" {
+		t.Errorf("close keyboard description: got %q", kb)
+	}
+	app := e.stepDescription(parser.ActionStep{Verb: parser.VerbClose})
+	if app != "close the app" {
+		t.Errorf("close app description: got %q", app)
+	}
+}
+
+// TestRunWait_DurationIsCLISide covers the campaign finding that
+// `wait N seconds` round-tripped through the agent: after `kill the app`,
+// the wait hit the dead connection and burned the step timeout in doomed
+// reconnect attempts. Duration waits now sleep CLI-side — no RPC at all.
+func TestRunWait_DurationIsCLISide(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client)
+
+	start := time.Now()
+	err := e.RunStep(context.Background(), parser.WaitStep{Kind: parser.WaitDuration, Duration: 0.2})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < 180*time.Millisecond {
+		t.Errorf("duration wait returned too fast (%v) — did it actually sleep?", elapsed)
+	}
+	if client.waitRPCs != 0 {
+		t.Errorf("duration wait must not call the agent, got %d Wait RPCs", client.waitRPCs)
+	}
+}

@@ -833,12 +833,16 @@ func (p *Parser) parseActionToggle() (Step, error) {
 	line := p.peek().Line
 	p.advance() // toggle
 	p.skipFillers()
-	name := ""
-	if p.peek().Type == TOKEN_IDENT || p.peek().Type == TOKEN_STRING {
-		name = p.advance().Literal
-	}
+	// Full-feature campaign finding: this used to accept only a bare ident or
+	// quoted string into Name — `toggle #id` left the #id token dangling to
+	// misparse as a junk recipe call (the PT-26/R-5 dangling-token class),
+	// and Name was then sent to the agent's `toggle` DeviceAction, which is
+	// a no-op — so even the accepted forms never actually toggled anything.
+	// Parse a real selector (text, #id, ordinal, ...) instead; the executor
+	// dispatches it as a tap, which is how a Switch actually toggles.
+	sel := p.parseSelector()
 	p.consumeNewline()
-	return ActionStep{Verb: VerbToggle, Name: name, Line: line}, nil
+	return ActionStep{Verb: VerbToggle, Sel: &sel, Line: line}, nil
 }
 
 // ---- Assert ----

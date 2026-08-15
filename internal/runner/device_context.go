@@ -532,7 +532,12 @@ func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error
 	fmt.Printf("    \033[36m📍\033[0m  Setting location to %s, %s\n", lat, lng)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial, "emu", "geo", "fix", lng, lat); err != nil {
+		// Campaign finding: this used to run `adb shell emu geo fix ...` —
+		// but `emu` is an *emulator console* command (`adb emu ...`, no
+		// shell), not a binary that exists in the device shell, so Android
+		// set-location had never actually worked: every call failed with
+		// "/system/bin/sh: emu: inaccessible or not found".
+		if _, err := dc.Manager.ADB().Run(ctx, dc.Serial, "emu", "geo", "fix", lng, lat); err != nil {
 			return fmt.Errorf("set location: %w", err)
 		}
 	case device.PlatformIOS:

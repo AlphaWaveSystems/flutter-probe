@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.12.1 - 2026-08-15
+
+- No agent-side changes — version kept in lockstep with the CLI's 0.12.1 release.
+
 ## 0.12.0 - 2026-08-15
 
 - Fixed: the app-cache-dir copy of the ProbeAgent's reconnection token was written once, at
