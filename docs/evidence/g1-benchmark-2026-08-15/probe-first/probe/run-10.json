@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-08-15T14:05:52Z",
+  "metadata": {
+    "device_name": "sdk gphone64 arm64",
+    "device_id": "emulator-5554",
+    "platform": "android",
+    "os_version": "Android 15",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "1.1.3",
+    "probe_version": "",
+    "config_file": "probe.yaml"
+  },
+  "total_tests": 9,
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "app launches to today screen at zero",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5174,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_launch_zero_1786802700003.png"
+      ]
+    },
+    {
+      "name": "quick add 250 ml",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6156,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_250ml_1786802706160.png"
+      ]
+    },
+    {
+      "name": "quick add 500 ml",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6151,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_500ml_1786802712310.png"
+      ]
+    },
+    {
+      "name": "quick add 1 litre",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6215,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_1l_1786802718524.png"
+      ]
+    },
+    {
+      "name": "undo removes the last entry",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6257,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_after_undo_1786802724784.png"
+      ]
+    },
+    {
+      "name": "goal reached shows 100 percent",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 9177,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_goal_100_percent_1786802733956.png"
+      ]
+    },
+    {
+      "name": "navigate to history tab",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5205,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_history_tab_1786802739167.png"
+      ]
+    },
+    {
+      "name": "navigate to settings tab",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5202,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_settings_tab_1786802744368.png"
+      ]
+    },
+    {
+      "name": "settings unit toggle",
+      "file": "tests/smoke.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7479,
+      "row": -1,
+      "artifacts": [
+        "screenshots/smoke_unit_imperial_1786802750691.png",
+        "screenshots/smoke_unit_back_metric_1786802751850.png"
+      ]
+    }
+  ]
+}
