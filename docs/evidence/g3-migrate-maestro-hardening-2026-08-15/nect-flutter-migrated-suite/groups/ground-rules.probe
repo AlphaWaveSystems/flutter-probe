@@ -1,0 +1,32 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on "Add Community"
+  wait for the page to load
+  tap on #fab_create_community
+  tap on #create_group_name_field
+  type "Maestro Ground Rules Test"
+  wait for the page to load
+  tap on #create_group_confirm_button
+  wait until "Set Your Ground Rules" appears
+  see "NECT Standard Guidelines"
+  see "Community Specific Rules"
+  take a screenshot called "ground-rules-initial"
+  tap on #ground_rules_accept_guidelines_checkbox
+  tap on #ground_rules_accept_guidelines_checkbox
+  scroll down
+  tap on #ground_rules_suggestion_chip_no_promotions
+  wait for the page to load
+  see "No Promotions"
+  tap on #ground_rules_suggestion_chip_18_plus
+  wait for the page to load
+  take a screenshot called "ground-rules-suggestions-selected"
+  tap on #ground_rules_custom_rules_field
+  type "No spoilers for 24 hours"
+  take a screenshot called "ground-rules-custom-text"
+  tap on #ground_rules_back_button
+  wait until "My Communities" appears

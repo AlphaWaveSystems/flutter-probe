@@ -1,0 +1,16 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  scroll down
+  see #contact_visibility_toggle
+  take a screenshot called "contact-visibility-before"
+  tap on #contact_visibility_toggle
+  wait for the page to load
+  take a screenshot called "contact-visibility-after"
+  tap on #contact_visibility_toggle
+  wait for the page to load
+  take a screenshot called "contact-visibility-restored"

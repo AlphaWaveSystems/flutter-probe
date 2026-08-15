@@ -1,0 +1,18 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  see "My Profile"
+  see "PERSONAL DETAILS"
+  scroll down
+  see "SKILLS & INTERESTS"
+  scroll down
+  see "ACCOUNT"
+  scroll down
+  see "Save Changes"
+  scroll down
+  see "Sign Out"
+  take a screenshot called "profile-full-view"

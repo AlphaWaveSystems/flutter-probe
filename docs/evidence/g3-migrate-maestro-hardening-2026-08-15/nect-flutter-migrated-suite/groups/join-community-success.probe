@@ -1,0 +1,30 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #my_communities_fab
+  wait for the page to load
+  tap on #fab_join_community
+  tap on #join_group_code_field
+  type "YXozd9ZPGZQL4SFIpoA5"
+  tap on #join_group_confirm_button
+  wait until "Successfully joined E2E Test Community|E2E Test Community" appears
+  take a screenshot called "join-community-success"
+  tap on #info_dialog_got_it_button
+  tap on "Got it"
+  wait for the page to load
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  take a screenshot called "join-community-appears-in-list"
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #community_options_leave_item
+  tap on "Leave"
+  wait until "No Communities Yet" appears
+  don't see #group_card_0
+  take a screenshot called "join-community-left-cleanup"

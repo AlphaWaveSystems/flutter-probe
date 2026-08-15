@@ -1,0 +1,10 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_subscription_item
+  wait until "Premium Subscription" appears
+  take a screenshot called "debug-simulate-before"
+  tap on #subscription_debug_simulate_button
+  take a screenshot called "debug-simulate-popped-to-previous-page"

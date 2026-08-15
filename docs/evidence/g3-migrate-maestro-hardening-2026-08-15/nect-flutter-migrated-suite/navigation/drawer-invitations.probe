@@ -1,0 +1,9 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_invitations_item
+  wait until "My Invitations" appears
+  see "My Invitations"
+  take a screenshot called "drawer-to-invitations"

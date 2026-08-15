@@ -1,0 +1,15 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  see #drawer_logout_item
+  see #drawer_home_item
+  see #drawer_communities_item
+  see #drawer_invitations_item
+  see #drawer_profile_item
+  see #drawer_subscription_item
+  see #drawer_settings_item
+  scroll down
+  see #drawer_help_item
+  take a screenshot called "drawer-menu"

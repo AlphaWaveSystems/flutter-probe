@@ -1,0 +1,10 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  see "Settings"
+  see "ACCOUNT"
+  take a screenshot called "drawer-to-settings"

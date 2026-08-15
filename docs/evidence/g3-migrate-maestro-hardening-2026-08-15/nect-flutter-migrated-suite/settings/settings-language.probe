@@ -1,0 +1,14 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  scroll down
+  tap on #settings_language_tile
+  wait until "Select Language" appears
+  see "Select Language"
+  see "English"
+  take a screenshot called "settings-language-dialog"
+  go back

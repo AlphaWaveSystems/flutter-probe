@@ -1,0 +1,149 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  take a screenshot called "manage-community-elements-initial"
+  tap on #manage_community_name_field
+  type " (maestro sweep)"
+  tap on #manage_community_description_field
+  type "Maestro element-sweep description -- never saved"
+  take a screenshot called "manage-community-elements-fields-edited"
+  see #manage_community_logo_button
+  tap on #manage_community_back_button
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  tap on #manage_community_invite_only_toggle
+  wait for the page to load
+  tap on #manage_community_save_button
+  wait until "Changes saved successfully!" appears
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  scroll down
+  tap on #manage_community_invite_button
+  wait until "Invite Members" appears
+  tap on #invite_members_email_field
+  type "maestro-reject-test@example.com"
+  press key "Enter"
+  take a screenshot called "manage-community-elements-invite-fake-recipient"
+  tap on #invite_send_email_button
+  wait until "Access Type" appears
+  tap on "Back"
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  wait until "Pending Requests" appears
+  scroll down
+  see "maestro-reject-test@example.com"
+  take a screenshot called "manage-community-elements-pending-fake"
+  tap on #manage_community_reject_button_0
+  wait until "Pending Requests" disappears
+  take a screenshot called "manage-community-elements-rejected"
+  don't see "maestro-reject-test@example.com"
+  scroll down
+  tap on #manage_community_invite_button
+  wait until "Invite Members" appears
+  tap on #invite_members_email_field
+  type "e2e.alice@nect.app"
+  press key "Enter"
+  tap on #invite_send_email_button
+  wait until "Access Type" appears
+  tap on "Back"
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  wait until "Pending Requests" appears
+  scroll down
+  see "e2e.alice@nect.app"
+  take a screenshot called "manage-community-elements-pending-alice"
+  tap on #manage_community_approve_button_0
+  wait until "Pending Requests" disappears
+  take a screenshot called "manage-community-elements-approved"
+  scroll down
+  tap on #manage_community_search_field
+  type "Screenshot"
+  wait for the page to load
+  scroll down
+  take a screenshot called "manage-community-elements-screenshot-user-isolated"
+  tap on #manage_community_member_options_button_0
+  wait for the page to load
+  wait until "Make Admin" appears
+  see #manage_community_remove_member_option
+  take a screenshot called "manage-community-elements-member-options-regular"
+  tap on #manage_community_make_admin_option
+  wait until "Screenshot User is now an admin" appears
+  take a screenshot called "manage-community-elements-make-admin-success"
+  scroll down
+  tap on #manage_community_member_options_button_0
+  wait for the page to load
+  see "Remove Admin"
+  don't see "Make Admin"
+  take a screenshot called "manage-community-elements-member-options-admin"
+  tap on #manage_community_remove_admin_option
+  wait for the page to load
+  take a screenshot called "manage-community-elements-remove-admin-dialog"
+  # TODO: tapOn used a relative point (67%,59%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  wait until "Screenshot User is no longer an admin" appears
+  take a screenshot called "manage-community-elements-remove-admin-success"
+  scroll down
+  tap on #manage_community_member_options_button_0
+  wait for the page to load
+  see "Make Admin"
+  don't see "Remove Admin"
+  go back
+  tap on #manage_community_search_field
+  clear
+  tap on #manage_community_back_button
+  wait until "My Communities" appears
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #communities_search_button
+  tap on #communities_search_field
+  type "E2E Test Community"
+  wait for the page to load
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #community_options_leave_item
+  wait for the page to load
+  take a screenshot called "manage-community-elements-alice-leave-dialog"
+  # TODO: tapOn used a relative point (71%,61%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  wait for the page to load
+  take a screenshot called "manage-community-elements-alice-after-leave-tap"
+  tap on #communities_back_button
+  wait for the page to load
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  take a screenshot called "manage-community-elements-alice-left-confirmed"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  tap on #manage_community_public_toggle
+  wait for the page to load
+  tap on #manage_community_save_button
+  wait until "Changes saved successfully!" appears
+  wait until "My Communities" appears

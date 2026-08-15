@@ -283,10 +283,20 @@ proposal.
   proposal instead of the old "native UI is a Maestro-only strength" framing.
   PR: —
 
-- [ ] **G-3 — Harden `probe migrate maestro`** against 2.x Maestro syntax
+- [x] **G-3 — Harden `probe migrate maestro`** against 2.x Maestro syntax
   (`setPermissions`, `relativePoint`, `retry`, `assertScreenshot`) using nect-flutter's real
   66-flow suite as the test corpus — a uniquely good migration-fidelity testbed we now have
   on hand.
+  A command-frequency audit against the real suite (76 flows, not 66 — grew since this was
+  written) found zero occurrences of any of the four named commands; the corpus's own real gaps
+  were `extendedWaitUntil`/`scrollUntilVisible`/`eraseText` (27% of all step invocations). Added
+  support for both sets. Found and fixed two real bugs along the way: `relativePoint` selectors
+  used to silently produce a corrupted, non-functional selector (`tap on "map[point:...]"`) rather
+  than erroring or flagging it — confirmed against a real occurrence in the corpus — and directory
+  discovery was single-level, not recursive, so any suite organized into feature subdirectories
+  (nect-flutter's own real layout) silently converted zero files. All 76 real flows now convert
+  and parse as valid ProbeScript. `CHANGELOG.md` updated.
+  See `docs/evidence/g3-migrate-maestro-hardening-2026-08-15/`.
   PR: —
 
 ---

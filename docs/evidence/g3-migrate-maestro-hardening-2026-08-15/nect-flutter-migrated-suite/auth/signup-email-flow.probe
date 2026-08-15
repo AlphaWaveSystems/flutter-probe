@@ -1,0 +1,20 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  wait until "Login to NECT" appears
+  scroll down
+  tap on "Sign Up"
+  wait until "Create Your Account" appears
+  see "First Name"
+  see "Last Name"
+  take a screenshot called "signup-email-step1"
+  tap on "First Name"
+  type "Test"
+  tap on "Last Name"
+  type "User"
+  scroll down
+  see "Email"
+  scroll down
+  see #signup_continue_button
+  take a screenshot called "signup-email-form-filled"

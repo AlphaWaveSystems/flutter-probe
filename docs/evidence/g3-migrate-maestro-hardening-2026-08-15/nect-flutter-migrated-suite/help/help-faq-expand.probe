@@ -1,0 +1,21 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  tap on #info_dialog_got_it_button
+  tap on "Got it"
+  use "../../helpers/open-drawer.yaml"
+  scroll down
+  tap on #drawer_help_item
+  wait until "CONTACT US" appears
+  tap on #info_dialog_got_it_button
+  tap on "Got it"
+  scroll down
+  wait for the page to load
+  tap on #info_dialog_got_it_button
+  tap on "Got it"
+  take a screenshot called "help-faq-before-tap"
+  # TODO: tapOn used a relative point (50%,58%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  wait for the page to load
+  see #faq_answer
+  take a screenshot called "help-faq-expanded"

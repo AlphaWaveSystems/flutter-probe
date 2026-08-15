@@ -1,0 +1,75 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  tap on #manage_community_invite_only_toggle
+  wait for the page to load
+  tap on #manage_community_save_button
+  wait until "Changes saved successfully!" appears
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  scroll down
+  tap on #manage_community_invite_button
+  wait until "Invite Members" appears
+  take a screenshot called "invite-members-elements-initial"
+  tap on #invite_members_history_button
+  wait for the page to load
+  wait until "Invite History" appears
+  take a screenshot called "invite-members-elements-history-sheet"
+  # TODO: tapOn used a relative point (50%,15%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  tap on #invite_members_copy_link_button
+  wait until "Link copied to clipboard!" appears
+  take a screenshot called "invite-members-elements-copy-link-result"
+  tap on #invite_members_share_link_button
+  wait for the page to load
+  take a screenshot called "invite-members-elements-share-sheet"
+  # TODO: tapOn used a relative point (50%,10%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  tap on #invite_members_email_field
+  type "maestro-chip-a@example.com"
+  press key "Enter"
+  tap on #invite_members_email_field
+  type "maestro-chip-b@example.com"
+  press key "Enter"
+  see "2 recipients"
+  take a screenshot called "invite-members-elements-two-recipients"
+  tap on #invite_members_recipient_remove_button_0
+  wait for the page to load
+  wait until "1 recipient" appears
+  see #invite_members_recipient_remove_button_0
+  don't see #invite_members_recipient_remove_button_1
+  take a screenshot called "invite-members-elements-remove-fixed"
+  tap on #invite_send_email_button
+  wait until "Access Type" appears
+  tap on "Back"
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  wait until "Pending Requests" appears
+  scroll down
+  see "maestro-chip-b@example.com"
+  tap on #manage_community_reject_button_0
+  wait until "Pending Requests" disappears
+  don't see "maestro-chip-b@example.com"
+  tap on "Back"
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  tap on #manage_community_public_toggle
+  wait for the page to load
+  tap on #manage_community_save_button
+  wait until "Changes saved successfully!" appears
+  wait until "My Communities" appears

@@ -1,0 +1,487 @@
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password-buttons.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  forgot-password-buttons.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/forgot-password-buttons.probe
+  [33m⚠[0m  forgot-password.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  forgot-password.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  forgot-password.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/forgot-password.probe
+  [33m⚠[0m  login-validation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  login-validation.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login-validation.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login-validation.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login-validation.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login-validation.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login-validation.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login-validation.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  login-validation.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  login-validation.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  login-validation.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/login-validation.probe
+  [33m⚠[0m  login.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  login.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  login.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  login.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  login.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/login.probe
+  [33m⚠[0m  logout.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  logout.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  logout.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/logout.probe
+  [33m⚠[0m  navigate-to-signup.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  navigate-to-signup.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  navigate-to-signup.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  navigate-to-signup.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/navigate-to-signup.probe
+  [33m⚠[0m  password-toggle.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  password-toggle.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/password-toggle.probe
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: evalScript requires manual Dart conversion
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-complete-with-cleanup.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-complete-with-cleanup.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-complete-with-cleanup.probe
+  [33m⚠[0m  signup-duplicate-email.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-duplicate-email.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-duplicate-email.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-duplicate-email.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-duplicate-email.probe
+  [33m⚠[0m  signup-email-flow.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-email-flow.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-email-flow.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-email-flow.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-email-flow.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-email-flow.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-email-flow.probe
+  [33m⚠[0m  signup-step1-toggles.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-step1-toggles.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-step1-toggles.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-step1-toggles.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-step1-toggles.probe
+  [33m⚠[0m  signup-step1.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-step1.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-step1.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  signup-step1.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-step1.probe
+  [33m⚠[0m  signup-step2-navigation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-step2-navigation.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-step2-navigation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-step2-navigation.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-step2-navigation.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-step2-navigation.probe
+  [33m⚠[0m  signup-tag-selection.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-tag-selection.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-tag-selection.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-tag-selection.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-tag-selection.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-tag-selection.probe
+  [33m⚠[0m  signup-validation-permutations.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-validation-permutations.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  signup-validation-permutations.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-validation-permutations.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-validation-permutations.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  signup-validation-permutations.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  signup-validation-permutations.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  signup-validation-permutations.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  signup-validation-permutations.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-validation-permutations.probe
+  [33m⚠[0m  create-community-dialog.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  create-community-dialog.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/create-community-dialog.probe
+  [33m⚠[0m  discover-communities.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  discover-communities.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  discover-communities.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  discover-communities.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [32m✓[0m  discover-communities.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/discover-communities.probe
+  [33m⚠[0m  ground-rules.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  ground-rules.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  ground-rules.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  ground-rules.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  ground-rules.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/ground-rules.probe
+  [33m⚠[0m  group-card-interaction.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  group-card-interaction.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  group-card-interaction.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/group-card-interaction.probe
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  invite-members-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/invite-members-page-elements.probe
+  [33m⚠[0m  invite-members.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  invite-members.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  invite-members.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/invite-members.probe
+  [33m⚠[0m  join-community-success.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  join-community-success.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  join-community-success.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  join-community-success.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  join-community-success.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/join-community-success.probe
+  [33m⚠[0m  join-community.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  join-community.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  join-community.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/join-community.probe
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  manage-community-page-elements.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  manage-community-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/manage-community-page-elements.probe
+  [33m⚠[0m  manage-community.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  manage-community.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  manage-community.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/manage-community.probe
+  [33m⚠[0m  my-communities-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  my-communities-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  my-communities-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/my-communities-page-elements.probe
+  [33m⚠[0m  my-communities-page.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  my-communities-page.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/my-communities-page.probe
+  [33m⚠[0m  help-faq-expand.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  help-faq-expand.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  help-faq-expand.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  help-faq-expand.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [32m✓[0m  help-faq-expand.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/help/help-faq-expand.probe
+  [33m⚠[0m  help-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  help-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  help-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  help-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/help/help-page-elements.probe
+  [33m⚠[0m  report-a-problem.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  report-a-problem.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  report-a-problem.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  report-a-problem.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  report-a-problem.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/help/report-a-problem.probe
+  [33m⚠[0m  fab-actions.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  fab-actions.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/home/fab-actions.probe
+  [33m⚠[0m  first-open-profile-prompt.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  first-open-profile-prompt.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  first-open-profile-prompt.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  first-open-profile-prompt.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  first-open-profile-prompt.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  first-open-profile-prompt.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  first-open-profile-prompt.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  first-open-profile-prompt.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/home/first-open-profile-prompt.probe
+  [32m✓[0m  home-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/home/home-page-elements.probe
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  accept-decline-invitation.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  accept-decline-invitation.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/invitations/accept-decline-invitation.probe
+  [33m⚠[0m  invitations-page.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  invitations-page.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/invitations/invitations-page.probe
+  [33m⚠[0m  inbox-send-message.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  inbox-send-message.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  inbox-send-message.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  inbox-send-message.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  inbox-send-message.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/messaging/inbox-send-message.probe
+  [32m✓[0m  app-launch.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/app-launch.probe
+  [33m⚠[0m  back-navigation.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  back-navigation.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  back-navigation.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/back-navigation.probe
+  [33m⚠[0m  drawer-communities.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  drawer-communities.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-communities.probe
+  [33m⚠[0m  drawer-help.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  drawer-help.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  drawer-help.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-help.probe
+  [33m⚠[0m  drawer-invitations.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  drawer-invitations.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-invitations.probe
+  [33m⚠[0m  drawer-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  drawer-profile.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-profile.probe
+  [33m⚠[0m  drawer-settings.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  drawer-settings.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-settings.probe
+  [33m⚠[0m  drawer-subscription.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  drawer-subscription.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-subscription.probe
+  [33m⚠[0m  drawer.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  drawer.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer.probe
+  [33m⚠[0m  bookmark-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  bookmark-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  bookmark-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  bookmark-post.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/bookmark-post.probe
+  [33m⚠[0m  create-post-navigation.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  create-post-navigation.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/create-post-navigation.probe
+  [33m⚠[0m  create-text-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  create-text-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  create-text-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  create-text-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  create-text-post.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  create-text-post.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  create-text-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  create-text-post.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/create-text-post.probe
+  [33m⚠[0m  follow-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  follow-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  follow-post.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/follow-post.probe
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-details-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  post-details-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/post-details-page-elements.probe
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  post-form-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  post-form-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  post-form-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  post-form-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/post-form-page-elements.probe
+  [32m✓[0m  post-list-empty-state.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/post-list-empty-state.probe
+  [33m⚠[0m  posts-list-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  posts-list-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  posts-list-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  posts-list-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  posts-list-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  posts-list-page-elements.yaml: tapOn used a relativePoint selector (no coordinate-tap equivalent in ProbeScript)
+  [32m✓[0m  posts-list-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/posts-list-page-elements.probe
+  [33m⚠[0m  react-to-post-count-verification.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  react-to-post-count-verification.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  react-to-post-count-verification.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/react-to-post-count-verification.probe
+  [33m⚠[0m  react-to-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  react-to-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  react-to-post.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/react-to-post.probe
+  [33m⚠[0m  report-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  report-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  report-post.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  report-post.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/report-post.probe
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  service-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  service-profile.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/service-profile.probe
+  [33m⚠[0m  contact-visibility-toggle.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  contact-visibility-toggle.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  contact-visibility-toggle.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/contact-visibility-toggle.probe
+  [33m⚠[0m  edit-profile-roundtrip.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  edit-profile-roundtrip.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  edit-profile-roundtrip.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  edit-profile-roundtrip.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: eraseText approximated as clear (whole field, not N characters from cursor)
+  [33m⚠[0m  edit-profile-roundtrip.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  edit-profile-roundtrip.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  edit-profile-roundtrip.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/edit-profile-roundtrip.probe
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  profile-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/profile-page-elements.probe
+  [33m⚠[0m  profile-sections.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  profile-sections.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  profile-sections.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  profile-sections.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/profile-sections.probe
+  [33m⚠[0m  sign-out-from-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  sign-out-from-profile.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  sign-out-from-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  sign-out-from-profile.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/sign-out-from-profile.probe
+  [33m⚠[0m  view-profile.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  view-profile.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  view-profile.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  view-profile.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  view-profile.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  view-profile.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/view-profile.probe
+  [33m⚠[0m  settings-about.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-about.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  settings-about.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-about.probe
+  [33m⚠[0m  settings-change-password.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-change-password.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  settings-change-password.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-change-password.probe
+  [33m⚠[0m  settings-contact-info-toggle.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-contact-info-toggle.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  settings-contact-info-toggle.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-contact-info-toggle.probe
+  [33m⚠[0m  settings-delete-account.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-delete-account.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-delete-account.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  settings-delete-account.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-delete-account.probe
+  [33m⚠[0m  settings-edit-profile-entrypoint.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-edit-profile-entrypoint.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-edit-profile-entrypoint.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  settings-edit-profile-entrypoint.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-edit-profile-entrypoint.probe
+  [33m⚠[0m  settings-language.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-language.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-language.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  settings-language.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-language.probe
+  [33m⚠[0m  settings-logout.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-logout.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-logout.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  settings-logout.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-logout.probe
+  [33m⚠[0m  settings-notifications.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-notifications.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-notifications.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  settings-notifications.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-notifications.probe
+  [33m⚠[0m  settings-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-page-elements.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [32m✓[0m  settings-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-page-elements.probe
+  [33m⚠[0m  settings-terms-privacy-links.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  settings-terms-privacy-links.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-terms-privacy-links.yaml: custom timeout not preserved (uses the default step timeout); 'optional: true' not preserved — `wait until` has no optional variant, this step will now fail the test if the target never appears
+  [33m⚠[0m  settings-terms-privacy-links.yaml: scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists
+  [33m⚠[0m  settings-terms-privacy-links.yaml: custom timeout not preserved (uses the default step timeout); 'optional: true' not preserved — `wait until` has no optional variant, this step will now fail the test if the target never appears
+  [32m✓[0m  settings-terms-privacy-links.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-terms-privacy-links.probe
+  [33m⚠[0m  subscription-debug-simulate-purchase.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  subscription-debug-simulate-purchase.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/subscription/subscription-debug-simulate-purchase.probe
+  [33m⚠[0m  subscription-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [33m⚠[0m  subscription-page-elements.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  subscription-page-elements.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/subscription/subscription-page-elements.probe
+  [33m⚠[0m  subscription-purchase-flow.yaml: custom timeout not preserved (uses the default step timeout)
+  [32m✓[0m  subscription-purchase-flow.yaml → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/subscription/subscription-purchase-flow.probe
+
+  Converted 76/76 file(s)
+
+  Linting generated .probe files...
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/forgot-password-buttons.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/forgot-password.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/login-validation.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/login.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/logout.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/navigate-to-signup.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/password-toggle.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-complete-with-cleanup.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-duplicate-email.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-email-flow.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-step1-toggles.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-step1.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-step2-navigation.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-tag-selection.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/auth/signup-validation-permutations.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/create-community-dialog.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/discover-communities.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/ground-rules.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/group-card-interaction.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/invite-members-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/invite-members.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/join-community-success.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/join-community.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/manage-community-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/manage-community.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/my-communities-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/groups/my-communities-page.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/help/help-faq-expand.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/help/help-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/help/report-a-problem.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/home/fab-actions.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/home/first-open-profile-prompt.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/home/home-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/invitations/accept-decline-invitation.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/invitations/invitations-page.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/messaging/inbox-send-message.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/app-launch.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/back-navigation.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-communities.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-help.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-invitations.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-profile.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-settings.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer-subscription.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/navigation/drawer.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/bookmark-post.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/create-post-navigation.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/create-text-post.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/follow-post.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/post-details-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/post-form-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/post-list-empty-state.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/posts-list-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/react-to-post-count-verification.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/react-to-post.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/report-post.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/posts/service-profile.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/contact-visibility-toggle.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/edit-profile-roundtrip.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/profile-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/profile-sections.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/sign-out-from-profile.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/profile/view-profile.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-about.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-change-password.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-contact-info-toggle.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-delete-account.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-edit-profile-entrypoint.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-language.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-logout.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-notifications.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/settings/settings-terms-privacy-links.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/subscription/subscription-debug-simulate-purchase.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/subscription/subscription-page-elements.probe
+  → /private/tmp/claude-501/-Users-patrickbertsch-dev-flutter-probe/aaed2dc8-a615-49d0-9325-6e308bcf3379/scratchpad/g3-migrated/subscription/subscription-purchase-flow.probe

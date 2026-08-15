@@ -1,0 +1,56 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  tap on "Actions"
+  wait for the page to load
+  wait until "Quick Actions" appears
+  tap on #fab_invite_to_group
+  wait until "Invite Members" appears
+  take a screenshot called "accept-decline-invite-members-page"
+  tap on #invite_members_email_field
+  type "e2e.alice@nect.app"
+  press key "Enter"
+  wait until "Remove e2e.alice@nect.app" appears
+  tap on #invite_members_email_field
+  type "e2e.eve@nect.app"
+  press key "Enter"
+  wait until "Remove e2e.eve@nect.app" appears
+  take a screenshot called "accept-decline-recipients-added"
+  tap on #invite_send_email_button
+  don't see "Invite Members"
+  take a screenshot called "accept-decline-invites-sent"
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_invitations_item
+  wait until "My Invitations" appears
+  take a screenshot called "accept-decline-alice-invitation-visible"
+  tap on #invitation_accept_YXozd9ZPGZQL4SFIpoA5
+  wait until "Joined .*!" appears
+  take a screenshot called "accept-decline-alice-accepted"
+  tap on #invitations_back_button
+  wait for the page to load
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #community_options_leave_item
+  tap on "Leave"
+  tap on #communities_back_button
+  wait for the page to load
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_communities_item
+  wait until "No Communities Yet" appears
+  don't see #group_card_0
+  take a screenshot called "accept-decline-alice-cleanup-done"
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_invitations_item
+  wait until "My Invitations" appears
+  take a screenshot called "accept-decline-eve-invitation-visible"
+  tap on #invitation_decline_YXozd9ZPGZQL4SFIpoA5
+  wait until "Invitation declined" appears
+  take a screenshot called "accept-decline-eve-declined"

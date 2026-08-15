@@ -1,0 +1,25 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  tap on #login_email_field
+  clear
+  tap on #login_email_field
+  clear
+  tap on #login_email_field
+  clear
+  type "${TEST_EMAIL}"
+  tap on #login_password_field
+  clear
+  tap on #login_password_field
+  clear
+  tap on #login_password_field
+  clear
+  type "${TEST_PASSWORD}"
+  scroll down
+  tap on #login_sign_in_button
+  don't see #info_dialog
+  take a screenshot called "first-open-profile-prompt-not-shown-for-complete-profile"
+  open the app
+  don't see #info_dialog
+  take a screenshot called "first-open-profile-prompt-still-not-shown-on-relaunch"

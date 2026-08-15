@@ -1,0 +1,34 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  wait until "Login to NECT" appears
+  tap on #login_email_field
+  clear
+  tap on #login_email_field
+  clear
+  tap on #login_email_field
+  clear
+  tap on #login_password_field
+  clear
+  tap on #login_password_field
+  clear
+  tap on #login_password_field
+  clear
+  scroll down
+  tap on #login_sign_in_button
+  see "Please enter your email"
+  see "Please enter your password"
+  take a screenshot called "login-validation-empty-fields"
+  tap on #login_email_field
+  type "not-an-email"
+  scroll down
+  tap on #login_sign_in_button
+  see "Please enter a valid email"
+  take a screenshot called "login-validation-invalid-email"
+  tap on #login_password_field
+  type "123"
+  scroll down
+  tap on #login_sign_in_button
+  see "Password must be at least 6 characters"
+  take a screenshot called "login-validation-short-password"

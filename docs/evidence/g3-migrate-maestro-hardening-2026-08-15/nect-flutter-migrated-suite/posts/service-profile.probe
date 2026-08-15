@@ -1,0 +1,32 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "Settings" appears
+  wait until ".*Professional Profile.*" appears
+  tap on ".*Professional Profile.*"
+  wait until "Premium Subscription" appears
+  take a screenshot called "service-profile-settings-redirect-gate"
+  tap on #subscription_back_button
+  wait until "Settings" appears
+  tap on #settings_back_button
+  wait until "Open menu" appears
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on #info_dialog_got_it_button
+  wait for the page to load
+  tap on ".*Test User.*"
+  wait until "Professional Profile" appears
+  take a screenshot called "service-profile-page"
+  see #service_profile_back_button
+  tap on #setup_pro_profile_button
+  wait until "Premium Feature" appears
+  take a screenshot called "service-profile-upgrade-dialog"
+  tap on #service_profile_upgrade_later_button
+  wait for the page to load
+  tap on #service_profile_back_button

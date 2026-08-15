@@ -1,0 +1,13 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  scroll down
+  tap on "Log Out"
+  see #logout_dialog
+  take a screenshot called "settings-logout-dialog"
+  tap on "Cancel"
+  wait until "Settings" appears

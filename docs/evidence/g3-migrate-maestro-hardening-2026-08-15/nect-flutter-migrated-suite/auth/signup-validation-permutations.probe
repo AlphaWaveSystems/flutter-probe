@@ -1,0 +1,41 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  wait until "Login to NECT" appears
+  tap on #login_signup_link
+  wait until "Create Your Account|Confirm Your Details" appears
+  take a screenshot called "signup-permutations-step1-loaded"
+  scroll down
+  tap on #signup_continue_button
+  see "Required"
+  see "Email is required"
+  see "Password is required"
+  see "Please confirm your password"
+  take a screenshot called "signup-permutations-all-empty"
+  see "Create Your Account|Confirm Your Details"
+  tap on #signup_email_field
+  type "not-an-email"
+  scroll down
+  tap on #signup_continue_button
+  see "Enter a valid email address"
+  take a screenshot called "signup-permutations-invalid-email"
+  tap on #signup_email_field
+  clear
+  type "e2e-permutation-test@nect.app"
+  tap on #signup_password_field
+  type "123"
+  scroll down
+  tap on #signup_continue_button
+  see "Password must be at least 6 characters"
+  take a screenshot called "signup-permutations-short-password"
+  tap on #signup_password_field
+  clear
+  type "ValidPass123"
+  tap on #signup_confirm_password_field
+  type "DifferentPass456"
+  scroll down
+  tap on #signup_continue_button
+  see "Passwords do not match"
+  take a screenshot called "signup-permutations-password-mismatch"
+  see #signup_continue_button

@@ -1,0 +1,27 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on "Actions"
+  wait for the page to load
+  wait until "Quick Actions" appears
+  tap on #fab_create_post
+  wait until "Post Title" appears
+  take a screenshot called "create-post-form-empty"
+  tap on #post_form_title_field
+  type "Maestro Test Post"
+  tap on #post_form_content_field
+  type "This is an automated test post created by Maestro E2E testing to verify post creation."
+  scroll down
+  tap on #post_form_tags_field
+  type "test,maestro,automated"
+  scroll down
+  take a screenshot called "create-post-form-filled"
+  tap on #post_form_submit_button
+  wait until "Post created successfully" appears
+  take a screenshot called "create-post-result"

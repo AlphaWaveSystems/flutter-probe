@@ -1,0 +1,29 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  take a screenshot called "profile-page-elements-loaded"
+  see #profile_settings_button
+  tap on #profile_settings_button
+  wait until "ACCOUNT" appears
+  take a screenshot called "profile-settings-icon-navigated"
+  tap on #settings_back_button
+  wait until "My Profile" appears
+  scroll down
+  tap on #profile_change_password_button
+  wait until "Change Password" appears
+  see "Current Password"
+  see "New Password"
+  see "Confirm New Password"
+  take a screenshot called "profile-change-password-dialog"
+  tap on "Cancel"
+  wait until "My Profile" appears
+  scroll down
+  tap on "Contact Support"
+  wait until "OK" appears
+  take a screenshot called "profile-contact-support-dialog"
+  tap on "OK"
+  wait until "My Profile" appears

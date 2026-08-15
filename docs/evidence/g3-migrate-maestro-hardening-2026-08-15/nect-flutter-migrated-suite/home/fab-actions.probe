@@ -1,0 +1,13 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  tap on "Actions"
+  wait for the page to load
+  wait until "Quick Actions" appears
+  see "Quick Actions"
+  see #fab_create_post
+  see #fab_invite_to_group
+  see #fab_share_app
+  take a screenshot called "fab-actions-sheet"
+  go back

@@ -1,0 +1,18 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on #post_list_card
+  tap on #post_detail_more_button
+  wait for the page to load
+  wait until "Share" appears
+  take a screenshot called "post-options-sheet-own-post"
+  don't see #post_options_report_item
+  see #post_options_edit_item
+  see #post_options_delete_item
+  go back

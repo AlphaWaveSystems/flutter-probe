@@ -1,0 +1,35 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  wait until "Login to NECT" appears
+  see "NECT"
+  see "Login to NECT"
+  see "Continue with Google"
+  see "Continue with Apple"
+  see "Email"
+  see "Password"
+  see "Forgot Password?"
+  see "Sign Up"
+  take a screenshot called "login-page"
+  tap on #login_email_field
+  clear
+  tap on #login_email_field
+  clear
+  tap on #login_email_field
+  clear
+  type "${TEST_EMAIL}"
+  tap on #login_password_field
+  clear
+  tap on #login_password_field
+  clear
+  tap on #login_password_field
+  clear
+  type "${TEST_PASSWORD}"
+  scroll down
+  tap on #login_sign_in_button
+  wait until "Got it|Login to NECT|Open menu" appears
+  tap on "Got it"
+  wait for the page to load
+  see #appbar_menu_button
+  take a screenshot called "home-after-login"

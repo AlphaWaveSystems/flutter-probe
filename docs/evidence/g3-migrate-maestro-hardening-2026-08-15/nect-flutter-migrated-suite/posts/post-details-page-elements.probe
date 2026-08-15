@@ -1,0 +1,55 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on "Got it"
+  tap on #post_list_card
+  take a screenshot called "post-details-elements-initial"
+  tap on #post_detail_share_button
+  wait for the page to load
+  take a screenshot called "post-details-elements-share-sheet"
+  # TODO: tapOn used a relative point (50%,10%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  tap on #post_detail_more_button
+  wait for the page to load
+  wait until "Share" appears
+  tap on #post_options_edit_item
+  wait until "Edit Post" appears
+  take a screenshot called "post-details-elements-edit-form"
+  tap on #post_form_back_button
+  tap on #post_detail_more_button
+  wait for the page to load
+  wait until "Bump to top" appears
+  tap on #post_options_bump_item
+  wait until "Post bumped to top of feed|You can only bump once per week" appears
+  take a screenshot called "post-details-elements-bump-result"
+  tap on #post_detail_more_button
+  wait for the page to load
+  wait until "Share" appears
+  tap on #post_options_share_item
+  wait for the page to load
+  take a screenshot called "post-details-elements-options-share-sheet"
+  # TODO: tapOn used a relative point (50%,10%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element
+  tap on #post_detail_more_button
+  wait for the page to load
+  wait until "Delete" appears
+  tap on #post_options_delete_item
+  wait until "Delete Post" appears
+  take a screenshot called "post-details-elements-delete-dialog"
+  tap on #post_delete_cancel_button
+  scroll down
+  tap on #post_chat_input_field
+  type "Maestro element-sweep comment"
+  tap on #post_chat_send_button
+  wait until "Comments (1)" appears
+  take a screenshot called "post-details-elements-chat-sent"
+  tap on #post_chat_message_delete_button
+  wait until "Delete Message" appears
+  take a screenshot called "post-details-elements-chat-delete-dialog"
+  tap on #post_chat_delete_confirm_button
+  wait for the page to load
+  take a screenshot called "post-details-elements-chat-deleted"

@@ -1,0 +1,14 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  scroll down
+  tap on "Sign Out"
+  wait until "Are you sure you want to sign out?" appears
+  see "Are you sure you want to sign out?"
+  tap on "Cancel"
+  see "My Profile"
+  take a screenshot called "sign-out-cancelled"

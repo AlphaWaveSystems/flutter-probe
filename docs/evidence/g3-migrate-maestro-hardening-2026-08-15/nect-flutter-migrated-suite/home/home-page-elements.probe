@@ -1,0 +1,6 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  see #appbar_menu_button
+  take a screenshot called "home-page-elements"
