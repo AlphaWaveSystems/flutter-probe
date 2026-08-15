@@ -1,0 +1,22 @@
+# E-3 evidence: `open link "url" in the app` — deep link routed via OS
+# intent handling, not the Dart agent's url_launcher (external browser).
+#
+# Proof strategy: first open an https:// link WITHOUT "in the app" (the
+# existing, unchanged behavior — brings up an external browser, backgrounding
+# water-sip), then use the new "in the app" form with water-sip's own
+# registered watersip:// scheme, and confirm water-sip is back in the
+# foreground — proving the OS actually routed the second URL to the app,
+# not just that the app happened to already be there.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "open link in the app brings water-sip back to foreground from a browser"
+  open link "https://example.com"
+  wait 3 seconds
+  verify external browser opened
+  open link "watersip://e3-evidence-deep-link" in the app
+  wait 3 seconds
+  see "Quick Add"
+  take a screenshot called "e3_back_in_app_after_deep_link"

@@ -543,6 +543,37 @@ func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error
 	return nil
 }
 
+// OpenDeepLink opens url through the OS's own URL/intent handling — the
+// same path a user tapping a link or push notification would trigger.
+// Unlike `open link` (the Dart agent's probe.open_link, which calls
+// url_launcher from inside the running app and always opens an external
+// browser/app), this is dispatched entirely CLI-side and lets the OS route
+// the URL to whichever app actually owns it — including the app under
+// test, if it's registered for that custom scheme or App/Universal Link.
+//
+// Not supported on physical iOS devices (no devicectl equivalent to
+// simctl's `openurl` at time of writing) — skips with a warning, matching
+// the existing pattern other physical-device-unsupported operations use
+// (see SetLocation above).
+func (dc *DeviceContext) OpenDeepLink(ctx context.Context, url string) error {
+	if dc.Platform == device.PlatformIOS && dc.IsPhysical {
+		fmt.Printf("    \033[33m⚠\033[0m  open link into the app is not supported on physical iOS devices — skipping\n")
+		return nil
+	}
+	fmt.Printf("    \033[36m🔗\033[0m  Opening %s via the OS (not the app's own url_launcher)\n", url)
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		if err := dc.Manager.ADB().OpenURL(ctx, dc.Serial, url); err != nil {
+			return fmt.Errorf("open link into the app: %w", err)
+		}
+	case device.PlatformIOS:
+		if err := dc.Manager.SimCtl().OpenURL(ctx, dc.Serial, url); err != nil {
+			return fmt.Errorf("open link into the app: %w", err)
+		}
+	}
+	return nil
+}
+
 // EnrollBiometric sets the simulator/emulator's biometric enrollment state
 // to "enrolled" so the app under test sees a registered Face ID / Touch ID /
 // fingerprint when it requests biometric authentication.

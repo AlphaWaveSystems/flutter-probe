@@ -504,8 +504,21 @@ func (p *Parser) parseActionOpen() (Step, error) {
 		p.advance()
 		p.skipFillers()
 		url := p.expectString("URL to open")
+		// Optional "in/into the app" suffix: routes the URL through the OS's
+		// own intent/URL handling (DeviceContext.OpenDeepLink) instead of the
+		// Dart agent's url_launcher call, which always opens an external
+		// browser/app. "in"/"into"/"the" are all filler words already
+		// stripped by skipFillers() — TOKEN_APP surviving that strip is what
+		// actually signals the suffix was written, in any of its forms
+		// ("in the app", "into the app", "in app").
+		p.skipFillers()
+		deepLink := false
+		if p.peek().Type == TOKEN_APP {
+			p.advance()
+			deepLink = true
+		}
 		p.consumeNewline()
-		return ActionStep{Verb: VerbOpenLink, Name: url, Line: line}, nil
+		return ActionStep{Verb: VerbOpenLink, Name: url, DeepLink: deepLink, Line: line}, nil
 	}
 	sel := p.parseSelector()
 	p.consumeNewline()

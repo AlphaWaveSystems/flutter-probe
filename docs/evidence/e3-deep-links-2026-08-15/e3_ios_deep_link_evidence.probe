@@ -1,0 +1,14 @@
+# E-3 evidence (iOS simulator variant): `open link "url" in the app` is
+# dispatched entirely CLI-side (xcrun simctl openurl) and doesn't depend on
+# any Dart agent RPC at all, unlike the pre-existing external-browser
+# `open link` (which does, and isn't part of this feature).
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "open link in the app on iOS simulator lands back on a real screen"
+  open link "watersip://e3-evidence-deep-link" in the app
+  wait 3 seconds
+  see "Quick Add"
+  take a screenshot called "e3_ios_deep_link_result"

@@ -23,6 +23,9 @@ type scriptedClient struct {
 	seeCalls    int
 	seeFailN    int
 	seeAlwaysOK bool
+
+	openLinkCalls int
+	openLinkURLs  []string
 }
 
 func (f *scriptedClient) Tap(ctx context.Context, sel probelink.SelectorParam) error {
@@ -44,6 +47,12 @@ func (f *scriptedClient) See(ctx context.Context, params probelink.SeeParams) er
 	if f.seeCalls <= f.seeFailN {
 		return fmt.Errorf("widget not found (attempt %d)", f.seeCalls)
 	}
+	return nil
+}
+
+func (f *scriptedClient) OpenLink(ctx context.Context, url string) error {
+	f.openLinkCalls++
+	f.openLinkURLs = append(f.openLinkURLs, url)
 	return nil
 }
 
@@ -150,5 +159,43 @@ func TestRunStep_OptionalAssertSwallowsFailure(t *testing.T) {
 	err := e.RunStep(context.Background(), step)
 	if err != nil {
 		t.Errorf("expected optional assertion's failure to be swallowed, got: %v", err)
+	}
+}
+
+// TestRunStep_OpenLink_ExternalBrowser covers E-3's backward-compat case:
+// without the "in the app" suffix, `open link` must still go through the
+// Dart agent's url_launcher path (client.OpenLink), unchanged from before.
+func TestRunStep_OpenLink_ExternalBrowser(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client)
+
+	step := parser.ActionStep{Verb: parser.VerbOpenLink, Name: "https://example.com"}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client.openLinkCalls != 1 {
+		t.Errorf("expected client.OpenLink to be called once, got %d", client.openLinkCalls)
+	}
+	if len(client.openLinkURLs) != 1 || client.openLinkURLs[0] != "https://example.com" {
+		t.Errorf("unexpected OpenLink URL(s): %v", client.openLinkURLs)
+	}
+}
+
+// TestRunStep_OpenLink_DeepLink_CloudModeSkips covers E-3's DeepLink path in
+// cloud mode (no DeviceContext available, since deep-linking is dispatched
+// CLI-side via adb/simctl, not through the agent RPC): it must skip with a
+// warning rather than panic or error, and critically must NOT fall through
+// to client.OpenLink — that would silently open the URL externally instead
+// of the "into the app" behavior the test author asked for.
+func TestRunStep_OpenLink_DeepLink_CloudModeSkips(t *testing.T) {
+	client := &scriptedClient{fakeAIClient: &fakeAIClient{}}
+	e := newScriptedExecutor(client) // deviceCtx is nil — see newScriptedExecutor
+
+	step := parser.ActionStep{Verb: parser.VerbOpenLink, Name: "myapp://profile/42", DeepLink: true}
+	if err := e.RunStep(context.Background(), step); err != nil {
+		t.Fatalf("expected a graceful cloud-mode skip, got error: %v", err)
+	}
+	if client.openLinkCalls != 0 {
+		t.Errorf("expected client.OpenLink NOT to be called for a DeepLink step, got %d calls", client.openLinkCalls)
 	}
 }

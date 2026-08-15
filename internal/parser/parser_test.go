@@ -256,6 +256,34 @@ func TestParser_OpenLink(t *testing.T) {
 	if a.Name != "https://example.com" {
 		t.Errorf("url: got %q", a.Name)
 	}
+	if a.DeepLink {
+		t.Error("expected DeepLink to default to false — no \"in the app\" suffix was written")
+	}
+}
+
+// TestParser_OpenLink_IntoApp covers E-3: the "in/into the app" suffix
+// routes the URL through the OS's own intent handling instead of the
+// external-browser url_launcher path, and must be captured even though
+// "in"/"into"/"the" are otherwise silently-stripped filler words.
+func TestParser_OpenLink_IntoApp(t *testing.T) {
+	cases := []string{
+		`open link "myapp://profile/42" in the app`,
+		`open link "myapp://profile/42" into the app`,
+		`open link "myapp://profile/42" in app`,
+	}
+	for _, src := range cases {
+		prog := mustParse(t, "test \"t\"\n  "+src+"\n")
+		a := firstAction(t, prog.Tests[0].Body)
+		if a.Verb != parser.VerbOpenLink {
+			t.Errorf("%q: verb: got %q, want open_link", src, a.Verb)
+		}
+		if a.Name != "myapp://profile/42" {
+			t.Errorf("%q: url: got %q", src, a.Name)
+		}
+		if !a.DeepLink {
+			t.Errorf("%q: expected DeepLink to be true", src)
+		}
+	}
 }
 
 // TestParser_RecipeCallStartingWithOpen covers PT-23: a recipe named
