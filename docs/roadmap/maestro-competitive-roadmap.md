@@ -125,14 +125,18 @@ Moves G-1 from "phase 3" up front: we now have a real, extensive Maestro suite
 (`nect-flutter/tests/smoke/`), so the comparison harness can be built immediately instead of
 waiting.
 
-- [ ] **B-1 — Pick a representative flow slice and write the missing half.** nect-flutter's
-  `tests/smoke/*.probe` (10 flows: first_launch, sign_in_out, browse_feed, create_post,
-  react_and_bookmark, filter_categories, open_post_detail, drawer_navigation, settings_toggle,
-  help_and_faq) map closely to existing Maestro flows (`login.yaml`, `home-page-elements.yaml`,
-  `create-text-post.yaml`, `react-to-post.yaml`, etc. under `.maestro/flows/`). For each of the 10,
-  confirm a Maestro equivalent exists (clone/adapt if not) so both suites cover identical user
-  journeys. Do the same for water-sip's `tests/smoke.probe` (write new Maestro flows from
-  scratch — no existing suite there).
+- [x] **B-1 — Pick a representative flow slice and write the missing half.** water-sip: wrote and
+  live-verified a full 9-flow Maestro suite matching `tests/smoke.probe` 1:1 (8/9 pass reliably;
+  the 9th is a genuine, documented tool-speed finding, not an authoring bug — see below). PR open:
+  water-sip#51. nect-flutter: static-analysis mapping of all 9 `tests/smoke/*.probe` files against
+  the real `.maestro/flows/**` suite (live execution blocked by the same connectivity issue as
+  R-2/R-3/R-4) — 7/9 full parity, 2 partial/gap (browse-feed scroll, filter-categories
+  exhaustiveness), both narrower on the Maestro side. Two reusable findings surfaced along the
+  way: (1) Maestro's out-of-process accessibility polling can miss a narrow-window UI element
+  (water-sip's Undo snackbar) that FlutterProbe's in-process tree access catches reliably — real
+  evidence for G-1's speed thesis; (2) Maestro's text selector needs an explicit `(?s)` DOTALL flag
+  to match two-line `content-desc` labels, undocumented, no FlutterProbe equivalent gotcha.
+  Full writeup: `docs/evidence/b1-flow-mapping-2026-08-14/`.
   PR: —
 
 - [ ] **B-2 — Harness script.** A small script (`scripts/bench/run-comparison.sh` or similar) that
