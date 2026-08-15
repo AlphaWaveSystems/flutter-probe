@@ -73,6 +73,7 @@ device:
 #   provider: local
 #   endpoint: http://localhost:11434/v1  # OpenAI-compatible base URL — required for provider: local
 #   model: llava                         # required — no default; must be a vision-capable model your server has loaded
+#   timeout: 90s                         # default: 60s. Large local reasoning models can take longer than that per call.
 
 reports_folder: reports
 recipes_folder: tests/recipes

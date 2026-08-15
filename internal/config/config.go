@@ -69,11 +69,12 @@ type RelayConfig struct {
 // AIConfig holds settings for LLM-powered features (test generation, self-healing,
 // `with ai` visual assertions).
 type AIConfig struct {
-	APIKey   string       `yaml:"api_key"`  // provider API key (supports ${ENV_VAR} syntax). Not required for provider: local.
-	Model    string       `yaml:"model"`    // model name (default: claude-sonnet-4-20250514). Required, no default, for provider: local.
-	Provider string       `yaml:"provider"` // "with ai" assertion provider: openai | anthropic | local — no default, must be set explicitly
-	Endpoint string       `yaml:"endpoint"` // OpenAI-compatible base URL (e.g. http://localhost:11434/v1) for provider: local; supports ${ENV_VAR}
-	Redact   []RedactRule `yaml:"redact"`   // screenshot regions to black out before any "with ai" call
+	APIKey   string        `yaml:"api_key"`  // provider API key (supports ${ENV_VAR} syntax). Not required for provider: local.
+	Model    string        `yaml:"model"`    // model name (default: claude-sonnet-4-20250514). Required, no default, for provider: local.
+	Provider string        `yaml:"provider"` // "with ai" assertion provider: openai | anthropic | local — no default, must be set explicitly
+	Endpoint string        `yaml:"endpoint"` // OpenAI-compatible base URL (e.g. http://localhost:11434/v1) for provider: local; supports ${ENV_VAR}
+	Redact   []RedactRule  `yaml:"redact"`   // screenshot regions to black out before any "with ai" call
+	Timeout  time.Duration `yaml:"timeout"`  // per-request HTTP timeout for AI provider calls (default: 60s). Raise for slow local models.
 }
 
 // Configured reports whether enough of the ai: block is set for a "with ai"
@@ -441,6 +442,7 @@ tools:
 #   provider: local
 #   endpoint: http://localhost:11434/v1  # OpenAI-compatible base URL — required for provider: local
 #   model: llava                         # required — no default; must be a vision-capable model your server has loaded
+#   timeout: 90s                         # default: 60s. Large local reasoning models can take longer than that per call.
 
 recipes_folder: tests/recipes
 reports_folder: reports

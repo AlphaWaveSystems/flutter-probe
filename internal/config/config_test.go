@@ -83,6 +83,7 @@ func TestLoadFile_AIConfig(t *testing.T) {
   provider: anthropic
   api_key: ${ANTHROPIC_API_KEY}
   model: claude-sonnet-4-6
+  timeout: 45s
   redact:
     - selector: "#credit_card_field"
     - selector: "Account Balance"
@@ -110,6 +111,32 @@ func TestLoadFile_AIConfig(t *testing.T) {
 	}
 	if cfg.AI.Redact[0].Selector != "#credit_card_field" {
 		t.Errorf("ai.redact[0].selector: got %q, want %q", cfg.AI.Redact[0].Selector, "#credit_card_field")
+	}
+	if cfg.AI.Timeout != 45*time.Second {
+		t.Errorf("ai.timeout: got %v, want %v", cfg.AI.Timeout, 45*time.Second)
+	}
+}
+
+// TestLoadFile_AIConfig_TimeoutUnsetStaysZero confirms an omitted ai.timeout
+// leaves the zero value — NewVisionProvider falls back to its own default,
+// config loading doesn't inject one.
+func TestLoadFile_AIConfig_TimeoutUnsetStaysZero(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "probe.yaml")
+	yaml := `ai:
+  provider: anthropic
+  api_key: sk-x
+`
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AI.Timeout != 0 {
+		t.Errorf("ai.timeout: got %v, want 0 (unset)", cfg.AI.Timeout)
 	}
 }
 

@@ -7,12 +7,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
 
 func TestNewVisionProvider_Local_RequiresEndpoint(t *testing.T) {
-	_, err := ai.NewVisionProvider("local", "", "llava", "")
+	_, err := ai.NewVisionProvider("local", "", "llava", "", 0)
 	if err == nil {
 		t.Fatal("expected an error when ai.endpoint is missing for provider: local")
 	}
@@ -22,7 +23,7 @@ func TestNewVisionProvider_Local_RequiresEndpoint(t *testing.T) {
 }
 
 func TestNewVisionProvider_Local_RequiresModel(t *testing.T) {
-	_, err := ai.NewVisionProvider("local", "", "", "http://localhost:11434/v1")
+	_, err := ai.NewVisionProvider("local", "", "", "http://localhost:11434/v1", 0)
 	if err == nil {
 		t.Fatal("expected an error when ai.model is missing for provider: local")
 	}
@@ -32,7 +33,7 @@ func TestNewVisionProvider_Local_RequiresModel(t *testing.T) {
 }
 
 func TestNewVisionProvider_UnknownProvider(t *testing.T) {
-	_, err := ai.NewVisionProvider("not-a-real-provider", "key", "model", "")
+	_, err := ai.NewVisionProvider("not-a-real-provider", "key", "model", "", 0)
 	if err == nil {
 		t.Fatal("expected an error for an unrecognized provider")
 	}
@@ -53,7 +54,7 @@ func TestVisionProvider_Local_PostsToConfiguredEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL+"/v1")
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL+"/v1", 0)
 	if err != nil {
 		t.Fatalf("NewVisionProvider: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestVisionProvider_Local_OmitsAuthorizationWhenNoAPIKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL, 0)
 	if err != nil {
 		t.Fatalf("NewVisionProvider: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestVisionProvider_Local_SendsAuthorizationWhenAPIKeySet(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider, err := ai.NewVisionProvider("local", "sk-local-test", "llava", srv.URL)
+	provider, err := ai.NewVisionProvider("local", "sk-local-test", "llava", srv.URL, 0)
 	if err != nil {
 		t.Fatalf("NewVisionProvider: %v", err)
 	}
@@ -114,14 +115,14 @@ func TestVisionProvider_Local_SendsAuthorizationWhenAPIKeySet(t *testing.T) {
 }
 
 func TestNewVisionProvider_OpenAI_RequiresAPIKey(t *testing.T) {
-	_, err := ai.NewVisionProvider("openai", "", "gpt-4o-mini", "")
+	_, err := ai.NewVisionProvider("openai", "", "gpt-4o-mini", "", 0)
 	if err == nil {
 		t.Fatal("expected an error when ai.api_key is missing for provider: openai")
 	}
 }
 
 func TestNewVisionProvider_Anthropic_RequiresAPIKey(t *testing.T) {
-	_, err := ai.NewVisionProvider("anthropic", "", "claude-sonnet-4-6", "")
+	_, err := ai.NewVisionProvider("anthropic", "", "claude-sonnet-4-6", "", 0)
 	if err == nil {
 		t.Fatal("expected an error when ai.api_key is missing for provider: anthropic")
 	}
@@ -138,7 +139,7 @@ func TestVisionProvider_Local_ExtractText_HappyPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL, 0)
 	if err != nil {
 		t.Fatalf("NewVisionProvider: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestVisionProvider_Local_ExtractText_StripsMarkdownFences(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL, 0)
 	if err != nil {
 		t.Fatalf("NewVisionProvider: %v", err)
 	}
@@ -182,7 +183,7 @@ func TestVisionProvider_Local_ExtractText_NotFoundBecomesError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL, 0)
 	if err != nil {
 		t.Fatalf("NewVisionProvider: %v", err)
 	}
@@ -192,5 +193,62 @@ func TestVisionProvider_Local_ExtractText_NotFoundBecomesError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "a code that isn't on screen") {
 		t.Errorf("error should name the query, got: %v", err)
+	}
+}
+
+// ---- ai.timeout (configurable HTTP client timeout) ----
+
+func TestVisionProvider_ShortTimeoutFailsFastAgainstSlowServer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": `{"answer": true, "reasoning": ""}`}}},
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("NewVisionProvider: %v", err)
+	}
+
+	start := time.Now()
+	_, err = provider.AssertScreen(context.Background(), []byte("x"), "y")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected a timeout error with a 50ms configured timeout against a 300ms-slow server")
+	}
+	// Must fail quickly, bounded by the configured 50ms timeout — not hang
+	// for the package's 60s default. This is exactly the real gap the
+	// LM Studio finding surfaced: before this fix, ai.timeout had no way
+	// to reach the http.Client at all.
+	if elapsed > 2*time.Second {
+		t.Errorf("AssertScreen took %v to fail — the configured timeout doesn't appear to be applied", elapsed)
+	}
+}
+
+func TestVisionProvider_LongerTimeoutAllowsSlowServerToSucceed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": `{"answer": true, "reasoning": "ok"}`}}},
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL, 2*time.Second)
+	if err != nil {
+		t.Fatalf("NewVisionProvider: %v", err)
+	}
+
+	verdict, err := provider.AssertScreen(context.Background(), []byte("x"), "y")
+	if err != nil {
+		t.Fatalf("expected a 2s configured timeout to comfortably cover a 300ms-slow server, got: %v", err)
+	}
+	if !verdict.True {
+		t.Error("verdict.True = false, want true")
 	}
 }

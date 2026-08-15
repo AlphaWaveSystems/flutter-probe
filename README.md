@@ -600,7 +600,13 @@ ai:
   provider: local
   endpoint: http://localhost:11434/v1  # OpenAI-compatible base URL — required for provider: local
   model: llava                         # required — no default; must be a vision-capable model your server has loaded
+  timeout: 90s                         # default: 60s. Large local reasoning models can take longer than that per call.
 ```
+
+`ai.timeout` applies to every provider, but matters most for `local`: confirmed against a real
+LM Studio instance running a 31B reasoning model, where `assert no visual defects with ai`
+(a richer prompt than a plain `see ... with ai`) consistently took longer than the 60s default —
+raise it if you hit `context deadline exceeded` with a large local model.
 
 This is currently the only "fully local" option FlutterProbe ships. Native on-device model
 support (Apple Intelligence on iOS/macOS, Gemini Nano on Android) is **not** implemented —
