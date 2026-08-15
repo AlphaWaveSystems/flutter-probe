@@ -186,6 +186,21 @@ Supports the full ProbeScript syntax:
                      sync "both logged in"
                      B:
                        see "Welcome"
+  Resilience:      retry N times — indented block re-runs from the top on failure,
+                     up to N attempts, stopping at first success (unlike repeat,
+                     which always runs every iteration). Trailing "optional" on
+                     tap/type/long press/double tap/clear/see — attempts the step
+                     but logs-and-continues on failure instead of failing the test.
+  Native UI:       tap native "…" / see native "…" / type native "…" into "…" —
+                     drives native (non-Flutter) UI like pickers and share sheets
+                     via uiautomator, matched by text or resource-id. Android only.
+  Device media:    add media "path/to/photo.jpg" — seeds a file into the camera
+                     roll/gallery (Android + iOS simulator).
+  Deep links:      open link "scheme://…" in the app — routes via OS intent/URL
+                     handling to the app's own registered scheme, instead of the
+                     external browser that plain open link uses.
+  Visual:          compare screenshot "name" — baseline-on-first-run comparison;
+                     add of "Widget"/#id to crop to one widget's bounds.
   Recipes:         recipe "name"(params) — reusable step sequences
   Hooks:           before each / after each / on failure / before all / after all
   Data-driven:     with examples | col1 | col2 |`,

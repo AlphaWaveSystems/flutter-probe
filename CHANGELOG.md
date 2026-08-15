@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-15
+
 ### Added
 - **`retry N times` block.** Wraps an indented block of steps: on failure, re-runs the whole
   block from the top, up to N total attempts, stopping at the first success. Distinct from
@@ -48,6 +50,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   See `docs/evidence/n1-native-ui-android-2026-08-15/`.
 
 ### Fixed
+- **A single Android transport drop no longer cascades into failing every remaining test
+  (issue #237).** Two real bugs in the connection-error recovery path, found by tracing #237's
+  exact failure signature through the executor: (1) the post-reconnect retry switch had silently
+  drifted out of sync with the main step-dispatch switch — it was missing recipe calls,
+  conditionals, loops, retry blocks, and HTTP calls, so a connection error surfacing from any of
+  those could reconnect successfully but never re-run the step, burning the whole retry budget
+  re-closing the connection each attempt had just re-established (both paths now share one
+  dispatch function and cannot drift again); (2) `if X appears` treated a dead connection as
+  "condition not visible" and silently took the else branch — misrouting navigation mid-recipe —
+  instead of propagating the connection error for reconnect the way `tap ... if visible` already
+  did. The underlying WS drop trigger from #237 remains under investigation (needs the reporting
+  project's live Firebase load); these fixes change its blast radius from "rest of the run" to
+  "one visible reconnect cycle". Also ruled out empirically: neither side's ping/keepalive
+  machinery kills a busy-but-alive connection (four load-shape experiments, kept in the evidence
+  folder). See `docs/evidence/i237-ws-drop-investigation-2026-08-15/`.
 - **`probe migrate maestro` hardened against 2.x syntax and two real bugs (G-3).** Audited the
   converter against nect-flutter's real 76-flow suite: `setPermissions`, `retry` (with recursive
   nested-command conversion, also fixed for `repeat`), and `assertScreenshot` are now supported,
