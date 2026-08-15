@@ -176,10 +176,14 @@ waiting.
   See `docs/evidence/e1-retry-optional-2026-08-15/`.
   PR: —
 
-- [ ] **E-2 — Element-scoped visual regression (`compare screenshot "x" of "Widget"`).** Reuse the
-  existing `RenderBox` geometry (already powers relational selectors) to crop before diffing.
-  Regression test: two renders of the same widget, one intentionally mutated, asserting the crop
-  catches it and a same-widget rerun doesn't false-positive.
+- [x] **E-2 — Element-scoped visual regression (`compare screenshot "x" of "Widget"`).** New
+  `visual.CropToBounds`, using the existing `probe.selector_bounds` RPC (already powers AI
+  redaction) rather than new geometry plumbing. Regression: 3 `internal/visual` tests (correct
+  region extracted — not just correct size — plus clamping and out-of-bounds error handling) + 3
+  parser tests. Real-device evidence against water-sip: baseline-vs-itself passes at 0% diff,
+  baseline-vs-genuinely-changed-content fails at a precise 37.61% diff, confirmed cropped to
+  68×44px (not full-screen). `dictionary.md` updated.
+  See `docs/evidence/e2-element-visual-regression-2026-08-15/`.
   PR: —
 
 - [ ] **E-3 — Deep links: `open link` into the app (not just external browser).** `simctl openurl`

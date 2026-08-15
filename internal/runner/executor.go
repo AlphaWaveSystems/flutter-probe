@@ -394,6 +394,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbTakeShot:
 			return fmt.Sprintf("screenshot %q", s.Name)
 		case parser.VerbCompareShot:
+			if s.Sel != nil {
+				return fmt.Sprintf("compare screenshot %q of %q", s.Name, s.Sel.Text)
+			}
 			return fmt.Sprintf("compare screenshot %q", s.Name)
 		case parser.VerbDumpTree:
 			return "dump tree"
@@ -621,8 +624,28 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if path != "" {
 			e.artifacts = append(e.artifacts, path)
 		}
-		if e.visual != nil && path != "" {
-			result, cmpErr := e.visual.Compare(a.Name, path)
+		// "of <selector>" scopes the comparison to a single widget: crop
+		// the freshly-taken screenshot to its on-screen bounds before
+		// handing it to Compare, so both the first-run baseline and every
+		// later actual image are the widget's region, not the full screen.
+		comparePath := path
+		if a.Sel != nil && path != "" {
+			bounds, boundsErr := e.client.SelectorBounds(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
+			if boundsErr != nil {
+				return fmt.Errorf("compare screenshot %q: resolve %q bounds: %w", a.Name, a.Sel.Text, boundsErr)
+			}
+			croppedPath, cropErr := visual.CropToBounds(path, image.Rect(
+				int(bounds.X), int(bounds.Y),
+				int(bounds.X+bounds.Width), int(bounds.Y+bounds.Height),
+			))
+			if cropErr != nil {
+				return fmt.Errorf("compare screenshot %q: crop to %q: %w", a.Name, a.Sel.Text, cropErr)
+			}
+			comparePath = croppedPath
+			e.artifacts = append(e.artifacts, croppedPath)
+		}
+		if e.visual != nil && comparePath != "" {
+			result, cmpErr := e.visual.Compare(a.Name, comparePath)
 			if cmpErr != nil {
 				return fmt.Errorf("compare screenshot %q: %w", a.Name, cmpErr)
 			}

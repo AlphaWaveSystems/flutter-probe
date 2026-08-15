@@ -94,6 +94,7 @@ Commands for capturing and comparing screenshots.
 |---|---|---|
 | `take screenshot` | `take screenshot "name"` | Save a PNG screenshot |
 | `compare screenshot` | `compare screenshot "baseline"` | Compare against a visual regression baseline |
+| `compare screenshot ... of` | `compare screenshot "price_tag" of "Price Label"` | Scope the comparison to a single widget's on-screen bounds instead of the full screen |
 | `dump tree` | `dump tree` | Dump the widget tree for debugging |
 | `save device logs` | `save device logs` | Save device logs to the report folder |
 

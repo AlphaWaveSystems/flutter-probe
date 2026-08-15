@@ -1,0 +1,17 @@
+# E-2 evidence: `compare screenshot "x" of "Widget"` — element-scoped
+# visual regression, run against water-sip on a real Android emulator.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "element-scoped baseline established and matches an unchanged widget"
+  compare screenshot "e2_ml_text_baseline" of #today_current_ml_text
+  compare screenshot "e2_ml_text_baseline" of #today_current_ml_text
+  see "0 ml"
+
+test "element-scoped comparison detects a real content change in that widget"
+  compare screenshot "e2_ml_text_changing" of #today_current_ml_text
+  tap #today_quick_add_250
+  wait until "250 ml" appears
+  compare screenshot "e2_ml_text_changing" of #today_current_ml_text

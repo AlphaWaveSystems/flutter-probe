@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -121,6 +123,38 @@ func (c *Comparator) Compare(name string, actualPath string) (*DiffResult, error
 		Threshold:    c.Threshold,
 	}
 	return result, nil
+}
+
+// CropToBounds loads the PNG at path, crops it to bounds, saves the result
+// to a sibling file (name_cropped.png), and returns that new path. Used by
+// `compare screenshot "x" of "Widget"` to scope a visual-regression
+// comparison to a single widget instead of the full screen — both the
+// first-run baseline and every subsequent actual image get cropped the
+// same way, so the stored baseline is itself just the widget's region, not
+// a full screenshot.
+//
+// bounds is clamped to the image's actual dimensions rather than erroring
+// outright, since RenderBox geometry captured mid-animation or right after
+// a layout change can be very slightly stale by the time the screenshot
+// lands — the same tolerance redaction already applies (see
+// captureRedactedScreenshot in internal/runner/executor.go).
+func CropToBounds(path string, bounds image.Rectangle) (string, error) {
+	img, err := loadPNG(path)
+	if err != nil {
+		return "", fmt.Errorf("crop: load %s: %w", path, err)
+	}
+	crop := bounds.Intersect(img.Bounds())
+	if crop.Empty() {
+		return "", fmt.Errorf("crop: requested region %v does not overlap the screenshot's bounds %v", bounds, img.Bounds())
+	}
+	cropped := image.NewRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
+	draw.Draw(cropped, cropped.Bounds(), img, crop.Min, draw.Src)
+
+	croppedPath := strings.TrimSuffix(path, ".png") + "_cropped.png"
+	if err := savePNG(cropped, croppedPath); err != nil {
+		return "", fmt.Errorf("crop: save %s: %w", croppedPath, err)
+	}
+	return croppedPath, nil
 }
 
 // UpdateBaseline replaces the baseline with the current actual image.
