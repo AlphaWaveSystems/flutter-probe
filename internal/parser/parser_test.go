@@ -1252,6 +1252,59 @@ func TestParser_KillApp(t *testing.T) {
 	}
 }
 
+// TestParser_DumpTree_Short and TestParser_DumpTree_Long cover R-5: neither
+// documented form of dump-tree consumed its trailing words ("tree" /
+// "widget tree"), so both misparsed into a second, stray "unknown recipe
+// call" step on the same line — this asserts exactly one step, which the
+// pre-fix parser could not produce for either form.
+func TestParser_DumpTree_Short(t *testing.T) {
+	src := `test "t"
+  dump tree
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbDumpTree {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbDumpTree)
+	}
+}
+
+func TestParser_DumpTree_Long(t *testing.T) {
+	src := `test "t"
+  dump the widget tree
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbDumpTree {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbDumpTree)
+	}
+}
+
+// TestParser_SaveDeviceLogs covers R-5's second half: "device logs" was
+// left unconsumed after "save", misparsing into a stray "unknown recipe
+// call" step.
+func TestParser_SaveDeviceLogs(t *testing.T) {
+	src := `test "t"
+  save device logs
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok {
+		t.Fatal("expected ActionStep")
+	}
+	if a.Verb != parser.VerbSaveLogs {
+		t.Errorf("verb: got %q, want %q", a.Verb, parser.VerbSaveLogs)
+	}
+}
+
 func TestParser_CopyClipboard(t *testing.T) {
 	src := `test "t"
   copy "hello@test.com" to clipboard

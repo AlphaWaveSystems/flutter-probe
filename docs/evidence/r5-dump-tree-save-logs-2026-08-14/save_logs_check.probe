@@ -1,0 +1,5 @@
+test "save device logs canonical form"
+  restart the app
+  wait until "Quick Add" appears
+  save device logs
+  see "Quick Add"
