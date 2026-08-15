@@ -1,0 +1,34 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on "Add Community"
+  wait for the page to load
+  tap on #fab_create_community
+  tap on #create_group_name_field
+  type "Maestro Manage ${TEST_EMAIL}"
+  tap on #create_group_confirm_button
+  wait until "Set Your Ground Rules" appears
+  tap on #ground_rules_save_continue_button
+  wait until "My Communities" appears
+  tap on #communities_search_button
+  tap on #communities_search_field
+  type "Maestro Manage"
+  wait for the page to load
+  tap on #group_card_options_button_0
+  wait for the page to load
+  take a screenshot called "manage-community-options-sheet"
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  take a screenshot called "manage-community-page"
+  tap on #manage_community_invite_only_toggle
+  wait for the page to load
+  take a screenshot called "manage-community-invite-only"
+  tap on #manage_community_public_toggle
+  wait for the page to load
+  take a screenshot called "manage-community-public-again"
+  see #manage_community_invite_button
+  go back

@@ -48,6 +48,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   See `docs/evidence/n1-native-ui-android-2026-08-15/`.
 
 ### Fixed
+- **`probe migrate maestro` hardened against 2.x syntax and two real bugs (G-3).** Audited the
+  converter against nect-flutter's real 76-flow suite: `setPermissions`, `retry` (with recursive
+  nested-command conversion, also fixed for `repeat`), and `assertScreenshot` are now supported,
+  and `relativePoint`-style `{point: "x%,y%"}` selectors get a clear `# TODO` instead of a real bug
+  the old code had — silently emitting `tap on "map[point:50%,10%]"`, confirmed against an actual
+  occurrence in the corpus. The corpus's own real gaps (not named in the original roadmap item, but
+  27% of all step invocations in this specific suite) — `extendedWaitUntil`, `scrollUntilVisible`,
+  `eraseText` — are now supported too. Also fixed: a stale `setLocation` "not supported" comment
+  (it's been a real ProbeScript verb since before this cycle), and `probe migrate maestro <dir>`
+  silently finding zero files for any suite organized into feature subdirectories — the real-world
+  norm, including nect-flutter's own — because directory discovery was single-level, not recursive.
+  Every one of the 76 real flows converted and parses as valid ProbeScript.
+  See `docs/evidence/g3-migrate-maestro-hardening-2026-08-15/`.
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown
   recipe call (R-5).** Both verb parsers called `skipFillers()` then `consumeNewline()` without
   ever explicitly consuming the trailing non-filler words ("tree", "widget tree", "device logs"),

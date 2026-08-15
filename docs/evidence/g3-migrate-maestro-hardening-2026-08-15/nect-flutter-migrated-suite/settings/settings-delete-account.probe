@@ -1,0 +1,15 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  scroll down
+  wait for the page to load
+  tap on #settings_delete_account_button
+  wait for the page to load
+  see "Cancel"
+  take a screenshot called "settings-delete-account-dialog"
+  tap on "Cancel"
+  wait until "Settings" appears

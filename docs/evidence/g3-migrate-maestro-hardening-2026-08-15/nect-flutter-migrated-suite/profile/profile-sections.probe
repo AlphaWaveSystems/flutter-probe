@@ -1,0 +1,17 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  see "FREE PLAN"
+  see "PERSONAL DETAILS"
+  see "Name"
+  see "Lastname"
+  scroll down
+  see "Phone"
+  see "Company"
+  scroll down
+  see "Email"
+  take a screenshot called "profile-sections"

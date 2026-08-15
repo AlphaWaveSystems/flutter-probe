@@ -1,0 +1,11 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  scroll down
+  tap on "About NECT"
+  take a screenshot called "settings-about-dialog"
+  go back

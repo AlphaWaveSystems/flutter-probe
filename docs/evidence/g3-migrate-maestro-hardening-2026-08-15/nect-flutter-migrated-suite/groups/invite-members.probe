@@ -1,0 +1,39 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on "Add Community"
+  wait for the page to load
+  tap on #fab_create_community
+  tap on #create_group_name_field
+  type "Maestro Invite ${TEST_EMAIL}"
+  tap on #create_group_confirm_button
+  wait until "Set Your Ground Rules" appears
+  tap on #ground_rules_save_continue_button
+  wait until "My Communities" appears
+  tap on #communities_search_button
+  tap on #communities_search_field
+  type "Maestro Invite"
+  wait for the page to load
+  tap on #group_card_options_button_0
+  wait for the page to load
+  tap on #manage_community_button
+  wait until "Access Type" appears
+  tap on #manage_community_invite_button
+  wait until "Invite Members" appears
+  take a screenshot called "invite-members-page"
+  see #invite_members_copy_link_button
+  see #invite_members_share_link_button
+  see #invite_members_show_qr_button
+  tap on #invite_members_show_qr_button
+  wait for the page to load
+  take a screenshot called "invite-members-qr-code"
+  go back
+  tap on #invite_members_email_field
+  type "maestro-invite-test@example.com"
+  take a screenshot called "invite-members-manual-invite-filled"
+  see #invite_members_history_button
+  tap on #invite_members_back_button

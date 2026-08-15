@@ -1,0 +1,22 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  scroll down
+  tap on #drawer_help_item
+  wait until "CONTACT US" appears
+  tap on #help_report_problem_button
+  wait until "Report a Problem" appears
+  take a screenshot called "report-a-problem-dialog"
+  tap on #help_report_submit_button
+  wait for the page to load
+  see "Please describe the problem before submitting."
+  see "Report a Problem"
+  take a screenshot called "report-a-problem-empty-validation"
+  tap on #help_report_description_field
+  type "Maestro E2E test report -- please ignore, automated coverage check."
+  take a screenshot called "report-a-problem-filled"
+  tap on #help_report_submit_button
+  wait until "Thank you for your feedback!" appears
+  take a screenshot called "report-a-problem-success"

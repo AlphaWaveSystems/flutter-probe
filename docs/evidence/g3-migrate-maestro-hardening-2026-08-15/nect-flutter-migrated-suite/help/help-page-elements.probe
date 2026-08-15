@@ -1,0 +1,13 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  scroll down
+  tap on #drawer_help_item
+  wait until "CONTACT US" appears
+  see "Help & Support"
+  see "CONTACT US"
+  scroll down
+  see "FREQUENTLY ASKED QUESTIONS"
+  take a screenshot called "help-page-elements"

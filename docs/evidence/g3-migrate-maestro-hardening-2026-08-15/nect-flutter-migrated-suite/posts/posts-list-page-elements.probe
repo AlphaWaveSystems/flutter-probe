@@ -1,0 +1,35 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on "Got it"
+  take a screenshot called "posts-list-elements-initial"
+  tap on #posts_search_field
+  type "zzz_no_such_post_zzz"
+  take a screenshot called "posts-list-elements-search-no-results"
+  tap on #search_clear_button
+  take a screenshot called "posts-list-elements-search-cleared"
+  tap on #posts_filter_chip_for_sale
+  wait for the page to load
+  take a screenshot called "posts-list-elements-category-for-sale"
+  tap on #posts_filter_chip_all
+  wait for the page to load
+  tap on "Actions"
+  wait for the page to load
+  wait until "Quick Actions" appears
+  tap on #fab_invite_to_group
+  wait until "Invite Members" appears
+  take a screenshot called "posts-list-elements-invite-to-group"
+  tap on #invite_members_back_button
+  tap on "Actions"
+  wait for the page to load
+  wait until "Quick Actions" appears
+  tap on #fab_share_app
+  wait for the page to load
+  take a screenshot called "posts-list-elements-share-app-sheet"
+  # TODO: tapOn used a relative point (50%,10%) — ProbeScript is selector-only, no coordinate-tap equivalent; pick a real selector for this element

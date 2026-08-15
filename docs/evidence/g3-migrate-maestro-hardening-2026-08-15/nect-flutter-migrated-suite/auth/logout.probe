@@ -1,0 +1,11 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_logout_item
+  wait until "Are you sure you want to log out?" appears
+  tap on #drawer_confirm_button
+  wait until "Login to NECT" appears
+  see "Login to NECT"
+  take a screenshot called "logout-success"

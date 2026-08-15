@@ -1,0 +1,20 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_messages_item
+  wait until "Messages" appears
+  wait until ".*Alice Adminone.*" appears
+  take a screenshot called "inbox-conversation-list"
+  tap on ".*Alice Adminone.*"
+  take a screenshot called "dm-conversation-opened"
+  tap on #dm_message_field
+  type "Maestro E2E test message"
+  tap on #dm_send_button
+  wait for the page to load
+  take a screenshot called "dm-message-sent"
+  tap on #conversation_page_back_button
+  wait until "Messages" appears
+  wait until ".*Maestro E2E test message.*" appears
+  take a screenshot called "inbox-preview-updated"

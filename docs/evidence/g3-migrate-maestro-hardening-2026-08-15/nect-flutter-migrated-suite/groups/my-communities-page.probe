@@ -1,0 +1,9 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  see "My Communities"
+  take a screenshot called "my-communities-page"

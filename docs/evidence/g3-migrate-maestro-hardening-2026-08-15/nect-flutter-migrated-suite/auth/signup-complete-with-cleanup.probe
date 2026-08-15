@@ -1,0 +1,40 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  wait until "Login to NECT" appears
+  run dart:
+  // NOTE: JS eval migrated to Dart — please review
+  // ${output.e2eSignupEmail = 'e2e-signup-test-' + Date.now() + '@nect.app'}
+  tap on #login_signup_link
+  wait until "Create Your Account|Confirm Your Details" appears
+  tap on #signup_first_name_field
+  type "E2E"
+  tap on #signup_last_name_field
+  type "SignupCleanup"
+  tap on #signup_email_field
+  type "${output.e2eSignupEmail}"
+  tap on #signup_password_field
+  type "E2eSignup123"
+  tap on #signup_confirm_password_field
+  type "E2eSignup123"
+  scroll down
+  see #signup_terms_checkbox
+  take a screenshot called "signup-complete-step1-filled"
+  scroll down
+  tap on #signup_continue_button
+  take a screenshot called "signup-complete-step2-reached"
+  scroll down
+  tap on #signup_complete_button
+  take a screenshot called "signup-complete-home-reached"
+  tap on #appbar_menu_button
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  wait until ".*${output.e2eSignupEmail}.*" appears
+  see ".*${output.e2eSignupEmail}.*"
+  take a screenshot called "signup-complete-backend-verified"
+  scroll down
+  tap on #settings_delete_account_button
+  take a screenshot called "signup-complete-delete-dialog"
+  tap on "Delete"
+  take a screenshot called "signup-complete-account-deleted"

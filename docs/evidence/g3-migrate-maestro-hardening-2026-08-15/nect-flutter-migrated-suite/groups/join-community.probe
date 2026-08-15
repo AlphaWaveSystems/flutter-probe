@@ -1,0 +1,19 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #my_communities_fab
+  wait for the page to load
+  tap on #fab_join_community
+  see #join_group_scan_button
+  see #join_group_confirm_button
+  see #join_group_cancel_button
+  take a screenshot called "join-community-dialog"
+  tap on #join_group_code_field
+  type "nonexistent-group-code-e2e-test"
+  tap on #join_group_confirm_button
+  wait until "Failed to join group. Please try again." appears
+  take a screenshot called "join-community-invalid-code-error"

@@ -1,0 +1,12 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on "Add Community"
+  wait for the page to load
+  tap on #fab_create_community
+  take a screenshot called "create-community-dialog"
+  go back

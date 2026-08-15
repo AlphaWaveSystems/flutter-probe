@@ -1,0 +1,23 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/clear-state.yaml"
+  wait until "Login to NECT" appears
+  tap on #login_signup_link
+  wait until "Create Your Account|Confirm Your Details" appears
+  tap on #signup_first_name_field
+  type "Duplicate"
+  tap on #signup_last_name_field
+  type "EmailTest"
+  tap on #signup_email_field
+  type "${TEST_EMAIL}"
+  tap on #signup_password_field
+  type "ValidPass123"
+  tap on #signup_confirm_password_field
+  type "ValidPass123"
+  scroll down
+  take a screenshot called "signup-duplicate-email-form-filled"
+  tap on #signup_continue_button
+  wait for the page to load
+  take a screenshot called "signup-duplicate-email-rejected"
+  see #signup_email_field

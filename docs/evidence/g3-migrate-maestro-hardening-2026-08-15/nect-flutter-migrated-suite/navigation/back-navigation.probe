@@ -1,0 +1,17 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  see "My Profile"
+  tap on "Back"
+  see #appbar_menu_button
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  see "Settings"
+  tap on "Back"
+  see #appbar_menu_button
+  take a screenshot called "back-navigation-success"

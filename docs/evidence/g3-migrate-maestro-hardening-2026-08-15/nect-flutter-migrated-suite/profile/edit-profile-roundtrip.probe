@@ -1,0 +1,33 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  scroll down
+  take a screenshot called "edit-profile-before"
+  tap on "map[below:^Company$]"
+  clear
+  clear
+  type "NECT E2E Verified"
+  scroll down
+  tap on #profile_save_button
+  wait until "Profile saved successfully" appears
+  take a screenshot called "edit-profile-saved-snackbar"
+  tap on #profile_back_button
+  tap on #appbar_menu_button
+  wait for the page to load
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  scroll down
+  see "NECT E2E Verified"
+  take a screenshot called "edit-profile-persisted-after-reload"
+  tap on "map[below:^Company$]"
+  clear
+  clear
+  type "NECT"
+  scroll down
+  tap on #profile_save_button
+  wait until "Profile saved successfully" appears
+  take a screenshot called "edit-profile-reverted"

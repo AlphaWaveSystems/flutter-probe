@@ -1,0 +1,38 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #my_communities_fab
+  wait for the page to load
+  tap on #fab_discover_communities
+  wait for the page to load
+  see #discover_filter_top_matches
+  see #discover_filter_trending
+  take a screenshot called "discover-communities-initial"
+  tap on #discover_filter_trending
+  wait for the page to load
+  take a screenshot called "discover-communities-trending"
+  tap on #discover_filter_top_matches
+  wait for the page to load
+  tap on #discover_communities_search_field
+  type "E2E Test Community"
+  wait for the page to load
+  see "E2E Test Community"
+  take a screenshot called "discover-communities-search-narrowed"
+  tap on #discover_communities_search_field
+  clear
+  type "zzzznonexistentzzzz"
+  wait for the page to load
+  wait until "No communities found" appears
+  see "Showing 0 results"
+  take a screenshot called "discover-communities-search-no-results"
+  tap on #discover_communities_search_field
+  clear
+  wait for the page to load
+  don't see "No communities found"
+  see #discover_filter_top_matches
+  take a screenshot called "discover-communities-search-cleared"
+  go back

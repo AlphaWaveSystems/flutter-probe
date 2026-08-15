@@ -1,0 +1,18 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on "Got it"
+  tap on #post_list_card
+  take a screenshot called "follow-post-detail-initial"
+  tap on #post_detail_follow_button
+  wait for the page to load
+  take a screenshot called "follow-post-after-first-toggle"
+  tap on #post_detail_follow_button
+  wait for the page to load
+  take a screenshot called "follow-post-after-second-toggle"

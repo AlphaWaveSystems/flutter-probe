@@ -1,0 +1,9 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_profile_item
+  wait until "My Profile" appears
+  see "My Profile"
+  take a screenshot called "drawer-to-profile"

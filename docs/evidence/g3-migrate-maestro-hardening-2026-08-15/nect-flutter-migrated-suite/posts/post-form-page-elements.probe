@@ -1,0 +1,41 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_communities_item
+  wait until "My Communities" appears
+  tap on #group_card_0
+  wait until "Actions" appears
+  tap on "Got it"
+  tap on "Actions"
+  wait for the page to load
+  wait until "Quick Actions" appears
+  tap on #fab_create_post
+  take a screenshot called "post-form-elements-empty"
+  tap on #post_form_category_event
+  wait until "Premium Feature" appears
+  take a screenshot called "post-form-elements-category-lock-dialog"
+  tap on #post_form_upgrade_later_button
+  tap on #post_form_category_for_sale
+  wait until "Premium Feature" appears
+  tap on #post_form_upgrade_button
+  wait until "Premium Subscription" appears
+  take a screenshot called "post-form-elements-upgrade-navigation"
+  tap on #subscription_back_button
+  tap on #post_form_category_general
+  tap on #post_form_title_field
+  type "Maestro Element Sweep Validation Test"
+  tap on #post_form_content_field
+  type "Exercising post_form_link_field's real URL validator without creating a second fixture post."
+  scroll down
+  tap on #post_form_link_field
+  type "not-a-valid-url"
+  scroll down
+  tap on #post_form_tags_field
+  type "test,maestro"
+  take a screenshot called "post-form-elements-filled-invalid-link"
+  tap on #post_form_submit_button
+  wait until "Please enter a valid URL" appears
+  take a screenshot called "post-form-elements-link-validation-error"
+  tap on #post_form_back_button

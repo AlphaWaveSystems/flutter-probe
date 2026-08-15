@@ -1,0 +1,15 @@
+# Converted from Maestro — app: ${APP_ID}
+
+test "migrated flow"
+  use "../../helpers/login.yaml"
+  use "../../helpers/open-drawer.yaml"
+  tap on #drawer_settings_item
+  wait until "ACCOUNT" appears
+  scroll down
+  tap on #settings_terms_tile
+  wait until "Could not open Terms of Service" appears
+  take a screenshot called "settings-terms-tile-result"
+  scroll down
+  tap on #settings_privacy_tile
+  wait until "Could not open Privacy Policy" appears
+  take a screenshot called "settings-privacy-tile-result"
