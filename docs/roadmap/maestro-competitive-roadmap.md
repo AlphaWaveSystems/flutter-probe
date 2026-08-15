@@ -232,9 +232,19 @@ proposal.
   See `docs/evidence/n1-native-ui-android-2026-08-15/`.
   PR: —
 
-- [ ] **N-2 — iOS native bridging proposal.** Write the proposal (own doc, per PT-13's
+- [x] **N-2 — iOS native bridging proposal.** Write the proposal (own doc, per PT-13's
   recommendation) before any code — needs a concrete justifying flow (e.g. nect-flutter's photo
   picker or share sheet on iOS).
+  Grounded in nect-flutter's real "Add Images" → `image_picker.pickMultiImage()` →
+  `PHPickerViewController` flow. Finding: PT-13's iOS cost estimate was the right shape but wrong
+  granularity — the real integration point is WebDriverAgent (WDA), a *separate* app (the same
+  mechanism Appium has used for iOS since ~2016), not a per-adopter Xcode project change. On
+  Simulator specifically it needs no code-signing at all; only physical-device support carries
+  that cost, matching this codebase's existing physical-vs-simulator asymmetry elsewhere (E-3,
+  E-4). Recommends WDA, Simulator-first, reusing N-1's existing `tap native`/`see native`/
+  `type native` syntax unchanged — only what runs underneath on iOS is new. No code shipped; this
+  is the proposal only, per PT-13's own recommendation to write the RFC before writing code.
+  See `docs/proposals/n2-ios-native-ui-bridging.md`.
   PR: —
 
 ---
