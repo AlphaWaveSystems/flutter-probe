@@ -1,4 +1,12 @@
 ---
+// Read the released version from the repo's VERSION file at build time, so
+// the hero badge can never drift from the actual release again (it sat
+// hardcoded at v0.7.0 through five releases before this). Resolved from the
+// build cwd (website/) rather than import.meta.url, which points into the
+// prerender chunk at render time.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim();
 ---
 <html lang="en">
 <head>
@@ -437,7 +445,7 @@
   </nav>
   <!-- Hero -->
   <div class="hero">
-    <div class="badge"><span></span> v0.7.0 &mdash; Studio Beta &middot; BSL 1.1 open source</div>
+    <div class="badge"><span></span> v{version} &middot; BSL 1.1 open source</div>
     <h1>Flutter E2E tests in<br/><span class="g">plain English</span></h1>
     <p class="sub">Write tests your whole team can read. Execute with direct widget-tree access &mdash; no accessibility layer, no WebDriver overhead.</p>
     <div class="hero-code">
@@ -494,8 +502,9 @@
       <div class="feat"><h3><span class="ic ic-p">&#8635;</span> Watch mode</h3><p>Re-runs on file save with hot-reload awareness. Iteration cycles under 2 seconds. No recompilation needed.</p></div>
       <div class="feat"><h3><span class="ic ic-a">&#8853;</span> Cross-platform</h3><p>Same tests on Android emulators, iOS simulators, and physical devices. Stable WiFi testing with zero connection drops. Permissions, lifecycle, and platform quirks handled automatically.</p></div>
       <div class="feat"><h3><span class="ic ic-c">&#9673;</span> Test recording</h3><p>Record taps, swipes, and text input on a real device. FlutterProbe writes the .probe file as you interact.</p></div>
-      <div class="feat"><h3><span class="ic ic-t">&#9651;</span> Visual regression</h3><p>Screenshot baselines with configurable pixel thresholds. Catch unintended UI changes before they ship.</p></div>
+      <div class="feat"><h3><span class="ic ic-t">&#9651;</span> Visual regression</h3><p>Screenshot baselines with configurable pixel thresholds — full screen or cropped to a single widget. Catch unintended UI changes before they ship.</p></div>
       <div class="feat"><h3><span class="ic ic-g">&#11041;</span> HTTP mocking</h3><p>Mock API responses directly in test files. No external packages, no separate mock server.</p></div>
+      <div class="feat"><h3><span class="ic ic-c">&#10024;</span> AI assertions, local-first</h3><p>see "checkout looks correct" with ai — against your own OpenAI/Anthropic key or a fully local model. Screenshot redaction built in; nothing routes through our servers.</p></div>
       <div class="feat"><h3><span class="ic ic-a">&#9724;</span> Native UI automation</h3><p>Drive pickers and share sheets outside the Flutter tree with tap native and see native. Android via uiautomator — no extra dependencies.</p></div>
       <div class="feat"><h3><span class="ic ic-p">&#9044;</span> CI/CD ready</h3><p>JUnit XML, JSON, HTML reports. Official Docker image. GitHub Actions workflow included. Test sharding with --shard N.</p></div>
     </div>
