@@ -567,6 +567,17 @@ just cut-off/overlapping/mis-centered elements:
 Unlike `see ... with ai`, `with ai` is mandatory here — there's no non-AI equivalent of
 "assert no visual defects."
 
+To read a specific piece of text off the screen into a variable — an OTP code, a
+dynamically-generated ID — for use later in the same test:
+
+```
+read "the 6-digit OTP code" with ai into otp
+type <otp> into the "Code" field
+```
+
+Same `with ai`-mandatory rule as `assert no visual defects with ai`. If the requested text
+isn't visible, the step fails with a clear error rather than storing an empty/wrong value.
+
 This requires a provider you configure yourself in `probe.yaml` — there is no default
 provider and nothing is sent anywhere unless you set this up. Unlike tools that route
 screenshots through a vendor-operated cloud service, FlutterProbe calls the provider you

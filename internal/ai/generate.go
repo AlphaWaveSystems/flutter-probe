@@ -304,23 +304,7 @@ func buildGeneratePrompt(req GenerateRequest) string {
 
 // extractProbeScript cleans up LLM output: strips markdown fences, trims whitespace.
 func extractProbeScript(raw string) string {
-	s := strings.TrimSpace(raw)
-
-	// Strip markdown code fences if the LLM wrapped output despite instructions
-	if strings.HasPrefix(s, "```") {
-		lines := strings.Split(s, "\n")
-		// Remove first line (```probe or ```)
-		if len(lines) > 1 {
-			lines = lines[1:]
-		}
-		// Remove last line if it's ```
-		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-			lines = lines[:len(lines)-1]
-		}
-		s = strings.Join(lines, "\n")
-	}
-
-	return strings.TrimSpace(s)
+	return stripMarkdownFences(strings.TrimSpace(raw))
 }
 
 // inferFilename derives a .probe filename from the prompt.

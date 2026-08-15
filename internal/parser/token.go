@@ -169,6 +169,9 @@ const (
 	// Native-prompt signal API (v0.9.9+)
 	TOKEN_DELIVER // "deliver" — head of `deliver signal "name"`
 	TOKEN_SIGNAL  // "signal"  — second word of deliver signal
+
+	// AI-powered visual assertions, Phase 4: read "<query>" with ai into <var>
+	TOKEN_READ // "read"
 )
 
 // Token is a single lexical unit.
@@ -313,6 +316,7 @@ var keywords = map[string]TokenType{
 	"enroll":     TOKEN_ENROLL,
 	"deliver":    TOKEN_DELIVER,
 	"signal":     TOKEN_SIGNAL,
+	"read":       TOKEN_READ,
 }
 
 // fillerWords are stripped by the forgiving parser.

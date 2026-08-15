@@ -677,6 +677,65 @@ func TestProgram_UsesAI_FalseWithoutAI(t *testing.T) {
 	}
 }
 
+// ---- Parser: read "..." with ai into <var> (Phase 4) ----
+
+func TestParser_ReadWithAIIntoVar(t *testing.T) {
+	src := `test "t"
+  read "the 6-digit OTP code" with ai into otp
+`
+	prog := mustParse(t, src)
+	a := firstAction(t, prog.Tests[0].Body)
+	if a.Verb != parser.VerbReadWithAI {
+		t.Fatalf("verb = %v, want VerbReadWithAI", a.Verb)
+	}
+	if a.Text != "the 6-digit OTP code" {
+		t.Errorf("query text = %q, want %q", a.Text, "the 6-digit OTP code")
+	}
+	if a.Name != "otp" {
+		t.Errorf("target var = %q, want %q", a.Name, "otp")
+	}
+}
+
+// TestParser_ReadWithoutWithAIIsParseError: no non-AI form of "read ... into"
+// exists — omitting "with ai" must be a parse error, not a silent no-op.
+func TestParser_ReadWithoutWithAIIsParseError(t *testing.T) {
+	src := `test "t"
+  read "the OTP code" into otp
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for \"read ... into\" without \"with ai\", got nil")
+	}
+	if !strings.Contains(err.Error(), "with ai") {
+		t.Errorf("error should mention \"with ai\", got: %v", err)
+	}
+}
+
+// TestParser_ReadWithAIWithoutIntoIsParseError confirms a missing "into
+// <var>" clause is also a parse error, not silently dropped.
+func TestParser_ReadWithAIWithoutIntoIsParseError(t *testing.T) {
+	src := `test "t"
+  read "the OTP code" with ai
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for \"read ... with ai\" missing \"into <var>\", got nil")
+	}
+	if !strings.Contains(err.Error(), "into") {
+		t.Errorf("error should mention \"into\", got: %v", err)
+	}
+}
+
+func TestProgram_UsesAI_TrueForReadWithAI(t *testing.T) {
+	src := `test "t"
+  read "the OTP code" with ai into otp
+`
+	prog := mustParse(t, src)
+	if !prog.UsesAI() {
+		t.Error("UsesAI() should be true for a program containing read ... with ai into")
+	}
+}
+
 // ---- Parser: wait steps ----
 
 // TestParser_Drag covers PT-19: "to" was never actually consumable anywhere

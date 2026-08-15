@@ -31,11 +31,16 @@ const NoDefectsAssertion = "This screen has no visual defects: no text or UI ele
 	"cut off, overlapping, or noticeably mis-centered within their containers. If there " +
 	"are any such defects, describe them specifically in your reasoning."
 
-// VisionProvider evaluates a natural-language assertion against a screenshot.
-// Implementations call the vendor directly — never through a FlutterProbe-
-// operated relay, per the project's AI-assertions PRD.
+// VisionProvider evaluates a natural-language assertion, or extracts a
+// specific piece of text, from a screenshot. Implementations call the
+// vendor directly — never through a FlutterProbe-operated relay, per the
+// project's AI-assertions PRD.
 type VisionProvider interface {
 	AssertScreen(ctx context.Context, image []byte, assertion string) (VisionVerdict, error)
+	// ExtractText reads a specific piece of text off the screenshot (e.g. an
+	// OTP code) for "read \"...\" with ai into <var>". Returns an error if
+	// the requested text isn't found — never an empty string on success.
+	ExtractText(ctx context.Context, image []byte, query string) (string, error)
 }
 
 // NewVisionProvider builds a VisionProvider for the given provider name.
@@ -84,6 +89,23 @@ func orDefault(v, fallback string) string {
 	return v
 }
 
+// stripMarkdownFences removes a leading/trailing ``` fence pair, in case the
+// model wrapped its output despite being told not to. Shared by
+// parseVisionAnswer, ExtractText, and generate.go's extractProbeScript.
+func stripMarkdownFences(s string) string {
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) > 1 {
+		lines = lines[1:]
+	}
+	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
 // ---- Shared verdict prompt/parsing ----
 
 const visionSystemPrompt = `You are evaluating a screenshot of a mobile app screen against a single natural-language assertion.
@@ -100,22 +122,10 @@ type visionAnswer struct {
 	Reasoning string `json:"reasoning"`
 }
 
-// parseVisionAnswer strips markdown fences (in case the model wrapped its
-// output despite instructions, mirroring extractProbeScript's tolerance)
-// and parses the strict JSON verdict shape.
+// parseVisionAnswer parses the strict JSON verdict shape, tolerating
+// markdown-fence-wrapped output despite the prompt's instructions not to.
 func parseVisionAnswer(raw string) (VisionVerdict, error) {
-	s := strings.TrimSpace(raw)
-	if strings.HasPrefix(s, "```") {
-		lines := strings.Split(s, "\n")
-		if len(lines) > 1 {
-			lines = lines[1:]
-		}
-		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-			lines = lines[:len(lines)-1]
-		}
-		s = strings.TrimSpace(strings.Join(lines, "\n"))
-	}
-
+	s := stripMarkdownFences(strings.TrimSpace(raw))
 	var a visionAnswer
 	if err := json.Unmarshal([]byte(s), &a); err != nil {
 		return VisionVerdict{}, fmt.Errorf("ai: could not parse provider response as a verdict: %w (raw: %s)", err, raw)
@@ -123,7 +133,21 @@ func parseVisionAnswer(raw string) (VisionVerdict, error) {
 	return VisionVerdict{True: a.Answer, Reasoning: a.Reasoning}, nil
 }
 
-// ---- OpenAI vision ----
+// ---- Shared extraction prompt ----
+
+// notFoundSentinel is what the model is instructed to reply with when the
+// requested text isn't visible — turned into a Go error by ExtractText.
+const notFoundSentinel = "NOT_FOUND"
+
+const extractionSystemPrompt = `You are extracting a specific piece of text from a screenshot of a mobile app screen.
+Reply with ONLY the extracted text — no explanation, no markdown fences, no surrounding quotes.
+If the requested text is not visible anywhere on the screen, reply with exactly: ` + notFoundSentinel
+
+func extractionUserPrompt(query string) string {
+	return fmt.Sprintf("Extract: %s", query)
+}
+
+// ---- OpenAI vision (also backs provider: local) ----
 
 type openAIVision struct {
 	apiKey  string
@@ -133,15 +157,38 @@ type openAIVision struct {
 }
 
 func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion string) (VisionVerdict, error) {
+	content, err := o.chatCompletion(ctx, visionSystemPrompt, visionUserPrompt(assertion), image)
+	if err != nil {
+		return VisionVerdict{}, err
+	}
+	return parseVisionAnswer(content)
+}
+
+func (o *openAIVision) ExtractText(ctx context.Context, image []byte, query string) (string, error) {
+	content, err := o.chatCompletion(ctx, extractionSystemPrompt, extractionUserPrompt(query), image)
+	if err != nil {
+		return "", err
+	}
+	text := stripMarkdownFences(strings.TrimSpace(content))
+	if text == notFoundSentinel {
+		return "", fmt.Errorf("ai: could not find %q on screen", query)
+	}
+	return text, nil
+}
+
+// chatCompletion sends a single-turn multimodal request to o.baseURL and
+// returns the raw text content of the first choice. Shared by AssertScreen
+// and ExtractText — only the system/user prompt differ between them.
+func (o *openAIVision) chatCompletion(ctx context.Context, system, user string, image []byte) (string, error) {
 	b64 := base64.StdEncoding.EncodeToString(image)
 	reqBody := map[string]any{
 		"model": o.model,
 		"messages": []map[string]any{
-			{"role": "system", "content": visionSystemPrompt},
+			{"role": "system", "content": system},
 			{
 				"role": "user",
 				"content": []map[string]any{
-					{"type": "text", "text": visionUserPrompt(assertion)},
+					{"type": "text", "text": user},
 					{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + b64}},
 				},
 			},
@@ -150,12 +197,12 @@ func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion
 
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: marshal openai request: %w", err)
+		return "", fmt.Errorf("ai: marshal request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL, bytes.NewReader(payload))
 	if err != nil {
-		return VisionVerdict{}, err
+		return "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	// Most local inference servers (Ollama, LM Studio) don't require auth;
@@ -166,19 +213,19 @@ func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion
 
 	resp, err := o.client.Do(httpReq)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: request to %s failed: %w", o.baseURL, err)
+		return "", fmt.Errorf("ai: request to %s failed: %w", o.baseURL, err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: reading response from %s: %w", o.baseURL, err)
+		return "", fmt.Errorf("ai: reading response from %s: %w", o.baseURL, err)
 	}
 	if resp.StatusCode == 429 {
-		return VisionVerdict{}, fmt.Errorf("ai: %s rate limited (429) — try again shortly", o.baseURL)
+		return "", fmt.Errorf("ai: %s rate limited (429) — try again shortly", o.baseURL)
 	}
 	if resp.StatusCode != 200 {
-		return VisionVerdict{}, fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, string(respBytes))
+		return "", fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, string(respBytes))
 	}
 
 	var apiResp struct {
@@ -192,16 +239,16 @@ func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(respBytes, &apiResp); err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: parsing response from %s: %w", o.baseURL, err)
+		return "", fmt.Errorf("ai: parsing response from %s: %w", o.baseURL, err)
 	}
 	if apiResp.Error != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: %s error: %s", o.baseURL, apiResp.Error.Message)
+		return "", fmt.Errorf("ai: %s error: %s", o.baseURL, apiResp.Error.Message)
 	}
 	if len(apiResp.Choices) == 0 {
-		return VisionVerdict{}, fmt.Errorf("ai: %s returned no choices", o.baseURL)
+		return "", fmt.Errorf("ai: %s returned no choices", o.baseURL)
 	}
 
-	return parseVisionAnswer(apiResp.Choices[0].Message.Content)
+	return apiResp.Choices[0].Message.Content, nil
 }
 
 // ---- Anthropic vision ----
@@ -218,18 +265,43 @@ func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assert
 	if a.apiKey == "" {
 		return VisionVerdict{}, fmt.Errorf("ai: Anthropic API key is required (ai.api_key in probe.yaml)")
 	}
+	content, err := a.callAnthropic(ctx, visionSystemPrompt, visionUserPrompt(assertion), image)
+	if err != nil {
+		return VisionVerdict{}, err
+	}
+	return parseVisionAnswer(content)
+}
 
+func (a *anthropicVision) ExtractText(ctx context.Context, image []byte, query string) (string, error) {
+	if a.apiKey == "" {
+		return "", fmt.Errorf("ai: Anthropic API key is required (ai.api_key in probe.yaml)")
+	}
+	content, err := a.callAnthropic(ctx, extractionSystemPrompt, extractionUserPrompt(query), image)
+	if err != nil {
+		return "", err
+	}
+	text := stripMarkdownFences(strings.TrimSpace(content))
+	if text == notFoundSentinel {
+		return "", fmt.Errorf("ai: could not find %q on screen", query)
+	}
+	return text, nil
+}
+
+// callAnthropic sends a single-turn multimodal request to the Claude
+// Messages API and returns the concatenated text content. Shared by
+// AssertScreen and ExtractText — only the system/user prompt differ.
+func (a *anthropicVision) callAnthropic(ctx context.Context, system, user string, image []byte) (string, error) {
 	b64 := base64.StdEncoding.EncodeToString(image)
 	reqBody := map[string]any{
 		"model":      a.model,
 		"max_tokens": maxTokens,
-		"system":     visionSystemPrompt,
+		"system":     system,
 		"messages": []map[string]any{
 			{
 				"role": "user",
 				"content": []map[string]any{
 					{"type": "image", "source": map[string]string{"type": "base64", "media_type": "image/png", "data": b64}},
-					{"type": "text", "text": visionUserPrompt(assertion)},
+					{"type": "text", "text": user},
 				},
 			},
 		},
@@ -237,12 +309,12 @@ func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assert
 
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: marshal anthropic request: %w", err)
+		return "", fmt.Errorf("ai: marshal anthropic request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, defaultAPIURL, bytes.NewReader(payload))
 	if err != nil {
-		return VisionVerdict{}, err
+		return "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-api-key", a.apiKey)
@@ -250,30 +322,30 @@ func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assert
 
 	resp, err := a.client.Do(httpReq)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: anthropic request failed: %w", err)
+		return "", fmt.Errorf("ai: anthropic request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: reading anthropic response: %w", err)
+		return "", fmt.Errorf("ai: reading anthropic response: %w", err)
 	}
 	if resp.StatusCode == 429 {
-		return VisionVerdict{}, fmt.Errorf("ai: anthropic API rate limited (429) — try again shortly")
+		return "", fmt.Errorf("ai: anthropic API rate limited (429) — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return VisionVerdict{}, fmt.Errorf("ai: anthropic API returned %d: %s", resp.StatusCode, string(respBytes))
+		return "", fmt.Errorf("ai: anthropic API returned %d: %s", resp.StatusCode, string(respBytes))
 	}
 
 	var apiResp apiResponse
 	if err := json.Unmarshal(respBytes, &apiResp); err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: parsing anthropic response: %w", err)
+		return "", fmt.Errorf("ai: parsing anthropic response: %w", err)
 	}
 	if apiResp.Error != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: anthropic API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
+		return "", fmt.Errorf("ai: anthropic API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
 	}
 	if len(apiResp.Content) == 0 {
-		return VisionVerdict{}, fmt.Errorf("ai: anthropic API returned empty content")
+		return "", fmt.Errorf("ai: anthropic API returned empty content")
 	}
 
 	var sb strings.Builder
@@ -282,5 +354,5 @@ func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assert
 			sb.WriteString(block.Text)
 		}
 	}
-	return parseVisionAnswer(sb.String())
+	return sb.String(), nil
 }

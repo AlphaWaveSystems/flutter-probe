@@ -126,3 +126,71 @@ func TestNewVisionProvider_Anthropic_RequiresAPIKey(t *testing.T) {
 		t.Fatal("expected an error when ai.api_key is missing for provider: anthropic")
 	}
 }
+
+// ---- ExtractText (Phase 4: read "..." with ai into <var>) ----
+
+func TestVisionProvider_Local_ExtractText_HappyPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": "123456"}}},
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	if err != nil {
+		t.Fatalf("NewVisionProvider: %v", err)
+	}
+	text, err := provider.ExtractText(context.Background(), []byte("fake-png-bytes"), "the 6-digit OTP code")
+	if err != nil {
+		t.Fatalf("ExtractText: %v", err)
+	}
+	if text != "123456" {
+		t.Errorf("ExtractText() = %q, want %q", text, "123456")
+	}
+}
+
+func TestVisionProvider_Local_ExtractText_StripsMarkdownFences(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": "```\n123456\n```"}}},
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	if err != nil {
+		t.Fatalf("NewVisionProvider: %v", err)
+	}
+	text, err := provider.ExtractText(context.Background(), []byte("x"), "the OTP code")
+	if err != nil {
+		t.Fatalf("ExtractText: %v", err)
+	}
+	if text != "123456" {
+		t.Errorf("ExtractText() = %q, want %q (fences stripped)", text, "123456")
+	}
+}
+
+func TestVisionProvider_Local_ExtractText_NotFoundBecomesError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": "NOT_FOUND"}}},
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := ai.NewVisionProvider("local", "", "llava", srv.URL)
+	if err != nil {
+		t.Fatalf("NewVisionProvider: %v", err)
+	}
+	_, err = provider.ExtractText(context.Background(), []byte("x"), "a code that isn't on screen")
+	if err == nil {
+		t.Fatal("expected an error when the model reports the text wasn't found")
+	}
+	if !strings.Contains(err.Error(), "a code that isn't on screen") {
+		t.Errorf("error should name the query, got: %v", err)
+	}
+}

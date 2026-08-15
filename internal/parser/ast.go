@@ -175,6 +175,11 @@ const (
 	// deliver signal "name" ["value"]
 	// Name = signal name, Text = value (default "true")
 	VerbDeliverSignal ActionVerb = "deliver_signal"
+
+	// AI-powered visual assertions, Phase 4:
+	// read "<query>" with ai into <var>
+	// Text = query, Name = destination variable
+	VerbReadWithAI ActionVerb = "read_with_ai"
 )
 
 type SwipeDirection string
@@ -400,6 +405,10 @@ func stepsUseAI(steps []Step) bool {
 			}
 		case AssertNoDefectsStep:
 			return true
+		case ActionStep:
+			if st.Verb == VerbReadWithAI {
+				return true
+			}
 		case ConditionalStep:
 			if stepsUseAI(st.Then) || stepsUseAI(st.Else) {
 				return true

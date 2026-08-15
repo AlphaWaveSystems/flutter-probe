@@ -411,6 +411,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "biometric no match"
 		case parser.VerbDeliverSignal:
 			return fmt.Sprintf("deliver signal %q", s.Name)
+		case parser.VerbReadWithAI:
+			return fmt.Sprintf("read %q with ai into %s", s.Text, s.Name)
 		default:
 			return string(s.Verb)
 		}
@@ -746,6 +748,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		e.vars[a.Name] = e.resolve(a.Text)
 		return nil
 
+	case parser.VerbReadWithAI:
+		return e.runReadWithAI(ctx, a)
+
 	case parser.VerbEnrollBiometric:
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping enroll biometric (cloud mode)")
@@ -881,10 +886,38 @@ func (e *Executor) runAssertNoDefects(ctx context.Context, a parser.AssertNoDefe
 	return nil
 }
 
+// runReadWithAI handles `read "<query>" with ai into <var>`: captures a
+// screenshot (redacted per ai.redact, same as the other AI commands) and
+// asks the configured VisionProvider to extract the requested text into a
+// ProbeScript variable.
+func (e *Executor) runReadWithAI(ctx context.Context, a parser.ActionStep) error {
+	if e.aiProvider == nil {
+		if e.aiConfigErr != nil {
+			return fmt.Errorf("read ... with ai: %w", e.aiConfigErr)
+		}
+		return fmt.Errorf(`"read ... with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	query := e.resolve(a.Text)
+
+	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "read_with_ai")
+	if err != nil {
+		return fmt.Errorf("read ... with ai: %w", err)
+	}
+	e.artifacts = append(e.artifacts, path)
+
+	text, err := e.aiProvider.ExtractText(ctx, imgBytes, query)
+	if err != nil {
+		return fmt.Errorf("read ... with ai: %w", err)
+	}
+	e.vars[a.Name] = text
+	return nil
+}
+
 // captureRedactedScreenshot takes a screenshot and applies any configured
 // ai.redact rules to it before any AI provider ever sees the bytes. Shared
-// by runAssertWithAI and runAssertNoDefects. Does not touch e.artifacts —
-// callers append the returned path themselves once the step's outcome is known.
+// by runAssertWithAI, runAssertNoDefects, and runReadWithAI. Does not touch
+// e.artifacts — callers append the returned path themselves once the
+// step's outcome is known.
 func (e *Executor) captureRedactedScreenshot(ctx context.Context, name string) (string, []byte, error) {
 	path, err := e.client.Screenshot(ctx, name)
 	if err != nil {
