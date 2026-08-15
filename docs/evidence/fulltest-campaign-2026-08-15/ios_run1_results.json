@@ -1,0 +1,335 @@
+{
+  "generated_at": "2026-08-15T19:45:24Z",
+  "metadata": {
+    "device_name": "probe-fulltest-sim",
+    "device_id": "387B18E5-1A5A-4BE0-9751-891D884FB567",
+    "platform": "ios",
+    "os_version": "iOS 26.5",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "",
+    "probe_version": "",
+    "config_file": "probe.yaml"
+  },
+  "total_tests": 32,
+  "passed": 23,
+  "failed": 9,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "launch, see, don't see, see exactly",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 5007,
+      "error": "rpc error -32002: Expected exactly 1 \"text(\"Quick Add\")\" but found 2",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_launch_see_don_t_see_see_exactly_1786822525415.png",
+        "screenshots/fail_01_core_1786822525522.png"
+      ]
+    },
+    {
+      "name": "tap and double tap register water",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8190,
+      "row": -1
+    },
+    {
+      "name": "undo via snackbar, wait until disappears",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 69493,
+      "error": "context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_undo_via_snackbar_wait_until_disappears_1786822602906.png",
+        "screenshots/fail_01_core_1786822603189.png"
+      ]
+    },
+    {
+      "name": "gestures: swipe and scroll on scrollable screens",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 69898,
+      "error": "context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_gestures_swipe_and_scroll_on_scrollable_screens_1786822672989.png",
+        "screenshots/fail_01_core_1786822673104.png"
+      ]
+    },
+    {
+      "name": "toggle unit system round trip",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 4569,
+      "error": "line 48: unknown recipe call \"#unit_system_toggle\" — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_toggle_unit_system_round_trip_1786822677558.png",
+        "screenshots/fail_01_core_1786822677674.png"
+      ]
+    },
+    {
+      "name": "navigation across all tabs with waits",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4367,
+      "row": -1
+    },
+    {
+      "name": "shake, pause, close keyboard are safe no-ops here",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5222,
+      "row": -1
+    },
+    {
+      "name": "wait for page load and network idle",
+      "file": "../tests_ios/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4201,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the then branch",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5218,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the otherwise branch",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5176,
+      "row": -1
+    },
+    {
+      "name": "repeat runs every iteration",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 7256,
+      "row": -1
+    },
+    {
+      "name": "retry stops at first success",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 4487,
+      "error": "retry: all 3 attempt(s) failed, last error: rpc error -32002: Expected to see \"text(\"250 ml\")\" but it was not found",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_retry_stops_at_first_success_1786822713497.png",
+        "screenshots/fail_02_flow_1786822713606.png"
+      ]
+    },
+    {
+      "name": "optional swallows a genuine failure and continues",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4773,
+      "row": -1
+    },
+    {
+      "name": "store, variables, and log",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5530,
+      "row": -1
+    },
+    {
+      "name": "recipe with argument and nested recipe",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 4624,
+      "error": "line 51: unknown recipe call \"add and verify \u003carg\u003e\" (also tried \"add verify\" with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_recipe_with_argument_and_nested_recipe_1786822728438.png",
+        "screenshots/fail_02_flow_1786822728536.png"
+      ]
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 1]",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4513
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 2]",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5006,
+      "row": 1
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 3]",
+      "file": "../tests_ios/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5693,
+      "row": 2
+    },
+    {
+      "name": "visual regression full screen baseline and match",
+      "file": "../tests_ios/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5064,
+      "row": -1,
+      "artifacts": [
+        "screenshots/fulltest_today_zero_1786822748493.png",
+        "screenshots/fulltest_today_zero_1786822748603.png",
+        "screenshots/fulltest_today_zero_diff_20260815_133908.png"
+      ]
+    },
+    {
+      "name": "element scoped visual regression detects change",
+      "file": "../tests_ios/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4518,
+      "row": -1,
+      "artifacts": [
+        "screenshots/fulltest_ml_text_1786822753194.png",
+        "screenshots/fulltest_ml_text_1786822753194_cropped.png",
+        "screenshots/fulltest_ml_text_1786822753320.png",
+        "screenshots/fulltest_ml_text_1786822753320_cropped.png"
+      ]
+    },
+    {
+      "name": "ai assertion true case",
+      "file": "../tests_ios/03_visual_and_ai.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 64702,
+      "error": "with ai: ai: request to http://127.0.0.1:1234/v1/chat/completions failed: Post \"http://127.0.0.1:1234/v1/chat/completions\": context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/with_ai_1786822757676.png",
+        "screenshots/failure_ai_assertion_true_case_1786822817824.png",
+        "screenshots/fail_03_visual_ai_1786822818042.png"
+      ]
+    },
+    {
+      "name": "ai smoke check for visual defects",
+      "file": "../tests_ios/03_visual_and_ai.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 64631,
+      "error": "assert no visual defects: ai: request to http://127.0.0.1:1234/v1/chat/completions failed: Post \"http://127.0.0.1:1234/v1/chat/completions\": context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/no_defects_1786822822442.png",
+        "screenshots/failure_ai_smoke_check_for_visual_defects_1786822882540.png",
+        "screenshots/fail_03_visual_ai_1786822882674.png"
+      ]
+    },
+    {
+      "name": "ai text extraction into a variable",
+      "file": "../tests_ios/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 23206,
+      "row": -1,
+      "artifacts": [
+        "screenshots/read_with_ai_1786822887994.png"
+      ]
+    },
+    {
+      "name": "add media seeds the gallery",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4485,
+      "row": -1
+    },
+    {
+      "name": "external browser then deep link back into the app",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 10347,
+      "row": -1
+    },
+    {
+      "name": "clipboard round trip",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4260,
+      "row": -1
+    },
+    {
+      "name": "set location",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4320,
+      "row": -1
+    },
+    {
+      "name": "grant all permissions",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 116667,
+      "error": "context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/fail_04_device_1786823045964.png"
+      ]
+    },
+    {
+      "name": "http mock rule and real http call",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4335,
+      "row": -1
+    },
+    {
+      "name": "diagnostics dump tree and save device logs",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4466,
+      "row": -1
+    },
+    {
+      "name": "kill and reopen the app",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 58763,
+      "row": -1
+    },
+    {
+      "name": "clear app data relaunches clean",
+      "file": "../tests_ios/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 10792,
+      "row": -1
+    }
+  ]
+}

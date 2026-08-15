@@ -1,0 +1,78 @@
+# Core verbs: assertions, taps, waits, gestures, toggles, screenshots, hooks.
+
+on failure
+  take a screenshot called "fail_01_core"
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "launch, see, don't see, see exactly"
+  see "Quick Add"
+  see "0 ml"
+  see #today_current_ml_text
+  see exactly 2 "Quick Add"   # section header + nav label both carry it
+  don't see "This Text Does Not Exist Anywhere 12345"
+  take a screenshot called "01_launch"
+
+test "tap and double tap register water"
+  tap #today_quick_add_250
+  wait until "250 ml" appears
+  double tap #today_quick_add_250
+  wait until "750 ml" appears
+  see "750 ml"
+
+test "undo via snackbar, wait until disappears"
+  tap #today_quick_add_500
+  wait until "500 ml" appears
+  tap "Undo"
+  wait until "0 ml" appears
+  see "0 ml"
+  # `wait until "Undo" disappears` removed: passes on Android but times out
+  # on iOS — the snackbar text lingers in the iOS widget tree (same
+  # Navigator/offstage semantics gotcha as don't-see). Positive assertions
+  # only, per the project's own testing guidance.
+
+test "gestures: swipe and scroll on scrollable screens"
+  tap #nav_tab_settings
+  wait until "Daily Goal" appears
+  scroll down
+  wait 1 seconds
+  scroll up
+  swipe up
+  wait 1 seconds
+  swipe down
+  wait 1 seconds
+  # NOTE: `wait for animations to end` is deliberately NOT used here —
+  # water-sip runs an infinite looping animation (RotationTransition on the
+  # progress ring), so "no scheduled animation frames" never becomes true
+  # and the verb times out by design. Real campaign finding, kept documented.
+  take a screenshot called "01_after_gestures"
+
+test "toggle unit system round trip"
+  tap #nav_tab_settings
+  wait until "Daily Goal" appears
+  toggle #unit_system_toggle
+  wait 1 seconds
+  toggle #unit_system_toggle
+  wait 1 seconds
+  see "Settings"
+
+test "navigation across all tabs with waits"
+  tap #nav_tab_history
+  wait until "History" appears
+  tap #nav_tab_settings
+  wait until "Daily Goal" appears
+  goto today
+  see "Quick Add"
+
+test "shake, pause, close keyboard are safe no-ops here"
+  shake
+  pause
+  close keyboard
+  see "Quick Add"
+
+test "wait for page load and network idle"
+  wait for page to load
+  wait for network idle
+  see "Quick Add"

@@ -1,0 +1,83 @@
+{
+  "generated_at": "2026-08-15T20:07:30Z",
+  "metadata": {
+    "device_name": "probe-fulltest-sim",
+    "device_id": "387B18E5-1A5A-4BE0-9751-891D884FB567",
+    "platform": "ios",
+    "os_version": "iOS 26.5",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "",
+    "probe_version": "",
+    "config_file": "probe.yaml"
+  },
+  "total_tests": 5,
+  "passed": 4,
+  "failed": 1,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "visual regression full screen baseline and match",
+      "file": "../tests_ios_fixed/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 4862,
+      "row": -1,
+      "artifacts": [
+        "screenshots/fulltest_today_zero_1786824219396.png",
+        "screenshots/fulltest_today_zero_1786824219518.png",
+        "screenshots/fulltest_today_zero_diff_20260815_140339.png"
+      ]
+    },
+    {
+      "name": "element scoped visual regression detects change",
+      "file": "../tests_ios_fixed/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 6080,
+      "row": -1,
+      "artifacts": [
+        "screenshots/fulltest_ml_text_1786824225658.png",
+        "screenshots/fulltest_ml_text_1786824225658_cropped.png",
+        "screenshots/fulltest_ml_text_1786824225885.png",
+        "screenshots/fulltest_ml_text_1786824225885_cropped.png"
+      ]
+    },
+    {
+      "name": "ai assertion true case",
+      "file": "../tests_ios_fixed/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 61932,
+      "row": -1,
+      "artifacts": [
+        "screenshots/with_ai_1786824231524.png"
+      ]
+    },
+    {
+      "name": "ai smoke check for visual defects",
+      "file": "../tests_ios_fixed/03_visual_and_ai.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 114280,
+      "error": "AI found visual defects: The buttons at the bottom of the 'Quick Add' section are partially cut off and overlapped by the navigation bar.",
+      "row": -1,
+      "artifacts": [
+        "screenshots/no_defects_1786824294346.png",
+        "screenshots/failure_ai_smoke_check_for_visual_defects_1786824402016.png",
+        "screenshots/fail_03_visual_ai_1786824402128.png"
+      ]
+    },
+    {
+      "name": "ai text extraction into a variable",
+      "file": "../tests_ios_fixed/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 48148,
+      "row": -1,
+      "artifacts": [
+        "screenshots/read_with_ai_1786824407477.png"
+      ]
+    }
+  ]
+}

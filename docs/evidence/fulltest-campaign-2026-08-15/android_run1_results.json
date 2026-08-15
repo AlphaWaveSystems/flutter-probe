@@ -1,0 +1,359 @@
+{
+  "generated_at": "2026-08-15T19:39:41Z",
+  "metadata": {
+    "device_name": "sdk gphone64 arm64",
+    "device_id": "emulator-5556",
+    "platform": "android",
+    "os_version": "Android 15",
+    "provider": "local",
+    "app_id": "com.alphawavesystems.watersip",
+    "app_version": "1.1.3",
+    "probe_version": "",
+    "config_file": "probe.yaml"
+  },
+  "total_tests": 34,
+  "passed": 23,
+  "failed": 11,
+  "skipped": 0,
+  "results": [
+    {
+      "name": "launch, see, don't see, see exactly",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 22017,
+      "error": "rpc error -32002: Expected exactly 1 \"text(\"Quick Add\")\" but found 2",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_launch_see_don_t_see_see_exactly_1786822195283.png",
+        "screenshots/fail_01_core_1786822197590.png"
+      ]
+    },
+    {
+      "name": "tap and double tap register water",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 21266,
+      "row": -1
+    },
+    {
+      "name": "undo via snackbar, wait until disappears",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 18808,
+      "row": -1
+    },
+    {
+      "name": "gestures: swipe and scroll on scrollable screens",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 73331,
+      "error": "context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_gestures_swipe_and_scroll_on_scrollable_screens_1786822310839.png",
+        "screenshots/fail_01_core_1786822311111.png"
+      ]
+    },
+    {
+      "name": "toggle unit system round trip",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 13788,
+      "error": "line 48: unknown recipe call \"#unit_system_toggle\" — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_toggle_unit_system_round_trip_1786822324325.png",
+        "screenshots/fail_01_core_1786822324891.png"
+      ]
+    },
+    {
+      "name": "navigation across all tabs with waits",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 13298,
+      "row": -1
+    },
+    {
+      "name": "shake, pause, close keyboard are safe no-ops here",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 11955,
+      "row": -1
+    },
+    {
+      "name": "wait for page load and network idle",
+      "file": "tests/01_core_and_gestures.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 10035,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the then branch",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 11379,
+      "row": -1
+    },
+    {
+      "name": "conditional takes the otherwise branch",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 14740,
+      "row": -1
+    },
+    {
+      "name": "repeat runs every iteration",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 10557,
+      "row": -1
+    },
+    {
+      "name": "retry stops at first success",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 10113,
+      "error": "retry: all 3 attempt(s) failed, last error: rpc error -32002: Expected to see \"text(\"250 ml\")\" but it was not found",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_retry_stops_at_first_success_1786822406898.png",
+        "screenshots/fail_02_flow_1786822407021.png"
+      ]
+    },
+    {
+      "name": "optional swallows a genuine failure and continues",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5871,
+      "row": -1
+    },
+    {
+      "name": "store, variables, and log",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 8069,
+      "row": -1
+    },
+    {
+      "name": "recipe with argument and nested recipe",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 5695,
+      "error": "line 51: unknown recipe call \"add and verify \u003carg\u003e\" (also tried \"add verify\" with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_recipe_with_argument_and_nested_recipe_1786822426467.png",
+        "screenshots/fail_02_flow_1786822426654.png"
+      ]
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 1]",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5492
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 2]",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5411,
+      "row": 1
+    },
+    {
+      "name": "data driven assertions with placeholder substitution [row 3]",
+      "file": "tests/02_flow_and_data.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5021,
+      "row": 2
+    },
+    {
+      "name": "visual regression full screen baseline and match",
+      "file": "tests/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5501,
+      "row": -1,
+      "artifacts": [
+        "screenshots/fulltest_today_zero_1786822447808.png",
+        "screenshots/fulltest_today_zero_1786822447920.png",
+        "screenshots/fulltest_today_zero_diff_20260815_133408.png"
+      ]
+    },
+    {
+      "name": "element scoped visual regression detects change",
+      "file": "tests/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5331,
+      "row": -1,
+      "artifacts": [
+        "screenshots/fulltest_ml_text_1786822453256.png",
+        "screenshots/fulltest_ml_text_1786822453256_cropped.png",
+        "screenshots/fulltest_ml_text_1786822453404.png",
+        "screenshots/fulltest_ml_text_1786822453404_cropped.png",
+        "screenshots/fulltest_ml_text_diff_20260815_133413.png"
+      ]
+    },
+    {
+      "name": "ai assertion true case",
+      "file": "tests/03_visual_and_ai.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 65661,
+      "error": "with ai: ai: request to http://127.0.0.1:1234/v1/chat/completions failed: Post \"http://127.0.0.1:1234/v1/chat/completions\": context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/with_ai_1786822458632.png",
+        "screenshots/failure_ai_assertion_true_case_1786822518890.png",
+        "screenshots/fail_03_visual_ai_1786822519077.png"
+      ]
+    },
+    {
+      "name": "ai smoke check for visual defects",
+      "file": "tests/03_visual_and_ai.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 66563,
+      "error": "assert no visual defects: ai: request to http://127.0.0.1:1234/v1/chat/completions failed: Post \"http://127.0.0.1:1234/v1/chat/completions\": context deadline exceeded",
+      "row": -1,
+      "artifacts": [
+        "screenshots/no_defects_1786822525441.png",
+        "screenshots/failure_ai_smoke_check_for_visual_defects_1786822585472.png",
+        "screenshots/fail_03_visual_ai_1786822585648.png"
+      ]
+    },
+    {
+      "name": "ai text extraction into a variable",
+      "file": "tests/03_visual_and_ai.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 30981,
+      "row": -1,
+      "artifacts": [
+        "screenshots/read_with_ai_1786822591846.png"
+      ]
+    },
+    {
+      "name": "add media seeds the gallery",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5349,
+      "row": -1
+    },
+    {
+      "name": "external browser then deep link back into the app",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 11163,
+      "row": -1
+    },
+    {
+      "name": "clipboard round trip",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5125,
+      "row": -1
+    },
+    {
+      "name": "set location",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 5658,
+      "error": "set location: -s emulator-5556 shell emu geo fix 11.5820 48.1351: /system/bin/sh: emu: inaccessible or not found\n",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_set_location_1786822643790.png",
+        "screenshots/fail_04_device_1786822643923.png"
+      ]
+    },
+    {
+      "name": "grant all permissions",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5656,
+      "row": -1
+    },
+    {
+      "name": "http mock rule and real http call",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5268,
+      "row": -1
+    },
+    {
+      "name": "diagnostics dump tree and save device logs",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 5059,
+      "row": -1
+    },
+    {
+      "name": "kill and reopen the app",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 72443,
+      "error": "probelink: write: write tcp 127.0.0.1:52616-\u003e127.0.0.1:48690: use of closed network connection (auto-reconnect attempt 1 failed: auto-reconnect failed: reconnect: read token: android: probe token not found within 30s)",
+      "row": -1
+    },
+    {
+      "name": "clear app data relaunches clean",
+      "file": "tests/04_device_and_lifecycle.probe",
+      "passed": true,
+      "skipped": false,
+      "duration_ms": 16750,
+      "row": -1
+    },
+    {
+      "name": "see native and tap native against real browser chrome",
+      "file": "tests/05_native_android.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 13121,
+      "error": "expected to see native element matching \"example.com\", but it was not found",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_see_native_and_tap_native_against_real_browser_chrome_1786822761761.png",
+        "screenshots/fail_05_native_1786822762184.png"
+      ]
+    },
+    {
+      "name": "type native into the browser url bar",
+      "file": "tests/05_native_android.probe",
+      "passed": false,
+      "skipped": false,
+      "duration_ms": 16365,
+      "error": "type native: tap native: no element matching \"Search or type URL\" in the current native UI",
+      "row": -1,
+      "artifacts": [
+        "screenshots/failure_type_native_into_the_browser_url_bar_1786822777950.png",
+        "screenshots/fail_05_native_1786822778538.png"
+      ]
+    }
+  ]
+}

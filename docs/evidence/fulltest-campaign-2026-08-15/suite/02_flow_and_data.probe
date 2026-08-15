@@ -1,0 +1,63 @@
+# Control flow: conditionals/otherwise, repeat, retry, optional, store/log,
+# recipes with args, data-driven examples, variables.
+
+on failure
+  take a screenshot called "fail_02_flow"
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "conditional takes the then branch"
+  if "Quick Add" appears
+    tap #today_quick_add_250
+    wait until "250 ml" appears
+  see "250 ml"
+
+test "conditional takes the otherwise branch"
+  if "Nonexistent Banner XYZ" appears
+    tap #today_quick_add_1000
+  otherwise
+    tap #today_quick_add_500
+    wait until "500 ml" appears
+  see "500 ml"
+
+test "repeat runs every iteration"
+  repeat 3 times
+    tap #today_quick_add_250
+    wait 1 seconds
+  see "750 ml"
+
+test "retry stops at first success"
+  retry 3 times
+    tap #today_quick_add_250
+    wait until "250 ml" appears
+  see "250 ml"
+
+test "optional swallows a genuine failure and continues"
+  tap "This Button Does Not Exist 98765" optional
+  see "Element That Is Not There 98765" optional
+  long press #today_quick_add_250 optional
+  see "Quick Add"
+
+test "store, variables, and log"
+  store "250 ml" as expected_total
+  tap #today_quick_add_250
+  wait until "<expected_total>" appears
+  see "<expected_total>"
+  log "verified total <expected_total>"
+
+test "recipe with argument and nested recipe"
+  add and verify "250 ml"
+  reset via today
+  see "Quick Add"
+
+test "data driven assertions with placeholder substitution"
+  see "<element>"
+  log "row verified: <element>"
+
+with examples:
+  element
+  "Quick Add"
+  "0 ml"
+  "0%"

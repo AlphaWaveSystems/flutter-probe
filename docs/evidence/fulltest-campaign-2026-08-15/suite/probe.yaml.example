@@ -1,0 +1,27 @@
+project:
+  name: "Full-feature test (water-sip)"
+  app: com.alphawavesystems.watersip
+
+defaults:
+  platform: android
+  timeout: 60s
+  screenshots: on_failure
+
+agent:
+  port: 48690          # host side — avoids colliding with other tests on 48686
+  device_port: 48686   # agent's fixed on-device port
+  dial_timeout: 45s
+  reconnect_delay: 2s
+
+visual:
+  threshold: 0.5
+  pixel_delta: 8
+
+ai:
+  provider: local
+  endpoint: http://127.0.0.1:1234/v1
+  model: google/gemma-4-31b
+  timeout: 300s
+
+recipes_folder: recipes
+reports_folder: reports

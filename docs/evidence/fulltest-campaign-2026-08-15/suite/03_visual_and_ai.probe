@@ -1,0 +1,31 @@
+# Visual regression (full + element-scoped) and the AI feature family
+# (see with ai, assert no visual defects with ai, read with ai into).
+# AI runs against LM Studio's google/gemma-4-31b, fully local.
+
+on failure
+  take a screenshot called "fail_03_visual_ai"
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "visual regression full screen baseline and match"
+  compare screenshot "fulltest_today_zero"
+  compare screenshot "fulltest_today_zero"
+
+test "element scoped visual regression detects change"
+  compare screenshot "fulltest_ml_text" of #today_current_ml_text
+  compare screenshot "fulltest_ml_text" of #today_current_ml_text
+
+test "ai assertion true case"
+  see "the screen shows a water intake tracker currently at zero" with ai
+
+test "ai smoke check for visual defects"
+  assert no visual defects with ai
+
+test "ai text extraction into a variable"
+  tap #today_quick_add_250
+  wait until "250 ml" appears
+  read "the current amount of water logged, exactly as displayed" with ai into current_total
+  log "AI extracted: <current_total>"
+  see "<current_total>"
