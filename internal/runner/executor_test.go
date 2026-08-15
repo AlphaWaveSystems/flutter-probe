@@ -111,6 +111,41 @@ func TestResolve_RepeatedPlaceholderStillWorks(t *testing.T) {
 	}
 }
 
+// TestResolveSelector_ResolvesVariablePlaceholder covers the still-open half
+// of the PT-02 addendum: tap/doubleTap/longPress/clear/swipe/scroll/drag
+// selectors were dispatched via toSelectorParam() directly, never passing
+// through e.resolve() the way type/see selectors already did — so
+// `tap "<button_label>"` silently searched for the literal text
+// "<button_label>" instead of the stored variable's value.
+func TestResolveSelector_ResolvesVariablePlaceholder(t *testing.T) {
+	e := newTestExecutor()
+	e.vars["button_label"] = "Submit"
+
+	sel := e.resolveSelector(parser.Selector{
+		Kind: parser.SelectorText,
+		Text: "<button_label>",
+	})
+
+	if sel.Text != "Submit" {
+		t.Errorf("resolveSelector().Text = %q, want %q", sel.Text, "Submit")
+	}
+}
+
+// TestResolveSelector_LeavesPlainTextUnchanged confirms the fix doesn't
+// mangle selectors that never referenced a variable in the first place.
+func TestResolveSelector_LeavesPlainTextUnchanged(t *testing.T) {
+	e := newTestExecutor()
+
+	sel := e.resolveSelector(parser.Selector{
+		Kind: parser.SelectorID,
+		Text: "#submit_button",
+	})
+
+	if sel.Text != "#submit_button" {
+		t.Errorf("resolveSelector().Text = %q, want %q", sel.Text, "#submit_button")
+	}
+}
+
 // TestLaunchTimeoutOrDefault_FallsBackWhenUnset covers PT-10: `restart the
 // app`/`clear app data` used to be bounded by a hardcoded, unconfigurable 90s
 // step timeout, which a real app's expensive cold-launch path could easily

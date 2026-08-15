@@ -39,13 +39,15 @@ Per `IMPROVEMENT_TASKS.md`'s own "Suggested working order" (revised 2026-07-05) 
 "Deferred / open items", exactly this is left from the hardening effort. Nothing here is
 speculative — every item has a documented repro or root cause already.
 
-- [ ] **R-1 — Tap-family verbs never resolve `<var>` placeholders in their selector.**
-  Still-open half of the PT-02 addendum. `type`/`see` selectors go through `e.resolve()`
-  (`internal/runner/executor.go:355,525,844,900`) before dispatch; the `tap`/`doubleTap`/
-  `longPress` cases (`executor.go:342,346,392` and `506,512,518`) don't. Fix: resolve the
-  selector text in each tap-family case the same way. Regression test: a recipe/test using
-  `tap "<button_label>"` with a stored variable, asserting the tap lands on the resolved text.
-  PR: —
+- [x] **R-1 — Tap-family verbs never resolve `<var>` placeholders in their selector.**
+  Still-open half of the PT-02 addendum. Scope grew during implementation: the same missing
+  resolution also affected `clear`, `swipe`/`scroll` targets, `drag ... to ...`, and the
+  `if visible` pre-check — not just tap/doubleTap/longPress. Fixed with a single
+  `resolveSelector()` helper in `internal/runner/executor.go`, applied at every selector-taking
+  call site (including `runAssert`, for consistency with the rest). Regression tests:
+  `TestResolveSelector_ResolvesVariablePlaceholder`, `TestResolveSelector_LeavesPlainTextUnchanged`.
+  Real-device evidence (water-sip, Android emulator): `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
+  PR: #216
 
 - [ ] **R-2 / PT-25 — Android WebSocket drop (`close 1006`) root cause, still open.**
   `DONE.md` explicitly says this needs either the reporting app's real background load or a
