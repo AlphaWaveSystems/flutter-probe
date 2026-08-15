@@ -1,0 +1,30 @@
+# R-2/PT-25 repro attempt: sustained real background load (Firebase
+# Crashlytics/Analytics/RemoteConfig/Performance/InAppMessaging + IAP
+# billing SDK calls) plus repeated app backgrounding, trying to trigger
+# the Android WebSocket drop (close 1006).
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "extended session under real background load"
+  repeat 6 times
+    tap #today_quick_add_250
+    wait 1 seconds
+    tap #nav_tab_history
+    wait 1 seconds
+    tap #nav_tab_settings
+    wait 1 seconds
+    tap #nav_tab_today
+    wait 1 seconds
+  tap #probe_open_paywall
+  wait until "Restore Purchase" appears
+  tap #restore_purchase_button
+  wait 16 seconds
+  see #paywall_screen
+  go back
+  wait 1 seconds
+  repeat 6 times
+    tap #today_quick_add_500
+    wait 1 seconds
+  see "Quick Add"

@@ -1,0 +1,25 @@
+# R-2/PT-25 repro attempt v2: sustained real background load (Firebase
+# Crashlytics/Analytics/RemoteConfig/Performance/InAppMessaging + IAP
+# billing SDK calls) for an extended CONTINUOUS foreground session — no
+# deliberate backgrounding this time, isolating for a genuine spontaneous
+# WebSocket drop rather than an expected lifecycle-triggered disconnect.
+
+before each test
+  restart the app
+  wait until "Quick Add" appears
+
+test "extended continuous foreground session under real background load"
+  repeat 15 times
+    tap #today_quick_add_250
+    wait 1 seconds
+    tap #nav_tab_history
+    wait 1 seconds
+    tap #nav_tab_settings
+    wait 1 seconds
+    tap #nav_tab_today
+    wait 1 seconds
+    tap #probe_open_paywall
+    wait 1 seconds
+    go back
+    wait 1 seconds
+  see "Quick Add"
