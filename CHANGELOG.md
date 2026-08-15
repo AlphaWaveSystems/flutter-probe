@@ -33,6 +33,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Intelligence, Gemini Nano), named in the PRD's design sketch, is
   explicitly **not** implemented — see `docs/prd/ai-visual-assertions-prd.md`
   §8 for why that's out of scope here rather than silently dropped.
+- **`read "<query>" with ai into <var>` — Phase 4 (final phase) of the same
+  PRD.** Extracts a specific piece of text off the current screen (an OTP
+  code, a dynamically-generated ID) into a ProbeScript variable for use in
+  later steps, e.g. `read "the 6-digit OTP code" with ai into otp` then
+  `type <otp> into the "Code" field`. Fails with a clear error, rather than
+  storing an empty/wrong value, if the requested text isn't visible. Same
+  `ai:` config, redaction, and all three providers (`openai`/`anthropic`/
+  `local`) as the other two AI commands — no new config surface. `with ai`
+  is mandatory (no non-AI form), same as `assert no visual defects with ai`.
 
 ### Fixed
 - **Android connect race: `websocket: bad handshake` on first dial** — the CLI

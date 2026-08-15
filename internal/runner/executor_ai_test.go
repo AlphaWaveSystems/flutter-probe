@@ -88,10 +88,14 @@ func (f *fakeAIClient) DrainOutput(ctx context.Context) (map[string]string, erro
 
 // fakeVisionProvider is a scripted ai.VisionProvider — no network calls.
 type fakeVisionProvider struct {
-	verdict     ai.VisionVerdict
-	err         error
-	gotImage    []byte
+	verdict      ai.VisionVerdict
+	err          error
+	gotImage     []byte
 	gotAssertion string
+
+	extractedText string
+	extractErr    error
+	gotQuery      string
 }
 
 func (f *fakeVisionProvider) AssertScreen(ctx context.Context, image []byte, assertion string) (ai.VisionVerdict, error) {
@@ -101,6 +105,15 @@ func (f *fakeVisionProvider) AssertScreen(ctx context.Context, image []byte, ass
 		return ai.VisionVerdict{}, f.err
 	}
 	return f.verdict, nil
+}
+
+func (f *fakeVisionProvider) ExtractText(ctx context.Context, image []byte, query string) (string, error) {
+	f.gotImage = image
+	f.gotQuery = query
+	if f.extractErr != nil {
+		return "", f.extractErr
+	}
+	return f.extractedText, nil
 }
 
 // writeSolidPNGFixture writes a solid-red PNG to a temp file and returns its path.
@@ -294,6 +307,92 @@ func TestRunAssertNoDefects_RedactionApplied(t *testing.T) {
 	e.aiProvider = fp
 
 	if err := e.runAssertNoDefects(context.Background(), parser.AssertNoDefectsStep{Line: 1}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(client.boundsCalls) != 1 {
+		t.Fatalf("expected exactly one SelectorBounds call, got %d", len(client.boundsCalls))
+	}
+
+	got, err := png.Decode(bytes.NewReader(fp.gotImage))
+	if err != nil {
+		t.Fatalf("decode image passed to provider: %v", err)
+	}
+	r, g, b, a := got.At(10, 10).RGBA()
+	if r != 0 || g != 0 || b != 0 || a>>8 != 255 {
+		t.Errorf("pixel inside redacted region = (%d,%d,%d,%d), want black", r>>8, g>>8, b>>8, a>>8)
+	}
+}
+
+// ---- read "..." with ai into <var> ----
+
+func readActionStep(query, varName string) parser.ActionStep {
+	return parser.ActionStep{
+		Verb: parser.VerbReadWithAI,
+		Text: query,
+		Name: varName,
+		Line: 1,
+	}
+}
+
+func TestRunReadWithAI_NoProviderConfigured(t *testing.T) {
+	e := newTestExecutor()
+	err := e.runReadWithAI(context.Background(), readActionStep("the OTP code", "otp"))
+	if err == nil {
+		t.Fatal("expected an error when no ai provider is configured")
+	}
+	if !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("error should say the provider isn't configured, got: %v", err)
+	}
+}
+
+func TestRunReadWithAI_Pass(t *testing.T) {
+	e := newTestExecutor()
+	path := writeSolidPNGFixture(t)
+	e.client = &fakeAIClient{screenshotPath: path}
+	fp := &fakeVisionProvider{extractedText: "123456"}
+	e.aiProvider = fp
+
+	err := e.runReadWithAI(context.Background(), readActionStep("the 6-digit OTP code", "otp"))
+	if err != nil {
+		t.Fatalf("expected a successful extraction to return nil, got: %v", err)
+	}
+	if fp.gotQuery != "the 6-digit OTP code" {
+		t.Errorf("query passed to provider = %q, want %q", fp.gotQuery, "the 6-digit OTP code")
+	}
+	if got := e.vars["otp"]; got != "123456" {
+		t.Errorf("e.vars[\"otp\"] = %q, want %q", got, "123456")
+	}
+	if len(e.artifacts) != 1 || e.artifacts[0] != path {
+		t.Errorf("expected the screenshot path to be recorded as an artifact, got: %v", e.artifacts)
+	}
+}
+
+func TestRunReadWithAI_NotFoundPropagatesError(t *testing.T) {
+	e := newTestExecutor()
+	e.client = &fakeAIClient{screenshotPath: writeSolidPNGFixture(t)}
+	e.aiProvider = &fakeVisionProvider{extractErr: errors.New(`ai: could not find "the OTP code" on screen`)}
+
+	err := e.runReadWithAI(context.Background(), readActionStep("the OTP code", "otp"))
+	if err == nil {
+		t.Fatal("expected an error when the provider can't find the requested text")
+	}
+	if _, ok := e.vars["otp"]; ok {
+		t.Error("otp should not be set in e.vars when extraction fails")
+	}
+}
+
+func TestRunReadWithAI_RedactionApplied(t *testing.T) {
+	e := newTestExecutor()
+	client := &fakeAIClient{
+		screenshotPath: writeSolidPNGFixture(t),
+		bounds:         probelink.BoundsResult{X: 5, Y: 5, Width: 10, Height: 10},
+	}
+	e.client = client
+	e.aiCfg.Redact = []config.RedactRule{{Selector: "#credit_card_field"}}
+	fp := &fakeVisionProvider{extractedText: "123456"}
+	e.aiProvider = fp
+
+	if err := e.runReadWithAI(context.Background(), readActionStep("the OTP code", "otp")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(client.boundsCalls) != 1 {

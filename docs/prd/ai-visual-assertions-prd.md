@@ -191,7 +191,15 @@ selector is a genuine differentiator, not just a privacy checkbox.
    PRD, not an extension of this one. The on-device-model quality question §7 originally flagged
    is therefore moot for what actually shipped — a local Ollama/LM Studio server's model quality
    is the operator's own choice, not something this project evaluates or certifies.
-5. **Phase 4 — `read ... with ai into <var>` (OTP/dynamic text extraction).**
+5. **Phase 4 — `read ... with ai into <var>` (OTP/dynamic text extraction) — shipped, last
+   phase in this PRD's rollout.** Added `VisionProvider.ExtractText` alongside the existing
+   `AssertScreen` method — a genuinely different response shape (arbitrary text vs. a
+   true/false verdict), so it's a second interface method rather than a repurposed one, unlike
+   Phase 2's reuse of `AssertScreen` for a fixed prompt. Reuses `ActionStep`/`e.vars` (the same
+   mechanism `store "value" as varName` already uses) rather than a new AST node. All further
+   AI-assertion work beyond this — native on-device models (deferred in Phase 3, see above),
+   richer structured defect reporting, anything else — is a new, separately-scoped proposal,
+   not an extension of this PRD.
 
 Each phase ships behind the same non-default `ai:` config gate — there is no phase where AI
 assertions become reachable without explicit user configuration.

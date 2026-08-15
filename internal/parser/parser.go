@@ -412,6 +412,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseEnrollBiometric()
 	case TOKEN_DELIVER:
 		return p.parseDeliverSignal()
+	case TOKEN_READ:
+		return p.parseActionRead()
 	case TOKEN_NEWLINE:
 		p.advance()
 		return nil, nil
@@ -1695,6 +1697,40 @@ func (p *Parser) parseStore() (Step, error) {
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbStore, Text: value, Name: varName, Line: line}, nil
+}
+
+// parseActionRead parses: read "<query>" with ai into <var>
+// Unlike "see", there is no non-AI form — "with ai" is mandatory.
+func (p *Parser) parseActionRead() (Step, error) {
+	line := p.peek().Line
+	p.advance() // read
+	p.skipFillers()
+	query := p.expectString("text to read")
+	p.skipFillers()
+
+	if !p.checkWithAI() {
+		return nil, fmt.Errorf(`line %d: "read ... into <var>" requires "with ai" — there is no non-AI equivalent`, line)
+	}
+
+	// Note: no skipFillers() here — TOKEN_INTO is itself a filler word
+	// (see fillerWords in token.go), so skipping fillers before checking
+	// for it would silently consume it.
+	if p.peek().Type != TOKEN_INTO {
+		return nil, fmt.Errorf(`line %d: expected "into <variable>" after "read %q with ai"`, line, query)
+	}
+	p.advance()
+	p.skipFillers()
+
+	varName := ""
+	if p.peek().Type == TOKEN_IDENT || p.peek().Type == TOKEN_STRING {
+		varName = p.advance().Literal
+	}
+	if varName == "" {
+		return nil, fmt.Errorf(`line %d: expected a variable name after "into"`, line)
+	}
+
+	p.consumeNewline()
+	return ActionStep{Verb: VerbReadWithAI, Text: query, Name: varName, Line: line}, nil
 }
 
 // parseDeliverSignal parses:

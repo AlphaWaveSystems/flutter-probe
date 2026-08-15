@@ -165,14 +165,18 @@ Supports the full ProbeScript syntax:
                      hard to express structurally (e.g. see "checkout total looks
                      correct" with ai). assert no visual defects with ai — a fixed
                      "does this screen look broken" smoke check (cut-off/overlapping/
-                     mis-centered elements), "with ai" is mandatory here (no non-AI
-                     form). Both require ai.provider configured in probe.yaml:
-                     openai | anthropic (bring your own api_key — never sent to a
-                     FlutterProbe-operated service) or local (endpoint pointing at
-                     any OpenAI-compatible local server, e.g. Ollama — nothing
-                     leaves the device/host at all). Fail fast with a clear error
-                     at parse time if unconfigured. see ... with ai cannot be
-                     negated.
+                     mis-centered elements). read "<query>" with ai into <var> — extract
+                     a specific piece of text (e.g. an OTP code) into a variable for
+                     later steps, e.g. read "the 6-digit OTP code" with ai into otp then
+                     type <otp> into the "Code" field. "with ai" is mandatory for both
+                     assert no visual defects and read ... into (no non-AI form); only
+                     plain see can be used with or without it. All three require
+                     ai.provider configured in probe.yaml: openai | anthropic (bring
+                     your own api_key — never sent to a FlutterProbe-operated service)
+                     or local (endpoint pointing at any OpenAI-compatible local server,
+                     e.g. Ollama — nothing leaves the device/host at all). Fail fast
+                     with a clear error at parse time if unconfigured. see ... with ai
+                     cannot be negated.
   Composite tests: composite test "name" for multi-device coordination:
                      devices
                        A: iPhone 15 Simulator

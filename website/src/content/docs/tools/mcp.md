@@ -302,6 +302,8 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 
 For a generic "does this screen look right" smoke check instead of a specific claim, use `assert no visual defects with ai` — same `ai:` config requirement, but no assertion text to write; it flags cut-off, overlapping, or mis-centered elements on its own. Unlike `see ... with ai`, there's no non-AI form of this command.
 
+To pull a specific piece of text off the screen into a variable — an OTP code, a dynamically-generated ID — for use in a later step, use `read "<query>" with ai into <var>`, e.g. `read "the 6-digit OTP code" with ai into otp` followed by `type <otp> into the "Code" field`. Same `ai:` requirement and mandatory `with ai` as `assert no visual defects`; fails with a clear error rather than storing an empty value if the requested text isn't visible.
+
 ### HTML report from CI results
 
 > "The CI run produced JSON results. Generate a report I can share."
