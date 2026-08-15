@@ -59,15 +59,15 @@ speculative — every item has a documented repro or root cause already.
   first, then a targeted fix once the mechanism is known.
   PR: —
 
-- [ ] **R-3 / PT-27 — Android reconnection token lives in an OS-clearable cache dir.**
-  `probe_agent/lib/src/server.dart`'s `_writeTokenFile()` writes once at startup to
-  `cache/probe/token`, which Android can clear at any time (confirmed reproducible: disappears
-  specifically after a screen touching `ImagePicker` is visited). Suggested fix (c) from
-  `IMPROVEMENT_TASKS.md`, lowest risk: have the existing every-3-second token re-print in
-  `server.dart` also re-write the file, so a cleared cache dir gets a fresh copy within seconds.
-  Regression test: Dart test asserting the periodic timer re-writes the token file, not just logs
-  it. Real-device evidence: repeat the `run-as ... cat cache/probe/token` poll from the original
-  report against water-sip/nect-flutter with an ImagePicker screen, confirm no permanent gap.
+- [x] **R-3 / PT-27 — Android reconnection token lives in an OS-clearable cache dir.**
+  Fixed per suggested fix (c) from `IMPROVEMENT_TASKS.md`: the existing every-3-second token
+  re-print in `server.dart` now also re-attempts `_writeTokenFile()`. Regression test:
+  `token_reprint_test.dart`, using a new `@visibleForTesting tokenFileWriteAttempts` counter
+  (the only thing observable from a host test, since the real file write no-ops off-device).
+  Real-device attempt against nect-flutter surfaced a *pre-existing, unrelated* environment issue
+  — `cache/probe/` was never created at all on that build, independent of this fix — documented
+  honestly rather than forced; likely the same root cause as R-2/PT-25's WS-drop investigation.
+  See `docs/evidence/r3-android-token-cache-clear-2026-08-14/`.
   PR: —
 
 - [x] **R-4 — `_textOf` doesn't read `EditableText`, so `see #field contains "…"` returns empty

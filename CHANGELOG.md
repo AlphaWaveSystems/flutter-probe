@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **Android: the ProbeAgent's reconnection token lived in an OS-clearable app-cache directory and
+  was only written once, at startup (PT-27).** Confirmed reproducible on a real device: the file
+  disappeared permanently, mid-session, right after visiting a screen that touches `ImagePicker`
+  — every subsequent reconnect attempt then failed with `probe token not found within 30s`, not
+  because of any retry-window issue, but because the file itself was simply gone. The existing
+  every-3-second token re-print now also re-attempts the file write, so a cleared cache dir gets a
+  fresh copy back within seconds. See `docs/evidence/r3-android-token-cache-clear-2026-08-14/`.
 - **Tap-family verbs (`tap`, `double tap`, `long press`, `clear`, `swipe`/`scroll` targets, and
   `drag ... to ...`) never resolved `<var>` placeholders in their selector — the still-open half
   of the PT-02 addendum.** `type`/`see` selectors were already routed through variable resolution

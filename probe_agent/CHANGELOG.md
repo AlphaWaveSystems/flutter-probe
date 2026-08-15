@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: the app-cache-dir copy of the ProbeAgent's reconnection token was written once, at
+  server startup, to a directory Android documents as clearable by the OS at any time (confirmed
+  reproducible: the file disappeared permanently, mid-session, after visiting a screen that
+  touches `ImagePicker` — PT-27). The existing every-3-second `PROBE_TOKEN=` log re-print now also
+  re-attempts the file write, so a cleared cache dir gets a fresh copy back within seconds instead
+  of staying gone — and permanently breaking reconnection — for the rest of the session.
 - Fixed: `_textOf` only read `Text`/`RichText` widgets, so `see #field contains "..."` silently
   returned an empty string for any `TextField`/`TextFormField` selector (the check always failed,
   reporting `contains "", not "<expected>"`). Now reuses the existing `_findTextController`

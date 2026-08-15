@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:meta/meta.dart';
+
 import 'agent_version.dart';
 import 'executor.dart';
 import 'mdns_advertise.dart';
@@ -82,6 +84,16 @@ class ProbeServer {
     _tokenTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       // ignore: avoid_print
       print('PROBE_TOKEN=$_token');
+      // PT-27: the app-cache-dir copy _writeTokenFile() writes below is only
+      // written once, at startup — but Android can clear an app's cache
+      // directory at any time (confirmed: a real session's copy disappeared
+      // permanently, reproducibly, right after visiting a screen that
+      // touches ImagePicker). Re-writing it on every periodic tick means a
+      // cleared cache dir gets a fresh copy back within ~3s instead of
+      // leaving the CLI's reconnect path unrecoverable for the rest of the
+      // session. Cheap and harmless to also redo on iOS/the durable
+      // /data/local/tmp path — _writeTokenFile() no-ops safely either way.
+      unawaited(_writeTokenFile());
     });
 
     // Advertise on mDNS only when we're actually reachable from off-host.
@@ -271,7 +283,16 @@ class ProbeServer {
     _server = null;
   }
 
+  /// Number of times [_writeTokenFile] has been invoked. `_writeTokenFile`
+  /// itself is a no-op on the host test platform (neither Platform.isIOS
+  /// nor Platform.isAndroid), so this is the only way a test can observe
+  /// that the periodic re-print tick (PT-27) is actually re-attempting the
+  /// write, not just re-printing to the log.
+  @visibleForTesting
+  int tokenFileWriteAttempts = 0;
+
   Future<void> _writeTokenFile() async {
+    tokenFileWriteAttempts++;
     try {
       if (Platform.isIOS) {
         final dir = '${Directory.systemTemp.path}/probe';
