@@ -271,9 +271,16 @@ proposal.
   See `docs/evidence/g1-benchmark-2026-08-15/`.
   PR: —
 
-- [ ] **G-2 — Refresh `vs-maestro` comparison pages** with 2026 facts gathered in the gap analysis
+- [x] **G-2 — Refresh `vs-maestro` comparison pages** with 2026 facts gathered in the gap analysis
   (no physical iOS, semantics-only Flutter, $250/device/mo cloud, AI assertions now at parity
   with a stronger privacy story, native-UI gap narrowed).
+  No dedicated `vs-maestro` page exists yet — updated `flutter-testing-framework.md`, the one page
+  with substantive Maestro-specific comparison content: sharpened the "not Flutter-specific"
+  framing (accessibility tree, not widget tree, linking to G-1's benchmark for what that costs),
+  added physical-iOS/pricing/AI-assertion-privacy facts, added three new comparison-table rows
+  (native picker/share-sheet automation, physical iOS support, AI-powered assertions), and rewrote
+  the "Native interactions" section to reflect N-1's Android native-UI shipment and N-2's iOS
+  proposal instead of the old "native UI is a Maestro-only strength" framing.
   PR: —
 
 - [ ] **G-3 — Harden `probe migrate maestro`** against 2.x Maestro syntax
