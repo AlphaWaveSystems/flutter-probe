@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.12.0 - 2026-08-15
+
 - Fixed: the app-cache-dir copy of the ProbeAgent's reconnection token was written once, at
   server startup, to a directory Android documents as clearable by the OS at any time (confirmed
   reproducible: the file disappeared permanently, mid-session, after visiting a screen that

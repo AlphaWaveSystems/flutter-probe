@@ -157,6 +157,46 @@ func (e *Executor) RunStep(ctx context.Context, step parser.Step) error {
 	return e.runStep(ctx, step)
 }
 
+// dispatchStep routes a step to its verb-specific run method. It is the
+// single dispatch point for both the initial attempt and the
+// post-reconnect retry in runStep — issue #237 came from these being two
+// hand-maintained copies of the same switch that drifted apart (the retry
+// copy was missing RecipeCall, ConditionalStep, LoopStep, RetryStep, and
+// HTTPCallStep), so a connection error surfacing from any of those step
+// kinds could reconnect but never actually re-run the step.
+//
+// Two contexts, matching the original switch's split: stepCtx carries the
+// per-step timeout; block-shaped steps (conditional/loop/retry/recipe/HTTP)
+// receive the parent ctx instead because they manage their own per-step
+// timeouts internally for each nested step.
+func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) error {
+	switch s := step.(type) {
+	case parser.ActionStep:
+		return e.runAction(stepCtx, s)
+	case parser.AssertStep:
+		return e.runAssert(stepCtx, s)
+	case parser.AssertNoDefectsStep:
+		return e.runAssertNoDefects(stepCtx, s)
+	case parser.WaitStep:
+		return e.runWait(stepCtx, s)
+	case parser.ConditionalStep:
+		return e.runConditional(ctx, s) // parent ctx — conditional manages its own timeout
+	case parser.LoopStep:
+		return e.runLoop(ctx, s)
+	case parser.RetryStep:
+		return e.runRetry(ctx, s)
+	case parser.DartBlock:
+		return e.runDart(stepCtx, s)
+	case parser.MockBlock:
+		return e.runMock(stepCtx, s)
+	case parser.RecipeCall:
+		return e.runRecipeCall(ctx, s)
+	case parser.HTTPCallStep:
+		return e.runHTTPCall(stepCtx, s)
+	}
+	return nil
+}
+
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Use a longer timeout for restart/clear — they kill the app and reconnect
 	stepTimeout := e.timeout
@@ -196,31 +236,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		go runStepTicker(stepCtx, desc, e.depth, 5*time.Second, stopTicker, tickerDone, &extraLines)
 	}
 
-	var err error
-	switch s := step.(type) {
-	case parser.ActionStep:
-		err = e.runAction(stepCtx, s)
-	case parser.AssertStep:
-		err = e.runAssert(stepCtx, s)
-	case parser.AssertNoDefectsStep:
-		err = e.runAssertNoDefects(stepCtx, s)
-	case parser.WaitStep:
-		err = e.runWait(stepCtx, s)
-	case parser.ConditionalStep:
-		err = e.runConditional(ctx, s) // pass parent ctx — conditional manages its own timeout
-	case parser.LoopStep:
-		err = e.runLoop(ctx, s)
-	case parser.RetryStep:
-		err = e.runRetry(ctx, s)
-	case parser.DartBlock:
-		err = e.runDart(stepCtx, s)
-	case parser.MockBlock:
-		err = e.runMock(stepCtx, s)
-	case parser.RecipeCall:
-		err = e.runRecipeCall(ctx, s)
-	case parser.HTTPCallStep:
-		err = e.runHTTPCall(stepCtx, s)
-	}
+	err := e.dispatchStep(ctx, stepCtx, step)
 
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
@@ -243,22 +259,25 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
 				break
 			}
-			// Retry the step with a fresh timeout
+			// Retry the step with a fresh timeout. Issue #237: this used to
+			// be a second, hand-duplicated copy of the dispatch switch above
+			// that had quietly drifted out of sync — it was missing
+			// parser.RecipeCall (among others), so a connection error
+			// surfacing from a recipe call (e.g. `goto feed`, or any nested
+			// recipe call within it) could never actually be retried here:
+			// the switch matched nothing, `err` stayed the stale
+			// pre-reconnect error, isConnectionError(err) stayed true, and
+			// the loop churned through every remaining attempt calling
+			// tryReconnect again — which closes the connection tryReconnect
+			// itself *just* established the attempt before — without ever
+			// re-running the step, burning the whole retry budget for
+			// nothing and leaving the connection in whatever state the last
+			// reconnect attempt happened to land in. Calling the exact same
+			// dispatchStep helper as the initial attempt makes the two
+			// switches structurally the same switch, so they can't drift
+			// apart like this again.
 			retryCtx, retryCancel := context.WithTimeout(ctx, stepTimeout)
-			switch s := step.(type) {
-			case parser.ActionStep:
-				err = e.runAction(retryCtx, s)
-			case parser.AssertStep:
-				err = e.runAssert(retryCtx, s)
-			case parser.AssertNoDefectsStep:
-				err = e.runAssertNoDefects(retryCtx, s)
-			case parser.WaitStep:
-				err = e.runWait(retryCtx, s)
-			case parser.DartBlock:
-				err = e.runDart(retryCtx, s)
-			case parser.MockBlock:
-				err = e.runMock(retryCtx, s)
-			}
+			err = e.dispatchStep(ctx, retryCtx, step)
 			retryCancel()
 			if err == nil || !isConnectionError(err) {
 				break // either succeeded or a non-connection error
@@ -1110,6 +1129,18 @@ func (e *Executor) runConditional(ctx context.Context, c parser.ConditionalStep)
 	err := e.client.See(checkCtx, probelink.SeeParams{
 		Selector: sel,
 	})
+	if err != nil && isConnectionError(err) {
+		// Issue #237: "couldn't check" is not "not visible". With a dead
+		// connection this used to fall through to the else branch — so a
+		// transport drop mid-recipe made every `if X appears` block silently
+		// take the wrong branch (e.g. `goto feed`'s `otherwise: go back`
+		// navigating away from a perfectly fine screen) before anything ever
+		// surfaced the connection error to runStep's reconnect machinery.
+		// Propagate it instead, exactly as runAction's `if visible` pre-check
+		// already does, so the step is retried after a reconnect and the
+		// condition gets evaluated against a live connection.
+		return err
+	}
 	if err == nil {
 		// condition is visible — run then branch
 		return e.RunBody(ctx, c.Then)
