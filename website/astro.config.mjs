@@ -90,6 +90,7 @@ export default defineConfig({
             { label: 'Guide to Flutter E2E Testing', slug: 'blog/guide-to-flutter-e2e-testing' },
             { label: 'Why We Built FlutterProbe', slug: 'blog/why-we-built-flutterprobe' },
             { label: 'FlutterProbe vs Patrol vs integration_test', slug: 'blog/flutterprobe-vs-patrol-vs-integration-test' },
+            { label: 'FlutterProbe vs Maestro: A Benchmark, Replicated', slug: 'blog/flutterprobe-vs-maestro-benchmark' },
           ],
         },
       ],

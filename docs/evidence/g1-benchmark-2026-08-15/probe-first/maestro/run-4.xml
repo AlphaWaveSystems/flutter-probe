@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="pixel_7" tests="9" failures="1" time="112.595" timestamp="2026-08-15T08:12:09">
+    <testcase id="navigate-history-tab" name="navigate-history-tab" classname="navigate-history-tab" file=".maestro/flows/smoke/navigate-history-tab.yaml" time="9.924" timestamp="2026-08-15T08:12:09" status="SUCCESS"/>
+    <testcase id="settings-unit-toggle" name="settings-unit-toggle" classname="settings-unit-toggle" file=".maestro/flows/smoke/settings-unit-toggle.yaml" time="12.907" timestamp="2026-08-15T08:12:19" status="SUCCESS"/>
+    <testcase id="undo-last-entry" name="undo-last-entry" classname="undo-last-entry" file=".maestro/flows/smoke/undo-last-entry.yaml" time="26.467" timestamp="2026-08-15T08:12:32" status="ERROR">
+      <failure>Element not found: Text matching regex: Undo</failure>
+    </testcase>
+    <testcase id="quick-add-500" name="quick-add-500" classname="quick-add-500" file=".maestro/flows/smoke/quick-add-500.yaml" time="9.736" timestamp="2026-08-15T08:12:58" status="SUCCESS"/>
+    <testcase id="app-launch-zero" name="app-launch-zero" classname="app-launch-zero" file=".maestro/flows/smoke/app-launch-zero.yaml" time="7.134" timestamp="2026-08-15T08:13:08" status="SUCCESS"/>
+    <testcase id="quick-add-1l" name="quick-add-1l" classname="quick-add-1l" file=".maestro/flows/smoke/quick-add-1l.yaml" time="9.753" timestamp="2026-08-15T08:13:15" status="SUCCESS"/>
+    <testcase id="goal-reached-100-percent" name="goal-reached-100-percent" classname="goal-reached-100-percent" file=".maestro/flows/smoke/goal-reached-100-percent.yaml" time="17.666" timestamp="2026-08-15T08:13:25" status="SUCCESS"/>
+    <testcase id="navigate-settings-tab" name="navigate-settings-tab" classname="navigate-settings-tab" file=".maestro/flows/smoke/navigate-settings-tab.yaml" time="8.788" timestamp="2026-08-15T08:13:42" status="SUCCESS"/>
+    <testcase id="quick-add-250" name="quick-add-250" classname="quick-add-250" file=".maestro/flows/smoke/quick-add-250.yaml" time="10.2" timestamp="2026-08-15T08:13:51" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

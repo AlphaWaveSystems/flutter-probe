@@ -1,0 +1,21 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @358c99f5 (file:/Users/patrickbertsch/.maestro/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil$MemoryAccessor (file:/Users/patrickbertsch/.maestro/lib/protobuf-java-3.21.9.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil$MemoryAccessor
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+[Passed] navigate-history-tab (10s)
+[Passed] settings-unit-toggle (13s)
+[Failed] undo-last-entry (27s) (Element not found: Text matching regex: Undo)
+[Passed] quick-add-500 (10s)
+[Passed] app-launch-zero (7s)
+[Passed] quick-add-1l (10s)
+[Passed] goal-reached-100-percent (17s)
+[Passed] navigate-settings-tab (9s)
+[Passed] quick-add-250 (10s)
+
+1/9 Flow Failed
+

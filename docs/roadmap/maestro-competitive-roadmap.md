@@ -251,13 +251,24 @@ proposal.
 
 ## Phase 3 — Compound the lead
 
-- [ ] **G-1 — Publish the benchmark.** Once Phase 0/0.5/1 land, re-run B-2's harness, write up the
+- [x] **G-1 — Publish the benchmark.** Once Phase 0/0.5/1 land, re-run B-2's harness, write up the
   comparison (blog post + flutterprobe.dev numbers), using the now-current data instead of the
   Phase 0.5 baseline. Before publishing, replicate B-3's device-connectivity finding with reversed
   run order (Maestro first, then probe) — as recorded it can't distinguish "Maestro's own
   driver/device management is less stable under sustained runs" from "the emulator happened to be
   the one dying regardless of which tool was running." The ~2.1x median wall-clock gap on runs
   that did execute doesn't have this confound and is safe to cite as-is.
+  Re-ran with the current build (post Phase 1/2): N=10 per tool, two full sessions (probe-first and
+  reversed maestro-first), 40 total suite executions. Speed gap held in both orderings — ~2.0–2.1x
+  faster median wall-clock for FlutterProbe, 0% flake across all 20 FlutterProbe runs, Maestro's
+  100% flake traced to the one known `undo-last-entry` timing issue every single run, no new
+  failures. **B-3's device-connectivity finding did not replicate** — no degradation in either
+  tool, either position, across ~70 minutes of sustained runs — retired as a citable claim.
+  Along the way, hardened `scripts/bench/run-comparison.sh` with `--order` (to support the reversed
+  run) and `--android-adb-port` (re-establishes the adb forward before every probe run — found the
+  hard way that a long, Maestro-interleaved session can silently drop it mid-run).
+  Published: `website/src/content/docs/blog/flutterprobe-vs-maestro-benchmark.md`.
+  See `docs/evidence/g1-benchmark-2026-08-15/`.
   PR: —
 
 - [ ] **G-2 — Refresh `vs-maestro` comparison pages** with 2026 facts gathered in the gap analysis
