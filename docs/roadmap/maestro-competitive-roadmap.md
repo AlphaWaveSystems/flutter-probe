@@ -87,11 +87,21 @@ speculative — every item has a documented repro or root cause already.
   scope a fix.
   PR: —
 
-- [ ] **D-1 — `dictionary.md` hygiene.** `website/src/content/docs/probescript/dictionary.md` is
-  missing several shipped commands (confirmed still true post-sync: `store`, `open link`,
-  `see ... is focused`, `wait for animations to end`, `log`, `save device logs`, biometrics,
-  `deliver signal`, composite/`sync`, and the entire AI-assertion family from v0.11.0). Add all
-  missing rows. No test to run; evidence is the diff itself plus a link check.
+- [x] **D-1 — `dictionary.md` hygiene.** Added all missing rows: `store`, `open link`, `log`,
+  `close keyboard`, `save device logs`, `see ... is focused` (+ note that state suffixes compose),
+  `wait for animations to end`, relational selectors, ordinal+key composition, filler words `on`/
+  `into`, and three new sections (AI-Powered Assertions, Biometrics, Signals, Composite Tests).
+  Verified with `npm run build` in `website/` — builds clean, `/probescript/dictionary/` renders.
+  **Follow-on gap found, not fixed here (new task, out of D-1's scope):** `probe.yaml`'s `ai:`
+  block has no entry in `advanced/configuration.md` at all — the dictionary intentionally doesn't
+  link to a guide page for it since none exists yet.
+  PR: —
+
+- [ ] **D-2 — document the `ai:` config block.** `advanced/configuration.md`'s `## Sections` list
+  (project/defaults/devices/agent/device/video/visual/tools/environment) has no `ai` entry at all,
+  despite v0.11.0 shipping the whole 4-command AI-assertion family gated behind it. Found while
+  doing D-1; add a `### ai` section covering `provider`, `api_key`, `model`, `endpoint`, `timeout`,
+  and `redact`, cross-referencing the dictionary's new "AI-Powered Assertions" section.
   PR: —
 
 ---

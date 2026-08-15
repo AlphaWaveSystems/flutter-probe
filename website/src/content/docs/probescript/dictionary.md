@@ -22,10 +22,14 @@ Commands that interact with the app's UI.
 | `go back` | `go back` | Press the device back button |
 | `open` | `open the app` | Launch the app (CLI-side) and reconnect |
 | `close` | `close the app` | Close the app |
+| `close` | `close keyboard` | Dismiss the on-screen keyboard |
 | `rotate` | `rotate landscape` or `rotate portrait` | Rotate the device orientation |
 | `toggle` | `toggle "Dark Mode"` | Toggle a switch or checkbox |
 | `shake` | `shake` | Simulate a device shake gesture |
 | `pause` | `pause` | Pause for 1 second |
+| `open link` | `open link "https://example.com"` | Open a URL in the external browser via `url_launcher` |
+| `store` | `store "value" as myVar` | Store a literal or `<var>` value for use in later steps |
+| `log` | `log "message"` | Emit a message into the run output |
 
 ## Assertions
 
@@ -39,8 +43,11 @@ Commands that verify the state of the UI.
 | `see enabled` | `see "Submit" is enabled` | Assert widget is enabled |
 | `see disabled` | `see "Submit" is disabled` | Assert widget is disabled |
 | `see checked` | `see "Agree" is checked` | Assert checkbox/toggle is checked |
+| `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
 | `see matching` | `see "Email" matching ".*@.*"` | Assert widget text matches regex pattern |
+
+State suffixes compose: `see "Field" is enabled contains "y" matching "z"` checks all three at once.
 
 ## Wait
 
@@ -53,6 +60,7 @@ Commands that pause execution until a condition is met.
 | `wait until disappears` | `wait until "Loading" disappears` | Wait until text is no longer visible |
 | `wait for page to load` | `wait for page to load` | Wait for the UI to settle (triple-signal sync) |
 | `wait for network idle` | `wait for network idle` | Wait for pending HTTP requests to complete |
+| `wait for animations to end` | `wait for animations to end` | Wait until no scheduled animation frames remain |
 
 ## App Lifecycle
 
@@ -87,6 +95,7 @@ Commands for capturing and comparing screenshots.
 | `take screenshot` | `take screenshot "name"` | Save a PNG screenshot |
 | `compare screenshot` | `compare screenshot "baseline"` | Compare against a visual regression baseline |
 | `dump tree` | `dump tree` | Dump the widget tree for debugging |
+| `save device logs` | `save device logs` | Save device logs to the report folder |
 
 ## Clipboard
 
@@ -197,6 +206,49 @@ Mock API responses for the app.
 | `when` | `when the app calls GET "/api/users"` | Define a mock rule |
 | `respond` | `respond with 200 and body "[]"` | Define the mock response |
 
+## AI-Powered Assertions
+
+Natural-language, LLM-backed checks for things that are hard to express structurally. Require an
+`ai:` block in `probe.yaml` (`provider: openai | anthropic | local`, your own API key) — every
+call goes directly from the CLI to the provider you configure, never through a FlutterProbe relay.
+
+| Command | Syntax | Description |
+|---|---|---|
+| `see with ai` | `see "the checkout total looks correct" with ai` | Natural-language visual assertion |
+| `assert no visual defects with ai` | `assert no visual defects with ai` | Fixed smoke check for cut-off/overlapping/mis-centered elements |
+| `read with ai into` | `read "the 6-digit OTP code" with ai into otp` | Extract text off the current screen into a variable |
+
+## Biometrics
+
+Simulate Face ID / Touch ID / fingerprint prompts on a simulator or emulator (skipped with a
+warning on physical devices).
+
+| Command | Syntax | Description |
+|---|---|---|
+| `enroll biometric` | `enroll biometric` | Mark the sim/emulator as having an enrolled face/finger |
+| `biometric match` | `biometric match` | Simulate a successful biometric capture |
+| `biometric no match` | `biometric no match` | Simulate a failed biometric capture |
+
+## Signals
+
+A generic escape hatch for resolving in-app prompts that don't map to a built-in verb (native
+push-permission dialogs, payment sheets, ATT prompts, custom deep-link handlers).
+
+| Command | Syntax | Description |
+|---|---|---|
+| `deliver signal` | `deliver signal "payment_ready" "true"` | Resolve a pending `awaitSignal(name)` call in the app; value defaults to `"true"` |
+
+## Composite (Multi-Device) Tests
+
+Run coordinated steps across multiple devices in a single test — chat apps, referrals, admin/user
+pairs.
+
+| Keyword | Syntax | Description |
+|---|---|---|
+| `composite test` | `composite test "name"` | Define a multi-device test |
+| `devices` | `devices:` / `A: <device>` | Declare device aliases inside a composite test |
+| `sync` | `sync "label"` | Cross-device barrier — every device's steps block here until all arrive |
+
 ## Selectors
 
 How ProbeScript locates widgets in the Flutter widget tree.
@@ -205,13 +257,14 @@ How ProbeScript locates widgets in the Flutter widget tree.
 |---|---|---|
 | Text | `"Login"` | Widget whose text contains "Login" |
 | Key | `#sign_in_button` | Widget with `Key('sign_in_button')` or `Semantics(identifier: 'sign_in_button')` |
-| Ordinal | `2nd "Item"` | The 2nd widget matching "Item" |
+| Ordinal | `2nd "Item"` | The 2nd widget matching "Item" (also composes with a key: `1st #card_id`) |
 | Positional | `"Price" in "Product Card"` | "Price" text within a "Product Card" container |
+| Relational | `"Submit" below "Email"` | "Submit" positioned below the "Email" widget (also `above`, `left of`, `right of`) |
 
 ## Filler Words
 
 These words are ignored by the parser — they make tests more readable but have no effect.
 
-`the`, `a`, `an`, `in`, `at`, `of`, `from`, `is`, `are`, `that`, `this`, `it`, `for`
+`the`, `a`, `an`, `on`, `in`, `into`, `at`, `of`, `from`, `is`, `are`, `that`, `this`, `it`, `for`
 
 Example: `tap the "Login" button` is equivalent to `tap "Login"`.
