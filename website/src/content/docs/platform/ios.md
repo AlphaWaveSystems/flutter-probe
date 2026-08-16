@@ -98,6 +98,14 @@ revoke all permissions
 
 This works on iOS 14+ simulators.
 
+:::note[Permission changes relaunch the app (v0.12.1+)]
+`simctl privacy grant/revoke` silently **terminates the target app** — an Apple behavior, not a
+probe one. As of v0.12.1, all four permission verbs automatically relaunch the app and reconnect
+the session afterward, so a permission step costs a few seconds of restart instead of hanging the
+next step. Follow a permission step with `wait until "<your screen>" appears` before asserting,
+exactly as you would after `restart the app`.
+:::
+
 :::caution[Notification permissions cannot be pre-granted]
 Apple does not support granting notification permissions via `simctl privacy`. If your app requests notification permission (e.g. via `UNUserNotificationCenter` or Firebase Messaging), the native dialog will block the Flutter UI and prevent tests from proceeding.
 
@@ -113,6 +121,41 @@ if (!probeEnabled) {
 
 Build with `--dart-define=PROBE_AGENT=true` to skip these requests during testing.
 :::
+
+## Device Media
+
+```
+add media "fixtures/photo.jpg"     # xcrun simctl addmedia
+```
+
+The file lands in the simulator's Photos library and is immediately visible to image pickers.
+Simulators only — there is no `devicectl` equivalent for physical devices; the step skips with a
+warning there.
+
+## Deep Links
+
+```
+open link "myapp://profile/42" in the app
+```
+
+Dispatches `xcrun simctl openurl`, so a custom scheme or Universal Link registered by your app is
+delivered to the app itself. Plain `open link "https://..."` still opens Safari via
+`url_launcher`.
+
+:::caution[No cold launch on iOS Simulator]
+`simctl openurl` cannot launch a fully-terminated app — iOS shows an "Open in App?" confirmation
+dialog that `simctl` has no way to dismiss. Deep links work reliably when the app is already
+running (foreground or backgrounded); put a `restart the app` or equivalent warm-up before the
+deep-link step if the app might not be running. Android has no such caveat.
+:::
+
+## Native UI Automation
+
+The `tap native` / `see native` / `type native` verbs are **Android-only today** — iOS has no
+`uiautomator` equivalent, and `simctl` cannot inspect or drive arbitrary UI. On iOS,
+`tap native`/`type native` fail with a clear error rather than silently no-op'ing, and
+`see native` reports "not found". iOS support via WebDriverAgent is a written, scoped proposal
+(`docs/proposals/n2-ios-native-ui-bridging.md` in the repo), not yet implemented.
 
 ## Biometric Authentication (Face ID / Touch ID)
 

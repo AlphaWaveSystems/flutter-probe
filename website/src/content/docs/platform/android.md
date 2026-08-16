@@ -93,6 +93,59 @@ grant all permissions              # grants all known runtime permissions
 
 Available permissions: `notifications`, `camera`, `location`, `microphone`, `storage`, `contacts`, `phone`, `calendar`, `sms`, `bluetooth`.
 
+## Native UI Automation
+
+Android is currently the only platform where probe can reach **outside the Flutter widget tree**
+into native, OS-owned UI — pickers, share sheets, and any other surface the Dart agent can never
+see. Elements are matched against uiautomator's text or resource-id and driven via
+`uiautomator dump` + `input tap`/`input text` — no new dependencies, `adb` already ships both:
+
+```
+tap native "Choose from Gallery"
+see native "IMG_0001.jpg"
+don't see native "Error"
+type native "wifi" into "Search settings"
+```
+
+Notes from real-device verification:
+
+- Matching is a case-insensitive substring against both `text` and `resource-id`.
+- If the native element is reached via a screen transition, add a `wait` step first — the same
+  idiom used after Flutter navigation.
+- `take a screenshot` (the Dart-agent verb) cannot capture native UI — it renders only Flutter's
+  own tree. Use `adb exec-out screencap` externally to visually verify native state.
+- API 35 pitfall for your own native screens: forced edge-to-edge can place a top-of-screen
+  element's reported bounds center underneath the app bar, which silently eats the tap — handle
+  window insets (`fitsSystemWindows` or equivalent).
+
+A purpose-built native fixture app with stable ids lives in the repo under `native-test-apps/`.
+
+## Device Media
+
+```
+add media "fixtures/photo.jpg"     # adb push + MEDIA_SCANNER_SCAN_FILE broadcast
+```
+
+The file lands in `/sdcard/Pictures/` and is MediaStore-indexed, so it is genuinely visible to
+image pickers — combine with the native UI verbs above to actually select it.
+
+## Deep Links
+
+```
+open link "myapp://profile/42" in the app
+```
+
+Dispatches `am start -a android.intent.action.VIEW`, so a custom scheme or App Links URL
+registered by your app is delivered to the app itself — including cold-launching it from fully
+terminated (unlike iOS Simulator; see the iOS page). Plain `open link "https://..."` (no suffix)
+still opens the external browser via `url_launcher`.
+
+## Location
+
+```
+set location 48.1351, 11.5820      # adb emu geo fix (emulators only)
+```
+
 ## Video Recording
 
 Android uses the built-in `screenrecord` command. Videos are recorded as MP4 (H.264). The CLI auto-chains recordings to work around the 180-second limit.
