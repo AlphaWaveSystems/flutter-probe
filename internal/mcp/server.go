@@ -197,6 +197,12 @@ Supports the full ProbeScript syntax:
                      via uiautomator, matched by text or resource-id. Android only.
   Device media:    add media "path/to/photo.jpg" — seeds a file into the camera
                      roll/gallery (Android + iOS simulator).
+  GPS routes:      travel to — indented "lat, lng" waypoints followed by a sibling
+                     "over N seconds" clause, e.g. travel to\n  37.7749, -122.4194\n
+                     37.7849, -122.4094\nover 10 seconds. Simulates GPS movement through
+                     the waypoints in order (interpolated, ~1s steps) for maps/delivery/
+                     rideshare flows. Same emulator/simulator-only limitation as the
+                     single-point set location.
   Deep links:      open link "scheme://…" in the app — routes via OS intent/URL
                      handling to the app's own registered scheme, instead of the
                      external browser that plain open link uses.

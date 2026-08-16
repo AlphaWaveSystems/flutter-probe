@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -544,6 +545,105 @@ func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error
 		simctl := dc.Manager.SimCtl()
 		if err := simctl.SetLocation(ctx, dc.Serial, lat, lng); err != nil {
 			return fmt.Errorf("set location: %w", err)
+		}
+	}
+	return nil
+}
+
+// LatLng is a single GPS coordinate, used by Travel.
+type LatLng struct {
+	Lat float64
+	Lng float64
+}
+
+// travelInterval is the target spacing between SetLocation calls while
+// walking a route — frequent enough to look like continuous movement,
+// nowhere near tight enough to hammer adb/simctl.
+const travelInterval = 1 * time.Second
+
+// travelFrame is one point along an interpolated route, plus how long to
+// wait after setting it before moving to the next frame (0 for the last).
+type travelFrame struct {
+	lat, lng float64
+}
+
+// buildTravelRoute interpolates waypoints into a sequence of frames spaced
+// roughly travelInterval apart, plus the wait to sleep after each frame
+// (len(gaps) == len(frames)-1; the last frame has nothing to wait for).
+// Total route time is split evenly across legs (each consecutive waypoint
+// pair); within a leg, position is linearly interpolated. If duration is
+// unspecified (<=0), each leg defaults to exactly one travelInterval, so a
+// bare `travel to` with no "over" clause still moves at a sane pace instead
+// of jumping instantly.
+//
+// This is a pure function (no device I/O) specifically so the interpolation
+// math can be unit-tested without needing a real or faked adb/simctl.
+func buildTravelRoute(waypoints []LatLng, duration time.Duration) (frames []travelFrame, gaps []time.Duration) {
+	legs := len(waypoints) - 1
+	if legs < 1 {
+		return nil, nil
+	}
+	if duration <= 0 {
+		duration = time.Duration(legs) * travelInterval
+	}
+	legDuration := duration / time.Duration(legs)
+
+	frames = append(frames, travelFrame{lat: waypoints[0].Lat, lng: waypoints[0].Lng})
+	for i := 0; i < legs; i++ {
+		from, to := waypoints[i], waypoints[i+1]
+		steps := int(legDuration / travelInterval)
+		if steps < 1 {
+			steps = 1
+		}
+		gap := legDuration / time.Duration(steps)
+		for s := 1; s <= steps; s++ {
+			frac := float64(s) / float64(steps)
+			frames = append(frames, travelFrame{
+				lat: from.Lat + (to.Lat-from.Lat)*frac,
+				lng: from.Lng + (to.Lng-from.Lng)*frac,
+			})
+			gaps = append(gaps, gap)
+		}
+	}
+	return frames, gaps
+}
+
+// Travel walks the device's GPS location through an ordered list of
+// waypoints, simulating movement over duration by calling SetLocation
+// repeatedly at ~travelInterval spacing along linearly-interpolated points
+// between each pair of waypoints (see buildTravelRoute). This is pure
+// orchestration on top of the existing single-point SetLocation primitive —
+// no new device-level GPS integration.
+//
+// Not supported on physical devices — skips with a single warning, matching
+// the existing pattern (see SetLocation, OpenDeepLink, AddMedia above).
+// SetLocation itself also checks IsPhysical, but Travel checks it first so a
+// route with many interpolated frames prints exactly one warning, not one
+// per frame.
+func (dc *DeviceContext) Travel(ctx context.Context, waypoints []LatLng, duration time.Duration) error {
+	if dc.IsPhysical {
+		fmt.Printf("    \033[33m⚠\033[0m  travel is not supported on physical devices — skipping\n")
+		return nil
+	}
+	if len(waypoints) < 2 {
+		return fmt.Errorf("travel: requires at least 2 waypoints, got %d", len(waypoints))
+	}
+
+	frames, gaps := buildTravelRoute(waypoints, duration)
+	fmt.Printf("    \033[36m🧭\033[0m  Traveling through %d waypoints (%d frames)\n", len(waypoints), len(frames))
+
+	for i, f := range frames {
+		lat := strconv.FormatFloat(f.lat, 'f', -1, 64)
+		lng := strconv.FormatFloat(f.lng, 'f', -1, 64)
+		if err := dc.SetLocation(ctx, lat, lng); err != nil {
+			return fmt.Errorf("travel: %w", err)
+		}
+		if i < len(gaps) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(gaps[i]):
+			}
 		}
 	}
 	return nil

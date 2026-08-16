@@ -177,6 +177,10 @@ const (
 
 	// Media seeding (E-4): add media "path/to/file.jpg"
 	TOKEN_ADD_MEDIA // compound: "add media"
+
+	// GPS route simulation (FP-6): travel to <waypoints> over N seconds
+	TOKEN_TRAVEL // "travel" — heads an indented block of waypoints
+	TOKEN_OVER   // "over" — introduces the route's total duration
 )
 
 // Token is a single lexical unit.
@@ -324,6 +328,10 @@ var keywords = map[string]TokenType{
 	"deliver":    TOKEN_DELIVER,
 	"signal":     TOKEN_SIGNAL,
 	"read":       TOKEN_READ,
+
+	// GPS route simulation (FP-6)
+	"travel": TOKEN_TRAVEL,
+	"over":   TOKEN_OVER,
 }
 
 // fillerWords are stripped by the forgiving parser.

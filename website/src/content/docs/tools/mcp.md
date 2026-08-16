@@ -305,6 +305,24 @@ For a generic "does this screen look right" smoke check instead of a specific cl
 
 To pull a specific piece of text off the screen into a variable — an OTP code, a dynamically-generated ID — for use in a later step, use `read "<query>" with ai into <var>`, e.g. `read "the 6-digit OTP code" with ai into otp` followed by `type <otp> into the "Code" field`. Same `ai:` requirement and mandatory `with ai` as `assert no visual defects`; fails with a clear error rather than storing an empty value if the requested text isn't visible.
 
+### GPS route simulation
+
+> "Write a test that simulates the delivery courier walking from the restaurant to the drop-off point and checks the ETA updates."
+
+1. `get_widget_tree` — find the ETA/map widgets to assert against
+2. `write_test` — add a `travel to` block with the restaurant and drop-off waypoints and an `over N seconds` duration, e.g.:
+   ```
+   travel to
+     37.7749, -122.4194
+     37.7849, -122.4094
+   over 15 seconds
+   see "Arriving in"
+   ```
+3. `run_tests` — execute it; the device's simulated GPS location moves through the waypoints in order as the test runs
+4. `get_report` — confirm the ETA assertion passed
+
+`travel to` is emulator/simulator only (same limitation as the single-point `set location`) — it skips with a warning on physical devices.
+
 ### HTML report from CI results
 
 > "The CI run produced JSON results. Generate a report I can share."

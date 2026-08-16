@@ -184,6 +184,19 @@ type "<clipboard>" into "Email"    # use the pasted value
 set location 37.7749, -122.4194    # set GPS coordinates (lat, lng)
 ```
 
+Simulate movement through an ordered route of waypoints over a duration:
+
+```
+travel to
+  37.7749, -122.4194
+  37.7849, -122.4094
+over 10 seconds
+```
+
+The device's location moves through the waypoints in order, interpolated at roughly 1-second
+intervals. `over N seconds` is optional (defaults to ~1 second per leg). Emulator/simulator only,
+same as `set location` — skips with a warning on physical devices.
+
 ## Device Media
 
 ```

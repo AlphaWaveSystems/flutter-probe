@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **GPS route simulation (`travel to ... over N seconds`, FP-6).** A new block-style ProbeScript
+  construct — matching Maestro's `travel` command — that walks the device's GPS location through
+  an ordered list of waypoints over a duration, simulating movement for maps/delivery/rideshare/
+  fitness flows. It's pure orchestration on top of the existing single-point `set location`
+  primitive: the executor linearly interpolates between consecutive waypoints and calls
+  `SetLocation` repeatedly at ~1-second intervals (never tighter), rather than adding any new
+  device-level GPS integration. Follows the same physical-device exclusion `set location` already
+  has (skips with a warning on real devices) and the same block-parsing shape `retry N times`
+  established. Covered by parser tests (waypoint parsing, negative coordinates, the optional `over`
+  clause, malformed-waypoint errors) and executor tests (route interpolation math, cloud-mode skip,
+  waypoint-count validation) — not yet verified against a real emulator/simulator.
+
 ### Fixed
 - **Studio's docs claimed physical devices weren't supported — they have been since v0.7.0 (#85, #86).**
   `website/src/content/docs/tools/studio.md` still said "Physical devices are not supported (no
