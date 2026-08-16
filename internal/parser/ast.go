@@ -320,6 +320,34 @@ func (r RetryStep) nodeType() string { return "retry" }
 func (r RetryStep) GetLine() int     { return r.Line }
 func (r RetryStep) stepType() string { return "retry" }
 
+// ---- TravelStep ----
+
+// Waypoint is a single GPS coordinate in a travel route. Lat/Lng are kept as
+// raw strings (not parsed to float64) here, mirroring how the single-point
+// `set location` verb (ActionStep.Name) carries its coordinates — parsing
+// happens once, at execution time, in the executor.
+type Waypoint struct {
+	Lat string
+	Lng string
+}
+
+// TravelStep walks the device's GPS location through an ordered list of
+// waypoints, simulating movement over Duration seconds (0 means no "over N
+// seconds" clause was given — the executor picks a sane default). It's the
+// route/travel analogue of the single-point `set location` verb: the
+// executor interpolates along the path and calls the same device-level
+// SetLocation primitive repeatedly, it does not add any new device
+// integration.
+type TravelStep struct {
+	Waypoints []Waypoint
+	Duration  float64 // total seconds over the whole route; 0 = unspecified
+	Line      int
+}
+
+func (t TravelStep) nodeType() string { return "travel" }
+func (t TravelStep) GetLine() int     { return t.Line }
+func (t TravelStep) stepType() string { return "travel" }
+
 // ---- DartBlock ----
 
 type DartBlock struct {

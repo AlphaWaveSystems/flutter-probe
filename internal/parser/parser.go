@@ -402,6 +402,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseActionPaste()
 	case TOKEN_SET_LOCATION:
 		return p.parseActionSetLocation()
+	case TOKEN_TRAVEL:
+		return p.parseTravel()
 	case TOKEN_VERIFY_BROWSER:
 		return p.parseActionVerifyBrowser()
 	case TOKEN_CALL:
@@ -1157,6 +1159,83 @@ func (p *Parser) parseRetry() (Step, error) {
 	return RetryStep{Count: count, Body: body, Line: line}, nil
 }
 
+// ---- Travel ----
+
+// parseTravel parses a GPS route/travel block:
+//
+//	travel to
+//	  37.7749, -122.4194
+//	  37.7849, -122.4094
+//	over 10 seconds
+//
+// The waypoint list is an INDENT-delimited block of raw "lat, lng" lines
+// (parseWaypoints), matching parseDartBlock's approach of hand-collecting
+// lines rather than routing them through parseStep/parseBody — a bare
+// coordinate isn't a recognized statement start, so the generic step parser
+// doesn't apply here.
+//
+// The trailing "over N seconds" clause is a sibling of "travel to" at the
+// same indent level, not part of the indented block — the same
+// after-the-body trailing-clause shape parseTest uses for "with examples:".
+// It's optional; parseTravel does not require it (0 = unspecified, and the
+// executor picks a sane default).
+func (p *Parser) parseTravel() (Step, error) {
+	line := p.peek().Line
+	p.advance() // travel
+	p.skipFillers()
+	p.consumeNewline()
+
+	waypoints, err := p.parseWaypoints()
+	if err != nil {
+		return nil, err
+	}
+
+	duration := 0.0
+	p.skipNewlines()
+	if p.peek().Type == TOKEN_OVER {
+		p.advance()
+		if p.peek().Type == TOKEN_INT || p.peek().Type == TOKEN_FLOAT {
+			duration, _ = strconv.ParseFloat(p.advance().Literal, 64)
+		}
+		p.skipFillers()
+		if p.peek().Type == TOKEN_SECONDS || p.peek().Type == TOKEN_SECOND {
+			p.advance()
+		}
+		p.consumeNewline()
+	}
+
+	return TravelStep{Waypoints: waypoints, Duration: duration, Line: line}, nil
+}
+
+// parseWaypoints reads an INDENT-delimited block of raw "lat, lng" lines.
+func (p *Parser) parseWaypoints() ([]Waypoint, error) {
+	if p.peek().Type != TOKEN_INDENT {
+		return nil, nil
+	}
+	p.advance() // INDENT
+	var points []Waypoint
+	for p.peek().Type != TOKEN_DEDENT && !p.atEOF() {
+		p.skipNewlines()
+		if p.peek().Type == TOKEN_DEDENT || p.atEOF() {
+			break
+		}
+		lineNo := p.peek().Line
+		raw := p.parseCoordinateLine()
+		parts := strings.SplitN(raw, ",", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("line %d: expected a waypoint as \"lat, lng\", got %q", lineNo, raw)
+		}
+		points = append(points, Waypoint{
+			Lat: strings.TrimSpace(parts[0]),
+			Lng: strings.TrimSpace(parts[1]),
+		})
+	}
+	if p.peek().Type == TOKEN_DEDENT {
+		p.advance() // consume DEDENT
+	}
+	return points, nil
+}
+
 // ---- Dart block ----
 
 func (p *Parser) parseDartBlock() (Step, error) {
@@ -1578,33 +1657,42 @@ func (p *Parser) parseActionSetLocation() (Step, error) {
 	line := p.peek().Line
 	p.advance() // compound "set location"
 	p.skipFillers()
+	raw := p.parseCoordinateLine()
+	return ActionStep{Verb: VerbSetLocation, Name: raw, Line: line}, nil
+}
 
-	// Consume all remaining tokens on this line as the coordinate string
+// parseCoordinateLine consumes all remaining tokens up to the next NEWLINE
+// (or DEDENT/EOF) and rebuilds them into a single "lat,lng" string,
+// preserving negative signs and decimal points — the lexer emits "-", ",",
+// and digit groups as separate TOKEN_IDENT/TOKEN_INT/TOKEN_FLOAT tokens, so
+// they need to be glued back together in source order. Shared by
+// parseActionSetLocation (single-point `set location lat, lng`) and
+// parseWaypoints (each line of a `travel to` block uses the exact same
+// coordinate syntax).
+func (p *Parser) parseCoordinateLine() string {
 	var parts []string
 	for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF && p.peek().Type != TOKEN_DEDENT {
 		parts = append(parts, p.advance().Literal)
 	}
 	p.consumeNewline()
 
-	// Rebuild coordinate string preserving negative signs and decimals
 	raw := ""
-	for i, p := range parts {
-		if p == "," {
+	for i, part := range parts {
+		if part == "," {
 			raw += ","
-		} else if p == "-" {
+		} else if part == "-" {
 			raw += "-"
 		} else if len(raw) > 0 && raw[len(raw)-1] == ',' {
-			raw += p
+			raw += part
 		} else if len(raw) > 0 && raw[len(raw)-1] == '-' {
-			raw += p
+			raw += part
 		} else if i == 0 {
-			raw += p
+			raw += part
 		} else {
-			raw += "," + p
+			raw += "," + part
 		}
 	}
-	raw = strings.TrimSpace(raw)
-	return ActionStep{Verb: VerbSetLocation, Name: raw, Line: line}, nil
+	return strings.TrimSpace(raw)
 }
 
 // parseActionAddMedia parses: add media "path/to/file.jpg"

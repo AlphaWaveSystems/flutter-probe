@@ -264,6 +264,10 @@ call GET "https://api.example.com/health"
 copy "user@test.com" to clipboard
 paste from clipboard
 set location 37.7749, -122.4194
+travel to                                 # simulate GPS movement through waypoints
+  37.7749, -122.4194
+  37.7849, -122.4094
+over 10 seconds
 add media "fixtures/photo.jpg"            # seed the camera roll/gallery
 kill the app
 open the app

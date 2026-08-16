@@ -1689,6 +1689,137 @@ func TestParser_SetLocation(t *testing.T) {
 	}
 }
 
+// TestParser_Travel covers the FP-6 `travel to ... over N seconds` block:
+// an indented list of waypoints followed by a sibling duration clause at the
+// same indent level as "travel to" (the same trailing-clause shape as `test
+// "..." ... with examples:`). Also confirms a step following the whole
+// block still parses as a normal sibling, not swallowed into the route.
+func TestParser_Travel(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749, -122.4194
+    37.7849, -122.4094
+  over 10 seconds
+  see "Arrived"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 2)
+
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if len(tr.Waypoints) != 2 {
+		t.Fatalf("waypoints: got %d, want 2", len(tr.Waypoints))
+	}
+	if tr.Waypoints[0].Lat != "37.7749" || tr.Waypoints[0].Lng != "-122.4194" {
+		t.Errorf("waypoint 0: got %+v", tr.Waypoints[0])
+	}
+	if tr.Waypoints[1].Lat != "37.7849" || tr.Waypoints[1].Lng != "-122.4094" {
+		t.Errorf("waypoint 1: got %+v", tr.Waypoints[1])
+	}
+	if tr.Duration != 10 {
+		t.Errorf("duration: got %v, want 10", tr.Duration)
+	}
+
+	if _, ok := prog.Tests[0].Body[1].(parser.AssertStep); !ok {
+		t.Fatalf("step 1: got %T, want parser.AssertStep (sibling after the travel block)", prog.Tests[0].Body[1])
+	}
+}
+
+// TestParser_Travel_NoOverClause confirms "over N seconds" is optional —
+// Duration stays 0 (unspecified) when it's omitted, leaving the executor to
+// pick a sane default rather than the parser rejecting a route with no
+// explicit pace.
+func TestParser_Travel_NoOverClause(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749, -122.4194
+    37.7849, -122.4094
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if len(tr.Waypoints) != 2 {
+		t.Fatalf("waypoints: got %d, want 2", len(tr.Waypoints))
+	}
+	if tr.Duration != 0 {
+		t.Errorf("duration: got %v, want 0 (unspecified)", tr.Duration)
+	}
+}
+
+// TestParser_Travel_NegativeCoordinates guards the same PT-24-class
+// regression TestParser_SetLocationNegativeCoordinates guards for `set
+// location` — travel waypoints reuse the exact same coordinate-line parsing
+// (parseCoordinateLine), so a standalone "-" must still lex as its own
+// token and reattach to the number that follows it.
+func TestParser_Travel_NegativeCoordinates(t *testing.T) {
+	src := `test "t"
+  travel to
+    -33.8688, 151.2093
+    -33.8788, 151.2193
+  over 4 seconds
+`
+	prog := mustParse(t, src)
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if tr.Waypoints[0].Lat != "-33.8688" || tr.Waypoints[0].Lng != "151.2093" {
+		t.Errorf("waypoint 0: got %+v", tr.Waypoints[0])
+	}
+	if tr.Waypoints[1].Lat != "-33.8788" || tr.Waypoints[1].Lng != "151.2193" {
+		t.Errorf("waypoint 1: got %+v", tr.Waypoints[1])
+	}
+}
+
+// TestParser_Travel_ThreeWaypoints confirms waypoint order is preserved for
+// routes with more than one leg.
+func TestParser_Travel_ThreeWaypoints(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749, -122.4194
+    37.7849, -122.4094
+    37.7949, -122.3994
+  over 20 seconds
+`
+	prog := mustParse(t, src)
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if len(tr.Waypoints) != 3 {
+		t.Fatalf("waypoints: got %d, want 3", len(tr.Waypoints))
+	}
+	wantLat := []string{"37.7749", "37.7849", "37.7949"}
+	for i, w := range wantLat {
+		if tr.Waypoints[i].Lat != w {
+			t.Errorf("waypoint %d lat: got %q, want %q", i, tr.Waypoints[i].Lat, w)
+		}
+	}
+	if tr.Duration != 20 {
+		t.Errorf("duration: got %v, want 20", tr.Duration)
+	}
+}
+
+// TestParser_Travel_MalformedWaypointIsParseError confirms a line inside the
+// block that isn't a "lat, lng" pair (here, a single bare number) is
+// rejected at parse time rather than silently producing a garbage waypoint.
+func TestParser_Travel_MalformedWaypointIsParseError(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749
+  over 5 seconds
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for a waypoint missing its longitude, got nil")
+	}
+}
+
 func TestParser_VerifyBrowser(t *testing.T) {
 	src := `test "t"
   verify external browser opened

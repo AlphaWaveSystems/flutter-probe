@@ -146,6 +146,17 @@ still opens the external browser via `url_launcher`.
 set location 48.1351, 11.5820      # adb emu geo fix (emulators only)
 ```
 
+Simulate movement through an ordered route with `travel to` — interpolates between waypoints and
+calls the same `adb emu geo fix` primitive repeatedly at ~1-second intervals, rather than jumping
+instantly:
+
+```
+travel to
+  48.1351, 11.5820
+  48.1451, 11.5920
+over 10 seconds
+```
+
 ## Video Recording
 
 Android uses the built-in `screenrecord` command. Videos are recorded as MP4 (H.264). The CLI auto-chains recordings to work around the 180-second limit.

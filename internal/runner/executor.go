@@ -186,6 +186,8 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 		return e.runLoop(ctx, s)
 	case parser.RetryStep:
 		return e.runRetry(ctx, s)
+	case parser.TravelStep:
+		return e.runTravel(ctx, s) // parent ctx — travel manages its own pacing over the whole route
 	case parser.DartBlock:
 		return e.runDart(stepCtx, s)
 	case parser.MockBlock:
@@ -515,6 +517,11 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		return fmt.Sprintf("repeat %d times", s.Count)
 	case parser.RetryStep:
 		return fmt.Sprintf("retry %d times", s.Count)
+	case parser.TravelStep:
+		if s.Duration > 0 {
+			return fmt.Sprintf("travel through %d waypoints over %.0f seconds", len(s.Waypoints), s.Duration)
+		}
+		return fmt.Sprintf("travel through %d waypoints", len(s.Waypoints))
 	case parser.HTTPCallStep:
 		return fmt.Sprintf("call %s %q", s.Method, s.URL)
 	}
@@ -1266,6 +1273,38 @@ func (e *Executor) runRetry(ctx context.Context, r parser.RetryStep) error {
 		}
 	}
 	return fmt.Errorf("retry: all %d attempt(s) failed, last error: %w", attempts, lastErr)
+}
+
+// ---- Travel execution ----
+
+// runTravel executes a `travel to ... over N seconds` block: parses the
+// waypoints' lat/lng strings and hands them to DeviceContext.Travel, which
+// does the actual interpolation and repeated SetLocation calls. Validation
+// of the waypoint count happens here, before touching the device, so a
+// malformed route (fewer than 2 waypoints) fails the same way regardless of
+// whether a device is even connected (cloud mode).
+func (e *Executor) runTravel(ctx context.Context, t parser.TravelStep) error {
+	if len(t.Waypoints) < 2 {
+		return fmt.Errorf("travel to: requires at least 2 waypoints, got %d", len(t.Waypoints))
+	}
+	if e.deviceCtx == nil {
+		fmt.Println("    \033[33m⚠\033[0m  Skipping travel (cloud mode)")
+		return nil
+	}
+	waypoints := make([]LatLng, len(t.Waypoints))
+	for i, w := range t.Waypoints {
+		lat, err := strconv.ParseFloat(strings.TrimSpace(w.Lat), 64)
+		if err != nil {
+			return fmt.Errorf("travel to: invalid latitude %q: %w", w.Lat, err)
+		}
+		lng, err := strconv.ParseFloat(strings.TrimSpace(w.Lng), 64)
+		if err != nil {
+			return fmt.Errorf("travel to: invalid longitude %q: %w", w.Lng, err)
+		}
+		waypoints[i] = LatLng{Lat: lat, Lng: lng}
+	}
+	duration := time.Duration(t.Duration * float64(time.Second))
+	return e.deviceCtx.Travel(ctx, waypoints, duration)
 }
 
 // ---- Dart block execution ----

@@ -120,7 +120,25 @@ Commands for device-level operations.
 | Command | Syntax | Description |
 |---|---|---|
 | `set location` | `set location 37.7749, -122.4194` | Set GPS coordinates (emulator/simulator only) |
+| `travel to` | `travel to` (indented waypoints) `over N seconds` | Simulate GPS movement through an ordered list of waypoints over a duration (emulator/simulator only) — see example below |
 | `verify external browser` | `verify external browser opened` | Assert that `url_launcher` was called |
+
+`travel to` example — an ordered, indented list of `lat, lng` waypoints followed by a sibling
+`over N seconds` clause at the same indent level as `travel to`:
+
+```probescript
+travel to
+  37.7749, -122.4194
+  37.7849, -122.4094
+  37.7949, -122.3994
+over 10 seconds
+```
+
+The device's GPS location moves through the waypoints in order, interpolated at roughly 1-second
+intervals so it looks like continuous movement rather than instant jumps — useful for maps,
+delivery, rideshare, or fitness flows that react to location changes over time. Reuses the same
+`set location` primitive under the hood, so it shares its emulator/simulator-only limitation. The
+`over N seconds` clause is optional; omitting it defaults to about 1 second per leg of the route.
 
 ## HTTP Calls
 
