@@ -1,0 +1,44 @@
+# Flutter twin of the native fixture apps (native-test-apps/android,
+# native-test-apps/ios) — the identical 8-element surface exercised through
+# probe's normal verbs instead of the native verb family. Unlike the native
+# suites, this app IS the ProbeAgent host, so a before-each restart is safe
+# and useful here (it isn't in the native suites, where restarting would
+# foreground the wrong app).
+#
+# Known flake (2026-08-16, live-verified on emulator-5556): "type ... into
+# #native_input" intermittently hangs to the 30s RPC timeout on this
+# emulator. Device logcat during the hang shows the emulator's TalkBack
+# accessibility overlay APK being loaded/unloaded mid-test, which lines up
+# with the timing — looks CLI/emulator-side, not an app defect (the field's
+# own ValueKey + Semantics wiring is confirmed correct; every other verb
+# against this same screen passes reliably). Not yet root-caused — flagging
+# rather than silently working around it.
+
+before each test:
+  restart the app
+
+test "see by visible text and by id"
+  see "Native Test App"
+  see #native_title
+  see "Tap Me"
+  see #native_counter
+  see "Taps: 0"
+
+test "hidden element is genuinely absent until revealed"
+  don't see "Message Revealed"
+  tap "Show Message"
+  wait until "Message Revealed" appears
+
+test "tap drives real state"
+  tap "Tap Me"
+  wait until "Taps: 1" appears
+  tap #native_button
+  wait until "Taps: 2" appears
+
+test "type echoes into the live mirror"
+  type "hello probe" into #native_input
+  wait until "Echo: hello probe" appears
+
+test "toggle the switch"
+  toggle #native_switch
+  see #native_switch
