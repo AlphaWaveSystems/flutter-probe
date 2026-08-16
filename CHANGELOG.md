@@ -19,6 +19,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   clause, malformed-waypoint errors) and executor tests (route interpolation math, cloud-mode skip,
   waypoint-count validation) — not yet verified against a real emulator/simulator.
 
+### Fixed
+- **Studio's docs claimed physical devices weren't supported — they have been since v0.7.0 (#85, #86).**
+  `website/src/content/docs/tools/studio.md` still said "Physical devices are not supported (no
+  iproxy management in Studio yet)" in its Known Limitations section, the Beta Preview banner, the
+  System Requirements section, and the Frame Rate table, even though Studio's `Connect()`/
+  `ConnectWiFi()` have wired `internal/device`'s `EnsureIProxy`, `EnsureADB`/`ForwardPort`, and mDNS
+  discovery for two releases — the exact same device-management code the CLI uses. FP-7 audited the
+  actual backend/frontend behavior (confirmed via a full `wails build`), found the code path already
+  complete, and rewrote the doc to match reality: new "Physical devices" section covering USB
+  (`iproxy` for iOS, `adb forward` for Android) and WiFi (mDNS-discovered, preferred for iOS per this
+  project's own USB-C-instability findings), plus a corrected Known Limitations list (the one real
+  gap: the WiFi overlay only connects to mDNS-discovered devices, no manual host/port entry field).
+  Added `studio/app_test.go` — the studio module previously had zero test coverage — covering the
+  pure/testable surface (`isDeviceReady`, `extractLineCol`, file-path guards, `Lint`, `ListDir`,
+  `Connect`/`ConnectWiFi` input validation).
+
 ## [0.13.0] - 2026-08-15
 
 ### Added

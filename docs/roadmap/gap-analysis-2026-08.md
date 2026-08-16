@@ -33,7 +33,9 @@ cli-2.8.0 (147 GitHub releases, 2022–2026).
   `docs/research/maestro-ai-assertions-investigation.md`.
 - Native/system UI automation (pickers, share sheets) — tracked as Phase 2 in the roadmap,
   design already scoped in `docs/proposals/pt13-native-ui-bridging.md`.
-- WebView content (Chrome DevTools hierarchy mode) — no FlutterProbe equivalent yet.
+- WebView content (Chrome DevTools hierarchy mode) — no FlutterProbe equivalent yet. Scoping
+  proposal: `docs/proposals/webview-content-automation.md` (no adopter flow found yet;
+  recommendation is to hold off on implementation).
 - Flutter Web / web platform — no FlutterProbe target yet.
 - Per-element visual regression (`assertScreenshot` + `cropOn`) — FlutterProbe compares full
   screenshots only; tracked as roadmap E-2.
