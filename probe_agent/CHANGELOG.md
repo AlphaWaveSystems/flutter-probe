@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## 0.14.0 - 2026-08-31
+
+- Fixed: `tap #id` could invoke a Semantics-wrapped button's `onTap` directly even when something
+  else (a modal barrier, a loading overlay, an unrelated `Stack` sibling) covered it on screen —
+  `_tryDirectTap`'s Element-tree walk has no relationship to paint order. Now gated behind a
+  read-only hit test (the same `hitTestInView` call Flutter's own pointer dispatch uses
+  internally); only takes the direct-invoke fast path when the target is genuinely the topmost
+  thing at its own screen position, otherwise falls through to the existing real hit-tested
+  pointer tap (FP-10).
+
 ## 0.13.0 - 2026-08-15
 
 - No agent-side changes — version kept in lockstep with the CLI's 0.13.0 release.
