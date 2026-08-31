@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-31
+
 ### Added
 - **GPS route simulation (`travel to ... over N seconds`, FP-6).** A new block-style ProbeScript
   construct — matching Maestro's `travel` command — that walks the device's GPS location through
@@ -34,6 +36,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Added `studio/app_test.go` — the studio module previously had zero test coverage — covering the
   pure/testable surface (`isDeviceReady`, `extractLineCol`, file-path guards, `Lint`, `ListDir`,
   `Connect`/`ConnectWiFi` input validation).
+- **`tap` could invoke a Semantics-wrapped button's `onTap` even when something else covered it
+  on screen (FP-10, #265).** `_tryDirectTap` walks the Element tree structurally to find a
+  `GestureDetector`/`InkResponse` descendant and calls its `onTap` directly (added for PT-04/PT-05,
+  since a real hit-tested pointer tap doesn't reliably reach focus/`onTap` through a `Semantics`
+  wrapper) — but that walk has no relationship to paint order, so it could fire on a button hidden
+  behind a modal barrier, loading overlay, or an unrelated `Stack` sibling that a real user's tap
+  would hit instead. `tap` now runs a read-only hit test (the same `hitTestInView` call Flutter's
+  own pointer dispatch makes internally) before taking the direct-invoke path, and only uses it
+  when the target is genuinely the topmost thing at its own screen position — otherwise it falls
+  through to the existing real hit-tested pointer tap, which already lands on whatever's actually
+  on top. `probe_agent/lib/src/executor.dart`; `probe_agent/test/tap_occlusion_test.dart`.
 
 ## [0.13.0] - 2026-08-15
 

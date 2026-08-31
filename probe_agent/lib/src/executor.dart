@@ -328,20 +328,33 @@ class ProbeExecutor {
 
     // Check if the matched element is a Semantics wrapper — if so, the
     // synthetic gesture may not reach the GestureDetector child. In that
-    // case, invoke onTap directly instead of using pointer events.
+    // case, invoke onTap directly instead of using pointer events — but
+    // only when the target is actually the topmost thing at its own
+    // screen position (FP-10). Direct invocation has no relationship to
+    // paint order (unlike a real pointer tap, which Flutter's own
+    // hit-testing already resolves correctly — see _createGesture below),
+    // so without this guard it could fire onTap on a button that's
+    // actually hidden behind a modal barrier, loading overlay, or Stack
+    // sibling a real user's tap would hit instead.
     if (element.widget is Semantics) {
-      final tapped = _tryDirectTap(element);
-      if (tapped) return;
+      final target = _findDirectTapTarget(element);
+      final targetBox = target?.renderObject;
+      if (target != null && targetBox is RenderBox && _isTopmostAt(targetBox, center)) {
+        _invokeOnTap(target);
+        return;
+      }
+      // Not found, or occluded — fall through to a real hit-tested
+      // pointer tap, which lands on whatever is actually on top instead.
     }
 
     final gesture = await _createGesture(center);
     await gesture.up();
   }
 
-  /// Walks down from [element] to find a GestureDetector or InkResponse
-  /// child and invokes its onTap directly. Only used when the matched
-  /// element is a Semantics wrapper where synthetic pointer events are
-  /// unreliable. Returns true if onTap was invoked.
+  /// Walks down from [element] to find the nearest GestureDetector or
+  /// InkResponse descendant with a non-null onTap — the same widget a
+  /// direct tap would invoke. Returns the Element without invoking
+  /// anything, so the caller can check occlusion (FP-10) before firing.
   ///
   /// PT-05: checks `InkResponse` rather than only `InkWell` — `InkWell` is
   /// just a subclass of `InkResponse` with a fixed splash shape, and modern
@@ -356,20 +369,18 @@ class ProbeExecutor {
   /// Semantics-wrapped button with no onTap SemanticsAction, or shadowed by
   /// an overlapping Semantics node) since Semantics doesn't participate in
   /// hit-testing at all.
-  bool _tryDirectTap(Element element) {
-    bool found = false;
+  Element? _findDirectTapTarget(Element element) {
+    Element? found;
     void visit(Element e) {
-      if (found) return;
+      if (found != null) return;
       try {
         final widget = e.widget;
         if (widget is GestureDetector && widget.onTap != null) {
-          widget.onTap!();
-          found = true;
+          found = e;
           return;
         }
         if (widget is InkResponse && widget.onTap != null) {
-          widget.onTap!();
-          found = true;
+          found = e;
           return;
         }
         e.visitChildren(visit);
@@ -379,6 +390,41 @@ class ProbeExecutor {
     }
     visit(element);
     return found;
+  }
+
+  /// Invokes the onTap callback on an Element located by
+  /// [_findDirectTapTarget].
+  void _invokeOnTap(Element element) {
+    final widget = element.widget;
+    if (widget is GestureDetector) {
+      widget.onTap!();
+    } else if (widget is InkResponse) {
+      widget.onTap!();
+    }
+  }
+
+  /// FP-10: returns true if [target] is the render object a real pointer
+  /// tap at [position] would actually reach — i.e. nothing else (a
+  /// ModalBarrier, a loading overlay, an unrelated Stack sibling) is
+  /// painted on top of it at that exact point.
+  ///
+  /// Uses the same `hitTestInView` call Flutter's own pointer dispatch
+  /// makes internally (see `GestureBinding.handlePointerEvent`), but as a
+  /// read-only query — no event is actually dispatched, so this has no
+  /// side effects on the widget tree.
+  bool _isTopmostAt(RenderObject target, Offset position) {
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (view == null) return true; // no view to hit-test against — don't block
+    final result = HitTestResult();
+    GestureBinding.instance.hitTestInView(result, position, view.viewId);
+    for (final entry in result.path) {
+      RenderObject? candidate = entry.target is RenderObject ? entry.target as RenderObject : null;
+      while (candidate != null) {
+        if (identical(candidate, target)) return true;
+        candidate = candidate.parent;
+      }
+    }
+    return false;
   }
 
   Future<void> _doubleTap(Map<String, dynamic> sel) async {
