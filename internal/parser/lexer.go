@@ -100,9 +100,10 @@ func (l *Lexer) nextLine() error {
 				return err
 			}
 		case ch == '<':
-			if err := l.lexBarePlaceholder(); err != nil {
-				return err
-			}
+			// lexBarePlaceholder has no success path — an unquoted '<' is
+			// always a parse error (see its doc comment) — so there's
+			// nothing to fall through to here.
+			return l.lexBarePlaceholder()
 		case ch == ':':
 			l.emit(TOKEN_COLON, ":")
 			l.pos++
