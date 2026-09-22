@@ -102,6 +102,7 @@ export class RunProfilePanel {
       <option value="browserstack">BrowserStack</option>
       <option value="saucelabs">Sauce Labs</option>
       <option value="lambdatest">LambdaTest</option>
+      <option value="testingbot">TestingBot</option>
       <option value="aws">AWS Device Farm</option>
       <option value="firebase">Firebase Test Lab</option>
     </select>

@@ -31,7 +31,7 @@ device:
 #   token: ${PROBE_CLOUD_TOKEN}
 
 # Cloud device farm provider (optional — bring your own account)
-# Supported: browserstack | saucelabs | lambdatest | aws | firebase
+# Supported: browserstack | saucelabs | lambdatest | testingbot | aws | firebase
 #
 # cloud:
 #   provider: saucelabs

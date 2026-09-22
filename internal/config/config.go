@@ -52,7 +52,7 @@ type Config struct {
 type CloudConfig struct {
 	URL         string            `yaml:"url"`         // cloud API base URL (must be configured by the user)
 	Token       string            `yaml:"token"`       // API key for cloud authentication (supports ${ENV_VAR} syntax)
-	Provider    string            `yaml:"provider"`    // cloud device farm provider: browserstack, aws, firebase, saucelabs, lambdatest
+	Provider    string            `yaml:"provider"`    // cloud device farm provider: browserstack, aws, firebase, saucelabs, lambdatest, testingbot
 	Credentials map[string]string `yaml:"credentials"` // provider-specific credentials (e.g. username, access_key)
 	App         string            `yaml:"app"`         // path to .apk/.ipa to upload to the cloud provider
 	Devices     []string          `yaml:"devices"`     // target device names for cloud testing
