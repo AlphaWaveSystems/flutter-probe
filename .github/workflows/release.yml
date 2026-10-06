@@ -205,8 +205,31 @@ jobs:
           name: mcpb-${{ matrix.goos }}-${{ matrix.goarch }}
           path: mcpb-out/*.mcpb
 
+  build-ios-driver:
+    name: Build iOS system-dialog driver
+    runs-on: macos-latest
+    # Optional feature: a failure here must never block releasing the CLI. Without
+    # the zip, `probe ios-driver install` reports a clear 404 instead.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build and package the XCUITest runner
+        run: |
+          # The driver reports the version it was built for.
+          echo "${GITHUB_REF_NAME#v}" > VERSION
+          scripts/build-ios-driver.sh ios-driver-out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-ios-driver
+          path: ios-driver-out/probe-ios-driver.zip
+
   release:
-    needs: [build, build-studio, build-mcpb]
+    needs: [build, build-studio, build-mcpb, build-ios-driver]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

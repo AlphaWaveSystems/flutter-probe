@@ -97,3 +97,7 @@ AGENTS.md
 /harness/
 .harness/
 .harness-backup/
+
+# iOS driver: generated project and build output
+ios-driver/ProbeDriver.xcodeproj/
+ios-driver/build/

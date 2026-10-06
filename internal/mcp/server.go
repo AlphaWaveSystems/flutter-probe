@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -166,6 +167,14 @@ Supports the full ProbeScript syntax:
                      scrolling until the target is on screen — use it for rows below
                      the fold instead of counting plain "scroll down" steps. Note
                      "scroll down" reveals LATER content, "scroll up" earlier content.
+  System dialogs:  OS-level dialogs outside the Flutter app (permission alerts, the
+                     StoreKit "Sign in to Apple Account" sheet): tap "Allow" in system
+                     dialog | type "$PROBE_SANDBOX_PASSWORD" into system field "Password"
+                     (value from an environment variable; always masked in logs) |
+                     see system dialog "Title" | wait for system dialog "Title" appears |
+                     dismiss system dialog | sign in sandbox tester (idempotent). Append
+                     optional to make a step a no-op when no dialog shows. iOS simulators
+                     (needs Xcode) and Android emulators/devices only.
   Idle:            wait for idle — after closing a dialog/sheet, waits for route
                      transitions and pending frames/animations/requests to settle
                      (prefer it to a fixed "wait 2 seconds"). "dont see" is an alias
@@ -260,8 +269,8 @@ Key flags for the flags parameter:
   --agent-port 48700          agent port (alias of --port); pair with the app's
                                --dart-define=PROBE_PORT=48700 so simulators don't collide
   --grant notifications,camera  pre-grant OS permissions before the first test
-                               (Android: pm grant; iOS simulator: simctl privacy;
-                               iOS notifications can't be pre-granted)
+                               (Android: pm grant; iOS simulator: simctl privacy; iOS
+                               notifications: a watcher taps Allow when the alert appears)
   --disable-animations       set timeDilation=0 to speed up Flutter animations
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
@@ -371,6 +380,23 @@ Returns a short probable cause and next step per failure. It never re-runs tests
 			Properties: map[string]mcpProp{
 				"input":  {Type: "string", Description: "JSON report path from run_tests --format json (default: most recently modified *.json in reports/)"},
 				"output": {Type: "string", Description: "Optional markdown file to also write the advice to"},
+			},
+		},
+	},
+	{
+		Name: "system_dialog",
+		Description: `Inspect and answer OS-level system dialogs that live outside the Flutter app and are invisible to get_widget_tree: iOS permission alerts, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs. Works on iOS simulators (needs Xcode; the driver downloads on first use) and Android emulators/devices.
+Actions: list (titles, buttons, fields of what is showing), see, tap (needs button), dismiss (Cancel / Don't Allow / Not Now; no-op if none), wait (appears; set gone=true to wait for it to disappear), sign-in-sandbox (StoreKit sandbox tester from the PROBE_SANDBOX_USER / PROBE_SANDBOX_PASSWORD environment variables; no-op if no sheet shows).
+Typing into system fields is intentionally not available here so secrets never pass through an agent: use the ProbeScript step type "$ENV_VAR" into system field "Password" in a test, which reads the environment and masks the value.`,
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"action"},
+			Properties: map[string]mcpProp{
+				"action": {Type: "string", Description: "list | see | tap | dismiss | wait | sign-in-sandbox"},
+				"button": {Type: "string", Description: "Button label for tap, e.g. Allow"},
+				"title":  {Type: "string", Description: "Only match a dialog whose text contains this"},
+				"gone":   {Type: "string", Description: "For wait: \"true\" waits for the dialog to disappear"},
+				"device": {Type: "string", Description: "Simulator UDID or Android serial (default: the only booted/connected device)"},
 			},
 		},
 	},
@@ -487,6 +513,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.generateReport(req.ID, args["input"], args["output"], args["flags"])
 	case "triage_failure":
 		return s.triageFailure(req.ID, args["input"], args["output"])
+	case "system_dialog":
+		return s.systemDialog(req.ID, args)
 	case "record":
 		return s.record(req.ID, args["output"], args["device"], args["timeout"])
 	default:
@@ -736,6 +764,44 @@ func (s *Server) generateReport(id any, input, output, flags string) *mcpRespons
 	}
 	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 		"content": []map[string]any{{"type": "text", "text": fmt.Sprintf("Report generated: %s\n%s", output, string(out))}},
+	}}
+}
+
+// systemDialog wraps `probe system-dialog` (FP-16). Typing is deliberately not
+// exposed: secrets must not pass through an agent.
+func (s *Server) systemDialog(id any, args map[string]string) *mcpResponse {
+	action := args["action"]
+	var cmdArgs []string
+	switch action {
+	case "list", "see", "dismiss", "sign-in-sandbox":
+		cmdArgs = []string{"system-dialog", action}
+	case "tap":
+		if args["button"] == "" {
+			return errResp(id, -32602, "tap needs a button, e.g. \"Allow\"")
+		}
+		cmdArgs = []string{"system-dialog", "tap", args["button"]}
+	case "wait":
+		cmdArgs = []string{"system-dialog", "wait"}
+		if args["gone"] == "true" {
+			cmdArgs = append(cmdArgs, "--gone")
+		}
+	default:
+		return errResp(id, -32602, "unknown action "+strconv.Quote(action)+": use list, see, tap, dismiss, wait or sign-in-sandbox")
+	}
+	if args["title"] != "" && action != "list" && action != "sign-in-sandbox" {
+		cmdArgs = append(cmdArgs, "--title", args["title"])
+	}
+	if args["device"] != "" {
+		cmdArgs = append(cmdArgs, "--device", args["device"])
+	}
+	cmd := exec.Command(probeBin(), cmdArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return textResp(id, string(out), err)
+	}
+	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
+		"content": []map[string]any{{"type": "text", "text": string(out)}},
 	}}
 }
 

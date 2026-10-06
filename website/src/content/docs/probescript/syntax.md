@@ -348,10 +348,30 @@ probe test tests/ --grant notifications,camera,location
 
 Android grants via `adb shell pm grant` (including `POST_NOTIFICATIONS`); the iOS simulator grants the
 services `xcrun simctl privacy` supports (camera, location, microphone, photos, contacts, calendar, sms).
-**iOS notifications cannot be pre-granted**: simctl has no notifications service and the prompt is a
-SpringBoard system alert the agent cannot see or tap. `--grant notifications` prints a warning on iOS
-rather than failing. Guard the request in your app with `bool.fromEnvironment('PROBE_AGENT')`, or accept
-the prompt once per simulator (the choice persists until the app is erased).
+**iOS notifications** have no simctl service. Since 0.16.0 probe answers the SpringBoard alert itself:
+`--grant notifications` and `allow permission "notifications"` tap **Allow** when it appears (needs Xcode,
+simulators only; see [System dialogs](#system-dialogs)).
+
+## System dialogs
+
+OS-level dialogs (permission alerts, the StoreKit "Sign in to Apple Account" sheet, Android permission
+dialogs) live outside the Flutter widget tree. These steps drive them:
+
+```
+tap "Allow" in system dialog
+tap "OK" in system dialog "Apple Account"            # optional title filter
+type "$PROBE_SANDBOX_PASSWORD" into system field "Password"
+see system dialog "Sign in to Apple Account"
+don't see system dialog "Notifications"
+wait for system dialog "Notifications" appears       # or: disappears
+dismiss system dialog                                # Cancel / Don't Allow / Not Now; no-op if none
+sign in sandbox tester                               # StoreKit sandbox account; no-op if no sheet appears
+tap "Allow" in system dialog optional                # any step: don't fail when no dialog shows up
+```
+
+Values typed into a system field come from an environment variable (`$NAME` or `${NAME}`) or a literal, and are
+**always masked** in step output, reports and error messages. See [System dialogs](/tools/system-dialogs/) for
+setup, the standalone `probe system-dialog` command and troubleshooting.
 
 ## Conditional Actions
 

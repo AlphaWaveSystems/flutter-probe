@@ -1,0 +1,29 @@
+# FlutterProbe
+
+> FlutterProbe is an end-to-end testing framework for Flutter apps. Tests are written in ProbeScript (.probe files,
+> natural-language steps). A Go CLI (`probe`) sends commands to an on-device Dart agent (`flutter_probe_agent`);
+> an MCP server (`probe-mcp`) exposes the same capabilities to AI agents.
+
+Key facts for an AI agent:
+- Install: `brew install alphawavesystems/tap/probe`; add `flutter_probe_agent` to the app and build with `--dart-define=PROBE_AGENT=true`.
+- Run: `probe test tests/ -v --format json -o reports/results.json`.
+- Failures look like `line N: <step>: rpc error -3200x: ... visible texts: [...], keys: [...]` — compare the visible texts/keys with the selector you used.
+- Wait for each new screen (`wait until "Text" appears`) before tapping; use `#key` selectors; use `scroll down until "X" appears` for rows below the fold.
+- OS dialogs (permission alerts, StoreKit sign-in) are not Flutter widgets: use `tap "Allow" in system dialog`, `dismiss system dialog`, `sign in sandbox tester`.
+- Secrets: only through environment variables (`type "$NAME" into system field "Password"`); they are masked in output.
+- AI features (local or hosted models) are optional and never required to run tests.
+
+## Docs
+- [Using FlutterProbe from AI agents](https://flutterprobe.dev/tools/ai-agents/): the loop, reading failures, rules.
+- [ProbeScript syntax](https://flutterprobe.dev/probescript/syntax/)
+- [Dictionary of steps](https://flutterprobe.dev/probescript/dictionary/)
+- [On-device agent](https://flutterprobe.dev/tools/agent/): build flags, ports, tokens, RPC methods, troubleshooting.
+- [System dialogs](https://flutterprobe.dev/tools/system-dialogs/)
+- [MCP server (21 tools)](https://flutterprobe.dev/tools/mcp/)
+- [CLI reference](https://flutterprobe.dev/tools/cli-reference/)
+- [AI and local models](https://flutterprobe.dev/tools/ai/)
+- [Configuration (probe.yaml)](https://flutterprobe.dev/advanced/configuration/)
+
+## Source
+- https://github.com/AlphaWaveSystems/flutter-probe
+- Agent package: https://pub.dev/packages/flutter_probe_agent

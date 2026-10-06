@@ -93,6 +93,9 @@ ProbeScript uses natural English with indent-based blocks (like Python). Key rul
   - scroll down / scroll up
   - scroll down until "Text" appears — keep scrolling until visible
   - wait for idle — dialogs/sheets/animations/requests settled
+  - tap "Allow" in system dialog — OS permission alerts / sign-in sheets (not Flutter widgets)
+  - type "$ENV_VAR" into system field "Password" — secret from an environment variable, always masked
+  - see system dialog "Title" / wait for system dialog "Title" appears / dismiss system dialog
   - go back
   - take a screenshot "name"
   - clear app data

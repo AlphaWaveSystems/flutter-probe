@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -170,4 +171,23 @@ func TestCheckHandshake(t *testing.T) {
 			t.Errorf("expected no warning when the agent's version is unknown, got %q", warning)
 		}
 	})
+}
+
+func TestVersionMismatchWarning_IgnoresPrereleaseAndBuildSuffixes(t *testing.T) {
+	same := [][2]string{
+		{"0.15.0-fp13", "0.15.0"},
+		{"v0.15.0", "0.15.0"},
+		{"0.15.0+abc123", "0.15.0"},
+		{"0.15.0-rc.1", "0.15.0-rc.2"},
+	}
+	for _, c := range same {
+		if w := VersionMismatchWarning(c[0], c[1]); w != "" {
+			t.Errorf("%s vs %s must not warn, got %q", c[0], c[1], w)
+		}
+	}
+	// A genuinely different release still warns, and the message keeps the real strings.
+	w := VersionMismatchWarning("0.15.0-fp13", "0.14.0")
+	if w == "" || !strings.Contains(w, "0.15.0-fp13") || !strings.Contains(w, "0.14.0") {
+		t.Errorf("0.15.0-fp13 vs 0.14.0 must warn with both versions, got %q", w)
+	}
 }

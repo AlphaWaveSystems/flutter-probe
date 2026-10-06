@@ -406,10 +406,32 @@ grant all permissions
 revoke all permissions
 ```
 
-Or once for the whole run: `probe test tests/ --grant notifications,camera`. **iOS notifications cannot be
-pre-granted** (`simctl privacy` has no such service; the prompt is a system alert the agent cannot tap) —
-guard the request with `bool.fromEnvironment('PROBE_AGENT')` or accept it once per simulator. Android
-`POST_NOTIFICATIONS` works.
+Or once for the whole run: `probe test tests/ --grant notifications,camera`. Android grants through
+`adb shell pm grant` (including `POST_NOTIFICATIONS`), the iOS simulator through `simctl privacy`. iOS
+notifications have no simctl service, so probe answers the system alert itself: `--grant notifications` (and
+`allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
+(needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
+
+### System dialogs (permission alerts, sign-in sheets)
+
+OS-level dialogs live outside the Flutter widget tree, so the Dart agent cannot see them. FlutterProbe drives
+them through an XCUITest runner on iOS simulators and uiautomator on Android:
+
+```
+tap "Allow" in system dialog                        # permission alert button
+type "$PROBE_SANDBOX_PASSWORD" into system field "Password"   # value from the environment, always masked
+see system dialog "Sign in to Apple Account"
+wait for system dialog "Notifications" appears
+dismiss system dialog                                # Cancel / Don't Allow / Not Now
+sign in sandbox tester                               # StoreKit sandbox account, idempotent
+tap "Allow" in system dialog optional                # no-op when no dialog shows up
+```
+
+Secrets come from environment variables only and are masked in step output, reports and errors. The same
+operations are available without any test file or Flutter app: `probe system-dialog tap "Allow"`,
+`probe system-dialog sign-in-sandbox`. iOS needs Xcode and downloads a small runner once
+(`probe ios-driver install`); physical iOS devices are not supported. Full guide:
+[flutterprobe.dev/tools/system-dialogs](https://flutterprobe.dev/tools/system-dialogs/).
 
 ### Dart escape hatch
 
@@ -491,6 +513,8 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe device list` | List connected devices and simulators |
 | `probe studio` | Open interactive widget tree inspector |
 | `probe generate --prompt "test login flow"` | AI-generate a test from a description (cloud or local model) |
+| `probe system-dialog tap\|type\|see\|wait\|dismiss\|list\|sign-in-sandbox` | Drive OS system dialogs (permission alerts, StoreKit sign-in sheet) on a simulator/emulator |
+| `probe ios-driver install\|status\|stop` | Manage the iOS system-dialog driver (XCUITest runner) |
 | `probe ai doctor` | Optional: check the configured `ai:` provider |
 | `probe triage --input results.json` | Optional: explain failures with the configured model (advisory) |
 | `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories) |
@@ -512,7 +536,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `--name <pattern>` | — | Run only tests matching name |
 | `--adb <path>` | PATH | Custom ADB binary |
 | `--agent-port <n>` | `48686` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators can't collide. A failed dial names the process holding the port |
-| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera` (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications can't be pre-granted) |
+| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera` (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
 | `--ai-triage` | off | Optional: after the run, explain failures with the configured `ai:` model (advisory; never changes results) |
 
 ## Studio (Beta Preview)
@@ -531,14 +555,14 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 20 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 21 tools:
 
 | Category | Tools |
 |---|---|
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
-| Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure` |
+| Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog` |
 | Project | `init_project`, `record` |
 
 Every CLI feature is accessible from MCP. Key capabilities an agent can use:
@@ -562,7 +586,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 20 tools appear in Claude.
+4. Done — all 21 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 

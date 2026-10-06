@@ -240,6 +240,38 @@ func (a AssertStep) nodeType() string { return "assert" }
 func (a AssertStep) GetLine() int     { return a.Line }
 func (a AssertStep) stepType() string { return "assert" }
 
+// ---- SystemDialogStep ----
+
+// SystemDialogOp is what a SystemDialogStep does.
+type SystemDialogOp string
+
+const (
+	SysTap     SystemDialogOp = "tap"     // tap "Allow" in system dialog
+	SysType    SystemDialogOp = "type"    // type "$PW" into system field "Password"
+	SysSee     SystemDialogOp = "see"     // see system dialog "Title" / don't see system dialog
+	SysWait    SystemDialogOp = "wait"    // wait for system dialog "Title" appears|disappears
+	SysDismiss SystemDialogOp = "dismiss" // dismiss system dialog
+	SysSandbox SystemDialogOp = "sandbox" // sign in sandbox tester
+)
+
+// SystemDialogStep drives an OS-level system dialog (permission alert, StoreKit
+// sign-in sheet, ...) that lives outside the Flutter widget tree.
+type SystemDialogStep struct {
+	Op       SystemDialogOp
+	Button   string // SysTap: button label
+	Text     string // SysType: text to type, or $ENV_VAR / ${ENV_VAR} — always masked
+	Field    string // SysType: field label
+	Title    string // optional dialog-title filter
+	Appear   bool   // SysWait: true = wait to appear, false = to disappear
+	Negated  bool   // SysSee: don't see
+	Optional bool   // do not fail the test when the step fails (e.g. no dialog showed up)
+	Line     int
+}
+
+func (s SystemDialogStep) nodeType() string { return "system_dialog" }
+func (s SystemDialogStep) GetLine() int     { return s.Line }
+func (s SystemDialogStep) stepType() string { return "system_dialog" }
+
 // ---- AssertNoDefectsStep ----
 
 // AssertNoDefectsStep is `assert no visual defects with ai` — a fixed

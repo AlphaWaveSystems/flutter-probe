@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-06
+
+### Added: system dialogs (FP-16)
+OS-level dialogs (iOS permission alerts, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs)
+live outside the Flutter widget tree and were invisible to probe. They can now be driven from ProbeScript and the
+command line.
+
+- **ProbeScript steps:** `tap "Allow" in system dialog`, `type "$ENV" into system field "Password"`,
+  `see system dialog "Title"` / `don't see system dialog`, `wait for system dialog "Title" appears|disappears`,
+  `dismiss system dialog`, `sign in sandbox tester` (idempotent; `PROBE_SANDBOX_USER` / `PROBE_SANDBOX_PASSWORD`). Any
+  of them accepts a trailing `optional`.
+- **iOS** (simulators; needs Xcode): a new XCUITest runner app (`ios-driver/`) serves a loopback HTTP API from inside the
+  UI-test process and drives SpringBoard's accessibility tree. Built in CI on every release and attached as
+  `probe-ios-driver.zip`; downloaded on first use (`probe ios-driver install|status|stop`). Physical devices are not
+  supported (code signing).
+- **Android:** `uiautomator` dumps scoped to system packages (permission controller, package installer, Play, GMS,
+  systemui) plus `adb input`. Typed text is single-quoted for the remote shell, so `& ; $ ' "` in a password are safe
+  (the existing `type native` only escaped spaces).
+- **Secrets:** values come from environment variables only (`$NAME` / `${NAME}`), are **always masked** in step output,
+  reports and error text (including literals), and are never accepted as command-line arguments.
+- **`probe system-dialog list|see|wait|tap|type|dismiss|sign-in-sandbox`**: the same driver without any test file or
+  Flutter app, for one-time provisioning such as signing a sandbox tester in on a CI simulator.
+- **iOS notifications**, which `simctl privacy` cannot grant: `allow permission "notifications"` and
+  `--grant notifications` now tap **Allow** on the system alert (a watcher for `--grant`).
+- **Docs:** new System Dialogs, On-Device Agent and Using Probe from AI Agents pages, `llms.txt`, a reworked
+  `flutter_probe_agent` README for pub.dev, and `ios-driver/README.md`.
+
+### Fixed (reported from real-project runs of 0.15.0)
+- A bare `scroll down` picked the largest scrollable in the tree, which could be a hidden tab kept alive by an
+  `IndexedStack`, so the visible list never moved. It now prefers a scrollable that receives touches on screen.
+- Agent errors showed an id selector as `id("#settings_screen")`; it is now `#settings_screen`.
+- The CLI/agent version-mismatch warning compared raw strings, so a pre-release CLI (`0.15.0-fp13`) warned against its
+  own release (`0.15.0`). Pre-release and build suffixes are now ignored.
+- Android `uiautomator` failures now explain that only one UI-automation client can run per device.
+
+### Verification
+iOS driver, steps and CLI verified on an iOS 26.5 simulator (real notification alert, and a StoreKit-shaped sheet with a
+secure field: the app received `tester+1@example.com|P@ss w0rd!&;$x`); Android verified on an API 35 emulator (real
+camera/location permission dialogs: see, tap, dismiss, wait, apostrophe matching, wrong-button error) and the shell
+quoting on a real device shell. **Not verified:** the genuine StoreKit "Sign in to Apple Account" sheet (no StoreKit app
+available here; use `probe system-dialog list` and `PROBE_DRIVER_APPS` if a given iOS version hosts it in another
+process), typing into an Android system dialog field, and the CI job that builds the iOS driver.
+
 ## [0.15.0] - 2026-10-06
 
 ### Changed (BREAKING for WiFi auto-discovery only) — FP-15

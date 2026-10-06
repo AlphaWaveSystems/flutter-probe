@@ -109,9 +109,16 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 		return nil, fmt.Errorf("runner: loading recipes: %w", err)
 	}
 
-	if err := r.applyGrants(ctx); err != nil {
+	stopGrants, err := r.applyGrants(ctx)
+	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		stopGrants()
+		if r.deviceCtx != nil {
+			r.deviceCtx.CloseSystemDriver() // no-op unless a system-dialog step started it
+		}
+	}()
 
 	var results []TestResult
 	for _, file := range r.opts.Files {

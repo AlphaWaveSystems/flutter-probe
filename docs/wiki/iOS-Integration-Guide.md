@@ -68,9 +68,9 @@ FlutterProbe pre-grants supported permissions via `xcrun simctl privacy`:
 | Photos | `photos` | Yes |
 | Contacts | `contacts-limited` | Yes |
 | Calendar | `calendar` | Yes |
-| **Notifications** | - | **No** (Apple limitation) |
+| **Notifications** | - | Not via simctl; answered through the system alert (see below) |
 
-Since notifications cannot be pre-granted, your app MUST skip notification permission requests when `PROBE_AGENT=true`. See [Troubleshooting](Troubleshooting#notification-permission-dialog-blocks-tests).
+`simctl privacy` cannot grant notifications, but since 0.16.0 `allow permission "notifications"` and `probe test --grant notifications` tap **Allow** on the system alert through the iOS system-dialog driver (XCUITest runner, needs Xcode, simulators only). Skipping the request under `PROBE_AGENT=true` still works too. See [System dialogs](https://flutterprobe.dev/tools/system-dialogs/) and [Troubleshooting](Troubleshooting#notification-permission-dialog-blocks-tests).
 
 ### Token Reading
 

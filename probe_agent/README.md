@@ -135,6 +135,57 @@ Future<bool> _signIn() async {
 
 The CLI automatically sends `probe.biometric_signal` after every `biometric match` / `biometric no match` step — no changes to `.probe` test files are needed.
 
+## Agent reference
+
+Everything you need to run the agent safely. Full docs: [flutterprobe.dev/tools/agent](https://flutterprobe.dev/tools/agent/).
+
+### Build flags (`--dart-define=NAME=value`)
+
+| Define | Effect |
+|---|---|
+| `PROBE_AGENT=true` | Enables the agent. Required; without it `ProbeAgent.start()` is a no-op, so the call is safe to leave in `main`. |
+| `PROBE_WIFI=true` | Bind to `0.0.0.0` so the CLI on another machine can connect (`probe test --host <ip> --token <token>`). Debug/profile only. |
+| `PROBE_PORT=<n>` | Move off the default port 48686 (pair with `probe test --agent-port <n>`). |
+| `PROBE_AGENT_FORCE=true` | Silence the warning in an explicitly allowed release build. |
+| `PROBE_RELAY_URL`, `PROBE_RELAY_TOKEN` | Relay mode for cloud device farms (the agent connects out). |
+
+### Build modes
+
+- **Debug / profile**: work with `PROBE_AGENT=true` (profile is required to cold-launch on physical iOS).
+- **Release**: blocked by default because the agent opens a debug server. `ProbeAgent.start(allowReleaseBuild: true)`
+  overrides it. Never ship that to users.
+
+The package has **no native plugin dependency**; nothing native is linked into your app.
+
+### Ports and tokens
+
+The agent listens on `127.0.0.1:48686` (falling back through the next 9 ports and printing `PROBE_PORT=<n>`), prints
+`PROBE_TOKEN=<token>` every 3 seconds and writes it to a file the CLI reads. Simulators/emulators use WebSocket;
+physical devices use stateless HTTP POST. If another process holds the port, a failed connection names it
+(`agent port 48686 is held by pid 4242 (Runner)`).
+
+### What it does for the CLI
+
+JSON-RPC 2.0 methods for tap, type, scroll (including `scroll ... until ... appears`), assertions, waiting
+(`wait for idle`), screenshots, widget-tree dumps, mocks and signals. `type` goes through the keyboard path, so
+`onChanged` and `inputFormatters` run. Failures list the visible texts and keys. Only widgets on the current route are
+matched.
+
+### Not covered by the agent
+
+OS dialogs (permission alerts, the StoreKit sign-in sheet) are outside the Flutter widget tree; the CLI drives them
+separately: see [System dialogs](https://flutterprobe.dev/tools/system-dialogs/). Studio's WiFi auto-discovery uses an
+optional `ProbeAdvertiser` hook that you implement in your app (no mDNS plugin is bundled here).
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| CLI cannot find the agent | Build with `--dart-define=PROBE_AGENT=true` and look for `PROBE_TOKEN=` in the log. |
+| `agent rejected token (HTTP 401)` | You reached a different agent (a leftover app on 48686). Stop it, or use `PROBE_PORT` + `--agent-port`. |
+| Red screen after closing a dialog on 0.10 – 0.14 | Fixed in 0.15.0: upgrade. |
+| Version-mismatch warning | Use the same minor version of the CLI and the agent. |
+
 ## Features
 
 - **WebSocket + HTTP transports** — persistent connection for simulators, stateless HTTP for physical devices

@@ -188,6 +188,8 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 		return e.runAssert(stepCtx, s)
 	case parser.AssertNoDefectsStep:
 		return e.runAssertNoDefects(stepCtx, s)
+	case parser.SystemDialogStep:
+		return e.runSystemDialog(stepCtx, s)
 	case parser.WaitStep:
 		return e.runWait(stepCtx, s)
 	case parser.ConditionalStep:
@@ -343,6 +345,8 @@ func stepIsOptional(step parser.Step) bool {
 		return s.Optional
 	case parser.AssertStep:
 		return s.Optional
+	case parser.SystemDialogStep:
+		return s.Optional
 	}
 	return false
 }
@@ -401,6 +405,8 @@ func runStepTicker(
 // stepDescription returns a human-readable description of the step.
 func (e *Executor) stepDescription(step parser.Step) string {
 	switch s := step.(type) {
+	case parser.SystemDialogStep:
+		return systemDialogDescription(s)
 	case parser.ActionStep:
 		switch s.Verb {
 		case parser.VerbTap:

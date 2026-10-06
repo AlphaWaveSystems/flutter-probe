@@ -1,4 +1,4 @@
-.PHONY: build build-convert install test test-convert test-convert-integration lint clean deps
+.PHONY: build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
 
 BINARY  = probe
 OUT_DIR = bin
@@ -51,3 +51,7 @@ lint:
 ## Clean build artifacts
 clean:
 	rm -rf $(OUT_DIR)
+
+## Build the iOS system-dialog driver (XCUITest runner) -> bin/probe-ios-driver.zip
+ios-driver:
+	scripts/build-ios-driver.sh bin

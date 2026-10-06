@@ -80,7 +80,7 @@ func TestToolsList(t *testing.T) {
 		"get_widget_tree", "read_test", "write_test", "run_script", "run_tests",
 		"list_files", "lint", "migrate_maestro", "take_screenshot",
 		// reporting
-		"get_report", "generate_test", "generate_report", "triage_failure",
+		"get_report", "generate_test", "generate_report", "triage_failure", "system_dialog",
 		// project management
 		"init_project", "record",
 	}
@@ -427,4 +427,43 @@ func TestMigrateMaestro_RequiresSource(t *testing.T) {
 	if msg, _ := errObj["message"].(string); !strings.Contains(msg, "source is required") {
 		t.Errorf("unexpected error message: %q", msg)
 	}
+}
+
+func TestSystemDialogToolValidatesArguments(t *testing.T) {
+	call := func(args map[string]any) map[string]any {
+		return roundTrip(t, map[string]any{
+			"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+			"params": map[string]any{"name": "system_dialog", "arguments": args},
+		})
+	}
+	// Unknown action and tap without a button are rejected before anything runs.
+	for name, args := range map[string]map[string]any{
+		"unknown action": {"action": "type"}, // typing is deliberately not exposed
+		"tap no button":  {"action": "tap"},
+	} {
+		resp := call(args)
+		errObj, ok := resp["error"].(map[string]any)
+		if !ok {
+			t.Errorf("%s: expected a JSON-RPC error, got %+v", name, resp)
+			continue
+		}
+		if msg, _ := errObj["message"].(string); msg == "" {
+			t.Errorf("%s: error needs a message", name)
+		}
+	}
+}
+
+func TestSystemDialogToolDoesNotExposeTyping(t *testing.T) {
+	for _, tool := range tools {
+		if tool.Name != "system_dialog" {
+			continue
+		}
+		for prop := range tool.InputSchema.Properties {
+			if prop == "text" || prop == "value" || prop == "password" || prop == "field" {
+				t.Errorf("system_dialog must not accept %q: secrets must not pass through an agent", prop)
+			}
+		}
+		return
+	}
+	t.Fatal("system_dialog tool not found")
 }

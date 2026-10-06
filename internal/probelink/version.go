@@ -32,12 +32,24 @@ func majorVersion(v string) (major int, ok bool) {
 	return n, true
 }
 
+// coreVersion strips a leading "v" and any pre-release / build suffix
+// ("0.15.0-fp13" -> "0.15.0", "1.2.3+build5" -> "1.2.3"), so a dev or
+// pre-release CLI built from the same release as the agent is not reported as
+// a mismatch (FP-16, reported from a real project running a 0.15.0 pre-release).
+func coreVersion(v string) string {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
+	return v
+}
+
 // VersionMismatchWarning returns a human-readable warning if clientVersion
 // and agentVersion are both known and differ, or "" if they match or either
 // side's version is unknown (empty/unparsable — nothing to compare against).
 // It performs no I/O; callers decide whether/how to print the result.
 func VersionMismatchWarning(clientVersion, agentVersion string) string {
-	if clientVersion == "" || agentVersion == "" || clientVersion == agentVersion {
+	if clientVersion == "" || agentVersion == "" || coreVersion(clientVersion) == coreVersion(agentVersion) {
 		return ""
 	}
 	return fmt.Sprintf(

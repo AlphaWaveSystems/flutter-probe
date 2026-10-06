@@ -123,7 +123,7 @@ func init() {
 	f.Bool("ai-triage", false, "after the run, ask the configured ai: model to explain failures (advisory; needs ai: in probe.yaml; never changes results or the exit code)")
 
 	// Permission pre-grant
-	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy — iOS notifications cannot be pre-granted)")
+	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy; iOS notifications: taps Allow on the system alert, needs Xcode)")
 
 	// App installation
 	f.String("app-path", "", "path to .apk or .app bundle to install before testing")
