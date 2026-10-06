@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ios"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 // Platform indicates the target platform.
@@ -392,7 +393,13 @@ func (m *Manager) WaitForBoot(ctx context.Context, serial string, pollInterval t
 
 // ForwardPort sets up adb forward so the host can reach localhost:agentPort on the device.
 func (m *Manager) ForwardPort(ctx context.Context, serial string, hostPort, devicePort int) error {
-	return m.adb.Forward(ctx, serial, hostPort, devicePort)
+	err := m.adb.Forward(ctx, serial, hostPort, devicePort)
+	if err != nil && strings.Contains(err.Error(), "Address already in use") {
+		// Something other than this forward owns the host port — typically an iOS
+		// simulator app from an earlier run. Say what (FP-19).
+		return fmt.Errorf("%w%s", err, probelink.PortHolderHint("127.0.0.1", hostPort))
+	}
+	return err
 }
 
 // RemoveForward cleans up an adb port forward.

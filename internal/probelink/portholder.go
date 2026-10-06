@@ -141,3 +141,9 @@ func portHolderHint(host string, port int) string {
 	}
 	return describeHolders(port, holders(port))
 }
+
+// PortHolderHint returns the " — agent port N is held by ..." suffix for a
+// loopback host, or "" (remote host, free port, or unknown holder). Exported so
+// callers that fail before dialing — `adb forward` reporting "Address already
+// in use" — can explain who holds the port too.
+func PortHolderHint(host string, port int) string { return portHolderHint(host, port) }

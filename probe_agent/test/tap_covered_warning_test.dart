@@ -5,14 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_probe_agent/src/executor.dart';
 import 'package:flutter_probe_agent/src/protocol.dart';
 
-Future<Map<String, dynamic>> _rpc(WidgetTester tester, String method, Map<String, dynamic> params) async {
+Future<Map<String, dynamic>> _rpc(WidgetTester tester, String method, Map<String, dynamic> params,
+    {ProbeExecutor? executor, void Function(int pumps)? onPump}) async {
   String? raw;
-  final executor = ProbeExecutor((s) => raw = s);
+  final ex = executor ?? ProbeExecutor((s) => raw = s);
+  if (executor != null) ex.sendFn = (s) => raw = s;
   var done = false;
-  final call = executor
+  final call = ex
       .dispatch(ProbeRequest(jsonrpc: '2.0', id: 1, method: method, params: params))
       .whenComplete(() => done = true);
   for (var i = 0; i < 100 && !done; i++) {
+    onPump?.call(i);
     await tester.pump(const Duration(milliseconds: 50));
   }
   await call;
@@ -107,6 +110,66 @@ void main() {
     expect(res['error'], isNull);
     expect(pos.isScrollingNotifier.value, isFalse, reason: 'the tap must not fire mid-scroll');
     expect(taps, 1, reason: 'after the scroll settled the tap lands on the button');
+  });
+
+  // FP-19: after a scroll the target can be transiently un-hittable (an
+  // IgnorePointer that lifts a moment later, a settling overlay, ...). The tap
+  // used to fire into the void; it now waits (bounded) until the target is reachable.
+  testWidgets('a tap right after a scroll waits until the target is hit-testable', (tester) async {
+    final blocked = ValueNotifier<bool>(true);
+    addTearDown(blocked.dispose);
+    var taps = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ValueListenableBuilder<bool>(
+          valueListenable: blocked,
+          builder: (_, isBlocked, __) => ListView(children: [
+            for (var i = 0; i < 3; i++) SizedBox(height: 48, child: Text('Row $i')),
+            IgnorePointer(
+              ignoring: isBlocked,
+              child: ElevatedButton(key: const ValueKey('late_button'), onPressed: () => taps++, child: const Text('Share')),
+            ),
+            for (var i = 3; i < 40; i++) SizedBox(height: 48, child: Text('Row $i')),
+          ]),
+        ),
+      ),
+    ));
+    final ex = ProbeExecutor((_) {});
+    await _rpc(tester, ProbeMethods.scroll, {'direction': 'up'}, executor: ex); // at the top: stamps the scroll time, moves nothing
+
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'id', 'text': '#late_button'},
+    }, executor: ex, onPump: (i) {
+      // The block lifts a few frames after the tap request arrived.
+      if (i == 6) blocked.value = false;
+    });
+    expect(res['error'], isNull);
+    expect(taps, 1, reason: 'the tap must wait for the target to become reachable instead of being lost');
+  });
+
+  testWidgets('a hit that stops at a parent handler is normal and does not warn', (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => taps++,
+            // The label itself ignores pointers; the parent handles the tap
+            // (a common button/snackbar-action structure).
+            child: const Padding(
+              padding: EdgeInsets.all(24),
+              child: IgnorePointer(child: Text('Undo')),
+            ),
+          ),
+        ),
+      ),
+    ));
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'text', 'text': 'Undo'},
+    });
+    expect(taps, 1, reason: 'the parent handler receives the tap');
+    expect(res['result'].containsKey('warning'), isFalse, reason: 'no unrelated widget covers the target');
   });
 }
 

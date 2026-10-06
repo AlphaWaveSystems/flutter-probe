@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## 0.16.3 - 2026-10-06
+
+- Fixed: `tap` waits (up to 2 s) until the target is hit-testable after a scroll, and only warns when the widget at the
+  tap point is unrelated to the target (FP-20).
+
 ## 0.16.2 - 2026-10-06
 
 - Changed: `tap` returns a `warning` in its result when another widget covers the tap point (the tap still happens), and

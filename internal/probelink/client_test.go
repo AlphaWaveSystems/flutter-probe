@@ -398,3 +398,33 @@ func TestDialRefreshRetryIsBounded(t *testing.T) {
 		t.Errorf("rejection should be reported after about %s, took %s", tokenRefreshWindow, took)
 	}
 }
+
+func TestDialCallsOnConnectRefusedAndExplainsTimeout(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := strconv.Atoi(portStr)
+	ln.Close()
+
+	var calls int32
+	_, err = DialWithOptions(context.Background(), DialOptions{
+		Host:             "127.0.0.1",
+		Port:             port,
+		DialTimeout:      1500 * time.Millisecond,
+		OnConnectRefused: func(context.Context) { atomic.AddInt32(&calls, 1) },
+	})
+	if err == nil {
+		t.Fatal("expected a dial error")
+	}
+	if atomic.LoadInt32(&calls) < 1 {
+		t.Errorf("OnConnectRefused was never called")
+	}
+	if atomic.LoadInt32(&calls) > 1 {
+		t.Errorf("OnConnectRefused must be throttled, called %d times in 1.5s", calls)
+	}
+	if !strings.Contains(err.Error(), "agent never started") {
+		t.Errorf("error should explain a refused timeout, got: %v", err)
+	}
+}

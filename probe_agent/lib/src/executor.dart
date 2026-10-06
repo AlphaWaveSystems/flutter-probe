@@ -166,6 +166,7 @@ class ProbeExecutor {
         final sel = req.params['selector'] as Map<String, dynamic>?;
         await _swipe(dir, sel);
         await _sync.waitForSettled();
+        _lastScrollAt = DateTime.now();
         return {'ok': true};
 
       case ProbeMethods.scroll:
@@ -178,6 +179,7 @@ class ProbeExecutor {
           await _scroll(dir, sel);
         }
         await _sync.waitForSettled();
+        _lastScrollAt = DateTime.now();
         return {'ok': true};
 
       case ProbeMethods.drag:
@@ -186,6 +188,7 @@ class ProbeExecutor {
           req.params['to'] as Map<String, dynamic>,
         );
         await _sync.waitForSettled();
+        _lastScrollAt = DateTime.now();
         return {'ok': true};
 
       // ---- Device actions ----
@@ -324,6 +327,31 @@ class ProbeExecutor {
   /// silently doing nothing (FP-19).
   String? _tapWarning;
 
+  /// When the last scroll/swipe/drag finished. A tap shortly after one waits for
+  /// its target to become hit-testable (see [_waitUntilHittableAfterScroll]).
+  DateTime _lastScrollAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// FP-19 (reported from an Android gate): a tap issued right after
+  /// `scroll ... until ... appears` was silently lost, although the target was
+  /// fully visible afterwards and a 3-second wait avoided it. At the moment of
+  /// the tap a hit test at the target's center did not reach it, so the
+  /// synthetic pointer event went nowhere. Whatever transiently blocks hits
+  /// after a scroll (overscroll/ballistic activity, an IgnorePointer, an
+  /// animating overlay), waiting until the target is hit-testable again is the
+  /// reliable fix, so this polls — but only within [window] of the last scroll,
+  /// and only until the target is reachable. Costs nothing when no scroll just
+  /// happened or the target is already reachable.
+  Future<void> _waitUntilHittableAfterScroll(Element element,
+      {Duration window = const Duration(seconds: 2)}) async {
+    final deadline = _lastScrollAt.add(window);
+    while (DateTime.now().isBefore(deadline)) {
+      final box = element.renderObject;
+      if (box is! RenderBox || !box.attached || !box.hasSize) return;
+      if (_hitState(box, box.localToGlobal(box.size.center(Offset.zero))).strict) return;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   /// True while any scrollable that contains [element] is scrolling. Flutter's
   /// Scrollable ignores pointer events for the duration of a scroll activity, so
   /// a tap issued right after a scroll can be dropped without any error.
@@ -367,6 +395,7 @@ class ProbeExecutor {
     // FP-19: same idea for a scroll that has not finished (e.g. right after
     // `scroll down until ... appears`).
     await _waitForScrollIdle(element);
+    await _waitUntilHittableAfterScroll(element);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
 
@@ -405,8 +434,12 @@ class ProbeExecutor {
     }
 
     // A real pointer tap lands on whatever is on top at the point. If that is
-    // not the target, say so: otherwise the tap "succeeds" and nothing happens.
-    if (!_isTopmostAt(box, center)) {
+    // a widget unrelated to the target (neither inside it nor around it), say so:
+    // otherwise the tap "succeeds" and nothing happens. A hit on a widget that
+    // contains the target (a parent GestureDetector/InkWell) is normal and does
+    // not warn — an earlier version warned there too (false positive on a
+    // snackbar action).
+    if (!_hitState(box, center).related) {
       _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
           '(${center.dx.round()}, ${center.dy.round()}); the tap lands on whatever is on top'
           '${_visibleHint()}';
@@ -476,6 +509,34 @@ class ProbeExecutor {
   /// makes internally (see `GestureBinding.handlePointerEvent`), but as a
   /// read-only query — no event is actually dispatched, so this has no
   /// side effects on the widget tree.
+  /// Hit-test result at [position], relative to [target].
+  /// `strict`: the target (or something inside it) is in the hit path.
+  /// `related`: the deepest hit render object is the target, inside it, or an
+  /// ancestor of it — i.e. NOT an unrelated widget sitting on top of it.
+  ({bool strict, bool related}) _hitState(RenderObject target, Offset position) {
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (view == null) return (strict: true, related: true);
+    final result = HitTestResult();
+    GestureBinding.instance.hitTestInView(result, position, view.viewId);
+    RenderObject? deepest;
+    var strict = false;
+    for (final entry in result.path) {
+      final t = entry.target;
+      if (t is! RenderObject) continue;
+      deepest ??= t;
+      for (RenderObject? c = t; c != null; c = c.parent) {
+        if (identical(c, target)) strict = true;
+      }
+    }
+    var related = deepest == null || strict;
+    if (!related) {
+      for (RenderObject? c = target; c != null; c = c.parent) {
+        if (identical(c, deepest)) related = true; // the hit stopped at an ancestor of the target
+      }
+    }
+    return (strict: strict, related: related);
+  }
+
   bool _isTopmostAt(RenderObject target, Offset position) {
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
     if (view == null) return true; // no view to hit-test against — don't block

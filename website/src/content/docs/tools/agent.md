@@ -116,7 +116,8 @@ underneath the one the user sees cannot produce a false positive.
 - **Scrolling**: `scroll down` reveals later content. `scroll down until "X" appears` scrolls half a viewport at a
   time and brings the target fully on screen. Lists build rows lazily, so a row that is off screen does not exist yet.
 - **Taps** wait up to 2 seconds for an in-flight dialog/sheet/page transition, then fire. `wait for idle` waits for
-  transitions, frames, animations and HTTP requests.
+  transitions, frames, animations and HTTP requests, but not for app-level async loads (for example a list fetched in
+  `initState`): after navigation use `wait until "<text>" appears`.
 - **Sync**: after every action the agent waits until frames, tracked animations and in-flight HTTP are idle.
 - **Semantics-wrapped buttons**: if a synthetic tap does not reach a `GestureDetector` under `Semantics`, put the
   `ValueKey` on the `GestureDetector`.
@@ -134,7 +135,7 @@ underneath the one the user sees cannot produce a false positive.
 
 | Symptom | Fix |
 |---|---|
-| `connection refused` / agent never found | The app was not built with `--dart-define=PROBE_AGENT=true`, or `ProbeAgent.start()` is not reached. Look for `PROBE_TOKEN=` in the app log. |
+| `connection refused` / agent never found | The app was not built with `--dart-define=PROBE_AGENT=true`, or `ProbeAgent.start()` is not reached. Look for `PROBE_TOKEN=` in the app log. On Android the CLI re-creates the `adb forward` while refused; check `adb forward --list` if it persists. |
 | `agent rejected token (HTTP 401)` | You are connected to a *different* agent (often a leftover simulator app on 48686). The error names the process holding the port; stop it or use `--agent-port` with `PROBE_PORT`. |
 | `agent port 48686 is held by an adb port forward` | A forward left over from an earlier run (or another Android device is forwarded to it): `adb forward --remove tcp:48686`, or `--agent-port`. |
 | `agent port 48686 is held by an iOS simulator app` | A simulator app from an iOS run is still running. The message names the simulator: `xcrun simctl terminate <udid> <bundle-id>`. |

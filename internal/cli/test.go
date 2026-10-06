@@ -890,6 +890,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 					trace("android: ForwardPort failed: %v", err)
 					return fmt.Errorf("port forward: %w", err)
 				}
+				dialOpts.OnConnectRefused = func(c context.Context) {
+					if err := dm.ForwardPort(c, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+						trace("android: re-forward failed: %v", err)
+					}
+				}
 				defer func() {
 					trace("android: removing port forward for host:%d", cfg.Agent.Port)
 					_ = dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port)

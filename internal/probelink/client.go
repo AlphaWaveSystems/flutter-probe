@@ -54,6 +54,24 @@ type DialOptions struct {
 	// a token that was valid moments later). A token the user passed explicitly
 	// (--token) must stay a fast, fatal failure, so leave this nil for it.
 	RefreshToken func(ctx context.Context) (string, error)
+
+	// OnConnectRefused, when set, is called (at most every refusedHookInterval)
+	// while dials are refused outright. The Android path uses it to re-create the
+	// adb port forward, which can silently disappear after the CLI set it up
+	// (FP-19: "connect: connection refused" right after a cold launch).
+	OnConnectRefused func(ctx context.Context)
+}
+
+// refusedHookInterval throttles DialOptions.OnConnectRefused.
+const refusedHookInterval = 3 * time.Second
+
+// refusedHint explains a dial that was refused for the whole DialTimeout: nothing
+// ever listened, which is a different problem from a slow or mismatched agent.
+func refusedHint(err error, timeout time.Duration) string {
+	if err == nil || !strings.Contains(err.Error(), "connection refused") {
+		return ""
+	}
+	return fmt.Sprintf(" — nothing listened on the agent port for %s: the app's agent never started (is it running and built with --dart-define=PROBE_AGENT=true? look for PROBE_TOKEN= in its log) or the port forward is gone (Android: `adb forward --list`)", timeout)
 }
 
 // tokenRefreshWindow bounds how long a rejected auto-detected token is re-read
@@ -125,6 +143,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	const retryInterval = time.Second
 	attempt := 0
 	var firstReject time.Time // first HTTP 401/403 seen; bounds RefreshToken retries
+	var lastRefusedHook time.Time
 	opts.trace("probelink: dialing %s (timeout=%s)", safeURL, opts.DialTimeout)
 	for {
 		attempt++
@@ -170,10 +189,20 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 			return nil, fmt.Errorf("probelink: dial %s: %w%s", safeURL, err, portHolderHint(opts.Host, opts.Port))
 		}
 		opts.trace("probelink: [attempt %d] dial failed (transient): %v — retrying in %s", attempt, err, retryInterval)
+		// Nothing is listening on the host port. For an adb-forwarded device that
+		// can mean the forward vanished (adb server restart, another tool removing
+		// forwards) rather than the agent being slow, so re-establish it every few
+		// seconds instead of waiting on a listener that will never come (FP-19).
+		if opts.OnConnectRefused != nil && strings.Contains(err.Error(), "connection refused") &&
+			time.Since(lastRefusedHook) >= refusedHookInterval {
+			lastRefusedHook = time.Now()
+			opts.trace("probelink: [attempt %d] connection refused — re-establishing the forward", attempt)
+			opts.OnConnectRefused(dialCtx)
+		}
 		select {
 		case <-dialCtx.Done():
 			opts.trace("probelink: dial deadline exceeded after %d attempt(s): %v", attempt, lastErr)
-			return nil, fmt.Errorf("probelink: dial %s: %w%s", safeURL, lastErr, portHolderHint(opts.Host, opts.Port))
+			return nil, fmt.Errorf("probelink: dial %s: %w%s%s", safeURL, lastErr, portHolderHint(opts.Host, opts.Port), refusedHint(lastErr, opts.DialTimeout))
 		case <-time.After(retryInterval):
 		}
 	}
