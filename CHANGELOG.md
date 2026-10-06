@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-10-06
+
+Follow-ups from a real project's gate on 0.16.2 (FP-20).
+
+### Fixed
+- **Silent tap after `scroll ... until`:** after a scroll the agent now waits (up to 2 s) until the target is actually
+  hit-testable before tapping, and the "covered by another widget" warning only fires when the widget at the tap point
+  is unrelated to the target (a descendant or ancestor hit, such as a button's inner text, is no longer reported).
+- **`connection refused` after a cold launch (Android):** while dials are refused the CLI re-creates the `adb forward`
+  every ~3 s, so a forward that vanished no longer turns into a full dial timeout. A refused timeout now says what
+  it means (agent never started vs. forward gone).
+- **iOS simulator port clashes:** `Address already in use` while forwarding now names the process holding the port.
+
+### Docs
+- `wait for idle` does not wait for application-level async loads (a list fetched in `initState`); use
+  `wait until "<text>" appears` after navigation.
+
 ## [0.16.2] - 2026-10-06
 
 Fixes for issues found by running a real project's full gate on 0.16.1 (FP-19).
