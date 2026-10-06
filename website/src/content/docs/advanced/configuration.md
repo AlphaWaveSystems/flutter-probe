@@ -177,6 +177,7 @@ this is a deliberate departure from Maestro's mandatory-cloud-upload model).
 | `model` | string | `claude-sonnet-4-20250514` | Model name. Required, no default, for `provider: local` |
 | `endpoint` | string | — | OpenAI-compatible base URL (e.g. `http://localhost:11434/v1`) for `provider: local`. Supports `${ENV_VAR}`. Required when `provider: local` — a test using `with ai` fails fast if it's missing |
 | `timeout` | duration | `60s` | Per-request HTTP timeout for AI provider calls. Raise this for slow local models — the step timeout alone doesn't cover the provider HTTP call |
+| `vision` | bool | `true` | Set `false` for a text-only model (most small local models have no image support). `see "..." with ai` is then judged from the screen's visible texts and keys instead of a screenshot; `assert no visual defects with ai` and `read ... with ai` need pixels and fail with a clear message. Refused when `redact` rules exist, since those can't be applied to text. See [AI & local models](/tools/ai/) |
 | `redact` | list | — | Widgets to black out in the screenshot before it's sent to any provider (local or cloud). Each entry: `selector:` — a ProbeScript selector (`"#credit_card_field"` or `"Card Number"`) |
 
 ```yaml

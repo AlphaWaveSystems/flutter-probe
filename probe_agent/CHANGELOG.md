@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## 0.15.0 - 2026-10-06
+
+- Fixed: `agent_version.dart` reported 0.13.0 in 0.14.0, causing a bogus CLI/agent version-mismatch warning.
+- **BREAKING (WiFi auto-discovery only):** the core agent no longer depends on `bonsoir`. A native plugin in an
+  app's dependencies is linked into every build of that app, release included (size, privacy, a possible
+  local-network prompt) regardless of `--dart-define=PROBE_AGENT`. mDNS advertising is now an optional hook:
+  implement `ProbeAdvertiser` in your own app (copy-paste `bonsoir` example in the Studio docs) and pass it to
+  `ProbeAgent.start(advertiser: ...)` in the build flavor that wants it. No separate package is published. Without
+  it WiFi testing is unchanged (`--host <ip> --token <token>`) and the agent logs `PROBE_MDNS=off`. New public
+  API: `ProbeAdvertiser`, `mdnsServiceType`. The advertised port is now the actually bound port (it used to be
+  the preferred one even after a fallback) (FP-15).
+- Fixed: the finder/executor resolved routes with `ModalRoute.of(element)`, subscribing queried elements to a
+  route scope from outside a build; since 0.10.0 that could trip a framework assertion (red screen) after
+  closing a sheet or dialog. Routes are now read without subscribing (`probeRouteOf`) (FP-13).
+
+- Added: `probe.scroll` accepts `until` (selector) — scroll until the target is on screen, then
+  `ensureVisible` it; stops early at the end of the list (FP-13).
+- Added: `probe.wait` kind `idle` (route transitions + frames/animations/HTTP settled); `tap` waits up
+  to 2 s for an in-flight route transition (FP-13).
+- Added: `probe.visible_summary` RPC; `Widget not found` / `Timed out waiting for` errors now list the
+  visible texts and keys (FP-13).
+- Added: `--dart-define=PROBE_PORT=<n>` moves the agent off 48686 (pairs with `probe test --agent-port`).
+- Fixed: `type`/`clear` assigned `controller.text`, which never reached `onChanged`/`inputFormatters`;
+  they now use `EditableTextState.userUpdateTextEditingValue` like real keystrokes (FP-13).
+
 ## 0.14.0 - 2026-08-31
 
 - Fixed: `tap #id` could invoke a Semantics-wrapped button's `onTap` directly even when something

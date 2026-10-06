@@ -129,8 +129,8 @@ studio/
 | Android Emulator | adb forward | Token from cache, /data/local/tmp, or logcat |
 | Physical iOS (USB) | iproxy tunnel | Requires `brew install libimobiledevice`; token via idevicesyslog |
 | Physical Android (USB) | adb forward | Same path as emulator |
-| Physical iOS (WiFi) | direct | Auto-discovered via mDNS; user pastes token from app logs |
-| Physical Android (WiFi) | direct | Auto-discovered via mDNS; user pastes token from app logs |
+| Physical iOS (WiFi) | direct | Auto-discovered via mDNS (needs a `ProbeAdvertiser` in the app, see the Studio docs); user pastes token from app logs |
+| Physical Android (WiFi) | direct | Auto-discovered via mDNS (needs a `ProbeAdvertiser` in the app, see the Studio docs); user pastes token from app logs |
 
 WiFi discovery requires `flutter_probe_agent` v0.7.0+ in your Flutter
 app's pubspec, and the app must run with `--dart-define=PROBE_WIFI=true`

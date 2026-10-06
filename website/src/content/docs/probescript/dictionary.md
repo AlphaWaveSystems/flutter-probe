@@ -17,7 +17,8 @@ Commands that interact with the app's UI.
 | `type` | `type "text" into "Field"` | Enter text into a text field |
 | `clear` | `clear "Field"` | Clear the contents of a text field |
 | `swipe` | `swipe up/down/left/right` | Swipe gesture on screen or widget |
-| `scroll` | `scroll up/down` | Scroll within a scrollable widget |
+| `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
+| `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |
 | `go back` | `go back` | Press the device back button |
 | `open` | `open the app` | Launch the app (CLI-side) and reconnect |
@@ -42,7 +43,7 @@ Commands that verify the state of the UI.
 | Command | Syntax | Description |
 |---|---|---|
 | `see` | `see "Text"` | Assert that text is visible on screen |
-| `don't see` | `don't see "Text"` | Assert that text is NOT visible |
+| `don't see` | `don't see "Text"` | Assert that text is NOT visible (`dont see` is accepted too) |
 | `see native` | `see native "..."` | Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as "not found" on other platforms |
 | `don't see native` | `don't see native "..."` | Assert a native UI element matching the query is NOT present |
 | `see exactly` | `see exactly 3 "Item"` | Assert exact count of matching widgets |
@@ -64,6 +65,7 @@ Commands that pause execution until a condition is met.
 | `wait N seconds` | `wait 5 seconds` | Wait for a fixed duration |
 | `wait until appears` | `wait until "Dashboard" appears` | Wait until text becomes visible |
 | `wait until disappears` | `wait until "Loading" disappears` | Wait until text is no longer visible |
+| `wait for idle` | `wait for idle` | Wait for route transitions, frames, animations and HTTP requests to settle |
 | `wait for page to load` | `wait for page to load` | Wait for the UI to settle (triple-signal sync) |
 | `wait for network idle` | `wait for network idle` | Wait for pending HTTP requests to complete |
 | `wait for animations to end` | `wait for animations to end` | Wait until no scheduled animation frames remain |

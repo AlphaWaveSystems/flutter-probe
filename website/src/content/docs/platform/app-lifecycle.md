@@ -74,6 +74,8 @@ allow permission "camera"
 grant all permissions
 ```
 
+To grant once for the whole run instead of per test, use `probe test --grant notifications,camera`.
+
 ### Revoking permissions
 
 ```
@@ -85,7 +87,7 @@ revoke all permissions
 
 | Permission | Android | iOS |
 |------------|---------|-----|
-| `notifications` | `POST_NOTIFICATIONS` | `notifications` |
+| `notifications` | `POST_NOTIFICATIONS` | — (cannot be pre-granted; see [iOS](/platform/ios/)) |
 | `camera` | `CAMERA` | `camera` |
 | `location` | `ACCESS_FINE_LOCATION` | `location` |
 | `microphone` | `RECORD_AUDIO` | `microphone` |

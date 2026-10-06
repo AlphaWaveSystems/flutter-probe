@@ -117,6 +117,11 @@ flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_W
 probe test tests/ --host <device-ip> --token <probe-token>
 ```
 
+Studio can auto-discover WiFi devices (mDNS) if the device build passes a `ProbeAdvertiser` to
+`ProbeAgent.start(advertiser: ...)`; a copy-paste `bonsoir` example is in the
+[Studio docs](https://flutterprobe.dev/tools/studio/#wifi-auto-discovery). It is left to the app so the core agent
+has no native plugin and nothing native is linked into release builds.
+
 **USB** — requires libimobiledevice (may experience USB-C drops):
 ```bash
 brew install libimobiledevice  # provides iproxy, idevicesyslog, idevice_id
@@ -294,6 +299,16 @@ compare screenshot "checkout_page"             # baseline on first run, diff aft
 compare screenshot "total_price" of "Total"    # crop the comparison to one widget
 ```
 
+### Scrolling, idling and negative checks
+
+```
+scroll down until "Rate this app" appears   # keep scrolling until it is on screen (scroll down = later content)
+wait for idle                                # dialogs/sheets/animations/requests settled
+dont see "Error"                             # alias of don't see "Error"
+```
+
+Failures name the line and step (`line 14: wait until "X" appears timed out after 28s — visible texts: [...]`).
+
 ### Conditionals, loops, and retries
 
 ```
@@ -386,10 +401,15 @@ Composite tests without configured devices are reported as **SKIPPED**, so singl
 
 ```
 allow permission "camera"
-deny permission "notifications"
+deny permission "location"
 grant all permissions
 revoke all permissions
 ```
+
+Or once for the whole run: `probe test tests/ --grant notifications,camera`. **iOS notifications cannot be
+pre-granted** (`simctl privacy` has no such service; the prompt is a system alert the agent cannot tap) —
+guard the request with `bool.fromEnvironment('PROBE_AGENT')` or accept it once per simulator. Android
+`POST_NOTIFICATIONS` works.
 
 ### Dart escape hatch
 
@@ -470,7 +490,9 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe report --input results.json` | Generate HTML report |
 | `probe device list` | List connected devices and simulators |
 | `probe studio` | Open interactive widget tree inspector |
-| `probe generate --prompt "test login flow"` | AI-generate a test from a description |
+| `probe generate --prompt "test login flow"` | AI-generate a test from a description (cloud or local model) |
+| `probe ai doctor` | Optional: check the configured `ai:` provider |
+| `probe triage --input results.json` | Optional: explain failures with the configured model (advisory) |
 | `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories) |
 | `probe version` | Print CLI version |
 | `probe-convert` | Convert tests from other frameworks |
@@ -489,6 +511,9 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `--tag <tag>` | — | Run only tests with this tag |
 | `--name <pattern>` | — | Run only tests matching name |
 | `--adb <path>` | PATH | Custom ADB binary |
+| `--agent-port <n>` | `48686` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators can't collide. A failed dial names the process holding the port |
+| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera` (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications can't be pre-granted) |
+| `--ai-triage` | off | Optional: after the run, explain failures with the configured `ai:` model (advisory; never changes results) |
 
 ## Studio (Beta Preview)
 
@@ -506,14 +531,14 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 18 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 20 tools:
 
 | Category | Tools |
 |---|---|
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
-| Reporting | `get_report`, `generate_report`, `generate_test` |
+| Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure` |
 | Project | `init_project`, `record` |
 
 Every CLI feature is accessible from MCP. Key capabilities an agent can use:
@@ -537,7 +562,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 18 tools appear in Claude.
+4. Done — all 20 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 
@@ -642,6 +667,22 @@ This is currently the only "fully local" option FlutterProbe ships. Native on-de
 support (Apple Intelligence on iOS/macOS, Gemini Nano on Android) is **not** implemented —
 those are in-app, entitlement-gated platform SDKs a CLI process has no route to, a materially
 larger effort than this feature, tracked separately rather than folded in silently.
+
+### Optional AI helpers — and tests never depend on them
+
+The `ai:` block can also power, with the same provider (a local model needs no API key):
+
+| What | How |
+|---|---|
+| Check the provider | `probe ai doctor` — endpoint, model, text, and whether the model can see images |
+| Explain failures | `probe test --ai-triage`, or later `probe triage --input reports/results.json`; MCP tool `triage_failure` |
+| Generate tests | `probe generate ...` uses the configured provider (Claude stays the default with no `ai.provider`) |
+| Text-only models | `ai.vision: false` judges `see "..." with ai` from the screen's visible texts instead of a screenshot |
+
+**AI is strictly opt-in and off the pass/fail path.** With no `ai:` block nothing runs and nothing is sent.
+Triage runs only after results are final; if the model is down, slow or wrong it prints a one-line note and
+results, reports and the exit code are untouched. Small models (about 0.5B) give weak advice; use 7B+ for
+triage. Details: [flutterprobe.dev/tools/ai](https://flutterprobe.dev/tools/ai/).
 
 `with ai` cannot be negated, and fails fast with a clear error at parse time — before any
 device connects — if `ai:` isn't configured. See

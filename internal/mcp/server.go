@@ -162,6 +162,14 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
+  Scrolling:       scroll down until "Text" appears (or until #key_id appears) keeps
+                     scrolling until the target is on screen — use it for rows below
+                     the fold instead of counting plain "scroll down" steps. Note
+                     "scroll down" reveals LATER content, "scroll up" earlier content.
+  Idle:            wait for idle — after closing a dialog/sheet, waits for route
+                     transitions and pending frames/animations/requests to settle
+                     (prefer it to a fixed "wait 2 seconds"). "dont see" is an alias
+                     of "don't see".
   AI assertions:   see "<natural-language assertion>" with ai — for checks that are
                      hard to express structurally (e.g. see "checkout total looks
                      correct" with ai). assert no visual defects with ai — a fixed
@@ -249,7 +257,12 @@ Key flags for the flags parameter:
   --parallel                  distribute tests across all connected devices
   --shard 1/3                 run 1/3 of test files (for CI matrix builds)
   --host <ip> --token <tok>   WiFi mode for physical devices
-  --disable-animations        set timeDilation=0 to speed up Flutter animations
+  --agent-port 48700          agent port (alias of --port); pair with the app's
+                               --dart-define=PROBE_PORT=48700 so simulators don't collide
+  --grant notifications,camera  pre-grant OS permissions before the first test
+                               (Android: pm grant; iOS simulator: simctl privacy;
+                               iOS notifications can't be pre-granted)
+  --disable-animations       set timeDilation=0 to speed up Flutter animations
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
   --stream                    emit one ndjson line per test as it completes (requires --format json)
@@ -346,6 +359,18 @@ For composite multi-device tests use the composite_devices parameter.`,
 				"input":  {Type: "string", Description: "JSON report path (default: most recently modified *.json in reports/)"},
 				"output": {Type: "string", Description: "HTML output path (default: reports/report.html)"},
 				"flags":  {Type: "string", Description: "Extra probe report flags (e.g. --open)"},
+			},
+		},
+	},
+	{
+		Name: "triage_failure",
+		Description: `OPTIONAL and advisory: explain the failed tests in a JSON results file using the AI model configured in probe.yaml (ai: block — a local OpenAI-compatible model such as Ollama or LM Studio works with no API key).
+Returns a short probable cause and next step per failure. It never re-runs tests and never changes results. If no ai: block is configured, or the model is unreachable, it says so and nothing else is affected — tests do not need it. Run ` + "`probe ai doctor`" + ` to check a provider. Failure text from FlutterProbe includes the failing line, the step and the visible texts/keys, which is what the model reasons over.`,
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"input":  {Type: "string", Description: "JSON report path from run_tests --format json (default: most recently modified *.json in reports/)"},
+				"output": {Type: "string", Description: "Optional markdown file to also write the advice to"},
 			},
 		},
 	},
@@ -460,6 +485,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.initProject(req.ID)
 	case "generate_report":
 		return s.generateReport(req.ID, args["input"], args["output"], args["flags"])
+	case "triage_failure":
+		return s.triageFailure(req.ID, args["input"], args["output"])
 	case "record":
 		return s.record(req.ID, args["output"], args["device"], args["timeout"])
 	default:
@@ -709,6 +736,36 @@ func (s *Server) generateReport(id any, input, output, flags string) *mcpRespons
 	}
 	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 		"content": []map[string]any{{"type": "text", "text": fmt.Sprintf("Report generated: %s\n%s", output, string(out))}},
+	}}
+}
+
+// triageFailure wraps `probe triage` (FP-14). Advisory only: any failure is
+// returned as text for the agent to read; it affects nothing else.
+func (s *Server) triageFailure(id any, input, output string) *mcpResponse {
+	if input == "" {
+		matches, _ := filepath.Glob(filepath.Join("reports", "*.json"))
+		var newestMod time.Time
+		for _, m := range matches {
+			if info, err := os.Stat(m); err == nil && (input == "" || info.ModTime().After(newestMod)) {
+				input, newestMod = m, info.ModTime()
+			}
+		}
+		if input == "" {
+			return textResp(id, "No JSON reports found in reports/. Run tests with --format json first.", fmt.Errorf("no reports"))
+		}
+	}
+	cmdArgs := []string{"triage", "--input", input}
+	if output != "" {
+		cmdArgs = append(cmdArgs, "--output", output)
+	}
+	cmd := exec.Command(probeBin(), cmdArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return textResp(id, string(out), err)
+	}
+	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
+		"content": []map[string]any{{"type": "text", "text": string(out)}},
 	}}
 }
 

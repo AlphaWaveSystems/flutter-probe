@@ -53,6 +53,7 @@ export default defineConfig({
             { label: 'Studio (Beta)', slug: 'tools/studio' },
             { label: 'MCP Server', slug: 'tools/mcp' },
             { label: 'Recording', slug: 'tools/recording' },
+            { label: 'AI & Local Models', slug: 'tools/ai' },
             { label: 'Plugins', slug: 'tools/plugins' },
           ],
         },

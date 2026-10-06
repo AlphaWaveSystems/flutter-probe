@@ -47,6 +47,7 @@ type Executor struct {
 	aiCfg       config.AIConfig    // from probe.yaml's ai: block
 	aiProvider  ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
 	aiConfigErr error              // set by SetAI when ai.provider has an unrecognized value
+	aiText      ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
 	maxReconnectAttempts int           // max auto-reconnect attempts per call (default 4)
 	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
@@ -130,6 +131,15 @@ func (e *Executor) SetAI(cfg config.AIConfig) {
 		return
 	}
 	e.aiProvider = provider
+	if !cfg.VisionEnabled() {
+		// Text-only model (FP-14): `see "..." with ai` is judged from the
+		// screen's visible texts, so a plain text completer is needed too.
+		e.aiText, err = ai.NewTextCompleter(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model, config.ResolveEnvVar(cfg.Endpoint), cfg.Timeout)
+		if err != nil {
+			e.aiConfigErr = err
+			e.aiProvider = nil
+		}
+	}
 }
 
 // Artifacts returns the list of screenshot paths collected during execution.
@@ -288,6 +298,14 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		}
 	}
 
+	// FP-13: a deadline error names nothing by itself — add the step line, the
+	// step and what the screen showed. Skipped for lifecycle actions (restart/
+	// kill/clear), where the agent is intentionally gone and can't be asked.
+	if !isLifecycleAction {
+		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
+	}
+	err = annotateStepError(step, desc, err)
+
 	// Stop the ticker goroutine and wait for it to fully exit before reading
 	// extraLines or printing the result — this eliminates any output race.
 	if desc != "" {
@@ -406,6 +424,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbSwipe:
 			return fmt.Sprintf("swipe %s", s.Direction)
 		case parser.VerbScroll:
+			if s.Until != nil {
+				return fmt.Sprintf("scroll %s until %q appears", s.Direction, s.Until.Text)
+			}
 			return fmt.Sprintf("scroll %s", s.Direction)
 		case parser.VerbOpen:
 			return "open the app"
@@ -623,6 +644,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if a.Sel != nil {
 			sp := toSelectorParam(e.resolveSelector(*a.Sel))
 			sel = &sp
+		}
+		if a.Until != nil {
+			return e.scrollUntilVisible(ctx, a, sel)
 		}
 		return e.client.Scroll(ctx, string(a.Direction), sel)
 
@@ -1046,6 +1070,10 @@ func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) err
 	}
 	assertion := e.resolve(a.Sel.Text)
 
+	if !e.aiCfg.VisionEnabled() {
+		return e.runAssertWithAIText(ctx, assertion)
+	}
+
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "with_ai")
 	if err != nil {
 		return fmt.Errorf("with ai: %w", err)
@@ -1071,6 +1099,9 @@ func (e *Executor) runAssertNoDefects(ctx context.Context, a parser.AssertNoDefe
 			return fmt.Errorf("assert no visual defects: %w", e.aiConfigErr)
 		}
 		return fmt.Errorf(`"assert no visual defects with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	if !e.aiCfg.VisionEnabled() {
+		return errNeedsVision("assert no visual defects with ai")
 	}
 
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "no_defects")
@@ -1099,6 +1130,9 @@ func (e *Executor) runReadWithAI(ctx context.Context, a parser.ActionStep) error
 			return fmt.Errorf("read ... with ai: %w", e.aiConfigErr)
 		}
 		return fmt.Errorf(`"read ... with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	if !e.aiCfg.VisionEnabled() {
+		return errNeedsVision("read ... with ai")
 	}
 	query := e.resolve(a.Text)
 
@@ -1192,13 +1226,14 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 		parser.WaitNetworkIdle: "network_idle",
 		parser.WaitSelector:    "selector",
 		parser.WaitAnimations:  "animations",
+		parser.WaitIdle:        "idle",
 	}[w.Kind]
 
 	return e.client.Wait(ctx, probelink.WaitParams{
 		Kind:     kindStr,
 		Target:   e.resolve(w.Target),
 		Duration: w.Duration,
-		Timeout:  e.timeout.Seconds(),
+		Timeout:  agentWaitTimeout(e.timeout).Seconds(),
 	})
 }
 
@@ -1387,7 +1422,7 @@ func isConnectionError(err error) bool {
 		strings.Contains(msg, "broken pipe") ||
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "EOF") ||
-		strings.Contains(msg, "rpc error -32000")
+		strings.Contains(msg, fmt.Sprintf("rpc error %d", probelink.CodeConnectionClosed))
 }
 
 // tryReconnect attempts to re-establish the connection to the agent. The app

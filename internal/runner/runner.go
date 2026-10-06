@@ -55,6 +55,7 @@ type RunOptions struct {
 	VideoDir     string // directory to store video recordings
 	DeviceID     string // device serial/UDID (for tagging results)
 	DeviceName   string // human-readable device name
+	Grant        []string // permissions to pre-grant before the first test (--grant)
 }
 
 // New creates a Runner.
@@ -106,6 +107,10 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 	// Load recipes
 	if err := r.loadRecipes(ctx); err != nil {
 		return nil, fmt.Errorf("runner: loading recipes: %w", err)
+	}
+
+	if err := r.applyGrants(ctx); err != nil {
+		return nil, err
 	}
 
 	var results []TestResult

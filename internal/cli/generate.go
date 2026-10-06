@@ -13,6 +13,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// providerConfigured reports whether the ai: block names a provider (FP-14).
+func providerConfigured(cfg *config.Config) bool {
+	return cfg != nil && cfg.AI.Configured()
+}
+
+// newGenerator builds the generator for `probe generate`. With an ai.provider
+// set (openai | anthropic | local) every call goes to that provider — so a
+// local model works with no API key. With no provider it is exactly the
+// original behavior: Claude, using --api-key / ai.api_key.
+func newGenerator(cfg *config.Config, apiKey, model string) (*ai.Generator, error) {
+	if providerConfigured(cfg) {
+		c, err := ai.NewTextCompleter(cfg.AI.Provider, config.ResolveEnvVar(cfg.AI.APIKey), model, config.ResolveEnvVar(cfg.AI.Endpoint), cfg.AI.Timeout)
+		if err != nil {
+			return nil, err
+		}
+		return ai.NewGeneratorWithCompleter(c), nil
+	}
+	return ai.NewGenerator(apiKey, model), nil
+}
+
 var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "AI-powered test generation and maintenance",
@@ -43,7 +63,10 @@ var generatePromptCmd = &cobra.Command{
 			model = cfg.AI.Model
 		}
 
-		gen := ai.NewGenerator(apiKey, model)
+		gen, err := newGenerator(cfg, apiKey, model)
+		if err != nil {
+			return err
+		}
 
 		req := ai.GenerateRequest{
 			Prompt: prompt,
@@ -145,8 +168,7 @@ var generateFromRecordingCmd = &cobra.Command{
 		}
 
 		// Try LLM-powered generation if API key available
-		if apiKey != "" {
-			gen := ai.NewGenerator(apiKey, model)
+		if gen, genErr := newGenerator(cfg, apiKey, model); genErr == nil && (apiKey != "" || providerConfigured(cfg)) {
 
 			prompt := fmt.Sprintf("Convert this recorded user interaction session into a clean, well-structured ProbeScript test.\n\nRecording data:\n%s", string(data))
 			if name != "" {

@@ -36,13 +36,14 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 
 `get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) to pin a specific target.
 
-### Reporting & generation (3 tools)
+### Reporting & generation (4 tools)
 
 | Tool | Description |
 |---|---|
 | `get_report` | Read the most recently modified JSON test run report |
 | `generate_report` | Generate a standalone HTML report from a JSON results file |
 | `generate_test` | AI-generate a `.probe` test from a natural language prompt |
+| `triage_failure` | Optional, advisory: explain failures in a JSON report with the configured `ai:` model (a local model works). Never affects results |
 
 ### Project management (1 tool)
 
@@ -67,6 +68,8 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--parallel` | Distribute tests across all connected devices |
 | `--shard 1/3` | Run 1/3 of test files (for CI matrix builds) |
 | `--host <ip> --token <t>` | WiFi mode for physical devices |
+| `--agent-port 48700` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=48700` so simulators don't collide. A failed dial names the process holding the port. |
+| `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications can't be pre-granted) |
 | `--disable-animations` | Set `timeDilation=0` for faster tests |
 | `-y` | Auto-approve destructive operations (CI mode) |
 | `--video` | Record device screen during the run |
@@ -138,7 +141,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 18 tools are immediately available in any new Claude conversation.
+4. Done — all 20 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 
@@ -322,6 +325,25 @@ To pull a specific piece of text off the screen into a variable — an OTP code,
 4. `get_report` — confirm the ETA assertion passed
 
 `travel to` is emulator/simulator only (same limitation as the single-point `set location`) — it skips with a warning on physical devices.
+
+### Reaching rows below the fold
+
+> "Write a test that opens Settings and checks the 'Rate' row, which is far down the list."
+
+1. `get_widget_tree` — confirm the row isn't built yet (lists build rows lazily)
+2. `write_test` — use `scroll down until` instead of counting `scroll down` steps, and `wait for idle` after dismissing a dialog instead of a fixed sleep:
+   ```
+   tap #nav_tab_settings
+   scroll down until "Rate this app" appears
+   see "Rate this app"
+   tap #close_button
+   wait for idle
+   tap #nav_tab_today
+   ```
+3. `run_tests` with `flags: "--grant notifications"` — pre-grants the OS permission so no system prompt interrupts the flow (Android and simulator-supported iOS services; iOS notifications can't be pre-granted)
+4. If a step fails, the error carries `line N`, the step, and the visible texts/keys at that moment — read those instead of guessing
+
+`scroll down` reveals later content; `scroll up` goes back toward the top.
 
 ### HTML report from CI results
 

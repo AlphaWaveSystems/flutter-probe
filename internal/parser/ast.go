@@ -210,6 +210,7 @@ type ActionStep struct {
 	Direction SwipeDirection // for swipe / scroll
 	Name      string      // for screenshot name, rotate direction, locale, etc.
 	To        *Selector   // for drag: destination
+	Until     *Selector   // for scroll: keep scrolling until this target is visible
 	IfVisible bool        // if true, skip silently when selector is not found
 	Optional  bool        // if true, attempt the step but don't fail the test if it errors
 	DeepLink  bool        // for VerbOpenLink: "in/into the app" — route via OS intent handling, not url_launcher
@@ -265,6 +266,7 @@ const (
 	WaitNetworkIdle                // wait until network is idle
 	WaitSelector                   // wait until #id disappears/appears
 	WaitAnimations                 // wait for animations to end
+	WaitIdle                       // wait for idle: route transitions + frames/animations/HTTP settled
 )
 
 type WaitStep struct {
