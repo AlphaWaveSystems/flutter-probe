@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## 0.16.4 - 2026-10-06
+
+- Fixed: `tap` prefers the reachable widget among several matches and warns about a covered target only after it stays
+  covered for ~0.6 s (FP-21).
+
 ## 0.16.3 - 2026-10-06
 
 - Fixed: `tap` waits (up to 2 s) until the target is hit-testable after a scroll, and only warns when the widget at the

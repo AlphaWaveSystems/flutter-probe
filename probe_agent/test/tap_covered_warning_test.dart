@@ -23,6 +23,7 @@ Future<Map<String, dynamic>> _rpc(WidgetTester tester, String method, Map<String
 }
 
 void main() {
+  snackbarCase();
   // FP-19 (reported from an Android gate): a tap "succeeded" and nothing
   // happened. When something else is on top at the tap point, say so.
   testWidgets('a tap on a covered target returns a warning instead of failing silently',
@@ -174,3 +175,55 @@ void main() {
 }
 
 void unawaited(Future<void> f) {}
+
+void snackbarCase() {
+  testWidgets('with two matches, the tap goes to the one that is reachable', (tester) async {
+    var hidden = 0, shown = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Stack(children: [
+          // First in tree order, but under an IgnorePointer (like a leaving overlay).
+          IgnorePointer(child: TextButton(onPressed: () => hidden++, child: const Text('Undo'))),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: TextButton(onPressed: () => shown++, child: const Text('Undo')),
+          ),
+        ]),
+      ),
+    ));
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'text', 'text': 'Undo'},
+    });
+    expect(res['error'], isNull);
+    expect(res['result']['warning'], isNull, reason: '${res['result']['warning']}');
+    expect(shown, 1);
+    expect(hidden, 0);
+  });
+
+  testWidgets('tapping a SnackBar action gives no covered warning', (tester) async {
+    var undone = 0;
+    late BuildContext ctx;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (c) {
+          ctx = c;
+          return const Center(child: Text('Body'));
+        }),
+        floatingActionButton: FloatingActionButton(onPressed: () {}),
+      ),
+    ));
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+      content: const Text('Added'),
+      action: SnackBarAction(label: 'Undo', onPressed: () => undone++),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100)); // mid slide-in
+
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'text', 'text': 'Undo'},
+    });
+    expect(res['error'], isNull);
+    expect(res['result']['warning'], isNull, reason: '${res['result']['warning']}');
+    expect(undone, 1);
+  });
+}
