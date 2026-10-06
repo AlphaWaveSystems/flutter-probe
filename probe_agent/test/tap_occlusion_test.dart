@@ -32,14 +32,22 @@ void main() {
       ));
 
       final executor = ProbeExecutor((_) {});
-      await executor.dispatch(ProbeRequest(
-        jsonrpc: '2.0',
-        id: 1,
-        method: ProbeMethods.tap,
-        params: {
-          'selector': {'kind': 'id', 'text': '#covered_button'},
-        },
-      ));
+      // A covered tap polls briefly before warning, so frames must advance.
+      var done = false;
+      final call = executor
+          .dispatch(ProbeRequest(
+            jsonrpc: '2.0',
+            id: 1,
+            method: ProbeMethods.tap,
+            params: {
+              'selector': {'kind': 'id', 'text': '#covered_button'},
+            },
+          ))
+          .whenComplete(() => done = true);
+      for (var i = 0; i < 100 && !done; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await call;
       await tester.pump();
 
       expect(tapped, isFalse,

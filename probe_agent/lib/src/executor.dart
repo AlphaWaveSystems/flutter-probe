@@ -384,6 +384,24 @@ class ProbeExecutor {
     }
   }
 
+  /// When several widgets match (an exiting SnackBar or route keeps its
+  /// widgets in the tree for a moment), prefer the first one a pointer can
+  /// actually reach, instead of whichever comes first in tree order.
+  Element _preferReachable(Element first, Map<String, dynamic> sel) {
+    try {
+      final all = _finder.findElements(sel);
+      if (all.length < 2) return first;
+      for (final e in all) {
+        final b = e.renderObject;
+        if (b is RenderBox && b.attached && b.hasSize &&
+            _hitState(b, b.localToGlobal(b.size.center(Offset.zero))).strict) {
+          return e;
+        }
+      }
+    } catch (_) {}
+    return first;
+  }
+
   Future<void> _tap(Map<String, dynamic> sel) async {
     _tapWarning = null;
     // FP-13: a tap issued right after a dialog/bottom sheet closes lands on
@@ -391,7 +409,7 @@ class ProbeExecutor {
     // swallowed. Let any in-flight route transition finish first (bounded —
     // never blocks a tap for more than a couple of seconds).
     await _waitForRouteTransitions();
-    final element = _requireElement(sel);
+    final element = _preferReachable(_requireElement(sel), sel);
     // FP-19: same idea for a scroll that has not finished (e.g. right after
     // `scroll down until ... appears`).
     await _waitForScrollIdle(element);
@@ -439,12 +457,21 @@ class ProbeExecutor {
     // contains the target (a parent GestureDetector/InkWell) is normal and does
     // not warn — an earlier version warned there too (false positive on a
     // snackbar action).
-    if (!_hitState(box, center).related) {
+    // An overlay that is still sliding in or out (a SnackBar action, a sheet)
+    // can sit over the target for a few frames; give it a moment to settle
+    // before calling the tap covered, so a transient state is not reported.
+    var warnCenter = center;
+    for (var i = 0; i < 12 && box.attached; i++) {
+      warnCenter = box.localToGlobal(box.size.center(Offset.zero));
+      if (_hitState(box, warnCenter).related) break;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    if (!_hitState(box, warnCenter).related) {
       _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
-          '(${center.dx.round()}, ${center.dy.round()}); the tap lands on whatever is on top'
+          '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top'
           '${_visibleHint()}';
     }
-    final gesture = await _createGesture(center);
+    final gesture = await _createGesture(warnCenter);
     await gesture.up();
   }
 

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-10-06
+
+### Fixed
+- **False "covered by another widget" warning on a SnackBar action (Android):** when several widgets match a
+  selector (an exiting SnackBar or route keeps its widgets in the tree briefly) `tap` now picks the one a pointer can
+  actually reach, and a tap only warns after the target has stayed covered for ~0.6 s, so overlays that are still
+  sliding in or out are not reported. A really covered target still warns (and costs that extra 0.6 s).
+
 ## [0.16.3] - 2026-10-06
 
 Follow-ups from a real project's gate on 0.16.2 (FP-20).
