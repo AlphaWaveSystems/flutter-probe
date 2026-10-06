@@ -213,6 +213,34 @@ class ProbeFinder {
     element.visitChildren((child) => _visitElement(child, visitor));
   }
 
+  /// FP-13: a short snapshot of what a user could currently see — visible
+  /// text strings and string-valued ValueKeys — for failure diagnostics.
+  /// A timed-out step used to report only "context deadline exceeded", leaving
+  /// the failure screenshot as the sole clue to what the screen showed.
+  /// Bounded by [max] per list so the message stays one readable line.
+  Map<String, List<String>> visibleSummary({int max = 25}) {
+    final texts = <String>[];
+    final keys = <String>[];
+    walkTree((e) {
+      if (texts.length >= max && keys.length >= max) return;
+      final widget = e.widget;
+      final key = widget.key;
+      if (key is ValueKey<String> && keys.length < max && !keys.contains(key.value) && _isVisible(e)) {
+        keys.add(key.value);
+      }
+      if (texts.length < max && (widget is Text || widget is EditableText)) {
+        final text = widget is Text
+            ? (widget.data ?? widget.textSpan?.toPlainText() ?? '')
+            : (widget as EditableText).controller.text;
+        final trimmed = text.trim();
+        if (trimmed.isNotEmpty && !texts.contains(trimmed) && _isVisible(e)) {
+          texts.add(trimmed);
+        }
+      }
+    });
+    return {'texts': texts, 'keys': keys};
+  }
+
   /// Returns all element info for a given selector (used by dump_tree).
   List<Map<String, dynamic>> findAll(Map<String, dynamic> sel) {
     final elements = findElements(sel);

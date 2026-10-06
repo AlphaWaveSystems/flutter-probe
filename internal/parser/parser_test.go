@@ -714,6 +714,82 @@ func TestParser_DontSee(t *testing.T) {
 	}
 }
 
+// FP-13: `dont see` (no apostrophe) is an alias for `don't see`.
+func TestParser_DontSee_NoApostropheAlias(t *testing.T) {
+	src := `test "t"
+  dont see "Loading..."
+  dont see #spinner
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(prog.Tests[0].Body))
+	}
+	a := firstAssert(t, prog.Tests[0].Body)
+	if !a.Negated {
+		t.Error("`dont see` should be negated")
+	}
+	if a.Sel.Text != "Loading..." {
+		t.Errorf("sel text: %q", a.Sel.Text)
+	}
+}
+
+// FP-13: `scroll [dir] until <target> [appears]` and `wait for idle`.
+func TestParser_ScrollUntil(t *testing.T) {
+	cases := []struct {
+		line      string
+		dir       parser.SwipeDirection
+		untilText string
+	}{
+		{`scroll down until "Rate Water Sip" appears`, parser.SwipeDown, "Rate Water Sip"},
+		{`scroll until "Share streak" is visible`, parser.SwipeDown, "Share streak"},
+		{`scroll up until "Top" appears`, parser.SwipeUp, "Top"},
+		{`scroll down until #share_streak_button appears`, parser.SwipeDown, "#share_streak_button"},
+	}
+	for _, c := range cases {
+		prog := mustParse(t, "test \"t\"\n  "+c.line+"\n")
+		if len(prog.Tests[0].Body) != 1 {
+			t.Fatalf("%q: want 1 step, got %d (trailing words leaked into a second step?)", c.line, len(prog.Tests[0].Body))
+		}
+		a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+		if !ok || a.Verb != parser.VerbScroll {
+			t.Fatalf("%q: want scroll action, got %#v", c.line, prog.Tests[0].Body[0])
+		}
+		if a.Direction != c.dir {
+			t.Errorf("%q: direction %q, want %q", c.line, a.Direction, c.dir)
+		}
+		if a.Until == nil || a.Until.Text != c.untilText {
+			t.Errorf("%q: until %+v, want text %q", c.line, a.Until, c.untilText)
+		}
+	}
+}
+
+func TestParser_PlainScrollHasNoUntil(t *testing.T) {
+	prog := mustParse(t, "test \"t\"\n  scroll down\n")
+	a := prog.Tests[0].Body[0].(parser.ActionStep)
+	if a.Until != nil {
+		t.Errorf("plain scroll must not set Until, got %+v", a.Until)
+	}
+}
+
+func TestParser_ScrollUntilRequiresTarget(t *testing.T) {
+	if _, err := parser.ParseFile("test \"t\"\n  scroll down until\n"); err == nil {
+		t.Fatal("expected a parse error for `scroll down until` with no target")
+	}
+}
+
+func TestParser_WaitForIdle(t *testing.T) {
+	for _, line := range []string{"wait for idle", "wait until idle"} {
+		prog := mustParse(t, "test \"t\"\n  "+line+"\n")
+		if len(prog.Tests[0].Body) != 1 {
+			t.Fatalf("%q: want 1 step, got %d", line, len(prog.Tests[0].Body))
+		}
+		w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+		if !ok || w.Kind != parser.WaitIdle {
+			t.Errorf("%q: want WaitIdle step, got %#v", line, prog.Tests[0].Body[0])
+		}
+	}
+}
+
 func TestParser_SeeExactly(t *testing.T) {
 	src := `test "t"
   see exactly 3 "Product" cards

@@ -112,7 +112,14 @@ class ProbeAgent {
       // Local mode: listen on port
       // PROBE_WIFI=true enables binding to 0.0.0.0 for WiFi testing
       const allowWifi = bool.fromEnvironment('PROBE_WIFI', defaultValue: false);
-      _server = ProbeServer(port: port, allowRemoteConnections: allowWifi);
+      // FP-13: --dart-define=PROBE_PORT=<n> moves the agent off 48686 without
+      // a code change, pairing with `probe test --agent-port <n>` so two
+      // simulators (or a stale process on the default port) can't collide.
+      const portOverride = int.fromEnvironment('PROBE_PORT', defaultValue: 0);
+      _server = ProbeServer(
+        port: portOverride > 0 ? portOverride : port,
+        allowRemoteConnections: allowWifi,
+      );
       await _server!.start();
     }
   }

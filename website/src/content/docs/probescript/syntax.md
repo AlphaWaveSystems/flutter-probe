@@ -54,7 +54,7 @@ type "secret123" into the "Password" field
 
 ```
 see "Dashboard"                    # text is visible
-don't see "Error"                  # text is NOT visible
+don't see "Error"                  # text is NOT visible (dont see "Error" also works)
 see 3 "Item"                       # exactly 3 matches
 see "Submit" is enabled            # widget state
 see "Terms" is checked             # checkbox state
@@ -71,8 +71,17 @@ swipe left
 swipe up on "Card"
 scroll down
 scroll up on "ListView"
+scroll down until "Rate Water Sip" appears      # keep scrolling until it is on screen
+scroll until #share_button is visible           # direction defaults to down
 drag "Item A" to "Item B"
 ```
+
+`scroll down` reveals **later** content (the list offset grows); `scroll up` goes back toward the top.
+`scroll ... until <target> appears` scrolls half a viewport at a time — lists build rows lazily, so
+the target only exists once enough has been scrolled — and then brings the target fully on screen.
+It stops early when the list can't move further, and fails with the visible texts if the target never
+shows up. It is the equivalent of Maestro's `scrollUntilVisible`. Use `on "List"` to pick which
+scrollable when a screen has several.
 
 ## Wait Commands
 
@@ -82,7 +91,16 @@ wait until "Dashboard" appears
 wait until "Loading" disappears
 wait for the page to load
 wait for network idle
+wait for idle
 ```
+
+`wait for idle` waits until route transitions (dialogs, sheets, pages closing or opening) have finished
+and no frames, animations or HTTP requests are pending. Use it after closing a dialog or bottom sheet
+instead of a fixed `wait 2 seconds`. `tap` also waits (up to 2 seconds) for an in-flight route transition
+before it fires.
+
+When a step times out, the error names the line, the step, the timeout and what was on screen
+(`visible texts: [...], keys: [...]`), so a failure no longer reduces to `context deadline exceeded`.
 
 ## Conditionals
 
@@ -321,6 +339,19 @@ revoke all permissions
 ```
 
 See [App Lifecycle](/platform/app-lifecycle/) for details on how these work across platforms.
+
+To grant permissions once, before the first test, instead of in every test, pass `--grant`:
+
+```bash
+probe test tests/ --grant notifications,camera,location
+```
+
+Android grants via `adb shell pm grant` (including `POST_NOTIFICATIONS`); the iOS simulator grants the
+services `xcrun simctl privacy` supports (camera, location, microphone, photos, contacts, calendar, sms).
+**iOS notifications cannot be pre-granted**: simctl has no notifications service and the prompt is a
+SpringBoard system alert the agent cannot see or tap. `--grant notifications` prints a warning on iOS
+rather than failing. Guard the request in your app with `bool.fromEnvironment('PROBE_AGENT')`, or accept
+the prompt once per simulator (the choice persists until the app is erased).
 
 ## Conditional Actions
 

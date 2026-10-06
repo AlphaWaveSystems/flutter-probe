@@ -162,6 +162,14 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
+  Scrolling:       scroll down until "Text" appears (or until #key_id appears) keeps
+                     scrolling until the target is on screen — use it for rows below
+                     the fold instead of counting plain "scroll down" steps. Note
+                     "scroll down" reveals LATER content, "scroll up" earlier content.
+  Idle:            wait for idle — after closing a dialog/sheet, waits for route
+                     transitions and pending frames/animations/requests to settle
+                     (prefer it to a fixed "wait 2 seconds"). "dont see" is an alias
+                     of "don't see".
   AI assertions:   see "<natural-language assertion>" with ai — for checks that are
                      hard to express structurally (e.g. see "checkout total looks
                      correct" with ai). assert no visual defects with ai — a fixed
@@ -249,7 +257,12 @@ Key flags for the flags parameter:
   --parallel                  distribute tests across all connected devices
   --shard 1/3                 run 1/3 of test files (for CI matrix builds)
   --host <ip> --token <tok>   WiFi mode for physical devices
-  --disable-animations        set timeDilation=0 to speed up Flutter animations
+  --agent-port 48700          agent port (alias of --port); pair with the app's
+                               --dart-define=PROBE_PORT=48700 so simulators don't collide
+  --grant notifications,camera  pre-grant OS permissions before the first test
+                               (Android: pm grant; iOS simulator: simctl privacy;
+                               iOS notifications can't be pre-granted)
+  --disable-animations       set timeDilation=0 to speed up Flutter animations
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
   --stream                    emit one ndjson line per test as it completes (requires --format json)

@@ -50,6 +50,8 @@ probe test [path] [flags]
 | `--visual-threshold` | `0.5` | Max allowed pixel diff % for visual regression |
 | `--visual-pixel-delta` | `8` | Pixel color delta tolerance |
 | `--port <int>` | `48686` | Agent WebSocket port |
+| `--agent-port <int>` | — | Alias of `--port`. Pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators (or a stale process on 48686) can't collide. A failed dial on loopback names the process holding the port. |
+| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera,location`. Android: `adb shell pm grant`; iOS simulator: `simctl privacy`. iOS notifications can't be pre-granted (warns). |
 | `--dial-timeout` | `30s` | WebSocket connection timeout |
 | `--token-timeout` | `30s` | Agent auth token wait timeout |
 | `--reconnect-delay` | `2s` | Post-restart reconnect delay |

@@ -75,6 +75,8 @@ ProbeScript uses natural English with indent-based blocks (like Python). Key rul
   - wait for the page to load
   - swipe up / swipe down / swipe left / swipe right
   - scroll down / scroll up
+  - scroll down until "Text" appears — keep scrolling until visible
+  - wait for idle — dialogs/sheets/animations/requests settled
   - go back
   - take a screenshot "name"
   - clear app data

@@ -41,11 +41,35 @@ func ResolveAndroidPermissions(name string) ([]string, error) {
 	return perms, nil
 }
 
+// ErrIOSNotificationsUnsupported is returned for the iOS "notifications"
+// permission: `xcrun simctl privacy` has no notifications service, and the
+// permission prompt is a SpringBoard system alert the Dart agent cannot see
+// or tap. Callers that apply permissions in bulk (--grant) treat it as a
+// warning; the single-permission `allow permission` step fails with it.
+var ErrIOSNotificationsUnsupported = fmt.Errorf(
+	"iOS cannot pre-grant \"notifications\": `xcrun simctl privacy` has no notifications service and the prompt is a SpringBoard system alert the agent cannot tap — " +
+		"skip the request when running under FlutterProbe (guard it with bool.fromEnvironment('PROBE_AGENT')), or accept it once by hand per simulator (the choice persists until the app is erased)")
+
 // ResolveIOSService returns the simctl privacy service for a human-readable name.
 func ResolveIOSService(name string) (string, error) {
+	if name == "notifications" {
+		return "", ErrIOSNotificationsUnsupported
+	}
 	svc, ok := IOSPrivacyServices[name]
 	if !ok {
-		return "", fmt.Errorf("unknown permission %q — available: notifications, camera, location, microphone, photos, contacts, calendar", name)
+		return "", fmt.Errorf("unknown permission %q — available on iOS: camera, location, microphone, photos, contacts, calendar, sms", name)
 	}
 	return svc, nil
+}
+
+// ValidPermissionName reports whether name is a permission FlutterProbe knows
+// on at least one platform, so a typo in --grant fails before any device work.
+func ValidPermissionName(name string) bool {
+	if _, ok := AndroidPermissions[name]; ok {
+		return true
+	}
+	if _, ok := IOSPrivacyServices[name]; ok {
+		return true
+	}
+	return name == "notifications"
 }

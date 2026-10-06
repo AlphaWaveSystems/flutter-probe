@@ -90,13 +90,20 @@ The iOS simulator shares the host's `localhost` network. No port forwarding is n
 iOS simulator permissions are managed via `xcrun simctl privacy`:
 
 ```
-allow permission "notifications"   # simctl privacy grant <UDID> notifications <bundleID>
-deny permission "camera"           # simctl privacy revoke <UDID> camera <bundleID>
+allow permission "camera"          # simctl privacy grant <UDID> camera <bundleID>
+deny permission "location"         # simctl privacy revoke <UDID> location <bundleID>
 grant all permissions
 revoke all permissions
 ```
 
-This works on iOS 14+ simulators.
+This works on iOS 14+ simulators for camera, location, microphone, photos, contacts, calendar and sms.
+`probe test --grant camera,location` applies the same grants once before the first test.
+
+**Notifications cannot be pre-granted on iOS.** `xcrun simctl privacy` has no notifications service, and the
+prompt is a SpringBoard system alert the Dart agent cannot see or tap, so `allow permission "notifications"`
+fails with an explanation and `--grant notifications` only warns. Skip the request when running under
+FlutterProbe (`bool.fromEnvironment('PROBE_AGENT')`), or accept it once per simulator — the choice persists
+until the app is erased. Android is unaffected: `POST_NOTIFICATIONS` is granted with `adb shell pm grant`.
 
 :::note[Permission changes relaunch the app (v0.12.1+)]
 `simctl privacy grant/revoke` silently **terminates the target app** — an Apple behavior, not a

@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Water Sip 1.2.5 release-gate feedback (FP-13), reported against CLI 0.14.0.
+
+### Added
+- **`scroll [dir] until <target> appears`** — scrollIntoView for lazily built lists (Maestro's
+  `scrollUntilVisible`). Resolved agent-side: scrolls half a viewport at a time, then brings the
+  target fully on screen (`Scrollable.ensureVisible`), stops early when the list can't move, and
+  fails with the visible texts if the target never shows up. Older agents fall back to a CLI-side
+  loop (25 attempts).
+- **`wait for idle`** (also `wait until idle`) — route transitions finished and no pending frames,
+  animations or HTTP requests. `tap` also waits (max 2 s) for an in-flight dialog/sheet/page
+  transition before firing.
+- **`probe test --grant <list>`** — pre-grant OS permissions once before the first test
+  (`--grant notifications,camera,location`). Android: `adb shell pm grant` incl. `POST_NOTIFICATIONS`;
+  iOS simulator: every `simctl privacy` service. **iOS notifications cannot be pre-granted** (no simctl
+  service; the prompt is a SpringBoard alert the agent cannot tap) — `--grant` warns instead of failing,
+  and `allow permission "notifications"` on iOS now fails with that explanation instead of a
+  contradictory "unknown permission — available: notifications".
+- **`--agent-port <n>`** on `probe test` / `probe record` (alias of `--port`) and the matching
+  **`--dart-define=PROBE_PORT=<n>`** for the app, so simulators can't fight over 48686.
+- **Port-holder report:** a failed agent dial on loopback now names the process holding the port
+  (`agent port 48686 is held by pid 4242 (Runner)`) and how to move off it.
+- **`probe.visible_summary`** agent RPC (visible texts + string ValueKeys) used for failure diagnostics.
+
+### Changed
+- **Timeout errors say what timed out.** A step that hit its deadline used to fail with a bare
+  `context deadline exceeded`. It now reports the line, the step, the timeout and the visible texts/keys
+  at that moment. Agent-side `Widget not found` / `Timed out waiting for` errors carry the same
+  suffix, and `wait` hands the agent a timeout 2 s shorter than the CLI's so the agent's descriptive
+  error arrives first.
+- **`type` and `clear` go through the platform text-input path**
+  (`EditableTextState.userUpdateTextEditingValue`) instead of assigning `controller.text`, so
+  `onChanged`, `inputFormatters` and form validation run as with real keystrokes.
+
+### Fixed
+- `dont see "X"` (no apostrophe) is accepted as an alias of `don't see "X"`; it previously failed
+  with `unknown recipe call "dont see <arg>"`.
+
 ## [0.14.0] - 2026-08-31
 
 ### Added

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Added: `probe.scroll` accepts `until` (selector) — scroll until the target is on screen, then
+  `ensureVisible` it; stops early at the end of the list (FP-13).
+- Added: `probe.wait` kind `idle` (route transitions + frames/animations/HTTP settled); `tap` waits up
+  to 2 s for an in-flight route transition (FP-13).
+- Added: `probe.visible_summary` RPC; `Widget not found` / `Timed out waiting for` errors now list the
+  visible texts and keys (FP-13).
+- Added: `--dart-define=PROBE_PORT=<n>` moves the agent off 48686 (pairs with `probe test --agent-port`).
+- Fixed: `type`/`clear` assigned `controller.text`, which never reached `onChanged`/`inputFormatters`;
+  they now use `EditableTextState.userUpdateTextEditingValue` like real keystrokes (FP-13).
+
 ## 0.14.0 - 2026-08-31
 
 - Fixed: `tap #id` could invoke a Semantics-wrapped button's `onTap` directly even when something

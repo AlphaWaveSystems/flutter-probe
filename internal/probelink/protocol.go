@@ -107,6 +107,9 @@ type SwipeParams struct {
 type ScrollParams struct {
 	Direction string        `json:"direction"`
 	Selector  *SelectorParam `json:"selector,omitempty"`
+	// Until, when set, makes the agent keep scrolling until this target is on
+	// screen (FP-13). Agents that predate it ignore the field and scroll once.
+	Until *SelectorParam `json:"until,omitempty"`
 }
 
 // OpenParams opens the app or a named screen.
@@ -172,6 +175,20 @@ type WidgetTreeResult struct {
 	Tree string `json:"tree"`
 }
 
+// CodeConnectionClosed is the client-side error code for pending calls that
+// were failed because the connection dropped. It is deliberately not -32000:
+// the agent uses -32000 for ordinary step timeouts ("Timed out waiting for X"),
+// and the two used to be indistinguishable — so a failed `wait` was treated as
+// a dead connection and burned the whole auto-reconnect budget (FP-13).
+const CodeConnectionClosed = -32099
+
+// VisibleSummaryResult is a short snapshot of the visible text strings and
+// string-valued ValueKeys on screen (FP-13), for failure diagnostics.
+type VisibleSummaryResult struct {
+	Texts []string `json:"texts"`
+	Keys  []string `json:"keys"`
+}
+
 // BoundsResult is a widget's on-screen pixel bounding box (top-left origin).
 // Used to redact a widget's region from a screenshot before it's sent to an
 // AI provider for a "with ai" assertion.
@@ -205,6 +222,7 @@ const (
 	MethodDrag         = "probe.drag"
 	MethodScreenshot   = "probe.screenshot"
 	MethodDumpTree     = "probe.dump_tree"
+	MethodVisibleSummary = "probe.visible_summary"
 	MethodSelectorBounds = "probe.selector_bounds"
 	MethodRunDart      = "probe.run_dart"
 	MethodMock         = "probe.mock"

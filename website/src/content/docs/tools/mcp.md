@@ -67,6 +67,8 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--parallel` | Distribute tests across all connected devices |
 | `--shard 1/3` | Run 1/3 of test files (for CI matrix builds) |
 | `--host <ip> --token <t>` | WiFi mode for physical devices |
+| `--agent-port 48700` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=48700` so simulators don't collide. A failed dial names the process holding the port. |
+| `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications can't be pre-granted) |
 | `--disable-animations` | Set `timeDilation=0` for faster tests |
 | `-y` | Auto-approve destructive operations (CI mode) |
 | `--video` | Record device screen during the run |
@@ -322,6 +324,25 @@ To pull a specific piece of text off the screen into a variable — an OTP code,
 4. `get_report` — confirm the ETA assertion passed
 
 `travel to` is emulator/simulator only (same limitation as the single-point `set location`) — it skips with a warning on physical devices.
+
+### Reaching rows below the fold
+
+> "Write a test that opens Settings and checks the 'Rate' row, which is far down the list."
+
+1. `get_widget_tree` — confirm the row isn't built yet (lists build rows lazily)
+2. `write_test` — use `scroll down until` instead of counting `scroll down` steps, and `wait for idle` after dismissing a dialog instead of a fixed sleep:
+   ```
+   tap #nav_tab_settings
+   scroll down until "Rate Water Sip" appears
+   see "Rate Water Sip"
+   tap #close_button
+   wait for idle
+   tap #nav_tab_today
+   ```
+3. `run_tests` with `flags: "--grant notifications"` — pre-grants the OS permission so no system prompt interrupts the flow (Android and simulator-supported iOS services; iOS notifications can't be pre-granted)
+4. If a step fails, the error carries `line N`, the step, and the visible texts/keys at that moment — read those instead of guessing
+
+`scroll down` reveals later content; `scroll up` goes back toward the top.
 
 ### HTML report from CI results
 
