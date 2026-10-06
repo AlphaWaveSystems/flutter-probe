@@ -117,6 +117,11 @@ flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_W
 probe test tests/ --host <device-ip> --token <probe-token>
 ```
 
+Studio can auto-discover WiFi devices (mDNS) if the device build also includes the optional
+[`flutter_probe_agent_mdns`](https://pub.dev/packages/flutter_probe_agent_mdns) package and starts the agent with
+`ProbeAgent.start(advertiser: const ProbeMdns())`. It is separate so the core agent has no native plugin and nothing
+native is linked into release builds.
+
 **USB** — requires libimobiledevice (may experience USB-C drops):
 ```bash
 brew install libimobiledevice  # provides iproxy, idevicesyslog, idevice_id
