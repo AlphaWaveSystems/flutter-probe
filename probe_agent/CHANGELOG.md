@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## 0.15.0 - 2026-10-06
+
+- Fixed: `agent_version.dart` reported 0.13.0 in 0.14.0, causing a bogus CLI/agent version-mismatch warning.
 - **BREAKING (WiFi auto-discovery only):** the core agent no longer depends on `bonsoir`. A native plugin in an
   app's dependencies is linked into every build of that app, release included (size, privacy, a possible
   local-network prompt) regardless of `--dart-define=PROBE_AGENT`. mDNS advertising is now an optional hook:

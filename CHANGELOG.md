@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-06
+
 ### Changed (BREAKING for WiFi auto-discovery only) — FP-15
 - **`flutter_probe_agent` no longer depends on the native `bonsoir` mDNS plugin.** A plugin in an app's
   dependencies is linked into every build of that app, release included, regardless of
