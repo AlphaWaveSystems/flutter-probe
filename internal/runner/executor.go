@@ -47,6 +47,7 @@ type Executor struct {
 	aiCfg       config.AIConfig    // from probe.yaml's ai: block
 	aiProvider  ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
 	aiConfigErr error              // set by SetAI when ai.provider has an unrecognized value
+	aiText      ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
 	maxReconnectAttempts int           // max auto-reconnect attempts per call (default 4)
 	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
@@ -130,6 +131,15 @@ func (e *Executor) SetAI(cfg config.AIConfig) {
 		return
 	}
 	e.aiProvider = provider
+	if !cfg.VisionEnabled() {
+		// Text-only model (FP-14): `see "..." with ai` is judged from the
+		// screen's visible texts, so a plain text completer is needed too.
+		e.aiText, err = ai.NewTextCompleter(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model, config.ResolveEnvVar(cfg.Endpoint), cfg.Timeout)
+		if err != nil {
+			e.aiConfigErr = err
+			e.aiProvider = nil
+		}
+	}
 }
 
 // Artifacts returns the list of screenshot paths collected during execution.
@@ -1060,6 +1070,10 @@ func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) err
 	}
 	assertion := e.resolve(a.Sel.Text)
 
+	if !e.aiCfg.VisionEnabled() {
+		return e.runAssertWithAIText(ctx, assertion)
+	}
+
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "with_ai")
 	if err != nil {
 		return fmt.Errorf("with ai: %w", err)
@@ -1085,6 +1099,9 @@ func (e *Executor) runAssertNoDefects(ctx context.Context, a parser.AssertNoDefe
 			return fmt.Errorf("assert no visual defects: %w", e.aiConfigErr)
 		}
 		return fmt.Errorf(`"assert no visual defects with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	if !e.aiCfg.VisionEnabled() {
+		return errNeedsVision("assert no visual defects with ai")
 	}
 
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "no_defects")
@@ -1113,6 +1130,9 @@ func (e *Executor) runReadWithAI(ctx context.Context, a parser.ActionStep) error
 			return fmt.Errorf("read ... with ai: %w", e.aiConfigErr)
 		}
 		return fmt.Errorf(`"read ... with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	if !e.aiCfg.VisionEnabled() {
+		return errNeedsVision("read ... with ai")
 	}
 	query := e.resolve(a.Text)
 

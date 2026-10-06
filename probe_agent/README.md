@@ -143,6 +143,10 @@ The CLI automatically sends `probe.biometric_signal` after every `biometric matc
 - **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing
 - **Pre-shared restart token** — `restart the app` works over WiFi without USB log reading
 - **`tap "X" if visible`** — conditional actions that skip silently when widget is not found
+- **`PROBE_PORT`** — `--dart-define=PROBE_PORT=48700` moves the agent off 48686 (pair with `probe test --agent-port 48700`)
+- **`scroll … until … appears` / `wait for idle`** — agent-side scroll-into-view and route-transition settling (0.15.0)
+- **Text input like a keyboard** — `type`/`clear` run through `EditableTextState`, so `onChanged` and `inputFormatters` fire
+- **Actionable failures** — `Widget not found` / `Timed out waiting for` list the visible texts and keys; `probe.visible_summary` RPC
 - **Port-range fallback** — auto-tries ports 48686–48695 if preferred port is busy; logs `PROBE_PORT_BUSY=N (another probe agent is running)` when collision is with a sibling agent
 
 ## Requirements

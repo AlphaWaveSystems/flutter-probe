@@ -363,6 +363,18 @@ For composite multi-device tests use the composite_devices parameter.`,
 		},
 	},
 	{
+		Name: "triage_failure",
+		Description: `OPTIONAL and advisory: explain the failed tests in a JSON results file using the AI model configured in probe.yaml (ai: block — a local OpenAI-compatible model such as Ollama or LM Studio works with no API key).
+Returns a short probable cause and next step per failure. It never re-runs tests and never changes results. If no ai: block is configured, or the model is unreachable, it says so and nothing else is affected — tests do not need it. Run ` + "`probe ai doctor`" + ` to check a provider. Failure text from FlutterProbe includes the failing line, the step and the visible texts/keys, which is what the model reasons over.`,
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"input":  {Type: "string", Description: "JSON report path from run_tests --format json (default: most recently modified *.json in reports/)"},
+				"output": {Type: "string", Description: "Optional markdown file to also write the advice to"},
+			},
+		},
+	},
+	{
 		Name:        "record",
 		Description: "Record user interactions with the running Flutter app and generate a .probe test file. Records for the specified duration (default 30s), then returns the generated file content. Requires a WebSocket-connected device (simulators/emulators); physical-device WiFi connections are not supported for recording.",
 		InputSchema: mcpSchema{
@@ -473,6 +485,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.initProject(req.ID)
 	case "generate_report":
 		return s.generateReport(req.ID, args["input"], args["output"], args["flags"])
+	case "triage_failure":
+		return s.triageFailure(req.ID, args["input"], args["output"])
 	case "record":
 		return s.record(req.ID, args["output"], args["device"], args["timeout"])
 	default:
@@ -722,6 +736,36 @@ func (s *Server) generateReport(id any, input, output, flags string) *mcpRespons
 	}
 	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 		"content": []map[string]any{{"type": "text", "text": fmt.Sprintf("Report generated: %s\n%s", output, string(out))}},
+	}}
+}
+
+// triageFailure wraps `probe triage` (FP-14). Advisory only: any failure is
+// returned as text for the agent to read; it affects nothing else.
+func (s *Server) triageFailure(id any, input, output string) *mcpResponse {
+	if input == "" {
+		matches, _ := filepath.Glob(filepath.Join("reports", "*.json"))
+		var newestMod time.Time
+		for _, m := range matches {
+			if info, err := os.Stat(m); err == nil && (input == "" || info.ModTime().After(newestMod)) {
+				input, newestMod = m, info.ModTime()
+			}
+		}
+		if input == "" {
+			return textResp(id, "No JSON reports found in reports/. Run tests with --format json first.", fmt.Errorf("no reports"))
+		}
+	}
+	cmdArgs := []string{"triage", "--input", input}
+	if output != "" {
+		cmdArgs = append(cmdArgs, "--output", output)
+	}
+	cmd := exec.Command(probeBin(), cmdArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return textResp(id, string(out), err)
+	}
+	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
+		"content": []map[string]any{{"type": "text", "text": string(out)}},
 	}}
 }
 

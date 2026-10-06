@@ -119,6 +119,9 @@ func init() {
 	// Destructive operations
 	f.BoolP("yes", "y", false, "auto-confirm destructive operations (clear app data, permissions)")
 
+	// Optional AI triage (advisory, after results are final; never affects the run)
+	f.Bool("ai-triage", false, "after the run, ask the configured ai: model to explain failures (advisory; needs ai: in probe.yaml; never changes results or the exit code)")
+
 	// Permission pre-grant
 	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy — iOS notifications cannot be pre-granted)")
 
@@ -440,6 +443,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 		}
 		if err := report.Report(results); err != nil {
 			return err
+		}
+
+		if aiTriage, _ := cmd.Flags().GetBool("ai-triage"); aiTriage {
+			maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 		}
 
 		if !runner.AllPassed(results) {
@@ -1221,6 +1228,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 		} else if cloudToken == "" && payMethod != "x402" {
 			fmt.Fprintln(statusW, msgCloudTokenMissing)
 		}
+	}
+
+	// FP-14: optional, advisory, after everything else is done. Cannot fail.
+	if aiTriage, _ := cmd.Flags().GetBool("ai-triage"); aiTriage {
+		maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 	}
 
 	if !runner.AllPassed(results) {

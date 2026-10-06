@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Optional local-LLM support (FP-14)
+
+AI stays strictly opt-in: no `ai:` block means no AI code runs, and none of the additions below can change a
+test result, a report or the exit code (they run after results are final, are time-bounded, make no retries,
+and stop after the first provider error).
+
+- **`probe ai doctor`** — checks the configured `ai:` provider: endpoint, model listed, a text round trip, and
+  whether the model accepts images. Verified live against LM Studio (a 0.5B text-only Qwen: text OK, vision
+  not accepted) and Ollama (Gemma 4 31B: both OK).
+- **Failure triage** — `probe test --ai-triage` (after the run) and `probe triage --input results.json`
+  produce a short advisory probable cause and next step per failure, printed and written to
+  `<reports>/triage.md`. MCP tool `triage_failure` wraps it (20 tools now; docs previously said 18).
+- **`ai.vision: false`** — text-only models: `see "..." with ai` is judged from the screen's visible
+  texts/keys instead of a screenshot. `assert no visual defects with ai` and `read ... with ai` report that
+  they need a vision model; the mode is refused when `ai.redact` rules exist (they can't apply to text).
+- **`probe generate` and AI selector suggestions honour `ai.provider`**, including `local` with no API key.
+  With no `ai.provider` the original Claude-only behavior is unchanged.
+- Docs: new [AI & Local Models](https://flutterprobe.dev/tools/ai/) page, plan in
+  `docs/prd/optional-local-llm-plan.md`. A 0.5B model gives weak triage advice; 7B+ is recommended.
+- READMEs added for `cmd/`, `internal/`, `scripts/`, `docker/`, `plugins/`, `mcpb/`, `tests/`,
+  `tools/probe-convert/`.
+
+### Fixed (docs)
+- `scroll down until "X" appears` was documented in the VS Code README and snippets but not implemented by the
+  parser; it is now (FP-13, below).
+
 Water Sip 1.2.5 release-gate feedback (FP-13), reported against CLI 0.14.0.
 
 ### Added

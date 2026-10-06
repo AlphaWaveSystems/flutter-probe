@@ -75,7 +75,16 @@ type AIConfig struct {
 	Endpoint string        `yaml:"endpoint"` // OpenAI-compatible base URL (e.g. http://localhost:11434/v1) for provider: local; supports ${ENV_VAR}
 	Redact   []RedactRule  `yaml:"redact"`   // screenshot regions to black out before any "with ai" call
 	Timeout  time.Duration `yaml:"timeout"`  // per-request HTTP timeout for AI provider calls (default: 60s). Raise for slow local models.
+	// Vision: set false for a text-only model (many small local models have no
+	// image support). `see "..." with ai` is then judged against the screen's
+	// visible texts/keys instead of a screenshot; `assert no visual defects` and
+	// `read ... with ai` need pixels and report that clearly. Unset = true.
+	Vision *bool `yaml:"vision"`
 }
+
+// VisionEnabled reports whether the configured model is treated as
+// vision-capable (the default).
+func (c AIConfig) VisionEnabled() bool { return c.Vision == nil || *c.Vision }
 
 // Configured reports whether enough of the ai: block is set for a "with ai"
 // step to actually run. A provider alone isn't enough for the cloud
