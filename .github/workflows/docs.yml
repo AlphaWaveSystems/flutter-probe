@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "website/**"
+      - "VERSION"   # the landing page shows the version read from this file at build time
+  workflow_dispatch:
 
 permissions:
   pages: write
