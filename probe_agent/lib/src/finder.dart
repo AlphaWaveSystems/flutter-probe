@@ -1,5 +1,40 @@
 import 'package:flutter/widgets.dart';
 
+/// The [ModalRoute] [element] belongs to, found WITHOUT subscribing to it.
+///
+/// `ModalRoute.of(context)` registers [context] as a dependent of the route's
+/// inherited scope. That is only legitimate during a build. The agent calls
+/// this from outside any build, on elements of routes that may be closing; when
+/// such a route is disposed its scope notifies the dependents it still holds,
+/// and the framework asserts that each one is still a descendant
+/// (`InheritedElement.notifyClients`, framework.dart) — a red screen in the
+/// app after closing a sheet or dialog. This was introduced with the route
+/// awareness added in agent 0.10.0 and broke apps in profile/debug test builds
+/// (FP-13, reported from Water Sip).
+///
+/// Walking ancestors reads the same route without registering anything.
+/// `_ModalScopeStatus` is private, so it is matched by name and its public
+/// `route` field read dynamically; any mismatch (a future Flutter renaming it)
+/// degrades to `null`, which every caller already treats as "no route
+/// information — assume visible".
+ModalRoute<dynamic>? probeRouteOf(Element element) {
+  ModalRoute<dynamic>? found;
+  try {
+    element.visitAncestorElements((ancestor) {
+      final widget = ancestor.widget;
+      if (widget is InheritedWidget && widget.runtimeType.toString() == '_ModalScopeStatus') {
+        final route = (widget as dynamic).route;
+        if (route is ModalRoute) found = route;
+        return false;
+      }
+      return true;
+    });
+  } catch (_) {
+    return null;
+  }
+  return found;
+}
+
 /// ProbeFinder translates ProbeLink SelectorParam JSON into Flutter elements
 /// by walking the live widget tree. Does NOT use flutter_test finders since
 /// those require TestWidgetsFlutterBinding.
@@ -177,7 +212,7 @@ class ProbeFinder {
       // Check if the widget is actually painted (not behind Offstage etc.)
       if (!ro.hasSize) return false;
     }
-    if (ModalRoute.of(element)?.isCurrent == false) return false;
+    if (probeRouteOf(element)?.isCurrent == false) return false;
     // Walk up the tree to check for Offstage / Visibility ancestors
     Element? current = element;
     while (current != null) {
