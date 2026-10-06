@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'advertiser.dart';
 import 'relay_client.dart';
 import 'server.dart';
 
@@ -49,6 +50,7 @@ class ProbeAgent {
   static Future<void> start({
     int port = 48686,
     bool allowReleaseBuild = false,
+    ProbeAdvertiser? advertiser,
   }) async {
     const enabled = bool.fromEnvironment('PROBE_AGENT', defaultValue: false);
     if (!enabled) return;
@@ -92,10 +94,10 @@ class ProbeAgent {
       print('ProbeAgent: starting in profile mode (physical device testing)');
     }
 
-    await _startInternal(port);
+    await _startInternal(port, advertiser);
   }
 
-  static Future<void> _startInternal(int port) async {
+  static Future<void> _startInternal(int port, ProbeAdvertiser? advertiser) async {
     if (_server != null || _relayClient != null) return; // already running
 
     const relayUrl = String.fromEnvironment('PROBE_RELAY_URL', defaultValue: '');
@@ -119,6 +121,7 @@ class ProbeAgent {
       _server = ProbeServer(
         port: portOverride > 0 ? portOverride : port,
         allowRemoteConnections: allowWifi,
+        advertiser: advertiser,
       );
       await _server!.start();
     }

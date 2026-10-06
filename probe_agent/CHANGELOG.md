@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **BREAKING (WiFi auto-discovery only):** the core agent no longer depends on `bonsoir`. A native plugin in an
+  app's dependencies is linked into every build of that app, release included (size, privacy, a possible
+  local-network prompt) regardless of `--dart-define=PROBE_AGENT`. mDNS advertising moved to the new optional
+  `flutter_probe_agent_mdns` package: add it and call `ProbeAgent.start(advertiser: const ProbeMdns())`. Without
+  it WiFi testing is unchanged (`--host <ip> --token <token>`) and the agent logs `PROBE_MDNS=off`. New public
+  API: `ProbeAdvertiser`, `mdnsServiceType`. The advertised port is now the actually bound port (it used to be
+  the preferred one even after a fallback) (FP-15).
+- Fixed: the finder/executor resolved routes with `ModalRoute.of(element)`, subscribing queried elements to a
+  route scope from outside a build; since 0.10.0 that could trip a framework assertion (red screen) after
+  closing a sheet or dialog. Routes are now read without subscribing (`probeRouteOf`) (FP-13).
+
 - Added: `probe.scroll` accepts `until` (selector) — scroll until the target is on screen, then
   `ensureVisible` it; stops early at the end of the list (FP-13).
 - Added: `probe.wait` kind `idle` (route transitions + frames/animations/HTTP settled); `tap` waits up

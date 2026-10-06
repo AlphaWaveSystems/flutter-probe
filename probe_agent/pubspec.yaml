@@ -21,12 +21,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Used to advertise the agent over mDNS/Bonjour when running in WiFi
-  # mode (PROBE_WIFI=true). Studio uses this for zero-config discovery
-  # of physical devices on the LAN. The dependency is conditional on the
-  # WiFi flag at runtime — apps not using WiFi mode pay no advertising
-  # cost.
-  bonsoir: ^5.1.10
 
 dev_dependencies:
   flutter_test:

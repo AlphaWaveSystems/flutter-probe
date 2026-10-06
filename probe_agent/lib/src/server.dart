@@ -5,7 +5,7 @@ import 'dart:math';
 
 import 'agent_version.dart';
 import 'executor.dart';
-import 'mdns_advertise.dart';
+import 'advertiser.dart';
 import 'protocol.dart';
 
 export 'agent_version.dart' show probeAgentVersion;
@@ -39,15 +39,20 @@ class ProbeServer {
   /// across stateless HTTP requests within the same session.
   ProbeExecutor? _httpExecutor;
 
-  /// mDNS broadcaster, only used when [allowRemoteConnections] is true.
-  /// Studio (and any other compatible client) browses for these records to
-  /// discover physical devices on the LAN without manual IP entry.
-  ProbeMDNS? _mdns;
+  /// Optional LAN advertiser (see [ProbeAdvertiser]); only used when
+  /// [allowRemoteConnections] is true. Studio browses for these records to
+  /// discover physical devices without manual IP entry.
+  final ProbeAdvertiser? advertiser;
 
   /// Creates a ProbeServer.
   /// Set [allowRemoteConnections] to true for WiFi testing (binds to 0.0.0.0
   /// instead of localhost). Only use in debug/profile builds — never in release.
-  ProbeServer({this.port = 48686, this.portRange = 10, this.allowRemoteConnections = false});
+  ProbeServer({
+    this.port = 48686,
+    this.portRange = 10,
+    this.allowRemoteConnections = false,
+    this.advertiser,
+  });
 
   Timer? _tokenTimer;
 
@@ -94,20 +99,26 @@ class ProbeServer {
       unawaited(_writeTokenFile());
     });
 
-    // Advertise on mDNS only when we're actually reachable from off-host.
-    // Localhost-bound agents have no one to discover them.
+    // Advertise only when we're actually reachable from off-host and an
+    // advertiser was supplied. Localhost-bound agents have no one to discover
+    // them, and the core agent has no mDNS implementation of its own.
     if (allowRemoteConnections) {
-      _mdns = ProbeMDNS();
-      // Hostname makes a stable, recognizable label (e.g. "Patrick's iPhone").
-      // Falls back to a generic name when the OS doesn't expose one.
-      final host = Platform.localHostname.isNotEmpty
-          ? Platform.localHostname
-          : 'flutter-probe-agent';
-      await _mdns!.start(
-        name: host,
-        port: port,
-        agentVersion: probeAgentVersion,
-      );
+      final adv = advertiser;
+      if (adv == null) {
+        // ignore: avoid_print
+        print('PROBE_MDNS=off (add flutter_probe_agent_mdns and pass advertiser: ProbeMdns() to ProbeAgent.start for Studio auto-discovery)');
+      } else {
+        // Hostname makes a stable, recognizable label (e.g. "Patrick's iPhone").
+        // Falls back to a generic name when the OS doesn't expose one.
+        final host = Platform.localHostname.isNotEmpty
+            ? Platform.localHostname
+            : 'flutter-probe-agent';
+        await adv.start(
+          name: host,
+          port: actualPort,
+          agentVersion: probeAgentVersion,
+        );
+      }
     }
 
     _serve();
@@ -275,8 +286,7 @@ class ProbeServer {
   Future<void> stop() async {
     _tokenTimer?.cancel();
     _tokenTimer = null;
-    await _mdns?.stop();
-    _mdns = null;
+    await advertiser?.stop();
     await _server?.close(force: true);
     _server = null;
   }

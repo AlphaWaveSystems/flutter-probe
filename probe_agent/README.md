@@ -140,7 +140,7 @@ The CLI automatically sends `probe.biometric_signal` after every `biometric matc
 - **WebSocket + HTTP transports** — persistent connection for simulators, stateless HTTP for physical devices
 - **Profile mode support** — works on physical iOS devices (not just debug)
 - **Release mode safeguards** — blocked by default, opt-in with `allowReleaseBuild: true`
-- **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing
+- **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing. Studio auto-discovery (mDNS) is the optional [`flutter_probe_agent_mdns`](https://pub.dev/packages/flutter_probe_agent_mdns) package, so this package has **no native plugin dependency** and nothing native is linked into release builds
 - **Pre-shared restart token** — `restart the app` works over WiFi without USB log reading
 - **`tap "X" if visible`** — conditional actions that skip silently when widget is not found
 - **`PROBE_PORT`** — `--dart-define=PROBE_PORT=48700` moves the agent off 48686 (pair with `probe test --agent-port 48700`)

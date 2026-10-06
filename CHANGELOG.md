@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (BREAKING for WiFi auto-discovery only) — FP-15
+- **`flutter_probe_agent` no longer depends on the native `bonsoir` mDNS plugin.** A plugin in an app's
+  dependencies is linked into every build of that app, release included, regardless of
+  `--dart-define=PROBE_AGENT` (reported by Water Sip: release size, privacy, possible local-network prompt).
+  mDNS advertising moved to the new optional package **`flutter_probe_agent_mdns`**
+  (`ProbeAgent.start(advertiser: const ProbeMdns())`). Without it WiFi testing is unchanged
+  (`--host <ip> --token <token>`); Studio's WiFi auto-discovery needs the package in the device build.
+  The advertised port is now the actually bound one.
+
 ### Optional local-LLM support (FP-14)
 
 AI stays strictly opt-in: no `ai:` block means no AI code runs, and none of the additions below can change a
