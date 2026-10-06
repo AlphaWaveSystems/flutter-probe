@@ -4,7 +4,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkResponse, TextButton, OutlinedButton;
+import 'package:flutter/cupertino.dart' show CupertinoPageScaffold;
+import 'package:flutter/material.dart' show BottomSheet, Dialog, ElevatedButton, GestureDetector, InkResponse, Scaffold, TextButton, OutlinedButton;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -168,7 +169,12 @@ class ProbeExecutor {
       case ProbeMethods.scroll:
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
-        await _scroll(dir, sel);
+        final until = req.params['until'] as Map<String, dynamic>?;
+        if (until != null) {
+          await _scrollUntil(dir, sel, until);
+        } else {
+          await _scroll(dir, sel);
+        }
         await _sync.waitForSettled();
         return {'ok': true};
 
@@ -211,6 +217,9 @@ class ProbeExecutor {
       case ProbeMethods.dumpTree:
         final tree = _dumpWidgetTree();
         return {'tree': tree};
+
+      case ProbeMethods.visibleSummary:
+        return _finder.visibleSummary();
 
       case ProbeMethods.selectorBounds:
         final sel = req.params['selector'] as Map<String, dynamic>;
@@ -309,6 +318,11 @@ class ProbeExecutor {
   // ---- Touch helpers ----
 
   Future<void> _tap(Map<String, dynamic> sel) async {
+    // FP-13: a tap issued right after a dialog/bottom sheet closes lands on
+    // its modal barrier while the exit animation is still running and is
+    // swallowed. Let any in-flight route transition finish first (bounded —
+    // never blocks a tap for more than a couple of seconds).
+    await _waitForRouteTransitions();
     final element = _requireElement(sel);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
@@ -458,19 +472,40 @@ class ProbeExecutor {
       // it — matters when `type` is used without a preceding `tap`, and
       // keeps behaviour consistent with the same fix in _tap.
       editable.focusNode.requestFocus();
-      editable.controller.text = text;
-      editable.controller.selection = TextSelection.collapsed(offset: text.length);
+      _enterText(editable, text);
     } else {
       // Fallback: tap to focus, then try to find any focused text field
       await _tap(sel);
       await Future.delayed(const Duration(milliseconds: 200));
-      final focusedController = _findFocusedTextController();
-      if (focusedController != null) {
-        focusedController.text = text;
-        focusedController.selection = TextSelection.collapsed(offset: text.length);
+      final focused = _findFocusedEditableTarget();
+      if (focused != null) {
+        _enterText(focused, text);
       } else {
         throw ProbeError(ProbeError.widgetNotFound, 'No text field found for: ${_selDesc(sel)}');
       }
+    }
+  }
+
+  /// FP-13: replace a field's text the way the platform keyboard does.
+  ///
+  /// `controller.text = ...` updates the controller (and its listeners) but
+  /// never reaches the TextField's `onChanged`, `inputFormatters`, or a
+  /// `Form`'s auto-validation — so a dialog that validates on `onChanged`
+  /// (e.g. a "value above range" notice) never rebuilt after `type`.
+  /// `EditableTextState.userUpdateTextEditingValue` is the entry point real
+  /// text input uses, so the whole chain runs. Falls back to setting the
+  /// controller value when the state isn't reachable (still notifies
+  /// controller listeners, just not `onChanged`).
+  void _enterText(_EditableTarget target, String text) {
+    final value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    final state = target.state;
+    if (state != null && state.mounted) {
+      state.userUpdateTextEditingValue(value, SelectionChangedCause.keyboard);
+    } else {
+      target.controller.value = value;
     }
   }
 
@@ -490,8 +525,7 @@ class ProbeExecutor {
     void visit(Element e) {
       if (result != null) return;
       if (e.widget is EditableText) {
-        final w = e.widget as EditableText;
-        result = _EditableTarget(w.controller, w.focusNode);
+        result = _editableTargetOf(e);
         return;
       }
       e.visitChildren(visit);
@@ -500,8 +534,7 @@ class ProbeExecutor {
     Element? current = element;
     for (int i = 0; i < 20 && current != null; i++) {
       if (current.widget is EditableText) {
-        final w = current.widget as EditableText;
-        return _EditableTarget(w.controller, w.focusNode);
+        return _editableTargetOf(current);
       }
       // TextField/TextFormField (and design-system wrappers around them)
       // always build an EditableText descendant — descend to find it.
@@ -517,16 +550,19 @@ class ProbeExecutor {
     return result;
   }
 
-  /// Finds any currently focused text controller.
-  TextEditingController? _findFocusedTextController() {
-    TextEditingController? result;
+  _EditableTarget _editableTargetOf(Element e) {
+    final w = e.widget as EditableText;
+    final state = e is StatefulElement && e.state is EditableTextState ? e.state as EditableTextState : null;
+    return _EditableTarget(w.controller, w.focusNode, state);
+  }
+
+  /// Finds any currently focused text field.
+  _EditableTarget? _findFocusedEditableTarget() {
+    _EditableTarget? result;
     _finder.walkTree((e) {
       if (result != null) return;
-      if (e.widget is EditableText) {
-        final editableText = e.widget as EditableText;
-        if (editableText.focusNode.hasFocus) {
-          result = editableText.controller;
-        }
+      if (e.widget is EditableText && (e.widget as EditableText).focusNode.hasFocus) {
+        result = _editableTargetOf(e);
       }
     });
     return result;
@@ -534,9 +570,10 @@ class ProbeExecutor {
 
   Future<void> _clearText(Map<String, dynamic> sel) async {
     final element = _requireElement(sel);
-    final controller = _findTextController(element);
-    if (controller != null) {
-      controller.clear();
+    final target = _findEditableTarget(element);
+    if (target != null) {
+      // Same path as `type` so onChanged fires for a cleared field too.
+      _enterText(target, '');
     }
   }
 
@@ -688,10 +725,49 @@ class ProbeExecutor {
       case 'animations':
         await _waitForAnimations(timeoutDur);
 
+      case 'idle':
+        // FP-13: `wait for idle` — route transitions finished AND the
+        // triple-signal sync (frames, animations, HTTP) settled.
+        await _waitForRouteTransitions(timeout: timeoutDur);
+        await _sync.waitForSettled(timeout: timeoutDur);
+
       case 'page_load':
       case 'network_idle':
       case 'settled':
         await _sync.waitForSettled(timeout: timeoutDur);
+    }
+  }
+
+  /// True while any mounted route is mid push/pop transition. A popped
+  /// dialog or sheet stays in the tree (inactive, animation reversing) until
+  /// its exit animation completes, and its modal barrier keeps absorbing
+  /// pointer events for that whole time.
+  ///
+  /// Routes are discovered through widgets every route body is built from
+  /// (page scaffolds, dialogs, sheets) because Navigator keeps its route list
+  /// private; `probeRouteOf` then resolves each one's own animation.
+  bool _routeTransitionInFlight() {
+    final seen = <ModalRoute<dynamic>>{};
+    var inFlight = false;
+    _finder.walkTree((e) {
+      if (inFlight) return;
+      final w = e.widget;
+      if (w is! Scaffold && w is! Dialog && w is! BottomSheet && w is! CupertinoPageScaffold) return;
+      final route = probeRouteOf(e);
+      if (route == null || !seen.add(route)) return;
+      final status = route.animation?.status;
+      if (status == AnimationStatus.forward || status == AnimationStatus.reverse) {
+        inFlight = true;
+      }
+    });
+    return inFlight;
+  }
+
+  Future<void> _waitForRouteTransitions({Duration timeout = const Duration(seconds: 2)}) async {
+    if (!_routeTransitionInFlight()) return;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline) && _routeTransitionInFlight()) {
+      await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
@@ -727,7 +803,7 @@ class ProbeExecutor {
     final desc = expect ? 'appear' : 'disappear';
     throw ProbeError(
       ProbeError.timeout,
-      'Timed out waiting for "$text" to $desc',
+      'Timed out waiting for "$text" to $desc${_visibleHint()}',
     );
   }
 
@@ -830,6 +906,46 @@ class ProbeExecutor {
     await WidgetsBinding.instance.endOfFrame;
   }
 
+  /// FP-13: `scroll <dir> until "X" appears` — scrollIntoView for lazily
+  /// built lists. Scrolls half a viewport at a time (rows outside the viewport
+  /// aren't built, so the target only exists once enough has been scrolled),
+  /// and once found brings it fully on screen: the finder also matches rows
+  /// in the list's cache extent, which are mounted but still off-screen.
+  /// Stops early when the list can't move any further.
+  Future<void> _scrollUntil(
+    String direction,
+    Map<String, dynamic>? sel,
+    Map<String, dynamic> until,
+  ) async {
+    const maxScrolls = 25;
+    var atEnd = false;
+    for (var i = 0; ; i++) {
+      final found = _finder.findElements(until);
+      if (found.isNotEmpty) {
+        await Scrollable.ensureVisible(
+          found.first,
+          alignment: 0.5,
+          duration: Duration.zero,
+        );
+        await WidgetsBinding.instance.endOfFrame;
+        return;
+      }
+      if (atEnd || i >= maxScrolls) break;
+      final before = _findScrollable(sel)?.position.pixels;
+      await _scroll(direction, sel);
+      final after = _findScrollable(sel)?.position.pixels;
+      // Can't move: check once more (the last scroll may have built rows)
+      // and then give up instead of burning the remaining attempts.
+      if (before != null && before == after) atEnd = true;
+    }
+    throw ProbeError(
+      ProbeError.widgetNotFound,
+      'scroll $direction until ${_selDesc(until)}: not found after scrolling'
+      ' (`scroll down` reveals later content, `scroll up` earlier content)'
+      '${_visibleHint()}',
+    );
+  }
+
   /// Finds the Scrollable most relevant to a scroll verb: if [sel] resolves
   /// to an element, the nearest enclosing Scrollable (walking up), or —
   /// since a selector commonly targets the list widget itself rather than a
@@ -865,7 +981,7 @@ class ProbeExecutor {
     ScrollableState? best;
     double bestArea = 0;
     void visit(Element e) {
-      if (ModalRoute.of(e)?.isCurrent == false) return;
+      if (probeRouteOf(e)?.isCurrent == false) return;
       if (e is StatefulElement && e.state is ScrollableState) {
         final state = e.state as ScrollableState;
         final box = state.context.findRenderObject();
@@ -972,7 +1088,7 @@ class ProbeExecutor {
       // silently capturing stale content instead of the current screen.
       // Skip anything belonging to a route that isn't current, mirroring
       // ProbeFinder's own route-awareness fix (PT-03).
-      if (ModalRoute.of(element)?.isCurrent == false) return;
+      if (probeRouteOf(element)?.isCurrent == false) return;
       final ro = element.renderObject;
       if (ro is RenderRepaintBoundary) {
         final area = ro.size.width * ro.size.height;
@@ -1066,10 +1182,26 @@ class ProbeExecutor {
     if (elements.isEmpty) {
       throw ProbeError(
         ProbeError.widgetNotFound,
-        'Widget not found: ${_selDesc(sel)}',
+        'Widget not found: ${_selDesc(sel)}${_visibleHint()}',
       );
     }
     return elements.first;
+  }
+
+  /// FP-13: " — visible: texts [...] keys [...]" suffix for failure messages,
+  /// so a failed step says what the screen actually showed instead of only
+  /// what was missing. Empty if the summary itself can't be built.
+  String _visibleHint() {
+    try {
+      final s = _finder.visibleSummary(max: 15);
+      final texts = s['texts']!;
+      final keys = s['keys']!;
+      if (texts.isEmpty && keys.isEmpty) return '';
+      String fmt(List<String> l) => l.map((v) => '"${v.length > 40 ? '${v.substring(0, 40)}…' : v}"').join(', ');
+      return ' — visible texts: [${fmt(texts)}], keys: [${fmt(keys)}]';
+    } catch (_) {
+      return '';
+    }
   }
 
   String _selDesc(Map<String, dynamic> sel) {
@@ -1161,9 +1293,13 @@ class ProbeExecutor {
 /// The controller and real FocusNode of an EditableText resolved near a
 /// selector — see [ProbeExecutor._findEditableTarget].
 class _EditableTarget {
-  const _EditableTarget(this.controller, this.focusNode);
+  const _EditableTarget(this.controller, this.focusNode, [this.state]);
   final TextEditingController controller;
   final FocusNode focusNode;
+
+  /// The EditableText's state, when reachable — the entry point for
+  /// keyboard-equivalent edits (see [ProbeExecutor._enterText]).
+  final EditableTextState? state;
 }
 
 // ---- Minimal gesture wrapper ----

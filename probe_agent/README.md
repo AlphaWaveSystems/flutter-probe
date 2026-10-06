@@ -140,9 +140,13 @@ The CLI automatically sends `probe.biometric_signal` after every `biometric matc
 - **WebSocket + HTTP transports** — persistent connection for simulators, stateless HTTP for physical devices
 - **Profile mode support** — works on physical iOS devices (not just debug)
 - **Release mode safeguards** — blocked by default, opt-in with `allowReleaseBuild: true`
-- **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing
+- **WiFi testing** — bind to `0.0.0.0` with `PROBE_WIFI=true` for cable-free testing. Studio auto-discovery (mDNS) is an optional `ProbeAdvertiser` hook you implement in your app (a copy-paste `bonsoir` example is in the [Studio docs](https://flutterprobe.dev/tools/studio/#wifi-auto-discovery)), so this package has **no native plugin dependency** and nothing native is linked into release builds
 - **Pre-shared restart token** — `restart the app` works over WiFi without USB log reading
 - **`tap "X" if visible`** — conditional actions that skip silently when widget is not found
+- **`PROBE_PORT`** — `--dart-define=PROBE_PORT=48700` moves the agent off 48686 (pair with `probe test --agent-port 48700`)
+- **`scroll … until … appears` / `wait for idle`** — agent-side scroll-into-view and route-transition settling (0.15.0)
+- **Text input like a keyboard** — `type`/`clear` run through `EditableTextState`, so `onChanged` and `inputFormatters` fire
+- **Actionable failures** — `Widget not found` / `Timed out waiting for` list the visible texts and keys; `probe.visible_summary` RPC
 - **Port-range fallback** — auto-tries ports 48686–48695 if preferred port is busy; logs `PROBE_PORT_BUSY=N (another probe agent is running)` when collision is with a sibling agent
 
 ## Requirements

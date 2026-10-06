@@ -603,8 +603,26 @@ func (p *Parser) parseActionScroll() (Step, error) {
 		s := p.parseSelector()
 		sel = &s
 	}
+	// FP-13: `scroll [dir] [list] until <target> [appears|is visible]` — keep
+	// scrolling until the target is on screen. Replaces hand-counted
+	// `scroll down` runs, and (unlike them) can't get the direction wrong
+	// silently: it either reaches the target or fails with a clear error.
+	var until *Selector
+	if p.peek().Type == TOKEN_UNTIL {
+		p.advance()
+		p.skipFillers()
+		if p.peek().Type != TOKEN_STRING && p.peek().Type != TOKEN_ID {
+			return nil, fmt.Errorf("line %d: \"scroll ... until\" needs a target: scroll down until \"Text\" appears, or until #id appears", line)
+		}
+		u := p.parseSelector()
+		until = &u
+		p.skipFillers()
+		if p.peek().Type == TOKEN_APPEARS || p.peekLiteral("visible") || p.peekLiteral("present") {
+			p.advance()
+		}
+	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbScroll, Direction: dir, Sel: sel, Line: line}, nil
+	return ActionStep{Verb: VerbScroll, Direction: dir, Sel: sel, Until: until, Line: line}, nil
 }
 
 func (p *Parser) parseActionLongPress() (Step, error) {
@@ -995,6 +1013,12 @@ func (p *Parser) parseWait() (Step, error) {
 			p.consumeNewline()
 			return WaitStep{Kind: WaitNetworkIdle, Line: line}, nil
 		}
+		// FP-13: "wait until idle"
+		if p.peek().Type == TOKEN_IDLE {
+			p.advance()
+			p.consumeNewline()
+			return WaitStep{Kind: WaitIdle, Line: line}, nil
+		}
 		target := p.expectString("condition target")
 		p.skipFillers()
 		switch p.peek().Type {
@@ -1021,6 +1045,18 @@ func (p *Parser) parseWait() (Step, error) {
 	// idle"/"page to load" completely unconsumed and misparsed as a
 	// separate, unrelated statement. Present since the very first commit,
 	// not a v0.10.0 regression, despite v0.10.0 being where this surfaced.)
+	// FP-13: "wait for idle" / "wait for the app to be idle" — everything has
+	// stopped moving: modal/route transitions done, no pending frames,
+	// animations or HTTP requests.
+	if tok.Type == TOKEN_IDLE {
+		p.advance()
+		for p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+			p.advance()
+		}
+		p.consumeNewline()
+		return WaitStep{Kind: WaitIdle, Line: line}, nil
+	}
+
 	if tok.Type == TOKEN_ANIMATIONS {
 		p.advance()
 		// consume trailing words ("to end", "to finish") up to the newline

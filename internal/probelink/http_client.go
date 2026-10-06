@@ -205,6 +205,12 @@ func (c *HTTPClient) Scroll(ctx context.Context, direction string, sel *Selector
 	return err
 }
 
+// ScrollUntil asks the agent to scroll until until is on screen (FP-13).
+func (c *HTTPClient) ScrollUntil(ctx context.Context, direction string, sel, until *SelectorParam) error {
+	_, err := c.Call(ctx, MethodScroll, ScrollParams{Direction: direction, Selector: sel, Until: until})
+	return err
+}
+
 func (c *HTTPClient) LongPress(ctx context.Context, sel SelectorParam) error {
 	_, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
 	return err
@@ -260,6 +266,21 @@ func (c *HTTPClient) DumpWidgetTree(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return result.Tree, nil
+}
+
+// VisibleSummary returns the visible texts/keys snapshot (FP-13). Agents older
+// than the version that added probe.visible_summary answer "method not found";
+// callers treat any error as "no summary available".
+func (c *HTTPClient) VisibleSummary(ctx context.Context) (VisibleSummaryResult, error) {
+	raw, err := c.Call(ctx, MethodVisibleSummary, nil)
+	if err != nil {
+		return VisibleSummaryResult{}, err
+	}
+	var result VisibleSummaryResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return VisibleSummaryResult{}, err
+	}
+	return result, nil
 }
 
 func (c *HTTPClient) SelectorBounds(ctx context.Context, sel SelectorParam) (BoundsResult, error) {

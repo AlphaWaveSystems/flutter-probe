@@ -343,10 +343,13 @@ func (l *Lexer) tryCompound(first string) TokenType {
 	// We check from current position (after first word was consumed).
 	compounds := []compound{
 		{[]string{"don't", "see"}, TOKEN_DONT_SEE},
+		// FP-13: "dont see" (no apostrophe) is an alias — it's what people type
+		// when the apostrophe is awkward, and without it the line fell through
+		// to an "unknown recipe call" error.
+		{[]string{"dont", "see"}, TOKEN_DONT_SEE},
 		{[]string{"go", "back"}, TOKEN_GO_BACK},
 		{[]string{"long", "press"}, TOKEN_LONG_PRESS},
 		{[]string{"double", "tap"}, TOKEN_DOUBLE_TAP},
-		{[]string{"don't", "see"}, TOKEN_DONT_SEE},
 		{[]string{"before", "all", "tests"}, TOKEN_LIFECYCLE},
 		{[]string{"after", "all", "tests"}, TOKEN_LIFECYCLE},
 		{[]string{"before", "all"}, TOKEN_LIFECYCLE},

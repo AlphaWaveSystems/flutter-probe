@@ -15,7 +15,9 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe record` | Record user interactions as ProbeScript |
 | `probe report` | Generate HTML report from test results |
 | `probe migrate` | Convert Maestro YAML flows to ProbeScript |
-| `probe generate` | AI-assisted test generation |
+| `probe generate` | AI-assisted test generation (any `ai:` provider, including a local model) |
+| `probe ai doctor` | Check the configured `ai:` provider: endpoint, model, text, vision. Optional — see [AI & local models](/tools/ai/) |
+| `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
 | `probe studio` | Launch interactive test studio |
 
 ## probe test
@@ -50,6 +52,9 @@ probe test [path] [flags]
 | `--visual-threshold` | `0.5` | Max allowed pixel diff % for visual regression |
 | `--visual-pixel-delta` | `8` | Pixel color delta tolerance |
 | `--port <int>` | `48686` | Agent WebSocket port |
+| `--agent-port <int>` | — | Alias of `--port`. Pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators (or a stale process on 48686) can't collide. A failed dial on loopback names the process holding the port. |
+| `--ai-triage` | `false` | After the run, ask the configured `ai:` model to explain failures (advisory, needs `ai:` in `probe.yaml`). Runs after results are final; cannot change results, reports or the exit code. Writes `<reports>/triage.md` |
+| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera,location`. Android: `adb shell pm grant`; iOS simulator: `simctl privacy`. iOS notifications can't be pre-granted (warns). |
 | `--dial-timeout` | `30s` | WebSocket connection timeout |
 | `--token-timeout` | `30s` | Agent auth token wait timeout |
 | `--reconnect-delay` | `2s` | Post-restart reconnect delay |

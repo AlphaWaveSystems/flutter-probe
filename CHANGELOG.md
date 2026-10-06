@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-06
+
+### Changed (BREAKING for WiFi auto-discovery only) — FP-15
+- **`flutter_probe_agent` no longer depends on the native `bonsoir` mDNS plugin.** A plugin in an app's
+  dependencies is linked into every build of that app, release included, regardless of
+  `--dart-define=PROBE_AGENT` (release size, privacy, possible local-network prompt).
+  mDNS advertising is now an optional `ProbeAdvertiser` hook
+  (`ProbeAgent.start(advertiser: ...)`) that the app implements with its own `bonsoir` dependency; a
+  copy-paste example is in the Studio docs. No new pub.dev package is published. Without it WiFi testing is
+  unchanged (`--host <ip> --token <token>`); Studio's WiFi auto-discovery needs an advertiser in the device build.
+  The advertised port is now the actually bound one.
+
+### Optional local-LLM support (FP-14)
+
+AI stays strictly opt-in: no `ai:` block means no AI code runs, and none of the additions below can change a
+test result, a report or the exit code (they run after results are final, are time-bounded, make no retries,
+and stop after the first provider error).
+
+- **`probe ai doctor`** — checks the configured `ai:` provider: endpoint, model listed, a text round trip, and
+  whether the model accepts images. Verified live against LM Studio (a 0.5B text-only Qwen: text OK, vision
+  not accepted) and Ollama (Gemma 4 31B: both OK).
+- **Failure triage** — `probe test --ai-triage` (after the run) and `probe triage --input results.json`
+  produce a short advisory probable cause and next step per failure, printed and written to
+  `<reports>/triage.md`. MCP tool `triage_failure` wraps it (20 tools now; docs previously said 18).
+- **`ai.vision: false`** — text-only models: `see "..." with ai` is judged from the screen's visible
+  texts/keys instead of a screenshot. `assert no visual defects with ai` and `read ... with ai` report that
+  they need a vision model; the mode is refused when `ai.redact` rules exist (they can't apply to text).
+- **`probe generate` and AI selector suggestions honour `ai.provider`**, including `local` with no API key.
+  With no `ai.provider` the original Claude-only behavior is unchanged.
+- Docs: new [AI & Local Models](https://flutterprobe.dev/tools/ai/) page, plan in
+  `docs/prd/optional-local-llm-plan.md`. A 0.5B model gives weak triage advice; 7B+ is recommended.
+- READMEs added for `cmd/`, `internal/`, `scripts/`, `docker/`, `plugins/`, `mcpb/`, `tests/`,
+  `tools/probe-convert/`.
+
+### Fixed (docs)
+- `scroll down until "X" appears` was documented in the VS Code README and snippets but not implemented by the
+  parser; it is now (FP-13, below).
+
+Fixes for limitations hit during a release-gate run (FP-13), reported against CLI 0.14.0.
+
+### Added
+- **`scroll [dir] until <target> appears`** — scrollIntoView for lazily built lists (Maestro's
+  `scrollUntilVisible`). Resolved agent-side: scrolls half a viewport at a time, then brings the
+  target fully on screen (`Scrollable.ensureVisible`), stops early when the list can't move, and
+  fails with the visible texts if the target never shows up. Older agents fall back to a CLI-side
+  loop (25 attempts).
+- **`wait for idle`** (also `wait until idle`) — route transitions finished and no pending frames,
+  animations or HTTP requests. `tap` also waits (max 2 s) for an in-flight dialog/sheet/page
+  transition before firing.
+- **`probe test --grant <list>`** — pre-grant OS permissions once before the first test
+  (`--grant notifications,camera,location`). Android: `adb shell pm grant` incl. `POST_NOTIFICATIONS`;
+  iOS simulator: every `simctl privacy` service. **iOS notifications cannot be pre-granted** (no simctl
+  service; the prompt is a SpringBoard alert the agent cannot tap) — `--grant` warns instead of failing,
+  and `allow permission "notifications"` on iOS now fails with that explanation instead of a
+  contradictory "unknown permission — available: notifications".
+- **`--agent-port <n>`** on `probe test` / `probe record` (alias of `--port`) and the matching
+  **`--dart-define=PROBE_PORT=<n>`** for the app, so simulators can't fight over 48686.
+- **Port-holder report:** a failed agent dial on loopback now names the process holding the port
+  (`agent port 48686 is held by pid 4242 (Runner)`) and how to move off it.
+- **`probe.visible_summary`** agent RPC (visible texts + string ValueKeys) used for failure diagnostics.
+
+### Changed
+- **Timeout errors say what timed out.** A step that hit its deadline used to fail with a bare
+  `context deadline exceeded`. It now reports the line, the step, the timeout and the visible texts/keys
+  at that moment. Agent-side `Widget not found` / `Timed out waiting for` errors carry the same
+  suffix, and `wait` hands the agent a timeout 2 s shorter than the CLI's so the agent's descriptive
+  error arrives first.
+- **`type` and `clear` go through the platform text-input path**
+  (`EditableTextState.userUpdateTextEditingValue`) instead of assigning `controller.text`, so
+  `onChanged`, `inputFormatters` and form validation run as with real keystrokes.
+
+### Fixed
+- `dont see "X"` (no apostrophe) is accepted as an alias of `don't see "X"`; it previously failed
+  with `unknown recipe call "dont see <arg>"`.
+
 ## [0.14.0] - 2026-08-31
 
 ### Added

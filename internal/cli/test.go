@@ -105,6 +105,7 @@ func init() {
 	// Agent connection
 	f.String("host", "", "ProbeAgent host IP (default: 127.0.0.1; use device IP for WiFi testing)")
 	f.Int("port", 0, "ProbeAgent WebSocket port (default: 48686)")
+	f.Int("agent-port", 0, "alias for --port (same name probe studio uses); set it per run to avoid a stale process holding 48686")
 	f.Duration("dial-timeout", 0, "max time to establish WebSocket connection (default: 30s)")
 	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
@@ -117,6 +118,12 @@ func init() {
 
 	// Destructive operations
 	f.BoolP("yes", "y", false, "auto-confirm destructive operations (clear app data, permissions)")
+
+	// Optional AI triage (advisory, after results are final; never affects the run)
+	f.Bool("ai-triage", false, "after the run, ask the configured ai: model to explain failures (advisory; needs ai: in probe.yaml; never changes results or the exit code)")
+
+	// Permission pre-grant
+	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy — iOS notifications cannot be pre-granted)")
 
 	// App installation
 	f.String("app-path", "", "path to .apk or .app bundle to install before testing")
@@ -215,6 +222,13 @@ func runTests(cmd *cobra.Command, args []string) error {
 	adbPath, _ := cmd.Flags().GetString("adb")
 	flutterPath, _ := cmd.Flags().GetString("flutter")
 	autoYes, _ := cmd.Flags().GetBool("yes")
+	grantPerms, _ := cmd.Flags().GetStringSlice("grant")
+	for i, g := range grantPerms {
+		grantPerms[i] = strings.ToLower(strings.TrimSpace(g))
+		if !device.ValidPermissionName(grantPerms[i]) {
+			return fmt.Errorf("--grant: unknown permission %q — known: notifications, camera, location, microphone, photos, storage, contacts, phone, calendar, sms, bluetooth", g)
+		}
+	}
 	appPath, _ := cmd.Flags().GetString("app-path")
 	videoFlag, _ := cmd.Flags().GetBool("video")
 	noVideoFlag, _ := cmd.Flags().GetBool("no-video")
@@ -223,6 +237,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 	agentHost, _ := cmd.Flags().GetString("host")
 	agentToken, _ := cmd.Flags().GetString("token")
 	agentPort, _ := cmd.Flags().GetInt("port")
+	if agentPort == 0 {
+		agentPort, _ = cmd.Flags().GetInt("agent-port")
+	}
 	dialTimeout, _ := cmd.Flags().GetDuration("dial-timeout")
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
@@ -402,6 +419,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Tags:    tags,
 			Timeout: timeout,
 			Verbose: verbose,
+			Grant:   grantPerms,
 		}
 
 		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
@@ -425,6 +443,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 		}
 		if err := report.Report(results); err != nil {
 			return err
+		}
+
+		if aiTriage, _ := cmd.Flags().GetBool("ai-triage"); aiTriage {
+			maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 		}
 
 		if !runner.AllPassed(results) {
@@ -1037,6 +1059,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		Timeout:      timeout,
 		DryRun:       dryRun,
 		Verbose:      verbose,
+		Grant:        grantPerms,
 		VideoEnabled: videoEnabled,
 		VideoDir:     videoDir,
 	}
@@ -1205,6 +1228,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 		} else if cloudToken == "" && payMethod != "x402" {
 			fmt.Fprintln(statusW, msgCloudTokenMissing)
 		}
+	}
+
+	// FP-14: optional, advisory, after everything else is done. Cannot fail.
+	if aiTriage, _ := cmd.Flags().GetBool("ai-triage"); aiTriage {
+		maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 	}
 
 	if !runner.AllPassed(results) {

@@ -323,11 +323,12 @@ open the app
 tap on "Button"
 type "text" into the "Field" field
 see "Expected text"
-don't see "Hidden text"
+don't see "Hidden text"      # "dont see" works too
 wait until "Element" appears
 wait 3 seconds
 swipe up / down / left / right
 scroll down until "Item" appears
+wait for idle
 take screenshot "name"
 compare screenshot "name"
 

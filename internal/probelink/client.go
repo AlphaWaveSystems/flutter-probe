@@ -123,7 +123,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// the same token cannot succeed.
 		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
 			opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — giving up", attempt, resp.StatusCode)
-			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w", safeURL, resp.StatusCode, err)
+			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHint(opts.Host, opts.Port))
 		}
 		// "bad handshake" without an auth response is transient on Android:
 		// adb forward accepts the host-side TCP connection before the
@@ -132,13 +132,13 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// healthy. Retry it like any other startup race.
 		if !errors.Is(err, websocket.ErrBadHandshake) && !isTransientDialError(err) {
 			opts.trace("probelink: [attempt %d] dial failed (non-transient): %v — giving up", attempt, err)
-			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, err)
+			return nil, fmt.Errorf("probelink: dial %s: %w%s", safeURL, err, portHolderHint(opts.Host, opts.Port))
 		}
 		opts.trace("probelink: [attempt %d] dial failed (transient): %v — retrying in %s", attempt, err, retryInterval)
 		select {
 		case <-dialCtx.Done():
 			opts.trace("probelink: dial deadline exceeded after %d attempt(s): %v", attempt, lastErr)
-			return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, lastErr)
+			return nil, fmt.Errorf("probelink: dial %s: %w%s", safeURL, lastErr, portHolderHint(opts.Host, opts.Port))
 		case <-time.After(retryInterval):
 		}
 	}
@@ -370,7 +370,7 @@ func (c *Client) readLoop() {
 				close(c.done)
 			}
 			for id, ch := range c.pending {
-				ch <- Response{ID: id, Error: &RPCError{Code: -32000, Message: err.Error()}}
+				ch <- Response{ID: id, Error: &RPCError{Code: CodeConnectionClosed, Message: "connection closed: " + err.Error()}}
 				delete(c.pending, id)
 			}
 			c.mu.Unlock()
@@ -438,6 +438,12 @@ func (c *Client) Scroll(ctx context.Context, direction string, sel *SelectorPara
 	return err
 }
 
+// ScrollUntil asks the agent to scroll until until is on screen (FP-13).
+func (c *Client) ScrollUntil(ctx context.Context, direction string, sel, until *SelectorParam) error {
+	_, err := c.Call(ctx, MethodScroll, ScrollParams{Direction: direction, Selector: sel, Until: until})
+	return err
+}
+
 func (c *Client) LongPress(ctx context.Context, sel SelectorParam) error {
 	_, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
 	return err
@@ -496,6 +502,21 @@ func (c *Client) DumpWidgetTree(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return result.Tree, nil
+}
+
+// VisibleSummary returns the visible texts/keys snapshot (FP-13). Agents older
+// than the version that added probe.visible_summary answer "method not found";
+// callers treat any error as "no summary available".
+func (c *Client) VisibleSummary(ctx context.Context) (VisibleSummaryResult, error) {
+	raw, err := c.Call(ctx, MethodVisibleSummary, nil)
+	if err != nil {
+		return VisibleSummaryResult{}, err
+	}
+	var result VisibleSummaryResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return VisibleSummaryResult{}, err
+	}
+	return result, nil
 }
 
 func (c *Client) SelectorBounds(ctx context.Context, sel SelectorParam) (BoundsResult, error) {
