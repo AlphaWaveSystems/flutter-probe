@@ -745,7 +745,7 @@ class ProbeExecutor {
   ///
   /// Routes are discovered through widgets every route body is built from
   /// (page scaffolds, dialogs, sheets) because Navigator keeps its route list
-  /// private; `ModalRoute.of` then resolves each one's own animation.
+  /// private; `probeRouteOf` then resolves each one's own animation.
   bool _routeTransitionInFlight() {
     final seen = <ModalRoute<dynamic>>{};
     var inFlight = false;
@@ -753,7 +753,7 @@ class ProbeExecutor {
       if (inFlight) return;
       final w = e.widget;
       if (w is! Scaffold && w is! Dialog && w is! BottomSheet && w is! CupertinoPageScaffold) return;
-      final route = ModalRoute.of(e);
+      final route = probeRouteOf(e);
       if (route == null || !seen.add(route)) return;
       final status = route.animation?.status;
       if (status == AnimationStatus.forward || status == AnimationStatus.reverse) {
@@ -981,7 +981,7 @@ class ProbeExecutor {
     ScrollableState? best;
     double bestArea = 0;
     void visit(Element e) {
-      if (ModalRoute.of(e)?.isCurrent == false) return;
+      if (probeRouteOf(e)?.isCurrent == false) return;
       if (e is StatefulElement && e.state is ScrollableState) {
         final state = e.state as ScrollableState;
         final box = state.context.findRenderObject();
@@ -1088,7 +1088,7 @@ class ProbeExecutor {
       // silently capturing stale content instead of the current screen.
       // Skip anything belonging to a route that isn't current, mirroring
       // ProbeFinder's own route-awareness fix (PT-03).
-      if (ModalRoute.of(element)?.isCurrent == false) return;
+      if (probeRouteOf(element)?.isCurrent == false) return;
       final ro = element.renderObject;
       if (ro is RenderRepaintBoundary) {
         final area = ro.size.width * ro.size.height;
