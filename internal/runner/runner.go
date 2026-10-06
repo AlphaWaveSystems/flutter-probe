@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -517,18 +518,32 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			// Copy screenshots to the local reports directory
 			localPath := filepath.Join(localDir, filepath.Base(remotePath))
 			var pullErr error
-			if dc.Platform == device.PlatformIOS {
+			switch {
+			case dc.Platform == device.PlatformIOS:
 				// iOS simulator: file is already on host, just copy it
-				pullErr = copyFile(remotePath, localPath)
-			} else {
+				pullErr = copyFileIfDifferent(remotePath, localPath)
+			case filepath.IsAbs(remotePath) && fileExists(remotePath):
+				// Android screenshots arrive as base64 in the RPC reply and are
+				// already saved on the host by the probelink client; this path is
+				// that host path, not a device path. Re-reading it through
+				// `adb exec-out run-as ... cat` printed "No such file" on stdout
+				// and that text overwrote the good PNG (FP-19).
+				pullErr = copyFileIfDifferent(remotePath, localPath)
+			default:
 				// Android: screenshots are in the app's private cache dir,
 				// use run-as to read them since adb pull can't access private dirs
 				data, err := dc.Manager.ADB().Run(ctx, dc.Serial,
 					"exec-out", "run-as", dc.AppID, "cat", remotePath)
-				if err == nil && len(data) > 0 {
-					pullErr = os.WriteFile(localPath, data, 0644)
-				} else {
+				switch {
+				case err != nil:
 					pullErr = err
+				case !looksLikeImage(data):
+					// exec-out reports failures (missing file, "package not
+					// debuggable") as text on stdout with exit 0: never write that
+					// out as an image.
+					pullErr = fmt.Errorf("pulling %s: not an image (%s)", remotePath, strings.TrimSpace(string(data[:min(len(data), 120)])))
+				default:
+					pullErr = os.WriteFile(localPath, data, 0644)
 				}
 			}
 			if pullErr == nil {
@@ -564,6 +579,28 @@ func LocalizeArtifacts(results []TestResult, localDir string) {
 		}
 		results[i].Artifacts = localPaths
 	}
+}
+
+// fileExists reports whether path exists on the host.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// copyFileIfDifferent copies src to dst unless they are the same file (an
+// artifact already saved into the destination directory).
+func copyFileIfDifferent(src, dst string) error {
+	a, errA := filepath.Abs(src)
+	b, errB := filepath.Abs(dst)
+	if errA == nil && errB == nil && a == b {
+		return nil
+	}
+	return copyFile(src, dst)
+}
+
+// looksLikeImage reports whether data starts with a PNG or JPEG signature.
+func looksLikeImage(data []byte) bool {
+	return bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G'}) || bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF})
 }
 
 func copyFile(src, dst string) error {

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.16.2 - 2026-10-06
+
+- Changed: `tap` returns a `warning` in its result when another widget covers the tap point (the tap still happens), and
+  waits up to 1.5 s while a scrollable around the target is still scrolling (Flutter ignores pointer events during
+  scroll activity) (FP-19).
+
 ## 0.16.1 - 2026-10-06
 
 - No agent change. Version bump to match the CLI release 0.16.1 (the 0.16.0 CLI release failed to build on Windows; see the root

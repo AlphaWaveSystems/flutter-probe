@@ -136,6 +136,10 @@ underneath the one the user sees cannot produce a false positive.
 |---|---|
 | `connection refused` / agent never found | The app was not built with `--dart-define=PROBE_AGENT=true`, or `ProbeAgent.start()` is not reached. Look for `PROBE_TOKEN=` in the app log. |
 | `agent rejected token (HTTP 401)` | You are connected to a *different* agent (often a leftover simulator app on 48686). The error names the process holding the port; stop it or use `--agent-port` with `PROBE_PORT`. |
+| `agent port 48686 is held by an adb port forward` | A forward left over from an earlier run (or another Android device is forwarded to it): `adb forward --remove tcp:48686`, or `--agent-port`. |
+| `agent port 48686 is held by an iOS simulator app` | A simulator app from an iOS run is still running. The message names the simulator: `xcrun simctl terminate <udid> <bundle-id>`. |
+| A tap "does nothing" | The CLI now prints `tap target ... is covered by another widget`: something is on top at that point (a loading overlay, a sticky bar). The visible texts/keys in the message show what the screen contained. |
+| `401` / `unexpected EOF` right after launching the app | The device still had the previous run's token. The CLI re-reads it and retries for up to 12 seconds; an explicit `--token` is not retried. |
 | Two simulators collide | Build each with its own `--dart-define=PROBE_PORT=<n>` and pass `--agent-port <n>`. |
 | Everything times out on a physical iPhone | Use a profile build and WiFi: `--dart-define=PROBE_WIFI=true`, then `--host <ip> --token <token>`. |
 | `version mismatch` warning | Update the agent and the CLI to the same minor version. |

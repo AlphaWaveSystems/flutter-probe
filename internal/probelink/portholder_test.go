@@ -51,3 +51,34 @@ func TestPortHolder_FindsOwnListener(t *testing.T) {
 		t.Errorf("hint should name the --agent-port escape hatch, got %q", hint)
 	}
 }
+
+func TestDescribeHolders_DistinguishesAdbFromASimulatorApp(t *testing.T) {
+	adb := describeHolders(48686, []Holder{{PID: "7", Name: "adb", Command: "adb -L tcp:5037 fork-server server"}})
+	if !strings.Contains(adb, "adb port forward") || !strings.Contains(adb, "adb forward --remove tcp:48686") || strings.Contains(adb, "simulator") {
+		t.Errorf("adb hint: %s", adb)
+	}
+	sim := describeHolders(48686, []Holder{{PID: "9", Name: "Runner",
+		Command: "/Users/x/Library/Developer/CoreSimulator/Devices/5BEA9EF5-91B4-4D9F-9529-5BD7959F6E6C/data/Containers/Bundle/Application/AAA/Runner.app/Runner"}})
+	if !strings.Contains(sim, "iOS simulator app") || !strings.Contains(sim, "5BEA9EF5-91B4-4D9F-9529-5BD7959F6E6C") || !strings.Contains(sim, "simctl terminate") {
+		t.Errorf("simulator hint: %s", sim)
+	}
+	if strings.Contains(sim, "adb forward") {
+		t.Errorf("a simulator app must not be described as an adb forward: %s", sim)
+	}
+	other := describeHolders(48686, []Holder{{PID: "3", Name: "python3", Command: "python3 -m http.server"}})
+	if !strings.Contains(other, "pid 3 (python3)") || !strings.Contains(other, "--agent-port") {
+		t.Errorf("generic hint: %s", other)
+	}
+	if describeHolders(48686, nil) != "" {
+		t.Error("a free port needs no hint")
+	}
+}
+
+func TestSimulatorUDID(t *testing.T) {
+	if got := simulatorUDID("/a/CoreSimulator/Devices/ABC-123/data/x"); got != "ABC-123" {
+		t.Errorf("got %q", got)
+	}
+	if simulatorUDID("/usr/bin/adb") != "" || simulatorUDID("") != "" {
+		t.Error("non-simulator commands have no UDID")
+	}
+}

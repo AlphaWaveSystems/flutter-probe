@@ -253,6 +253,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 	visualThreshold, _ := cmd.Flags().GetFloat64("visual-threshold")
 	visualPixelDelta, _ := cmd.Flags().GetInt("visual-pixel-delta")
 
+	// Agent warnings (e.g. a tap whose target is covered by another widget) are
+	// successful calls the user should still hear about (FP-19).
+	probelink.SetWarningHandler(func(w string) { statusWarn(statusW, "%s", w) })
+
 	// Apply CLI overrides to config
 	if agentPort != 0 {
 		cfg.Agent.Port = agentPort
@@ -844,6 +848,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 					if tokenErr != nil {
 						return fmt.Errorf("agent token: %w — is the app running with probe_agent?", tokenErr)
 					}
+					// Auto-detected only: an explicit --token must fail fast on a 401 (FP-19).
+					dialOpts.RefreshToken = func(c context.Context) (string, error) {
+						return dm.ReadTokenIOS(c, deviceSerial, 5*time.Second, cfg.Project.App)
+					}
 				}
 				dialOpts.Token = token
 				if isPhysicalIOS {
@@ -893,6 +901,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 				}
 				dialOpts.Token = token
+				// Right after a cold launch the token read above can still be the
+				// previous app instance's: re-read it on a 401 instead of failing (FP-19).
+				dialOpts.RefreshToken = func(c context.Context) (string, error) {
+					return dm.ReadTokenAndroid(c, deviceSerial, 5*time.Second, cfg.Project.App, trace)
+				}
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {
 					return fmt.Errorf("connecting to ProbeAgent: %w", err)

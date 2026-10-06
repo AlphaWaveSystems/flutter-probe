@@ -316,3 +316,85 @@ func TestDialRetriesAfterImmediateClose(t *testing.T) {
 		t.Error("first connection was never accepted and closed")
 	}
 }
+
+// FP-19: right after a cold launch the readable token can be the previous app
+// instance's. With an auto-detected token (RefreshToken set), a 401 re-reads the
+// token and retries instead of failing at once.
+func TestDialRefreshesAStaleAutoDetectedTokenOn401(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	var live atomic.Value
+	live.Store("old-token")
+	var rejected atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("token") != live.Load().(string) {
+			rejected.Add(1)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	// The new app instance comes up and its token becomes readable after a moment.
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		live.Store("fresh-token")
+	}()
+	var reads atomic.Int32
+	host, port := serverHostPort(t, srv)
+	client, err := DialWithOptions(context.Background(), DialOptions{
+		Host: host, Port: port, Token: "stale-token", DialTimeout: 20 * time.Second,
+		RefreshToken: func(context.Context) (string, error) {
+			reads.Add(1)
+			return live.Load().(string), nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("a stale token that becomes fresh must be recovered, got %v (rejected %d times)", err, rejected.Load())
+	}
+	defer client.Close()
+	if reads.Load() == 0 || rejected.Load() == 0 {
+		t.Errorf("expected at least one rejection and one token re-read (rejected=%d reads=%d)", rejected.Load(), reads.Load())
+	}
+}
+
+func TestDialExplicitTokenStillFailsFastOn401(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusUnauthorized) }))
+	defer srv.Close()
+	host, port := serverHostPort(t, srv)
+	start := time.Now()
+	_, err := DialWithOptions(context.Background(), DialOptions{Host: host, Port: port, Token: "wrong", DialTimeout: 20 * time.Second})
+	if err == nil || time.Since(start) > 3*time.Second {
+		t.Fatalf("an explicit --token must fail fast: err=%v after %s", err, time.Since(start))
+	}
+}
+
+func TestDialRefreshRetryIsBounded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits out the refresh window")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusUnauthorized) }))
+	defer srv.Close()
+	host, port := serverHostPort(t, srv)
+	start := time.Now()
+	_, err := DialWithOptions(context.Background(), DialOptions{
+		Host: host, Port: port, Token: "t", DialTimeout: 60 * time.Second,
+		RefreshToken: func(context.Context) (string, error) { return "still-wrong", nil },
+	})
+	took := time.Since(start)
+	if err == nil {
+		t.Fatal("a foreign agent must still be reported")
+	}
+	if took > tokenRefreshWindow+5*time.Second || took < 2*time.Second {
+		t.Errorf("rejection should be reported after about %s, took %s", tokenRefreshWindow, took)
+	}
+}

@@ -44,7 +44,23 @@ type DialOptions struct {
 	// failures were previously a black box with no visibility into whether
 	// the CLI ever actually reached the agent's WebSocket server.
 	Trace func(format string, args ...any)
+
+	// RefreshToken, when set, is called after the agent rejects the token
+	// (HTTP 401/403) to read the token again, and the dial is retried for a short
+	// window (tokenRefreshWindow). Set it only when the token was auto-detected
+	// from the device: right after a cold launch the readable token can still be
+	// the previous app instance's, a few seconds before the new agent rewrites it
+	// (FP-19, reported from an Android gate: "unexpected EOF" and then a 401 for
+	// a token that was valid moments later). A token the user passed explicitly
+	// (--token) must stay a fast, fatal failure, so leave this nil for it.
+	RefreshToken func(ctx context.Context) (string, error)
 }
+
+// tokenRefreshWindow bounds how long a rejected auto-detected token is re-read
+// and retried before the rejection is reported. Long enough to outlast an app
+// cold start, short enough that a genuinely foreign agent on the port (the
+// "port held by ..." case) is still reported promptly.
+const tokenRefreshWindow = 12 * time.Second
 
 // trace calls opts.Trace with the given message, or does nothing if it's nil.
 func (opts DialOptions) trace(format string, args ...any) {
@@ -108,6 +124,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	var lastErr error
 	const retryInterval = time.Second
 	attempt := 0
+	var firstReject time.Time // first HTTP 401/403 seen; bounds RefreshToken retries
 	opts.trace("probelink: dialing %s (timeout=%s)", safeURL, opts.DialTimeout)
 	for {
 		attempt++
@@ -122,6 +139,24 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// A real HTTP auth rejection from the agent is fatal — retrying with
 		// the same token cannot succeed.
 		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+			if opts.RefreshToken != nil {
+				if firstReject.IsZero() {
+					firstReject = time.Now()
+				}
+				if time.Since(firstReject) < tokenRefreshWindow {
+					opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — re-reading the token and retrying", attempt, resp.StatusCode)
+					select {
+					case <-dialCtx.Done():
+						return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHint(opts.Host, opts.Port))
+					case <-time.After(retryInterval):
+					}
+					if tok, terr := opts.RefreshToken(dialCtx); terr == nil && tok != "" {
+						opts.Token = tok
+						u.RawQuery = "token=" + tok
+					}
+					continue
+				}
+			}
 			opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — giving up", attempt, resp.StatusCode)
 			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHint(opts.Host, opts.Port))
 		}
@@ -409,7 +444,10 @@ func (c *Client) Open(ctx context.Context, screen string) error {
 }
 
 func (c *Client) Tap(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
+	if err == nil {
+		reportWarning(raw)
+	}
 	return err
 }
 
