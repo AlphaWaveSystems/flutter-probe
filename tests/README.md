@@ -11,5 +11,4 @@
 | `regression/` | Visual regression sample |
 | `recipes/`, `fixtures/` | Shared recipes and data |
 
-The reference test app is `e2e-test-workspace` (Flutter plus native twins). Run a suite with
-`probe test tests/e2e --config probe.yaml`.
+Run a suite against your own app with `probe test tests/e2e --config probe.yaml`.

@@ -44,7 +44,7 @@ and stop after the first provider error).
 - `scroll down until "X" appears` was documented in the VS Code README and snippets but not implemented by the
   parser; it is now (FP-13, below).
 
-Fixes for limitations hit while gating a downstream app release (FP-13), reported against CLI 0.14.0.
+Fixes for limitations hit during a release-gate run (FP-13), reported against CLI 0.14.0.
 
 ### Added
 - **`scroll [dir] until <target> appears`** — scrollIntoView for lazily built lists (Maestro's
