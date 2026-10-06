@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-06
+
+### Fixed
+- **The Windows build of 0.16.0 failed**, so no 0.16.0 GitHub release or Homebrew update was published (the 0.16.0 agent
+  did reach pub.dev; it is unaffected). The iOS system-dialog driver used `syscall.Setpgid` / `syscall.Kill`, which do
+  not exist on Windows; process-group handling now lives in build-tagged files. 0.16.1 carries everything in 0.16.0
+  below.
+- CI now cross-compiles `probe` and `probe-mcp` for linux/amd64, darwin/amd64, darwin/arm64 and windows/amd64 on every
+  PR, so a platform-specific API fails the PR instead of the release.
+
 ## [0.16.0] - 2026-10-06
 
 ### Added: system dialogs (FP-16)
