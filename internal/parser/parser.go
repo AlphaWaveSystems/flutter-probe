@@ -306,6 +306,14 @@ func (p *Parser) parseStep() (Step, error) {
 	p.skipFillers()
 	tok := p.peek()
 
+	// FP-16: system-dialog steps are recognized by their trailing phrase
+	// ("... in system dialog", "... into system field ...", "see system
+	// dialog ...") before the generic verb handling, so a quoted label can
+	// never be mistaken for a Flutter selector.
+	if p.lineIsSystemDialog() {
+		return p.parseSystemDialog()
+	}
+
 	switch tok.Type {
 	case TOKEN_OPEN:
 		// PT-23: "open" is also a legal first word of a user-defined recipe
@@ -2059,4 +2067,93 @@ func (p *Parser) parseEnrollBiometric() (Step, error) {
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbEnrollBiometric, Line: line}, nil
+}
+
+
+// ---- System dialogs (FP-16) ----
+
+// lineTokens returns the tokens of the current statement line without consuming them.
+func (p *Parser) lineTokens() []Token {
+	var out []Token
+	for i := p.pos; i < len(p.tokens); i++ {
+		switch p.tokens[i].Type {
+		case TOKEN_NEWLINE, TOKEN_EOF, TOKEN_INDENT, TOKEN_DEDENT:
+			return out
+		}
+		out = append(out, p.tokens[i])
+	}
+	return out
+}
+
+func isWord(t Token, w string) bool {
+	return t.Type != TOKEN_STRING && strings.EqualFold(t.Literal, w)
+}
+
+// lineIsSystemDialog reports whether the statement is one of the system-dialog
+// forms. Quoted strings are never inspected, only the bare words around them.
+func (p *Parser) lineIsSystemDialog() bool {
+	toks := p.lineTokens()
+	for i := 0; i+1 < len(toks); i++ {
+		if isWord(toks[i], "system") && (isWord(toks[i+1], "dialog") || isWord(toks[i+1], "field")) {
+			return true
+		}
+		if i+3 < len(toks) && isWord(toks[i], "sign") && isWord(toks[i+1], "in") &&
+			isWord(toks[i+2], "sandbox") && isWord(toks[i+3], "tester") {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Parser) parseSystemDialog() (Step, error) {
+	toks := p.lineTokens()
+	line := toks[0].Line
+	var strs []string
+	optional, disappears := false, false
+	for _, t := range toks {
+		switch {
+		case t.Type == TOKEN_STRING:
+			strs = append(strs, t.Literal)
+		case isWord(t, "optional"):
+			optional = true
+		case t.Type == TOKEN_DISAPPEARS || isWord(t, "disappears"):
+			disappears = true
+		}
+	}
+	for range toks { // consume the whole line
+		p.advance()
+	}
+	p.consumeNewline()
+
+	arg := func(i int) string {
+		if i < len(strs) {
+			return strs[i]
+		}
+		return ""
+	}
+	first := toks[0]
+	step := SystemDialogStep{Line: line, Optional: optional}
+	switch {
+	case first.Type == TOKEN_TAP:
+		if arg(0) == "" {
+			return nil, fmt.Errorf("line %d: tap needs a button label: tap \"Allow\" in system dialog", line)
+		}
+		step.Op, step.Button, step.Title = SysTap, arg(0), arg(1)
+	case first.Type == TOKEN_TYPE:
+		if len(strs) < 2 {
+			return nil, fmt.Errorf("line %d: type needs a value and a field: type \"$PROBE_SANDBOX_PASSWORD\" into system field \"Password\"", line)
+		}
+		step.Op, step.Text, step.Field, step.Title = SysType, arg(0), arg(1), arg(2)
+	case first.Type == TOKEN_SEE || first.Type == TOKEN_DONT_SEE:
+		step.Op, step.Title, step.Negated = SysSee, arg(0), first.Type == TOKEN_DONT_SEE
+	case first.Type == TOKEN_WAIT:
+		step.Op, step.Title, step.Appear = SysWait, arg(0), !disappears
+	case isWord(first, "dismiss"):
+		step.Op, step.Title = SysDismiss, arg(0)
+	case isWord(first, "sign"):
+		step.Op = SysSandbox
+	default:
+		return nil, fmt.Errorf("line %d: unrecognized system dialog step — use: tap \"X\" in system dialog | type \"$ENV\" into system field \"F\" | see system dialog \"T\" | wait for system dialog \"T\" appears | dismiss system dialog | sign in sandbox tester", line)
+	}
+	return step, nil
 }

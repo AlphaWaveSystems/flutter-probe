@@ -41,14 +41,14 @@ func ResolveAndroidPermissions(name string) ([]string, error) {
 	return perms, nil
 }
 
-// ErrIOSNotificationsUnsupported is returned for the iOS "notifications"
-// permission: `xcrun simctl privacy` has no notifications service, and the
-// permission prompt is a SpringBoard system alert the Dart agent cannot see
-// or tap. Callers that apply permissions in bulk (--grant) treat it as a
-// warning; the single-permission `allow permission` step fails with it.
+// ErrIOSNotificationsUnsupported is returned by ResolveIOSService for the iOS
+// "notifications" permission: `xcrun simctl privacy` has no notifications
+// service, so it cannot be granted by name. FlutterProbe answers the system
+// alert through its iOS system-dialog driver instead (DeviceContext.AllowPermission,
+// `--grant notifications`); callers of ResolveIOSService must route
+// "notifications" there first.
 var ErrIOSNotificationsUnsupported = fmt.Errorf(
-	"iOS cannot pre-grant \"notifications\": `xcrun simctl privacy` has no notifications service and the prompt is a SpringBoard system alert the agent cannot tap — " +
-		"skip the request when running under FlutterProbe (guard it with bool.fromEnvironment('PROBE_AGENT')), or accept it once by hand per simulator (the choice persists until the app is erased)")
+	"iOS cannot grant \"notifications\" through simctl; probe answers the system alert via its iOS driver (`allow permission \"notifications\"` or `--grant notifications`, needs Xcode)")
 
 // ResolveIOSService returns the simctl privacy service for a human-readable name.
 func ResolveIOSService(name string) (string, error) {

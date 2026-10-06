@@ -132,6 +132,21 @@
     "body": "scroll down until \"${1:element}\" appears",
     "description": "Scroll until element appears"
   },
+  "Tap in system dialog": {
+    "prefix": "systemtap",
+    "body": "tap \"${1:Allow}\" in system dialog",
+    "description": "Tap a button in an OS system dialog (permission alert, sign-in sheet)"
+  },
+  "Type into system field": {
+    "prefix": "systemtype",
+    "body": "type \"\\$${1:PROBE_SANDBOX_PASSWORD}\" into system field \"${2:Password}\"",
+    "description": "Type a value from an environment variable into a system dialog field (masked)"
+  },
+  "Wait for system dialog": {
+    "prefix": "systemwait",
+    "body": "wait for system dialog \"${1:Notifications}\" appears",
+    "description": "Wait for an OS system dialog"
+  },
   "Take screenshot": {
     "prefix": "screenshot",
     "body": "take a screenshot called \"${1:name}\"",

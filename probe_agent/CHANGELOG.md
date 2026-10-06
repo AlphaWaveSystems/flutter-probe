@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## 0.16.0 - 2026-10-06
+
+- Fixed: a bare `scroll` chose the largest scrollable even when it was a hidden `IndexedStack` tab; it now prefers a
+  scrollable that receives touches at its center (FP-16).
+- Fixed: id selectors in error messages read `id("#key")`; they now read `#key`.
+- Docs: full agent reference in the README (build flags, ports and tokens, modes, troubleshooting) and a documentation
+  link on pub.dev. The agent still has no native plugin dependency.
+
 ## 0.15.0 - 2026-10-06
 
 - Fixed: `agent_version.dart` reported 0.13.0 in 0.14.0, causing a bogus CLI/agent version-mismatch warning.

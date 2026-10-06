@@ -87,7 +87,7 @@ revoke all permissions
 
 | Permission | Android | iOS |
 |------------|---------|-----|
-| `notifications` | `POST_NOTIFICATIONS` | — (cannot be pre-granted; see [iOS](/platform/ios/)) |
+| `notifications` | `POST_NOTIFICATIONS` | — (answered via the system alert, see [System dialogs](/tools/system-dialogs/)) |
 | `camera` | `CAMERA` | `camera` |
 | `location` | `ACCESS_FINE_LOCATION` | `location` |
 | `microphone` | `RECORD_AUDIO` | `microphone` |

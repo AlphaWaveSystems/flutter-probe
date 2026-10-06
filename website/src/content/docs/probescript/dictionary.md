@@ -66,6 +66,12 @@ Commands that pause execution until a condition is met.
 | `wait until appears` | `wait until "Dashboard" appears` | Wait until text becomes visible |
 | `wait until disappears` | `wait until "Loading" disappears` | Wait until text is no longer visible |
 | `wait for idle` | `wait for idle` | Wait for route transitions, frames, animations and HTTP requests to settle |
+| `tap in system dialog` | `tap "Allow" in system dialog` | Tap a button in an OS system dialog (outside the Flutter app) |
+| `type into system field` | `type "$PW_ENV" into system field "Password"` | Type a value (from an env var; always masked) into a system dialog field |
+| `see system dialog` | `see system dialog "Title"` | Assert a system dialog is showing (`don't see system dialog` asserts none) |
+| `wait for system dialog` | `wait for system dialog "Title" appears` | Wait for a system dialog to appear or disappear |
+| `dismiss system dialog` | `dismiss system dialog` | Tap Cancel / Don't Allow / Not Now; no-op when nothing is showing |
+| `sign in sandbox tester` | `sign in sandbox tester` | Sign the StoreKit sandbox tester in (`PROBE_SANDBOX_USER` / `PROBE_SANDBOX_PASSWORD`); no-op if no sheet |
 | `wait for page to load` | `wait for page to load` | Wait for the UI to settle (triple-signal sync) |
 | `wait for network idle` | `wait for network idle` | Wait for pending HTTP requests to complete |
 | `wait for animations to end` | `wait for animations to end` | Wait until no scheduled animation frames remain |

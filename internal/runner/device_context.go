@@ -7,10 +7,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // ConfirmFunc is called before destructive operations. It receives a description
@@ -39,6 +41,41 @@ type DeviceContext struct {
 	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
 	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
 	CLIVersion              string          // running probe binary's version, sent during the reconnect handshake
+
+	sysMu     sync.Mutex
+	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
+}
+
+// SystemDriver returns the run's shared system-dialog driver, creating it on
+// first use (this starts the iOS runner on a simulator, ~5s). Only steps that
+// use system dialogs ever call it, so ordinary runs never pay for it.
+func (dc *DeviceContext) SystemDriver(ctx context.Context) (sysdialog.Driver, error) {
+	dc.sysMu.Lock()
+	defer dc.sysMu.Unlock()
+	if dc.sysDriver != nil {
+		return dc.sysDriver, nil
+	}
+	version := dc.CLIVersion
+	d, err := sysdialog.ForDevice(ctx, dc.Manager, dc.Serial, dc.Platform, sysdialog.IOSOptions{
+		Version:     version,
+		AutoInstall: true,
+		Logf:        func(f string, a ...any) { fmt.Printf("    \033[36mℹ\033[0m  "+f+"\n", a...) },
+	})
+	if err != nil {
+		return nil, err
+	}
+	dc.sysDriver = d
+	return d, nil
+}
+
+// CloseSystemDriver stops the system-dialog driver if one was started.
+func (dc *DeviceContext) CloseSystemDriver() {
+	dc.sysMu.Lock()
+	defer dc.sysMu.Unlock()
+	if dc.sysDriver != nil {
+		_ = dc.sysDriver.Close()
+		dc.sysDriver = nil
+	}
 }
 
 // agentHost returns the configured agent host or the default.
@@ -259,6 +296,10 @@ func (dc *DeviceContext) AllowPermission(ctx context.Context, name string) error
 			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
 			return nil
 		}
+		if name == "notifications" {
+			// simctl cannot grant this one: answer the system alert instead.
+			return dc.answerNotificationAlert(ctx, "Allow")
+		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
 			return err
@@ -287,6 +328,9 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 		if dc.IsPhysical {
 			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
 			return nil
+		}
+		if name == "notifications" {
+			return dc.answerNotificationAlert(ctx, "Don't Allow")
 		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
@@ -876,6 +920,30 @@ func (dc *DeviceContext) biometricCapture(ctx context.Context, match bool) error
 		if _, err := dc.Manager.ADB().Run(ctx, dc.Serial, "emu", "finger", "touch", fingerID); err != nil {
 			return fmt.Errorf("biometric %s: adb emu finger touch %s: %w", verb, fingerID, err)
 		}
+	}
+	return nil
+}
+
+// answerNotificationAlert taps button on the iOS notification-permission
+// alert, if one is showing within a few seconds. There is no simctl service
+// for notifications, so this is the only way to answer the prompt (FP-16).
+// No alert is not an error: the permission may already have been decided, and
+// that keeps `allow permission "notifications"` idempotent. Needs the iOS
+// system-dialog driver (Xcode).
+func (dc *DeviceContext) answerNotificationAlert(ctx context.Context, button string) error {
+	d, err := dc.SystemDriver(ctx)
+	if err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
+	appeared, err := d.Wait(ctx, "Notifications", true, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
+	if !appeared {
+		return nil
+	}
+	if _, err := d.Tap(ctx, button, "Notifications"); err != nil {
+		return fmt.Errorf("notifications: %w", err)
 	}
 	return nil
 }

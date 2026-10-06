@@ -36,13 +36,14 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 
 `get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) to pin a specific target.
 
-### Reporting & generation (4 tools)
+### Reporting & generation (5 tools)
 
 | Tool | Description |
 |---|---|
 | `get_report` | Read the most recently modified JSON test run report |
 | `generate_report` | Generate a standalone HTML report from a JSON results file |
 | `generate_test` | AI-generate a `.probe` test from a natural language prompt |
+| `system_dialog` | List, see, tap, dismiss or wait for OS system dialogs (permission alerts, StoreKit sign-in) on a simulator/emulator; `sign-in-sandbox` provisions the StoreKit tester. Typing is deliberately not exposed (secrets) |
 | `triage_failure` | Optional, advisory: explain failures in a JSON report with the configured `ai:` model (a local model works). Never affects results |
 
 ### Project management (1 tool)
@@ -69,7 +70,7 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--shard 1/3` | Run 1/3 of test files (for CI matrix builds) |
 | `--host <ip> --token <t>` | WiFi mode for physical devices |
 | `--agent-port 48700` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=48700` so simulators don't collide. A failed dial names the process holding the port. |
-| `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications can't be pre-granted) |
+| `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
 | `--disable-animations` | Set `timeDilation=0` for faster tests |
 | `-y` | Auto-approve destructive operations (CI mode) |
 | `--video` | Record device screen during the run |
@@ -141,7 +142,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 20 tools are immediately available in any new Claude conversation.
+4. Done — all 21 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 
@@ -340,7 +341,7 @@ To pull a specific piece of text off the screen into a variable — an OTP code,
    wait for idle
    tap #nav_tab_today
    ```
-3. `run_tests` with `flags: "--grant notifications"` — pre-grants the OS permission so no system prompt interrupts the flow (Android and simulator-supported iOS services; iOS notifications can't be pre-granted)
+3. `run_tests` with `flags: "--grant notifications"` — pre-grants the OS permission so no system prompt interrupts the flow (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications are answered by tapping Allow on the system alert)
 4. If a step fails, the error carries `line N`, the step, and the visible texts/keys at that moment — read those instead of guessing
 
 `scroll down` reveals later content; `scroll up` goes back toward the top.

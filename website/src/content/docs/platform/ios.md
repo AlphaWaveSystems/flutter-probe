@@ -99,11 +99,11 @@ revoke all permissions
 This works on iOS 14+ simulators for camera, location, microphone, photos, contacts, calendar and sms.
 `probe test --grant camera,location` applies the same grants once before the first test.
 
-**Notifications cannot be pre-granted on iOS.** `xcrun simctl privacy` has no notifications service, and the
-prompt is a SpringBoard system alert the Dart agent cannot see or tap, so `allow permission "notifications"`
-fails with an explanation and `--grant notifications` only warns. Skip the request when running under
-FlutterProbe (`bool.fromEnvironment('PROBE_AGENT')`), or accept it once per simulator — the choice persists
-until the app is erased. Android is unaffected: `POST_NOTIFICATIONS` is granted with `adb shell pm grant`.
+**Notifications have no simctl service**, so they cannot be granted by name. Since 0.16.0 probe answers the system
+alert instead: `allow permission "notifications"` and `probe test --grant notifications` tap **Allow** when the alert
+appears, through the iOS system-dialog driver (an XCUITest runner; needs Xcode, simulators only). See
+[System dialogs](/tools/system-dialogs/). Android is unaffected: `POST_NOTIFICATIONS` is granted with
+`adb shell pm grant`.
 
 :::note[Permission changes relaunch the app (v0.12.1+)]
 `simctl privacy grant/revoke` silently **terminates the target app** — an Apple behavior, not a
@@ -113,20 +113,10 @@ next step. Follow a permission step with `wait until "<your screen>" appears` be
 exactly as you would after `restart the app`.
 :::
 
-:::caution[Notification permissions cannot be pre-granted]
-Apple does not support granting notification permissions via `simctl privacy`. If your app requests notification permission (e.g. via `UNUserNotificationCenter` or Firebase Messaging), the native dialog will block the Flutter UI and prevent tests from proceeding.
-
-**Solution:** Guard notification permission requests in your app's `main.dart`:
-
-```dart
-const probeEnabled = bool.fromEnvironment('PROBE_AGENT');
-if (!probeEnabled) {
-  await requestNotificationPermission();
-  await FirebaseMessaging.instance.requestPermission();
-}
-```
-
-Build with `--dart-define=PROBE_AGENT=true` to skip these requests during testing.
+:::tip[Notification permissions]
+`xcrun simctl privacy` cannot grant notifications, but probe can answer the system alert itself (see above), so
+you no longer have to remove the request from your app. If you prefer to skip it under test anyway, guard the
+request with `bool.fromEnvironment('PROBE_AGENT')`.
 :::
 
 ## Device Media

@@ -329,6 +329,8 @@ wait 3 seconds
 swipe up / down / left / right
 scroll down until "Item" appears
 wait for idle
+tap "Allow" in system dialog       # OS permission alerts / sign-in sheets
+type "$ENV_VAR" into system field "Password"   # masked
 take screenshot "name"
 compare screenshot "name"
 

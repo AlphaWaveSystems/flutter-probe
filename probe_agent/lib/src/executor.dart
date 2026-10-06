@@ -978,8 +978,17 @@ class ProbeExecutor {
     // with the largest viewport area instead, since that's virtually always
     // the main scrolling content, not an incidental one inside some other
     // widget.
-    ScrollableState? best;
-    double bestArea = 0;
+    //
+    // FP-16: "largest" alone can pick a scrollable the user cannot see — an
+    // IndexedStack (tabs kept alive) lays out every child but only paints and
+    // hit-tests the selected one, so a hidden tab's list can be first in tree
+    // order and the same size as the visible one, and `scroll down` then moves
+    // nothing on screen. Prefer a scrollable that actually receives touches at
+    // its own center; fall back to the largest of all if none does.
+    ScrollableState? bestHit;
+    double bestHitArea = 0;
+    ScrollableState? bestAny;
+    double bestAnyArea = 0;
     void visit(Element e) {
       if (probeRouteOf(e)?.isCurrent == false) return;
       if (e is StatefulElement && e.state is ScrollableState) {
@@ -987,16 +996,21 @@ class ProbeExecutor {
         final box = state.context.findRenderObject();
         if (box is RenderBox && box.hasSize) {
           final area = box.size.width * box.size.height;
-          if (area > bestArea) {
-            bestArea = area;
-            best = state;
+          if (area > bestAnyArea) {
+            bestAnyArea = area;
+            bestAny = state;
+          }
+          if (area > bestHitArea && box.attached &&
+              _isTopmostAt(box, box.localToGlobal(box.size.center(Offset.zero)))) {
+            bestHitArea = area;
+            bestHit = state;
           }
         }
       }
       e.visitChildren(visit);
     }
     WidgetsBinding.instance.rootElement?.visitChildren(visit);
-    return best;
+    return bestHit ?? bestAny;
   }
 
   Future<void> _drag(
@@ -1206,7 +1220,10 @@ class ProbeExecutor {
 
   String _selDesc(Map<String, dynamic> sel) {
     final kind = sel['kind'] ?? 'text';
-    final text = sel['text'] ?? '';
+    final text = '${sel['text'] ?? ''}';
+    // An id selector's text already carries its leading '#' ("#settings_screen"):
+    // show it once, as written in the test, not as id("#settings_screen").
+    if (kind == 'id') return text.startsWith('#') ? text : '#$text';
     return '$kind("$text")';
   }
 

@@ -1,0 +1,42 @@
+name: ProbeDriver
+options:
+  bundleIdPrefix: dev.flutterprobe
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  ProbeDriverHost:
+    type: application
+    platform: iOS
+    sources: [Host]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.flutterprobe.driver.host
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ProbeDriver
+  ProbeDriverUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: ProbeDriverHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.flutterprobe.driver.uitests
+        TEST_TARGET_NAME: ProbeDriverHost
+schemes:
+  ProbeDriver:
+    build:
+      targets:
+        ProbeDriverHost: all
+        ProbeDriverUITests: all
+    test:
+      targets:
+        - ProbeDriverUITests
