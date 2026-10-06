@@ -78,30 +78,3 @@ jobs:
             exit 0
           fi
           dart pub publish -f
-
-  publish-mdns:
-    name: Publish flutter_probe_agent_mdns
-    needs: publish-agent
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dart-lang/setup-dart@v1
-      - uses: flutter-actions/setup-flutter@v4
-        with:
-          channel: stable
-      - run: dart pub get
-        working-directory: probe_agent_mdns
-      - run: dart pub publish --dry-run
-        working-directory: probe_agent_mdns
-      - name: Publish
-        working-directory: probe_agent_mdns
-        run: |
-          pkg=$(grep '^name:' pubspec.yaml | awk '{print $2}')
-          ver=$(grep '^version:' pubspec.yaml | awk '{print $2}')
-          if curl -sf "https://pub.dev/packages/$pkg/versions/$ver" > /dev/null 2>&1; then
-            echo "$pkg $ver already published — skipping"
-            exit 0
-          fi
-          dart pub publish -f

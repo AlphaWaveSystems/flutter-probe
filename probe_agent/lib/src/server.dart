@@ -106,7 +106,7 @@ class ProbeServer {
       final adv = advertiser;
       if (adv == null) {
         // ignore: avoid_print
-        print('PROBE_MDNS=off (add flutter_probe_agent_mdns and pass advertiser: ProbeMdns() to ProbeAgent.start for Studio auto-discovery)');
+        print('PROBE_MDNS=off (implement ProbeAdvertiser and pass advertiser: to ProbeAgent.start for Studio auto-discovery — see flutterprobe.dev/tools/studio)');
       } else {
         // Hostname makes a stable, recognizable label (e.g. "Patrick's iPhone").
         // Falls back to a generic name when the OS doesn't expose one.

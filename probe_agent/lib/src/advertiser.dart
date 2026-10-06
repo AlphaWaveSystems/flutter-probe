@@ -10,10 +10,11 @@ const String mdnsServiceType = '_flutterprobe._tcp';
 /// The core agent deliberately has **no native dependency**: advertising needs a
 /// platform plugin (Bonjour/NSD), and a plugin listed in an app's dependencies
 /// is linked into every build of that app, release included. Implementations
-/// live in the optional `flutter_probe_agent_mdns` package; pass one to
-/// `ProbeAgent.start(advertiser: ...)` only in the build flavor that wants
-/// auto-discovery. Without one, WiFi testing works exactly as before with
-/// `--host <ip> --token <token>`.
+/// is left to the app: implement this class with a plugin such as `bonsoir`
+/// (a copy-paste example is in the docs, flutterprobe.dev/tools/studio) in the
+/// build flavor that wants auto-discovery, and pass it to
+/// `ProbeAgent.start(advertiser: ...)`. Without one, WiFi testing works exactly
+/// as before with `--host <ip> --token <token>`.
 abstract class ProbeAdvertiser {
   const ProbeAdvertiser();
 

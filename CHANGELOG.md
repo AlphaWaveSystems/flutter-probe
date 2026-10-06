@@ -10,9 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`flutter_probe_agent` no longer depends on the native `bonsoir` mDNS plugin.** A plugin in an app's
   dependencies is linked into every build of that app, release included, regardless of
   `--dart-define=PROBE_AGENT` (reported by Water Sip: release size, privacy, possible local-network prompt).
-  mDNS advertising moved to the new optional package **`flutter_probe_agent_mdns`**
-  (`ProbeAgent.start(advertiser: const ProbeMdns())`). Without it WiFi testing is unchanged
-  (`--host <ip> --token <token>`); Studio's WiFi auto-discovery needs the package in the device build.
+  mDNS advertising is now an optional `ProbeAdvertiser` hook
+  (`ProbeAgent.start(advertiser: ...)`) that the app implements with its own `bonsoir` dependency; a
+  copy-paste example is in the Studio docs. No new pub.dev package is published. Without it WiFi testing is
+  unchanged (`--host <ip> --token <token>`); Studio's WiFi auto-discovery needs an advertiser in the device build.
   The advertised port is now the actually bound one.
 
 ### Optional local-LLM support (FP-14)

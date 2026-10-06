@@ -56,15 +56,15 @@ The runner is a library, not a subprocess. The connection-stability work in v0.6
 - Linux only: WebKitGTK 4.1+ (`apt install libwebkit2gtk-4.1-dev`)
 - Physical iOS over USB: `libimobiledevice` for `iproxy` (`brew install libimobiledevice` on macOS)
 - Physical Android: `adb` on `PATH` (Android SDK platform-tools) — same requirement as emulators
-- Physical devices over WiFi: `flutter_probe_agent` built with `--dart-define=PROBE_WIFI=true`, plus the optional [`flutter_probe_agent_mdns`](https://pub.dev/packages/flutter_probe_agent_mdns) package (agent 0.15.0+; before that mDNS shipped inside the agent) for mDNS discovery
+- Physical devices over WiFi: `flutter_probe_agent` built with `--dart-define=PROBE_WIFI=true`, plus a `ProbeAdvertiser` in the app (agent 0.15.0+; before that mDNS shipped inside the agent) for mDNS discovery — see [WiFi auto-discovery](#wifi-auto-discovery)
 
 ## Physical devices
 
 Studio connects to physical iOS and Android devices through the exact same `internal/device` package the `probe` CLI uses — there is no separate device-management code path for Studio.
 
 - **USB** — plug in the device, launch the app with `--dart-define=PROBE_AGENT=true`, click ↻ to refresh the device picker, and pick the entry tagged `physical`. Physical iOS gets an `iproxy` tunnel automatically before Studio dials the agent; physical Android goes through `adb forward`, the same path as emulators. Connection errors for a missing `iproxy` or `adb` binary surface inline with an actionable fix (e.g. "install via: brew install libimobiledevice").
-- **WiFi (preferred for iOS)** — matching the CLI's own documented preference, WiFi is more stable than USB-C for physical iOS: a USB-C cable's charge/data mode-flipping can drop the `iproxy` tunnel mid-run, where WiFi has no such failure mode. Build the Flutter app with `--dart-define=PROBE_WIFI=true` and `ProbeAgent.start(advertiser: const ProbeMdns())` (from `flutter_probe_agent_mdns`; see [WiFi auto-discovery](#wifi-auto-discovery)), click the 📡 button to open the WiFi discovery overlay, and pick the device once it appears via mDNS (`_flutterprobe._tcp`). Paste the token printed in the app's `PROBE_TOKEN=...` log line — Studio remembers it per device in local storage for next time (with a "forget" control).
-- Devices that don't advertise over mDNS (no `flutter_probe_agent_mdns` in the build, older agent versions, or networks that block mDNS) currently need the CLI's `--host <ip> --token <token>` flow instead — Studio's WiFi overlay only supports discovered devices, not a manual host/port entry field, as of this release.
+- **WiFi (preferred for iOS)** — matching the CLI's own documented preference, WiFi is more stable than USB-C for physical iOS: a USB-C cable's charge/data mode-flipping can drop the `iproxy` tunnel mid-run, where WiFi has no such failure mode. Build the Flutter app with `--dart-define=PROBE_WIFI=true` and pass an advertiser to `ProbeAgent.start` (see [WiFi auto-discovery](#wifi-auto-discovery)), click the 📡 button to open the WiFi discovery overlay, and pick the device once it appears via mDNS (`_flutterprobe._tcp`). Paste the token printed in the app's `PROBE_TOKEN=...` log line — Studio remembers it per device in local storage for next time (with a "forget" control).
+- Devices that don't advertise over mDNS (no advertiser in the build, older agent versions, or networks that block mDNS) currently need the CLI's `--host <ip> --token <token>` flow instead — Studio's WiFi overlay only supports discovered devices, not a manual host/port entry field, as of this release.
 
 ## Quick start
 
@@ -125,21 +125,60 @@ Studio bugs go to the same tracker as the CLI: [github.com/AlphaWaveSystems/flut
 
 ## WiFi auto-discovery
 
-mDNS advertising lives in a separate package so the core agent carries no native plugin (a plugin in your
-dependencies is linked into every build of your app, release included). Add it only for the build you test on
-devices:
+The core agent has **no native dependency**: a native plugin in your app's dependencies is linked into every
+build of that app, release included. mDNS advertising needs one (Bonjour/NSD), so the agent only defines a hook,
+`ProbeAdvertiser`, and you implement it in the build you test on devices. No extra FlutterProbe package is needed.
+
+Add `bonsoir` to your app (ideally only in a dedicated flavor/target):
 
 ```yaml
-# pubspec.yaml
 dependencies:
-  flutter_probe_agent: ^0.15.0
-  flutter_probe_agent_mdns: ^0.15.0
+  bonsoir: ^5.1.10
 ```
 
 ```dart
-await ProbeAgent.start(advertiser: const ProbeMdns());
+import 'package:bonsoir/bonsoir.dart';
+import 'package:flutter_probe_agent/flutter_probe_agent.dart';
+
+class BonsoirAdvertiser extends ProbeAdvertiser {
+  BonsoirBroadcast? _broadcast;
+
+  @override
+  Future<void> start({required String name, required int port, required String agentVersion}) async {
+    try {
+      final broadcast = BonsoirBroadcast(
+        service: BonsoirService(
+          name: name,
+          type: mdnsServiceType, // _flutterprobe._tcp
+          port: port,
+          // The auth token is deliberately NOT advertised.
+          attributes: {'version': agentVersion, 'port': '$port'},
+        ),
+      );
+      await broadcast.ready;
+      await broadcast.start();
+      _broadcast = broadcast;
+    } catch (e) {
+      print('ProbeAgent: mDNS advertise failed: $e'); // never block the agent
+    }
+  }
+
+  @override
+  Future<void> stop() async {
+    try {
+      await _broadcast?.stop();
+    } catch (_) {}
+    _broadcast = null;
+  }
+}
+
+Future<void> main() async {
+  await ProbeAgent.start(advertiser: BonsoirAdvertiser());
+  runApp(const MyApp());
+}
 ```
 
 Run with `--dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true`. On iOS, add `_flutterprobe._tcp` to
-`NSBonjourServices` and a `NSLocalNetworkUsageDescription` in `Info.plist` of that build. Without the package,
-WiFi testing still works with `probe test --host <ip> --token <token>`.
+`NSBonjourServices` and a `NSLocalNetworkUsageDescription` in that build's `Info.plist`. It only advertises in
+WiFi mode (agent bound to `0.0.0.0`). Without an advertiser, WiFi testing still works with
+`probe test --host <ip> --token <token>`; the agent logs `PROBE_MDNS=off`.

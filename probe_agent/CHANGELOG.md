@@ -4,8 +4,9 @@
 
 - **BREAKING (WiFi auto-discovery only):** the core agent no longer depends on `bonsoir`. A native plugin in an
   app's dependencies is linked into every build of that app, release included (size, privacy, a possible
-  local-network prompt) regardless of `--dart-define=PROBE_AGENT`. mDNS advertising moved to the new optional
-  `flutter_probe_agent_mdns` package: add it and call `ProbeAgent.start(advertiser: const ProbeMdns())`. Without
+  local-network prompt) regardless of `--dart-define=PROBE_AGENT`. mDNS advertising is now an optional hook:
+  implement `ProbeAdvertiser` in your own app (copy-paste `bonsoir` example in the Studio docs) and pass it to
+  `ProbeAgent.start(advertiser: ...)` in the build flavor that wants it. No separate package is published. Without
   it WiFi testing is unchanged (`--host <ip> --token <token>`) and the agent logs `PROBE_MDNS=off`. New public
   API: `ProbeAdvertiser`, `mdnsServiceType`. The advertised port is now the actually bound port (it used to be
   the preferred one even after a fallback) (FP-15).
