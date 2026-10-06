@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## 0.16.1 - 2026-10-06
+
+- No agent change. Version bump to match the CLI release 0.16.1 (the 0.16.0 CLI release failed to build on Windows; see the root
+  changelog).
+
 ## 0.16.0 - 2026-10-06
 
 - Fixed: a bare `scroll` chose the largest scrollable even when it was a hidden `IndexedStack` tab; it now prefers a

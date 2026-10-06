@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -130,7 +129,7 @@ func (d *IOSDriver) start(ctx context.Context, opts IOSOptions) error {
 		cmd.Env = append(cmd.Env, "TEST_RUNNER_PROBE_DRIVER_APPS="+apps)
 	}
 	cmd.Stdout, cmd.Stderr = logFile, logFile
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting the iOS driver: %w", err)
 	}
@@ -289,9 +288,7 @@ func (d *IOSDriver) Close() error {
 	select {
 	case <-done:
 	case <-time.After(8 * time.Second):
-		if d.cmd.Process != nil {
-			_ = syscall.Kill(-d.cmd.Process.Pid, syscall.SIGKILL)
-		}
+		killProcessGroup(d.cmd)
 	}
 	d.cmd = nil
 	_ = os.Remove(d.logPath)
