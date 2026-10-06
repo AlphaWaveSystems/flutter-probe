@@ -176,7 +176,10 @@ func (c *HTTPClient) Open(ctx context.Context, screen string) error {
 }
 
 func (c *HTTPClient) Tap(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
+	if err == nil {
+		reportWarning(raw)
+	}
 	return err
 }
 

@@ -122,7 +122,9 @@ class ProbeExecutor {
       case ProbeMethods.tap:
         await _tap(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
-        return {'ok': true};
+        final tapWarning = _tapWarning;
+        _tapWarning = null;
+        return tapWarning == null ? {'ok': true} : {'ok': true, 'warning': tapWarning};
 
       case ProbeMethods.doubleTap:
         await _doubleTap(req.params['selector'] as Map<String, dynamic>);
@@ -317,13 +319,54 @@ class ProbeExecutor {
 
   // ---- Touch helpers ----
 
+  /// Set by [_tap] when it had to proceed with a tap that probably will not do
+  /// what the test expects; returned to the CLI as a warning instead of the tap
+  /// silently doing nothing (FP-19).
+  String? _tapWarning;
+
+  /// True while any scrollable that contains [element] is scrolling. Flutter's
+  /// Scrollable ignores pointer events for the duration of a scroll activity, so
+  /// a tap issued right after a scroll can be dropped without any error.
+  bool _scrollingAround(Element element) {
+    var scrolling = false;
+    try {
+      element.visitAncestorElements((a) {
+        if (a is StatefulElement && a.state is ScrollableState) {
+          final position = (a.state as ScrollableState).position;
+          if (position.isScrollingNotifier.value) {
+            scrolling = true;
+            return false;
+          }
+        }
+        return true;
+      });
+    } catch (_) {
+      return false;
+    }
+    return scrolling;
+  }
+
+  /// Lets a scroll that is still in progress around [element] finish (bounded).
+  /// Costs nothing — not even a frame — when nothing is scrolling.
+  Future<void> _waitForScrollIdle(Element element, {Duration timeout = const Duration(milliseconds: 1500)}) async {
+    if (!_scrollingAround(element)) return;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline) && _scrollingAround(element)) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   Future<void> _tap(Map<String, dynamic> sel) async {
+    _tapWarning = null;
     // FP-13: a tap issued right after a dialog/bottom sheet closes lands on
     // its modal barrier while the exit animation is still running and is
     // swallowed. Let any in-flight route transition finish first (bounded —
     // never blocks a tap for more than a couple of seconds).
     await _waitForRouteTransitions();
     final element = _requireElement(sel);
+    // FP-19: same idea for a scroll that has not finished (e.g. right after
+    // `scroll down until ... appears`).
+    await _waitForScrollIdle(element);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
 
@@ -361,6 +404,13 @@ class ProbeExecutor {
       // pointer tap, which lands on whatever is actually on top instead.
     }
 
+    // A real pointer tap lands on whatever is on top at the point. If that is
+    // not the target, say so: otherwise the tap "succeeds" and nothing happens.
+    if (!_isTopmostAt(box, center)) {
+      _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
+          '(${center.dx.round()}, ${center.dy.round()}); the tap lands on whatever is on top'
+          '${_visibleHint()}';
+    }
     final gesture = await _createGesture(center);
     await gesture.up();
   }

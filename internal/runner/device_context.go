@@ -439,6 +439,17 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		Port:        dc.Port,
 		Token:       token,
 		DialTimeout: dc.dialTimeoutVal(),
+		// The token was read from the device a moment ago, possibly before the
+		// new app instance rewrote it: re-read on a 401 (FP-19).
+		RefreshToken: func(c context.Context) (string, error) {
+			switch dc.Platform {
+			case device.PlatformAndroid:
+				return dc.Manager.ReadTokenAndroid(c, dc.Serial, 5*time.Second, dc.AppID, nil)
+			case device.PlatformIOS:
+				return dc.Manager.ReadTokenIOS(c, dc.Serial, 5*time.Second, dc.AppID)
+			}
+			return "", fmt.Errorf("no token source for %s", dc.Platform)
+		},
 	}
 
 	if dc.UseHTTP {

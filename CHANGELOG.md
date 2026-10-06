@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-10-06
+
+Fixes for issues found by running a real project's full gate on 0.16.1 (FP-19).
+
+### Fixed
+- **Android failure screenshots were corrupt.** The screenshot is saved on the host from the RPC's base64 data, and
+  `PullArtifacts` then re-read that *host* path through `adb exec-out run-as ... cat`; `cat` printed "No such file" on
+  stdout (exit 0) and that text overwrote the PNG. A screenshot already on the host is now kept, and anything pulled from
+  a device must start with a PNG/JPEG signature or it is reported as an error instead of written as an image.
+- **Cold-launch race on Android (and iOS simulators):** dialing a few seconds after launch could end in
+  `unexpected EOF` and then a 401, because the token readable on the device was still the previous app instance's. When
+  the CLI auto-detected the token it now re-reads it on a 401 and retries for up to 12 seconds. An explicit `--token`
+  still fails fast.
+- **The "agent port is held by" hint now says what holds it:** an `adb` port forward (with `adb forward --remove`), an iOS
+  simulator app (with its simulator UDID and `simctl terminate`), or any other process. It used to print the same text for
+  the first two.
+
+### Changed
+- **A tap that cannot reach its target is no longer silent.** When something else is on top at the tap point, the agent
+  returns a warning (`tap target #id is covered by another widget at (x, y) ...`, with the visible texts/keys) and the
+  CLI prints it. The tap still happens, as for a real user.
+- A tap now waits (up to 1.5 s) while a scrollable around its target is still scrolling: Flutter ignores pointer events
+  during scroll activity, so a tap right after `scroll ... until ... appears` could be dropped. Costs nothing when
+  nothing is scrolling.
+
+### Not changed
+- `--grant notifications` taps Allow as soon as the iOS notification alert is up, which can be right after a relaunch and
+  before the app has visibly asked. That is intended (the alert is what is answered); it is harmless.
+- Whether the silent tap after `scroll ... until` on Android is fully explained by the two changes above could not be
+  reproduced without that app; the new warning will name the cause if it happens again.
+
 ## [0.16.1] - 2026-10-06
 
 ### Fixed
