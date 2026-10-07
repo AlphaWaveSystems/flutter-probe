@@ -65,6 +65,9 @@ type DialOptions struct {
 // refusedHookInterval throttles DialOptions.OnConnectRefused.
 const refusedHookInterval = 3 * time.Second
 
+// refusedWarnAfter is how long dials may be refused before the user is told.
+const refusedWarnAfter = 5 * time.Second
+
 // refusedHint explains a dial that was refused for the whole DialTimeout: nothing
 // ever listened, which is a different problem from a slow or mismatched agent.
 func refusedHint(err error, timeout time.Duration) string {
@@ -143,7 +146,8 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	const retryInterval = time.Second
 	attempt := 0
 	var firstReject time.Time // first HTTP 401/403 seen; bounds RefreshToken retries
-	var lastRefusedHook time.Time
+	var lastRefusedHook, firstRefused time.Time
+	warnedRefused := false
 	opts.trace("probelink: dialing %s (timeout=%s)", safeURL, opts.DialTimeout)
 	for {
 		attempt++
@@ -193,6 +197,19 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// can mean the forward vanished (adb server restart, another tool removing
 		// forwards) rather than the agent being slow, so re-establish it every few
 		// seconds instead of waiting on a listener that will never come (FP-19).
+		if strings.Contains(err.Error(), "connection refused") {
+			if firstRefused.IsZero() {
+				firstRefused = time.Now()
+			}
+			// Say so early instead of leaving the user to wait out the whole
+			// DialTimeout when the app simply is not running.
+			if !warnedRefused && time.Since(firstRefused) >= refusedWarnAfter {
+				warnedRefused = true
+				emitWarning(fmt.Sprintf("still waiting: nothing listens on the agent port (%d) after %s — is the app running and built with --dart-define=PROBE_AGENT=true?", opts.Port, refusedWarnAfter))
+			}
+		} else {
+			firstRefused = time.Time{}
+		}
 		if opts.OnConnectRefused != nil && strings.Contains(err.Error(), "connection refused") &&
 			time.Since(lastRefusedHook) >= refusedHookInterval {
 			lastRefusedHook = time.Now()

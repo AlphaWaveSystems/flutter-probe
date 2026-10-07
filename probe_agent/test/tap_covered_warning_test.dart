@@ -177,6 +177,55 @@ void main() {
 void unawaited(Future<void> f) {}
 
 void snackbarCase() {
+  testWidgets('a "covered" tap that visibly changes the screen is not reported', (tester) async {
+    var label = 'Before';
+    late StateSetter set;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(builder: (c, setState) {
+          set = setState;
+          return Stack(children: [
+            Center(child: ElevatedButton(key: const ValueKey('b'), onPressed: () {}, child: const Text('Go'))),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => set(() => label = 'After'),
+                child: Center(child: Text(label)),
+              ),
+            ),
+          ]);
+        }),
+      ),
+    ));
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'id', 'text': '#b'},
+    });
+    expect(label, 'After');
+    expect(res['result']['warning'], isNull, reason: '${res['result']['warning']}');
+  });
+
+  testWidgets('with two wide labels, the copy whose button is hit wins, no warning', (tester) async {
+    var hidden = 0, shown = 0;
+    Widget wide(VoidCallback f) => TextButton(
+          onPressed: f,
+          child: const SizedBox(width: 200, child: Text('Undo')), // glyphs only at the left edge
+        );
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Stack(children: [
+          IgnorePointer(child: wide(() => hidden++)),
+          Align(alignment: Alignment.bottomCenter, child: wide(() => shown++)),
+        ]),
+      ),
+    ));
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'text', 'text': 'Undo'},
+    });
+    expect(res['result']['warning'], isNull, reason: '${res['result']['warning']}');
+    expect(shown, 1);
+    expect(hidden, 0);
+  });
+
   testWidgets('with two matches, the tap goes to the one that is reachable', (tester) async {
     var hidden = 0, shown = 0;
     await tester.pumpWidget(MaterialApp(

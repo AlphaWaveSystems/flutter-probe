@@ -97,3 +97,10 @@ Called as:
 ```
 create account with "Alice" and "alice@test.com" and "pass123"
 ```
+
+## Recipe names that start with a built-in verb
+
+A recipe may start with a verb word such as `open`, `add` or `clear`: `recipe "clear search"` is called with
+`clear search`. The built-in `clear` needs a quoted text, an `#id` or an ordinal (`clear "Email"`, `clear #email`), so
+`clear` followed by a bare word is treated as a recipe call. A recipe name that continues with a quoted text or `#id`
+after the verb would still read as the built-in; name such recipes differently.

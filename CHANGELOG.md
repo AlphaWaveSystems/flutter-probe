@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-10-06
+
+### Fixed
+- **A recipe whose name starts with `clear`** (for example `recipe "clear search"`, called as `clear search`) is called
+  instead of being parsed as the built-in `clear` with a type selector. The built-in forms (`clear "Email"`,
+  `clear #id`) are unchanged.
+- **False "covered by another widget" warning** (seen on a SnackBar action): the hit test can disagree with what a
+  real tap reaches on overlays. The warning now appears only when the hit test says covered *and* the screen did not
+  change after the tap, which is the silent-tap case it exists for. Its text now includes the topmost hit render objects.
+
+### Changed
+- When the agent port refuses connections for 5 s the CLI now says so (is the app running and built with
+  `--dart-define=PROBE_AGENT=true`?) instead of waiting silently for the dial timeout.
+
 ## [0.16.4] - 2026-10-06
 
 ### Fixed
