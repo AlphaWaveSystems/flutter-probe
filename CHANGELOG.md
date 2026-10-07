@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-10-07
+
+### Fixed
+- **`probe test --dry-run` now resolves every step.** A step that is not a built-in and matches no recipe (a typo, a
+  verb that does not exist, such as `hide keyboard`) fails the dry run, also when it sits inside a recipe the test calls
+  or in a hook. Before, dry-run reported such tests as passed and they only failed at runtime.
+- **A tap that nothing receives is no longer a silent success** (Android: a submit button under the on-screen
+  keyboard, or clipped away). A hit that stops at a passive ancestor or the root view now counts as "covered", so the
+  existing warning appears when the screen also did not change; it says when the keyboard is open and suggests
+  `close keyboard`. A hit that stops at a parent that handles taps is still normal.
+
 ## [0.16.5] - 2026-10-06
 
 ### Fixed

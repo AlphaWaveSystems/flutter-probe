@@ -1367,30 +1367,30 @@ func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
 
 // ---- Recipe call execution ----
 
-func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
-	recipe, ok := e.recipes[rc.Name]
-	stripped := rc.Name
-	if !ok {
-		// Try matching by stripping <arg> placeholders and filler words from the call name.
-		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
-		stripped = stripRecipeCallArgs(rc.Name)
-		recipe, ok = e.recipes[stripped]
+// lookupRecipe resolves a recipe call name against the loaded recipes: exactly,
+// then with <arg> placeholders and filler words stripped from the call name,
+// then with the same normalization applied to the definition names (a recipe
+// whose own name contains a filler word, e.g. `recipe "add and verify" (x)`,
+// would otherwise be unreachable by its written name). It also returns the
+// stripped call name for error messages. Shared by execution and --dry-run.
+func lookupRecipe(recipes map[string]parser.RecipeDef, name string) (parser.RecipeDef, string, bool) {
+	if r, ok := recipes[name]; ok {
+		return r, name, true
 	}
-	if !ok {
-		// Campaign finding: stripping was applied to the CALL name only,
-		// never the DEFINITION name — so a recipe whose own name contains a
-		// filler word, e.g. `recipe "add and verify" (x)`, was unreachable
-		// by its exact written name: the call `add and verify "v"` parses as
-		// "add and verify <arg>", strips to "add verify", and "add verify"
-		// matches nothing because the definition kept its "and". Normalize
-		// both sides the same way before comparing.
-		for defName, def := range e.recipes {
-			if stripRecipeCallArgs(defName) == stripped {
-				recipe, ok = def, true
-				break
-			}
+	stripped := stripRecipeCallArgs(name)
+	if r, ok := recipes[stripped]; ok {
+		return r, stripped, true
+	}
+	for defName, def := range recipes {
+		if stripRecipeCallArgs(defName) == stripped {
+			return def, stripped, true
 		}
 	}
+	return parser.RecipeDef{}, stripped, false
+}
+
+func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
+	recipe, stripped, ok := lookupRecipe(e.recipes, rc.Name)
 	if !ok {
 		// PT-02(a): an unrecognized recipe call used to silently no-op ("may
 		// be a filler line"), which masked genuine typos and broken recipe

@@ -159,10 +159,17 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	tests := r.filterTests(prog.Tests)
 
 	if r.opts.DryRun {
-		// Parse-only — just return names as passed
+		// Parse and resolve only: a step that is not a built-in is a recipe
+		// call, so an unknown one (a typo, a verb that does not exist) is
+		// reported here instead of at runtime.
 		var results []TestResult
 		for _, t := range tests {
-			results = append(results, TestResult{TestName: t.Name, File: path, Passed: true, Row: -1})
+			res := TestResult{TestName: t.Name, File: path, Passed: true, Row: -1}
+			if err := r.unresolvedCalls(prog, t); err != nil {
+				res.Passed = false
+				res.Error = err
+			}
+			results = append(results, res)
 		}
 		return results, nil
 	}
@@ -621,4 +628,58 @@ func sanitizeName(name string) string {
 		s = s[:60]
 	}
 	return s
+}
+
+// unresolvedCalls reports the first recipe call reachable from the test (its
+// body, the hooks and every recipe body it can call) that matches no loaded
+// recipe. Used by --dry-run.
+func (r *Runner) unresolvedCalls(prog *parser.Program, t parser.TestDef) error {
+	seen := map[string]bool{}
+	var check func(steps []parser.Step) error
+	check = func(steps []parser.Step) error {
+		for _, s := range steps {
+			switch st := s.(type) {
+			case parser.RecipeCall:
+				rec, stripped, ok := lookupRecipe(r.recipes, st.Name)
+				if !ok {
+					if stripped != st.Name {
+						return fmt.Errorf("line %d: unknown step %q (also tried %q) — not a built-in step and no recipe with that name is defined", st.Line, st.Name, stripped)
+					}
+					return fmt.Errorf("line %d: unknown step %q — not a built-in step and no recipe with that name is defined", st.Line, st.Name)
+				}
+				if !seen[rec.Name] {
+					seen[rec.Name] = true
+					if err := check(rec.Body); err != nil {
+						return fmt.Errorf("in recipe %q: %w", rec.Name, err)
+					}
+				}
+			case parser.ConditionalStep:
+				if err := check(st.Then); err != nil {
+					return err
+				}
+				if err := check(st.Else); err != nil {
+					return err
+				}
+			case parser.LoopStep:
+				if err := check(st.Body); err != nil {
+					return err
+				}
+			case parser.RetryStep:
+				if err := check(st.Body); err != nil {
+					return err
+				}
+			case parser.DeviceStep:
+				if err := check([]parser.Step{st.Step}); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	for _, h := range prog.Hooks {
+		if err := check(h.Body); err != nil {
+			return err
+		}
+	}
+	return check(t.Body)
 }

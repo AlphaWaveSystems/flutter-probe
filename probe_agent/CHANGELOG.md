@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## 0.16.6 - 2026-10-07
+
+- Fixed: a tap whose point is received by nothing (clipped, off screen, under the keyboard) produces the covered
+  warning (when the screen also did not change) instead of a plain success; the warning mentions an open keyboard.
+
 ## 0.16.5 - 2026-10-06
 
 - Changed: `go back` at the root route is a no-op with a warning instead of leaving the app (Android).

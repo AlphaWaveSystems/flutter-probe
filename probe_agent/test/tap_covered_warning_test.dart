@@ -177,6 +177,41 @@ void main() {
 void unawaited(Future<void> f) {}
 
 void snackbarCase() {
+  testWidgets('a tap whose point nothing receives (clipped / under the keyboard) warns', (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Column(children: [
+          // The button is laid out beyond the clip of its box: nothing is hit there.
+          SizedBox(
+            height: 40,
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.topCenter,
+                maxHeight: 400,
+                child: Column(children: [
+                  const SizedBox(height: 200),
+                  ElevatedButton(
+                    key: const ValueKey('hidden_button'),
+                    onPressed: () => taps++,
+                    child: const Text('Sign in'),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    ));
+    final res = await _rpc(tester, ProbeMethods.tap, {
+      'selector': {'kind': 'id', 'text': '#hidden_button'},
+    });
+    expect(taps, 0);
+    final warning = res['result']['warning'] as String?;
+    expect(warning, isNotNull, reason: 'a tap nothing received must not look like a plain success');
+    expect(warning, contains('covered'));
+  });
+
   testWidgets('a "covered" tap that visibly changes the screen is not reported', (tester) async {
     var label = 'Before';
     late StateSetter set;
