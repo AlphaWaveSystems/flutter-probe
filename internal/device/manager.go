@@ -552,6 +552,11 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 	trace.log("android: giving up after %d attempt(s), %s elapsed — no source produced a token", attempt, timeout)
 	// No "— is the app running with probe_agent?" suffix here: the caller in
 	// internal/cli/test.go already appends this suggestion when wrapping.
+	if appID != "" {
+		if out, err := m.adb.Shell(ctx, serial, "pidof", appID); err == nil && strings.TrimSpace(string(out)) == "" {
+			return "", fmt.Errorf("android: probe token not found within %s: the app process %s is not running (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, appID)
+		}
+	}
 	return "", fmt.Errorf("android: probe token not found within %s", timeout)
 }
 
@@ -566,6 +571,19 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 // tokens from multiple app-process generations, including already-dead
 // ones. The agent reprints its token every ~3s, so the most recent matching
 // line is always the live process's token, if one is currently running.
+// ReadTokenAndroidLogcat returns the newest PROBE_TOKEN= line in the device's
+// logcat, or "" when there is none. The agent reprints its token every few
+// seconds, so this is the live process's token even when the token file in the
+// app's cache is stale (e.g. the agent could not rewrite it after a restart).
+func (m *Manager) ReadTokenAndroidLogcat(ctx context.Context, serial string) string {
+	out, err := m.adb.Shell(ctx, serial, "logcat", "-d", "-s", "flutter:I")
+	if err != nil {
+		return ""
+	}
+	t, _ := latestProbeToken(string(out))
+	return t
+}
+
 func latestProbeToken(logOutput string) (token string, matches int) {
 	const marker = "PROBE_TOKEN="
 	for _, line := range strings.Split(logOutput, "\n") {

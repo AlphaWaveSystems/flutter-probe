@@ -351,6 +351,12 @@ func (p *Parser) parseStep() (Step, error) {
 	case TOKEN_DOUBLE_TAP:
 		return p.parseActionDoubleTap()
 	case TOKEN_CLEAR:
+		// FP-20: "clear" followed by a bare word (not a quoted text, #id or
+		// ordinal) is a recipe whose name starts with "clear" (e.g. "clear
+		// search"), the same collision "open" and "add" guard against.
+		if p.clearTakesBareWord() {
+			return p.parseRecipeCall()
+		}
 		return p.parseActionClear()
 	case TOKEN_CLOSE:
 		return p.parseActionClose()
@@ -499,6 +505,17 @@ func (p *Parser) looksLikeOpenVerb() bool {
 		return true
 	}
 	return p.peek().Type == TOKEN_LINK
+}
+
+// clearTakesBareWord reports whether the token after "clear" is a bare word
+// instead of a quoted text, #id or ordinal. The built-in verb needs one of
+// those, so a bare word means a recipe name. Consumes nothing.
+func (p *Parser) clearTakesBareWord() bool {
+	saved := p.pos
+	defer func() { p.pos = saved }()
+	p.advance() // clear
+	p.skipFillers()
+	return p.peek().Type == TOKEN_IDENT
 }
 
 // ---- Action parsers ----

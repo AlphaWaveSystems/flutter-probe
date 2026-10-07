@@ -37,3 +37,13 @@ func reportWarning(raw json.RawMessage) {
 		f(r.Warning)
 	}
 }
+
+// emitWarning sends a CLI-side warning to the same sink as agent warnings.
+func emitWarning(msg string) {
+	warnMu.RLock()
+	f := warningSink
+	warnMu.RUnlock()
+	if f != nil {
+		f(msg)
+	}
+}

@@ -136,10 +136,27 @@ func describeHolders(port int, hs []Holder) string {
 // port on this machine, and how to move off it. Empty for remote hosts and
 // when the port is free (then the failure is something else).
 func portHolderHint(host string, port int) string {
+	return portHolderHintFor(host, port, false)
+}
+
+// portHolderHintFor is portHolderHint, optionally ignoring adb forwards: on an
+// Android run the host port is the CLI's own `adb forward`, so naming it as the
+// culprit of a rejected token is misleading (the real cause is the token).
+func portHolderHintFor(host string, port int, ownAdbForward bool) string {
 	if !isLoopback(host) {
 		return ""
 	}
-	return describeHolders(port, holders(port))
+	hs := holders(port)
+	if ownAdbForward {
+		var rest []Holder
+		for _, h := range hs {
+			if !strings.EqualFold(h.Name, "adb") {
+				rest = append(rest, h)
+			}
+		}
+		hs = rest
+	}
+	return describeHolders(port, hs)
 }
 
 // PortHolderHint returns the " — agent port N is held by ..." suffix for a

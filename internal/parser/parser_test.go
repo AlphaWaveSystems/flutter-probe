@@ -2391,3 +2391,31 @@ func TestParser_ToggleByText(t *testing.T) {
 		t.Errorf("selector: got %+v, want text Dark Mode", a.Sel)
 	}
 }
+
+// A recipe named "clear search" must be called, not parsed as the built-in
+// clear verb with a type selector "search"; the documented forms still work.
+func TestParser_RecipeCallStartingWithClear(t *testing.T) {
+	src := `recipe "clear search"
+  tap #search_clear_button
+
+test "t"
+  clear search
+  clear "Email"
+  clear #email_field
+`
+	prog := mustParse(t, src)
+	body := prog.Tests[0].Body
+	if len(body) != 3 {
+		t.Fatalf("body: got %d steps, want 3: %+v", len(body), body)
+	}
+	call, ok := body[0].(parser.RecipeCall)
+	if !ok || call.Name != "clear search" {
+		t.Fatalf("step 1: got %#v, want RecipeCall \"clear search\"", body[0])
+	}
+	for i := 1; i < 3; i++ {
+		a, ok := body[i].(parser.ActionStep)
+		if !ok || a.Verb != parser.VerbClear {
+			t.Errorf("step %d: got %#v, want the built-in clear", i+1, body[i])
+		}
+	}
+}

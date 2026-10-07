@@ -908,8 +908,23 @@ func runTests(cmd *cobra.Command, args []string) error {
 				dialOpts.Token = token
 				// Right after a cold launch the token read above can still be the
 				// previous app instance's: re-read it on a 401 instead of failing (FP-19).
+				dialOpts.OwnAdbForward = true
+				// A token file in the app cache can outlive its app process (the agent
+				// could not rewrite it): when a re-read returns the token that was
+				// just rejected, fall back to the newest one in logcat.
+				lastToken := token
 				dialOpts.RefreshToken = func(c context.Context) (string, error) {
-					return dm.ReadTokenAndroid(c, deviceSerial, 5*time.Second, cfg.Project.App, trace)
+					t, err := dm.ReadTokenAndroid(c, deviceSerial, 5*time.Second, cfg.Project.App, trace)
+					if err == nil && t == lastToken {
+						if lt := dm.ReadTokenAndroidLogcat(c, deviceSerial); lt != "" && lt != t {
+							trace("android: token file is stale (rejected), using the newest token from logcat")
+							t = lt
+						}
+					}
+					if err == nil {
+						lastToken = t
+					}
+					return t, err
 				}
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {

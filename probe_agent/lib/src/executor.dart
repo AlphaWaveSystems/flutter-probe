@@ -193,12 +193,15 @@ class ProbeExecutor {
 
       // ---- Device actions ----
       case ProbeMethods.deviceAction:
+        _tapWarning = null;
         await _deviceAction(
           req.params['action'] as String,
           req.params['value'] as String? ?? '',
         );
         await _sync.waitForSettled();
-        return {'ok': true};
+        final actionWarning = _tapWarning;
+        _tapWarning = null;
+        return actionWarning == null ? {'ok': true} : {'ok': true, 'warning': actionWarning};
 
       case ProbeMethods.close:
         await SystemNavigator.pop();
@@ -391,13 +394,18 @@ class ProbeExecutor {
     try {
       final all = _finder.findElements(sel);
       if (all.length < 2) return first;
+      Element? related;
       for (final e in all) {
         final b = e.renderObject;
-        if (b is RenderBox && b.attached && b.hasSize &&
-            _hitState(b, b.localToGlobal(b.size.center(Offset.zero))).strict) {
-          return e;
-        }
+        if (b is! RenderBox || !b.attached || !b.hasSize) continue;
+        final state = _hitState(b, b.localToGlobal(b.size.center(Offset.zero)));
+        if (state.strict) return e;
+        // A text label is often wider than its glyphs, so the hit at its
+        // center lands on the enclosing button instead of the paragraph:
+        // that still means this copy is the reachable one.
+        if (state.related && related == null) related = e;
       }
+      if (related != null) return related;
     } catch (_) {}
     return first;
   }
@@ -466,13 +474,33 @@ class ProbeExecutor {
       if (_hitState(box, warnCenter).related) break;
       await Future.delayed(const Duration(milliseconds: 50));
     }
-    if (!_hitState(box, warnCenter).related) {
-      _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
-          '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top'
-          '${_visibleHint()}';
-    }
+    final covered = !_hitState(box, warnCenter).related;
+    final before = covered ? _screenFingerprint() : '';
     final gesture = await _createGesture(warnCenter);
     await gesture.up();
+    if (covered) {
+      // The hit test says something unrelated is on top, but it can be wrong
+      // about overlays (a SnackBar action reported "covered" although tapping
+      // it worked). So only report it when the tap also changed nothing on
+      // screen — that is the case where a test would otherwise pass silently.
+      for (var i = 0; i < 4; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (_screenFingerprint() != before) return;
+      }
+      _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
+          '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top '
+          'and the screen did not change (topmost hit: ${_hitPathDesc(warnCenter)})'
+          '${_visibleHint()}';
+    }
+  }
+
+  String _screenFingerprint() {
+    try {
+      final s = _finder.visibleSummary(max: 500);
+      return '${s['texts']!.join('|')}#${s['keys']!.join('|')}';
+    } catch (_) {
+      return '';
+    }
   }
 
   /// Walks down from [element] to find the nearest GestureDetector or
@@ -540,6 +568,26 @@ class ProbeExecutor {
   /// `strict`: the target (or something inside it) is in the hit path.
   /// `related`: the deepest hit render object is the target, inside it, or an
   /// ancestor of it — i.e. NOT an unrelated widget sitting on top of it.
+  /// Short description of what a hit test at [position] reaches, deepest first
+  /// (render object types), for diagnosing "covered" warnings.
+  String _hitPathDesc(Offset position) {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view == null) return 'no view';
+      final result = HitTestResult();
+      GestureBinding.instance.hitTestInView(result, position, view.viewId);
+      final names = <String>[];
+      for (final e in result.path) {
+        final t = e.target;
+        if (t is RenderObject) names.add('${t.runtimeType}');
+        if (names.length >= 14) break;
+      }
+      return names.isEmpty ? 'nothing' : names.join(' < ');
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
   ({bool strict, bool related}) _hitState(RenderObject target, Offset position) {
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
     if (view == null) return (strict: true, related: true);
@@ -1176,7 +1224,12 @@ class ProbeExecutor {
         if (nav != null && nav.canPop()) {
           nav.pop();
         } else {
-          await SystemNavigator.pop();
+          // At the root route the system Back would leave the app (Android),
+          // killing the agent mid-test: every later step then fails with a
+          // lost connection. A test saying "go back" never means that — use
+          // "close the app" for it — so report it instead of exiting.
+          _tapWarning = 'go back: already at the root route, nothing to go back to; '
+              'the app was not closed (use "close the app" to leave it)';
         }
       case 'close':
         // PT-12: `close keyboard`/`close the app` (parser.VerbClose) both
