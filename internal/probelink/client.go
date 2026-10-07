@@ -60,6 +60,10 @@ type DialOptions struct {
 	// adb port forward, which can silently disappear after the CLI set it up
 	// (FP-19: "connect: connection refused" right after a cold launch).
 	OnConnectRefused func(ctx context.Context)
+
+	// OwnAdbForward marks the host port as the CLI's own `adb forward` (Android
+	// runs), so port-holder hints do not blame it for a rejected token.
+	OwnAdbForward bool
 }
 
 // refusedHookInterval throttles DialOptions.OnConnectRefused.
@@ -170,7 +174,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 					opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — re-reading the token and retrying", attempt, resp.StatusCode)
 					select {
 					case <-dialCtx.Done():
-						return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHint(opts.Host, opts.Port))
+						return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHintFor(opts.Host, opts.Port, opts.OwnAdbForward))
 					case <-time.After(retryInterval):
 					}
 					if tok, terr := opts.RefreshToken(dialCtx); terr == nil && tok != "" {
@@ -181,7 +185,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 				}
 			}
 			opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — giving up", attempt, resp.StatusCode)
-			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHint(opts.Host, opts.Port))
+			return nil, fmt.Errorf("probelink: dial %s: agent rejected token (HTTP %d): %w%s", safeURL, resp.StatusCode, err, portHolderHintFor(opts.Host, opts.Port, opts.OwnAdbForward))
 		}
 		// "bad handshake" without an auth response is transient on Android:
 		// adb forward accepts the host-side TCP connection before the
@@ -190,7 +194,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// healthy. Retry it like any other startup race.
 		if !errors.Is(err, websocket.ErrBadHandshake) && !isTransientDialError(err) {
 			opts.trace("probelink: [attempt %d] dial failed (non-transient): %v — giving up", attempt, err)
-			return nil, fmt.Errorf("probelink: dial %s: %w%s", safeURL, err, portHolderHint(opts.Host, opts.Port))
+			return nil, fmt.Errorf("probelink: dial %s: %w%s", safeURL, err, portHolderHintFor(opts.Host, opts.Port, opts.OwnAdbForward))
 		}
 		opts.trace("probelink: [attempt %d] dial failed (transient): %v — retrying in %s", attempt, err, retryInterval)
 		// Nothing is listening on the host port. For an adb-forwarded device that
@@ -219,7 +223,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		select {
 		case <-dialCtx.Done():
 			opts.trace("probelink: dial deadline exceeded after %d attempt(s): %v", attempt, lastErr)
-			return nil, fmt.Errorf("probelink: dial %s: %w%s%s", safeURL, lastErr, portHolderHint(opts.Host, opts.Port), refusedHint(lastErr, opts.DialTimeout))
+			return nil, fmt.Errorf("probelink: dial %s: %w%s%s", safeURL, lastErr, portHolderHintFor(opts.Host, opts.Port, opts.OwnAdbForward), refusedHint(lastErr, opts.DialTimeout))
 		case <-time.After(retryInterval):
 		}
 	}

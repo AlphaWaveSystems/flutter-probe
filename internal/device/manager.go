@@ -566,6 +566,19 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 // tokens from multiple app-process generations, including already-dead
 // ones. The agent reprints its token every ~3s, so the most recent matching
 // line is always the live process's token, if one is currently running.
+// ReadTokenAndroidLogcat returns the newest PROBE_TOKEN= line in the device's
+// logcat, or "" when there is none. The agent reprints its token every few
+// seconds, so this is the live process's token even when the token file in the
+// app's cache is stale (e.g. the agent could not rewrite it after a restart).
+func (m *Manager) ReadTokenAndroidLogcat(ctx context.Context, serial string) string {
+	out, err := m.adb.Shell(ctx, serial, "logcat", "-d", "-s", "flutter:I")
+	if err != nil {
+		return ""
+	}
+	t, _ := latestProbeToken(string(out))
+	return t
+}
+
 func latestProbeToken(logOutput string) (token string, matches int) {
 	const marker = "PROBE_TOKEN="
 	for _, line := range strings.Split(logOutput, "\n") {

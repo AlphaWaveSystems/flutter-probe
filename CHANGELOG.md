@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   real tap reaches on overlays. The warning now appears only when the hit test says covered *and* the screen did not
   change after the tap, which is the silent-tap case it exists for. Its text now includes the topmost hit render objects.
 
+- **Stale Android token file after an app restart:** if the token read from the app's cache is rejected again on a
+  re-read (the agent could not rewrite the file), the CLI now falls back to the newest `PROBE_TOKEN=` line in logcat
+  instead of retrying the same file until it gives up. The port-holder hint no longer blames the CLI's own `adb forward`
+  for a rejected token on Android.
+
 ### Changed
 - When the agent port refuses connections for 5 s the CLI now says so (is the app running and built with
   `--dart-define=PROBE_AGENT=true`?) instead of waiting silently for the dial timeout.
