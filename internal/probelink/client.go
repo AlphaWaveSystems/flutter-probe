@@ -630,7 +630,10 @@ func (c *Client) RegisterMock(ctx context.Context, m MockParam) error {
 }
 
 func (c *Client) DeviceAction(ctx context.Context, action, value string) error {
-	_, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
+	raw, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
+	if err == nil {
+		reportWarning(raw)
+	}
 	return err
 }
 

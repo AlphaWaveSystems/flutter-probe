@@ -172,7 +172,7 @@ take screenshot "checkout_page"    # save PNG to screenshots folder
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
-go back                            # device back button
+go back                            # pop the current route (no-op + warning at the root; use "close the app" to exit)
 rotate landscape                   # rotate device
 shake                              # simulate device shake gesture
 log "checkpoint reached"           # print to test output

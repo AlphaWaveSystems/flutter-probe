@@ -20,7 +20,7 @@ Commands that interact with the app's UI.
 | `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
 | `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |
-| `go back` | `go back` | Press the device back button |
+| `go back` | `go back` | Pop the current route. At the root route it does nothing and warns (it never exits the app; use `close the app`) |
 | `open` | `open the app` | Launch the app (CLI-side) and reconnect |
 | `close` | `close the app` | Close the app |
 | `close` | `close keyboard` | Dismiss the on-screen keyboard |

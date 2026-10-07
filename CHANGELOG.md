@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   instead of retrying the same file until it gives up. The port-holder hint no longer blames the CLI's own `adb forward`
   for a rejected token on Android.
 
+- **`go back` at the root route no longer exits the app on Android.** It used to call the system Back, which killed
+  the app and the agent: the step hung until its timeout and every later test failed with a broken pipe. It is now a
+  no-op with a warning ("already at the root route"); use `close the app` to leave the app on purpose. **Behavior
+  change:** a test that relied on `go back` to exit the app must use `close the app`.
+- A lost Android connection now says when the app process is gone ("the app process ... is not running") instead of
+  only "probe token not found".
+
 ### Changed
 - When the agent port refuses connections for 5 s the CLI now says so (is the app running and built with
   `--dart-define=PROBE_AGENT=true`?) instead of waiting silently for the dial timeout.

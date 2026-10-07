@@ -4,6 +4,7 @@
 
 ## 0.16.5 - 2026-10-06
 
+- Changed: `go back` at the root route is a no-op with a warning instead of leaving the app (Android).
 - Fixed: the "covered by another widget" tap warning is only reported when the tap also changed nothing on screen
   (no more false positives on SnackBar actions); `tap` prefers the reachable copy among several matches.
 

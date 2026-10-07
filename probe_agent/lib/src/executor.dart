@@ -193,12 +193,15 @@ class ProbeExecutor {
 
       // ---- Device actions ----
       case ProbeMethods.deviceAction:
+        _tapWarning = null;
         await _deviceAction(
           req.params['action'] as String,
           req.params['value'] as String? ?? '',
         );
         await _sync.waitForSettled();
-        return {'ok': true};
+        final actionWarning = _tapWarning;
+        _tapWarning = null;
+        return actionWarning == null ? {'ok': true} : {'ok': true, 'warning': actionWarning};
 
       case ProbeMethods.close:
         await SystemNavigator.pop();
@@ -1221,7 +1224,12 @@ class ProbeExecutor {
         if (nav != null && nav.canPop()) {
           nav.pop();
         } else {
-          await SystemNavigator.pop();
+          // At the root route the system Back would leave the app (Android),
+          // killing the agent mid-test: every later step then fails with a
+          // lost connection. A test saying "go back" never means that — use
+          // "close the app" for it — so report it instead of exiting.
+          _tapWarning = 'go back: already at the root route, nothing to go back to; '
+              'the app was not closed (use "close the app" to leave it)';
         }
       case 'close':
         // PT-12: `close keyboard`/`close the app` (parser.VerbClose) both
