@@ -75,7 +75,7 @@ ListValue    = "[" { Step "," } "]" .
 			// Wait
 			{ID: "maestro.waitForAnimationToEnd", Name: "waitForAnimationToEnd", Category: CatWait, Level: Full,
 				EBNF: `"waitForAnimationToEnd"`, Example: `- waitForAnimationToEnd`,
-				ProbeTemplate: "wait for the page to load", ProbeExample: "wait for the page to load"},
+				ProbeTemplate: "wait for idle", ProbeExample: "wait for idle"},
 			{ID: "maestro.wait", Name: "wait", Category: CatWait, Level: Full,
 				EBNF: `"wait:" NEWLINE "for:" INT`, Example: "- wait:\n    for: 3000",
 				ProbeTemplate: "wait $1 seconds", ProbeExample: "wait 3.0 seconds"},

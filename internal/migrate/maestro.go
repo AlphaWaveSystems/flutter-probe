@@ -22,6 +22,51 @@ type MaestroFlow struct {
 // Maestro supports both map and string forms.
 type MaestroStep map[string]interface{}
 
+// convertSeq converts a list of steps. A text-entry step that follows a tap on a
+// field is aimed at that field (`type "x" into #id`, `clear #id`): a plain `type`
+// goes to whatever has focus, which is not reliably the field that was tapped.
+func (c *converter) convertSeq(steps []MaestroStep) ([]string, []string) {
+	var lines, warns []string
+	lastField := "" // selector of the field tapped just before, e.g. #email_field
+	for _, step := range steps {
+		line, warn := c.convertStep(step)
+		if _, ok := step["tapOn"]; ok {
+			lastField = tapFieldSelector(step["tapOn"])
+		} else if v, ok := step["inputText"].(string); ok && lastField != "" {
+			line = fmt.Sprintf("type %s into %s", quoteVal(v), lastField)
+		} else if _, ok := step["eraseText"]; (ok || step["_cmd"] == "eraseText") && lastField != "" {
+			line, warn = "clear "+lastField, "eraseText approximated as clear (whole field, not N characters from cursor)"
+		} else {
+			lastField = ""
+		}
+		if warn != "" {
+			warns = append(warns, warn)
+		}
+		lines = append(lines, line)
+	}
+	return lines, warns
+}
+
+// tapFieldSelector returns the ProbeScript selector for a tapOn target that can
+// name a field: an id (`#id`) or a plain text; "" for points and other forms.
+func tapFieldSelector(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return quoteVal(t)
+	case map[string]interface{}:
+		if _, point := t["point"]; point {
+			return ""
+		}
+		if id, ok := t["id"].(string); ok {
+			return "#" + id
+		}
+		if text, ok := t["text"].(string); ok {
+			return fmt.Sprintf("%q", text)
+		}
+	}
+	return ""
+}
+
 // converter carries the state of converting one flow file: where it lives (to
 // resolve `runFlow` targets) and the recipe files it needs.
 type converter struct {
@@ -184,11 +229,9 @@ func (c *converter) convertDoc(yamlSrc, name string, asRecipe bool) (string, []s
 	}
 
 	var body strings.Builder
-	for _, step := range steps {
-		line, warn := c.convertStep(step)
-		if warn != "" {
-			warnings = append(warnings, warn)
-		}
+	seqLines, seqWarns := c.convertSeq(steps)
+	warnings = append(warnings, seqWarns...)
+	for _, line := range seqLines {
 		writeIndented(&body, "  ", line)
 	}
 
@@ -207,7 +250,7 @@ func (c *converter) convertDoc(yamlSrc, name string, asRecipe bool) (string, []s
 
 	// ${VAR} placeholders are Maestro env interpolation; they stay literal text.
 	if names := envPlaceholders(body.String()); len(names) > 0 {
-		warnings = append(warnings, fmt.Sprintf("uses Maestro env variables (%s) — they are left as literal text; substitute the values", strings.Join(names, ", ")))
+		warnings = append(warnings, fmt.Sprintf("uses Maestro env variables (%s) — ProbeScript expands ${NAME} from the environment at run time, so export them before `probe test` (values never appear in step lines or errors)", strings.Join(names, ", ")))
 	}
 
 	if asRecipe {
@@ -282,12 +325,8 @@ func (c *converter) convertNestedSteps(commands interface{}) (string, []string) 
 		}
 	}
 	var sb strings.Builder
-	var warnings []string
-	for _, step := range nested {
-		line, warn := c.convertStep(step)
-		if warn != "" {
-			warnings = append(warnings, warn)
-		}
+	lines, warnings := c.convertSeq(nested)
+	for _, line := range lines {
 		writeIndented(&sb, "  ", line)
 	}
 	return strings.TrimSuffix(sb.String(), "\n"), warnings
@@ -297,6 +336,7 @@ func (c *converter) convertNestedSteps(commands interface{}) (string, []string) 
 func (c *converter) convertStep(step MaestroStep) (string, string) {
 	normalizeStepText(step)
 	line, warn := c.convertStepInner(step)
+	line = applyOptional(step, line)
 	if pat := regexSelector(step); pat != "" && !isPlainWaitAlternation(step) {
 		note := fmt.Sprintf("# TODO: Maestro matches %q as a regular expression; ProbeScript matches text literally here — rewrite it to one literal text (or use `see ... matching`)", pat)
 		line = note + "\n" + line
@@ -429,6 +469,31 @@ func normalizeStepText(step MaestroStep) {
 	if lit, ok := literalText(text); ok && lit != text {
 		set(lit)
 	}
+}
+
+// applyOptional carries Maestro's `optional: true` over: a tap/long press/double
+// tap becomes `... if visible` (skipped when the target is absent), an assertion
+// gets the `optional` modifier. It only touches single-line converted steps.
+func applyOptional(step MaestroStep, line string) string {
+	if strings.Contains(line, "\n") || strings.HasPrefix(line, "#") {
+		return line
+	}
+	for key, val := range step {
+		m, ok := val.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if opt, _ := m["optional"].(bool); !opt {
+			continue
+		}
+		switch key {
+		case "tapOn", "longPressOn", "doubleTapOn":
+			return line + " if visible"
+		case "assertVisible", "assertNotVisible":
+			return line + " optional"
+		}
+	}
+	return line
 }
 
 // regexSelector returns the selector text of a step when it still uses regex
@@ -605,7 +670,7 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			return "close keyboard", ""
 
 		case "waitForAnimationToEnd":
-			return "wait for the page to load", ""
+			return "wait for idle", ""
 
 		case "wait":
 			if m, ok := val.(map[string]interface{}); ok {
@@ -797,7 +862,7 @@ func convertStringStep(cmd string) (string, string) {
 	case "hideKeyboard":
 		return "close keyboard", ""
 	case "waitForAnimationToEnd":
-		return "wait for the page to load", ""
+		return "wait for idle", ""
 	case "assertScreenshot":
 		return `compare screenshot "screenshot"`, ""
 	default:

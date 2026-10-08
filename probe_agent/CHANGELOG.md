@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## 0.16.9 - 2026-10-08
+
+- Fixed: bare `type` / `clear` (empty selector) act on the focused text field (error when none is focused).
+- Fixed: `see` / `wait until` find content of a page under a see-through route (dialog, bottom sheet, popup), for example a SnackBar.
+
 ## 0.16.8 - 2026-10-08
 
 - Fixed: `probe.see` applies the `pattern` parameter (`matching`); it was received and ignored.

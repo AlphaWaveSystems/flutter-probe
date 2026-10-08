@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.9] - 2026-10-08
+
+Fixes from the first full campaigns on 0.16.6-0.16.8.
+
+### Fixed
+- **`use` resolution:** a `use`d file's own `use` lines are followed, each relative to the file that contains it (nested
+  helpers did not load). `probe test --dry-run` resolves each file on its own, so it matches running that file alone (it
+  pooled all files' recipes and passed what a single run could not resolve). An unresolved call names `use` targets that do
+  not exist.
+- **Bare `type "x"` / `clear`** act on the text field that has focus. `type` went to the first text field on the screen
+  (LIM-15), and a bare `clear` did nothing. With no focused field they fail with a clear message.
+- **Texts under a dialog:** a SnackBar (or any content) of the page underneath a see-through route (dialog, bottom sheet,
+  popup) is found by `see` / `wait until`; only routes under an opaque page are excluded.
+- **Android `restart the app`:** the reconnect re-creates the `adb forward` while dials are refused. A forward removed by
+  another tool on the same adb server (for example `adb forward --remove-all` from a parallel run) caused sporadic
+  `agent not reachable within 30s` failures.
+- **`clear app data` without a terminal** (CI, scripts) fails at once with "pass --yes" instead of blocking on a prompt;
+  documented in the dictionary.
+- **`probe migrate maestro`:** `optional: true` is kept (`tap ... if visible`, assertions get `optional`); `tapOn` of a
+  field followed by `inputText` / `eraseText` becomes `type "x" into <field>` / `clear <field>`; `waitForAnimationToEnd`
+  becomes `wait for idle` (it was `wait for the page to load`, which does not wait for animations).
+
+### Added
+- **Environment variables in steps:** `${NAME}` inside a quoted text is replaced from the environment when the step runs.
+  The step line shows `${NAME}`, the value is scrubbed from errors and reports, an unset variable is left as written with a
+  warning. Migrated Maestro flows that use `${TEST_EMAIL}` now run as they are.
+
 ## [0.16.8] - 2026-10-08
 
 ### Fixed

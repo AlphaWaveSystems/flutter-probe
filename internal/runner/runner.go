@@ -39,6 +39,8 @@ type Runner struct {
 	deviceCtx       *DeviceContext  // nil in dry-run mode
 	opts            RunOptions
 	recipes         map[string]parser.RecipeDef
+	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
+	missingUses     []string                     // `use` targets that do not exist, for error messages
 	visual          *visual.Comparator  // nil if visual regression is not configured
 	onResult        func(TestResult)    // optional per-result callback for streaming
 	compositeRunner *CompositeRunner    // nil if composite tests are not configured
@@ -100,6 +102,7 @@ func (r *Runner) newExecutor() *Executor {
 	exec.SetReconnectPolicy(r.cfg.Agent.ReconnectAttempts, r.cfg.Agent.ReconnectBackoff)
 	exec.SetLaunchTimeout(r.cfg.Agent.LaunchTimeout)
 	exec.SetAI(r.cfg.AI)
+	exec.useNote = r.missingUsesNote()
 	return exec
 }
 
@@ -108,6 +111,10 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 	// Load recipes
 	if err := r.loadRecipes(ctx); err != nil {
 		return nil, fmt.Errorf("runner: loading recipes: %w", err)
+	}
+	r.baseRecipes = make(map[string]parser.RecipeDef, len(r.recipes))
+	for k, v := range r.recipes {
+		r.baseRecipes[k] = v
 	}
 
 	stopGrants, err := r.applyGrants(ctx)
@@ -143,9 +150,25 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	// Import additional recipes declared with `use`
+	// --dry-run resolves each file on its own, like running that file alone: the
+	// recipes of other files in the same run must not make an unresolved call look
+	// fine (a runtime run of this one file could not see them).
+	if r.opts.DryRun && r.baseRecipes != nil {
+		r.recipes = make(map[string]parser.RecipeDef, len(r.baseRecipes))
+		for k, v := range r.baseRecipes {
+			r.recipes[k] = v
+		}
+	}
+
+	// Import additional recipes declared with `use` (nested `use` lines are
+	// followed, each relative to the file that contains them).
+	r.missingUses = nil
+	seen := map[string]bool{}
+	if abs, err := filepath.Abs(path); err == nil {
+		seen[abs] = true
+	}
 	for _, u := range prog.Uses {
-		if err := r.loadRecipeFile(ctx, filepath.Join(filepath.Dir(path), u.Path)); err != nil {
+		if err := r.loadUse(ctx, path, u, seen); err != nil {
 			return nil, err
 		}
 	}
@@ -452,6 +475,50 @@ func (r *Runner) loadRecipeFile(_ context.Context, path string) error {
 	return nil
 }
 
+// loadUse loads the file named by a `use` statement found in `from`, then the
+// `use` statements of that file in turn (relative to it). A target that does not
+// exist is remembered (see missingUsesNote) instead of silently ignored.
+func (r *Runner) loadUse(ctx context.Context, from string, u parser.UseStmt, seen map[string]bool) error {
+	target := filepath.Join(filepath.Dir(from), u.Path)
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		abs = target
+	}
+	if seen[abs] {
+		return nil
+	}
+	seen[abs] = true
+	src, err := os.ReadFile(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			r.missingUses = append(r.missingUses, fmt.Sprintf("%s:%d `use %q` -> %s", from, u.Line, u.Path, target))
+			return nil
+		}
+		return err
+	}
+	prog, err := parser.ParseFile(string(src))
+	if err != nil {
+		return fmt.Errorf("parse recipe file %s: %w", target, err)
+	}
+	for _, rec := range prog.Recipes {
+		r.recipes[rec.Name] = rec
+	}
+	for _, nested := range prog.Uses {
+		if err := r.loadUse(ctx, target, nested, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// missingUsesNote explains an unresolved call when some `use` target was missing.
+func (r *Runner) missingUsesNote() string {
+	if len(r.missingUses) == 0 {
+		return ""
+	}
+	return " — note: these `use` targets do not exist: " + strings.Join(r.missingUses, "; ")
+}
+
 // filterTests removes tests that don't match the tag filter.
 func (r *Runner) filterTests(tests []parser.TestDef) []parser.TestDef {
 	if len(r.opts.Tags) == 0 {
@@ -643,9 +710,9 @@ func (r *Runner) unresolvedCalls(prog *parser.Program, t parser.TestDef) error {
 				rec, _, stripped, ok := resolveCall(r.recipes, st)
 				if !ok {
 					if stripped != st.Name {
-						return fmt.Errorf("line %d: unknown step %q (also tried %q) — not a built-in step and no recipe with that name is defined", st.Line, st.Name, stripped)
+						return fmt.Errorf("line %d: unknown step %q (also tried %q) — not a built-in step and no recipe with that name is defined%s", st.Line, st.Name, stripped, r.missingUsesNote())
 					}
-					return fmt.Errorf("line %d: unknown step %q — not a built-in step and no recipe with that name is defined", st.Line, st.Name)
+					return fmt.Errorf("line %d: unknown step %q — not a built-in step and no recipe with that name is defined%s", st.Line, st.Name, r.missingUsesNote())
 				}
 				if !seen[rec.Name] {
 					seen[rec.Name] = true

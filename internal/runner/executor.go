@@ -10,6 +10,7 @@ import (
 	mathrand "math/rand"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/redact"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
@@ -39,6 +41,9 @@ type Executor struct {
 	onReconnect func(probelink.ProbeClient)       // callback to update Runner's client ref
 	timeout     time.Duration
 	recipes     map[string]parser.RecipeDef   // loaded recipes by name
+	envValues   []string                      // values expanded from ${NAME} in steps; scrubbed from errors
+	envWarned   map[string]bool
+	useNote     string                        // appended to "unknown recipe call" (missing `use` targets)
 	vars        map[string]string             // variable scope for data-driven tests
 	verbose     bool
 	depth       int      // indentation depth for verbose logging
@@ -307,6 +312,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
 	}
 	err = annotateStepError(step, desc, err)
+	err = e.scrubEnv(err)
 
 	// Stop the ticker goroutine and wait for it to fully exit before reading
 	// extraLines or printing the result — this eliminates any output race.
@@ -422,7 +428,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			if s.Sel != nil {
 				target = fmt.Sprintf(" into %q", s.Sel.Text)
 			}
-			return fmt.Sprintf("type %q%s", e.resolve(s.Text), target)
+			return fmt.Sprintf("type %q%s", e.resolveVars(s.Text), target)
 		case parser.VerbClear:
 			if s.Sel != nil {
 				return fmt.Sprintf("clear %q", s.Sel.Text)
@@ -637,7 +643,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbClear:
 		if a.Sel == nil {
-			return nil
+			// Bare `clear`: the field that has focus (an empty selector; the agent
+			// resolves it). This used to be a silent no-op.
+			return e.client.Clear(ctx, probelink.SelectorParam{})
 		}
 		return e.client.Clear(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 
@@ -1470,9 +1478,9 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 		// this executor already errors loudly (see runAction's default
 		// case) — this was the sole silent exception.
 		if stripped != rc.Name {
-			return fmt.Errorf("line %d: unknown recipe call %q (also tried %q with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name, stripped)
+			return fmt.Errorf("line %d: unknown recipe call %q (also tried %q with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file%s", rc.Line, rc.Name, stripped, e.useNote)
 		}
-		return fmt.Errorf("line %d: unknown recipe call %q — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name)
+		return fmt.Errorf("line %d: unknown recipe call %q — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file%s", rc.Line, rc.Name, e.useNote)
 	}
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
@@ -1606,6 +1614,54 @@ func reconnectDelay(base time.Duration, attempt int) time.Duration {
 // resolve substitutes <variable> placeholders with values from the vars map
 // and expands <random.*> generators.
 func (e *Executor) resolve(s string) string {
+	return e.expandEnv(e.resolveVars(s))
+}
+
+// expandEnv replaces ${NAME} with the value of the environment variable NAME
+// (the braced form only: a bare $ stays text, so "$5" and "$name" are untouched).
+// The values are remembered so they can be scrubbed from step errors, and the step
+// line shows the template (see stepDescription), never the value. An unset
+// variable is left as written, with a one-time warning.
+func (e *Executor) expandEnv(s string) string {
+	if !strings.Contains(s, "${") {
+		return s
+	}
+	return envRef.ReplaceAllStringFunc(s, func(m string) string {
+		name := m[2 : len(m)-1]
+		v, ok := os.LookupEnv(name)
+		if !ok {
+			if e.envWarned == nil {
+				e.envWarned = map[string]bool{}
+			}
+			if !e.envWarned[name] {
+				e.envWarned[name] = true
+				fmt.Fprintf(os.Stderr, "  warning: environment variable %s is not set; ${%s} is used as written\n", name, name)
+			}
+			return m
+		}
+		if v != "" {
+			e.envValues = append(e.envValues, v)
+		}
+		return v
+	})
+}
+
+var envRef = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*\}`)
+
+// scrubEnv removes expanded environment values from an error before it is shown.
+func (e *Executor) scrubEnv(err error) error {
+	if err == nil || len(e.envValues) == 0 {
+		return err
+	}
+	msg := err.Error()
+	scrubbed := sysdialog.Scrub(msg, e.envValues...)
+	if scrubbed == msg {
+		return err
+	}
+	return fmt.Errorf("%s", scrubbed)
+}
+
+func (e *Executor) resolveVars(s string) string {
 	// First: expand random data generators
 	s = resolveRandomVars(s)
 	// Then: substitute data-driven and recipe variables

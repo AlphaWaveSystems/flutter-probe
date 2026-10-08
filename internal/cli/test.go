@@ -1065,7 +1065,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
 			AgentHost:               agentHost,  // device IP for WiFi mode
 			AllowClearData:          autoYes,
-			Confirm:                 promptUserConfirm,
+			Confirm:                 confirmFunc(),
 			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,
 			ReconnectDelay:          cfg.Agent.ReconnectDelay,
 			RestartDelay:            cfg.Device.RestartDelay,
@@ -1388,6 +1388,16 @@ func validateAIConfig(files []string, cfg *config.Config) error {
 		}
 	}
 	return nil
+}
+
+// confirmFunc returns the interactive confirmation prompt, or nil when stdin is not
+// a terminal (CI, a script, an agent): there is nobody to answer, so the step fails
+// at once with a hint to pass --yes instead of blocking on a prompt.
+func confirmFunc() func(string) bool {
+	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return nil
+	}
+	return promptUserConfirm
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.

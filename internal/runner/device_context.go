@@ -178,7 +178,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 	if !dc.AllowClearData {
 		if dc.Confirm == nil {
 			return fmt.Errorf("clear app data: this is a destructive operation that wipes all app data for %s. "+
-				"Use --allow-clear-data flag to permit this, or run interactively", dc.AppID)
+				"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", dc.AppID)
 		}
 		msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
 			"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
@@ -441,6 +441,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		DialTimeout: dc.dialTimeoutVal(),
 		// The token was read from the device a moment ago, possibly before the
 		// new app instance rewrote it: re-read on a 401 (FP-19).
+		OnConnectRefused: dc.reforwardHook(),
 		RefreshToken: func(c context.Context) (string, error) {
 			switch dc.Platform {
 			case device.PlatformAndroid:
@@ -477,6 +478,18 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	return client, nil
 }
 
+// reforwardHook returns a probelink.DialOptions.OnConnectRefused that re-creates
+// the Android `adb forward` for the agent port; nil on other platforms or without
+// a device manager.
+func (dc *DeviceContext) reforwardHook() func(context.Context) {
+	if dc.Platform != device.PlatformAndroid || dc.Manager == nil || dc.UseHTTP {
+		return nil
+	}
+	return func(c context.Context) {
+		_ = dc.Manager.ForwardPort(c, dc.Serial, dc.Port, dc.DevicePort)
+	}
+}
+
 // ReconnectWithToken reconnects using a pre-shared token (set via set_next_token
 // before restart). This skips token reading from device logs — critical for WiFi
 // mode where idevicesyslog is unavailable.
@@ -489,6 +502,10 @@ func (dc *DeviceContext) ReconnectWithToken(ctx context.Context, token string) (
 		Port:        dc.Port,
 		Token:       token,
 		DialTimeout: dc.dialTimeoutVal(),
+		// The `adb forward` can disappear while the app restarts (another tool on the
+		// same adb server clearing forwards, an adb restart): re-create it while
+		// dials are refused instead of waiting out the token window.
+		OnConnectRefused: dc.reforwardHook(),
 	}
 
 	// For WiFi: use the original host (not 127.0.0.1)

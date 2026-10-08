@@ -85,7 +85,7 @@ func TestConvert_WaitForAnimation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, result.ProbeCode, "wait for the page to load")
+	assertContains(t, result.ProbeCode, "wait for idle")
 }
 
 func TestConvert_LongPress(t *testing.T) {
