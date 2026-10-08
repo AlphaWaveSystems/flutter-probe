@@ -159,3 +159,51 @@ func TestEnvExpansionIsMaskedAndPartial(t *testing.T) {
 		t.Fatalf("description leaked the value: %s", desc)
 	}
 }
+
+// flakySee fails its first `failures` See calls with a not-found error.
+type flakySee struct {
+	fakeAIClient
+	failures int
+	calls    int
+}
+
+func (f *flakySee) See(ctx context.Context, params probelink.SeeParams) error {
+	f.calls++
+	if f.calls <= f.failures {
+		return fmt.Errorf(`rpc error -32002: Expected to see "x" but it was not found`)
+	}
+	return nil
+}
+
+func TestImplicitWaitRetriesNotFound(t *testing.T) {
+	step := parser.AssertStep{Sel: parser.Selector{Kind: parser.SelectorText, Text: "x"}}
+
+	// off by default: fails at once
+	c := &flakySee{failures: 2}
+	e := NewExecutor(c, nil, func(probelink.ProbeClient) {}, 5*time.Second, false)
+	if err := e.runStep(context.Background(), step); err == nil {
+		t.Fatal("without implicit wait a missing target must fail immediately")
+	}
+	if c.calls != 1 {
+		t.Fatalf("expected a single attempt, got %d", c.calls)
+	}
+
+	// on: retried until the target appears
+	c = &flakySee{failures: 2}
+	e = NewExecutor(c, nil, func(probelink.ProbeClient) {}, 5*time.Second, false)
+	e.SetImplicitWait(5 * time.Second)
+	if err := e.runStep(context.Background(), step); err != nil {
+		t.Fatalf("implicit wait should have waited for the target: %v", err)
+	}
+	if c.calls != 3 {
+		t.Fatalf("expected 3 attempts, got %d", c.calls)
+	}
+
+	// still fails after the wait when the target never shows
+	c = &flakySee{failures: 1000}
+	e = NewExecutor(c, nil, func(probelink.ProbeClient) {}, 5*time.Second, false)
+	e.SetImplicitWait(700 * time.Millisecond)
+	if err := e.runStep(context.Background(), step); err == nil || c.calls < 2 {
+		t.Fatalf("expected a failure after retries, err=%v calls=%d", err, c.calls)
+	}
+}

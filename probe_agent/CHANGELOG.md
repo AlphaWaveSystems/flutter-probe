@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.18.0 - 2026-10-08
+
+- No agent change (implicit waiting is a CLI feature); version aligned.
+
 ## 0.17.2 - 2026-10-08
 
 - No agent change (CLI migrate fixes); version aligned.
