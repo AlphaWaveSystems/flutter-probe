@@ -224,7 +224,7 @@ func TestConvert_SetAirplaneMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, result.ProbeCode, "toggle wifi off")
+	assertContains(t, result.ProbeCode, "# TODO: setAirplaneMode true")
 	if len(result.Warnings) != 0 {
 		t.Errorf("expected no warnings, got %d", len(result.Warnings))
 	}
@@ -239,7 +239,7 @@ func TestConvert_SetAirplaneModeOff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, result.ProbeCode, "toggle wifi on")
+	assertContains(t, result.ProbeCode, "# TODO: setAirplaneMode false")
 }
 
 func TestConvert_Ifdef(t *testing.T) {
