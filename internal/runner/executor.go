@@ -1389,8 +1389,24 @@ func lookupRecipe(recipes map[string]parser.RecipeDef, name string) (parser.Reci
 	return parser.RecipeDef{}, stripped, false
 }
 
+// resolveCall finds the recipe a call refers to and the arguments to bind. A call
+// with bare numbers is tried as written first (numbers part of the name), then
+// with the numbers as arguments.
+func resolveCall(recipes map[string]parser.RecipeDef, rc parser.RecipeCall) (parser.RecipeDef, []string, string, bool) {
+	rec, stripped, ok := lookupRecipe(recipes, rc.Name)
+	if ok {
+		return rec, rc.Args, stripped, true
+	}
+	if rc.NumName != "" {
+		if rec, _, ok := lookupRecipe(recipes, rc.NumName); ok {
+			return rec, rc.NumArgs, stripped, true
+		}
+	}
+	return rec, rc.Args, stripped, false
+}
+
 func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
-	recipe, stripped, ok := lookupRecipe(e.recipes, rc.Name)
+	recipe, args, stripped, ok := resolveCall(e.recipes, rc)
 	if !ok {
 		// PT-02(a): an unrecognized recipe call used to silently no-op ("may
 		// be a filler line"), which masked genuine typos and broken recipe
@@ -1405,8 +1421,8 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 	}
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
-		if i < len(rc.Args) {
-			e.vars[param] = rc.Args[i]
+		if i < len(args) {
+			e.vars[param] = args[i]
 		}
 	}
 	e.depth++

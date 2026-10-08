@@ -640,7 +640,7 @@ func (r *Runner) unresolvedCalls(prog *parser.Program, t parser.TestDef) error {
 		for _, s := range steps {
 			switch st := s.(type) {
 			case parser.RecipeCall:
-				rec, stripped, ok := lookupRecipe(r.recipes, st.Name)
+				rec, _, stripped, ok := resolveCall(r.recipes, st)
 				if !ok {
 					if stripped != st.Name {
 						return fmt.Errorf("line %d: unknown step %q (also tried %q) — not a built-in step and no recipe with that name is defined", st.Line, st.Name, stripped)

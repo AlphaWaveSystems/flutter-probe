@@ -410,9 +410,14 @@ func (m MockBlock) stepType() string { return "mock" }
 // ---- RecipeCall ----
 
 type RecipeCall struct {
-	Name   string
-	Args   []string
-	Line   int
+	Name string
+	Args []string
+	// NumName / NumArgs are the same call with bare numbers treated as arguments
+	// too ("increment counter <arg> <arg>" for `increment counter "x" 3`); they are
+	// tried when Name matches no recipe. Empty when the call has no bare number.
+	NumName string
+	NumArgs []string
+	Line    int
 }
 
 func (r RecipeCall) nodeType() string { return "recipe_call" }

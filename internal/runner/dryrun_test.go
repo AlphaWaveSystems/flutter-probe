@@ -45,3 +45,27 @@ func TestDryRunReportsUnknownSteps(t *testing.T) {
 		t.Errorf("via recipe: want the unknown step inside the recipe reported, got %+v", res)
 	}
 }
+
+// A bare number after a quoted argument is a recipe argument:
+// `increment counter "x" 3` calls recipe "increment counter" (identifier, times).
+// A number that is part of a recipe's name still resolves as before.
+func TestRecipeCallWithBareNumberArgument(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f.probe")
+	src := "recipe \"increment counter\" (identifier, times)\n  tap on \"<identifier>\"\n\n" +
+		"recipe \"step 2 of onboarding\"\n  wait 1 seconds\n\n" +
+		"test \"t\"\n  increment counter \"post_form_beds_plus\" 3\n  step 2 of onboarding\n"
+	if err := os.WriteFile(file, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := New(&config.Config{}, &fakeAIClient{}, &DeviceContext{}, RunOptions{
+		Files: []string{file}, DryRun: true, Timeout: time.Second,
+	})
+	results, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Fatalf("both calls must resolve, got %+v", results)
+	}
+}

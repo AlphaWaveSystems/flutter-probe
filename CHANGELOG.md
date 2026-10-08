@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
   unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
   matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **A recipe call with a bare number argument resolves:** `increment counter "x" 3` for
+  `recipe "increment counter" (identifier, times)` failed with `unknown recipe call "increment counter <arg> 3"`
+  because only quoted values counted as arguments. Bare numbers are now arguments too (a number that is part of a
+  recipe's name, `step 2 of onboarding`, still matches as before).
 - **Converters no longer emit steps ProbeScript does not have:** `probe-convert` turned Maestro `openLink` into
   `open "<url>"` (the valid form is `open link "<url>"`) and `setAirplaneMode` into `toggle wifi off`/`on` (no such
   step); both converters now emit `open link` and a `# TODO` comment. The new dry-run check found these.
