@@ -902,6 +902,7 @@ Full documentation: [alphawavesystems.github.io/flutter-probe](https://flutterpr
 - [Installation Guide](https://flutterprobe.dev/getting-started/installation/)
 - [Quick Start](https://flutterprobe.dev/getting-started/quick-start/)
 - [ProbeScript Syntax](https://flutterprobe.dev/probescript/syntax/)
+- [ProbeScript Grammar (complete EBNF)](https://flutterprobe.dev/probescript/grammar/)
 - [CLI Reference](https://flutterprobe.dev/tools/cli-reference/)
 - [CI/CD Integration](https://flutterprobe.dev/ci-cd/github-actions/)
 - [Configuration Reference](https://flutterprobe.dev/advanced/configuration/)

@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
   unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
   matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **Complete ProbeScript grammar in EBNF** (`website/src/content/docs/probescript/grammar.md`): lexical rules, layout,
+  every statement, selector, modifier and block, with a runnable example per production. A conformance test
+  (`internal/parser/grammar_test.go`) parses every example and fails when a keyword is added to or removed from the
+  lexer without the grammar page changing. The page also lists where the other docs and the parser disagree.
 - **New step `wait until any of "A", "B", "C" appears`** (the first alternative on screen satisfies it; times out
   with the step timeout). `probe migrate maestro` converts a plain `"A|B|C"` wait to it; other regex selectors still get
   a `# TODO`. Documented in the dictionary, syntax page, VS Code snippet/grammar and the MCP guide.
