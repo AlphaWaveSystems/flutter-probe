@@ -28,7 +28,7 @@ type MaestroStep map[string]interface{}
 func (c *converter) convertSeq(steps []MaestroStep) ([]string, []string) {
 	var lines, warns []string
 	lastField := "" // selector of the field tapped just before, e.g. #email_field
-	for _, step := range steps {
+	for i, step := range steps {
 		line, warn := c.convertStep(step)
 		if _, ok := step["tapOn"]; ok {
 			lastField = tapFieldSelector(step["tapOn"])
@@ -43,8 +43,37 @@ func (c *converter) convertSeq(steps []MaestroStep) ([]string, []string) {
 			warns = append(warns, warn)
 		}
 		lines = append(lines, line)
+		// The soft keyboard stays open after text entry and can cover the button the
+		// flow taps next (Maestro's own scroll or tap dismisses it implicitly). Close it
+		// when the text entry is followed by an action on something that is not another
+		// field.
+		if _, typed := step["inputText"]; typed && i+1 < len(steps) && needsKeyboardClosed(steps, i+1) {
+			lines = append(lines, "close keyboard")
+		}
 	}
 	return lines, warns
+}
+
+// needsKeyboardClosed reports whether the step at i, which follows text entry, acts on
+// something other than another text field.
+func needsKeyboardClosed(steps []MaestroStep, i int) bool {
+	next := steps[i]
+	if _, ok := next["scrollUntilVisible"]; ok {
+		return true
+	}
+	if _, ok := next["tapOn"]; ok {
+		// a tap on a field that is then typed into keeps the keyboard
+		if i+1 < len(steps) {
+			if _, ok := steps[i+1]["inputText"]; ok {
+				return false
+			}
+			if _, ok := steps[i+1]["eraseText"]; ok || steps[i+1]["_cmd"] == "eraseText" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // tapFieldSelector returns the ProbeScript selector for a tapOn target that can
@@ -593,20 +622,25 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			return "scroll up", ""
 
 		case "scrollUntilVisible":
-			// ProbeScript has no scroll-until-visible primitive — `scroll
-			// <direction> <selector>` selects which scrollable to act on,
-			// not a target to scroll toward, so passing the target through
-			// would silently change what the step means. Approximate as a
-			// single scroll and flag it: long lists may need this repeated,
-			// which the test author needs to verify by hand.
+			// `scroll <direction> until <target> appears` scrolls toward the target, like
+			// Maestro's step, and (as a real scroll) also leaves a soft keyboard behind.
 			dir := "down"
+			target := ""
+			warn := ""
 			if m, ok := val.(map[string]interface{}); ok {
 				if d, ok := m["direction"].(string); ok && d != "" {
 					dir = strings.ToLower(d)
 				}
+				target = tapFieldSelector(m["element"])
+				if _, hasTimeout := m["timeout"]; hasTimeout {
+					warn = "scrollUntilVisible timeout/speed/visibility options were not carried over"
+				}
 			}
-			return fmt.Sprintf("scroll %s", dir),
-				"scrollUntilVisible has no direct ProbeScript equivalent — approximated as a single scroll; may need to repeat for long lists"
+			if target == "" {
+				return fmt.Sprintf("scroll %s", dir),
+					"scrollUntilVisible without an id or text element — approximated as a single scroll"
+			}
+			return fmt.Sprintf("scroll %s until %s appears", dir, target), warn
 
 		case "eraseText":
 			// Maestro's eraseText backspaces N characters from the cursor
