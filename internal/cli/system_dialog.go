@@ -35,6 +35,20 @@ shell history): use --env NAME or --stdin with the type command.`,
 func sysDialogFlags(c *cobra.Command) {
 	c.Flags().String("device", "", "simulator UDID or Android serial (default: the only booted/connected device)")
 	c.Flags().String("title", "", "only match a dialog whose text contains this")
+	c.Flags().Int("driver-port", 0, "iOS driver loopback port, 1024-65535 (default: derived from the simulator UDID; or agent.driver_port in probe.yaml)")
+	c.Flags().String("app", "", "bundle id of the app under test, whose share sheet is also detected on iOS (default: project.app from probe.yaml)")
+}
+
+// driverPortFor resolves the iOS driver port: --driver-port, else
+// agent.driver_port from probe.yaml, else 0 (derived from the UDID).
+func driverPortFor(cmd *cobra.Command) (int, error) {
+	port, _ := cmd.Flags().GetInt("driver-port")
+	if port == 0 {
+		if cfg, err := loadConfig(cmd); err == nil {
+			port = cfg.Agent.DriverPort
+		}
+	}
+	return port, sysdialog.ValidatePort(port)
 }
 
 // openSystemDriver resolves --device and returns a ready driver.
@@ -65,8 +79,20 @@ func openSystemDriver(cmd *cobra.Command) (sysdialog.Driver, error) {
 			return nil, fmt.Errorf("device %q not found (probe device list)", id)
 		}
 	}
+	port, err := driverPortFor(cmd)
+	if err != nil {
+		return nil, err
+	}
+	appID, _ := cmd.Flags().GetString("app")
+	if appID == "" {
+		if cfg, cerr := loadConfig(cmd); cerr == nil {
+			appID = cfg.Project.App
+		}
+	}
 	return sysdialog.ForDevice(ctx, dm, id, platform, sysdialog.IOSOptions{
 		Version:     Version,
+		Port:        port,
+		AppID:       appID,
 		AutoInstall: true,
 		Logf:        func(f string, a ...any) { statusInfo(os.Stderr, f, a...) },
 	})
@@ -290,7 +316,13 @@ var iosDriverStatusCmd = &cobra.Command{
 			fmt.Printf("  installed: yes (%s)\n", dir)
 		}
 		if id, _ := cmd.Flags().GetString("device"); id != "" {
-			port := sysdialog.PortFor(id)
+			port, err := driverPortFor(cmd)
+			if err != nil {
+				return err
+			}
+			if port == 0 {
+				port = sysdialog.PortFor(id)
+			}
 			fmt.Printf("  runner for %s: port %d, running: %v\n", id, port, sysdialog.Healthy(cmd.Context(), port))
 		}
 		return nil
@@ -306,7 +338,13 @@ var iosDriverStopCmd = &cobra.Command{
 		if id == "" {
 			return fmt.Errorf("--device is required")
 		}
-		port := sysdialog.PortFor(id)
+		port, err := driverPortFor(cmd)
+		if err != nil {
+			return err
+		}
+		if port == 0 {
+			port = sysdialog.PortFor(id)
+		}
 		if !sysdialog.Healthy(cmd.Context(), port) {
 			fmt.Println("  No runner is running for that device.")
 			return nil
@@ -333,6 +371,9 @@ func init() {
 	iosDriverInstallCmd.Flags().String("url", "", "install from this zip URL instead of the GitHub release")
 	iosDriverStatusCmd.Flags().String("device", "", "simulator UDID")
 	iosDriverStopCmd.Flags().String("device", "", "simulator UDID")
+	for _, c := range []*cobra.Command{iosDriverStatusCmd, iosDriverStopCmd} {
+		c.Flags().Int("driver-port", 0, "driver port (default: agent.driver_port from probe.yaml, else derived from the UDID)")
+	}
 	iosDriverCmd.AddCommand(iosDriverInstallCmd, iosDriverStatusCmd, iosDriverStopCmd)
 	rootCmd.AddCommand(iosDriverCmd)
 }

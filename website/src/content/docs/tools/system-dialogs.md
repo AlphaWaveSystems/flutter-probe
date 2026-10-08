@@ -1,6 +1,6 @@
 ---
 title: System Dialogs
-description: Drive OS-level dialogs — permission alerts, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs — from ProbeScript or the command line.
+description: Drive OS-level dialogs — permission alerts, the iOS share sheet, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs — from ProbeScript or the command line.
 ---
 
 Some UI is not part of your Flutter app: iOS permission alerts, the StoreKit **Sign in to Apple Account** sheet,
@@ -38,6 +38,38 @@ tap "Allow" in system dialog optional
 - **`optional`** on any step turns "no dialog showed up" into a warning instead of a failure, which keeps flows
   idempotent.
 - Failures say what *is* showing: `... (showing: "Allow Notifications?" [Allow | Don’t Allow])`.
+
+## The iOS share sheet
+
+When your app opens the standard share sheet (`UIActivityViewController`, for example from a Flutter share action),
+the sheet covers the app but is drawn by a system process. On an iOS simulator `list`, `see`, `wait`, `tap` and
+`dismiss` handle it like any other system dialog:
+
+```bash
+probe system-dialog list
+#   • <the shared item's caption, or "Share sheet">
+#       buttons: <share targets and actions, e.g. Copy | Save to Files | ...>
+probe system-dialog see --title "Share sheet"
+probe system-dialog tap "Copy"
+probe system-dialog dismiss
+```
+
+```
+see system dialog "Share sheet"
+dismiss system dialog
+```
+
+- **Detection** needs the app's bundle id, so the driver can look inside that app: it is taken from `project.app` in
+  `probe.yaml` (or `--app <bundle-id>` on `probe system-dialog`). Without it only SpringBoard's alerts and system
+  service sheets are seen, and `list` says "No system dialog is showing."
+- **Title**: the shared item's caption shown at the top of the sheet. The text `Share sheet` always matches, whatever
+  is shared, so `see system dialog "Share sheet"` is a stable check.
+- **Buttons** are the sheet's Close button (on iOS versions that draw one) plus every share target and action in it
+  (`Copy`, `Save to Files`, an installed app's name, ...). Labels are the device's, so they follow the simulator's
+  language.
+- **`dismiss`** taps Close if the sheet has one; otherwise it taps the dimmed area above the sheet and, if the sheet is
+  still there, swipes it down. It does nothing when no sheet is showing.
+- Alerts and the other system dialogs behave exactly as before.
 
 ## Secrets
 
@@ -92,7 +124,8 @@ probe system-dialog type --field Password --env PROBE_SANDBOX_PASSWORD   # or --
 probe system-dialog sign-in-sandbox
 ```
 
-`--device <udid-or-serial>` picks the target (default: the only booted/connected device). The value for `type` is
+`--device <udid-or-serial>` picks the target (default: the only booted/connected device). `--app <bundle-id>` names
+the app whose share sheet to look for (default: `project.app`), and `--driver-port` sets the iOS driver port (below). The value for `type` is
 accepted from `--env NAME` or `--stdin` only, never as an argument, so it cannot show up in `ps` or shell history.
 
 ## The iOS driver
@@ -107,8 +140,29 @@ probe ios-driver stop --device <udid>     # normally not needed
 ```
 
 `probe` starts it with `xcodebuild test-without-building` on the simulator (about 5 seconds, once per run), talks
-to it over a loopback-only HTTP port derived from the simulator's UDID, and stops it when the run ends. If the CLI
+to it over a loopback-only HTTP port (derived from the simulator's UDID unless you set one), and stops it when the run ends. If the CLI
 dies, the runner stops itself after a safety timeout.
+
+### Choosing the driver port
+
+By default each simulator gets a loopback port derived from its UDID (48790 to 48989). If your CI reserves port
+ranges per test lane, pin it:
+
+```yaml
+# probe.yaml
+agent:
+  driver_port: 49100      # 1024-65535
+```
+
+```bash
+probe test tests/ --driver-port 49100
+probe system-dialog list --driver-port 49100
+probe ios-driver status --device <udid> --driver-port 49100
+```
+
+The flag wins over `agent.driver_port`; with neither, the derived port is used. Values outside 1024-65535 are
+rejected before anything starts. One port serves one simulator, so use it for single-device runs; parallel runs
+(`--parallel`, `--composite-device`) keep the derived per-simulator ports.
 
 | Variable | Purpose |
 |---|---|

@@ -21,6 +21,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 	"github.com/spf13/cobra"
 )
@@ -112,6 +113,7 @@ func init() {
 	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
 	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
+	f.Int("driver-port", 0, "loopback port of the iOS system-dialog driver, 1024-65535 (default: derived from the simulator UDID; or agent.driver_port in probe.yaml)")
 	f.Duration("launch-timeout", 0, "max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — raise this for apps with an expensive cold-launch path (default: 120s)")
 
 	// Tool paths
@@ -247,6 +249,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
 	launchTimeout, _ := cmd.Flags().GetDuration("launch-timeout")
+	driverPort, _ := cmd.Flags().GetInt("driver-port")
 
 	// Video overrides
 	videoResolution, _ := cmd.Flags().GetString("video-resolution")
@@ -277,6 +280,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if launchTimeout != 0 {
 		cfg.Agent.LaunchTimeout = launchTimeout
+	}
+	if driverPort != 0 {
+		cfg.Agent.DriverPort = driverPort
+	}
+	if err := sysdialog.ValidatePort(cfg.Agent.DriverPort); err != nil {
+		return err
 	}
 	if videoResolution != "" {
 		cfg.Video.Resolution = videoResolution
@@ -1062,6 +1071,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Platform:                platform,
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
+			DriverPort:              cfg.Agent.DriverPort,
 			DevicePort:              cfg.Agent.AgentDevicePort(),
 			IsPhysical:              isPhysical,
 			UseHTTP:                 isPhysical, // physical devices use HTTP fallback

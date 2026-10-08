@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **iOS share sheet in `probe system-dialog`:** `list` / `see` / `wait` / `tap` / `dismiss` (and the ProbeScript
+  system-dialog steps) now handle the share (activity) sheet an app opens with `UIActivityViewController`, which
+  previously reported "No system dialog is showing." The driver looks inside the app under test (`project.app`, or the
+  new `--app <bundle-id>`); the sheet's title is the shared item's caption and `Share sheet` always matches; buttons are
+  Close (where the OS draws one) plus the share targets and actions; `dismiss` taps Close, else taps outside the sheet,
+  else swipes down. Alerts are unchanged. The driver host app gets a `-probeShowShareSheet` self-test argument.
+- **`--driver-port` / `agent.driver_port`:** choose the iOS system-dialog driver's loopback port (1024-65535) on
+  `probe test`, `probe system-dialog` and `probe ios-driver status|stop`; the flag wins over probe.yaml; the default
+  (derived from the simulator UDID) is unchanged.
+
 ## [0.16.9] - 2026-10-08
 
 Fixes from the first full campaigns on 0.16.6-0.16.8.
