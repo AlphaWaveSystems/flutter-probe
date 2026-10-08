@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Tooltip;
 import 'package:flutter/widgets.dart';
 
 /// The [ModalRoute] [element] belongs to, found WITHOUT subscribing to it.
@@ -138,6 +139,19 @@ class ProbeFinder {
     final results = <Element>[];
     walkTree((e) {
       if (_matchesText(e.widget, text)) {
+        results.add(e);
+      }
+    });
+    if (results.isNotEmpty) return results;
+    // Nothing shows this text: fall back to what the app labels for assistive
+    // technology and hover help — a Semantics label or a Tooltip message (an
+    // icon button has no Text, only a tooltip). Only when no visible text matches, so
+    // a Semantics wrapper around a Text never doubles a count.
+    walkTree((e) {
+      final w = e.widget;
+      if (w is Tooltip && (w.message?.contains(text) ?? false)) {
+        results.add(e);
+      } else if (w is Semantics && (w.properties.label?.contains(text) ?? false)) {
         results.add(e);
       }
     });

@@ -307,6 +307,7 @@ type WaitStep struct {
 	Kind     WaitKind
 	Target   string   // text or selector
 	Duration float64  // seconds
+	Pattern  string   // WaitAppears: "matching" regular expression the text must match
 	Any      []string // WaitAny: alternatives; the first one that appears satisfies the wait
 	Line     int
 }

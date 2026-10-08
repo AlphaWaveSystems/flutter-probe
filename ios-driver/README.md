@@ -13,10 +13,12 @@ It is optional. A normal `probe test` run never starts it; only system-dialog st
 - `ProbeDriverUITests/ProbeDriverTests.testServe` never asserts anything: it starts a loopback-only HTTP server
   (`DriverServer.swift`) inside the test-runner process, the only process allowed to drive SpringBoard's accessibility
   tree, and keeps the test alive until it receives `POST /shutdown` (or a 3-hour safety timeout).
-- `Driver.swift` finds dialogs (alerts, sheets, and the windows of system service apps) and exposes `/dialogs`, `/see`,
+- `Driver.swift` finds dialogs (alerts, sheets, the windows of system service apps, and the share/activity sheet of
+  the app under test, whose bundle id the CLI sends as `app` in each request) and exposes `/dialogs`, `/see`,
   `/tap`, `/type`, `/dismiss`, `/tree`. Text sent to `/type` is never echoed in a response.
 - The CLI (`internal/sysdialog`) starts it with `xcodebuild test-without-building`, talks to it over
-  `127.0.0.1:<port derived from the simulator UDID>`, and stops it when done.
+  `127.0.0.1:<port>` (derived from the simulator UDID unless `--driver-port` / `agent.driver_port` pins it; the runner
+  reads it from `TEST_RUNNER_PROBE_DRIVER_PORT`), and stops it when done.
 
 ## Build
 
@@ -36,6 +38,7 @@ every release and attaches it; `probe ios-driver install` downloads it to `~/.pr
 | Argument | What it does |
 |---|---|
 | `-probeRequestNotifications` | requests notification permission, which raises the system alert |
+| `-probeShowShareSheet` | presents the share sheet (`UIActivityViewController`) for a text item; detect it with `--app dev.flutterprobe.driver.host` |
 | `-probeShowSignInAlert` | shows an alert shaped like the StoreKit sheet (account field, secure password field, Cancel/OK) and writes what was typed to `tmp/probe_signin.txt` |
 
 Simulators only: a runner on a physical device needs code signing.

@@ -151,7 +151,24 @@ func (a *ADB) RevokePermission(ctx context.Context, serial, appID, permission st
 // App Links URL registered by the app under test is delivered to *that
 // app*, not launched externally.
 func (a *ADB) OpenURL(ctx context.Context, serial, url string) error {
-	_, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", url)
+	return a.OpenURLIn(ctx, serial, url, "")
+}
+
+// OpenURLIn fires the VIEW intent for url, restricted to package pkg when set. Without
+// the restriction Android picks any app that claims the scheme: with two flavours of
+// one app installed (production and staging) the wrong one can start, and the CLI then
+// waits for an agent that never comes. If pkg cannot handle the link, the intent is
+// retried unrestricted so links meant for other apps (a browser) keep working. The
+// URL is single-quoted for the device shell, so characters like & and ? survive.
+func (a *ADB) OpenURLIn(ctx context.Context, serial, url, pkg string) error {
+	quoted := "'" + strings.ReplaceAll(url, "'", `'\''`) + "'"
+	if pkg != "" {
+		out, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", quoted, "-p", pkg)
+		if err == nil && !strings.Contains(string(out), "Error") {
+			return nil
+		}
+	}
+	_, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", quoted)
 	return err
 }
 

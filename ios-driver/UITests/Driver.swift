@@ -1,12 +1,12 @@
 import XCTest
 
 /// Finds and drives iOS *system* dialogs (permission alerts, the StoreKit
-/// "Sign in to Apple Account" sheet, ...) through the accessibility tree of
+/// "Sign in to Apple Account" sheet, the app's share sheet, ...) through the accessibility tree of
 /// SpringBoard and of the system service apps that host such UI.
 ///
 /// Secrets: `type` never echoes the text back in any response or log line.
 final class Driver {
-    static let version = "0.16.9"
+    static let version = "0.17.0"
 
     /// Processes that can present system UI. Only ones that are running are
     /// queried (asking an app that is not running for its UI would launch it).
@@ -35,6 +35,9 @@ final class Driver {
         let bundleID: String
         let texts: [String]
         let buttons: [XCUIElement]
+        /// Set for the activity (share) sheet of the app under test; `dismiss`
+        /// has no Cancel-like button to rely on there.
+        var shareSheet: XCUIApplication? = nil
         var buttonLabels: [String] { buttons.map { $0.label } }
         var title: String { texts.first ?? "" }
 
@@ -52,8 +55,9 @@ final class Driver {
         }
     }
 
-    private func dialogs() -> [Dialog] {
+    private func dialogs(appID: String? = nil) -> [Dialog] {
         var found: [Dialog] = []
+        if let sheet = shareSheet(appID: appID) { found.append(sheet) }
         for app in runningApps() {
             let id = app.label.isEmpty ? "app" : app.label
             _ = id
@@ -75,14 +79,83 @@ final class Driver {
         return found
     }
 
-    private func find(title: String?) -> Dialog? {
-        dialogs().first { $0.matches(title: title) }
+    // MARK: - Activity (share) sheet
+
+    /// Accessibility identifiers the activity sheet exposes inside the app that
+    /// presented it (the sheet is a remote view, so it is part of that app's
+    /// hierarchy, not SpringBoard's). Checked in this order; the first is the
+    /// outermost container.
+    private let shareSheetIdentifiers = [
+        "ShareSheet.RemoteContainerView", "UIActivityContentView", "ActivityListView",
+        "shareSheet.activity.contentView", "activityCollectionView",
+    ]
+
+    /// The share sheet shown by the app under test, if any. `appID` is the
+    /// bundle id of that app; without it only system apps are inspected.
+    private func shareSheet(appID: String?) -> Dialog? {
+        guard let id = appID, !id.isEmpty else { return nil }
+        let app = XCUIApplication(bundleIdentifier: id)
+        // Asking an app that is not running for its UI would launch it.
+        guard app.state == .runningForeground else { return nil }
+        var container: XCUIElement?
+        for ident in shareSheetIdentifiers {
+            let el = app.descendants(matching: .any).matching(identifier: ident).firstMatch
+            if el.exists { container = el; break }
+        }
+        guard let c = container else { return nil }
+        // Header: the shared item's caption (e.g. the text or file name) from the sheet's top bar.
+        let bar = app.navigationBars["UIActivityContentView"]
+        var header: [String] = []
+        if bar.exists {
+            header = bar.descendants(matching: .any).allElementsBoundByIndex.prefix(12)
+                .filter { $0.elementType != .image && $0.elementType != .button }
+                .map { $0.label }.filter { !$0.isEmpty }
+        }
+        // Buttons: Close (when the OS version draws one) and every activity / action cell.
+        let bars = c.buttons.allElementsBoundByIndex.filter { $0.exists && !$0.label.isEmpty }
+        let cells = c.cells.allElementsBoundByIndex.filter { $0.exists && !$0.label.isEmpty }
+        var seen = Set<String>()
+        var buttons: [XCUIElement] = []
+        for b in bars + cells where seen.insert(b.label).inserted { buttons.append(b) }
+        let title = header.first ?? "Share sheet"
+        var texts = [title, "Share sheet"] + header.dropFirst()
+        texts += buttons.map { $0.label }
+        return Dialog(element: c, bundleID: id, texts: texts, buttons: buttons, shareSheet: app)
+    }
+
+    /// Closes the share sheet: its Close button if the OS draws one, otherwise a
+    /// tap on the dimmed area above it, then a swipe down. Returns how it was closed.
+    private func dismissShareSheet(_ d: Dialog, app: XCUIApplication) -> String? {
+        func gone() -> Bool {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.8))
+            return !d.element.exists
+        }
+        for label in ["Close", "Cancel", "Done"] {
+            if let b = d.buttons.first(where: { $0.elementType == .button && $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
+                b.tap()
+                if gone() { return label }
+            }
+        }
+        let frame = d.element.frame
+        let top = max(frame.minY, 0)
+        if top > 60 {
+            let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            origin.withOffset(CGVector(dx: frame.midX, dy: top / 2)).tap()
+            if gone() { return "tap outside" }
+        }
+        d.element.swipeDown(velocity: .fast)
+        if gone() { return "swipe down" }
+        return nil
+    }
+
+    private func find(title: String?, appID: String? = nil) -> Dialog? {
+        dialogs(appID: appID).first { $0.matches(title: title) }
     }
 
     // MARK: - Endpoints (each returns (httpStatus, json))
 
     func dialogs(_ body: [String: Any]) -> (Int, [String: Any]) {
-        let list = dialogs().map { d -> [String: Any] in
+        let list = dialogs(appID: body["app"] as? String).map { d -> [String: Any] in
             ["title": d.title, "texts": d.texts, "buttons": d.buttonLabels, "app": d.bundleID,
              "fields": fieldLabels(in: d.element)]
         }
@@ -91,7 +164,7 @@ final class Driver {
 
     func see(_ body: [String: Any]) -> (Int, [String: Any]) {
         let title = body["title"] as? String
-        let d = find(title: title)
+        let d = find(title: title, appID: body["app"] as? String)
         return (200, ["ok": true, "found": d != nil, "title": d?.title ?? "", "buttons": d?.buttonLabels ?? []])
     }
 
@@ -101,7 +174,7 @@ final class Driver {
         let timeout = (body["timeout"] as? Double) ?? 10
         let deadline = Date(timeIntervalSinceNow: timeout)
         repeat {
-            let present = find(title: title) != nil
+            let present = find(title: title, appID: body["app"] as? String) != nil
             if present == appear { return (200, ["ok": true, "found": present]) }
             RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.25))
         } while Date() < deadline
@@ -113,7 +186,7 @@ final class Driver {
             return (400, ["ok": false, "error": "missing button"])
         }
         let title = body["title"] as? String
-        guard let d = find(title: title) else {
+        guard let d = find(title: title, appID: body["app"] as? String) else {
             return (200, ["ok": false, "error": "no system dialog found" + titleSuffix(title)])
         }
         guard let button = match(wanted, in: d.buttons, by: { $0.label }) else {
@@ -126,8 +199,14 @@ final class Driver {
 
     func dismiss(_ body: [String: Any]) -> (Int, [String: Any]) {
         let title = body["title"] as? String
-        guard let d = find(title: title) else {
+        guard let d = find(title: title, appID: body["app"] as? String) else {
             return (200, ["ok": true, "dismissed": false])   // idempotent: nothing to dismiss
+        }
+        if let app = d.shareSheet {
+            if let how = dismissShareSheet(d, app: app) {
+                return (200, ["ok": true, "dismissed": true, "tapped": how])
+            }
+            return (200, ["ok": false, "error": "could not close the share sheet", "buttons": d.buttonLabels, "title": d.title])
         }
         for label in dismissLabels {
             if let b = d.buttons.first(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
@@ -145,7 +224,7 @@ final class Driver {
             return (400, ["ok": false, "error": "missing field or text"])
         }
         let title = body["title"] as? String
-        guard let d = find(title: title) else {
+        guard let d = find(title: title, appID: body["app"] as? String) else {
             return (200, ["ok": false, "error": "no system dialog found" + titleSuffix(title)])
         }
         let fields = d.element.textFields.allElementsBoundByIndex + d.element.secureTextFields.allElementsBoundByIndex
@@ -169,6 +248,10 @@ final class Driver {
         var out: [String: String] = [:]
         for app in runningApps() {
             out[app.debugBundleID] = String(app.debugDescription.prefix(20_000))
+        }
+        if let id = body["app"] as? String, !id.isEmpty {
+            let app = XCUIApplication(bundleIdentifier: id)
+            if app.state != .notRunning { out[id] = String(app.debugDescription.prefix(40_000)) }
         }
         return (200, ["ok": true, "tree": out])
     }

@@ -40,6 +40,7 @@ type DeviceContext struct {
 	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
 	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
 	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
+	DriverPort              int             // iOS system-dialog driver port (0 = derived from the simulator UDID)
 	CLIVersion              string          // running probe binary's version, sent during the reconnect handshake
 
 	sysMu     sync.Mutex
@@ -58,6 +59,8 @@ func (dc *DeviceContext) SystemDriver(ctx context.Context) (sysdialog.Driver, er
 	version := dc.CLIVersion
 	d, err := sysdialog.ForDevice(ctx, dc.Manager, dc.Serial, dc.Platform, sysdialog.IOSOptions{
 		Version:     version,
+		AppID:       dc.AppID,
+		Port:        dc.DriverPort,
 		AutoInstall: true,
 		Logf:        func(f string, a ...any) { fmt.Printf("    \033[36mℹ\033[0m  "+f+"\n", a...) },
 	})
@@ -741,7 +744,7 @@ func (dc *DeviceContext) OpenDeepLink(ctx context.Context, url string) error {
 	fmt.Printf("    \033[36m🔗\033[0m  Opening %s via the OS (not the app's own url_launcher)\n", url)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if err := dc.Manager.ADB().OpenURL(ctx, dc.Serial, url); err != nil {
+		if err := dc.Manager.ADB().OpenURLIn(ctx, dc.Serial, url, dc.AppID); err != nil {
 			return fmt.Errorf("open link into the app: %w", err)
 		}
 	case device.PlatformIOS:

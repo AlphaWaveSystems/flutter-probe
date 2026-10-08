@@ -95,6 +95,7 @@ type WaitParams struct {
 	Target   string  `json:"target,omitempty"`
 	Duration float64 `json:"duration,omitempty"` // seconds
 	Timeout  float64 `json:"timeout,omitempty"`
+	Pattern  string  `json:"pattern,omitempty"` // appears: the text must also match this regular expression
 }
 
 // SwipeParams controls a swipe gesture.

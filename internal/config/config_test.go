@@ -490,3 +490,24 @@ environment:
 		t.Errorf("env KEY: %q", cfg.Env["KEY"])
 	}
 }
+
+func TestLoadFile_DriverPort(t *testing.T) {
+	write := func(body string) string {
+		p := filepath.Join(t.TempDir(), "probe.yaml")
+		if err := os.WriteFile(p, []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	cfg, err := config.LoadFile(write("agent:\n  driver_port: 49100\n"))
+	if err != nil || cfg.Agent.DriverPort != 49100 {
+		t.Fatalf("driver_port: got %v, err %v", cfg, err)
+	}
+	cfg, err = config.LoadFile(write("project:\n  app: com.test.app\n"))
+	if err != nil || cfg.Agent.DriverPort != 0 {
+		t.Fatalf("unset driver_port must stay 0, got %v, err %v", cfg, err)
+	}
+	if _, err = config.LoadFile(write("agent:\n  driver_port: 80\n")); err == nil {
+		t.Fatal("driver_port 80 must be rejected")
+	}
+}

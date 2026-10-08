@@ -239,3 +239,51 @@ func TestInstallIOSDriverFrom_DownloadsAndUnpacks(t *testing.T) {
 		t.Error("HTTP 404 must be an error")
 	}
 }
+
+func TestValidatePort(t *testing.T) {
+	for _, p := range []int{0, 1024, 48790, 65535} {
+		if err := ValidatePort(p); err != nil {
+			t.Errorf("ValidatePort(%d) = %v, want nil", p, err)
+		}
+	}
+	for _, p := range []int{-1, 1, 80, 1023, 65536} {
+		if err := ValidatePort(p); err == nil {
+			t.Errorf("ValidatePort(%d) = nil, want error", p)
+		}
+	}
+}
+
+func TestNewIOS_RejectsBadPort(t *testing.T) {
+	if _, err := NewIOS(context.Background(), "udid", IOSOptions{Port: 80}); err == nil {
+		t.Fatal("expected an invalid port error")
+	}
+}
+
+// The app under test is sent with every request so the runner can look for its
+// share sheet; without one the field is omitted.
+func TestIOSCall_SendsAppID(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got = nil
+		_ = json.Unmarshal(b, &got)
+		_, _ = w.Write([]byte(`{"ok":true,"found":true}`))
+	}))
+	defer srv.Close()
+	for _, tc := range []struct {
+		app  string
+		want bool
+	}{{"com.example.app", true}, {"", false}} {
+		d := &IOSDriver{appID: tc.app, base: srv.URL, client: srv.Client()}
+		if _, err := d.See(context.Background(), "Share"); err != nil {
+			t.Fatal(err)
+		}
+		app, has := got["app"]
+		if has != tc.want || (has && app != tc.app) {
+			t.Errorf("appID %q: request body %v", tc.app, got)
+		}
+		if got["title"] != "Share" {
+			t.Errorf("title lost: %v", got)
+		}
+	}
+}

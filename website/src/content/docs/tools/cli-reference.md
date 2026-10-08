@@ -46,6 +46,7 @@ probe test [path] [flags]
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |
 | `-o, --output <path>` | — | Output file path for reports |
 | `-v, --verbose` | `false` | Verbose output |
+| `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog |
 | `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions |
 | `--watch` | `false` | Watch mode — re-run on file changes |
 | `--video` | `false` | Enable video recording per test |

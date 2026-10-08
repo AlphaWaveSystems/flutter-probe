@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageScaffold;
-import 'package:flutter/material.dart' show BottomSheet, Dialog, ElevatedButton, GestureDetector, InkResponse, Scaffold, TextButton, OutlinedButton;
+import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, Dialog, FloatingActionButton, GestureDetector, IconButton, InkResponse, Scaffold, Switch, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -968,7 +968,7 @@ class ProbeExecutor {
         await Future.delayed(Duration(milliseconds: (duration * 1000).toInt()));
 
       case 'appears':
-        await _waitUntilVisible(target, timeoutDur, expect: true);
+        await _waitUntilVisible(target, timeoutDur, expect: true, pattern: params['pattern'] as String? ?? '');
 
       case 'disappears':
         await _waitUntilVisible(target, timeoutDur, expect: false);
@@ -1032,7 +1032,7 @@ class ProbeExecutor {
     throw ProbeError(ProbeError.timeout, 'Timed out waiting for animations to finish');
   }
 
-  Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect}) async {
+  Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect, String pattern = ''}) async {
     // PT-06: WaitStep carries only a raw target string, not a selector kind
     // (unlike Selector/SelectorParam used by tap/type), so an id target must
     // be detected from its '#' prefix here — this previously always built a
@@ -1044,9 +1044,20 @@ class ProbeExecutor {
     final sel = text.startsWith('#')
         ? {'kind': 'id', 'text': text}
         : {'kind': 'text', 'text': text};
+    RegExp? re;
+    if (pattern.isNotEmpty) {
+      try {
+        re = RegExp(pattern);
+      } on FormatException catch (e) {
+        throw ProbeError(ProbeError.assertFailed, 'Invalid regular expression "$pattern": ${e.message}');
+      }
+    }
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      final found = _finder.findElements(sel).isNotEmpty;
+      final elements = _finder.findElements(sel);
+      // `appears matching "<re>"`: the text must also match the expression
+      // (substring selectors alone cannot say "exactly 0 ml").
+      final found = re == null ? elements.isNotEmpty : elements.any((e) => re!.hasMatch(_textOf(e)));
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
       await _sync.waitForSettled(timeout: const Duration(seconds: 1));
@@ -1054,7 +1065,7 @@ class ProbeExecutor {
     final desc = expect ? 'appear' : 'disappear';
     throw ProbeError(
       ProbeError.timeout,
-      'Timed out waiting for "$text" to $desc${_visibleHint()}',
+      'Timed out waiting for "$text" to $desc${pattern.isEmpty ? '' : ' matching /$pattern/'}${_visibleHint()}',
     );
   }
 
@@ -1502,13 +1513,35 @@ class ProbeExecutor {
     return '$kind("$text")';
   }
 
+  /// The disabled state of a widget, or of the control it labels: the element a text
+  /// selector matches is usually the `Text` inside a button, so the nearest enclosing
+  /// control (button, icon button, FAB, text field, switch, checkbox) decides — a
+  /// grey `ElevatedButton(onPressed: null, child: Text("Submit"))` is disabled.
   bool _isDisabled(Element e) {
-    final widget = e.widget;
-    if (widget is ElevatedButton) return widget.onPressed == null;
-    if (widget is TextButton) return widget.onPressed == null;
-    if (widget is OutlinedButton) return widget.onPressed == null;
-    if (widget is GestureDetector) return widget.onTap == null;
-    return false;
+    final own = _controlDisabled(e.widget);
+    if (own != null) return own;
+    bool? found;
+    var depth = 0;
+    e.visitAncestorElements((a) {
+      final d = _controlDisabled(a.widget);
+      if (d != null) {
+        found = d;
+        return false;
+      }
+      return ++depth < 40;
+    });
+    return found ?? (e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null);
+  }
+
+  /// null when [w] is not a control this knows how to read.
+  bool? _controlDisabled(Widget w) {
+    if (w is ButtonStyleButton) return !w.enabled;
+    if (w is IconButton) return w.onPressed == null;
+    if (w is FloatingActionButton) return w.onPressed == null;
+    if (w is TextField) return w.enabled == false;
+    if (w is Switch) return w.onChanged == null;
+    if (w is Checkbox) return w.onChanged == null;
+    return null;
   }
 
   String _textOf(Element e) {

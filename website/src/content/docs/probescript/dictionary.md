@@ -66,6 +66,7 @@ Commands that pause execution until a condition is met.
 | `wait N seconds` | `wait 5 seconds` | Wait for a fixed duration |
 | `wait until appears` | `wait until "Dashboard" appears` | Wait until text becomes visible |
 | `wait until disappears` | `wait until "Loading" disappears` | Wait until text is no longer visible |
+| `wait until appears matching` | `wait until "0 ml" appears matching "^0 ml$"` | Wait until a matched widget's text also matches the regular expression (exact text) |
 | `wait until any of` | `wait until any of "Got it", "Login", "Home" appears` | Wait until any one of the texts is visible (screens that vary, e.g. an optional consent dialog) |
 | `wait for idle` | `wait for idle` | Wait for route transitions, frames, animations and HTTP requests to settle |
 | `tap in system dialog` | `tap "Allow" in system dialog` | Tap a button in an OS system dialog (outside the Flutter app) |

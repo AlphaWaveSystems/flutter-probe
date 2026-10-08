@@ -22,12 +22,24 @@ const BasePort = 48790
 // PortFor returns the runner port for a simulator UDID.
 func PortFor(udid string) int { return BasePort + int(crc32.ChecksumIEEE([]byte(udid))%200) }
 
+// ValidatePort checks a user-chosen driver port. 0 means "derive from the UDID".
+func ValidatePort(port int) error {
+	if port == 0 || (port >= 1024 && port <= 65535) {
+		return nil
+	}
+	return fmt.Errorf("invalid iOS driver port %d: use a value between 1024 and 65535", port)
+}
+
 // IOSOptions configures NewIOS.
 type IOSOptions struct {
 	// Version is the CLI version; selects the runner build to use or install.
 	Version string
-	// Port overrides the derived port.
+	// Port overrides the derived port (see ValidatePort).
 	Port int
+	// AppID is the bundle id of the app under test. The driver looks for that
+	// app's share (activity) sheet in addition to SpringBoard's alerts; empty
+	// means system dialogs only.
+	AppID string
 	// AutoInstall downloads the runner from the GitHub release when missing.
 	AutoInstall bool
 	// Logf, if set, receives progress lines (never secrets).
@@ -40,6 +52,7 @@ type IOSOptions struct {
 // IOSDriver drives iOS simulator system dialogs through the XCUITest runner.
 type IOSDriver struct {
 	udid    string
+	appID   string
 	port    int
 	base    string
 	client  *http.Client
@@ -50,12 +63,16 @@ type IOSDriver struct {
 
 // NewIOS connects to (or starts) the iOS runner for the simulator udid.
 func NewIOS(ctx context.Context, udid string, opts IOSOptions) (*IOSDriver, error) {
+	if err := ValidatePort(opts.Port); err != nil {
+		return nil, err
+	}
 	port := opts.Port
 	if port == 0 {
 		port = PortFor(udid)
 	}
 	d := &IOSDriver{
 		udid:   udid,
+		appID:  opts.AppID,
 		port:   port,
 		base:   fmt.Sprintf("http://127.0.0.1:%d", port),
 		client: &http.Client{Timeout: 90 * time.Second},
@@ -175,6 +192,14 @@ func tailFile(path string, n int) string {
 
 // call POSTs JSON to the runner and decodes the reply.
 func (d *IOSDriver) call(ctx context.Context, path string, body map[string]any, out any) error {
+	if d.appID != "" {
+		withApp := make(map[string]any, len(body)+1)
+		for k, v := range body {
+			withApp[k] = v
+		}
+		withApp["app"] = d.appID
+		body = withApp
+	}
 	payload, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.base+path, bytes.NewReader(payload))
 	if err != nil {

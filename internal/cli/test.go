@@ -21,6 +21,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 	"github.com/spf13/cobra"
 )
@@ -92,6 +93,7 @@ func init() {
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
+	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
@@ -111,6 +113,7 @@ func init() {
 	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
 	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
+	f.Int("driver-port", 0, "loopback port of the iOS system-dialog driver, 1024-65535 (default: derived from the simulator UDID; or agent.driver_port in probe.yaml)")
 	f.Duration("launch-timeout", 0, "max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — raise this for apps with an expensive cold-launch path (default: 120s)")
 
 	// Tool paths
@@ -223,6 +226,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	adbPath, _ := cmd.Flags().GetString("adb")
 	flutterPath, _ := cmd.Flags().GetString("flutter")
 	autoYes, _ := cmd.Flags().GetBool("yes")
+	noGrantOnClear, _ := cmd.Flags().GetBool("no-grant-on-clear")
 	grantPerms, _ := cmd.Flags().GetStringSlice("grant")
 	for i, g := range grantPerms {
 		grantPerms[i] = strings.ToLower(strings.TrimSpace(g))
@@ -245,6 +249,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
 	launchTimeout, _ := cmd.Flags().GetDuration("launch-timeout")
+	driverPort, _ := cmd.Flags().GetInt("driver-port")
 
 	// Video overrides
 	videoResolution, _ := cmd.Flags().GetString("video-resolution")
@@ -275,6 +280,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if launchTimeout != 0 {
 		cfg.Agent.LaunchTimeout = launchTimeout
+	}
+	if driverPort != 0 {
+		cfg.Agent.DriverPort = driverPort
+	}
+	if err := sysdialog.ValidatePort(cfg.Agent.DriverPort); err != nil {
+		return err
 	}
 	if videoResolution != "" {
 		cfg.Video.Resolution = videoResolution
@@ -1060,13 +1071,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Platform:                platform,
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
+			DriverPort:              cfg.Agent.DriverPort,
 			DevicePort:              cfg.Agent.AgentDevicePort(),
 			IsPhysical:              isPhysical,
 			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
 			AgentHost:               agentHost,  // device IP for WiFi mode
 			AllowClearData:          autoYes,
 			Confirm:                 confirmFunc(),
-			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,
+			GrantPermissionsOnClear: (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear,
 			ReconnectDelay:          cfg.Agent.ReconnectDelay,
 			RestartDelay:            cfg.Device.RestartDelay,
 			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,
