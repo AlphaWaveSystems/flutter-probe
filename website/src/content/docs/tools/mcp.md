@@ -71,7 +71,7 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--host <ip> --token <t>` | WiFi mode for physical devices |
 | `--agent-port 48700` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=48700` so simulators don't collide. A failed dial names the process holding the port. |
 | `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
-| `--disable-animations` | Set `timeDilation=0` for faster tests |
+| `--disable-animations` | Set a tiny `timeDilation` (0.001) so animations end within a frame |
 | `-y` | Auto-approve destructive operations (CI mode) |
 | `--video` | Record device screen during the run |
 | `--stream` | Emit one ndjson line per test as it completes (requires `--format json`) |

@@ -166,7 +166,7 @@ func init() {
 	f.String("relay-session-id", "", "existing relay session ID for status polling and cleanup")
 
 	// Animation control
-	f.Bool("disable-animations", false, "disable Flutter animations by setting timeDilation=0 (speeds up tests)")
+	f.Bool("disable-animations", false, "disable Flutter animations by setting a tiny timeDilation (0.001; speeds up tests)")
 
 	// Composite test device aliases
 	f.StringArray("composite-device", nil, compositeDeviceUsage())
@@ -1146,7 +1146,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Disable animations if requested (--disable-animations flag or probe.yaml)
 	disableAnimationsFlag, _ := cmd.Flags().GetBool("disable-animations")
 	if (disableAnimationsFlag || cfg.Defaults.DisableAnimations) && client != nil && !dryRun {
-		if err := client.SetTimeDilation(ctx, 0); err != nil {
+		if err := client.SetTimeDilation(ctx, 0.001); err != nil {
 			fmt.Fprintf(statusW, "  ⚠  disable-animations: %v\n", err)
 		}
 	}

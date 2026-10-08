@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.18.1 - 2026-10-08
+
+- Fixed: `probe.set_time_dilation` with a non-positive factor sets 0.001 instead of an invalid 0.
+
 ## 0.18.0 - 2026-10-08
 
 - No agent change (implicit waiting is a CLI feature); version aligned.
