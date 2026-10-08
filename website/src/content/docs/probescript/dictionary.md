@@ -50,7 +50,7 @@ Commands that verify the state of the UI.
 | `see exactly` | `see exactly 3 "Item"` | Assert exact count of matching widgets |
 | `see enabled` | `see "Submit" is enabled` | Assert widget is enabled |
 | `see disabled` | `see "Submit" is disabled` | Assert widget is disabled |
-| `see checked` | `see "Agree" is checked` | Assert checkbox/toggle is checked |
+| `see checked` | `see "Agree" is checked` | Assert the switch, checkbox, radio (or their list tiles, filter or choice chips) is on; "not a checkable control" for anything else. `don't see "Agree" is checked` asserts it is off |
 | `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
 | `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so use an anchored pattern for exact text: `see "0 ml" matching "^0 ml$"` |

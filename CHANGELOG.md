@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-10-08
+
+### Fixed
+- **`see #x is checked` / `don't see #x is checked` now read the real value.** The agent had no `checked` check at all:
+  it fell through and passed for every widget, so `is checked` always succeeded and `don't see ... is checked` always
+  failed. It now reads `Switch`, `SwitchListTile`, `CupertinoSwitch`, `Checkbox`, `CheckboxListTile`, `Radio`,
+  `RadioListTile`, `FilterChip` and `ChoiceChip` (the matched widget, a control inside it, or the control enclosing the
+  matched label text), and says so when the widget is not a checkable control. **Tests that passed only because
+  `is checked` was always true will now fail where the control is off.**
+
 ## [0.17.0] - 2026-10-08
 
 ### Fixed
