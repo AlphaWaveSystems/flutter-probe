@@ -445,3 +445,50 @@ func TestConvertFile_RunFlowOutsideRootWarns(t *testing.T) {
 		t.Errorf("expected a TODO about the helper outside the root:\n%s", b)
 	}
 }
+
+func TestConvertYAML_ConditionalRunFlow(t *testing.T) {
+	probe, _, err := migrate.ConvertYAML(`- runFlow:
+    when:
+      visible: "Login to X"
+    commands:
+      - tapOn: "Login"
+- runFlow:
+    when:
+      notVisible: "Home"
+    commands:
+      - tapOn: "Skip"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(probe, "if \"Login to X\" appears\n    tap on \"Login\"") {
+		t.Errorf("visible condition should become an if block:\n%s", probe)
+	}
+	if !strings.Contains(probe, "if \"Home\" appears") || !strings.Contains(probe, "otherwise\n    tap on \"Skip\"") {
+		t.Errorf("notVisible should become if/otherwise:\n%s", probe)
+	}
+	if _, err := parser.ParseFile(probe); err != nil {
+		t.Errorf("generated file must parse: %v\n%s", err, probe)
+	}
+}
+
+func TestConvertYAML_LiteralRegexForms(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML(`- assertVisible: ".*Professional Profile.*"
+- assertVisible: "Comments (1)"
+- extendedWaitUntil:
+    visible: "No offers at this time\\.|Subscribe Now"
+- assertVisible: "Joined .*!"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`see "Professional Profile"`, `see "Comments (1)"`,
+		`wait until any of "No offers at this time.", "Subscribe Now" appears`} {
+		if !strings.Contains(probe, want) {
+			t.Errorf("missing %q in:\n%s", want, probe)
+		}
+	}
+	if strings.Count(probe, "# TODO") != 1 || len(warns) != 1 {
+		t.Errorf("only the mid-wildcard selector should keep a TODO, got %d TODO, warns %v:\n%s", strings.Count(probe, "# TODO"), warns, probe)
+	}
+}

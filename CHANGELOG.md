@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   It is a compound keyword, so recipes whose names start with `press` or `submit` are unaffected.
 
 ### Fixed
+- **`probe migrate maestro`, conditional `runFlow`:** `runFlow: {when: {visible: "X"}, commands: [...]}` becomes an
+  `if "X" appears` block, and `notVisible` becomes `if "X" appears` / `otherwise` with the commands (a `file:` target works
+  too). Conditions on platform or scripts, and regex conditions, stay `# TODO`.
+- **`probe migrate maestro`, regex selectors that mean a literal:** `.*TEXT.*` becomes `TEXT` (text selectors already
+  match substrings), escaped characters (`time\\.`) are unescaped, parentheses are literal, and plain alternations
+  with those forms become `wait until any of`. Only real regex syntax (a wildcard in the middle, classes,
+  quantifiers) keeps a `# TODO`.
 - **`before each` / `after each` without `test`** (what the Hooks and Dictionary pages show) kept the keyword but
   silently dropped the hook body. They are now the same hook as `before each test` / `after each test`.
 - **`probe migrate maestro` now warns when a `runFlow` target is outside the migrate root** (it was never converted, so
