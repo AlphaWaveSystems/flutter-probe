@@ -346,6 +346,10 @@ func (p *Parser) parseStep() (Step, error) {
 		p.advance()
 		p.consumeNewline()
 		return ActionStep{Verb: VerbGoBack, Line: tok.Line}, nil
+	case TOKEN_PRESS_ENTER:
+		p.advance()
+		p.consumeNewline()
+		return ActionStep{Verb: VerbPressEnter, Line: tok.Line}, nil
 	case TOKEN_LONG_PRESS:
 		return p.parseActionLongPress()
 	case TOKEN_DOUBLE_TAP:

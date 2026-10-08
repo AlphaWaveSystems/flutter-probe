@@ -348,6 +348,7 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		// to an "unknown recipe call" error.
 		{[]string{"dont", "see"}, TOKEN_DONT_SEE},
 		{[]string{"go", "back"}, TOKEN_GO_BACK},
+		{[]string{"press", "enter"}, TOKEN_PRESS_ENTER},
 		{[]string{"long", "press"}, TOKEN_LONG_PRESS},
 		{[]string{"double", "tap"}, TOKEN_DOUBLE_TAP},
 		{[]string{"before", "all", "tests"}, TOKEN_LIFECYCLE},
@@ -356,6 +357,10 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		{[]string{"after", "all"}, TOKEN_LIFECYCLE},
 		{[]string{"before", "each", "test"}, TOKEN_LIFECYCLE},
 		{[]string{"after", "each", "test"}, TOKEN_LIFECYCLE},
+		// "before each" / "after each" without "test" are what the docs show; the
+		// parser used to accept them and silently drop the hook body.
+		{[]string{"before", "each"}, TOKEN_LIFECYCLE},
+		{[]string{"after", "each"}, TOKEN_LIFECYCLE},
 		{[]string{"on", "failure"}, TOKEN_LIFECYCLE},
 		{[]string{"with", "examples"}, TOKEN_EXAMPLES},
 		{[]string{"go", "back"}, TOKEN_GO_BACK},

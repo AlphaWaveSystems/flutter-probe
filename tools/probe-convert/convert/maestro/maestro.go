@@ -148,10 +148,11 @@ func convertStep(step map[string]interface{}) (string, string) {
 			switch strings.ToLower(k) {
 			case "back":
 				return "go back", ""
-			case "home":
-				return "press the home button", ""
+			case "enter", "return":
+				return "press enter", ""
 			default:
-				return fmt.Sprintf("press key %s", quoteVal(k)), ""
+				// no other key steps exist in ProbeScript
+				return fmt.Sprintf("# TODO: pressKey %s has no ProbeScript equivalent (only `go back` and `press enter` exist)", k), ""
 			}
 		case "hideKeyboard", "closeKeyboard":
 			return "close keyboard", ""

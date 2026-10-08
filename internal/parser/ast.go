@@ -137,6 +137,7 @@ const (
 	VerbSwipe      ActionVerb = "swipe"
 	VerbScroll     ActionVerb = "scroll"
 	VerbGoBack     ActionVerb = "go_back"
+	VerbPressEnter ActionVerb = "press_enter"
 	VerbLongPress  ActionVerb = "long_press"
 	VerbDoubleTap  ActionVerb = "double_tap"
 	VerbClear      ActionVerb = "clear"

@@ -161,9 +161,9 @@ The lexer joins these word sequences, separated by one or more spaces, into a si
 keyword lookup:
 
 ```ebnf
-compound-keyword = "don't see" | "dont see" | "go back" | "long press" | "double tap"
+compound-keyword = "don't see" | "dont see" | "go back" | "press enter" | "long press" | "double tap"
                  | "before all tests" | "after all tests" | "before all" | "after all"
-                 | "before each test" | "after each test" | "on failure" | "with examples"
+                 | "before each test" | "after each test" | "before each" | "after each" | "on failure" | "with examples"
                  | "clear app data" | "grant all permissions" | "revoke all permissions"
                  | "allow permission" | "deny permission" | "set location"
                  | "verify external browser" | "add media" ;
@@ -309,12 +309,12 @@ with examples from "fixtures/users.csv"
 ```ebnf
 hook-def  = hook-head , NEWLINE , body ;
 hook-head = "before all tests" | "before all" | "after all tests" | "after all"
-          | "before each test" | "after each test" | "on failure"
+          | "before each test" | "after each test" | "before each" | "after each" | "on failure"
           | ( "before" | "after" ) , fillers ;       (* bare form: a before-each / after-each hook *)
 ```
 
-`before each` and `after each` **without** `test` are not in this grammar on purpose: the parser
-accepts them but silently discards the hook body. Always write `before each test` / `after each test`.
+`before each` and `after each` (with or without `test`) are the same hook; `before all` / `after all`
+likewise. Before 0.16.7 the forms without `test` were accepted but their body was silently discarded.
 
 ```probe
 before all tests
@@ -401,7 +401,7 @@ line-step  = tap-native-step | tap-step | type-native-step | type-step
            | see-native-step | see-step | dont-see-step | assert-defects-step
            | wait-step
            | open-app-step | open-link-step | close-step | restart-step | kill-step | clear-data-step
-           | go-back-step | shake-step | pause-step | log-step | rotate-step
+           | go-back-step | press-enter-step | shake-step | pause-step | log-step | rotate-step
            | permission-step | grant-revoke-step
            | copy-step | paste-step | set-location-step | verify-browser-step | add-media-step
            | take-screenshot-step | compare-screenshot-step | dump-tree-step | save-logs-step
@@ -437,7 +437,7 @@ The first matching row wins.
 | `clear` followed by a bare `WORD` | `recipe-call-step` (a recipe whose name starts with "clear") |
 | `clear` otherwise | `clear-step` |
 | `clear app data` | `clear-data-step` |
-| `close`, `restart`, `kill`, `go back`, `shake`, `pause`, `log`, `rotate` | the step of the same name |
+| `close`, `restart`, `kill`, `go back`, `press enter`, `shake`, `pause`, `log`, `rotate` | the step of the same name |
 | `allow`, `deny`, `allow permission`, `deny permission` | `permission-step` |
 | `grant`, `revoke`, `grant all permissions`, `revoke all permissions` | `grant-revoke-step` |
 | `copy`, `paste`, `set location`, `verify external browser`, `add media` | the step of the same name |
@@ -734,6 +734,7 @@ restart-step    = "restart" , fillers , [ "app" ] ;
 kill-step       = "kill" , fillers , [ "app" ] ;
 clear-data-step = "clear app data" ;
 go-back-step    = "go back" ;
+press-enter-step = "press enter" ;                  (* the keyboard action key on the focused text field *)
 shake-step      = "shake" ;
 pause-step      = "pause" ;
 log-step        = "log" , [ STRING ] ;
@@ -777,6 +778,7 @@ test "app lifecycle"
   close "Dialog"
   close
   go back
+  press enter
   shake
   pause
   log "checkpoint reached"
@@ -1178,8 +1180,8 @@ bound to parameter names by position into a flat variable map; there is no per-r
 without complaint and yield empty values: `use`, `recipe`, `test` or `composite` without a name; `if`
 without a condition; a missing selector (`tap`); `store` without a name; `log` without a message; a
 `with examples from` without a file name; a `recipe` parameter list that is never closed (it swallows the
-rest of the file); unexpected tokens at file level and inside `composite` bodies; `before each` /
-`after each` without `test` (the body is dropped). Inconsistent indentation does not raise an error
+rest of the file); unexpected tokens at file level and inside `composite` bodies;
+Inconsistent indentation does not raise an error
 either: an over-indented line becomes a recipe call named `<indent> ...` and a stray dedent can end a
 block early.
 
@@ -1203,7 +1205,6 @@ The grammar above follows the parser.
 |---|---|---|
 | `type <email> into "Email"`, `see <expected>` (unquoted placeholders in Recipes and Data-driven pages) | lexical error: "unquoted placeholder" | `type "<email>" into "Email"` |
 | `log in as "u" with "p"` as a recipe call (Recipes and Hooks pages) | `log` is a keyword: parsed as `log` plus a call named `as <arg> with <arg>` | name recipes so the first word is not a keyword (`sign in as`) |
-| `before each` / `after each` (Hooks and Dictionary pages) | accepted, but the hook body is silently discarded | `before each test` / `after each test` |
 | `tap the "Login" button` "is equivalent to" `tap "Login"` (Dictionary, Filler Words) | trailing `button` / `field` is only consumed by `type`, `see` and `don't see`; after `tap` it becomes a stray recipe call | `tap "Login"` |
 | `see 3 "Item"` (Syntax, Assertions) | no count is parsed; an empty assertion plus a recipe call `3 <arg>` | `see exactly 3 "Item"` |
 | `tap <ElevatedButton>` (Syntax, Selectors table) | lexical error (unquoted `<`) | `tap ElevatedButton` |

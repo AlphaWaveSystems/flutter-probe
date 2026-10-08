@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-10-08
+
+### Added
+- **New step `press enter`:** presses the keyboard action key (done / go / search / send / next) on the focused
+  text field; warns when no field has focus. `probe migrate maestro` converts `pressKey: Enter` to it (it emitted
+  `press key "Enter"`, which does not exist). Other `pressKey` values (home, volume, ...) become a `# TODO` comment.
+  It is a compound keyword, so recipes whose names start with `press` or `submit` are unaffected.
+
+### Fixed
+- **`before each` / `after each` without `test`** (what the Hooks and Dictionary pages show) kept the keyword but
+  silently dropped the hook body. They are now the same hook as `before each test` / `after each test`.
+- **`probe migrate maestro` now warns when a `runFlow` target is outside the migrate root** (it was never converted, so
+  the generated `use` pointed at a file that does not exist). Migrate the parent directory that holds both flows and
+  helpers to convert them together.
+
 ## [0.16.6] - 2026-10-07
 
 ### Fixed

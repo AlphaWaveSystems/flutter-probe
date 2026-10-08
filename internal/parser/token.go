@@ -34,9 +34,10 @@ const (
 	TOKEN_WAIT
 	TOKEN_SWIPE
 	TOKEN_SCROLL
-	TOKEN_GO_BACK    // "go back"
-	TOKEN_LONG_PRESS // "long press"
-	TOKEN_DOUBLE_TAP // "double tap"
+	TOKEN_GO_BACK     // "go back"
+	TOKEN_PRESS_ENTER // "press enter" (compound)
+	TOKEN_LONG_PRESS  // "long press"
+	TOKEN_DOUBLE_TAP  // "double tap"
 	TOKEN_CLEAR
 	TOKEN_CLOSE
 	TOKEN_DRAG
@@ -102,9 +103,9 @@ const (
 	TOKEN_SECOND
 
 	// Extras
-	TOKEN_COLON  // :
-	TOKEN_HASH   // inline comment #
-	TOKEN_DART   // "dart" after run
+	TOKEN_COLON // :
+	TOKEN_HASH  // inline comment #
+	TOKEN_DART  // "dart" after run
 	TOKEN_RUN
 	TOKEN_GET
 	TOKEN_POST
@@ -141,18 +142,18 @@ const (
 	TOKEN_ALL        // "all"
 
 	// New E2E commands (v0.4.0)
-	TOKEN_KILL            // "kill"
-	TOKEN_COPY            // "copy"
-	TOKEN_PASTE           // "paste"
-	TOKEN_SET_LOCATION    // compound: "set location"
-	TOKEN_VERIFY_BROWSER  // compound: "verify external browser"
-	TOKEN_CALL            // "call"
+	TOKEN_KILL           // "kill"
+	TOKEN_COPY           // "copy"
+	TOKEN_PASTE          // "paste"
+	TOKEN_SET_LOCATION   // compound: "set location"
+	TOKEN_VERIFY_BROWSER // compound: "verify external browser"
+	TOKEN_CALL           // "call"
 
 	// Relational selectors (v0.5.7)
-	TOKEN_BELOW  // "below"
-	TOKEN_ABOVE  // "above"
-	TOKEN_LEFT   // "left"
-	TOKEN_RIGHT  // "right"
+	TOKEN_BELOW // "below"
+	TOKEN_ABOVE // "above"
+	TOKEN_LEFT  // "left"
+	TOKEN_RIGHT // "right"
 
 	// New keywords (v0.5.7)
 	TOKEN_FOCUSED    // "focused" — state check in see
@@ -197,119 +198,119 @@ func (t Token) String() string {
 
 // keywords maps lowercase words to token types.
 var keywords = map[string]TokenType{
-	"test":         TOKEN_TEST,
-	"recipe":       TOKEN_RECIPE,
-	"use":          TOKEN_USE,
-	"before":       TOKEN_BEFORE,
-	"after":        TOKEN_AFTER,
-	"on":           TOKEN_ON_KW,
-	"open":         TOKEN_OPEN,
-	"tap":          TOKEN_TAP,
-	"type":         TOKEN_TYPE,
-	"see":          TOKEN_SEE,
-	"assert":       TOKEN_ASSERT,
-	"wait":         TOKEN_WAIT,
-	"swipe":        TOKEN_SWIPE,
-	"scroll":       TOKEN_SCROLL,
-	"clear":        TOKEN_CLEAR,
-	"close":        TOKEN_CLOSE,
-	"drag":         TOKEN_DRAG,
-	"pinch":        TOKEN_PINCH,
-	"rotate":       TOKEN_ROTATE,
-	"toggle":       TOKEN_TOGGLE,
-	"shake":        TOKEN_SHAKE,
-	"press":        TOKEN_PRESS,
-	"if":           TOKEN_IF,
-	"otherwise":    TOKEN_OTHERWISE,
+	"test":      TOKEN_TEST,
+	"recipe":    TOKEN_RECIPE,
+	"use":       TOKEN_USE,
+	"before":    TOKEN_BEFORE,
+	"after":     TOKEN_AFTER,
+	"on":        TOKEN_ON_KW,
+	"open":      TOKEN_OPEN,
+	"tap":       TOKEN_TAP,
+	"type":      TOKEN_TYPE,
+	"see":       TOKEN_SEE,
+	"assert":    TOKEN_ASSERT,
+	"wait":      TOKEN_WAIT,
+	"swipe":     TOKEN_SWIPE,
+	"scroll":    TOKEN_SCROLL,
+	"clear":     TOKEN_CLEAR,
+	"close":     TOKEN_CLOSE,
+	"drag":      TOKEN_DRAG,
+	"pinch":     TOKEN_PINCH,
+	"rotate":    TOKEN_ROTATE,
+	"toggle":    TOKEN_TOGGLE,
+	"shake":     TOKEN_SHAKE,
+	"press":     TOKEN_PRESS,
+	"if":        TOKEN_IF,
+	"otherwise": TOKEN_OTHERWISE,
 	// "else" is accepted as an alias for "otherwise" (PT-02(d)): before this,
 	// an "else" line lexed as a plain identifier, was silently treated as an
 	// unknown recipe call, and its body ran unconditionally as a sibling step
 	// of the "if" instead of being gated by it — the exact opposite of what
 	// the test author intended, with no error anywhere.
-	"else": TOKEN_OTHERWISE,
-	"repeat":       TOKEN_REPEAT,
-	"retry":        TOKEN_RETRY,
-	"times":        TOKEN_TIMES,
-	"optional":     TOKEN_OPTIONAL,
-	"for":          TOKEN_FOR_KW,
-	"each":         TOKEN_EACH_KW,
-	"when":         TOKEN_WHEN,
-	"respond":      TOKEN_RESPOND,
-	"the":          TOKEN_THE,
-	"a":            TOKEN_A,
-	"an":           TOKEN_AN,
-	"in":           TOKEN_IN,
-	"into":         TOKEN_INTO,
-	"at":           TOKEN_AT,
-	"of":           TOKEN_OF,
-	"to":           TOKEN_TO,
-	"from":         TOKEN_FROM,
-	"is":           TOKEN_IS,
-	"are":          TOKEN_ARE,
-	"that":         TOKEN_THAT,
-	"this":         TOKEN_THIS,
-	"it":           TOKEN_IT,
-	"with":         TOKEN_WITH,
-	"as":           TOKEN_AS,
-	"and":          TOKEN_AND,
-	"until":        TOKEN_UNTIL,
-	"appears":      TOKEN_APPEARS,
-	"disappears":   TOKEN_DISAPPEARS,
-	"enabled":      TOKEN_ENABLED,
-	"disabled":     TOKEN_DISABLED,
-	"checked":      TOKEN_CHECKED,
-	"contains":     TOKEN_CONTAINS,
-	"exactly":      TOKEN_EXACTLY,
-	"button":       TOKEN_BUTTON,
-	"field":        TOKEN_FIELD,
-	"app":          TOKEN_APP,
-	"page":         TOKEN_PAGE,
-	"network":      TOKEN_NETWORK,
-	"idle":         TOKEN_IDLE,
-	"load":         TOKEN_LOAD,
-	"seconds":      TOKEN_SECONDS,
-	"second":       TOKEN_SECOND,
-	"dart":         TOKEN_DART,
-	"run":          TOKEN_RUN,
-	"get":          TOKEN_GET,
-	"post":         TOKEN_POST,
-	"put":          TOKEN_PUT,
-	"delete":       TOKEN_DELETE,
-	"body":         TOKEN_BODY,
-	"examples":     TOKEN_EXAMPLES,
-	"matching":     TOKEN_MATCHING,
-	"between":      TOKEN_BETWEEN,
-	"take":         TOKEN_TAKE,
-	"compare":      TOKEN_COMPARE,
-	"screenshot":   TOKEN_SCREENSHOT,
-	"called":       TOKEN_CALLED,
-	"dump":         TOKEN_DUMP,
-	"widget":       TOKEN_WIDGET,
-	"tree":         TOKEN_TREE,
-	"save":         TOKEN_SAVE,
-	"device":       TOKEN_DEVICE,
-	"logs":         TOKEN_LOGS,
-	"pause":        TOKEN_PAUSE,
-	"log":          TOKEN_LOG,
-	"back":         TOKEN_BACK,
-	"home":         TOKEN_HOME,
-	"failure":      TOKEN_FAILURE,
-	"restart":      TOKEN_RESTART,
-	"allow":        TOKEN_ALLOW,
-	"deny":         TOKEN_DENY,
-	"grant":        TOKEN_GRANT,
-	"revoke":       TOKEN_REVOKE,
-	"permission":   TOKEN_PERMISSION,
-	"permissions":  TOKEN_PERMISSION,
-	"all":          TOKEN_ALL,
-	"kill":         TOKEN_KILL,
-	"copy":         TOKEN_COPY,
-	"paste":        TOKEN_PASTE,
-	"call":         TOKEN_CALL,
-	"verify":       TOKEN_IDENT,
-	"set":          TOKEN_IDENT,
-	"location":     TOKEN_IDENT,
-	"clipboard":    TOKEN_IDENT,
+	"else":        TOKEN_OTHERWISE,
+	"repeat":      TOKEN_REPEAT,
+	"retry":       TOKEN_RETRY,
+	"times":       TOKEN_TIMES,
+	"optional":    TOKEN_OPTIONAL,
+	"for":         TOKEN_FOR_KW,
+	"each":        TOKEN_EACH_KW,
+	"when":        TOKEN_WHEN,
+	"respond":     TOKEN_RESPOND,
+	"the":         TOKEN_THE,
+	"a":           TOKEN_A,
+	"an":          TOKEN_AN,
+	"in":          TOKEN_IN,
+	"into":        TOKEN_INTO,
+	"at":          TOKEN_AT,
+	"of":          TOKEN_OF,
+	"to":          TOKEN_TO,
+	"from":        TOKEN_FROM,
+	"is":          TOKEN_IS,
+	"are":         TOKEN_ARE,
+	"that":        TOKEN_THAT,
+	"this":        TOKEN_THIS,
+	"it":          TOKEN_IT,
+	"with":        TOKEN_WITH,
+	"as":          TOKEN_AS,
+	"and":         TOKEN_AND,
+	"until":       TOKEN_UNTIL,
+	"appears":     TOKEN_APPEARS,
+	"disappears":  TOKEN_DISAPPEARS,
+	"enabled":     TOKEN_ENABLED,
+	"disabled":    TOKEN_DISABLED,
+	"checked":     TOKEN_CHECKED,
+	"contains":    TOKEN_CONTAINS,
+	"exactly":     TOKEN_EXACTLY,
+	"button":      TOKEN_BUTTON,
+	"field":       TOKEN_FIELD,
+	"app":         TOKEN_APP,
+	"page":        TOKEN_PAGE,
+	"network":     TOKEN_NETWORK,
+	"idle":        TOKEN_IDLE,
+	"load":        TOKEN_LOAD,
+	"seconds":     TOKEN_SECONDS,
+	"second":      TOKEN_SECOND,
+	"dart":        TOKEN_DART,
+	"run":         TOKEN_RUN,
+	"get":         TOKEN_GET,
+	"post":        TOKEN_POST,
+	"put":         TOKEN_PUT,
+	"delete":      TOKEN_DELETE,
+	"body":        TOKEN_BODY,
+	"examples":    TOKEN_EXAMPLES,
+	"matching":    TOKEN_MATCHING,
+	"between":     TOKEN_BETWEEN,
+	"take":        TOKEN_TAKE,
+	"compare":     TOKEN_COMPARE,
+	"screenshot":  TOKEN_SCREENSHOT,
+	"called":      TOKEN_CALLED,
+	"dump":        TOKEN_DUMP,
+	"widget":      TOKEN_WIDGET,
+	"tree":        TOKEN_TREE,
+	"save":        TOKEN_SAVE,
+	"device":      TOKEN_DEVICE,
+	"logs":        TOKEN_LOGS,
+	"pause":       TOKEN_PAUSE,
+	"log":         TOKEN_LOG,
+	"back":        TOKEN_BACK,
+	"home":        TOKEN_HOME,
+	"failure":     TOKEN_FAILURE,
+	"restart":     TOKEN_RESTART,
+	"allow":       TOKEN_ALLOW,
+	"deny":        TOKEN_DENY,
+	"grant":       TOKEN_GRANT,
+	"revoke":      TOKEN_REVOKE,
+	"permission":  TOKEN_PERMISSION,
+	"permissions": TOKEN_PERMISSION,
+	"all":         TOKEN_ALL,
+	"kill":        TOKEN_KILL,
+	"copy":        TOKEN_COPY,
+	"paste":       TOKEN_PASTE,
+	"call":        TOKEN_CALL,
+	"verify":      TOKEN_IDENT,
+	"set":         TOKEN_IDENT,
+	"location":    TOKEN_IDENT,
+	"clipboard":   TOKEN_IDENT,
 
 	// Relational / new keywords (v0.5.7)
 	"below":      TOKEN_BELOW,

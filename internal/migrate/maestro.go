@@ -27,6 +27,8 @@ type MaestroStep map[string]interface{}
 type converter struct {
 	baseDir string   // directory of the source YAML; "" when converting a string
 	uses    []string // `use` paths (relative to the output file) for runFlow targets
+	// converted holds the absolute paths of every YAML converted in this run; nil = unknown.
+	converted map[string]bool
 }
 
 // Options tunes ConvertFileWith.
@@ -34,6 +36,9 @@ type Options struct {
 	// RecipeFiles holds the absolute paths of YAML files that other flows pull in with
 	// `runFlow`; they are converted to recipe files instead of tests.
 	RecipeFiles map[string]bool
+	// Converted holds the absolute paths of every YAML file being converted in this
+	// run; a runFlow target outside it gets a warning (it will not exist as .probe).
+	Converted map[string]bool
 }
 
 // recipeNameFor is the recipe name a helper flow file gets: "flow <file name>".
@@ -56,7 +61,7 @@ func ConvertFileWith(inputPath, outputPath string, opts Options) (string, error)
 	}
 
 	abs, _ := filepath.Abs(inputPath)
-	c := &converter{baseDir: filepath.Dir(inputPath)}
+	c := &converter{baseDir: filepath.Dir(inputPath), converted: opts.Converted}
 	name := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
 	probe, warnings, err := c.convertDoc(string(src), name, opts.RecipeFiles[abs])
 	if err != nil {
@@ -476,10 +481,13 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			switch strings.ToLower(key) {
 			case "back":
 				return "go back", ""
-			case "home":
-				return "press the home button", ""
+			case "enter", "return":
+				return "press enter", ""
 			default:
-				return fmt.Sprintf("press key %s", quoteVal(key)), ""
+				// ProbeScript has no other key steps; a made-up step would fail as an
+				// unknown recipe call at runtime.
+				return fmt.Sprintf("# TODO: pressKey %s has no ProbeScript equivalent (only `go back` and `press enter` exist)", key),
+					fmt.Sprintf("pressKey %s was not converted", key)
 			}
 
 		case "hideKeyboard", "closeKeyboard":
@@ -508,6 +516,14 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			if c.baseDir == "" {
 				return fmt.Sprintf("# TODO: runFlow %s — convert that flow to a recipe (%q) and `use` it", path, recipe),
 					fmt.Sprintf("runFlow %s was not converted (no source directory)", path)
+			}
+			if c.converted != nil {
+				target, _ := filepath.Abs(filepath.Join(c.baseDir, path))
+				if !c.converted[target] {
+					c.uses = append(c.uses, use)
+					return "# TODO: runFlow " + path + " is outside the migrate root and was not converted\n" + recipe,
+						fmt.Sprintf("runFlow target %s is outside the migrate root and was not converted — migrate the parent directory (it holds both flows and helpers), or convert that file by hand", path)
+				}
 			}
 			known := false
 			for _, u := range c.uses {

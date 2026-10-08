@@ -173,6 +173,7 @@ take screenshot "checkout_page"    # save PNG to screenshots folder
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
+press enter                        # keyboard action key on the focused field (Maestro pressKey: Enter)
 go back                            # pop the current route (no-op + warning at the root; use "close the app" to exit)
 rotate landscape                   # rotate device
 shake                              # simulate device shake gesture

@@ -1251,6 +1251,25 @@ class ProbeExecutor {
           _tapWarning = 'go back: already at the root route, nothing to go back to; '
               'the app was not closed (use "close the app" to leave it)';
         }
+      case 'press_enter':
+        // The keyboard's action key (done / go / search / send / next) on the
+        // focused text field — what Maestro's `pressKey: Enter` does.
+        final focus = FocusManager.instance.primaryFocus?.context;
+        EditableTextState? editable;
+        if (focus != null) {
+          if (focus is StatefulElement && focus.state is EditableTextState) {
+            editable = focus.state as EditableTextState;
+          } else {
+            editable = focus.findAncestorStateOfType<EditableTextState>();
+          }
+        }
+        if (editable == null) {
+          _tapWarning = 'press enter: no text field has focus, nothing was submitted';
+        } else {
+          final w = editable.widget;
+          editable.performAction(w.textInputAction ??
+              (w.maxLines == 1 ? TextInputAction.done : TextInputAction.newline));
+        }
       case 'close':
         // PT-12: `close keyboard`/`close the app` (parser.VerbClose) both
         // dispatch here with action='close' — this case never existed, so

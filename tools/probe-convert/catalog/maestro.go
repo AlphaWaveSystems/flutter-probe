@@ -55,9 +55,10 @@ ListValue    = "[" { Step "," } "]" .
 			// Navigation
 			{ID: "maestro.back", Name: "back", Category: CatNavigation, Level: Full,
 				EBNF: `"back"`, Example: `- back`, ProbeTemplate: "go back", ProbeExample: "go back"},
-			{ID: "maestro.pressKey", Name: "pressKey", Category: CatNavigation, Level: Full,
-				EBNF: `"pressKey:" ( "back" | "home" | STRING )`, Example: `- pressKey: "back"`,
-				ProbeTemplate: "go back", ProbeExample: "go back"},
+			{ID: "maestro.pressKey", Name: "pressKey", Category: CatNavigation, Level: Partial,
+				EBNF: `"pressKey:" ( "back" | "enter" | STRING )`, Example: `- pressKey: "Enter"`,
+				ProbeTemplate: "press enter", ProbeExample: "press enter",
+				Notes: "back becomes go back and Enter becomes press enter; other keys (home, volume, ...) have no ProbeScript step and become a TODO comment"},
 			{ID: "maestro.hideKeyboard", Name: "hideKeyboard", Category: CatNavigation, Level: Full,
 				EBNF: `"hideKeyboard" | "closeKeyboard"`, Example: `- hideKeyboard`,
 				ProbeTemplate: "close keyboard", ProbeExample: "close keyboard"},
