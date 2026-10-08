@@ -223,10 +223,15 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		}
 
 		if dataPath != "" {
+			// The preferences daemon holds NSUserDefaults in memory and writes them back
+			// later: drop it before and after deleting the files, or the app relaunches
+			// with its old preferences (an "already onboarded" flag survived a clear).
+			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial)
 			for _, subdir := range []string{"Documents", "Library", "tmp"} {
 				target := dataPath + "/" + subdir
 				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-rf", target)
 			}
+			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial)
 			fmt.Printf("    \033[32m✓\033[0m  Cleared data container: %s\n", dataPath)
 		}
 

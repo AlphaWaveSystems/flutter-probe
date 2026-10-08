@@ -145,6 +145,16 @@ func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte
 	return s.run(ctx, cmdArgs...)
 }
 
+// ResetPrefsDaemon kills the simulator's preferences daemon (cfprefsd). It keeps every app's
+// NSUserDefaults (shared_preferences on iOS) in memory and writes them back to the app
+// container on its own schedule, so deleting the files alone does not reset an app: the daemon
+// serves the old values to the relaunched app and can even re-create the plist. launchd restarts
+// it on demand with an empty cache. Best effort; the error is returned for logging only.
+func (s *SimCtl) ResetPrefsDaemon(ctx context.Context, udid string) error {
+	_, err := s.Spawn(ctx, udid, "launchctl", "kill", "SIGKILL", "system/com.apple.cfprefsd.xpc.daemon")
+	return err
+}
+
 // ReadToken reads the ProbeAgent token. It first tries the token file written
 // by the agent (checking both the app container path and the legacy device-level
 // path), then falls back to polling the simulator's system log via `log show`.

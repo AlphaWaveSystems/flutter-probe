@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.19.1 - 2026-10-08
+
+- No agent change (iOS `clear app data` fix in the CLI); version aligned.
+
 ## 0.19.0 - 2026-10-08
 
 - Fixed: text/id lookups ignore widgets laid out entirely off screen and elements without a render object (mid-rebuild); `screenshot` retries while a boundary still needs paint.
