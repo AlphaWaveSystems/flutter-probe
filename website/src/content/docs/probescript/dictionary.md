@@ -20,6 +20,7 @@ Commands that interact with the app's UI.
 | `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
 | `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |
+| `press enter` | `press enter` | Press the keyboard action key (done / go / search / send) on the focused text field; warns if no field has focus |
 | `go back` | `go back` | Pop the current route. At the root route it does nothing and warns (it never exits the app; use `close the app`) |
 | `open` | `open the app` | Launch the app (CLI-side) and reconnect |
 | `close` | `close the app` | Close the app |

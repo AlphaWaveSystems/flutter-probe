@@ -445,6 +445,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "close the app"
 		case parser.VerbGoBack:
 			return "go back"
+		case parser.VerbPressEnter:
+			return "press enter"
 		case parser.VerbTakeShot:
 			return fmt.Sprintf("screenshot %q", s.Name)
 		case parser.VerbCompareShot:
@@ -660,6 +662,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbGoBack:
 		return e.client.DeviceAction(ctx, "go_back", "")
+
+	case parser.VerbPressEnter:
+		return e.client.DeviceAction(ctx, "press_enter", "")
 
 	case parser.VerbClose:
 		return e.client.DeviceAction(ctx, "close", a.Name)

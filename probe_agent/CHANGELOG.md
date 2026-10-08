@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.16.7 - 2026-10-08
+
+- Added: device action `press_enter` (keyboard action key on the focused text field; warns when nothing has focus).
+
 ## 0.16.6 - 2026-10-07
 
 - Fixed: a tap whose point is received by nothing (clipped, off screen, under the keyboard) produces the covered

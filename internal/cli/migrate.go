@@ -40,6 +40,11 @@ var migrateMaestroCmd = &cobra.Command{
 		}
 
 		recipeFiles := migrate.RunFlowTargets(yamlFiles)
+		convertedSet := map[string]bool{}
+		for _, yf := range yamlFiles {
+			abs, _ := filepath.Abs(yf.Path)
+			convertedSet[abs] = true
+		}
 		converted := 0
 		for _, yf := range yamlFiles {
 			outPath := ""
@@ -48,7 +53,7 @@ var migrateMaestroCmd = &cobra.Command{
 				outPath = filepath.Join(outputDir, yf.RelDir, base+".probe")
 			}
 
-			result, err := migrate.ConvertFileWith(yf.Path, outPath, migrate.Options{RecipeFiles: recipeFiles})
+			result, err := migrate.ConvertFileWith(yf.Path, outPath, migrate.Options{RecipeFiles: recipeFiles, Converted: convertedSet})
 			if err != nil {
 				fmt.Printf("  \033[31m✗\033[0m  %s — %s\n", filepath.Base(yf.Path), err)
 				continue

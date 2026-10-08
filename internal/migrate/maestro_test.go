@@ -408,3 +408,87 @@ func TestConvertYAML_PlainAlternationBecomesWaitAny(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertYAML_PressKey(t *testing.T) {
+	probe, _, err := migrate.ConvertYAML("- pressKey: Enter\n- pressKey: Back\n- pressKey: Home\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(probe, "press enter") || !strings.Contains(probe, "go back") {
+		t.Errorf("Enter and Back must convert:\n%s", probe)
+	}
+	if strings.Contains(probe, "press key") || strings.Contains(probe, "press the home") {
+		t.Errorf("no made-up steps may remain:\n%s", probe)
+	}
+	if !strings.Contains(probe, "# TODO: pressKey Home") {
+		t.Errorf("unsupported keys need a TODO:\n%s", probe)
+	}
+}
+
+func TestConvertFile_RunFlowOutsideRootWarns(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "flows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	flow := filepath.Join(dir, "flows", "a.yaml")
+	if err := os.WriteFile(flow, []byte("- runFlow: ../helpers/login.yaml\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	abs, _ := filepath.Abs(flow)
+	out := filepath.Join(dir, "out", "a.probe")
+	_, err := migrate.ConvertFileWith(flow, out, migrate.Options{Converted: map[string]bool{abs: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(out)
+	if !strings.Contains(string(b), "outside the migrate root") {
+		t.Errorf("expected a TODO about the helper outside the root:\n%s", b)
+	}
+}
+
+func TestConvertYAML_ConditionalRunFlow(t *testing.T) {
+	probe, _, err := migrate.ConvertYAML(`- runFlow:
+    when:
+      visible: "Login to X"
+    commands:
+      - tapOn: "Login"
+- runFlow:
+    when:
+      notVisible: "Home"
+    commands:
+      - tapOn: "Skip"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(probe, "if \"Login to X\" appears\n    tap on \"Login\"") {
+		t.Errorf("visible condition should become an if block:\n%s", probe)
+	}
+	if !strings.Contains(probe, "if \"Home\" appears") || !strings.Contains(probe, "otherwise\n    tap on \"Skip\"") {
+		t.Errorf("notVisible should become if/otherwise:\n%s", probe)
+	}
+	if _, err := parser.ParseFile(probe); err != nil {
+		t.Errorf("generated file must parse: %v\n%s", err, probe)
+	}
+}
+
+func TestConvertYAML_LiteralRegexForms(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML(`- assertVisible: ".*Professional Profile.*"
+- assertVisible: "Comments (1)"
+- extendedWaitUntil:
+    visible: "No offers at this time\\.|Subscribe Now"
+- assertVisible: "Joined .*!"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`see "Professional Profile"`, `see "Comments (1)"`,
+		`wait until any of "No offers at this time.", "Subscribe Now" appears`} {
+		if !strings.Contains(probe, want) {
+			t.Errorf("missing %q in:\n%s", want, probe)
+		}
+	}
+	if strings.Count(probe, "# TODO") != 1 || len(warns) != 1 {
+		t.Errorf("only the mid-wildcard selector should keep a TODO, got %d TODO, warns %v:\n%s", strings.Count(probe, "# TODO"), warns, probe)
+	}
+}

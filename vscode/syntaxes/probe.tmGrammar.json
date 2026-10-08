@@ -40,7 +40,7 @@
       "name": "keyword.control.hook.probe"
     },
     "action-keyword": {
-      "match": "\\b(open|tap|type|swipe|scroll|go back|long press|double tap|clear|close|drag|rotate|toggle|shake|press|take|compare|dump|save|pause|log|add media)\\b",
+      "match": "\\b(open|tap|type|swipe|scroll|go back|press enter|long press|double tap|clear|close|drag|rotate|toggle|shake|press|take|compare|dump|save|pause|log|add media)\\b",
       "name": "keyword.operator.action.probe"
     },
     "assert-keyword": {

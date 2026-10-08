@@ -27,6 +27,8 @@ type MaestroStep map[string]interface{}
 type converter struct {
 	baseDir string   // directory of the source YAML; "" when converting a string
 	uses    []string // `use` paths (relative to the output file) for runFlow targets
+	// converted holds the absolute paths of every YAML converted in this run; nil = unknown.
+	converted map[string]bool
 }
 
 // Options tunes ConvertFileWith.
@@ -34,6 +36,9 @@ type Options struct {
 	// RecipeFiles holds the absolute paths of YAML files that other flows pull in with
 	// `runFlow`; they are converted to recipe files instead of tests.
 	RecipeFiles map[string]bool
+	// Converted holds the absolute paths of every YAML file being converted in this
+	// run; a runFlow target outside it gets a warning (it will not exist as .probe).
+	Converted map[string]bool
 }
 
 // recipeNameFor is the recipe name a helper flow file gets: "flow <file name>".
@@ -56,7 +61,7 @@ func ConvertFileWith(inputPath, outputPath string, opts Options) (string, error)
 	}
 
 	abs, _ := filepath.Abs(inputPath)
-	c := &converter{baseDir: filepath.Dir(inputPath)}
+	c := &converter{baseDir: filepath.Dir(inputPath), converted: opts.Converted}
 	name := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
 	probe, warnings, err := c.convertDoc(string(src), name, opts.RecipeFiles[abs])
 	if err != nil {
@@ -290,6 +295,7 @@ func (c *converter) convertNestedSteps(commands interface{}) (string, []string) 
 
 // convertStep converts one Maestro step map to a ProbeScript line.
 func (c *converter) convertStep(step MaestroStep) (string, string) {
+	normalizeStepText(step)
 	line, warn := c.convertStepInner(step)
 	if pat := regexSelector(step); pat != "" && !isPlainWaitAlternation(step) {
 		note := fmt.Sprintf("# TODO: Maestro matches %q as a regular expression; ProbeScript matches text literally here — rewrite it to one literal text (or use `see ... matching`)", pat)
@@ -303,46 +309,156 @@ func (c *converter) convertStep(step MaestroStep) (string, string) {
 	return line, warn
 }
 
-// regexSelector returns the text of a tapOn / assertVisible / assertNotVisible /
-// extendedWaitUntil step when it uses regex syntax (alternation, wildcards,
-// classes), which Maestro honours and ProbeScript text selectors do not.
-func regexSelector(step MaestroStep) string {
+// convertConditionalRunFlow converts `runFlow: {when: {visible|notVisible: "X"},
+// commands: [...]}` (or `file:` instead of `commands:`) into an `if "X" appears`
+// block (`otherwise` for notVisible). Other conditions (platform, script) stay TODOs.
+func (c *converter) convertConditionalRunFlow(mp map[string]interface{}) (string, string) {
+	when, _ := mp["when"].(map[string]interface{})
+	var body string
+	var warns []string
+	if _, hasFile := mp["file"]; hasFile {
+		inner, w := c.convertStepInner(MaestroStep{"runFlow": map[string]interface{}{"file": mp["file"]}})
+		body, warns = "  "+strings.ReplaceAll(inner, "\n", "\n  "), appendNonEmpty(warns, w)
+	} else {
+		var ws []string
+		body, ws = c.convertNestedSteps(mp["commands"])
+		warns = append(warns, ws...)
+	}
+	if body == "" {
+		body = "  log \"nothing to do\""
+	}
+	for key, neg := range map[string]bool{"visible": false, "notVisible": true} {
+		raw, ok := when[key].(string)
+		if !ok {
+			continue
+		}
+		text, lit := literalText(raw)
+		if !lit {
+			return fmt.Sprintf("# TODO: runFlow when %s %q uses a regular expression — rewrite the condition and inline the commands by hand", key, raw),
+				"conditional runFlow with a regex condition was not converted"
+		}
+		var line string
+		if !neg {
+			line = fmt.Sprintf("if %q appears\n%s", text, body)
+		} else {
+			line = fmt.Sprintf("if %q appears\n  log %q\notherwise\n%s", text, "skipped: "+text+" is visible", body)
+		}
+		return line, strings.Join(warns, "; ")
+	}
+	return "# TODO: runFlow with a platform/script condition is not converted — inline the steps by hand",
+		"conditional runFlow was not converted (unsupported condition)"
+}
+
+func appendNonEmpty(s []string, v string) []string {
+	if v != "" {
+		s = append(s, v)
+	}
+	return s
+}
+
+// literalText turns a Maestro text selector (a regular expression) into the
+// literal text it stands for when it has no real regex semantics: escaped
+// characters are unescaped (`time\\.` -> `time.`), a leading/trailing `.*` is
+// dropped (ProbeScript text selectors already match substrings), and parentheses
+// are literal. ok is false for anything else (alternation, classes, quantifiers,
+// a wildcard in the middle).
+func literalText(s string) (string, bool) {
+	s = strings.TrimPrefix(s, ".*")
+	s = strings.TrimSuffix(s, ".*")
+	var sb strings.Builder
+	rs := []rune(s)
+	for i := 0; i < len(rs); i++ {
+		switch r := rs[i]; r {
+		case '\\':
+			if i+1 >= len(rs) {
+				return "", false
+			}
+			i++
+			sb.WriteRune(rs[i])
+		case '|', '[', ']', '{', '}', '*', '+', '?', '^', '$':
+			return "", false
+		case '.':
+			if i+1 < len(rs) && (rs[i+1] == '*' || rs[i+1] == '+') {
+				return "", false
+			}
+			sb.WriteRune(r)
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String(), true
+}
+
+// stepText returns a pointer-like accessor to the selector text of a step that
+// carries one (tapOn / assertVisible / assertNotVisible text, extendedWaitUntil
+// visible / notVisible), plus a setter.
+func stepText(step MaestroStep) (text string, set func(string)) {
 	for key, val := range step {
-		var text string
 		switch key {
 		case "tapOn", "assertVisible", "assertNotVisible":
-			text, _ = val.(string)
+			if t, ok := val.(string); ok {
+				k := key
+				return t, func(n string) { step[k] = n }
+			}
 			if m, ok := val.(map[string]interface{}); ok {
-				text, _ = m["text"].(string)
+				if t, ok := m["text"].(string); ok {
+					return t, func(n string) { m["text"] = n }
+				}
 			}
 		case "extendedWaitUntil":
 			if m, ok := val.(map[string]interface{}); ok {
-				text, _ = m["visible"].(string)
-				if text == "" {
-					text, _ = m["notVisible"].(string)
+				for _, f := range []string{"visible", "notVisible"} {
+					if t, ok := m[f].(string); ok {
+						ff := f
+						return t, func(n string) { m[ff] = n }
+					}
 				}
 			}
 		}
-		if text != "" && (strings.ContainsAny(text, "|[]()\\") || strings.Contains(text, ".*") || strings.Contains(text, ".+")) {
-			return text
-		}
 	}
-	return ""
+	return "", nil
 }
 
-// plainAlternation splits "A|B|C" into its alternatives when every alternative is
-// plain text (no other regex syntax), else returns nil.
+// normalizeStepText rewrites a regex-looking selector to the literal text it
+// stands for, when there is one.
+func normalizeStepText(step MaestroStep) {
+	text, set := stepText(step)
+	if set == nil || text == "" || plainAlternation(text) != nil {
+		return
+	}
+	if lit, ok := literalText(text); ok && lit != text {
+		set(lit)
+	}
+}
+
+// regexSelector returns the selector text of a step when it still uses regex
+// syntax that cannot be reduced to a literal (alternation outside waits,
+// classes, quantifiers, a wildcard in the middle).
+func regexSelector(step MaestroStep) string {
+	text, _ := stepText(step)
+	if text == "" {
+		return ""
+	}
+	if _, ok := literalText(text); ok {
+		return ""
+	}
+	return text
+}
+
+// plainAlternation splits "A|B|C" into its alternatives when every alternative
+// reduces to literal text, else returns nil.
 func plainAlternation(s string) []string {
-	if !strings.Contains(s, "|") || strings.ContainsAny(s, "[]()\\*+?^$") || strings.Contains(s, ".*") {
+	if !strings.Contains(s, "|") {
 		return nil
 	}
 	var alts []string
 	for _, a := range strings.Split(s, "|") {
 		a = strings.TrimSpace(a)
-		if a == "" {
+		lit, ok := literalText(a)
+		if !ok || lit == "" {
 			return nil
 		}
-		alts = append(alts, a)
+		alts = append(alts, lit)
 	}
 	return alts
 }
@@ -476,10 +592,13 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			switch strings.ToLower(key) {
 			case "back":
 				return "go back", ""
-			case "home":
-				return "press the home button", ""
+			case "enter", "return":
+				return "press enter", ""
 			default:
-				return fmt.Sprintf("press key %s", quoteVal(key)), ""
+				// ProbeScript has no other key steps; a made-up step would fail as an
+				// unknown recipe call at runtime.
+				return fmt.Sprintf("# TODO: pressKey %s has no ProbeScript equivalent (only `go back` and `press enter` exist)", key),
+					fmt.Sprintf("pressKey %s was not converted", key)
 			}
 
 		case "hideKeyboard", "closeKeyboard":
@@ -498,6 +617,9 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			return "wait 1 seconds", ""
 
 		case "runFlow":
+			if mp, ok := val.(map[string]interface{}); ok && mp["when"] != nil {
+				return c.convertConditionalRunFlow(mp)
+			}
 			path := runFlowPath(val)
 			if path == "" {
 				return "# TODO: runFlow without a file (inline commands) is not converted — inline the steps by hand",
@@ -509,6 +631,14 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 				return fmt.Sprintf("# TODO: runFlow %s — convert that flow to a recipe (%q) and `use` it", path, recipe),
 					fmt.Sprintf("runFlow %s was not converted (no source directory)", path)
 			}
+			if c.converted != nil {
+				target, _ := filepath.Abs(filepath.Join(c.baseDir, path))
+				if !c.converted[target] {
+					c.uses = append(c.uses, use)
+					return "# TODO: runFlow " + path + " is outside the migrate root and was not converted\n" + recipe,
+						fmt.Sprintf("runFlow target %s is outside the migrate root and was not converted — migrate the parent directory (it holds both flows and helpers), or convert that file by hand", path)
+				}
+			}
 			known := false
 			for _, u := range c.uses {
 				if u == use {
@@ -519,8 +649,8 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 				c.uses = append(c.uses, use)
 			}
 			warn := ""
-			if m, ok := val.(map[string]interface{}); ok && (m["env"] != nil || m["when"] != nil) {
-				warn = fmt.Sprintf("runFlow %s has env/when options — they were dropped; review the call", path)
+			if m, ok := val.(map[string]interface{}); ok && m["env"] != nil {
+				warn = fmt.Sprintf("runFlow %s has env options — they were dropped; review the call", path)
 			}
 			return recipe, warn
 

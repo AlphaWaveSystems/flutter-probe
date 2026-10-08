@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-10-08
+
+### Added
+- **New step `press enter`:** presses the keyboard action key (done / go / search / send / next) on the focused
+  text field; warns when no field has focus. `probe migrate maestro` converts `pressKey: Enter` to it (it emitted
+  `press key "Enter"`, which does not exist). Other `pressKey` values (home, volume, ...) become a `# TODO` comment.
+  It is a compound keyword, so recipes whose names start with `press` or `submit` are unaffected.
+
+### Fixed
+- **`probe migrate maestro`, conditional `runFlow`:** `runFlow: {when: {visible: "X"}, commands: [...]}` becomes an
+  `if "X" appears` block, and `notVisible` becomes `if "X" appears` / `otherwise` with the commands (a `file:` target works
+  too). Conditions on platform or scripts, and regex conditions, stay `# TODO`.
+- **`probe migrate maestro`, regex selectors that mean a literal:** `.*TEXT.*` becomes `TEXT` (text selectors already
+  match substrings), escaped characters (`time\\.`) are unescaped, parentheses are literal, and plain alternations
+  with those forms become `wait until any of`. Only real regex syntax (a wildcard in the middle, classes,
+  quantifiers) keeps a `# TODO`.
+- **`before each` / `after each` without `test`** (what the Hooks and Dictionary pages show) kept the keyword but
+  silently dropped the hook body. They are now the same hook as `before each test` / `after each test`.
+- **`probe migrate maestro` now warns when a `runFlow` target is outside the migrate root** (it was never converted, so
+  the generated `use` pointed at a file that does not exist). Migrate the parent directory that holds both flows and
+  helpers to convert them together.
+
 ## [0.16.6] - 2026-10-07
 
 ### Fixed

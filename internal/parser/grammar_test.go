@@ -725,6 +725,7 @@ var grammarProductionExamples = []productionExample{
 	{production: "kill-step", src: testBody(`kill the app`, `kill`), want: repeat("action:kill", 2)},
 	{production: "clear-data-step", src: testBody(`clear app data`), want: []string{"action:clear_app_data"}},
 	{production: "go-back-step", src: testBody(`go back`), want: []string{"action:go_back"}},
+	{production: "press-enter-step", src: testBody(`press enter`), want: []string{"action:press_enter"}},
 	{production: "shake-step", src: testBody(`shake`), want: []string{"action:shake"}},
 	{production: "pause-step", src: testBody(`pause`), want: []string{"action:pause"}},
 	{production: "log-step", src: testBody(`log "checkpoint"`, `log`), want: repeat("action:log", 2)},
@@ -944,9 +945,9 @@ func TestGrammarPage_DocumentedDivergences(t *testing.T) {
 	t.Run("quoted placeholder is fine", func(t *testing.T) {
 		mustParse(t, testBody(`type "<email>" into "Email"`))
 	})
-	t.Run("before each without test drops the body", func(t *testing.T) {
-		prog := mustParse(t, "before each\n  tap \"a\"\n\ntest \"t\"\n  tap \"b\"\n")
-		if len(prog.Hooks) != 1 || len(prog.Hooks[0].Body) != 0 {
+	t.Run("before each / after each without test keep their body", func(t *testing.T) {
+		prog := mustParse(t, "before each\n  tap \"a\"\n\nafter each\n  tap \"c\"\n\ntest \"t\"\n  tap \"b\"\n")
+		if len(prog.Hooks) != 2 || len(prog.Hooks[0].Body) != 1 || len(prog.Hooks[1].Body) != 1 {
 			t.Fatalf("hooks = %+v", prog.Hooks)
 		}
 	})
