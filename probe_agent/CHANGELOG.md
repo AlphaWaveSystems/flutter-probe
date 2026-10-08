@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.16.8 - 2026-10-08
+
+- Fixed: `probe.see` applies the `pattern` parameter (`matching`); it was received and ignored.
+
 ## 0.16.7 - 2026-10-08
 
 - Added: device action `press_enter` (keyboard action key on the focused text field; warns when nothing has focus).

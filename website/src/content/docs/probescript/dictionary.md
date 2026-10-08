@@ -53,7 +53,7 @@ Commands that verify the state of the UI.
 | `see checked` | `see "Agree" is checked` | Assert checkbox/toggle is checked |
 | `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
-| `see matching` | `see "Email" matching ".*@.*"` | Assert widget text matches regex pattern |
+| `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so use an anchored pattern for exact text: `see "0 ml" matching "^0 ml$"` |
 
 State suffixes compose: `see "Field" is enabled contains "y" matching "z"` checks all three at once.
 

@@ -92,6 +92,7 @@ func init() {
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
+	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
 	// Device selection
@@ -256,6 +257,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Agent warnings (e.g. a tap whose target is covered by another widget) are
 	// successful calls the user should still hear about (FP-19).
 	probelink.SetWarningHandler(func(w string) { statusWarn(statusW, "%s", w) })
+	failOnWarning, _ := cmd.Flags().GetBool("fail-on-warning")
+	probelink.SetStrictWarnings(failOnWarning)
 
 	// Apply CLI overrides to config
 	if agentPort != 0 {

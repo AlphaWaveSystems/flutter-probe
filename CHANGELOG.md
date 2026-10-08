@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.8] - 2026-10-08
+
+### Fixed
+- **`see "X" matching "<regex>"` never checked the pattern:** the agent received it and only used it in the
+  not-found message, so the assertion passed whenever the text selector found something. It now requires that some
+  matched widget's text matches the regular expression (an invalid regex is an error). With text selectors matching
+  substrings, `see "0 ml" matching "^0 ml$"` is the exact-text form.
+
+### Added
+- **`probe test --fail-on-warning`:** agent warnings (a tap that did nothing, `press enter` with no focused field,
+  `go back` at the root) fail the step. Off by default.
+
+### Docs
+- Text selectors match substrings (`see "0 ml"` passes on "250 ml"); documented on the syntax, dictionary and grammar pages
+  with the exact-match forms.
+
 ## [0.16.7] - 2026-10-08
 
 ### Added

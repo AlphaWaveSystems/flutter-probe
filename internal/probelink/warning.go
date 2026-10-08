@@ -2,6 +2,7 @@ package probelink
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 )
 
@@ -19,23 +20,40 @@ func SetWarningHandler(f func(string)) {
 	warnMu.Unlock()
 }
 
+var strictWarnings bool
+
+// SetStrictWarnings makes agent warnings fail the call that produced them
+// (`probe test --fail-on-warning`): a tap that provably did nothing, a `press enter`
+// with no focused field, a `go back` at the root route. Off by default.
+func SetStrictWarnings(on bool) {
+	warnMu.Lock()
+	strictWarnings = on
+	warnMu.Unlock()
+}
+
 // reportWarning forwards a {"warning": "..."} field from an RPC result, if any.
-func reportWarning(raw json.RawMessage) {
+// It returns an error only in strict mode (see SetStrictWarnings).
+func reportWarning(raw json.RawMessage) error {
 	if len(raw) == 0 {
-		return
+		return nil
 	}
 	var r struct {
 		Warning string `json:"warning"`
 	}
 	if json.Unmarshal(raw, &r) != nil || r.Warning == "" {
-		return
+		return nil
 	}
 	warnMu.RLock()
 	f := warningSink
+	strict := strictWarnings
 	warnMu.RUnlock()
 	if f != nil {
 		f(r.Warning)
 	}
+	if strict {
+		return fmt.Errorf("agent warning treated as an error (--fail-on-warning): %s", r.Warning)
+	}
+	return nil
 }
 
 // emitWarning sends a CLI-side warning to the same sink as agent warnings.
