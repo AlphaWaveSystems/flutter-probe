@@ -6,7 +6,7 @@ import XCTest
 ///
 /// Secrets: `type` never echoes the text back in any response or log line.
 final class Driver {
-    static let version = "0.19.2"
+    static let version = "0.19.3"
 
     /// Processes that can present system UI. Only ones that are running are
     /// queried (asking an app that is not running for its UI would launch it).
@@ -193,8 +193,33 @@ final class Driver {
             return (200, ["ok": false, "error": "no button \"\(wanted)\" in the dialog", "buttons": d.buttonLabels, "title": d.title])
         }
         let label = button.label
+        let signature = d.buttonLabels
         button.tap()
+        if stillShowing(title: title, signature: signature, appID: body["app"] as? String) {
+            // The tap was reported by XCUITest but the dialog did not go away (seen with
+            // SpringBoard's "Open in <app>?" confirmation). Tap the button's centre point
+            // instead of asking the element, then check again.
+            if let again = find(title: title, appID: body["app"] as? String),
+               let b = match(wanted, in: again.buttons, by: { $0.label }) {
+                b.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            if stillShowing(title: title, signature: signature, appID: body["app"] as? String) {
+                return (200, ["ok": false, "error": "tapped \"\(label)\" but the dialog is still showing",
+                              "buttons": signature, "title": d.title])
+            }
+        }
         return (200, ["ok": true, "tapped": label])
+    }
+
+    /// True when a dialog with the same buttons is still on screen after a tap (polled
+    /// for up to ~1.2 s, since dialogs animate away).
+    private func stillShowing(title: String?, signature: [String], appID: String?) -> Bool {
+        let deadline = Date(timeIntervalSinceNow: 1.2)
+        repeat {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.2))
+            guard let d = find(title: title, appID: appID), d.buttonLabels == signature else { return false }
+        } while Date() < deadline
+        return true
     }
 
     func dismiss(_ body: [String: Any]) -> (Int, [String: Any]) {

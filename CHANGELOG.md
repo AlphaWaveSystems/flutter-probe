@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-10-08
+
+### Fixed
+- **A bare `scroll down` / `swipe` picks a scrollable that can scroll.** It chose the largest scrollable under the touch point, which
+  could be a `PageView` with `NeverScrollableScrollPhysics` (the biggest scrollable on its screen) and then moved nothing, while
+  the page inside it needed the scroll (`scroll down until "..." appears` reported "not found after scrolling" on an onboarding
+  flow). Scrollables with a scrollable extent that accept user input now rank first, then the one that receives touches, then
+  the largest.
+- **iOS `probe system-dialog tap` no longer reports a tap that did nothing as done:** after tapping, the driver checks that the
+  dialog went away (it polls for about a second), retries once with a tap on the button's centre point, and otherwise
+  fails with `tapped "Open" but the dialog is still showing` (seen with SpringBoard's "Open in <app>?" confirmation).
+  Not verified against that dialog here; the driver builds and the other dialog paths are unchanged.
+
 ## [0.19.2] - 2026-10-08
 
 ### Fixed
