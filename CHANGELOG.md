@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-08
+
+### Added
+- **`see any of "A", "B"` / `don't see any of "A", "B"`:** an assertion over alternatives (passes when any one is on screen; the
+  negated form when none is). `probe migrate maestro` converts a plain `assertVisible: "A|B"` / `assertNotVisible: "A|B"` to it.
+  With implicit wait it retries like any other `see`. Grammar page, conformance test, dictionary and MCP guide updated.
+
+### Fixed
+- **`see` / `don't see` / `wait until` only count widgets that are on screen:** a widget laid out entirely outside the screen (the
+  neighbouring page of a `PageView`, a tab kept alive to the side, list items in the cache area) no longer matches. `don't see X`
+  used to fail on such off-screen copies ("found 2 element(s)") while Maestro's `assertNotVisible` passed. **Behavior change:** a
+  `see` of a widget that is built but off screen now fails (it is not visible to the user).
+- **Elements caught mid-rebuild no longer crash lookups:** `tap "Add Community"` right after a route change failed with a Flutter
+  assertion (`'_renderObject != null'`); such elements are treated as not visible, and with `--implicit-wait` the step retries.
+- **`screenshot` right after a navigation** no longer fails with `'!debugNeedsPaint'`: the capture waits for the pending frame
+  and retries (bounded).
+- **`probe migrate maestro`:** relative selectors (`tapOn: {below: ...}`, `childOf`, `index`, ...) become a `# TODO` with a warning
+  instead of the garbage selector `tap "map[below:...]"`.
+
 ## [0.18.1] - 2026-10-08
 
 ### Fixed

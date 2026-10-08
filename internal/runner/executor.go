@@ -269,9 +269,9 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Implicit wait: the target of a tap/type/see is often not there yet (a sign-in is
 	// still in flight, a screen is still animating in). Retry "not found" until the
 	// configured time has passed instead of failing at once.
-	if err != nil && e.implicitWait > 0 && implicitWaitable(step) && isNotFoundError(err) {
+	if err != nil && e.implicitWait > 0 && implicitWaitable(step) && (isNotFoundError(err) || isTransientAssertion(err)) {
 		deadline := time.Now().Add(e.implicitWait)
-		for err != nil && isNotFoundError(err) && time.Now().Before(deadline) && ctx.Err() == nil {
+		for err != nil && (isNotFoundError(err) || isTransientAssertion(err)) && time.Now().Before(deadline) && ctx.Err() == nil {
 			select {
 			case <-time.After(300 * time.Millisecond):
 			case <-ctx.Done():
@@ -542,6 +542,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		neg := ""
 		if s.Negated {
 			neg = "don't "
+		}
+		if len(s.Any) > 0 {
+			return fmt.Sprintf("%ssee any of %q", neg, s.Any)
 		}
 		if s.Native {
 			return fmt.Sprintf("%ssee native %q", neg, s.Sel.Text)
@@ -1068,7 +1071,46 @@ func (e *Executor) runAssertNative(ctx context.Context, a parser.AssertStep) err
 
 // ---- Assert execution ----
 
+// runAssertAny handles `see any of "A", "B"` (passes when any alternative is on screen) and
+// `don't see any of "A", "B"` (passes when none is).
+func (e *Executor) runAssertAny(ctx context.Context, a parser.AssertStep) error {
+	var present []string
+	for _, alt := range a.Any {
+		text := e.resolve(alt)
+		sel := probelink.SelectorParam{Kind: "text", Text: text}
+		if strings.HasPrefix(text, "#") {
+			sel = probelink.SelectorParam{Kind: "id", Text: text}
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		err := e.client.See(probeCtx, probelink.SeeParams{Selector: sel})
+		cancel()
+		if err == nil {
+			present = append(present, text)
+			continue
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if isConnectionError(err) {
+			return err
+		}
+	}
+	if a.Negated {
+		if len(present) > 0 {
+			return fmt.Errorf("expected NOT to see any of %q but found %q", a.Any, present)
+		}
+		return nil
+	}
+	if len(present) == 0 {
+		return fmt.Errorf("expected to see any of %q, but none of them is on screen", a.Any)
+	}
+	return nil
+}
+
 func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
+	if len(a.Any) > 0 {
+		return e.runAssertAny(ctx, a)
+	}
 	if a.Native {
 		return e.runAssertNative(ctx, a)
 	}

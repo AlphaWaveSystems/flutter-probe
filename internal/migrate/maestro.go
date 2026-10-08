@@ -363,7 +363,13 @@ func (c *converter) convertNestedSteps(commands interface{}) (string, []string) 
 
 // convertStep converts one Maestro step map to a ProbeScript line.
 func (c *converter) convertStep(step MaestroStep) (string, string) {
+	if todo, warn := unsupportedSelectorTODO(step); todo != "" {
+		return todo, warn
+	}
 	normalizeStepText(step)
+	if line, ok := seeAnyLine(step); ok {
+		return applyOptional(step, line), ""
+	}
 	line, warn := c.convertStepInner(step)
 	line = applyOptional(step, line)
 	if pat := regexSelector(step); pat != "" && !isPlainWaitAlternation(step) {
@@ -500,6 +506,34 @@ func normalizeStepText(step MaestroStep) {
 	}
 }
 
+// unsupportedSelectorTODO catches the selector forms of tapOn / assertVisible / ... that have
+// no ProbeScript equivalent (relative selectors: below, above, leftOf, rightOf, childOf,
+// containsChild, index, traits, ...). They used to print as a Go map ("tap on \"map[below:...]\"").
+func unsupportedSelectorTODO(step MaestroStep) (string, string) {
+	for _, key := range []string{"tapOn", "longPressOn", "doubleTapOn", "assertVisible", "assertNotVisible"} {
+		m, ok := step[key].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if _, point := m["point"]; point {
+			continue // handled by its own TODO
+		}
+		_, hasID := m["id"].(string)
+		_, hasText := m["text"].(string)
+		if hasID || hasText {
+			continue
+		}
+		var parts []string
+		for k, v := range m {
+			parts = append(parts, fmt.Sprintf("%s: %v", k, v))
+		}
+		sort.Strings(parts)
+		return fmt.Sprintf("# TODO: %s with a selector ProbeScript cannot express (%s) — pick an id or text selector", key, strings.Join(parts, ", ")),
+			fmt.Sprintf("%s selector (%s) has no ProbeScript equivalent", key, strings.Join(parts, ", "))
+	}
+	return "", ""
+}
+
 // applyOptional carries Maestro's `optional: true` over: a tap/long press/double
 // tap becomes `... if visible` (skipped when the target is absent), an assertion
 // gets the `optional` modifier. It only touches single-line converted steps.
@@ -523,6 +557,35 @@ func applyOptional(step MaestroStep, line string) string {
 		}
 	}
 	return line
+}
+
+// seeAnyLine converts assertVisible / assertNotVisible with a plain "A|B" alternation to
+// `see any of` / `don't see any of`. ok is false when it does not apply.
+func seeAnyLine(step MaestroStep) (string, bool) {
+	for key, neg := range map[string]bool{"assertVisible": false, "assertNotVisible": true} {
+		val, present := step[key]
+		if !present {
+			continue
+		}
+		text, _ := val.(string)
+		if m, isMap := val.(map[string]interface{}); isMap {
+			text, _ = m["text"].(string)
+		}
+		alts := plainAlternation(text)
+		if len(alts) < 2 {
+			continue
+		}
+		quoted := make([]string, len(alts))
+		for i, a := range alts {
+			quoted[i] = fmt.Sprintf("%q", a)
+		}
+		prefix := "see any of "
+		if neg {
+			prefix = "don't see any of "
+		}
+		return prefix + strings.Join(quoted, ", "), true
+	}
+	return "", false
 }
 
 // regexSelector returns the selector text of a step when it still uses regex
