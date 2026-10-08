@@ -153,6 +153,7 @@ type AgentConfig struct {
 	ReconnectDelay    time.Duration `yaml:"reconnect_delay"`     // delay after app restart before attempting WebSocket reconnect (default: 2s)
 	ReconnectAttempts int           `yaml:"reconnect_attempts"`  // max auto-reconnect attempts after a connection drop mid-test (default: 4)
 	ReconnectBackoff  time.Duration `yaml:"reconnect_backoff"`   // base delay for exponential reconnect backoff: delay = base << (attempt-1), capped at 8s, ±20% jitter (default: 1s)
+	DriverPort        int           `yaml:"driver_port"`         // loopback port of the iOS system-dialog driver, 1024-65535 (default: derived from the simulator UDID, 48790-48989). Pin it when a port range is reserved per test lane. Overridden by --driver-port.
 	LaunchTimeout     time.Duration `yaml:"launch_timeout"`      // max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — distinct from dial_timeout/token_read_timeout since a real app's cold-launch path (e.g. Firebase App Check init) can cost far more than a warm reconnect (default: 120s)
 }
 
@@ -251,6 +252,10 @@ func LoadFile(path string) (*Config, error) {
 	// Validate security-sensitive fields
 	if cfg.Project.App != "" && !validAppID.MatchString(cfg.Project.App) {
 		return nil, fmt.Errorf("invalid project.app %q: must be alphanumeric with dots/underscores (e.g. com.example.myapp)", cfg.Project.App)
+	}
+
+	if p := cfg.Agent.DriverPort; p != 0 && (p < 1024 || p > 65535) {
+		return nil, fmt.Errorf("invalid agent.driver_port %d: use a value between 1024 and 65535", p)
 	}
 
 	return &cfg, nil
@@ -401,6 +406,7 @@ agent:
   ping_interval: 5s        # WebSocket keepalive ping interval
   token_read_timeout: 30s  # max time to wait for the agent auth token
   reconnect_delay: 2s      # delay after app restart before reconnecting
+  # driver_port: 48800    # loopback port of the iOS system-dialog driver (1024-65535); default is derived per simulator. --driver-port wins
   launch_timeout: 120s     # max time for restart/clear-data to force-stop, relaunch, and reconnect — raise this if your app has an expensive cold-launch path (e.g. Firebase App Check init)
 
 # Emulator / simulator startup settings

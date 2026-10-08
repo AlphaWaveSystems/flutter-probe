@@ -5,6 +5,8 @@ import UserNotifications
 // host application; this one does nothing except, for the driver's own
 // self-tests, optionally trigger a system permission alert on launch:
 //   -probeRequestNotifications   asks for notification permission
+//   -probeShowSignInAlert        shows a sign-in shaped alert
+//   -probeShowShareSheet         presents the share sheet
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
@@ -34,7 +36,21 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         if CommandLine.arguments.contains("-probeShowSignInAlert") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.showSignInAlert() }
         }
+        // Self-test only: presents the standard share sheet (UIActivityViewController)
+        // for a text item, the way a share action in an app does.
+        if CommandLine.arguments.contains("-probeShowShareSheet") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.showShareSheet() }
+        }
         return true
+    }
+
+    private func showShareSheet() {
+        let vc = UIActivityViewController(activityItems: ["FlutterProbe share sheet self-test"], applicationActivities: nil)
+        if let pop = vc.popoverPresentationController {   // iPad requires an anchor
+            pop.sourceView = window?.rootViewController?.view
+            pop.sourceRect = CGRect(x: 100, y: 100, width: 1, height: 1)
+        }
+        window?.rootViewController?.present(vc, animated: true)
     }
 
     private func showSignInAlert() {

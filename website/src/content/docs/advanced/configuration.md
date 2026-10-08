@@ -36,6 +36,7 @@ agent:
   reconnect_attempts: 4
   reconnect_backoff: 1s
   launch_timeout: 120s
+  # driver_port: 49100     # iOS system-dialog driver port (default: derived from the simulator UDID)
 
 device:
   emulator_boot_timeout: 120s
@@ -123,6 +124,7 @@ WebSocket connection settings:
 | `reconnect_attempts` | int | `4` | Max auto-reconnect attempts after a connection drop mid-test |
 | `reconnect_backoff` | duration | `1s` | Base for exponential reconnect backoff: `delay = base << (attempt-1)` capped at 8s, ±20% jitter |
 | `launch_timeout` | duration | `120s` | Max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — distinct from `dial_timeout` since a real app's cold-launch path (e.g. Firebase App Check init) can cost far more than a warm reconnect. Raise this if `restart the app` times out on a slow-starting app. Also settable per-run with `--launch-timeout` |
+| `driver_port` | int | derived | Loopback port of the iOS system-dialog driver (1024-65535). Derived per simulator from its UDID (48790-48989) when unset; pin it when a port range is reserved per test lane. Also settable with `--driver-port`, which wins. Single-device runs only |
 
 ### device
 
