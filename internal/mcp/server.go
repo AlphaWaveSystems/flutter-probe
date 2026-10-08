@@ -276,7 +276,7 @@ Key flags for the flags parameter:
   --grant notifications,camera  pre-grant OS permissions before the first test
                                (Android: pm grant; iOS simulator: simctl privacy; iOS
                                notifications: a watcher taps Allow when the alert appears)
-  --disable-animations       set timeDilation=0 to speed up Flutter animations
+  --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
   --stream                    emit one ndjson line per test as it completes (requires --format json)

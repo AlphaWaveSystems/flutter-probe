@@ -292,7 +292,11 @@ class ProbeExecutor {
       // ---- Animation control ----
       case ProbeMethods.setTimeDilation:
         final factor = (req.params['factor'] as num?)?.toDouble() ?? 1.0;
-        timeDilation = factor;
+        // Flutter requires timeDilation > 0 (an assert in debug builds; in profile and
+        // release a 0 divides frame times by zero and throws inside every frame, which
+        // leaves the UI a tap behind). "No animations" is a tiny positive factor, so
+        // time runs ~1000x faster and every animation ends within a frame.
+        timeDilation = factor > 0 ? factor : 0.001;
         return {'ok': true};
 
       // ---- Output variables ----

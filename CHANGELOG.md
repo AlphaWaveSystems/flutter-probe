@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-10-08
+
+### Fixed
+- **`--disable-animations` / `defaults.disable_animations` set `timeDilation` to 0**, which Flutter does not accept: an assert in
+  debug builds, and in profile and release builds a division by zero in every frame. A frame that throws can leave the UI a
+  tap behind (the change appears only after the next input). The CLI now sends 0.001 (time runs about 1000x faster, so
+  animations end within a frame) and the agent maps any non-positive factor to 0.001.
+
 ## [0.18.0] - 2026-10-08
 
 ### Added
