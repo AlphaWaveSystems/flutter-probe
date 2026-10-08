@@ -44,7 +44,7 @@
       "name": "keyword.operator.action.probe"
     },
     "assert-keyword": {
-      "match": "\\b(see|don't see|dont see|wait|wait until|wait for|until|dismiss|sign in sandbox tester)\\b",
+      "match": "\\b(see|don't see|dont see|wait|wait until|wait for|until|any of|dismiss|sign in sandbox tester)\\b",
       "name": "keyword.operator.assert.probe"
     },
     "control-flow": {

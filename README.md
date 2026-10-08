@@ -517,7 +517,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe ios-driver install\|status\|stop` | Manage the iOS system-dialog driver (XCUITest runner) |
 | `probe ai doctor` | Optional: check the configured `ai:` provider |
 | `probe triage --input results.json` | Optional: explain failures with the configured model (advisory) |
-| `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories) |
+| `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories; `runFlow` helpers become recipe files; regex selectors, `evalScript` and `${ENV}` placeholders are flagged with TODO comments and warnings) |
 | `probe version` | Print CLI version |
 | `probe-convert` | Convert tests from other frameworks |
 
@@ -902,6 +902,7 @@ Full documentation: [alphawavesystems.github.io/flutter-probe](https://flutterpr
 - [Installation Guide](https://flutterprobe.dev/getting-started/installation/)
 - [Quick Start](https://flutterprobe.dev/getting-started/quick-start/)
 - [ProbeScript Syntax](https://flutterprobe.dev/probescript/syntax/)
+- [ProbeScript Grammar (complete EBNF)](https://flutterprobe.dev/probescript/grammar/)
 - [CLI Reference](https://flutterprobe.dev/tools/cli-reference/)
 - [CI/CD Integration](https://flutterprobe.dev/ci-cd/github-actions/)
 - [Configuration Reference](https://flutterprobe.dev/advanced/configuration/)

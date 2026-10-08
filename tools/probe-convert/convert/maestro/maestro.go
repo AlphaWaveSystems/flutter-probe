@@ -187,10 +187,12 @@ func convertStep(step map[string]interface{}) (string, string) {
 			return strings.Join(lines, "\n"), ""
 		case "setAirplaneMode":
 			enabled, _ := val.(bool)
+			// ProbeScript has no network/airplane-mode step: leave a comment, not a step
+			// that would fail as an unknown recipe call.
 			if enabled {
-				return "toggle wifi off", ""
+				return "# TODO: setAirplaneMode true — no ProbeScript equivalent; run `adb shell cmd connectivity airplane-mode enable` (Android) from the harness", ""
 			}
-			return "toggle wifi on", ""
+			return "# TODO: setAirplaneMode false — no ProbeScript equivalent; run `adb shell cmd connectivity airplane-mode disable` (Android) from the harness", ""
 		case "repeat":
 			if m, ok := val.(map[string]interface{}); ok {
 				times := 1
@@ -232,7 +234,7 @@ func convertStep(step map[string]interface{}) (string, string) {
 			return strings.Join(lines, "\n"), ""
 		case "openLink":
 			link, _ := val.(string)
-			return fmt.Sprintf("open %q", link), ""
+			return fmt.Sprintf("open link %q", link), ""
 		case "setLocation":
 			if m, ok := val.(map[string]interface{}); ok {
 				lat, _ := m["latitude"].(float64)

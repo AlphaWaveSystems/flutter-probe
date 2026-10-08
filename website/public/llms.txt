@@ -16,6 +16,7 @@ Key facts for an AI agent:
 ## Docs
 - [Using FlutterProbe from AI agents](https://flutterprobe.dev/tools/ai-agents/): the loop, reading failures, rules.
 - [ProbeScript syntax](https://flutterprobe.dev/probescript/syntax/)
+- [ProbeScript grammar (complete EBNF)](https://flutterprobe.dev/probescript/grammar/): every construct the parser accepts, with a conformance test.
 - [Dictionary of steps](https://flutterprobe.dev/probescript/dictionary/)
 - [On-device agent](https://flutterprobe.dev/tools/agent/): build flags, ports, tokens, RPC methods, troubleshooting.
 - [System dialogs](https://flutterprobe.dev/tools/system-dialogs/)

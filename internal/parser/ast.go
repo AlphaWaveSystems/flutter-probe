@@ -299,12 +299,14 @@ const (
 	WaitSelector                   // wait until #id disappears/appears
 	WaitAnimations                 // wait for animations to end
 	WaitIdle                       // wait for idle: route transitions + frames/animations/HTTP settled
+	WaitAny                        // wait until any of "A", "B" appears
 )
 
 type WaitStep struct {
 	Kind     WaitKind
 	Target   string   // text or selector
 	Duration float64  // seconds
+	Any      []string // WaitAny: alternatives; the first one that appears satisfies the wait
 	Line     int
 }
 
@@ -410,9 +412,14 @@ func (m MockBlock) stepType() string { return "mock" }
 // ---- RecipeCall ----
 
 type RecipeCall struct {
-	Name   string
-	Args   []string
-	Line   int
+	Name string
+	Args []string
+	// NumName / NumArgs are the same call with bare numbers treated as arguments
+	// too ("increment counter <arg> <arg>" for `increment counter "x" 3`); they are
+	// tried when Name matches no recipe. Empty when the call has no bare number.
+	NumName string
+	NumArgs []string
+	Line    int
 }
 
 func (r RecipeCall) nodeType() string { return "recipe_call" }

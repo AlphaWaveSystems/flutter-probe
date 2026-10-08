@@ -34,6 +34,11 @@
     "body": "wait until \"${1:element}\" appears",
     "description": "Wait until an element appears"
   },
+  "Wait until any appears": {
+    "prefix": "waita",
+    "body": "wait until any of \"${1:first}\", \"${2:second}\" appears",
+    "description": "Wait until any one of several texts appears"
+  },
   "Wait until disappears": {
     "prefix": "waitd",
     "body": "wait until \"${1:element}\" disappears",

@@ -1044,6 +1044,38 @@ func (p *Parser) parseWait() (Step, error) {
 			p.consumeNewline()
 			return WaitStep{Kind: WaitIdle, Line: line}, nil
 		}
+		// "wait until any of "A", "B", "C" appears" — also what a Maestro
+		// regex alternation ("A|B|C") migrates to.
+		if p.peekLiteral("any") {
+			p.advance()
+			p.skipFillers() // "of"
+			if p.peekLiteral("of") {
+				p.advance()
+				p.skipFillers()
+			}
+			var alts []string
+			for {
+				p.skipFillers()
+				switch {
+				case p.peek().Type == TOKEN_STRING:
+					alts = append(alts, p.advance().Literal)
+				case p.peekLiteral(",") || p.peekLiteral("or"):
+					p.advance()
+				default:
+					goto doneAlts
+				}
+			}
+		doneAlts:
+			if len(alts) < 2 {
+				return nil, fmt.Errorf("line %d: \"wait until any of\" needs at least two quoted alternatives", line)
+			}
+			p.skipFillers()
+			if p.peek().Type == TOKEN_APPEARS {
+				p.advance()
+			}
+			p.consumeNewline()
+			return WaitStep{Kind: WaitAny, Any: alts, Line: line}, nil
+		}
 		target := p.expectString("condition target")
 		p.skipFillers()
 		switch p.peek().Type {
@@ -1406,19 +1438,35 @@ func (p *Parser) parseMockBlock() (Step, error) {
 func (p *Parser) parseRecipeCall() (Step, error) {
 	line := p.peek().Line
 	// collect idents / strings until newline
-	var parts []string
-	var args []string
+	var parts, numParts []string
+	var args, numArgs []string
+	hasNum := false
 	for p.peek().Type != TOKEN_NEWLINE && !p.atEOF() && p.peek().Type != TOKEN_DEDENT {
 		tok := p.advance()
-		if tok.Type == TOKEN_STRING {
+		switch tok.Type {
+		case TOKEN_STRING:
 			args = append(args, tok.Literal)
+			numArgs = append(numArgs, tok.Literal)
 			parts = append(parts, "<arg>")
-		} else {
+			numParts = append(numParts, "<arg>")
+		case TOKEN_INT:
+			// A bare number is part of the recipe's name ("step 2 of onboarding") or
+			// an argument (`increment counter "x" 3`): keep both readings.
+			hasNum = true
+			numArgs = append(numArgs, tok.Literal)
 			parts = append(parts, strings.ToLower(tok.Literal))
+			numParts = append(numParts, "<arg>")
+		default:
+			parts = append(parts, strings.ToLower(tok.Literal))
+			numParts = append(numParts, strings.ToLower(tok.Literal))
 		}
 	}
 	p.consumeNewline()
-	return RecipeCall{Name: strings.Join(parts, " "), Args: args, Line: line}, nil
+	rc := RecipeCall{Name: strings.Join(parts, " "), Args: args, Line: line}
+	if hasNum {
+		rc.NumName, rc.NumArgs = strings.Join(numParts, " "), numArgs
+	}
+	return rc, nil
 }
 
 // ---- Examples block ----

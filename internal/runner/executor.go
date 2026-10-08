@@ -527,6 +527,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("wait until %q appears", s.Target)
 		case parser.WaitDisappears:
 			return fmt.Sprintf("wait until %q disappears", s.Target)
+		case parser.WaitAny:
+			return fmt.Sprintf("wait until any of %q appears", s.Any)
 		case parser.WaitPageLoad:
 			return "wait for page to load"
 		case parser.WaitNetworkIdle:
@@ -1208,6 +1210,50 @@ func redactSelector(raw string) parser.Selector {
 
 // ---- Wait execution ----
 
+// waitAny polls until any of the alternatives is on screen, or the step timeout
+// passes. Each probe is a short `see`, so a flow that shows one of several
+// screens (a consent dialog, the login screen, or the home screen) proceeds
+// as soon as one appears.
+func (e *Executor) waitAny(ctx context.Context, alts []string) error {
+	timeout := e.timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	resolved := make([]string, len(alts))
+	for i, a := range alts {
+		resolved[i] = e.resolve(a)
+	}
+	for {
+		for _, a := range resolved {
+			sel := probelink.SelectorParam{Kind: "text", Text: a}
+			if strings.HasPrefix(a, "#") {
+				sel = probelink.SelectorParam{Kind: "id", Text: a}
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+			err := e.client.See(probeCtx, probelink.SeeParams{Selector: sel})
+			cancel()
+			if err == nil {
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if isConnectionError(err) {
+				return err
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("none of %q appeared within %s", resolved, timeout)
+		}
+		select {
+		case <-time.After(300 * time.Millisecond):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	// Campaign finding: a plain `wait N seconds` used to round-trip through
 	// the agent as an RPC — so `kill the app` followed by `wait 2 seconds`
@@ -1223,6 +1269,10 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+	}
+
+	if w.Kind == parser.WaitAny {
+		return e.waitAny(ctx, w.Any)
 	}
 
 	kindStr := map[parser.WaitKind]string{
@@ -1367,30 +1417,46 @@ func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
 
 // ---- Recipe call execution ----
 
-func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
-	recipe, ok := e.recipes[rc.Name]
-	stripped := rc.Name
-	if !ok {
-		// Try matching by stripping <arg> placeholders and filler words from the call name.
-		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
-		stripped = stripRecipeCallArgs(rc.Name)
-		recipe, ok = e.recipes[stripped]
+// lookupRecipe resolves a recipe call name against the loaded recipes: exactly,
+// then with <arg> placeholders and filler words stripped from the call name,
+// then with the same normalization applied to the definition names (a recipe
+// whose own name contains a filler word, e.g. `recipe "add and verify" (x)`,
+// would otherwise be unreachable by its written name). It also returns the
+// stripped call name for error messages. Shared by execution and --dry-run.
+func lookupRecipe(recipes map[string]parser.RecipeDef, name string) (parser.RecipeDef, string, bool) {
+	if r, ok := recipes[name]; ok {
+		return r, name, true
 	}
-	if !ok {
-		// Campaign finding: stripping was applied to the CALL name only,
-		// never the DEFINITION name — so a recipe whose own name contains a
-		// filler word, e.g. `recipe "add and verify" (x)`, was unreachable
-		// by its exact written name: the call `add and verify "v"` parses as
-		// "add and verify <arg>", strips to "add verify", and "add verify"
-		// matches nothing because the definition kept its "and". Normalize
-		// both sides the same way before comparing.
-		for defName, def := range e.recipes {
-			if stripRecipeCallArgs(defName) == stripped {
-				recipe, ok = def, true
-				break
-			}
+	stripped := stripRecipeCallArgs(name)
+	if r, ok := recipes[stripped]; ok {
+		return r, stripped, true
+	}
+	for defName, def := range recipes {
+		if stripRecipeCallArgs(defName) == stripped {
+			return def, stripped, true
 		}
 	}
+	return parser.RecipeDef{}, stripped, false
+}
+
+// resolveCall finds the recipe a call refers to and the arguments to bind. A call
+// with bare numbers is tried as written first (numbers part of the name), then
+// with the numbers as arguments.
+func resolveCall(recipes map[string]parser.RecipeDef, rc parser.RecipeCall) (parser.RecipeDef, []string, string, bool) {
+	rec, stripped, ok := lookupRecipe(recipes, rc.Name)
+	if ok {
+		return rec, rc.Args, stripped, true
+	}
+	if rc.NumName != "" {
+		if rec, _, ok := lookupRecipe(recipes, rc.NumName); ok {
+			return rec, rc.NumArgs, stripped, true
+		}
+	}
+	return rec, rc.Args, stripped, false
+}
+
+func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
+	recipe, args, stripped, ok := resolveCall(e.recipes, rc)
 	if !ok {
 		// PT-02(a): an unrecognized recipe call used to silently no-op ("may
 		// be a filler line"), which masked genuine typos and broken recipe
@@ -1405,8 +1471,8 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 	}
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
-		if i < len(rc.Args) {
-			e.vars[param] = rc.Args[i]
+		if i < len(args) {
+			e.vars[param] = args[i]
 		}
 	}
 	e.depth++

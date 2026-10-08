@@ -40,7 +40,7 @@ Supported commands:
   repeat             → repeat N times
   clearState         → clear app data
   hideKeyboard       → close keyboard
-  openLink           → open "url"
+  openLink           → open link "url"
 
 Example:
   Input (login.yaml):

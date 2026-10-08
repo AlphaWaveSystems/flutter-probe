@@ -10,14 +10,14 @@ test "advanced"
     // Migrated from Maestro evalScript — review and adapt JS → Dart
     // Original: console.log('Checking state...')
     print('Checking state...')
-  open "https://example.com/deeplink"
+  open link "https://example.com/deeplink"
   # Location: 37.7749, -122.4194 (migrated from Maestro setLocation)
   # Android: adb shell cmd location set-location 37.7749 -122.4194
   # iOS sim: xcrun simctl location set <UDID> 37.7749 -122.4194
   run dart:
     // Set mock location — requires platform-level GPS mocking
     // Coordinates: 37.7749, -122.4194
-  toggle wifi off
+  # TODO: setAirplaneMode true — no ProbeScript equivalent; run `adb shell cmd connectivity airplane-mode enable` (Android) from the harness
   # Platform conditional (migrated from Maestro ifdef: android)
   run dart:
     // Platform guard — adapt to your needs

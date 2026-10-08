@@ -34,6 +34,7 @@ export default defineConfig({
             { label: 'Hooks', slug: 'probescript/hooks' },
             { label: 'Annotation-driven Tests', slug: 'probescript/annotations' },
             { label: 'Dictionary', slug: 'probescript/dictionary' },
+            { label: 'Grammar (EBNF)', slug: 'probescript/grammar' },
           ],
         },
         {

@@ -13,30 +13,58 @@ import (
 
 // MaestroFlow represents a parsed Maestro YAML test flow.
 type MaestroFlow struct {
-	AppID  string           `yaml:"appId"`
-	Env    map[string]string `yaml:"env"`
-	Steps  []MaestroStep
+	AppID string            `yaml:"appId"`
+	Env   map[string]string `yaml:"env"`
+	Steps []MaestroStep
 }
 
 // MaestroStep is one action in a Maestro flow.
 // Maestro supports both map and string forms.
 type MaestroStep map[string]interface{}
 
+// converter carries the state of converting one flow file: where it lives (to
+// resolve `runFlow` targets) and the recipe files it needs.
+type converter struct {
+	baseDir string   // directory of the source YAML; "" when converting a string
+	uses    []string // `use` paths (relative to the output file) for runFlow targets
+}
+
+// Options tunes ConvertFileWith.
+type Options struct {
+	// RecipeFiles holds the absolute paths of YAML files that other flows pull in with
+	// `runFlow`; they are converted to recipe files instead of tests.
+	RecipeFiles map[string]bool
+}
+
+// recipeNameFor is the recipe name a helper flow file gets: "flow <file name>".
+func recipeNameFor(path string) string {
+	base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	base = strings.NewReplacer("-", " ", "_", " ").Replace(base)
+	return "flow " + strings.ToLower(strings.TrimSpace(base))
+}
+
 // ConvertFile reads a Maestro YAML file and writes a .probe file.
 func ConvertFile(inputPath, outputPath string) (string, error) {
+	return ConvertFileWith(inputPath, outputPath, Options{})
+}
+
+// ConvertFileWith is ConvertFile with options (see Options).
+func ConvertFileWith(inputPath, outputPath string, opts Options) (string, error) {
 	src, err := os.ReadFile(inputPath)
 	if err != nil {
 		return "", fmt.Errorf("migrate: read %s: %w", inputPath, err)
 	}
 
-	probe, warnings, err := ConvertYAML(string(src))
+	abs, _ := filepath.Abs(inputPath)
+	c := &converter{baseDir: filepath.Dir(inputPath)}
+	name := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+	probe, warnings, err := c.convertDoc(string(src), name, opts.RecipeFiles[abs])
 	if err != nil {
 		return "", fmt.Errorf("migrate: convert %s: %w", inputPath, err)
 	}
 
 	if outputPath == "" {
-		base := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
-		outputPath = filepath.Join(filepath.Dir(inputPath), base+".probe")
+		outputPath = filepath.Join(filepath.Dir(inputPath), name+".probe")
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
@@ -52,8 +80,69 @@ func ConvertFile(inputPath, outputPath string) (string, error) {
 	return outputPath, nil
 }
 
+// RunFlowTargets returns the absolute paths of every YAML file the given flows
+// pull in with `runFlow`, so they can be converted to recipe files.
+func RunFlowTargets(files []YAMLFile) map[string]bool {
+	targets := map[string]bool{}
+	for _, f := range files {
+		src, err := os.ReadFile(f.Path)
+		if err != nil {
+			continue
+		}
+		for _, doc := range strings.Split(string(src), "---") {
+			var raw interface{}
+			if yaml.Unmarshal([]byte(doc), &raw) != nil {
+				continue
+			}
+			collectRunFlow(raw, filepath.Dir(f.Path), targets)
+		}
+	}
+	return targets
+}
+
+func collectRunFlow(node interface{}, dir string, out map[string]bool) {
+	switch v := node.(type) {
+	case []interface{}:
+		for _, it := range v {
+			collectRunFlow(it, dir, out)
+		}
+	case map[string]interface{}:
+		for k, val := range v {
+			if k == "runFlow" {
+				if p := runFlowPath(val); p != "" {
+					abs, _ := filepath.Abs(filepath.Join(dir, p))
+					out[abs] = true
+				}
+				continue
+			}
+			collectRunFlow(val, dir, out)
+		}
+	}
+}
+
+// runFlowPath extracts the target file of a runFlow value (`runFlow: a.yaml` or
+// `runFlow: {file: a.yaml, ...}`); "" when it has none.
+func runFlowPath(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		if f, ok := v["file"].(string); ok {
+			return f
+		}
+	}
+	return ""
+}
+
 // ConvertYAML converts a Maestro YAML string to a ProbeScript string.
 func ConvertYAML(yamlSrc string) (string, []string, error) {
+	c := &converter{}
+	return c.convertDoc(yamlSrc, "", false)
+}
+
+// convertDoc converts a Maestro document. asRecipe emits `recipe "flow <name>"`
+// (a helper pulled in by runFlow) instead of a test.
+func (c *converter) convertDoc(yamlSrc, name string, asRecipe bool) (string, []string, error) {
 	// Split on YAML document separator ---
 	docs := strings.Split(yamlSrc, "---")
 
@@ -89,24 +178,66 @@ func ConvertYAML(yamlSrc string) (string, []string, error) {
 		}
 	}
 
+	var body strings.Builder
+	for _, step := range steps {
+		line, warn := c.convertStep(step)
+		if warn != "" {
+			warnings = append(warnings, warn)
+		}
+		writeIndented(&body, "  ", line)
+	}
+
 	var sb strings.Builder
 
 	// File header
 	if appID != "" {
 		sb.WriteString(fmt.Sprintf("# Converted from Maestro — app: %s\n\n", appID))
 	}
-
-	sb.WriteString("test \"migrated flow\"\n")
-
-	for _, step := range steps {
-		line, warn := convertStep(step)
-		if warn != "" {
-			warnings = append(warnings, warn)
-		}
-		writeIndented(&sb, "  ", line)
+	for _, u := range c.uses {
+		sb.WriteString(fmt.Sprintf("use %q\n", u))
+	}
+	if len(c.uses) > 0 {
+		sb.WriteString("\n")
 	}
 
+	// ${VAR} placeholders are Maestro env interpolation; they stay literal text.
+	if names := envPlaceholders(body.String()); len(names) > 0 {
+		warnings = append(warnings, fmt.Sprintf("uses Maestro env variables (%s) — they are left as literal text; substitute the values", strings.Join(names, ", ")))
+	}
+
+	if asRecipe {
+		sb.WriteString(fmt.Sprintf("recipe %q\n", recipeNameFor(name)))
+	} else if name != "" {
+		sb.WriteString(fmt.Sprintf("test %q\n", name))
+	} else {
+		sb.WriteString("test \"migrated flow\"\n")
+	}
+	sb.WriteString(body.String())
+
 	return sb.String(), warnings, nil
+}
+
+// envPlaceholders lists the distinct ${NAME} placeholders in s.
+func envPlaceholders(s string) []string {
+	seen := map[string]bool{}
+	var names []string
+	for {
+		i := strings.Index(s, "${")
+		if i < 0 {
+			break
+		}
+		j := strings.Index(s[i:], "}")
+		if j < 0 {
+			break
+		}
+		n := s[i+2 : i+j]
+		if !seen[n] {
+			seen[n] = true
+			names = append(names, n)
+		}
+		s = s[i+j+1:]
+	}
+	return names
 }
 
 // writeIndented writes line to sb, prefixing every line of a (possibly
@@ -133,7 +264,7 @@ func writeIndented(sb *strings.Builder, indent, line string) {
 // is itself a retry/repeat block returns its own multi-line body, which
 // writeIndented re-indents relative to whatever indent this call was given,
 // so arbitrarily nested blocks compound their indentation correctly.
-func convertNestedSteps(commands interface{}) (string, []string) {
+func (c *converter) convertNestedSteps(commands interface{}) (string, []string) {
 	var nested []MaestroStep
 	if list, ok := commands.([]interface{}); ok {
 		for _, c := range list {
@@ -148,7 +279,7 @@ func convertNestedSteps(commands interface{}) (string, []string) {
 	var sb strings.Builder
 	var warnings []string
 	for _, step := range nested {
-		line, warn := convertStep(step)
+		line, warn := c.convertStep(step)
 		if warn != "" {
 			warnings = append(warnings, warn)
 		}
@@ -158,7 +289,76 @@ func convertNestedSteps(commands interface{}) (string, []string) {
 }
 
 // convertStep converts one Maestro step map to a ProbeScript line.
-func convertStep(step MaestroStep) (string, string) {
+func (c *converter) convertStep(step MaestroStep) (string, string) {
+	line, warn := c.convertStepInner(step)
+	if pat := regexSelector(step); pat != "" && !isPlainWaitAlternation(step) {
+		note := fmt.Sprintf("# TODO: Maestro matches %q as a regular expression; ProbeScript matches text literally here — rewrite it to one literal text (or use `see ... matching`)", pat)
+		line = note + "\n" + line
+		w := fmt.Sprintf("selector %q is a regex in Maestro and a literal text in ProbeScript", pat)
+		if warn != "" {
+			w = warn + "; " + w
+		}
+		warn = w
+	}
+	return line, warn
+}
+
+// regexSelector returns the text of a tapOn / assertVisible / assertNotVisible /
+// extendedWaitUntil step when it uses regex syntax (alternation, wildcards,
+// classes), which Maestro honours and ProbeScript text selectors do not.
+func regexSelector(step MaestroStep) string {
+	for key, val := range step {
+		var text string
+		switch key {
+		case "tapOn", "assertVisible", "assertNotVisible":
+			text, _ = val.(string)
+			if m, ok := val.(map[string]interface{}); ok {
+				text, _ = m["text"].(string)
+			}
+		case "extendedWaitUntil":
+			if m, ok := val.(map[string]interface{}); ok {
+				text, _ = m["visible"].(string)
+				if text == "" {
+					text, _ = m["notVisible"].(string)
+				}
+			}
+		}
+		if text != "" && (strings.ContainsAny(text, "|[]()\\") || strings.Contains(text, ".*") || strings.Contains(text, ".+")) {
+			return text
+		}
+	}
+	return ""
+}
+
+// plainAlternation splits "A|B|C" into its alternatives when every alternative is
+// plain text (no other regex syntax), else returns nil.
+func plainAlternation(s string) []string {
+	if !strings.Contains(s, "|") || strings.ContainsAny(s, "[]()\\*+?^$") || strings.Contains(s, ".*") {
+		return nil
+	}
+	var alts []string
+	for _, a := range strings.Split(s, "|") {
+		a = strings.TrimSpace(a)
+		if a == "" {
+			return nil
+		}
+		alts = append(alts, a)
+	}
+	return alts
+}
+
+// isPlainWaitAlternation: an extendedWaitUntil whose text is a plain A|B|C
+// alternation, which converts to `wait until any of ...` without a TODO.
+func isPlainWaitAlternation(step MaestroStep) bool {
+	m, ok := step["extendedWaitUntil"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	v, _ := m["visible"].(string)
+	return len(plainAlternation(v)) > 1
+}
+
+func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 	// Handle simple string command
 	if cmd, ok := step["_cmd"].(string); ok {
 		return convertStringStep(cmd)
@@ -248,6 +448,13 @@ func convertStep(step MaestroStep) (string, string) {
 				if opt, _ := m["optional"].(bool); opt {
 					warnParts = append(warnParts, "'optional: true' not preserved — `wait until` has no optional variant, this step will now fail the test if the target never appears")
 				}
+				if alts := plainAlternation(visible); len(alts) > 1 {
+					quoted := make([]string, len(alts))
+					for i, a := range alts {
+						quoted[i] = fmt.Sprintf("%q", a)
+					}
+					return "wait until any of " + strings.Join(quoted, ", ") + " appears", strings.Join(warnParts, "; ")
+				}
 				return fmt.Sprintf("wait until %q appears", visible), strings.Join(warnParts, "; ")
 			}
 			if notVisible, ok := m["notVisible"].(string); ok {
@@ -291,9 +498,31 @@ func convertStep(step MaestroStep) (string, string) {
 			return "wait 1 seconds", ""
 
 		case "runFlow":
-			if path, ok := val.(string); ok {
-				return fmt.Sprintf("use %q", path), ""
+			path := runFlowPath(val)
+			if path == "" {
+				return "# TODO: runFlow without a file (inline commands) is not converted — inline the steps by hand",
+					"runFlow without a file target was not converted"
 			}
+			recipe := recipeNameFor(path)
+			use := strings.TrimSuffix(path, filepath.Ext(path)) + ".probe"
+			if c.baseDir == "" {
+				return fmt.Sprintf("# TODO: runFlow %s — convert that flow to a recipe (%q) and `use` it", path, recipe),
+					fmt.Sprintf("runFlow %s was not converted (no source directory)", path)
+			}
+			known := false
+			for _, u := range c.uses {
+				if u == use {
+					known = true
+				}
+			}
+			if !known {
+				c.uses = append(c.uses, use)
+			}
+			warn := ""
+			if m, ok := val.(map[string]interface{}); ok && (m["env"] != nil || m["when"] != nil) {
+				warn = fmt.Sprintf("runFlow %s has env/when options — they were dropped; review the call", path)
+			}
+			return recipe, warn
 
 		case "takeScreenshot":
 			name, _ := val.(string)
@@ -304,15 +533,18 @@ func convertStep(step MaestroStep) (string, string) {
 
 		case "evalScript":
 			src, _ := val.(string)
-			return fmt.Sprintf("run dart:\n// NOTE: JS eval migrated to Dart — please review\n// %s", src),
-				"evalScript requires manual Dart conversion"
+			src = strings.Join(strings.Fields(src), " ")
+			return fmt.Sprintf("# TODO: evalScript (JavaScript) is not converted — rewrite it as ProbeScript or a `run dart:` block: %s", src),
+				"evalScript requires manual conversion"
 
 		case "setAirplaneMode":
 			enabled, _ := val.(bool)
+			state := "disable"
 			if enabled {
-				return "turn off wifi", "airplane mode is not directly supported — using wifi toggle"
+				state = "enable"
 			}
-			return "turn on wifi", "airplane mode is not directly supported — using wifi toggle"
+			return fmt.Sprintf("# TODO: setAirplaneMode %v — ProbeScript has no network step; run `adb shell cmd connectivity airplane-mode %s` from the harness", enabled, state),
+				"airplane mode has no ProbeScript equivalent — left as a TODO comment"
 
 		case "repeat":
 			if m, ok := val.(map[string]interface{}); ok {
@@ -320,7 +552,7 @@ func convertStep(step MaestroStep) (string, string) {
 				if times == 0 {
 					times = 1
 				}
-				body, warns := convertNestedSteps(m["commands"])
+				body, warns := c.convertNestedSteps(m["commands"])
 				line := fmt.Sprintf("repeat %d times", times)
 				if body != "" {
 					line += "\n" + body
@@ -338,7 +570,7 @@ func convertStep(step MaestroStep) (string, string) {
 				if maxRetries == 0 {
 					maxRetries = 1
 				}
-				body, warns := convertNestedSteps(m["commands"])
+				body, warns := c.convertNestedSteps(m["commands"])
 				line := fmt.Sprintf("retry %d times", maxRetries)
 				if body != "" {
 					line += "\n" + body

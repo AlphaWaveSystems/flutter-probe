@@ -490,8 +490,21 @@ class ProbeExecutor {
       _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
           '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top '
           'and the screen did not change (topmost hit: ${_hitPathDesc(warnCenter)})'
+          '${_keyboardHint()}'
           '${_visibleHint()}';
     }
+  }
+
+  /// A soft keyboard that is open can hide a button (a login form's submit
+  /// button): say so, since the fix is a `close keyboard` step.
+  String _keyboardHint() {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view != null && view.viewInsets.bottom > 0) {
+        return ' — the on-screen keyboard is open and may be covering it; add `close keyboard` before this step';
+      }
+    } catch (_) {}
+    return '';
   }
 
   String _screenFingerprint() {
@@ -580,13 +593,16 @@ class ProbeExecutor {
       for (final e in result.path) {
         final t = e.target;
         if (t is RenderObject) names.add('${t.runtimeType}');
-        if (names.length >= 14) break;
+        if (names.length >= 5) break;
       }
       return names.isEmpty ? 'nothing' : names.join(' < ');
     } catch (_) {
       return 'unknown';
     }
   }
+
+  bool _handlesPointer(RenderObject r) =>
+      r is RenderPointerListener || r is RenderMouseRegion || r is RenderSemanticsGestureHandler;
 
   ({bool strict, bool related}) _hitState(RenderObject target, Offset position) {
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
@@ -604,9 +620,13 @@ class ProbeExecutor {
       }
     }
     var related = deepest == null || strict;
-    if (!related) {
+    // A hit that stops at an ancestor is normal only when that ancestor is
+    // something that handles taps (a parent GestureDetector/InkWell). Stopping
+    // at a passive container or the root view means nothing received the tap
+    // at that point (clipped away, off screen, under the keyboard).
+    if (!related && _handlesPointer(deepest)) {
       for (RenderObject? c = target; c != null; c = c.parent) {
-        if (identical(c, deepest)) related = true; // the hit stopped at an ancestor of the target
+        if (identical(c, deepest)) related = true;
       }
     }
     return (strict: strict, related: related);

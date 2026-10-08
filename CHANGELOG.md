@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-10-07
+
+### Fixed
+- **`probe migrate maestro` and `runFlow`:** a `runFlow` target is now converted to a recipe file
+  (`recipe "flow <file name>"`, written at the mirrored path) and the caller gets `use "<file>.probe"` plus a call to the
+  recipe. Before it emitted `use "<helper>.yaml"`, which is not ProbeScript, so every migrated flow with a helper failed.
+  `runFlow` options (`env`, `when`) are dropped with a warning.
+- **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
+  unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
+  matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **Complete ProbeScript grammar in EBNF** (`website/src/content/docs/probescript/grammar.md`): lexical rules, layout,
+  every statement, selector, modifier and block, with a runnable example per production. A conformance test
+  (`internal/parser/grammar_test.go`) parses every example and fails when a keyword is added to or removed from the
+  lexer without the grammar page changing. The page also lists where the other docs and the parser disagree.
+- **New step `wait until any of "A", "B", "C" appears`** (the first alternative on screen satisfies it; times out
+  with the step timeout). `probe migrate maestro` converts a plain `"A|B|C"` wait to it; other regex selectors still get
+  a `# TODO`. Documented in the dictionary, syntax page, VS Code snippet/grammar and the MCP guide.
+- **A recipe call with a bare number argument resolves:** `increment counter "x" 3` for
+  `recipe "increment counter" (identifier, times)` failed with `unknown recipe call "increment counter <arg> 3"`
+  because only quoted values counted as arguments. Bare numbers are now arguments too (a number that is part of a
+  recipe's name, `step 2 of onboarding`, still matches as before).
+- **Converters no longer emit steps ProbeScript does not have:** `probe-convert` turned Maestro `openLink` into
+  `open "<url>"` (the valid form is `open link "<url>"`) and `setAirplaneMode` into `toggle wifi off`/`on` (no such
+  step); both converters now emit `open link` and a `# TODO` comment. The new dry-run check found these.
+- **`--composite-device` flags replace `composite.devices` from probe.yaml** instead of merging with it: a configured
+  device that was down used to skip the whole composite test even when the flags named other devices.
+- **`probe test --dry-run` now resolves every step.** A step that is not a built-in and matches no recipe (a typo, a
+  verb that does not exist, such as `hide keyboard`) fails the dry run, also when it sits inside a recipe the test calls
+  or in a hook. Before, dry-run reported such tests as passed and they only failed at runtime.
+- **A tap that nothing receives is no longer a silent success** (Android: a submit button under the on-screen
+  keyboard, or clipped away). A hit that stops at a passive ancestor or the root view now counts as "covered", so the
+  existing warning appears when the screen also did not change; it says when the keyboard is open and suggests
+  `close keyboard`. A hit that stops at a parent that handles taps is still normal.
+
 ## [0.16.5] - 2026-10-06
 
 ### Fixed
