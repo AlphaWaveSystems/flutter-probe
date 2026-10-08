@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.17.1 - 2026-10-08
+
+- Fixed: the `checked` state check was missing and passed for every widget; it now reads Switch, SwitchListTile, CupertinoSwitch, Checkbox, CheckboxListTile, Radio, RadioListTile, FilterChip and ChoiceChip.
+
 ## 0.17.0 - 2026-10-08
 
 - Fixed: `is disabled` / `is enabled` use the control enclosing the matched text (button, icon button, FAB, text field, switch, checkbox).

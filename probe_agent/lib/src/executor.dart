@@ -4,8 +4,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/cupertino.dart' show CupertinoPageScaffold;
-import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, Dialog, FloatingActionButton, GestureDetector, IconButton, InkResponse, Scaffold, Switch, TextField;
+import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoSwitch;
+import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, CheckboxListTile, ChoiceChip, Dialog, FilterChip, FloatingActionButton, GestureDetector, IconButton, InkResponse, Radio, RadioListTile, Scaffold, Switch, SwitchListTile, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -911,6 +911,14 @@ class ProbeExecutor {
         final text = _textOf(element);
         if (!text.contains(checkVal)) return 'contains "$text", not "$checkVal"';
         return null;
+      case 'checked':
+        // This case was missing: `is checked` fell through to the default and
+        // passed for every widget, whatever its value.
+        final checked = _checkedState(element);
+        if (checked == null) {
+          return 'is not a checkable control (Switch, Checkbox, Radio, their ListTile variants, FilterChip or ChoiceChip)';
+        }
+        return checked ? null : 'is not checked';
       case 'focused':
         final focused = WidgetsBinding.instance.focusManager.primaryFocus;
         if (focused == null || !element.renderObject!.attached) {
@@ -1511,6 +1519,56 @@ class ProbeExecutor {
     // show it once, as written in the test, not as id("#settings_screen").
     if (kind == 'id') return text.startsWith('#') ? text : '#$text';
     return '$kind("$text")';
+  }
+
+  /// The on/off value of the checkable control a selector matched: the element
+  /// itself, a control nested inside it (a SwitchListTile builds a Switch), or the
+  /// control that encloses it (the Text label of a tile). null = not checkable.
+  bool? _checkedState(Element e) {
+    bool? own(Widget w) {
+      if (w is Switch) return w.value;
+      if (w is SwitchListTile) return w.value;
+      if (w is CupertinoSwitch) return w.value;
+      if (w is Checkbox) return w.value ?? false;
+      if (w is CheckboxListTile) return w.value ?? false;
+      if (w is FilterChip) return w.selected;
+      if (w is ChoiceChip) return w.selected;
+      if (w is Radio || w is RadioListTile) {
+        try {
+          final dyn = w as dynamic;
+          return dyn.value == dyn.groupValue;
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    final self = own(e.widget);
+    if (self != null) return self;
+    bool? below;
+    void visit(Element c) {
+      if (below != null) return;
+      final v = own(c.widget);
+      if (v != null) {
+        below = v;
+        return;
+      }
+      c.visitChildren(visit);
+    }
+    e.visitChildren(visit);
+    if (below != null) return below;
+    bool? above;
+    var depth = 0;
+    e.visitAncestorElements((a) {
+      final v = own(a.widget);
+      if (v != null) {
+        above = v;
+        return false;
+      }
+      return ++depth < 40;
+    });
+    return above;
   }
 
   /// The disabled state of a widget, or of the control it labels: the element a text
