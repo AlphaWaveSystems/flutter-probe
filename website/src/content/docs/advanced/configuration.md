@@ -19,6 +19,7 @@ defaults:
   video: false
   retry_failed_tests: 1
   grant_permissions_on_clear: true
+  implicit_wait: 0s            # retry tap/type/see on "not found" for up to this long (Maestro-style); 0 = off. --implicit-wait overrides
 
 devices:
   - name: iPhone 16 Pro

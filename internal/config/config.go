@@ -141,6 +141,7 @@ type DefaultsConfig struct {
 	RetryFailedTests        int           `yaml:"retry_failed_tests"`         // number of retries for failed tests
 	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
 	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation=0 to disable Flutter animations
+	ImplicitWait            time.Duration `yaml:"implicit_wait"`              // retry tap/type/see/... on "not found" for up to this long before failing (default: 0 = off). Overridden by --implicit-wait.
 }
 
 // AgentConfig controls the ProbeAgent WebSocket connection.

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-08
+
+### Added
+- **Implicit waiting (`probe test --implicit-wait 7s`, `defaults.implicit_wait`):** a `tap`, `type`, `long press`, `double tap`,
+  `clear`, `drag` or plain `see` whose target is not on screen yet is retried (every 0.3 s) for up to the given time before
+  failing, like Maestro's implicit waiting. Off by default, so existing suites behave as before. Steps with `if visible` /
+  `optional`, `don't see`, and the explicit `wait` steps are never retried. `probe migrate maestro` prints the recommended
+  setting: migrated flows rely on it (a login step used to fail while the sign-in was still in flight, 55 of 75 migrated flows
+  in one project).
+
 ## [0.17.2] - 2026-10-08
 
 ### Fixed

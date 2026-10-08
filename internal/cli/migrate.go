@@ -63,6 +63,10 @@ var migrateMaestroCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\n  Converted %d/%d file(s)\n", converted, len(yamlFiles))
+		if converted > 0 {
+			fmt.Println("  Note: Maestro waits implicitly for elements to appear; ProbeScript steps fail at once.")
+			fmt.Println("        Run migrated tests with `probe test --implicit-wait 7s` (or defaults.implicit_wait: 7s in probe.yaml).")
+		}
 
 		// Optionally lint the output
 		if outputDir != "" && converted > 0 {

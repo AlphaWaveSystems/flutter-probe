@@ -57,6 +57,7 @@ type Executor struct {
 	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64 // incremented on each successful reconnect
+	implicitWait         time.Duration // retry a step whose target is not on screen yet for up to this long (0 = off)
 	launchTimeout        time.Duration // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 }
 
@@ -87,6 +88,13 @@ const defaultLaunchTimeout = 120 * time.Second
 
 // SetLaunchTimeout configures the timeout applied to `restart the app`/`clear app data`,
 // taken from agent.launch_timeout in probe.yaml. A zero value falls back to the default.
+// SetImplicitWait makes tap/type/long press/double tap/clear/swipe/drag and plain `see`
+// steps wait up to d for their target to appear instead of failing at once (the
+// behaviour of Maestro's implicit waiting). 0 turns it off.
+func (e *Executor) SetImplicitWait(d time.Duration) {
+	e.implicitWait = d
+}
+
 func (e *Executor) SetLaunchTimeout(d time.Duration) {
 	e.launchTimeout = d
 }
@@ -257,6 +265,20 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	}
 
 	err := e.dispatchStep(ctx, stepCtx, step)
+
+	// Implicit wait: the target of a tap/type/see is often not there yet (a sign-in is
+	// still in flight, a screen is still animating in). Retry "not found" until the
+	// configured time has passed instead of failing at once.
+	if err != nil && e.implicitWait > 0 && implicitWaitable(step) && isNotFoundError(err) {
+		deadline := time.Now().Add(e.implicitWait)
+		for err != nil && isNotFoundError(err) && time.Now().Before(deadline) && ctx.Err() == nil {
+			select {
+			case <-time.After(300 * time.Millisecond):
+			case <-ctx.Done():
+			}
+			err = e.dispatchStep(ctx, stepCtx, step)
+		}
+	}
 
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.

@@ -1158,6 +1158,10 @@ errors. The parser does not see this: a `${...}` is ordinary string content to t
 **Bare `type` and `clear` act on the focused field.** `type "x"` without `into`, and `clear` without a
 selector, target the text field that has focus (an error when none has).
 
+**Implicit wait.** With `--implicit-wait <d>` (or `defaults.implicit_wait`) a `tap`, `type`, `long press`, `double tap`,
+`clear`, `drag` or plain `see` whose target is not on screen is retried for up to `<d>` before it fails. It is a run
+setting, not syntax; steps with `if visible` / `optional`, `don't see` and the `wait` steps are never retried.
+
 **Text selectors match substrings.** A `STRING` selector matches every widget whose text contains it
 (`see "0 ml"` is satisfied by "250 ml"). `matching "<regex>"` then requires that at least one of the matched
 widgets has text matching the regular expression, so `see "0 ml" matching "^0 ml$"` is the exact form.

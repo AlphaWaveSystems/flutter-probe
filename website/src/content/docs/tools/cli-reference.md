@@ -46,6 +46,7 @@ probe test [path] [flags]
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |
 | `-o, --output <path>` | — | Output file path for reports |
 | `-v, --verbose` | `false` | Verbose output |
+| `--implicit-wait` | `0` (off) | Retry `tap`, `type`, `long press`, `double tap`, `clear`, `drag` and plain `see` steps whose target is not on screen yet for up to this long before failing, like Maestro's implicit waiting (`--implicit-wait 7s`). `defaults.implicit_wait` in probe.yaml sets it permanently. Steps with `if visible` / `optional`, `don't see` and explicit waits are never retried |
 | `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog |
 | `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions |
 | `--watch` | `false` | Watch mode — re-run on file changes |
