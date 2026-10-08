@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.17.2 - 2026-10-08
+
+- No agent change (CLI migrate fixes); version aligned.
+
 ## 0.17.1 - 2026-10-08
 
 - Fixed: the `checked` state check was missing and passed for every widget; it now reads Switch, SwitchListTile, CupertinoSwitch, Checkbox, CheckboxListTile, Radio, RadioListTile, FilterChip and ChoiceChip.

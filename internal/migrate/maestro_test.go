@@ -282,9 +282,9 @@ func TestConvertYAML_ScrollUntilVisible(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, probe, "scroll down")
-	if len(warnings) == 0 {
-		t.Error("expected a warning that scrollUntilVisible is approximated")
+	assertContains(t, probe, "scroll down until #delete_button appears")
+	if len(warnings) != 0 {
+		t.Errorf("a scrollUntilVisible with an element converts exactly, got warnings %v", warnings)
 	}
 	mustParseProbe(t, probe)
 }
@@ -516,6 +516,46 @@ func TestConvertYAML_OptionalTypeIntoAndAnimation(t *testing.T) {
 		`type "secret" into #login_password_field`, `see "Welcome" optional`, "wait for idle"} {
 		if !strings.Contains(probe, want) {
 			t.Errorf("missing %q in:\n%s", want, probe)
+		}
+	}
+	if _, err := parser.ParseFile(probe); err != nil {
+		t.Errorf("must parse: %v\n%s", err, probe)
+	}
+}
+
+func TestConvertYAML_ScrollUntilVisibleAndKeyboard(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML(`- tapOn:
+    id: login_password_field
+- inputText: "secret"
+- scrollUntilVisible:
+    element:
+      id: login_sign_in_button
+    direction: DOWN
+- tapOn:
+    id: login_sign_in_button
+- tapOn:
+    id: email_field
+- inputText: "a@b.c"
+- tapOn:
+    id: other_field
+- inputText: "x"
+- tapOn: "Done"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"scroll down until #login_sign_in_button appears", "close keyboard\n"} {
+		if !strings.Contains(probe, want) {
+			t.Errorf("missing %q in:\n%s", want, probe)
+		}
+	}
+	// keyboard closed before the scroll (after secret) and before the final tap, not between the two fields
+	if strings.Count(probe, "close keyboard") != 2 {
+		t.Errorf("want exactly 2 close keyboard, got %d:\n%s", strings.Count(probe, "close keyboard"), probe)
+	}
+	for _, w := range warns {
+		if strings.Contains(w, "approximated") {
+			t.Errorf("unexpected approximation warning: %s", w)
 		}
 	}
 	if _, err := parser.ParseFile(probe); err != nil {

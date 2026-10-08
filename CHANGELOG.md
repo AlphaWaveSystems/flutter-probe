@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-10-08
+
+### Fixed
+- **`probe migrate maestro`, `scrollUntilVisible`:** converts exactly to `scroll <direction> until <#id | "text"> appears`
+  (it was approximated as one blind `scroll`, so the target was often not reached).
+- **`probe migrate maestro`, soft keyboard:** after `inputText` a `close keyboard` is emitted when the next step acts on
+  something that is not another text field (a button tap, a scroll toward a target). The keyboard otherwise stays open and
+  covers the button; Maestro's own tap or scroll dismisses it implicitly. This was the cause of most migrated login helpers
+  failing.
+
 ## [0.17.1] - 2026-10-08
 
 ### Fixed
