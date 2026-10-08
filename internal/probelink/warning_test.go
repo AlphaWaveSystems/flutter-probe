@@ -24,3 +24,19 @@ func TestReportWarningWithoutAHandlerIsHarmless(t *testing.T) {
 	SetWarningHandler(nil)
 	reportWarning(json.RawMessage(`{"warning":"x"}`)) // must not panic
 }
+
+func TestStrictWarningsFailTheCall(t *testing.T) {
+	SetWarningHandler(func(string) {})
+	defer SetWarningHandler(nil)
+	if err := reportWarning(json.RawMessage(`{"ok":true,"warning":"covered"}`)); err != nil {
+		t.Fatalf("lenient mode must not fail: %v", err)
+	}
+	SetStrictWarnings(true)
+	defer SetStrictWarnings(false)
+	if err := reportWarning(json.RawMessage(`{"ok":true,"warning":"covered"}`)); err == nil {
+		t.Fatal("strict mode must turn a warning into an error")
+	}
+	if err := reportWarning(json.RawMessage(`{"ok":true}`)); err != nil {
+		t.Fatalf("no warning, no error: %v", err)
+	}
+}

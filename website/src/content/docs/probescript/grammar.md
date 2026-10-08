@@ -1149,6 +1149,10 @@ test "filler words"
 
 ## 8. Semantic notes that EBNF cannot express
 
+**Text selectors match substrings.** A `STRING` selector matches every widget whose text contains it
+(`see "0 ml"` is satisfied by "250 ml"). `matching "<regex>"` then requires that at least one of the matched
+widgets has text matching the regular expression, so `see "0 ml" matching "^0 ml$"` is the exact form.
+
 **Statement boundaries.** A statement ends at the end of its line. A built-in step consumes only what its
 production names; any tokens left on the line are parsed as a **separate** statement, which is usually a
 recipe call that fails at run time with "unknown recipe call". This is how `tap the "Login" button`

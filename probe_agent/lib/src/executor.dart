@@ -845,6 +845,25 @@ class ProbeExecutor {
         throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" $reason');
       }
     }
+
+    // `matching "<regex>"`: some matched widget's text must match. (The pattern
+    // used to be received and never applied, so the assertion passed regardless.)
+    if (pattern.isNotEmpty) {
+      final RegExp re;
+      try {
+        re = RegExp(pattern);
+      } on FormatException catch (e) {
+        throw ProbeError(ProbeError.assertFailed, 'Invalid regular expression "$pattern": ${e.message}');
+      }
+      final texts = elements.map(_textOf).toList();
+      if (!texts.any(re.hasMatch)) {
+        final shown = texts.take(5).map((t) => '"$t"').join(', ');
+        throw ProbeError(
+          ProbeError.assertFailed,
+          '"${_selDesc(sel)}" found, but none of its texts [$shown] matches /$pattern/',
+        );
+      }
+    }
   }
 
   /// Evaluates a `see`/`don't see` state check ("enabled", "disabled",

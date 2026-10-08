@@ -496,7 +496,7 @@ func (c *Client) Open(ctx context.Context, screen string) error {
 func (c *Client) Tap(ctx context.Context, sel SelectorParam) error {
 	raw, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
 	if err == nil {
-		reportWarning(raw)
+		return reportWarning(raw)
 	}
 	return err
 }
@@ -632,7 +632,7 @@ func (c *Client) RegisterMock(ctx context.Context, m MockParam) error {
 func (c *Client) DeviceAction(ctx context.Context, action, value string) error {
 	raw, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
 	if err == nil {
-		reportWarning(raw)
+		return reportWarning(raw)
 	}
 	return err
 }

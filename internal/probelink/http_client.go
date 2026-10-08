@@ -178,7 +178,7 @@ func (c *HTTPClient) Open(ctx context.Context, screen string) error {
 func (c *HTTPClient) Tap(ctx context.Context, sel SelectorParam) error {
 	raw, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
 	if err == nil {
-		reportWarning(raw)
+		return reportWarning(raw)
 	}
 	return err
 }
@@ -309,7 +309,10 @@ func (c *HTTPClient) RegisterMock(ctx context.Context, m MockParam) error {
 }
 
 func (c *HTTPClient) DeviceAction(ctx context.Context, action, value string) error {
-	_, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
+	raw, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 

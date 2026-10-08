@@ -65,6 +65,7 @@ probe test [path] [flags]
 | `--flutter <path>` | `flutter` | Override Flutter binary path |
 | `--config <path>` | `probe.yaml` | Config file path |
 | `--shard <N/M>` | — | Run shard N of M (for parallel CI) |
+| `--fail-on-warning` | `false` | Treat agent warnings as step failures: a tap that provably did nothing (covered, screen unchanged), `press enter` with no focused field, `go back` at the root route |
 | `--dry-run` | `false` | Parse and validate without executing; also fails on any step that is not built in and matches no recipe (typos, unknown verbs), including inside recipes |
 
 ### Examples

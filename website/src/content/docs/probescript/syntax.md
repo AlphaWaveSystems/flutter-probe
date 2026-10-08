@@ -83,6 +83,13 @@ It stops early when the list can't move further, and fails with the visible text
 shows up. It is the equivalent of Maestro's `scrollUntilVisible`. Use `on "List"` to pick which
 scrollable when a screen has several.
 
+## Text matching is by substring
+
+A quoted text selector (`see "0 ml"`, `tap "Save"`, `wait until "Done" appears`) matches any widget whose text
+**contains** it: `see "0 ml"` passes while only "250 ml" is on screen. For an exact check use an anchored pattern,
+`see "0 ml" matching "^0 ml$"` (some matched widget's text must match the regular expression), or select by key
+(`see #counter_text`). Before 0.16.8 the `matching` pattern was accepted but never applied.
+
 ## Wait Commands
 
 ```
