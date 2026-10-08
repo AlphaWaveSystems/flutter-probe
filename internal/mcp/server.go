@@ -175,6 +175,8 @@ Supports the full ProbeScript syntax:
                      dismiss system dialog | sign in sandbox tester (idempotent). Append
                      optional to make a step a no-op when no dialog shows. iOS simulators
                      (needs Xcode) and Android emulators/devices only.
+  Any of:          wait until any of "A", "B", "C" appears — whichever text shows first
+                     (an optional consent dialog, a login or home screen).
   Idle:            wait for idle — after closing a dialog/sheet, waits for route
                      transitions and pending frames/animations/requests to settle
                      (prefer it to a fixed "wait 2 seconds"). "dont see" is an alias

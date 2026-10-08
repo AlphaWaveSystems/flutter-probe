@@ -527,6 +527,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("wait until %q appears", s.Target)
 		case parser.WaitDisappears:
 			return fmt.Sprintf("wait until %q disappears", s.Target)
+		case parser.WaitAny:
+			return fmt.Sprintf("wait until any of %q appears", s.Any)
 		case parser.WaitPageLoad:
 			return "wait for page to load"
 		case parser.WaitNetworkIdle:
@@ -1208,6 +1210,50 @@ func redactSelector(raw string) parser.Selector {
 
 // ---- Wait execution ----
 
+// waitAny polls until any of the alternatives is on screen, or the step timeout
+// passes. Each probe is a short `see`, so a flow that shows one of several
+// screens (a consent dialog, the login screen, or the home screen) proceeds
+// as soon as one appears.
+func (e *Executor) waitAny(ctx context.Context, alts []string) error {
+	timeout := e.timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	resolved := make([]string, len(alts))
+	for i, a := range alts {
+		resolved[i] = e.resolve(a)
+	}
+	for {
+		for _, a := range resolved {
+			sel := probelink.SelectorParam{Kind: "text", Text: a}
+			if strings.HasPrefix(a, "#") {
+				sel = probelink.SelectorParam{Kind: "id", Text: a}
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+			err := e.client.See(probeCtx, probelink.SeeParams{Selector: sel})
+			cancel()
+			if err == nil {
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if isConnectionError(err) {
+				return err
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("none of %q appeared within %s", resolved, timeout)
+		}
+		select {
+		case <-time.After(300 * time.Millisecond):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	// Campaign finding: a plain `wait N seconds` used to round-trip through
 	// the agent as an RPC — so `kill the app` followed by `wait 2 seconds`
@@ -1223,6 +1269,10 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+	}
+
+	if w.Kind == parser.WaitAny {
+		return e.waitAny(ctx, w.Any)
 	}
 
 	kindStr := map[parser.WaitKind]string{

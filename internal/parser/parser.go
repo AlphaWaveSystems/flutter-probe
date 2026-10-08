@@ -1044,6 +1044,38 @@ func (p *Parser) parseWait() (Step, error) {
 			p.consumeNewline()
 			return WaitStep{Kind: WaitIdle, Line: line}, nil
 		}
+		// "wait until any of "A", "B", "C" appears" — also what a Maestro
+		// regex alternation ("A|B|C") migrates to.
+		if p.peekLiteral("any") {
+			p.advance()
+			p.skipFillers() // "of"
+			if p.peekLiteral("of") {
+				p.advance()
+				p.skipFillers()
+			}
+			var alts []string
+			for {
+				p.skipFillers()
+				switch {
+				case p.peek().Type == TOKEN_STRING:
+					alts = append(alts, p.advance().Literal)
+				case p.peekLiteral(",") || p.peekLiteral("or"):
+					p.advance()
+				default:
+					goto doneAlts
+				}
+			}
+		doneAlts:
+			if len(alts) < 2 {
+				return nil, fmt.Errorf("line %d: \"wait until any of\" needs at least two quoted alternatives", line)
+			}
+			p.skipFillers()
+			if p.peek().Type == TOKEN_APPEARS {
+				p.advance()
+			}
+			p.consumeNewline()
+			return WaitStep{Kind: WaitAny, Any: alts, Line: line}, nil
+		}
 		target := p.expectString("condition target")
 		p.skipFillers()
 		switch p.peek().Type {

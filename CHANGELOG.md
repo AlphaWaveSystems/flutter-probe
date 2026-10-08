@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
   unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
   matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **New step `wait until any of "A", "B", "C" appears`** (the first alternative on screen satisfies it; times out
+  with the step timeout). `probe migrate maestro` converts a plain `"A|B|C"` wait to it; other regex selectors still get
+  a `# TODO`. Documented in the dictionary, syntax page, VS Code snippet/grammar and the MCP guide.
 - **A recipe call with a bare number argument resolves:** `increment counter "x" 3` for
   `recipe "increment counter" (identifier, times)` failed with `unknown recipe call "increment counter <arg> 3"`
   because only quoted values counted as arguments. Bare numbers are now arguments too (a number that is part of a

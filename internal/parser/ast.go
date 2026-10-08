@@ -299,12 +299,14 @@ const (
 	WaitSelector                   // wait until #id disappears/appears
 	WaitAnimations                 // wait for animations to end
 	WaitIdle                       // wait for idle: route transitions + frames/animations/HTTP settled
+	WaitAny                        // wait until any of "A", "B" appears
 )
 
 type WaitStep struct {
 	Kind     WaitKind
 	Target   string   // text or selector
 	Duration float64  // seconds
+	Any      []string // WaitAny: alternatives; the first one that appears satisfies the wait
 	Line     int
 }
 

@@ -385,11 +385,26 @@ func TestConvertYAML_EvalScriptIsAComment(t *testing.T) {
 }
 
 func TestConvertYAML_RegexSelectorGetsATodo(t *testing.T) {
-	probe, warns, err := migrate.ConvertYAML("- extendedWaitUntil:\n    visible: \"Got it|Login\"\n")
+	probe, warns, err := migrate.ConvertYAML("- extendedWaitUntil:\n    visible: \"Got.*it\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(probe, "# TODO: Maestro matches") || len(warns) == 0 {
 		t.Errorf("regex selector should be flagged:\n%s\n%v", probe, warns)
+	}
+}
+
+func TestConvertYAML_PlainAlternationBecomesWaitAny(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML("- extendedWaitUntil:\n    visible: \"Got it|Login to X|Open menu\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(probe, `wait until any of "Got it", "Login to X", "Open menu" appears`) || strings.Contains(probe, "TODO") {
+		t.Errorf("plain alternation should become wait-any without a TODO:\n%s", probe)
+	}
+	for _, w := range warns {
+		if strings.Contains(w, "regex") {
+			t.Errorf("unexpected regex warning %q", w)
+		}
 	}
 }

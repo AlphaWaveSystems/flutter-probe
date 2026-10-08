@@ -89,6 +89,7 @@ scrollable when a screen has several.
 wait 5 seconds
 wait until "Dashboard" appears
 wait until "Loading" disappears
+wait until any of "Got it", "Login", "Home" appears   # whichever shows first
 wait for the page to load
 wait for network idle
 wait for idle

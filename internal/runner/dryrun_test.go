@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 // --dry-run must resolve every step: a step that is not built in and matches no
@@ -67,5 +69,30 @@ func TestRecipeCallWithBareNumberArgument(t *testing.T) {
 	}
 	if len(results) != 1 || !results[0].Passed {
 		t.Fatalf("both calls must resolve, got %+v", results)
+	}
+}
+
+// seeClient is a client whose See succeeds only for the texts in visible.
+type seeClient struct {
+	fakeAIClient
+	visible map[string]bool
+}
+
+func (s *seeClient) See(ctx context.Context, params probelink.SeeParams) error {
+	if s.visible[params.Selector.Text] {
+		return nil
+	}
+	return errors.New("not found")
+}
+
+func TestWaitAnyReturnsWhenAnyAlternativeIsVisible(t *testing.T) {
+	e := &Executor{client: &seeClient{visible: map[string]bool{"Home": true}}, timeout: 5 * time.Second, vars: map[string]string{}}
+	if err := e.waitAny(context.Background(), []string{"Got it", "Login", "Home"}); err != nil {
+		t.Fatalf("want success, got %v", err)
+	}
+	e = &Executor{client: &seeClient{}, timeout: 1 * time.Second, vars: map[string]string{}}
+	err := e.waitAny(context.Background(), []string{"Got it", "Login"})
+	if err == nil || !strings.Contains(err.Error(), "none of") {
+		t.Fatalf("want a none-of error, got %v", err)
 	}
 }

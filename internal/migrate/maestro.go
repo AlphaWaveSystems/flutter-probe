@@ -291,7 +291,7 @@ func (c *converter) convertNestedSteps(commands interface{}) (string, []string) 
 // convertStep converts one Maestro step map to a ProbeScript line.
 func (c *converter) convertStep(step MaestroStep) (string, string) {
 	line, warn := c.convertStepInner(step)
-	if pat := regexSelector(step); pat != "" {
+	if pat := regexSelector(step); pat != "" && !isPlainWaitAlternation(step) {
 		note := fmt.Sprintf("# TODO: Maestro matches %q as a regular expression; ProbeScript matches text literally here — rewrite it to one literal text (or use `see ... matching`)", pat)
 		line = note + "\n" + line
 		w := fmt.Sprintf("selector %q is a regex in Maestro and a literal text in ProbeScript", pat)
@@ -328,6 +328,34 @@ func regexSelector(step MaestroStep) string {
 		}
 	}
 	return ""
+}
+
+// plainAlternation splits "A|B|C" into its alternatives when every alternative is
+// plain text (no other regex syntax), else returns nil.
+func plainAlternation(s string) []string {
+	if !strings.Contains(s, "|") || strings.ContainsAny(s, "[]()\\*+?^$") || strings.Contains(s, ".*") {
+		return nil
+	}
+	var alts []string
+	for _, a := range strings.Split(s, "|") {
+		a = strings.TrimSpace(a)
+		if a == "" {
+			return nil
+		}
+		alts = append(alts, a)
+	}
+	return alts
+}
+
+// isPlainWaitAlternation: an extendedWaitUntil whose text is a plain A|B|C
+// alternation, which converts to `wait until any of ...` without a TODO.
+func isPlainWaitAlternation(step MaestroStep) bool {
+	m, ok := step["extendedWaitUntil"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	v, _ := m["visible"].(string)
+	return len(plainAlternation(v)) > 1
 }
 
 func (c *converter) convertStepInner(step MaestroStep) (string, string) {
@@ -419,6 +447,13 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 				}
 				if opt, _ := m["optional"].(bool); opt {
 					warnParts = append(warnParts, "'optional: true' not preserved — `wait until` has no optional variant, this step will now fail the test if the target never appears")
+				}
+				if alts := plainAlternation(visible); len(alts) > 1 {
+					quoted := make([]string, len(alts))
+					for i, a := range alts {
+						quoted[i] = fmt.Sprintf("%q", a)
+					}
+					return "wait until any of " + strings.Join(quoted, ", ") + " appears", strings.Join(warnParts, "; ")
 				}
 				return fmt.Sprintf("wait until %q appears", visible), strings.Join(warnParts, "; ")
 			}
