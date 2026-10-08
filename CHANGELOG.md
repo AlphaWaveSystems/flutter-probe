@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.17.0] - 2026-10-08
 
+### Fixed
+- **`see "Submit" is disabled` / `is enabled` read the control that labels the text:** the selector matches the `Text`
+  inside a button, which was never itself a button, so every labelled button counted as enabled. The nearest enclosing
+  button (`ElevatedButton`, `TextButton`, `OutlinedButton`, `FilledButton`), `IconButton`, `FloatingActionButton`,
+  `TextField` (`enabled`), `Switch` or `Checkbox` decides.
+
 ### Added
 - **`wait until "X" appears matching "<regex>"`:** the exact-text form of a wait (text selectors match substrings), the
   same suffix as `see ... matching`. Grammar page and conformance test updated.

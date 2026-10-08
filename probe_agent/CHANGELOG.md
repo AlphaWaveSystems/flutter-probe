@@ -4,6 +4,7 @@
 
 ## 0.17.0 - 2026-10-08
 
+- Fixed: `is disabled` / `is enabled` use the control enclosing the matched text (button, icon button, FAB, text field, switch, checkbox).
 - Added: `wait` accepts a `pattern` for `appears` (`matching`); text selectors fall back to Tooltip messages and Semantics labels when no visible text matches.
 
 ## 0.16.9 - 2026-10-08
