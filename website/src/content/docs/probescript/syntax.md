@@ -97,6 +97,7 @@ wait 5 seconds
 wait until "Dashboard" appears
 wait until "Loading" disappears
 wait until any of "Got it", "Login", "Home" appears   # whichever shows first
+wait until "0 ml" appears matching "^0 ml$"            # exact text (selectors match substrings)
 wait for the page to load
 wait for network idle
 wait for idle

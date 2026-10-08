@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.17.0 - 2026-10-08
+
+- Added: `wait` accepts a `pattern` for `appears` (`matching`); text selectors fall back to Tooltip messages and Semantics labels when no visible text matches.
+
 ## 0.16.9 - 2026-10-08
 
 - Fixed: bare `type` / `clear` (empty selector) act on the focused text field (error when none is focused).

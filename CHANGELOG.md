@@ -6,13 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-08
+
 ### Added
+- **`wait until "X" appears matching "<regex>"`:** the exact-text form of a wait (text selectors match substrings), the
+  same suffix as `see ... matching`. Grammar page and conformance test updated.
+- **`probe test --no-grant-on-clear`:** after `clear app data` keep runtime permissions revoked even with `--yes`
+  (which implies granting), so a test can see the first-run permission dialog.
+- **Tooltips and Semantics labels are matched** by text selectors when no visible text matches: `see "Show password"` finds
+  an icon button whose only label is its tooltip. A visible text always wins, so counts do not double.
 - **iOS share sheet in `probe system-dialog`:** `list` / `see` / `wait` / `tap` / `dismiss` (and the ProbeScript
   system-dialog steps) now handle the share (activity) sheet an app opens with `UIActivityViewController`, which
   previously reported "No system dialog is showing." The driver looks inside the app under test (`project.app`, or the
   new `--app <bundle-id>`); the sheet's title is the shared item's caption and `Share sheet` always matches; buttons are
   Close (where the OS draws one) plus the share targets and actions; `dismiss` taps Close, else taps outside the sheet,
   else swipes down. Alerts are unchanged. The driver host app gets a `-probeShowShareSheet` self-test argument.
+- **Android `open link "scheme://..." in the app`** is restricted to the app under test (`am start -p <package>`; retried
+  unrestricted if the app cannot handle the link) and the URL is quoted for the device shell. With two flavours of one app
+  installed, the wrong one could start, and the CLI then never found an agent (`reconnect: read token`).
 - **`--driver-port` / `agent.driver_port`:** choose the iOS system-dialog driver's loopback port (1024-65535) on
   `probe test`, `probe system-dialog` and `probe ios-driver status|stop`; the flag wins over probe.yaml; the default
   (derived from the simulator UDID) is unchanged.
