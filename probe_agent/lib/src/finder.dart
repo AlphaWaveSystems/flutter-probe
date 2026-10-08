@@ -46,6 +46,20 @@ class ProbeFinder {
   /// Returns all [Element]s matching the given selector map.
   /// Only returns elements that are currently visible on screen
   /// (not behind Offstage, Visibility(false), or off-screen routes).
+  bool _includeOffScreen = false;
+
+  /// Like [findElements], but also returns widgets that are built yet laid out entirely
+  /// off screen (a chip beyond the end of a horizontal list). Used by actions, which scroll
+  /// such a target into view; assertions must not see them.
+  List<Element> findElementsIncludingOffScreen(Map<String, dynamic> sel) {
+    _includeOffScreen = true;
+    try {
+      return findElements(sel);
+    } finally {
+      _includeOffScreen = false;
+    }
+  }
+
   List<Element> findElements(Map<String, dynamic> sel) {
     final kind = sel['kind'] as String? ?? 'text';
     final text = sel['text'] as String? ?? '';
@@ -235,7 +249,7 @@ class ProbeFinder {
       // A widget laid out entirely outside the screen is not visible to the user: the
       // neighbouring page of a PageView, a tab kept alive off to the side, a list item in the
       // cache area beyond the viewport. Without this `don't see X` counted such copies.
-      if (_isOffScreen(ro)) return false;
+      if (!_includeOffScreen && _isOffScreen(ro)) return false;
     }
     final route = probeRouteOf(element);
     if (route != null && !route.isCurrent && !_routeOnScreen(route)) return false;

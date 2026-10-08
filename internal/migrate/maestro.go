@@ -27,11 +27,17 @@ type MaestroStep map[string]interface{}
 // goes to whatever has focus, which is not reliably the field that was tapped.
 func (c *converter) convertSeq(steps []MaestroStep) ([]string, []string) {
 	var lines, warns []string
-	lastField := "" // selector of the field tapped just before, e.g. #email_field
+	lastField := ""      // selector of the field tapped just before, e.g. #email_field
+	tapNotConverted := false // the previous tapOn became a TODO: nothing is focused
 	for i, step := range steps {
 		line, warn := c.convertStep(step)
 		if _, ok := step["tapOn"]; ok {
 			lastField = tapFieldSelector(step["tapOn"])
+			tapNotConverted = strings.HasPrefix(line, "# TODO")
+		} else if tapNotConverted && (step["inputText"] != nil || step["eraseText"] != nil || step["_cmd"] == "eraseText") {
+			// a text-entry step after a tap that could not be converted has no field to act on
+			line = "# TODO: the previous tapOn was not converted, so no field is focused: " + strings.ReplaceAll(line, "\n", " ")
+			lastField = ""
 		} else if v, ok := step["inputText"].(string); ok && lastField != "" {
 			line = fmt.Sprintf("type %s into %s", quoteVal(v), lastField)
 		} else if _, ok := step["eraseText"]; (ok || step["_cmd"] == "eraseText") && lastField != "" {

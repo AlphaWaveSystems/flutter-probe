@@ -421,7 +421,7 @@ class ProbeExecutor {
     // swallowed. Let any in-flight route transition finish first (bounded —
     // never blocks a tap for more than a couple of seconds).
     await _waitForRouteTransitions();
-    final element = _preferReachable(_requireElement(sel), sel);
+    final element = _preferReachable(await _resolveActionTarget(sel), sel);
     // FP-19: same idea for a scroll that has not finished (e.g. right after
     // `scroll down until ... appears`).
     await _waitForScrollIdle(element);
@@ -652,7 +652,7 @@ class ProbeExecutor {
   }
 
   Future<void> _doubleTap(Map<String, dynamic> sel) async {
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
     final g1 = await _createGesture(center);
@@ -663,7 +663,7 @@ class ProbeExecutor {
   }
 
   Future<void> _longPress(Map<String, dynamic> sel) async {
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
     final gesture = await _createGesture(center);
@@ -692,7 +692,7 @@ class ProbeExecutor {
       return;
     }
     // Find the nearest EditableText in the widget tree near the selector
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final editable = _findEditableTarget(element);
     if (editable != null) {
       // PT-04: focus the field the way a real tap would before typing into
@@ -805,7 +805,7 @@ class ProbeExecutor {
       _enterText(focused, '');
       return;
     }
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final target = _findEditableTarget(element);
     if (target != null) {
       // Same path as `type` so onChanged fires for a cleared field too.
@@ -1503,6 +1503,27 @@ class ProbeExecutor {
       _mocks['${method.toUpperCase()}:$path'];
 
   // ---- Internal helpers ----
+
+  /// The target of an action (tap, long press, type, ...). A widget that is built but outside
+  /// the screen (a chip at the far end of a horizontal list, a row below the fold in a lazily
+  /// built list) is scrolled into view first, as a user would: assertions do not see such a
+  /// widget, but the action should not fail on it.
+  Future<Element> _resolveActionTarget(Map<String, dynamic> sel) async {
+    if (_finder.findElements(sel).isEmpty) {
+      final off = _finder.findElementsIncludingOffScreen(sel);
+      if (off.isNotEmpty) {
+        try {
+          await Scrollable.ensureVisible(off.first, duration: Duration.zero, alignment: 0.5);
+          WidgetsBinding.instance.scheduleFrame();
+          await WidgetsBinding.instance.endOfFrame;
+          await _sync.waitForSettled(timeout: const Duration(seconds: 1));
+        } catch (_) {
+          // no scrollable ancestor: fall through to the not-found error
+        }
+      }
+    }
+    return _requireElement(sel);
+  }
 
   Element _requireElement(Map<String, dynamic> sel) {
     final elements = _finder.findElements(sel);

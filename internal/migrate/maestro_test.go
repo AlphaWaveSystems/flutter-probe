@@ -588,3 +588,23 @@ func TestConvertYAML_RelativeSelectorAndAssertionAlternation(t *testing.T) {
 		t.Errorf("must parse: %v\n%s", perr, probe)
 	}
 }
+
+func TestConvertYAML_TextEntryAfterUnconvertedTap(t *testing.T) {
+	probe, _, err := migrate.ConvertYAML(`- tapOn:
+    below: "^Company$"
+- eraseText
+- inputText: "x"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(probe, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "clear" || strings.HasPrefix(l, "type ") {
+			t.Errorf("no bare clear/type may follow a tap that became a TODO: %q\n%s", l, probe)
+		}
+	}
+	if _, perr := parser.ParseFile(probe); perr != nil {
+		t.Errorf("must parse: %v\n%s", perr, probe)
+	}
+}
