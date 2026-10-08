@@ -25,9 +25,8 @@ type MaestroStep map[string]interface{}
 // converter carries the state of converting one flow file: where it lives (to
 // resolve `runFlow` targets) and the recipe files it needs.
 type converter struct {
-	baseDir  string   // directory of the source YAML; "" when converting a string
-	uses     []string // `use` paths (relative to the output file) for runFlow targets
-	envNames map[string]bool
+	baseDir string   // directory of the source YAML; "" when converting a string
+	uses    []string // `use` paths (relative to the output file) for runFlow targets
 }
 
 // Options tunes ConvertFileWith.
@@ -505,10 +504,12 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 
 		case "setAirplaneMode":
 			enabled, _ := val.(bool)
+			state := "disable"
 			if enabled {
-				return "turn off wifi", "airplane mode is not directly supported — using wifi toggle"
+				state = "enable"
 			}
-			return "turn on wifi", "airplane mode is not directly supported — using wifi toggle"
+			return fmt.Sprintf("# TODO: setAirplaneMode %v — ProbeScript has no network step; run `adb shell cmd connectivity airplane-mode %s` from the harness", enabled, state),
+				"airplane mode has no ProbeScript equivalent — left as a TODO comment"
 
 		case "repeat":
 			if m, ok := val.(map[string]interface{}); ok {

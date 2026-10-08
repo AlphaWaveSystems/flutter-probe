@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
   unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
   matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **Converters no longer emit steps ProbeScript does not have:** `probe-convert` turned Maestro `openLink` into
+  `open "<url>"` (the valid form is `open link "<url>"`) and `setAirplaneMode` into `toggle wifi off`/`on` (no such
+  step); both converters now emit `open link` and a `# TODO` comment. The new dry-run check found these.
 - **`--composite-device` flags replace `composite.devices` from probe.yaml** instead of merging with it: a configured
   device that was down used to skip the whole composite test even when the flags named other devices.
 - **`probe test --dry-run` now resolves every step.** A step that is not a built-in and matches no recipe (a typo, a
