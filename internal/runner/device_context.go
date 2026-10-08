@@ -423,6 +423,13 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 			if tokenPath != "" {
 				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
 			}
+			// The connection often drops because the app went to the background (a link
+			// that opens Safari, a system sheet): iOS suspends it and its socket. If its
+			// process is alive, bring it back to the foreground before redialing; a
+			// crashed app is not relaunched here (that stays a clear failure).
+			if dc.AppID != "" && simctl.IsAppRunning(ctx, dc.Serial, dc.AppID) {
+				_ = simctl.Launch(ctx, dc.Serial, dc.AppID)
+			}
 		}
 	}
 

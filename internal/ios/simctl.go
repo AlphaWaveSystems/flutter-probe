@@ -145,6 +145,21 @@ func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte
 	return s.run(ctx, cmdArgs...)
 }
 
+// IsAppRunning reports whether the app has a live process in the simulator.
+func (s *SimCtl) IsAppRunning(ctx context.Context, udid, bundleID string) bool {
+	out, err := s.Spawn(ctx, udid, "launchctl", "list")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "UIKitApplication:"+bundleID) {
+			fields := strings.Fields(line)
+			return len(fields) > 0 && fields[0] != "-" // a PID in the first column
+		}
+	}
+	return false
+}
+
 // ResetPrefsDaemon kills the simulator's preferences daemon (cfprefsd). It keeps every app's
 // NSUserDefaults (shared_preferences on iOS) in memory and writes them back to the app
 // container on its own schedule, so deleting the files alone does not reset an app: the daemon

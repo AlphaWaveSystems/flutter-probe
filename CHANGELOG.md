@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-10-08
+
+### Fixed
+- **Actions scroll an off-screen target into view:** since 0.19.0 `tap "Service"` failed on a chip that is built but beyond the
+  viewport of a horizontal list (assertions rightly do not see it). `tap`, `long press`, `double tap`, `type` and `clear` now
+  scroll such a target into view first (`Scrollable.ensureVisible`), like a user. `see` / `don't see` still ignore it.
+- **iOS simulator, connection lost while the app is in the background** (a link that opens Safari): the reconnect brings the app
+  back to the foreground first when its process is alive, instead of redialing a suspended socket. A crashed app is still not
+  relaunched silently.
+- **`probe migrate maestro`:** a text-entry step (`eraseText`, `inputText`) after a `tapOn` that became a `# TODO` is no longer
+  emitted as a bare `clear` / `type` (nothing is focused); it becomes a TODO as well.
+
 ## [0.19.1] - 2026-10-08
 
 ### Fixed

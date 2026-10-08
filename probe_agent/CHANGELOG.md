@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.19.2 - 2026-10-08
+
+- Fixed: tap, long press, double tap, type and clear scroll a built but off-screen target into view (since 0.19.0 they failed on it).
+
 ## 0.19.1 - 2026-10-08
 
 - No agent change (iOS `clear app data` fix in the CLI); version aligned.
