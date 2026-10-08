@@ -2,7 +2,7 @@
 
 test "onboarding"
   open the app
-  wait for the page to load
+  wait for idle
   see "Welcome"
   take a screenshot called "welcome_screen"
   tap on "Get Started"

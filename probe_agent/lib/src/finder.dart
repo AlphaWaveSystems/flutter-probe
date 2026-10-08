@@ -212,7 +212,8 @@ class ProbeFinder {
       // Check if the widget is actually painted (not behind Offstage etc.)
       if (!ro.hasSize) return false;
     }
-    if (probeRouteOf(element)?.isCurrent == false) return false;
+    final route = probeRouteOf(element);
+    if (route != null && !route.isCurrent && !_routeOnScreen(route)) return false;
     // Walk up the tree to check for Offstage / Visibility ancestors
     Element? current = element;
     while (current != null) {
@@ -220,6 +221,50 @@ class ProbeFinder {
       if (widget is Offstage && widget.offstage) return false;
       if (widget is Visibility && !widget.visible) return false;
       current = _parentElement(current);
+    }
+    return true;
+  }
+
+  // The routes of the Navigator stack, bottom to top, as the tree lists them.
+  // Cached for a few milliseconds: _isVisible runs for every candidate element of
+  // one lookup, and the stack cannot change between them.
+  List<ModalRoute<dynamic>>? _stackCache;
+  int _stackStamp = -1;
+
+  List<ModalRoute<dynamic>> _routeStack() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final cached = _stackCache;
+    if (cached != null && now - _stackStamp < 5000) return cached;
+    final routes = <ModalRoute<dynamic>>[];
+    final root = WidgetsBinding.instance.rootElement;
+    void visit(Element e) {
+      final w = e.widget;
+      if (w is InheritedWidget && w.runtimeType.toString() == '_ModalScopeStatus') {
+        final r = (w as dynamic).route;
+        if (r is ModalRoute && !routes.contains(r)) routes.add(r);
+      }
+      e.visitChildren(visit);
+    }
+    if (root != null) {
+      try {
+        visit(root);
+      } catch (_) {}
+    }
+    _stackCache = routes;
+    _stackStamp = now;
+    return routes;
+  }
+
+  /// A route that is not current is still on screen when every route above it
+  /// is see-through (a dialog, a bottom sheet, a popup): the page underneath
+  /// stays painted, and so does what it shows — a SnackBar, say. Routes under
+  /// an opaque page are hidden and stay excluded (PT-03).
+  bool _routeOnScreen(ModalRoute<dynamic> route) {
+    final stack = _routeStack();
+    final i = stack.indexOf(route);
+    if (i < 0) return false;
+    for (var j = i + 1; j < stack.length; j++) {
+      if (stack[j].opaque) return false;
     }
     return true;
   }

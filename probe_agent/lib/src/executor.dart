@@ -669,7 +669,24 @@ class ProbeExecutor {
 
   // ---- Text input helpers ----
 
+  /// True for the empty selector a bare `type "x"` / `clear` sends: no target was
+  /// named, so the field that has focus is meant (not "the first text field").
+  bool _isFocusSelector(Map<String, dynamic> sel) {
+    final text = '${sel['text'] ?? ''}';
+    final kind = '${sel['kind'] ?? ''}';
+    return text.isEmpty && (kind.isEmpty || kind == 'text');
+  }
+
   Future<void> _typeText(Map<String, dynamic> sel, String text) async {
+    if (_isFocusSelector(sel)) {
+      final focused = _findFocusedEditableTarget();
+      if (focused == null) {
+        throw ProbeError(ProbeError.widgetNotFound,
+            'type: no text field has focus — tap the field first or use `type "..." into <field>`${_visibleHint()}');
+      }
+      _enterText(focused, text);
+      return;
+    }
     // Find the nearest EditableText in the widget tree near the selector
     final element = _requireElement(sel);
     final editable = _findEditableTarget(element);
@@ -775,6 +792,15 @@ class ProbeExecutor {
   }
 
   Future<void> _clearText(Map<String, dynamic> sel) async {
+    if (_isFocusSelector(sel)) {
+      final focused = _findFocusedEditableTarget();
+      if (focused == null) {
+        throw ProbeError(ProbeError.widgetNotFound,
+            'clear: no text field has focus — tap the field first or use `clear <field>`${_visibleHint()}');
+      }
+      _enterText(focused, '');
+      return;
+    }
     final element = _requireElement(sel);
     final target = _findEditableTarget(element);
     if (target != null) {

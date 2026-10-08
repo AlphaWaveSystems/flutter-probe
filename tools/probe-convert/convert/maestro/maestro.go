@@ -157,7 +157,7 @@ func convertStep(step map[string]interface{}) (string, string) {
 		case "hideKeyboard", "closeKeyboard":
 			return "close keyboard", ""
 		case "waitForAnimationToEnd":
-			return "wait for the page to load", ""
+			return "wait for idle", ""
 		case "wait":
 			if m, ok := val.(map[string]interface{}); ok {
 				if ms, ok := m["for"].(int); ok {
@@ -270,7 +270,7 @@ func convertStringStep(cmd string) (string, string) {
 	case "hideKeyboard":
 		return "close keyboard", ""
 	case "waitForAnimationToEnd":
-		return "wait for the page to load", ""
+		return "wait for idle", ""
 	default:
 		return "# " + cmd, "unknown string command: " + cmd
 	}

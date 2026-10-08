@@ -86,7 +86,7 @@ func TestConvertYAML_Wait(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, probe, "wait for the page to load")
+	assertContains(t, probe, "wait for idle")
 }
 
 func TestConvertYAML_LongPress(t *testing.T) {
@@ -490,5 +490,35 @@ func TestConvertYAML_LiteralRegexForms(t *testing.T) {
 	}
 	if strings.Count(probe, "# TODO") != 1 || len(warns) != 1 {
 		t.Errorf("only the mid-wildcard selector should keep a TODO, got %d TODO, warns %v:\n%s", strings.Count(probe, "# TODO"), warns, probe)
+	}
+}
+
+func TestConvertYAML_OptionalTypeIntoAndAnimation(t *testing.T) {
+	probe, _, err := migrate.ConvertYAML(`- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    id: login_email_field
+- eraseText
+- inputText: "a@b.c"
+- tapOn:
+    id: login_password_field
+- inputText: "secret"
+- assertVisible:
+    text: "Welcome"
+    optional: true
+- waitForAnimationToEnd
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`tap on "Allow" if visible`, `clear #login_email_field`, `type "a@b.c" into #login_email_field`,
+		`type "secret" into #login_password_field`, `see "Welcome" optional`, "wait for idle"} {
+		if !strings.Contains(probe, want) {
+			t.Errorf("missing %q in:\n%s", want, probe)
+		}
+	}
+	if _, err := parser.ParseFile(probe); err != nil {
+		t.Errorf("must parse: %v\n%s", err, probe)
 	}
 }
