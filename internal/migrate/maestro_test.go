@@ -562,3 +562,29 @@ func TestConvertYAML_ScrollUntilVisibleAndKeyboard(t *testing.T) {
 		t.Errorf("must parse: %v\n%s", err, probe)
 	}
 }
+
+func TestConvertYAML_RelativeSelectorAndAssertionAlternation(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML(`- tapOn:
+    below: "^Company$"
+- assertVisible: "Create Your Account|Confirm Your Details"
+- assertNotVisible: "Error|Failed"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(probe, "map[") {
+		t.Errorf("a Go map must never be printed as a selector:\\n%s", probe)
+	}
+	for _, want := range []string{"# TODO: tapOn with a selector ProbeScript cannot express (below: ^Company$)",
+		`see any of "Create Your Account", "Confirm Your Details"`, `don't see any of "Error", "Failed"`} {
+		if !strings.Contains(probe, want) {
+			t.Errorf("missing %q in:\n%s", want, probe)
+		}
+	}
+	if len(warns) != 1 {
+		t.Errorf("only the relative selector warns, got %v", warns)
+	}
+	if _, perr := parser.ParseFile(probe); perr != nil {
+		t.Errorf("must parse: %v\n%s", perr, probe)
+	}
+}

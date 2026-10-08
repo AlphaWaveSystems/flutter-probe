@@ -915,6 +915,33 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 
 	p.skipFillers()
 
+	// "see any of "A", "B"" / "don't see any of "A", "B""
+	if p.peekLiteral("any") {
+		p.advance()
+		p.skipFillers()
+		if p.peekLiteral("of") {
+			p.advance()
+			p.skipFillers()
+		}
+		var alts []string
+		for {
+			p.skipFillers()
+			if p.peek().Type == TOKEN_STRING {
+				alts = append(alts, p.advance().Literal)
+			} else if p.peekLiteral(",") || p.peekLiteral("or") {
+				p.advance()
+			} else {
+				break
+			}
+		}
+		if len(alts) < 2 {
+			return nil, fmt.Errorf("line %d: \"see any of\" needs at least two quoted alternatives", line)
+		}
+		optional := p.checkOptional()
+		p.consumeNewline()
+		return AssertStep{Negated: negated, Any: alts, Optional: optional, Line: line}, nil
+	}
+
 	// "see exactly N ..."
 	count := 0
 	if p.peek().Type == TOKEN_EXACTLY {

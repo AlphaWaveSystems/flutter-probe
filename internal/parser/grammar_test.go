@@ -192,6 +192,8 @@ func describe(s parser.Step) string {
 			kind = "assert:native"
 		case v.WithAI:
 			kind = "assert:ai"
+		case len(v.Any) > 0:
+			kind = "assert:any"
 		}
 		if v.Negated {
 			kind += ":negated"
@@ -662,6 +664,8 @@ var grammarProductionExamples = []productionExample{
 		want: repeat("assert:ai", 2)},
 	{production: "dont-see-step", src: testBody(`don't see "A"`, `dont see #a`, `don't see exactly 3 "A"`, `don't see "A" optional`),
 		want: repeat("assert:negated", 4)},
+	{production: "see-any-tail", src: testBody(`see any of "A", "B"`, `see any of "A" or "B" or "C" optional`, `don't see any of "A", "B"`),
+		want: []string{"assert:any", "assert:any", "assert:any:negated"}},
 	{production: "see-native-step", src: testBody(`see native "IMG"`, `don't see native "Err"`),
 		want: []string{"assert:native", "assert:native:negated"}},
 	{production: "assert-defects-step", src: testBody(`assert no visual defects with ai`, `assert no defects with ai`),

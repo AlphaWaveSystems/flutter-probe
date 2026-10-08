@@ -218,13 +218,24 @@ class ProbeFinder {
   /// Navigator ancestor at all (e.g. the root scaffold) — that case is
   /// treated as visible, since there's no ambiguity to resolve.
   bool _isVisible(Element element) {
-    final ro = element.renderObject;
+    // An element that is mid-rebuild or unmounted has no render object yet; in debug builds the
+    // `renderObject` getter then asserts instead of returning null. Not visible, not an error.
+    final RenderObject? ro;
+    try {
+      ro = element.renderObject;
+    } catch (_) {
+      return false;
+    }
     if (ro == null || !ro.attached) return false;
     if (ro is RenderBox) {
       // Zero-size widgets are not visible
       if (ro.size == Size.zero) return false;
       // Check if the widget is actually painted (not behind Offstage etc.)
       if (!ro.hasSize) return false;
+      // A widget laid out entirely outside the screen is not visible to the user: the
+      // neighbouring page of a PageView, a tab kept alive off to the side, a list item in the
+      // cache area beyond the viewport. Without this `don't see X` counted such copies.
+      if (_isOffScreen(ro)) return false;
     }
     final route = probeRouteOf(element);
     if (route != null && !route.isCurrent && !_routeOnScreen(route)) return false;
@@ -237,6 +248,18 @@ class ProbeFinder {
       current = _parentElement(current);
     }
     return true;
+  }
+
+  bool _isOffScreen(RenderBox ro) {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view == null || view.devicePixelRatio <= 0) return false;
+      final screen = Offset.zero & (view.physicalSize / view.devicePixelRatio);
+      final rect = ro.localToGlobal(Offset.zero) & ro.size;
+      return !rect.overlaps(screen);
+    } catch (_) {
+      return false; // cannot tell: assume visible
+    }
   }
 
   // The routes of the Navigator stack, bottom to top, as the tree lists them.

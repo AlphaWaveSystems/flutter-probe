@@ -207,3 +207,25 @@ func TestImplicitWaitRetriesNotFound(t *testing.T) {
 		t.Fatalf("expected a failure after retries, err=%v calls=%d", err, c.calls)
 	}
 }
+
+func TestSeeAnyOfAndTransientAssertionRetry(t *testing.T) {
+	c := &seeClient{visible: map[string]bool{"Second": true}}
+	e := NewExecutor(c, nil, func(probelink.ProbeClient) {}, 5*time.Second, false)
+	if err := e.runStep(context.Background(), parser.AssertStep{Any: []string{"First", "Second"}}); err != nil {
+		t.Fatalf("see any of: one alternative is on screen, want pass: %v", err)
+	}
+	if err := e.runStep(context.Background(), parser.AssertStep{Any: []string{"Nope", "Neither"}}); err == nil || !strings.Contains(err.Error(), "none of them is on screen") {
+		t.Fatalf("see any of with nothing on screen must fail with that message, got %v", err)
+	}
+	if err := e.runStep(context.Background(), parser.AssertStep{Negated: true, Any: []string{"Nope", "Neither"}}); err != nil {
+		t.Fatalf("don't see any of with nothing on screen must pass: %v", err)
+	}
+	if err := e.runStep(context.Background(), parser.AssertStep{Negated: true, Any: []string{"First", "Second"}}); err == nil {
+		t.Fatal("don't see any of with one alternative on screen must fail")
+	}
+	if !isTransientAssertion(fmt.Errorf("rpc error -32603: 'package:flutter/src/rendering/proxy_box.dart': Failed assertion: line 3553 pos 12: '!debugNeedsPaint': is not true")) ||
+		!isTransientAssertion(fmt.Errorf("Failed assertion: line 6620 pos 12: '_renderObject != null'")) ||
+		isTransientAssertion(fmt.Errorf("Widget not found")) {
+		t.Fatal("transient assertion detection is wrong")
+	}
+}

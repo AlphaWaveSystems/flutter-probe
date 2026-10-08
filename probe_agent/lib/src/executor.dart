@@ -1372,7 +1372,22 @@ class ProbeExecutor {
     // Primary path: RenderRepaintBoundary.toImage() — works on both Skia and
     // Impeller. OffsetLayer.toImage() returns a GPU-backed texture on Impeller
     // where toByteData(png) returns null, so we can't rely on it for iOS.
-    final pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+    // Right after a route push or a rebuild a RenderRepaintBoundary can still need paint, and
+    // toImage asserts `!debugNeedsPaint` in debug builds. Let the pending frame paint and try
+    // again (bounded) instead of failing the step.
+    Uint8List? pngBytes;
+    for (var attempt = 0;; attempt++) {
+      try {
+        pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+        break;
+      } on AssertionError {
+        // FlutterError is an AssertionError subtype too
+        if (attempt >= 12) rethrow;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      WidgetsBinding.instance.scheduleFrame();
+      await WidgetsBinding.instance.endOfFrame;
+    }
     if (pngBytes == null) {
       throw ProbeError(ProbeError.internalError, 'Screenshot capture failed: no renderable surface');
     }

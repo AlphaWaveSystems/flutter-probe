@@ -233,6 +233,7 @@ type AssertStep struct {
 	Pattern  string     // regex for "matching"
 	WithAI   bool       // see "<natural-language assertion>" with ai
 	Optional bool       // if true, attempt the assertion but don't fail the test if it doesn't hold
+	Any      []string   // see any of "A", "B": passes when any alternative is on screen (don't see any of: none is)
 	Native   bool       // see native "..." — matched against uiautomator's text/resource-id, not the Flutter agent
 	Line     int
 }

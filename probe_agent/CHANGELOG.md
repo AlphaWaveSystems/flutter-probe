@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.19.0 - 2026-10-08
+
+- Fixed: text/id lookups ignore widgets laid out entirely off screen and elements without a render object (mid-rebuild); `screenshot` retries while a boundary still needs paint.
+
 ## 0.18.1 - 2026-10-08
 
 - Fixed: `probe.set_time_dilation` with a non-positive factor sets 0.001 instead of an invalid 0.

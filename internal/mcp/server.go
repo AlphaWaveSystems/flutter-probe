@@ -178,6 +178,7 @@ Supports the full ProbeScript syntax:
                      share sheet (activity sheet) is detected too when project.app is set:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Keyboard:        press enter — the keyboard action key on the focused text field.
+  See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first
                      (an optional consent dialog, a login or home screen).
   Idle:            wait for idle — after closing a dialog/sheet, waits for route

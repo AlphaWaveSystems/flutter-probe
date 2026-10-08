@@ -573,8 +573,9 @@ test "typing"
 ### Assertions
 
 ```ebnf
-see-step      = "see" , see-tail , [ "with" , "ai" ] , [ optional-mod ] ;
-dont-see-step = ( "don't see" | "dont see" ) , see-tail , [ optional-mod ] ;
+see-step      = "see" , ( see-tail , [ "with" , "ai" ] | see-any-tail ) , [ optional-mod ] ;
+dont-see-step = ( "don't see" | "dont see" ) , ( see-tail | see-any-tail ) , [ optional-mod ] ;
+see-any-tail  = fillers , "any" , fillers , [ "of" ] , alt-list ;       (* passes when any alternative is on screen; don't see: when none is *)
 see-native-step = ( "see" | "don't see" | "dont see" ) , "native" , fillers , text-operand ;
 
 see-tail      = fillers , [ "exactly" , [ INT ] , fillers ] , selector ,
@@ -598,6 +599,8 @@ test "assertions"
   see "Email" matching ".*@.*"
   see "Price" contains "$" matching "[0-9]+"
   see exactly 3 "Item"
+  see any of "Create Your Account", "Confirm Your Details"
+  don't see any of "Error", "Failed"
   see exactly 2 2nd "Row"
   see #welcome_banner
   see 2nd "Item"
