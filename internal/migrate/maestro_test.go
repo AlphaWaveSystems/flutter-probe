@@ -1,6 +1,8 @@
 package migrate_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -324,5 +326,70 @@ func assertContains(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {
 		t.Errorf("expected output to contain %q\ngot:\n%s", needle, haystack)
+	}
+}
+
+func TestConvertFile_RunFlowBecomesRecipeAndUse(t *testing.T) {
+	dir := t.TempDir()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(dir, "in", "helpers"), 0o755))
+	must(os.MkdirAll(filepath.Join(dir, "in", "flows"), 0o755))
+	must(os.WriteFile(filepath.Join(dir, "in", "helpers", "login-flow.yaml"), []byte("- tapOn: \"Login\"\n"), 0o644))
+	must(os.WriteFile(filepath.Join(dir, "in", "flows", "a.yaml"),
+		[]byte("- launchApp\n- runFlow: ../helpers/login-flow.yaml\n"), 0o644))
+
+	files, err := migrate.DiscoverYAMLFiles([]string{filepath.Join(dir, "in")})
+	must(err)
+	opts := migrate.Options{RecipeFiles: migrate.RunFlowTargets(files)}
+	out := filepath.Join(dir, "out")
+	for _, f := range files {
+		base := strings.TrimSuffix(filepath.Base(f.Path), ".yaml")
+		_, err := migrate.ConvertFileWith(f.Path, filepath.Join(out, f.RelDir, base+".probe"), opts)
+		must(err)
+	}
+
+	flow, err := os.ReadFile(filepath.Join(out, "flows", "a.probe"))
+	must(err)
+	if !strings.Contains(string(flow), `use "../helpers/login-flow.probe"`) || !strings.Contains(string(flow), "flow login flow") {
+		t.Errorf("flow should use the converted recipe file and call the recipe:\n%s", flow)
+	}
+	if strings.Contains(string(flow), ".yaml") {
+		t.Errorf("no .yaml may remain in the converted flow:\n%s", flow)
+	}
+	helper, err := os.ReadFile(filepath.Join(out, "helpers", "login-flow.probe"))
+	must(err)
+	if !strings.HasPrefix(string(helper), `recipe "flow login flow"`) {
+		t.Errorf("helper should be a recipe:\n%s", helper)
+	}
+}
+
+func TestConvertYAML_EvalScriptIsAComment(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML("- evalScript: \"output.x = 1\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(probe, "\n") {
+		l = strings.TrimSpace(l)
+		if strings.Contains(l, "evalScript") && !strings.HasPrefix(l, "#") {
+			t.Errorf("evalScript must be a # comment, got %q", l)
+		}
+	}
+	if len(warns) == 0 {
+		t.Error("expected a warning")
+	}
+}
+
+func TestConvertYAML_RegexSelectorGetsATodo(t *testing.T) {
+	probe, warns, err := migrate.ConvertYAML("- extendedWaitUntil:\n    visible: \"Got it|Login\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(probe, "# TODO: Maestro matches") || len(warns) == 0 {
+		t.Errorf("regex selector should be flagged:\n%s\n%v", probe, warns)
 	}
 }

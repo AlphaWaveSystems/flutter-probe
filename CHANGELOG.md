@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.16.6] - 2026-10-07
 
 ### Fixed
+- **`probe migrate maestro` and `runFlow`:** a `runFlow` target is now converted to a recipe file
+  (`recipe "flow <file name>"`, written at the mirrored path) and the caller gets `use "<file>.probe"` plus a call to the
+  recipe. Before it emitted `use "<helper>.yaml"`, which is not ProbeScript, so every migrated flow with a helper failed.
+  `runFlow` options (`env`, `when`) are dropped with a warning.
+- **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
+  unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
+  matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **`--composite-device` flags replace `composite.devices` from probe.yaml** instead of merging with it: a configured
+  device that was down used to skip the whole composite test even when the flags named other devices.
 - **`probe test --dry-run` now resolves every step.** A step that is not a built-in and matches no recipe (a typo, a
   verb that does not exist, such as `hide keyboard`) fails the dry run, also when it sits inside a recipe the test calls
   or in a hook. Before, dry-run reported such tests as passed and they only failed at runtime.

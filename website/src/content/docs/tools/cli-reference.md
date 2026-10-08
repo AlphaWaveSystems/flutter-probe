@@ -14,7 +14,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe device start` | Start an emulator/simulator |
 | `probe record` | Record user interactions as ProbeScript |
 | `probe report` | Generate HTML report from test results |
-| `probe migrate` | Convert Maestro YAML flows to ProbeScript |
+| `probe migrate` | Convert Maestro YAML flows to ProbeScript. A flow pulled in with `runFlow` is converted to a recipe file (`recipe "flow <file name>"`) and the caller gets `use "<file>.probe"` plus a call to it. Maestro regex selectors (`A\|B`, `.*x.*`), `evalScript` and `${ENV}` placeholders are not translated: they get a `# TODO` comment and a warning |
 | `probe generate` | AI-assisted test generation (any `ai:` provider, including a local model) |
 | `probe system-dialog` | Drive OS system dialogs (permission alerts, sign-in sheets): `tap`, `type`, `see`, `wait`, `dismiss`, `list`, `sign-in-sandbox`. See [System dialogs](/tools/system-dialogs/) |
 | `probe ios-driver` | Manage the iOS system-dialog driver: `install`, `status`, `stop` |

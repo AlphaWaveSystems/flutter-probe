@@ -593,7 +593,7 @@ class ProbeExecutor {
       for (final e in result.path) {
         final t = e.target;
         if (t is RenderObject) names.add('${t.runtimeType}');
-        if (names.length >= 14) break;
+        if (names.length >= 5) break;
       }
       return names.isEmpty ? 'nothing' : names.join(' < ');
     } catch (_) {
