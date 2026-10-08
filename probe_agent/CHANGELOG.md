@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.19.3 - 2026-10-08
+
+- Fixed: the target of a bare `scroll` / `swipe` ranks scrollables that can scroll (extent > 0, physics accepting user input) before ones that cannot (a non-scrollable PageView).
+
 ## 0.19.2 - 2026-10-08
 
 - Fixed: tap, long press, double tap, type and clear scroll a built but off-screen target into view (since 0.19.0 they failed on it).

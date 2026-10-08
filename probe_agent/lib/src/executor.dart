@@ -1259,10 +1259,13 @@ class ProbeExecutor {
     // order and the same size as the visible one, and `scroll down` then moves
     // nothing on screen. Prefer a scrollable that actually receives touches at
     // its own center; fall back to the largest of all if none does.
-    ScrollableState? bestHit;
-    double bestHitArea = 0;
-    ScrollableState? bestAny;
-    double bestAnyArea = 0;
+    // Rank: a scrollable that can actually be scrolled by the user (extent > 0 and physics that
+    // accepts user input) beats one that cannot — a PageView with NeverScrollableScrollPhysics is
+    // the biggest scrollable on its screen but never moves, while the page inside it does — then
+    // one that receives touches at its center, then the largest.
+    ScrollableState? best;
+    var bestRank = -1;
+    var bestArea = 0.0;
     void visit(Element e) {
       if (probeRouteOf(e)?.isCurrent == false) return;
       if (e is StatefulElement && e.state is ScrollableState) {
@@ -1270,21 +1273,26 @@ class ProbeExecutor {
         final box = state.context.findRenderObject();
         if (box is RenderBox && box.hasSize) {
           final area = box.size.width * box.size.height;
-          if (area > bestAnyArea) {
-            bestAnyArea = area;
-            bestAny = state;
+          var rank = 0;
+          try {
+            final pos = state.position;
+            final extent = pos.maxScrollExtent - pos.minScrollExtent;
+            if (extent > 1.0 && pos.physics.shouldAcceptUserOffset(pos)) rank += 2;
+          } catch (_) {
+            // position not ready: treat as scrollable-unknown (rank unchanged)
           }
-          if (area > bestHitArea && box.attached &&
-              _isTopmostAt(box, box.localToGlobal(box.size.center(Offset.zero)))) {
-            bestHitArea = area;
-            bestHit = state;
+          if (box.attached && _isTopmostAt(box, box.localToGlobal(box.size.center(Offset.zero)))) rank += 1;
+          if (rank > bestRank || (rank == bestRank && area > bestArea)) {
+            bestRank = rank;
+            bestArea = area;
+            best = state;
           }
         }
       }
       e.visitChildren(visit);
     }
     WidgetsBinding.instance.rootElement?.visitChildren(visit);
-    return bestHit ?? bestAny;
+    return best;
   }
 
   Future<void> _drag(
