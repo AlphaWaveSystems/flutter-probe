@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-08
+
+### Fixed
+- **`clear app data` on an iOS simulator now resets `shared_preferences` / `NSUserDefaults`:** the files were deleted, but the
+  simulator's preferences daemon (cfprefsd) kept the old values in memory (and can write them back), so a relaunched app
+  could still be "already onboarded". The daemon is restarted before and after the container is wiped. The mechanism
+  (`launchctl kill` of the daemon through `simctl spawn`) was checked on a simulator, but the full effect on an app that
+  persists a flag was not reproduced here.
+
 ## [0.19.0] - 2026-10-08
 
 ### Added
