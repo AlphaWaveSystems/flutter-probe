@@ -672,8 +672,8 @@ var grammarProductionExamples = []productionExample{
 	// waits
 	{production: "wait-duration-step", src: testBody(`wait 5 seconds`, `wait 1 second`, `wait 1.5 seconds`, `wait 2`),
 		want: repeat("wait:duration", 4)},
-	{production: "wait-until-step", src: testBody(`wait until "A" appears`, `wait until "A" disappears`, `wait until A`, `wait until "A"`),
-		want: []string{"wait:appears", "wait:disappears", "wait:appears", "wait:appears"}},
+	{production: "wait-until-step", src: testBody(`wait until "A" appears`, `wait until "A" disappears`, `wait until A`, `wait until "A"`, `wait until "0 ml" appears matching "^0 ml$"`),
+		want: []string{"wait:appears", "wait:disappears", "wait:appears", "wait:appears", "wait:appears"}},
 	{production: "wait-any-step", src: testBody(`wait until any of "A", "B" appears`, `wait until any of "A" or "B" or "C"`),
 		want: repeat("wait:any", 2)},
 	{production: "wait-idle-step", src: testBody(`wait for idle`, `wait until idle`), want: repeat("wait:idle", 2)},

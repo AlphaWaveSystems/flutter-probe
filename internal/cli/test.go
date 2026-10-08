@@ -92,6 +92,7 @@ func init() {
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
+	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
@@ -223,6 +224,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	adbPath, _ := cmd.Flags().GetString("adb")
 	flutterPath, _ := cmd.Flags().GetString("flutter")
 	autoYes, _ := cmd.Flags().GetBool("yes")
+	noGrantOnClear, _ := cmd.Flags().GetBool("no-grant-on-clear")
 	grantPerms, _ := cmd.Flags().GetStringSlice("grant")
 	for i, g := range grantPerms {
 		grantPerms[i] = strings.ToLower(strings.TrimSpace(g))
@@ -1066,7 +1068,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			AgentHost:               agentHost,  // device IP for WiFi mode
 			AllowClearData:          autoYes,
 			Confirm:                 confirmFunc(),
-			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,
+			GrantPermissionsOnClear: (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear,
 			ReconnectDelay:          cfg.Agent.ReconnectDelay,
 			RestartDelay:            cfg.Device.RestartDelay,
 			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,

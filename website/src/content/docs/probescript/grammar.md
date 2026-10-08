@@ -644,7 +644,8 @@ test "ai steps"
 ```ebnf
 wait-duration-step   = "wait" , fillers , ( INT | FLOAT ) , fillers , [ "seconds" | "second" ] ;
 wait-until-step      = "wait" , fillers , "until" , fillers , text-operand , fillers ,
-                       [ "appears" | "disappears" ] ;                (* default: appears *)
+                       [ "appears" , fillers , [ "matching" , fillers , STRING ]
+                       | "disappears" ] ;                            (* default: appears; matching = regex the text must match *)
 wait-any-step        = "wait" , fillers , "until" , fillers , "any" , fillers ,
                        alt-list , fillers , [ "appears" ] ;
 alt-list             = STRING , { alt-sep } , STRING , { { alt-sep } , STRING } ;
@@ -671,6 +672,7 @@ test "waits"
   wait 1.5 seconds
   wait 2
   wait until "Dashboard" appears
+  wait until "0 ml" appears matching "^0 ml$"
   wait until "Loading" disappears
   wait until Dashboard
   wait until #spinner disappears

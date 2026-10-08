@@ -532,6 +532,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.WaitDuration:
 			return fmt.Sprintf("wait %.0f seconds", s.Duration)
 		case parser.WaitAppears:
+			if s.Pattern != "" {
+				return fmt.Sprintf("wait until %q appears matching %q", s.Target, s.Pattern)
+			}
 			return fmt.Sprintf("wait until %q appears", s.Target)
 		case parser.WaitDisappears:
 			return fmt.Sprintf("wait until %q disappears", s.Target)
@@ -1301,6 +1304,7 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	return e.client.Wait(ctx, probelink.WaitParams{
 		Kind:     kindStr,
 		Target:   e.resolve(w.Target),
+		Pattern:  w.Pattern,
 		Duration: w.Duration,
 		Timeout:  agentWaitTimeout(e.timeout).Seconds(),
 	})

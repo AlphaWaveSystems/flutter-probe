@@ -1085,8 +1085,14 @@ func (p *Parser) parseWait() (Step, error) {
 		switch p.peek().Type {
 		case TOKEN_APPEARS:
 			p.advance()
+			p.skipFillers()
+			pattern := ""
+			if p.peek().Type == TOKEN_MATCHING {
+				p.advance()
+				pattern = p.expectString("regex pattern")
+			}
 			p.consumeNewline()
-			return WaitStep{Kind: WaitAppears, Target: target, Line: line}, nil
+			return WaitStep{Kind: WaitAppears, Target: target, Pattern: pattern, Line: line}, nil
 		case TOKEN_DISAPPEARS:
 			p.advance()
 			p.consumeNewline()

@@ -741,7 +741,7 @@ func (dc *DeviceContext) OpenDeepLink(ctx context.Context, url string) error {
 	fmt.Printf("    \033[36m🔗\033[0m  Opening %s via the OS (not the app's own url_launcher)\n", url)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if err := dc.Manager.ADB().OpenURL(ctx, dc.Serial, url); err != nil {
+		if err := dc.Manager.ADB().OpenURLIn(ctx, dc.Serial, url, dc.AppID); err != nil {
 			return fmt.Errorf("open link into the app: %w", err)
 		}
 	case device.PlatformIOS:

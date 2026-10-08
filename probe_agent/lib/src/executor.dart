@@ -968,7 +968,7 @@ class ProbeExecutor {
         await Future.delayed(Duration(milliseconds: (duration * 1000).toInt()));
 
       case 'appears':
-        await _waitUntilVisible(target, timeoutDur, expect: true);
+        await _waitUntilVisible(target, timeoutDur, expect: true, pattern: params['pattern'] as String? ?? '');
 
       case 'disappears':
         await _waitUntilVisible(target, timeoutDur, expect: false);
@@ -1032,7 +1032,7 @@ class ProbeExecutor {
     throw ProbeError(ProbeError.timeout, 'Timed out waiting for animations to finish');
   }
 
-  Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect}) async {
+  Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect, String pattern = ''}) async {
     // PT-06: WaitStep carries only a raw target string, not a selector kind
     // (unlike Selector/SelectorParam used by tap/type), so an id target must
     // be detected from its '#' prefix here — this previously always built a
@@ -1044,9 +1044,20 @@ class ProbeExecutor {
     final sel = text.startsWith('#')
         ? {'kind': 'id', 'text': text}
         : {'kind': 'text', 'text': text};
+    RegExp? re;
+    if (pattern.isNotEmpty) {
+      try {
+        re = RegExp(pattern);
+      } on FormatException catch (e) {
+        throw ProbeError(ProbeError.assertFailed, 'Invalid regular expression "$pattern": ${e.message}');
+      }
+    }
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      final found = _finder.findElements(sel).isNotEmpty;
+      final elements = _finder.findElements(sel);
+      // `appears matching "<re>"`: the text must also match the expression
+      // (substring selectors alone cannot say "exactly 0 ml").
+      final found = re == null ? elements.isNotEmpty : elements.any((e) => re!.hasMatch(_textOf(e)));
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
       await _sync.waitForSettled(timeout: const Duration(seconds: 1));
@@ -1054,7 +1065,7 @@ class ProbeExecutor {
     final desc = expect ? 'appear' : 'disappear';
     throw ProbeError(
       ProbeError.timeout,
-      'Timed out waiting for "$text" to $desc${_visibleHint()}',
+      'Timed out waiting for "$text" to $desc${pattern.isEmpty ? '' : ' matching /$pattern/'}${_visibleHint()}',
     );
   }
 
