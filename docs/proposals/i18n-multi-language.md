@@ -37,6 +37,30 @@ localized apps without rewriting tests per language.
 6. **Docs and surfaces, in every phase:** grammar (EBNF) + conformance test, dictionary/syntax, MCP guide, VS Code
    snippets/grammar, a "Testing localized apps" guide, README, CHANGELOG.
 
+## Also planned: backend awareness (P6, requested 2026-10-09)
+
+React to what backend services and BFFs return, to test behaviour that depends on data the UI does not show.
+
+Finding: the `mock` block is advertised ("when the app calls POST ... respond with 503") but the agent only stores the mock in a
+map (`ProbeExecutor._mocks`, read by `mockFor`, which nothing calls and the package does not export); nothing intercepts the app's
+traffic. P6 starts by making interception real.
+
+- Agent: install an `HttpOverrides` wrapper at `ProbeAgent.start()` for `dart:io` `HttpClient` (covers `http`, dio's default adapter,
+  most Dart clients; not native SDK calls, WebViews or `dart:html`). It (1) records method, url, status, selected headers
+  (Authorization/Cookie/Set-Cookie redacted) and a capped body (default 64 KB) per exchange in a ring buffer, (2) applies
+  mocks (status, body, headers, delay, connection failure), (3) feeds the existing in-flight tracking used by `wait for idle`.
+  Capture can be turned off (`PROBE_HTTP_CAPTURE=false`); it never exists in release builds.
+- RPCs: `probe.http_log` (filtered, since a cursor), `probe.http_clear`, `probe.mock` (now effective).
+- ProbeScript (all in the EBNF + conformance test):
+  - `wait for response GET "/api/orders" [status 200]`
+  - `see response "/api/me" status 200` / `contains "premium"` / `json "data.plan" equals "pro"`
+  - `store response "/api/me" json "data.plan" as plan` (then `<plan>` in later steps)
+  - `if response "/api/me" json "data.plan" equals "pro"` ... `otherwise` (same block rules as `if "X" appears`)
+  - `see exactly 2 requests GET "/api/orders"`, `clear recorded requests`
+  - `mock GET "/api/orders" status 503 [delay 2 seconds | fail]` (modernised form of the old mock block)
+- Docs: a "Testing against backend data" guide, plus the surfaces required by the docs rule.
+- Release: R4 (0.23.0), after R1-R3, unless the user reprioritises.
+
 ## Status
 
 - P3 loose matching: implemented (0.20.0).
