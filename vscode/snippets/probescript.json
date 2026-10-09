@@ -161,5 +161,14 @@
     "prefix": "seea",
     "body": "see any of \"${1:first}\", \"${2:second}\"",
     "description": "Assert that any one of several texts is on screen (per-language labels)"
+  },
+  "Set app language": {
+    "prefix": "setlanguage",
+    "body": [
+      "set language \"${1:de}\"",
+      "wait until \"${2:element}\" appears",
+      "$0"
+    ],
+    "description": "Relaunch the app in another language (Android 13+, iOS simulator)"
   }
 }

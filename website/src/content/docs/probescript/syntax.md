@@ -221,6 +221,18 @@ paste from clipboard               # stores result in <clipboard> variable
 type "<clipboard>" into "Email"    # use the pasted value
 ```
 
+## App Language
+
+```
+set language "de"                  # relaunch the app in German (also "pt-BR", "ja", "ar", ...)
+see "Einstellungen"
+set language "system"              # back to the device language
+```
+
+The app is force-stopped and relaunched, so app state is lost (data on disk is kept). Android 13+ uses per-app locales; an iOS
+simulator gets the language as a launch argument. Right-to-left languages (`ar`, `he`, `fa`, `ur`) flip the layout because
+Flutter follows the locale. Not supported on physical iOS devices. See [Testing localized apps](/advanced/multi-language/).
+
 ## Device Location
 
 ```

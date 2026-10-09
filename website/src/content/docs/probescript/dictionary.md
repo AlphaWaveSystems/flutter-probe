@@ -132,6 +132,7 @@ Commands for device-level operations.
 | Command | Syntax | Description |
 |---|---|---|
 | `set location` | `set location 37.7749, -122.4194` | Set GPS coordinates (emulator/simulator only) |
+| `set language` | `set language "de"` · `"pt-BR"` · `"ar"` · `"system"` | Run the app in another language and relaunch it (Android 13+, iOS simulator). `"system"` removes the override. The device language and system dialogs are unchanged |
 | `travel to` | `travel to` (indented waypoints) `over N seconds` | Simulate GPS movement through an ordered list of waypoints over a duration (emulator/simulator only) — see example below |
 | `verify external browser` | `verify external browser opened` | Assert that `url_launcher` was called |
 

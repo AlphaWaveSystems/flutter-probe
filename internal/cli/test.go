@@ -95,6 +95,8 @@ func init() {
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
 	f.Bool("match-loose", false, "match text selectors loosely: fold case, accents, typographic apostrophes/dashes and whitespace (also defaults.match: loose in probe.yaml)")
 	f.Duration("implicit-wait", 0, "retry tap/type/see steps whose target is not on screen yet for up to this long before failing (Maestro-style implicit waiting); 0 uses probe.yaml defaults.implicit_wait, default off")
+	f.String("locale", "", `run the app in this language (BCP-47, e.g. "de", "pt-BR", "ar"; "system" = device default). Android 13+ and iOS simulators; the device language itself is unchanged`)
+	f.String("locales", "", `run the whole suite once per language (comma-separated, e.g. "de,ja,ar"), each in its own run; -o report files get the tag in their name`)
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
@@ -174,6 +176,9 @@ func init() {
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
+	if multi, _ := cmd.Flags().GetString("locales"); strings.TrimSpace(multi) != "" {
+		return runLocaleMatrix(cmd, multi)
+	}
 	// Cancel the run on Ctrl-C / SIGTERM so deferred cleanup (iproxy, ADB
 	// forwards, idevicesyslog) actually runs. A second signal force-exits in
 	// case shutdown stalls; the user shouldn't have to wait for a hung test.
@@ -807,6 +812,28 @@ func runTests(cmd *cobra.Command, args []string) error {
 				statusOK(statusW, msgAppInstalledAndLaunched)
 			}
 
+			// --locale: set the app language and relaunch before the agent connects.
+			if lang, _ := cmd.Flags().GetString("locale"); strings.TrimSpace(lang) != "" {
+				if cfg.Project.App == "" {
+					return fmt.Errorf("--locale: project.app must be set in probe.yaml")
+				}
+				lc := &runner.DeviceContext{
+					Manager: dm, Serial: deviceSerial, Platform: platform, AppID: cfg.Project.App,
+					IsPhysical:   platform == device.PlatformIOS && dm.IsPhysicalIOS(ctx, deviceSerial),
+					RestartDelay: cfg.Device.RestartDelay,
+				}
+				if err := lc.SetLanguage(ctx, lang); err != nil {
+					return fmt.Errorf("--locale: %w", err)
+				}
+				if platform == device.PlatformAndroid {
+					_ = dm.ADB().ClearLogcat(ctx, deviceSerial) // so the relaunch prints a fresh token
+				}
+				if err := lc.RestartApp(ctx); err != nil {
+					return fmt.Errorf("--locale: relaunch: %w", err)
+				}
+				statusOK(statusW, "App language set to %s", lang)
+			}
+
 			host := "127.0.0.1"
 			if agentHost != "" {
 				host = agentHost
@@ -995,6 +1022,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var runMeta runner.RunMetadata
 	if !dryRun && dm != nil { //nolint:nestif
 		meta := runner.RunMetadata{
+			Locale:   func() string { l, _ := cmd.Flags().GetString("locale"); return strings.TrimSpace(l) }(),
 			DeviceID: deviceSerial,
 			Platform: string(platform),
 			Provider: "local",

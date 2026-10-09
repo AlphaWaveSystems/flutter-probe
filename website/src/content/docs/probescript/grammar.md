@@ -822,6 +822,7 @@ test "clipboard"
 ```probe
 test "location and media"
   set location 37.7749, -122.4194
+  set language "de"
   set location -33.8688, 151.2093
   add media "fixtures/photo.jpg"
 ```

@@ -140,6 +140,15 @@ registered by your app is delivered to the app itself — including cold-launchi
 terminated (unlike iOS Simulator; see the iOS page). Plain `open link "https://..."` (no suffix)
 still opens the external browser via `url_launcher`.
 
+## App language
+
+```
+set language "de"        # cmd locale set-app-locales (Android 13+ / API 33)
+```
+
+Per-app language, then a relaunch. Older images fail with a clear error. `probe test --locale de` or `--locales de,ja,ar` do the
+same for a whole run. The emulator's own language and its permission dialogs are unchanged.
+
 ## Location
 
 ```

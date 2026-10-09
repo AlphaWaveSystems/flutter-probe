@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`set language "de"`** (ProbeScript) and **`probe test --locale de`**: run the app in another language (BCP-47 tag, `"system"` resets). Android 13+ per-app locales; iOS simulator launch arguments (also applied on `restart the app`/`clear app data`). Right-to-left languages flip the layout. Physical iOS devices are rejected with a clear message. Grammar page and conformance test updated.
+- **`probe test --locales de,ja,ar`**: the suite once per language in separate runs; `-o r.json` becomes `r.de.json`, ...; per-language pass/fail table; reports record `locale`.
+
 ## [0.20.0] - 2026-10-09
 
 ### Fixed

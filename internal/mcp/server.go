@@ -180,7 +180,9 @@ Supports the full ProbeScript syntax:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Devices:         start_device names every simulator it boots (name arg; created when
                      missing); results carry the device name and id.
-  Languages:       prefer #key selectors. Run with --match-loose to fold case, accents and
+  Languages:       set language "de" (or "pt-BR", "ar", "system") relaunches the app in that
+                     language; probe test --locale de / --locales de,ja,ar do it per run.
+                     prefer #key selectors. Run with --match-loose to fold case, accents and
                      typographic apostrophes in text selectors; use see any of "A", "B" for
                      per-language labels. System-dialog buttons resolve by role (allow, deny,
                      cancel, ...), so tap "Don't Allow" in system dialog works on a device set
@@ -285,6 +287,8 @@ Key flags for the flags parameter:
   --grant notifications,camera  pre-grant OS permissions before the first test
                                (Android: pm grant; iOS simulator: simctl privacy; iOS
                                notifications: a watcher taps Allow when the alert appears)
+  --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
+  --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
