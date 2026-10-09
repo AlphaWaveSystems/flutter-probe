@@ -246,3 +246,10 @@ func LabelRole(label string) (role string, ok bool) {
 	}
 	return role, role != ""
 }
+
+func init() {
+	extraLabelRole = func(folded string) (Role, bool) {
+		r, ok := LabelRole(folded)
+		return Role(r), ok
+	}
+}

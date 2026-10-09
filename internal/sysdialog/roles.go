@@ -43,7 +43,7 @@ var androidIDRoles = map[string]Role{
 	"permission_deny_and_dont_ask_again_button": RoleDeny,
 }
 
-// extraLabelRole is filled by the measured iOS label table (labels_ios.go) and by
+// extraLabelRole is filled by the measured iOS label table (labels_table.go) and by
 // user-supplied labels, to translate a button label of any language to its role.
 var extraLabelRole func(folded string) (Role, bool)
 

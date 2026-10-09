@@ -68,3 +68,19 @@ func TestDismissButtonByRole(t *testing.T) {
 		t.Errorf("English cancel: %d", i)
 	}
 }
+
+func TestRoleOfMeasuredIOSLabels(t *testing.T) {
+	cases := map[string]Role{
+		"Nicht erlauben":                  RoleDeny,
+		"Erlauben":                        RoleAllow,
+		"Beim Verwenden der App erlauben": RoleAllowWhileUsing,
+		"Einmal erlauben":                 RoleAllowOnce,
+		"Autoriser":                       RoleAllow,
+		"Ne pas autoriser":                RoleDeny,
+	}
+	for label, want := range cases {
+		if got, ok := RoleOf(label); !ok || got != want {
+			t.Errorf("RoleOf(%q) = %q, %v; want %q", label, got, ok, want)
+		}
+	}
+}

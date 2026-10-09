@@ -52,7 +52,7 @@ dismiss system dialog                    # the cancel-like button in the device'
 ```
 
 On Android the roles come from the permission dialog's language-independent resource ids; on iOS from a table of labels measured
-on real simulators for each language (`docs/evidence/i18n-ios-dialog-labels-*`). An exact label of the device always wins over a role.
+on real simulators for each language (`docs/evidence/i18n-ios-dialog-labels-*`). Measured for allow, deny, allow once and allow while using in 27 languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). `ok`, `cancel` and `open` labels outside English are not measured yet (use the exact label, or `dismiss system dialog`). An exact label of the device always wins over a role.
 
 ## What is not covered yet
 
