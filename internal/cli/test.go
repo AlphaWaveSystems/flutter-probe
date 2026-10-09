@@ -18,6 +18,8 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/l10n"
+	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
@@ -336,6 +338,25 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Fail fast, before any device connection, if a test uses "with ai" but
 	// no AI provider is configured. Never a silent no-op or implicit cloud call.
 	if err := validateAIConfig(files, cfg); err != nil {
+		return err
+	}
+
+	// l10n "key": load the ARB catalog and fail before any device work when a key
+	// does not resolve for the languages this run uses.
+	if cfg.L10n.Dir != "" {
+		cat, lerr := l10n.Load(cfg.L10n.Dir)
+		if lerr != nil {
+			return fmt.Errorf("l10n.dir %s: %w", cfg.L10n.Dir, lerr)
+		}
+		runner.SetL10n(cat, cfg.L10n.Default)
+	}
+	runLang, _ := cmd.Flags().GetString("locale")
+	if strings.TrimSpace(runLang) != "" {
+		if t, perr := locale.Parse(runLang); perr == nil && !t.System {
+			runner.SetL10nLanguage(t.BCP47)
+		}
+	}
+	if err := runner.ValidateL10n(files, strings.TrimSpace(runLang)); err != nil {
 		return err
 	}
 

@@ -20,6 +20,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/l10n"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/redact"
@@ -1704,7 +1705,25 @@ func reconnectDelay(base time.Duration, attempt int) time.Duration {
 // resolve substitutes <variable> placeholders with values from the vars map
 // and expands <random.*> generators.
 func (e *Executor) resolve(s string) string {
-	return e.expandEnv(e.resolveVars(s))
+	s = e.expandEnv(e.resolveVars(s))
+	if strings.Contains(s, "\x1el10n:") {
+		lang := ""
+		if e.deviceCtx != nil {
+			lang = e.deviceCtx.Language
+		}
+		out, err := l10n.Expand(s, func(key string) (string, error) { return L10nLookup(key, lang) })
+		if err != nil {
+			if e.envWarned == nil {
+				e.envWarned = map[string]bool{}
+			}
+			if !e.envWarned[err.Error()] {
+				e.envWarned[err.Error()] = true
+				fmt.Fprintf(os.Stderr, "  warning: %v\n", err)
+			}
+		}
+		s = out
+	}
+	return s
 }
 
 // expandEnv replaces ${NAME} with the value of the environment variable NAME
@@ -1869,6 +1888,12 @@ func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error
 // nothing instead of the intended target.
 func (e *Executor) resolveSelector(s parser.Selector) parser.Selector {
 	s.Text = e.resolve(s.Text)
+	if s.Container != "" {
+		s.Container = e.resolve(s.Container)
+	}
+	if s.Anchor != "" {
+		s.Anchor = e.resolve(s.Anchor)
+	}
 	return s
 }
 

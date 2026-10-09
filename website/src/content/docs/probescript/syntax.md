@@ -221,6 +221,16 @@ paste from clipboard               # stores result in <clipboard> variable
 type "<clipboard>" into "Email"    # use the pasted value
 ```
 
+## Localized text from ARB files
+
+```
+tap l10n "saveButton"        # the text of key saveButton in the app's current language
+see l10n "title"
+```
+
+`l10n "key"` is a string wherever a string works. It needs `l10n.dir` in probe.yaml; a key that does not resolve fails the run before
+it starts. See [Testing localized apps](/advanced/multi-language/#your-arb-files-l10n-key).
+
 ## App Language
 
 ```

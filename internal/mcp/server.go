@@ -180,6 +180,9 @@ Supports the full ProbeScript syntax:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Devices:         start_device names every simulator it boots (name arg; created when
                      missing); results carry the device name and id.
+  Localized text:  l10n "saveButton" is a string taken from the app's ARB files (probe.yaml
+                     l10n.dir / l10n.default) in the language the app currently runs in; keys
+                     are validated before the run starts. tap l10n "save", see l10n "title".
   Languages:       set language "de" (or "pt-BR", "ar", "system") relaunches the app in that
                      language; probe test --locale de / --locales de,ja,ar do it per run.
                      prefer #key selectors. Run with --match-loose to fold case, accents and

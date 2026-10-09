@@ -75,7 +75,9 @@ tokens followed by one `NEWLINE`.
 lexeme  = STRING | FLOAT | ORDINAL | INT | ID | TAG | COLON | PUNCT | identifier | ignored ;
           (* FLOAT, ORDINAL and INT all start with a digit: the longest form wins, tried in that order *)
 
-STRING  = '"' , { string-char } , '"' ;
+STRING  = quoted-string | l10n-string ;
+quoted-string = '"' , { string-char } , '"' ;
+l10n-string   = "l10n" , blank , { blank } , quoted-string ;   (* a string whose text comes from the app's ARB files *)
 string-char = ? any character except '"', "\" and LF ? | escape ;
 escape  = "\" , ( '"' | "n" | "t" | ? any other character, which stands for itself ? ) ;
 
@@ -104,6 +106,11 @@ case-insensitive (`TAP "x"` is `tap "x"`).
 ```ebnf
 WORD = identifier - keyword ;
 ```
+
+`l10n "key"` is a `STRING` wherever a string may appear (`tap l10n "saveButton"`, `see l10n "title"`): the lexer
+keeps the key, and the runner replaces it with the text of that key from the ARB file of the language the app currently
+runs in (`probe.yaml` `l10n.dir`; see [Testing localized apps](/advanced/multi-language/)). The word `l10n` followed by anything
+other than blanks and a quote is an ordinary `WORD`.
 
 Strings cannot contain a raw line break. Placeholders such as `"<email>"` are ordinary string content;
 see [Placeholders and variables](#placeholders-and-variables).
@@ -823,6 +830,7 @@ test "clipboard"
 test "location and media"
   set location 37.7749, -122.4194
   set language "de"
+  tap l10n "saveButton"
   set location -33.8688, 151.2093
   add media "fixtures/photo.jpg"
 ```

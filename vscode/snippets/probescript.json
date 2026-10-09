@@ -170,5 +170,13 @@
       "$0"
     ],
     "description": "Relaunch the app in another language (Android 13+, iOS simulator)"
+  },
+  "ARB label": {
+    "prefix": "l10n",
+    "body": [
+      "${1|tap,see|} l10n \"${2:key}\"",
+      "$0"
+    ],
+    "description": "Use the text of an ARB key in the current app language"
   }
 }
