@@ -16,7 +16,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `list_devices` | List booted/connected simulators, emulators, and physical devices (id, name, platform, state, OS version) |
 | `list_simulators` | List all iOS simulators (booted + shutdown) so the agent can pick one to boot |
 | `list_avds` | List Android Virtual Device names available to launch |
-| `start_device` | Boot an Android emulator (by AVD name) or iOS simulator (by UDID); blocks until online |
+| `start_device` | Boot an Android emulator (by AVD name) or iOS simulator (by UDID or `name`, created when missing); blocks until online. Devices are always named so results are tied to a device |
 | `shutdown_device` | Shut down an iOS simulator (`udid`) or Android emulator (`serial`) |
 
 ### Authoring & execution (9 tools)

@@ -277,6 +277,47 @@ func (m *Manager) Start(ctx context.Context, avdName string, bootTimeout, pollIn
 
 // StartIOS boots an iOS simulator by UDID. If udid is empty, auto-selects one.
 func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
+	return m.StartIOSNamed(ctx, udid, "")
+}
+
+// StartIOSNamed boots an iOS simulator and guarantees it carries a name.
+//   - name set, a simulator with that name exists: it is booted (udid ignored
+//     unless it disagrees, which is an error).
+//   - name set, none exists: a new simulator is created from the udid's (or the
+//     auto-selected simulator's) device type and runtime, under that name.
+//   - name empty and udid names a simulator: that simulator keeps its own name.
+func (m *Manager) StartIOSNamed(ctx context.Context, udid, name string) (*Device, error) {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		sims, err := m.simctl.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if found := ios.FindByName(sims, name); found != nil {
+			if udid != "" && udid != found.UDID {
+				return nil, fmt.Errorf("simulator %q is %s, not %s", name, found.UDID, udid)
+			}
+			udid = found.UDID
+		} else {
+			var tmpl *ios.Simulator
+			for i := range sims {
+				if sims[i].UDID == udid {
+					tmpl = &sims[i]
+				}
+			}
+			if tmpl == nil {
+				if tmpl, err = m.simctl.AutoSelect(ctx); err != nil {
+					return nil, err
+				}
+			}
+			newUDID, err := m.simctl.Create(ctx, name, tmpl.DeviceTypeID, tmpl.Runtime)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("  Created simulator %q (%s)\n", name, newUDID)
+			udid = newUDID
+		}
+	}
 	if udid == "" {
 		sim, err := m.simctl.AutoSelect(ctx)
 		if err != nil {
@@ -294,7 +335,7 @@ func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
 
 	// Resolve name
 	sims, _ := m.simctl.List(ctx)
-	name := udid
+	name = udid
 	for _, s := range sims {
 		if s.UDID == udid {
 			name = s.Name

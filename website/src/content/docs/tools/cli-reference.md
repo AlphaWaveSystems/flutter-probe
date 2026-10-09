@@ -11,7 +11,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
 | `probe device list` | List connected devices/simulators |
-| `probe device start` | Start an emulator/simulator |
+| `probe device start` | Start an emulator/simulator. `--name` names the iOS simulator it boots (created when missing); Android emulators run under their AVD name |
 | `probe record` | Record user interactions as ProbeScript |
 | `probe report` | Generate HTML report from test results |
 | `probe migrate` | Convert Maestro YAML flows to ProbeScript. A flow pulled in with `runFlow` is converted to a recipe file (`recipe "flow <file name>"`) and the caller gets `use "<file>.probe"` plus a call to it. Maestro regex selectors (`A\|B`, `.*x.*`), `evalScript` and `${ENV}` placeholders are not translated: they get a `# TODO` comment and a warning |
@@ -131,7 +131,12 @@ Manage connected devices and emulators.
 probe device list
 probe device start --platform android
 probe device start --platform ios
+probe device start --platform ios --name probe-checkout   # boot (or create) a simulator called probe-checkout
 ```
+
+### Named devices
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device list` shows running emulators by AVD name, so `probe-checkout` or `watersip-emu` appears in JUnit/JSON/HTML reports instead of a bare serial. `--name` on iOS boots the simulator with that name or, when none exists, creates one with the default simulator's device type and runtime. Android emulators are named by their AVD (create it with Android Studio or `avdmanager`, then `probe device start --avd <name>`).
 
 ## probe-convert
 

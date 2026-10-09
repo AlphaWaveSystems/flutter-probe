@@ -79,6 +79,38 @@ func (s *SimCtl) List(ctx context.Context) ([]Simulator, error) {
 	return sims, nil
 }
 
+// Create creates a simulator with the given name, device type and runtime and
+// returns its UDID. Every simulator probe creates is named: a nameless one
+// could not be tied to the test results it produced.
+func (s *SimCtl) Create(ctx context.Context, name, deviceType, runtime string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("simctl create: a simulator name is required")
+	}
+	out, err := s.run(ctx, "create", name, deviceType, runtime)
+	if err != nil {
+		return "", fmt.Errorf("simctl create: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Rename gives an existing simulator a new name.
+func (s *SimCtl) Rename(ctx context.Context, udid, name string) error {
+	if _, err := s.run(ctx, "rename", udid, name); err != nil {
+		return fmt.Errorf("simctl rename: %w", err)
+	}
+	return nil
+}
+
+// FindByName returns the simulator called name (exact match), or nil.
+func FindByName(sims []Simulator, name string) *Simulator {
+	for i := range sims {
+		if sims[i].Name == name {
+			return &sims[i]
+		}
+	}
+	return nil
+}
+
 // Boot boots a simulator by UDID.
 func (s *SimCtl) Boot(ctx context.Context, udid string) error {
 	_, err := s.run(ctx, "boot", udid)

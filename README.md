@@ -412,6 +412,10 @@ notifications have no simctl service, so probe answers the system alert itself: 
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
 (needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
 
+### Named devices
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device start --platform ios --name probe-checkout` boots (or creates) a simulator under that name; running Android emulators are listed and reported by their AVD name.
+
 ### Multi-language apps
 
 One suite for every language. Select by `#key` (language-independent); use `--match-loose` (or `defaults.match: loose`) to fold

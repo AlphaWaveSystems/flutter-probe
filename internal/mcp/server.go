@@ -120,6 +120,7 @@ var tools = []mcpTool{
 				"platform": {Type: "string", Description: "Target platform: android or ios"},
 				"avd":      {Type: "string", Description: "Android AVD name (required for android; use list_avds to discover)"},
 				"udid":     {Type: "string", Description: "iOS simulator UDID (optional for ios; auto-selects if omitted)"},
+				"name":     {Type: "string", Description: "iOS simulator name: boots the simulator with this name, creating it when missing. Every simulator probe opens is named so test results are tied to a device"},
 				"timeout":  {Type: "string", Description: "Boot timeout as a Go duration, e.g. 90s (default 120s)"},
 			},
 		},
@@ -177,6 +178,8 @@ Supports the full ProbeScript syntax:
                      (needs Xcode) and Android emulators/devices only. On iOS the app's
                      share sheet (activity sheet) is detected too when project.app is set:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
+  Devices:         start_device names every simulator it boots (name arg; created when
+                     missing); results carry the device name and id.
   Languages:       prefer #key selectors. Run with --match-loose to fold case, accents and
                      typographic apostrophes in text selectors; use see any of "A", "B" for
                      per-language labels. System-dialog buttons resolve by role (allow, deny,
@@ -893,6 +896,7 @@ type devManager interface {
 	List(ctx context.Context) ([]device.Device, error)
 	Start(ctx context.Context, avdName string, bootTimeout, pollInterval time.Duration) (*device.Device, error)
 	StartIOS(ctx context.Context, udid string) (*device.Device, error)
+	StartIOSNamed(ctx context.Context, udid, name string) (*device.Device, error)
 	SimCtl() *ios.SimCtl
 	ADB() *device.ADB
 }
@@ -965,6 +969,7 @@ func (s *Server) startDevice(id any, raw json.RawMessage) *mcpResponse {
 		Platform string `json:"platform"`
 		AVD      string `json:"avd"`
 		UDID     string `json:"udid"`
+		Name     string `json:"name"`
 		Timeout  string `json:"timeout"`
 	}
 	if len(raw) > 0 {
@@ -999,7 +1004,7 @@ func (s *Server) startDevice(id any, raw json.RawMessage) *mcpResponse {
 		}
 		booted, err = dm.Start(ctx, args.AVD, timeout, 0)
 	case "ios":
-		booted, err = dm.StartIOS(ctx, args.UDID)
+		booted, err = dm.StartIOSNamed(ctx, args.UDID, args.Name)
 	}
 	if err != nil {
 		return textResp(id, "start device: "+err.Error(), err)

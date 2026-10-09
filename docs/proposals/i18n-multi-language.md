@@ -65,6 +65,7 @@ traffic. P6 starts by making interception real.
 
 - P3 loose matching: implemented (0.20.0).
 - P1 system-dialog roles: Android + role mechanics implemented; the iOS label table is being measured per language on real simulators.
+- Named devices (hard rule, 2026-10-09): implemented (0.20.0). Every simulator/emulator probe opens is named (`device start --name`, AVD names, MCP `name`), every result records device name + id. The locale matrix (P5) reports per device + locale.
 - P2, P5, P4: next.
 
 ## Releases (pub.dev allows 12 publishes a day, so batch)

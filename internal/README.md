@@ -9,6 +9,7 @@ Go packages behind the `probe` CLI and `probe-mcp`.
 | `probelink` | JSON-RPC 2.0 client for the on-device agent (WebSocket and HTTP) |
 | `device`, `ios` | adb / simctl / devicectl management, permissions |
 | `textfold` | Dependency-free text folding for loose, language-tolerant matching (case, accents, apostrophes, whitespace); the Dart agent has a tested mirror |
+| `device`, `ios` | Device lifecycle; simulators/emulators are always named (`StartIOSNamed`, `simctl create/rename`, AVD names) and results carry the device name + id |
 | `sysdialog` | System dialogs on iOS (XCUITest driver) and Android (uiautomator); buttons are resolved by role so labels work in any device language |
 | `config` | `probe.yaml` loading and defaults |
 | `report` | HTML report |

@@ -23,7 +23,10 @@ xcrun simctl list devices available
 
 ```bash
 probe device start --platform ios
+probe device start --platform ios --name my-sim   # named; created if it does not exist
 ```
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial).
 
 Or manually:
 

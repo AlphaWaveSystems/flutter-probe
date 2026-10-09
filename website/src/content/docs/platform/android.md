@@ -20,7 +20,7 @@ probe device list
 ### Start an emulator
 
 ```bash
-probe device start --platform android
+probe device start --platform android --avd my-avd   # emulators are identified by AVD name in results
 ```
 
 Or start manually:

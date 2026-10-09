@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Named devices (hard rule):** `probe device start --platform ios --name <n>` (and MCP `start_device` `name`) boots the simulator with that name, or creates one (same device type/runtime as the default) when missing. Running Android emulators are listed and reported by their AVD name instead of the hardware model, and a run never has an unnamed device (falls back to the serial/UDID). Every result records device name and id.
 - **Loose text matching (`--match-loose`, `defaults.match: loose`):** text selectors, `see`, `wait until` and tooltip/Semantics-label
   matching fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and
   whitespace on both sides (`Änderungen` ~ `anderungen`, `Don’t Allow` ~ `Don't allow`). Off by default. Ids are never folded.

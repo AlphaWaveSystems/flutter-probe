@@ -198,6 +198,7 @@ optional `ProbeAdvertiser` hook that you implement in your app (no mDNS plugin i
 - **`scroll … until … appears` / `wait for idle`** — agent-side scroll-into-view and route-transition settling (0.15.0)
 - **Text input like a keyboard** — `type`/`clear` run through `EditableTextState`, so `onChanged` and `inputFormatters` fire
 - **Actionable failures** — `Widget not found` / `Timed out waiting for` list the visible texts and keys; `probe.visible_summary` RPC
+- **Named devices** — every simulator/emulator probe opens is named (`probe device start --name …`), and every test result records the device name and id it ran on
 - **Multi-language apps** — text selectors can match loosely (case, accents, typographic apostrophes, whitespace folded; `probe test --match-loose`), `#key` selectors never depend on the language, and `see any of "Save", "Speichern"` takes alternatives. Guide: [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/)
 - **Port-range fallback** — auto-tries ports 48686–48695 if preferred port is busy; logs `PROBE_PORT_BUSY=N (another probe agent is running)` when collision is with a sibling agent
 

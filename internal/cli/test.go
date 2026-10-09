@@ -1016,6 +1016,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 				break
 			}
 		}
+		if meta.DeviceName == "" {
+			meta.DeviceName = deviceSerial // never leave a run unassociated with a device
+		}
 		// Android-specific: query OS version and app version via ADB
 		if platform == device.PlatformAndroid {
 			if meta.OSVersion == "" {
