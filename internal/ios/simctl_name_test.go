@@ -1,6 +1,9 @@
 package ios
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestFindByName(t *testing.T) {
 	sims := []Simulator{{UDID: "A", Name: "iPhone 15"}, {UDID: "B", Name: "probe-ios-1"}}
@@ -13,7 +16,7 @@ func TestFindByName(t *testing.T) {
 }
 
 func TestCreateRequiresName(t *testing.T) {
-	if _, err := New().Create(nil, "  ", "type", "runtime"); err == nil { //nolint:staticcheck // nil ctx is never used: rejected before exec
+	if _, err := New().Create(context.TODO(), "  ", "type", "runtime"); err == nil {
 		t.Fatal("Create with empty name must fail")
 	}
 }
