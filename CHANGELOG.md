@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-09
+
+### Security
+- The agent's HTTP capture redacts more credentials: `x-goog-api-key`, `api-key`, `x-auth-token`, `x-access-token`, `x-amz-security-token`, `x-csrf-token`, `x-xsrf-token` headers and credential query parameters (`?key=`, `?access_token=`, `?token=`, ...) in recorded URLs. Bodies are unchanged and documented as such.
+
 ## [0.22.0] - 2026-10-09
 
 ### Fixed

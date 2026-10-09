@@ -12,9 +12,9 @@ The agent installs an `HttpOverrides` wrapper when `ProbeAgent.start()` runs, so
 recorded: the `http` package, dio's default adapter and most Dart clients. Not recorded: WebViews, `dart:html`, and native SDK
 calls (a native analytics or payment SDK). Start the agent before the app creates its HTTP clients (the usual `main` does).
 
-Each exchange keeps the method, URL, status, duration, headers (`Authorization`, `Cookie`, `Set-Cookie` and `x-api-key` are
-replaced by `<redacted>`) and up to 64 KB of request and response body. The last 300 exchanges are kept. Capture exists in debug and
-profile builds only, and `--dart-define=PROBE_HTTP_CAPTURE=false` turns it off. The log starts empty in every test.
+Each exchange keeps the method, URL, status, duration, headers (`Authorization`, `Cookie`, `Set-Cookie`, `x-api-key`, `x-goog-api-key`, `x-auth-token` and similar are
+replaced by `<redacted>`; so are the values of `?key=`, `?access_token=`, `?token=` and similar query parameters in the URL) and up to 64 KB of request and response body. The last 300 exchanges are kept. Capture exists in debug and
+profile builds only, bodies are kept as they are (a token inside a JSON body is not masked: it stays in memory on the device and in reports only if a test stores it), and `--dart-define=PROBE_HTTP_CAPTURE=false` turns it off. The log starts empty in every test.
 
 ## Naming a request
 

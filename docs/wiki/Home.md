@@ -20,7 +20,7 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 
 FlutterProbe is in active development. Per-step time budgets: `... within 90 seconds`. React to backend data with `wait for response` / `see response` / `if response` and real mocks. Use ARB keys with `l10n "key"`. Change the app language with `set language "de"` or `probe test --locales de,ja,ar`. Devices are always named: `probe device start --name`, and every result records its device. Multi-language: see [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/) (loose text matching, alternatives, system dialog roles).
 
-Current version: **0.22.0**.
+Current version: **0.22.1**.
 
 ### Repository Structure
 

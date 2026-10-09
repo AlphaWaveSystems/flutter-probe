@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.22.1 - 2026-10-09
+
+- Changed: HTTP capture also redacts `x-goog-api-key`, `api-key`, `x-auth-token`, `x-access-token`, `x-amz-security-token`, `x-csrf-token`, `x-xsrf-token` headers and the values of credential query parameters (`key`, `api_key`, `access_token`, `token`, `id_token`, `refresh_token`, `auth`, `secret`, `password`, `sig`, `signature`) in logged URLs (reported by a user review of 0.22.0).
+
 ## 0.22.0 - 2026-10-09
 
 - Added: the agent records the app's `dart:io` HTTP traffic (`HttpOverrides`; method, URL, status, duration, redacted headers, 64 KB bodies, last 300 exchanges; `PROBE_HTTP_CAPTURE=false` disables) and answers `probe.http_log` / `probe.http_clear`.
