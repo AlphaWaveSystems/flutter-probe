@@ -146,6 +146,7 @@ const (
 	TOKEN_COPY           // "copy"
 	TOKEN_PASTE          // "paste"
 	TOKEN_SET_LOCATION   // compound: "set location"
+	TOKEN_SET_LANGUAGE   // compound: "set language"
 	TOKEN_VERIFY_BROWSER // compound: "verify external browser"
 	TOKEN_CALL           // "call"
 
@@ -310,6 +311,7 @@ var keywords = map[string]TokenType{
 	"verify":      TOKEN_IDENT,
 	"set":         TOKEN_IDENT,
 	"location":    TOKEN_IDENT,
+	"language":    TOKEN_IDENT,
 	"clipboard":   TOKEN_IDENT,
 
 	// Relational / new keywords (v0.5.7)

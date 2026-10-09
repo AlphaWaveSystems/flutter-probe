@@ -10,16 +10,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Simulator represents an iOS simulator.
 type Simulator struct {
-	UDID          string
-	Name          string
-	State         string // Booted | Shutdown
-	Runtime       string // com.apple.CoreSimulator.SimRuntime.iOS-17-5
-	DeviceTypeID  string
+	UDID         string
+	Name         string
+	State        string // Booted | Shutdown
+	Runtime      string // com.apple.CoreSimulator.SimRuntime.iOS-17-5
+	DeviceTypeID string
 }
 
 // HumanRuntime converts the raw runtime string (e.g.
@@ -41,7 +42,10 @@ func (s Simulator) HumanRuntime() string {
 }
 
 // SimCtl wraps xcrun simctl.
-type SimCtl struct{}
+type SimCtl struct {
+	mu         sync.Mutex
+	launchArgs map[string][]string // udid+"/"+bundle -> extra `simctl launch` arguments
+}
 
 func New() *SimCtl { return &SimCtl{} }
 
@@ -155,8 +159,35 @@ func (s *SimCtl) Install(ctx context.Context, udid, appPath string) error {
 
 // Launch launches an installed app by bundle ID.
 func (s *SimCtl) Launch(ctx context.Context, udid, bundleID string) error {
-	_, err := s.run(ctx, "launch", udid, bundleID)
+	args := append([]string{"launch", udid, bundleID}, s.extraLaunchArgs(udid, bundleID)...)
+	_, err := s.run(ctx, args...)
 	return err
+}
+
+// SetAppLanguage makes every later Launch of bundleID on the simulator start
+// with the given language and region (-AppleLanguages / -AppleLocale launch
+// arguments, which Flutter's PlatformDispatcher.locale follows; writing the
+// preferences with `defaults` is refused for apps on a simulator). The running
+// app is not affected until it is relaunched. Empty bcp47 removes the override.
+// System dialogs keep the device language: it is a device setting, not an app one.
+func (s *SimCtl) SetAppLanguage(udid, bundleID, bcp47, posix string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := udid + "/" + bundleID
+	if bcp47 == "" {
+		delete(s.launchArgs, key)
+		return
+	}
+	if s.launchArgs == nil {
+		s.launchArgs = map[string][]string{}
+	}
+	s.launchArgs[key] = []string{"-AppleLanguages", "(" + bcp47 + ")", "-AppleLocale", posix}
+}
+
+func (s *SimCtl) extraLaunchArgs(udid, bundleID string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.launchArgs[udid+"/"+bundleID]
 }
 
 // Terminate kills a running app.
