@@ -365,3 +365,24 @@ func (a *ADB) ListAVDs(ctx context.Context) ([]string, error) {
 	}
 	return avds, nil
 }
+
+// SetAppLocale sets the per-app language of pkg (Android 13+ / API 33). An
+// empty bcp47 removes the override so the app follows the system language.
+func (a *ADB) SetAppLocale(ctx context.Context, serial, pkg, bcp47 string) error {
+	sdk, _ := a.GetProp(ctx, serial, "ro.build.version.sdk")
+	if n, err := strconv.Atoi(strings.TrimSpace(sdk)); err == nil && n < 33 {
+		return fmt.Errorf("set language needs Android 13+ (API 33) for per-app languages; this device is API %d. Use an API 33+ emulator image", n)
+	}
+	args := []string{"cmd", "locale", "set-app-locales", pkg}
+	if bcp47 != "" {
+		args = append(args, "--locales", bcp47)
+	}
+	out, err := a.Shell(ctx, serial, args...)
+	if err != nil {
+		return fmt.Errorf("set-app-locales: %w", err)
+	}
+	if s := strings.TrimSpace(string(out)); strings.Contains(strings.ToLower(s), "exception") || strings.Contains(strings.ToLower(s), "error") {
+		return fmt.Errorf("set-app-locales: %s", s)
+	}
+	return nil
+}

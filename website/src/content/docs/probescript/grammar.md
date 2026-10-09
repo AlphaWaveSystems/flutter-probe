@@ -75,7 +75,9 @@ tokens followed by one `NEWLINE`.
 lexeme  = STRING | FLOAT | ORDINAL | INT | ID | TAG | COLON | PUNCT | identifier | ignored ;
           (* FLOAT, ORDINAL and INT all start with a digit: the longest form wins, tried in that order *)
 
-STRING  = '"' , { string-char } , '"' ;
+STRING  = quoted-string | l10n-string ;
+quoted-string = '"' , { string-char } , '"' ;
+l10n-string   = "l10n" , blank , { blank } , quoted-string ;   (* a string whose text comes from the app's ARB files *)
 string-char = ? any character except '"', "\" and LF ? | escape ;
 escape  = "\" , ( '"' | "n" | "t" | ? any other character, which stands for itself ? ) ;
 
@@ -104,6 +106,11 @@ case-insensitive (`TAP "x"` is `tap "x"`).
 ```ebnf
 WORD = identifier - keyword ;
 ```
+
+`l10n "key"` is a `STRING` wherever a string may appear (`tap l10n "saveButton"`, `see l10n "title"`): the lexer
+keeps the key, and the runner replaces it with the text of that key from the ARB file of the language the app currently
+runs in (`probe.yaml` `l10n.dir`; see [Testing localized apps](/advanced/multi-language/)). The word `l10n` followed by anything
+other than blanks and a quote is an ordinary `WORD`.
 
 Strings cannot contain a raw line break. Placeholders such as `"<email>"` are ordinary string content;
 see [Placeholders and variables](#placeholders-and-variables).
@@ -144,7 +151,7 @@ keyword = "test" | "recipe" | "use" | "before" | "after" | "on" | "open" | "tap"
         | "focused" | "link" | "animations" | "animation" | "store" | "composite" | "sync"
         | "biometric" | "enroll" | "deliver" | "signal" | "read" | "travel" | "over" ;
 
-listed-word = "verify" | "set" | "location" | "clipboard" ;
+listed-word = "verify" | "set" | "location" | "language" | "clipboard" ;
               (* in the keyword table, but they lex as plain WORD tokens *)
 ```
 
@@ -165,7 +172,7 @@ compound-keyword = "don't see" | "dont see" | "go back" | "press enter" | "long 
                  | "before all tests" | "after all tests" | "before all" | "after all"
                  | "before each test" | "after each test" | "before each" | "after each" | "on failure" | "with examples"
                  | "clear app data" | "grant all permissions" | "revoke all permissions"
-                 | "allow permission" | "deny permission" | "set location"
+                 | "allow permission" | "deny permission" | "set location" | "set language"
                  | "verify external browser" | "add media" ;
 ```
 
@@ -440,7 +447,7 @@ The first matching row wins.
 | `close`, `restart`, `kill`, `go back`, `press enter`, `shake`, `pause`, `log`, `rotate` | the step of the same name |
 | `allow`, `deny`, `allow permission`, `deny permission` | `permission-step` |
 | `grant`, `revoke`, `grant all permissions`, `revoke all permissions` | `grant-revoke-step` |
-| `copy`, `paste`, `set location`, `verify external browser`, `add media` | the step of the same name |
+| `copy`, `paste`, `set location`, `set language`, `verify external browser`, `add media` | the step of the same name |
 | `take`, `compare`, `dump`, `save` | `take-screenshot-step`, `compare-screenshot-step`, `dump-tree-step`, `save-logs-step` |
 | `store`, `read`, `deliver` | `store-step`, `read-ai-step`, `deliver-signal-step` |
 | `biometric`, `enroll` | `biometric-step`, `enroll-biometric-step` |
@@ -754,6 +761,7 @@ grant-revoke-step = ( "grant all permissions" | "revoke all permissions" | "gran
 copy-step            = "copy" , fillers , [ STRING ] , rest-of-line ;    (* "to clipboard" is swallowed *)
 paste-step           = "paste" , rest-of-line ;                         (* "from clipboard" is swallowed *)
 set-location-step    = "set location" , fillers , coordinate ;
+set-language-step    = "set language" , fillers , STRING ;               (* "de", "pt-BR", "system" *)
 verify-browser-step  = "verify external browser" , rest-of-line ;       (* "opened" is swallowed *)
 add-media-step       = "add media" , fillers , text-operand ;
 
@@ -821,6 +829,8 @@ test "clipboard"
 ```probe
 test "location and media"
   set location 37.7749, -122.4194
+  set language "de"
+  tap l10n "saveButton"
   set location -33.8688, 151.2093
   add media "fixtures/photo.jpg"
 ```

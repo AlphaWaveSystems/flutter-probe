@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.21.0 - 2026-10-09
+
+- No agent change (`set language`, `--locale`/`--locales` and `l10n "key"` live in the CLI); version aligned.
+
 ## 0.20.0 - 2026-10-09
 
 - Added: loose text matching (`loose` selector flag, `probe test --match-loose`): case, accents/diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and whitespace fold on both sides (`lib/src/textfold.dart`, identical to the CLI via a shared fixture). Off by default.

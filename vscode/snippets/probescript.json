@@ -161,5 +161,22 @@
     "prefix": "seea",
     "body": "see any of \"${1:first}\", \"${2:second}\"",
     "description": "Assert that any one of several texts is on screen (per-language labels)"
+  },
+  "Set app language": {
+    "prefix": "setlanguage",
+    "body": [
+      "set language \"${1:de}\"",
+      "wait until \"${2:element}\" appears",
+      "$0"
+    ],
+    "description": "Relaunch the app in another language (Android 13+, iOS simulator)"
+  },
+  "ARB label": {
+    "prefix": "l10n",
+    "body": [
+      "${1|tap,see|} l10n \"${2:key}\"",
+      "$0"
+    ],
+    "description": "Use the text of an ARB key in the current app language"
   }
 }

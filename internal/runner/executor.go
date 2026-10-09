@@ -20,10 +20,11 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/l10n"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
-	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/redact"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
@@ -36,29 +37,29 @@ func generateToken() string {
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
 type Executor struct {
-	client      probelink.ProbeClient
-	deviceCtx   *DeviceContext                // nil in dry-run mode
-	onReconnect func(probelink.ProbeClient)       // callback to update Runner's client ref
-	timeout     time.Duration
-	recipes     map[string]parser.RecipeDef   // loaded recipes by name
-	envValues   []string                      // values expanded from ${NAME} in steps; scrubbed from errors
-	envWarned   map[string]bool
-	useNote     string                        // appended to "unknown recipe call" (missing `use` targets)
-	vars        map[string]string             // variable scope for data-driven tests
-	verbose     bool
-	depth       int      // indentation depth for verbose logging
-	artifacts   []string // collected screenshot paths (on-device)
-	visual      *visual.Comparator // nil if visual regression is not configured
-	aiCfg       config.AIConfig    // from probe.yaml's ai: block
-	aiProvider  ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
-	aiConfigErr error              // set by SetAI when ai.provider has an unrecognized value
-	aiText      ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
-	maxReconnectAttempts int           // max auto-reconnect attempts per call (default 4)
-	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
-	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
-	clientGen            atomic.Uint64 // incremented on each successful reconnect
-	implicitWait         time.Duration // retry a step whose target is not on screen yet for up to this long (0 = off)
-	launchTimeout        time.Duration // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
+	client               probelink.ProbeClient
+	deviceCtx            *DeviceContext              // nil in dry-run mode
+	onReconnect          func(probelink.ProbeClient) // callback to update Runner's client ref
+	timeout              time.Duration
+	recipes              map[string]parser.RecipeDef // loaded recipes by name
+	envValues            []string                    // values expanded from ${NAME} in steps; scrubbed from errors
+	envWarned            map[string]bool
+	useNote              string            // appended to "unknown recipe call" (missing `use` targets)
+	vars                 map[string]string // variable scope for data-driven tests
+	verbose              bool
+	depth                int                // indentation depth for verbose logging
+	artifacts            []string           // collected screenshot paths (on-device)
+	visual               *visual.Comparator // nil if visual regression is not configured
+	aiCfg                config.AIConfig    // from probe.yaml's ai: block
+	aiProvider           ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
+	aiConfigErr          error              // set by SetAI when ai.provider has an unrecognized value
+	aiText               ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
+	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
+	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
+	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
+	clientGen            atomic.Uint64      // incremented on each successful reconnect
+	implicitWait         time.Duration      // retry a step whose target is not on screen yet for up to this long (0 = off)
+	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 }
 
 // NewExecutor creates an Executor.
@@ -517,6 +518,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "paste from clipboard"
 		case parser.VerbSetLocation:
 			return fmt.Sprintf("set location %s", s.Name)
+		case parser.VerbSetLanguage:
+			return fmt.Sprintf("set language %q", s.Name)
 		case parser.VerbVerifyBrowser:
 			return "verify external browser opened"
 		case parser.VerbEnrollBiometric:
@@ -919,6 +922,16 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		e.vars["clipboard"] = text
 		return nil
 
+	case parser.VerbSetLanguage:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping set language (cloud mode)")
+			return nil
+		}
+		if err := e.deviceCtx.SetLanguage(ctx, e.resolve(a.Name)); err != nil {
+			return err
+		}
+		return e.relaunchApp(ctx, "language change")
+
 	case parser.VerbSetLocation:
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping set location (cloud mode)")
@@ -1029,13 +1042,22 @@ func (e *Executor) relaunchAfterIOSPermissionChange(ctx context.Context) error {
 	if dc == nil || dc.Platform != device.PlatformIOS || dc.IsPhysical {
 		return nil
 	}
+	return e.relaunchApp(ctx, "permission change")
+}
+
+// relaunchApp force-stops and relaunches the app, then reconnects the agent client.
+func (e *Executor) relaunchApp(ctx context.Context, why string) error {
+	dc := e.deviceCtx
+	if dc == nil {
+		return nil
+	}
 	e.client.Close()
 	if err := dc.RestartApp(ctx); err != nil {
-		return fmt.Errorf("relaunch after permission change: %w", err)
+		return fmt.Errorf("relaunch after %s: %w", why, err)
 	}
 	newClient, err := dc.Reconnect(ctx)
 	if err != nil {
-		return fmt.Errorf("reconnect after permission change: %w", err)
+		return fmt.Errorf("reconnect after %s: %w", why, err)
 	}
 	e.client = newClient
 	e.clientGen.Add(1)
@@ -1683,7 +1705,25 @@ func reconnectDelay(base time.Duration, attempt int) time.Duration {
 // resolve substitutes <variable> placeholders with values from the vars map
 // and expands <random.*> generators.
 func (e *Executor) resolve(s string) string {
-	return e.expandEnv(e.resolveVars(s))
+	s = e.expandEnv(e.resolveVars(s))
+	if strings.Contains(s, "\x1el10n:") {
+		lang := ""
+		if e.deviceCtx != nil {
+			lang = e.deviceCtx.Language
+		}
+		out, err := l10n.Expand(s, func(key string) (string, error) { return L10nLookup(key, lang) })
+		if err != nil {
+			if e.envWarned == nil {
+				e.envWarned = map[string]bool{}
+			}
+			if !e.envWarned[err.Error()] {
+				e.envWarned[err.Error()] = true
+				fmt.Fprintf(os.Stderr, "  warning: %v\n", err)
+			}
+		}
+		s = out
+	}
+	return s
 }
 
 // expandEnv replaces ${NAME} with the value of the environment variable NAME
@@ -1765,7 +1805,8 @@ var recipeFillerWords = map[string]bool{
 // stripRecipeCallArgs removes <arg> placeholders and common filler words
 // from a recipe call name so it can match the recipe definition name.
 // e.g., "sign in with <arg> and <arg>" → "sign in with"
-//       "enter credentials <arg> and <arg>" → "enter credentials"
+//
+//	"enter credentials <arg> and <arg>" → "enter credentials"
 func stripRecipeCallArgs(name string) string {
 	words := strings.Fields(name)
 	var result []string
@@ -1847,17 +1888,23 @@ func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error
 // nothing instead of the intended target.
 func (e *Executor) resolveSelector(s parser.Selector) parser.Selector {
 	s.Text = e.resolve(s.Text)
+	if s.Container != "" {
+		s.Container = e.resolve(s.Container)
+	}
+	if s.Anchor != "" {
+		s.Anchor = e.resolve(s.Anchor)
+	}
 	return s
 }
 
 func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 	kinds := map[parser.SelectorKind]string{
-		parser.SelectorText:        "text",
-		parser.SelectorID:          "id",
-		parser.SelectorType:        "type",
-		parser.SelectorOrdinal:     "ordinal",
-		parser.SelectorPositional:  "positional",
-		parser.SelectorRelational:  "relational",
+		parser.SelectorText:       "text",
+		parser.SelectorID:         "id",
+		parser.SelectorType:       "type",
+		parser.SelectorOrdinal:    "ordinal",
+		parser.SelectorPositional: "positional",
+		parser.SelectorRelational: "relational",
 	}
 	return probelink.SelectorParam{
 		Kind:      kinds[s.Kind],

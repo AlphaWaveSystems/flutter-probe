@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/l10n"
 	"fmt"
 	"strings"
 	"unicode"
@@ -124,7 +125,11 @@ func (l *Lexer) nextLine() error {
 			// @tag — include the @ prefix so the parser can recognize it
 			l.lexTag()
 		default:
-			if unicode.IsLetter(ch) || ch == '_' {
+			if ch == 'l' && l.atL10nString() {
+				if err := l.lexL10nString(); err != nil {
+					return err
+				}
+			} else if unicode.IsLetter(ch) || ch == '_' {
 				l.lexIdent()
 			} else {
 				l.pos++
@@ -165,6 +170,46 @@ func (l *Lexer) lexBarePlaceholder() error {
 	return fmt.Errorf(
 		"line %d: unquoted placeholder <%s> at col %d — placeholders must be quoted to be substituted (write \"<%s>\" instead of <%s>); an unquoted placeholder is silently typed/matched as literal text",
 		l.line, name, startCol, name, name)
+}
+
+// atL10nString reports whether the input continues with `l10n "`: the word l10n,
+// blanks, and an opening quote. Anything else (an ident like l10nKey, or l10n
+// alone) is an ordinary word.
+func (l *Lexer) atL10nString() bool {
+	const w = "l10n"
+	for i, r := range w {
+		if l.pos+i >= len(l.src) || l.src[l.pos+i] != r {
+			return false
+		}
+	}
+	p := l.pos + len(w)
+	if p >= len(l.src) || (l.src[p] != ' ' && l.src[p] != '\t') {
+		return false
+	}
+	for p < len(l.src) && (l.src[p] == ' ' || l.src[p] == '\t') {
+		p++
+	}
+	return p < len(l.src) && l.src[p] == '"'
+}
+
+// lexL10nString lexes `l10n "key"` as one STRING token whose text is the
+// l10n marker for key; the executor swaps it for the ARB text at run time.
+func (l *Lexer) lexL10nString() error {
+	l.pos += len("l10n")
+	l.col += len("l10n")
+	for l.src[l.pos] == ' ' || l.src[l.pos] == '\t' {
+		l.pos++
+		l.col++
+	}
+	if err := l.lexString(); err != nil {
+		return err
+	}
+	last := &l.tokens[len(l.tokens)-1]
+	if strings.TrimSpace(last.Literal) == "" {
+		return fmt.Errorf("line %d: l10n needs a key: l10n \"saveButton\"", l.line)
+	}
+	last.Literal = l10n.Marker(last.Literal)
+	return nil
 }
 
 func (l *Lexer) lexString() error {
@@ -370,6 +415,7 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		{[]string{"allow", "permission"}, TOKEN_ALLOW},
 		{[]string{"deny", "permission"}, TOKEN_DENY},
 		{[]string{"set", "location"}, TOKEN_SET_LOCATION},
+		{[]string{"set", "language"}, TOKEN_SET_LANGUAGE},
 		{[]string{"verify", "external", "browser"}, TOKEN_VERIFY_BROWSER},
 		{[]string{"add", "media"}, TOKEN_ADD_MEDIA},
 	}

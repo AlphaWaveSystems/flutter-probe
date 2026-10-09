@@ -11,6 +11,8 @@ Key facts for an AI agent:
 - Wait for each new screen (`wait until "Text" appears`) before tapping; use `#key` selectors; use `scroll down until "X" appears` for rows below the fold.
 - OS dialogs (permission alerts, StoreKit sign-in) are not Flutter widgets: use `tap "Allow" in system dialog`, `dismiss system dialog`, `sign in sandbox tester`.
 - Devices: every simulator/emulator probe opens is named (`probe device start --platform ios --name <n>`; Android = AVD name) and each test result records device name + id.
+- `l10n "key"` is a string from the app's ARB files (probe.yaml `l10n.dir`, `l10n.default`) in the current app language: `tap l10n "saveButton"`. Keys are validated before the run.
+- App language: `set language "de"` (also `"pt-BR"`, `"ar"`, `"system"`) relaunches the app in that language (Android 13+, iOS simulator); `probe test --locale de` / `--locales de,ja,ar` run a suite per language.
 - Multi-language: prefer `#key` selectors; `--match-loose` folds case/accents/apostrophes in text selectors; `see any of "A", "B"` for per-language labels; system-dialog buttons resolve by role, so `tap "Don't Allow" in system dialog` works on any device language.
 - Secrets: only through environment variables (`type "$NAME" into system field "Password"`); they are masked in output.
 - AI features (local or hosted models) are optional and never required to run tests.

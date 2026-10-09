@@ -221,6 +221,28 @@ paste from clipboard               # stores result in <clipboard> variable
 type "<clipboard>" into "Email"    # use the pasted value
 ```
 
+## Localized text from ARB files
+
+```
+tap l10n "saveButton"        # the text of key saveButton in the app's current language
+see l10n "title"
+```
+
+`l10n "key"` is a string wherever a string works. It needs `l10n.dir` in probe.yaml; a key that does not resolve fails the run before
+it starts. See [Testing localized apps](/advanced/multi-language/#your-arb-files-l10n-key).
+
+## App Language
+
+```
+set language "de"                  # relaunch the app in German (also "pt-BR", "ja", "ar", ...)
+see "Einstellungen"
+set language "system"              # back to the device language
+```
+
+The app is force-stopped and relaunched, so app state is lost (data on disk is kept). Android 13+ uses per-app locales; an iOS
+simulator gets the language as a launch argument. Right-to-left languages (`ar`, `he`, `fa`, `ur`) flip the layout because
+Flutter follows the locale. Not supported on physical iOS devices. See [Testing localized apps](/advanced/multi-language/).
+
 ## Device Location
 
 ```

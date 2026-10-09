@@ -122,6 +122,17 @@ you no longer have to remove the request from your app. If you prefer to skip it
 request with `bool.fromEnvironment('PROBE_AGENT')`.
 :::
 
+## App language
+
+```
+set language "de"        # relaunches the simulator app with -AppleLanguages (de) -AppleLocale de
+```
+
+The language is passed as launch arguments on every later launch of the app (including `restart the app` and `clear app data`), which
+Flutter's locale follows. System dialogs (permissions, share sheet) keep the simulator's language: use the role-based
+`tap "Don't Allow" in system dialog` for those. Not supported on physical devices (change the language in Settings > Apps).
+`probe test --locale de` and `--locales de,ja,ar` apply it per run.
+
 ## Device Media
 
 ```

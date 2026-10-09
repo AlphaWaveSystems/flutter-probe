@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
@@ -25,23 +26,24 @@ type ConfirmFunc func(message string) bool
 // the running app, so they handle reconnection transparently.
 type DeviceContext struct {
 	Manager                 *device.Manager
-	Serial                  string          // ADB serial or iOS UDID
+	Serial                  string // ADB serial or iOS UDID
 	Platform                device.Platform
-	AppID                   string          // bundle ID / package name
-	Port                    int             // host-side agent port (default 48686)
-	DevicePort              int             // on-device agent port (default: same as Port)
-	IsPhysical              bool            // true for physical devices (vs emulator/simulator)
-	UseHTTP                 bool            // if true, use HTTP POST instead of WebSocket for reconnection
-	AgentHost               string          // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
-	AllowClearData          bool            // if true, skip confirmation for clear app data (CI/CD mode)
-	Confirm                 ConfirmFunc     // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
-	GrantPermissionsOnClear bool            // if true, auto-grant all permissions after clearing data
-	ReconnectDelay          time.Duration   // delay after app restart before reconnecting WebSocket (default 2s)
-	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
-	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
-	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
-	DriverPort              int             // iOS system-dialog driver port (0 = derived from the simulator UDID)
-	CLIVersion              string          // running probe binary's version, sent during the reconnect handshake
+	AppID                   string        // bundle ID / package name
+	Port                    int           // host-side agent port (default 48686)
+	DevicePort              int           // on-device agent port (default: same as Port)
+	IsPhysical              bool          // true for physical devices (vs emulator/simulator)
+	UseHTTP                 bool          // if true, use HTTP POST instead of WebSocket for reconnection
+	AgentHost               string        // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
+	AllowClearData          bool          // if true, skip confirmation for clear app data (CI/CD mode)
+	Confirm                 ConfirmFunc   // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
+	GrantPermissionsOnClear bool          // if true, auto-grant all permissions after clearing data
+	ReconnectDelay          time.Duration // delay after app restart before reconnecting WebSocket (default 2s)
+	RestartDelay            time.Duration // delay after force-stop before relaunching (default 500ms)
+	TokenReadTimeout        time.Duration // max time to wait for agent token during reconnect (default 30s)
+	DialTimeout             time.Duration // max time to establish WebSocket connection (default 30s)
+	DriverPort              int           // iOS system-dialog driver port (0 = derived from the simulator UDID)
+	CLIVersion              string        // running probe binary's version, sent during the reconnect handshake
+	Language                string        // app language set by `set language` / --locale ("" = device default)
 
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
@@ -315,6 +317,31 @@ func (dc *DeviceContext) AllowPermission(ctx context.Context, name string) error
 			return fmt.Errorf("grant %s: %w", name, err)
 		}
 	}
+	return nil
+}
+
+// SetLanguage sets the app's own language (not the device's): "de", "pt-BR", or
+// "system" to remove the override. The caller relaunches the app afterwards.
+// Android 13+ uses per-app locales; an iOS simulator gets language launch
+// arguments for every later launch. Right-to-left languages flip the layout on
+// their own, because Flutter follows the locale.
+func (dc *DeviceContext) SetLanguage(ctx context.Context, tag string) error {
+	t, err := locale.Parse(tag)
+	if err != nil {
+		return fmt.Errorf("set language: %w", err)
+	}
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		if err := dc.Manager.ADB().SetAppLocale(ctx, dc.Serial, dc.AppID, t.BCP47); err != nil {
+			return fmt.Errorf("set language: %w", err)
+		}
+	case device.PlatformIOS:
+		if dc.IsPhysical {
+			return fmt.Errorf("set language is not supported on physical iOS devices: change the language in Settings > Apps > %s", dc.AppID)
+		}
+		dc.Manager.SimCtl().SetAppLanguage(dc.Serial, dc.AppID, t.BCP47, t.POSIX)
+	}
+	dc.Language = t.BCP47
 	return nil
 }
 

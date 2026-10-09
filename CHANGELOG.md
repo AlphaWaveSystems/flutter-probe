@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-09
+
+### Added
+- **`l10n "key"`**: a string whose text comes from the app's ARB files in the current app language (`probe.yaml` `l10n: {dir, default}`; language fallback `de-AT` -> `de` -> default). Keys are validated for the run language, every `set language` literal and the default before any device work; placeholder/plural messages are rejected. EBNF + conformance test updated (`l10n-string`).
+- **`set language "de"`** (ProbeScript) and **`probe test --locale de`**: run the app in another language (BCP-47 tag, `"system"` resets). Android 13+ per-app locales; iOS simulator launch arguments (also applied on `restart the app`/`clear app data`). Right-to-left languages flip the layout. Physical iOS devices are rejected with a clear message. Grammar page and conformance test updated.
+- **`probe test --locales de,ja,ar`**: the suite once per language in separate runs; `-o r.json` becomes `r.de.json`, ...; per-language pass/fail table; reports record `locale`.
+
 ## [0.20.0] - 2026-10-09
 
 ### Fixed

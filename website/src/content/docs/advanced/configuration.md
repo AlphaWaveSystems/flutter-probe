@@ -77,6 +77,10 @@ ai:
 recipes_folder: tests/recipes
 reports_folder: reports
 
+l10n:
+  dir: lib/l10n             # folder with your .arb files, for l10n "key" in tests
+  default: en               # fallback language / language before any set language
+
 environment:
   TEST_USER: "admin@test.com"
   API_BASE: "http://localhost:8080"
@@ -192,6 +196,15 @@ ai:
     - selector: "#credit_card_field"
     - selector: "Email"
 ```
+
+### l10n
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `dir` | string | — | Folder with the app's `.arb` files (`app_en.arb`, `app_de.arb`, ...). Enables `l10n "key"` in tests |
+| `default` | string | — | Language used before any `set language` / `--locale`, and the fallback for keys missing from a translation |
+
+See [Testing localized apps](/advanced/multi-language/#your-arb-files-l10n-key).
 
 ### environment
 

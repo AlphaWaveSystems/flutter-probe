@@ -93,7 +93,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 	}
 
 	// Build metadata display strings
-	metaDevice, metaPlatform, metaOS, metaApp := "", "", "", ""
+	metaDevice, metaPlatform, metaOS, metaApp, metaLocale := "", "", "", "", ""
 	if h.Metadata != nil {
 		m := h.Metadata
 		if m.DeviceName != "" {
@@ -105,6 +105,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 			metaDevice = m.DeviceID
 		}
 		metaPlatform = m.Platform
+		metaLocale = m.Locale
 		metaOS = m.OSVersion
 		if m.AppID != "" {
 			metaApp = m.AppID
@@ -124,6 +125,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Total        int
 		ResultsJSON  string
 		MetaDevice   string
+		MetaLocale   string
 		MetaPlatform string
 		MetaOS       string
 		MetaApp      string
@@ -137,6 +139,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Total:        len(results),
 		ResultsJSON:  string(resultsJSON),
 		MetaDevice:   metaDevice,
+		MetaLocale:   metaLocale,
 		MetaPlatform: metaPlatform,
 		MetaOS:       metaOS,
 		MetaApp:      metaApp,
@@ -231,7 +234,7 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
     <span class="project">/ {{.ProjectName}}</span>
   </div>
   <div class="meta">Generated {{.GeneratedAt}} · Total duration {{.TotalDur}}</div>
-{{if or .MetaDevice .MetaOS .MetaApp}}  <div class="meta" style="margin-top:4px">{{if .MetaDevice}}Device: {{.MetaDevice}}{{end}}{{if .MetaOS}} · OS: {{.MetaOS}}{{end}}{{if .MetaPlatform}} · Platform: {{.MetaPlatform}}{{end}}{{if .MetaApp}} · App: {{.MetaApp}}{{end}}</div>
+{{if or .MetaDevice .MetaOS .MetaApp}}  <div class="meta" style="margin-top:4px">{{if .MetaDevice}}Device: {{.MetaDevice}}{{end}}{{if .MetaOS}} · OS: {{.MetaOS}}{{end}}{{if .MetaPlatform}} · Platform: {{.MetaPlatform}}{{end}}{{if .MetaApp}} · App: {{.MetaApp}}{{end}}{{if .MetaLocale}} · Language: {{.MetaLocale}}{{end}}</div>
 {{end}}</header>
 
 <div class="summary">

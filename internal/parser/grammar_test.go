@@ -434,7 +434,7 @@ var keywordAllowlist = map[string]string{
 	"load": "reserved, unused",
 	// Table entries that lex as plain WORD tokens and only occur inside the
 	// compounds "set location" and "verify external browser".
-	"set": "word in a compound", "location": "word in a compound", "verify": "word in a compound",
+	"set": "word in a compound", "location": "word in a compound", "language": "word in a compound", "verify": "word in a compound",
 	"each":    "reserved, covered by the 'before each test' compound",
 	"failure": "reserved, covered by the 'on failure' compound",
 }
@@ -740,6 +740,17 @@ var grammarProductionExamples = []productionExample{
 		want: []string{"action:grant_all_permissions", "action:revoke_all_permissions", "action:grant_all_permissions"}},
 	{production: "copy-step", src: testBody(`copy "text" to clipboard`, `copy "text"`), want: repeat("action:copy_clipboard", 2)},
 	{production: "paste-step", src: testBody(`paste from clipboard`, `paste`), want: repeat("action:paste_clipboard", 2)},
+	{production: "set-language-step", src: testBody(`set language "de"`, `set language "pt-BR"`, `set language "system"`),
+		want: repeat("action:set_language", 3),
+		check: func(t *testing.T, p *parser.Program) {
+			var got []string
+			for _, s := range p.Tests[0].Body {
+				got = append(got, s.(parser.ActionStep).Name)
+			}
+			if strings.Join(got, ",") != "de,pt-BR,system" {
+				t.Errorf("language tags = %v", got)
+			}
+		}},
 	{production: "set-location-step", src: testBody(`set location 37.7749, -122.4194`, `set location -33.8, 151.2`, `set location 37 122`),
 		want: repeat("action:set_location", 3),
 		check: func(t *testing.T, p *parser.Program) {

@@ -39,6 +39,7 @@ type Config struct {
 	AI        AIConfig         `yaml:"ai"`
 	Recipes   string           `yaml:"recipes_folder"`
 	Reports   string           `yaml:"reports_folder"`
+	L10n      L10nConfig       `yaml:"l10n"`
 	Env       map[string]string `yaml:"environment"`
 
 	// CLIVersion is the running probe binary's version (internal/cli.Version).
@@ -46,6 +47,12 @@ type Config struct {
 	// after loading, so runner/probelink code can include it in the connect
 	// handshake without importing internal/cli (which would be a cycle).
 	CLIVersion string `yaml:"-"`
+}
+
+// L10nConfig points `l10n "key"` at the app's ARB files.
+type L10nConfig struct {
+	Dir     string `yaml:"dir"`     // folder with the .arb files (e.g. lib/l10n)
+	Default string `yaml:"default"` // language used until set language / --locale picks one (e.g. en)
 }
 
 // CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.

@@ -420,6 +420,8 @@ func (p *Parser) parseStep() (Step, error) {
 		return p.parseActionPaste()
 	case TOKEN_SET_LOCATION:
 		return p.parseActionSetLocation()
+	case TOKEN_SET_LANGUAGE:
+		return p.parseActionSetLanguage()
 	case TOKEN_TRAVEL:
 		return p.parseTravel()
 	case TOKEN_VERIFY_BROWSER:
@@ -1805,6 +1807,20 @@ func (p *Parser) parseActionSetLocation() (Step, error) {
 	p.skipFillers()
 	raw := p.parseCoordinateLine()
 	return ActionStep{Verb: VerbSetLocation, Name: raw, Line: line}, nil
+}
+
+// parseActionSetLanguage handles: set language "de" / set language "pt-BR" / set language "system"
+func (p *Parser) parseActionSetLanguage() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compound "set language"
+	p.skipFillers()
+	if p.peek().Type != TOKEN_STRING {
+		return nil, fmt.Errorf("line %d: expected a language tag (quoted string, e.g. \"de\" or \"pt-BR\") after set language", line)
+	}
+	tag := p.peek().Literal
+	p.advance()
+	p.consumeNewline()
+	return ActionStep{Verb: VerbSetLanguage, Name: tag, Line: line}, nil
 }
 
 // parseCoordinateLine consumes all remaining tokens up to the next NEWLINE
