@@ -1,0 +1,64 @@
+# language=zh-Hans locale=zh_CN  date=2026-10-09T12:19:32Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array zh-Hans ; AppleLocale zh_CN
+$ simctl spawn defaults read -g AppleLanguages
+("zh-Hans")
+$ simctl spawn defaults read -g AppleLocale
+zh_CN
+runner health: {"ok":true,"version":"0.19.5","driver":"flutter-probe-ios-driver"}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 92525
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”想给你发送通知
+      buttons: 不允许 | 允许
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 93089
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • 允许“AlertsTest”使用你的位置？
+      buttons: 允许一次 | 使用App时允许 | 不允许
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 93855
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”想访问相机。
+      buttons: 不允许 | 允许
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 94574
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”想访问麦克风。
+      buttons: 不允许 | 允许
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 95059
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”想访问你的提醒事项。
+      buttons: 不允许 | 允许
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 95349
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”想访问语音识别。
+      buttons: 不允许 | 允许
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 95993
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”想访问你的运动与健身记录。
+      buttons: 不允许 | 允许

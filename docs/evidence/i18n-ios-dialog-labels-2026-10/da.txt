@@ -1,0 +1,64 @@
+# language=da locale=da_DK  date=2026-10-09T11:50:37Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array da ; AppleLocale da_DK
+$ simctl spawn defaults read -g AppleLanguages
+(da)
+$ simctl spawn defaults read -g AppleLocale
+da_DK
+runner health: {"driver":"flutter-probe-ios-driver","version":"0.19.5","ok":true}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 23585
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” vil gerne sende dig notifikationer
+      buttons: Tillad ikke | Tillad
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 23739
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Må “AlertsTest” bruge din lokalitet?
+      buttons: Tillad en gang | Tillad, mens du bruger app | Tillad ikke
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 23886
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” vil bruge kameraet.
+      buttons: Tillad ikke | Tillad
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 24023
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” vil bruge mikrofonen.
+      buttons: Tillad ikke | Tillad
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 24175
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” vil bruge dine påmindelser.
+      buttons: Tillad ikke | Tillad
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 24319
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” vil bruge talegenkendelse.
+      buttons: Tillad ikke | Tillad
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 24534
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” vil bruge din bevægelses- og fitnessaktivitet.
+      buttons: Tillad ikke | Tillad

@@ -1,0 +1,64 @@
+# language=ko locale=ko_KR  date=2026-10-09T12:17:58Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array ko ; AppleLocale ko_KR
+$ simctl spawn defaults read -g AppleLanguages
+(ko)
+$ simctl spawn defaults read -g AppleLocale
+ko_KR
+runner health: {"driver":"flutter-probe-ios-driver","version":"0.19.5","ok":true}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 87110
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’에서 알림을 보내고자 합니다.
+      buttons: 허용 안 함 | 허용
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 87592
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’ 앱이 사용자의 위치를 사용하도록 허용하겠습니까?
+      buttons: 한 번 허용 | 앱을 사용하는 동안 허용 | 허용 안 함
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 87950
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’이(가) 카메라에 접근하려고 합니다.
+      buttons: 허용 안 함 | 허용
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 88450
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’이(가) 마이크에 접근하려고 합니다.
+      buttons: 허용 안 함 | 허용
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 88976
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’이(가) 사용자의 미리 알림에 접근하려고 합니다.
+      buttons: 허용 안 함 | 허용
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 89676
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’이(가) 음성 인식에 접근하려고 합니다.
+      buttons: 허용 안 함 | 허용
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 90455
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • ‘AlertsTest’이(가) 사용자의 동작 및 피트니스 활동에 접근하려고 합니다.
+      buttons: 허용 안 함 | 허용

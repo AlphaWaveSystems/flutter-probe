@@ -1,0 +1,64 @@
+# language=nb locale=nb_NO  date=2026-10-09T11:52:09Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array nb ; AppleLocale nb_NO
+$ simctl spawn defaults read -g AppleLanguages
+(nb)
+$ simctl spawn defaults read -g AppleLocale
+nb_NO
+runner health: {"driver":"flutter-probe-ios-driver","ok":true,"version":"0.19.5"}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 25381
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • AlertsTest vil sende deg varslinger
+      buttons: Ikke tillat | Tillat
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 25542
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Vil du tillate at AlertsTest bruker posisjonen din?
+      buttons: Tillat én gang | Tillat mens appen er i bruk | Ikke tillat
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 25662
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • AlertsTest vil ha tilgang til kameraet.
+      buttons: Ikke tillat | Tillat
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 25800
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • AlertsTest vil ha tilgang til mikrofonen.
+      buttons: Ikke tillat | Tillat
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 25950
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • AlertsTest vil ha tilgang til påminnelsene dine.
+      buttons: Ikke tillat | Tillat
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 26167
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • AlertsTest vil ha tilgang til talegjenkjenning.
+      buttons: Ikke tillat | Tillat
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 26425
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • AlertsTest vil ha tilgang til bevegelses- og treningsaktiviteten din.
+      buttons: Ikke tillat | Tillat
