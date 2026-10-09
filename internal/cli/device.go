@@ -67,8 +67,9 @@ var deviceStartCmd = &cobra.Command{
 			statusOK(os.Stdout, "Emulator %s (%s) is online", d.Name, d.ID)
 		case "ios":
 			udid, _ := cmd.Flags().GetString("udid")
+			name, _ := cmd.Flags().GetString("name")
 			fmt.Println("  Booting iOS simulator...")
-			d, err := dm.StartIOS(ctx, udid)
+			d, err := dm.StartIOSNamed(ctx, udid, name)
 			if err != nil {
 				return err
 			}
@@ -84,6 +85,7 @@ func init() {
 	deviceStartCmd.Flags().StringP("platform", "p", "android", "platform: android | ios")
 	deviceStartCmd.Flags().String("avd", "", "AVD name to start (default: first available)")
 	deviceStartCmd.Flags().String("udid", "", "iOS simulator UDID to boot (default: auto-select)")
+	deviceStartCmd.Flags().String("name", "", "iOS: boot the simulator with this name, creating it (same type/runtime as the default) when it does not exist")
 	deviceCmd.AddCommand(deviceListCmd)
 	deviceCmd.AddCommand(deviceStartCmd)
 }

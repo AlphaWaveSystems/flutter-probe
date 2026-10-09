@@ -10,6 +10,8 @@ Key facts for an AI agent:
 - Failures look like `line N: <step>: rpc error -3200x: ... visible texts: [...], keys: [...]` — compare the visible texts/keys with the selector you used.
 - Wait for each new screen (`wait until "Text" appears`) before tapping; use `#key` selectors; use `scroll down until "X" appears` for rows below the fold.
 - OS dialogs (permission alerts, StoreKit sign-in) are not Flutter widgets: use `tap "Allow" in system dialog`, `dismiss system dialog`, `sign in sandbox tester`.
+- Devices: every simulator/emulator probe opens is named (`probe device start --platform ios --name <n>`; Android = AVD name) and each test result records device name + id.
+- Multi-language: prefer `#key` selectors; `--match-loose` folds case/accents/apostrophes in text selectors; `see any of "A", "B"` for per-language labels; system-dialog buttons resolve by role, so `tap "Don't Allow" in system dialog` works on any device language.
 - Secrets: only through environment variables (`type "$NAME" into system field "Password"`); they are masked in output.
 - AI features (local or hosted models) are optional and never required to run tests.
 
@@ -23,6 +25,7 @@ Key facts for an AI agent:
 - [MCP server (21 tools)](https://flutterprobe.dev/tools/mcp/)
 - [CLI reference](https://flutterprobe.dev/tools/cli-reference/)
 - [AI and local models](https://flutterprobe.dev/tools/ai/)
+- [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/): keys, loose matching, alternatives, system dialogs in any language.
 - [Configuration (probe.yaml)](https://flutterprobe.dev/advanced/configuration/)
 
 ## Source

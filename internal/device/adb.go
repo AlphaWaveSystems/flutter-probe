@@ -58,6 +58,13 @@ func (a *ADB) Devices(ctx context.Context) ([]Device, error) {
 				break
 			}
 		}
+		// A running emulator is identified by its AVD name (the name it was
+		// created and started under), not by the hardware model it emulates.
+		if strings.HasPrefix(serial, "emulator-") && state == "device" {
+			if avd := a.AVDName(ctx, serial); avd != "" {
+				name = avd
+			}
+		}
 		devices = append(devices, Device{
 			ID:       serial,
 			Name:     name,
@@ -66,6 +73,17 @@ func (a *ADB) Devices(ctx context.Context) ([]Device, error) {
 		})
 	}
 	return devices, nil
+}
+
+// AVDName returns the AVD name of a running emulator ("" when unknown or the
+// serial is not an emulator).
+func (a *ADB) AVDName(ctx context.Context, serial string) string {
+	out, err := a.run(ctx, "-s", serial, "emu", "avd", "name")
+	if err != nil {
+		return ""
+	}
+	first := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	return strings.TrimSpace(strings.TrimSuffix(first, "\r"))
 }
 
 // StartEmulator boots an AVD and returns a Device once it appears.
@@ -91,7 +109,7 @@ func (a *ADB) StartEmulator(ctx context.Context, avdName string, bootTimeout, po
 		devices, err := a.Devices(ctx)
 		if err == nil {
 			for _, d := range devices {
-				if strings.Contains(d.Name, avdName) || strings.Contains(d.ID, "emulator") {
+				if d.Name == avdName || strings.Contains(d.Name, avdName) || strings.Contains(d.ID, "emulator") {
 					return &d, nil
 				}
 			}

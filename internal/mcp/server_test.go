@@ -298,6 +298,13 @@ func (f *fakeManager) StartIOS(ctx context.Context, udid string) (*device.Device
 	}
 	return &device.Device{ID: udid, Name: "iPhone 15", Platform: device.PlatformIOS, State: "booted"}, nil
 }
+func (f *fakeManager) StartIOSNamed(ctx context.Context, udid, name string) (*device.Device, error) {
+	d, _ := f.StartIOS(ctx, udid)
+	if name != "" {
+		d.Name = name
+	}
+	return d, nil
+}
 func (f *fakeManager) SimCtl() *ios.SimCtl { return ios.New() }
 func (f *fakeManager) ADB() *device.ADB    { return device.NewADB() }
 

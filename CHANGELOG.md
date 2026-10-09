@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-09
+
+### Fixed
+- **Agent: `scroll down in "<anchor>" until X appears` regression (0.19.2+):** failed with `Widget not found: text("<anchor>")` once the anchor scrolled off screen (the scrollable was re-resolved from the anchor every step). Resolved once now.
+- **Agent: "UI one tap behind":** the post-action settle (and `wait for idle`) now lets a scheduled frame run before declaring the UI idle, so `see` right after `tap` no longer reads the pre-tap state (bottom sheets, radio rows; intermittent).
+
+### Added
+- **iOS system-dialog labels for 27 languages:** allow / deny / allow once / allow while using measured on a real simulator (iOS 26.3) per language, raw output in `docs/evidence/i18n-ios-dialog-labels-2026-10/`. `tap "Allow" in system dialog` now works on a device set to any of them. Not measured (so exact label needed): `ok`, `cancel`, `open` outside English, photo/calendar/contacts alerts.
+- **Named devices (hard rule):** `probe device start --platform ios --name <n>` (and MCP `start_device` `name`) boots the simulator with that name, or creates one (same device type/runtime as the default) when missing. Running Android emulators are listed and reported by their AVD name instead of the hardware model, and a run never has an unnamed device (falls back to the serial/UDID). Every result records device name and id.
+- **Loose text matching (`--match-loose`, `defaults.match: loose`):** text selectors, `see`, `wait until` and tooltip/Semantics-label
+  matching fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and
+  whitespace on both sides (`Änderungen` ~ `anderungen`, `Don’t Allow` ~ `Don't allow`). Off by default. Ids are never folded.
+  Marks that carry meaning (Indic vowel signs, Thai tone marks) are kept. A shared fixture file keeps the Go and Dart folding identical.
+- The system-dialog button/title matching now uses the same folding (accents included).
+- **System-dialog buttons resolve by role in any device language:** `tap "Don't Allow" in system dialog`, `deny permission "notifications"`,
+  `--grant notifications` and `dismiss system dialog` find the button with the same role (allow, deny, allow once, allow while using,
+  OK, cancel, not now, open, close) on a device set to another language. Android uses the permission dialog's resource ids; an exact
+  label always wins over a role. The iOS notification alert is recognised by its buttons (Allow + Don't Allow) instead of its English title.
+- **iOS `deny permission "notifications"` really resets the decision when the app is not running:** iOS keeps an earlier Allow (or
+  `--grant notifications`) for good and simctl cannot change it, so a "first run" notification test only saw the alert once. The
+  step now reinstalls the app from a copy of its own bundle (`SimCtl.Reinstall`), which brings notifications back to "not asked
+  yet" (verified on a simulator: Allow, relaunch shows no alert; reinstall, launch shows the alert again). With the app running it
+  still answers the alert. The reinstall leaves a new, empty data container.
+- Docs: new guide "Testing localized apps"; README, agent README (pub.dev), `internal/README`, llms.txt, MCP guide, VS Code snippet.
+
 ## [0.19.5] - 2026-10-09
 
 ### Fixed

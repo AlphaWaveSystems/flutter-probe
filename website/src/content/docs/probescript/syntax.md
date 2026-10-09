@@ -83,6 +83,14 @@ It stops early when the list can't move further, and fails with the visible text
 shows up. It is the equivalent of Maestro's `scrollUntilVisible`. Use `on "List"` to pick which
 scrollable when a screen has several.
 
+## Matching text in several languages
+
+Prefer `#key` selectors (locale-independent). When you select by visible text, matching is a case-sensitive substring by
+default. Run with `--match-loose` (or `defaults.match: loose`) to fold case, accents/diacritics, typographic
+apostrophes and dashes, full-width forms and whitespace on both sides, so one script tolerates `Änderungen speichern` /
+`anderungen SPEICHERN`, `Don’t Allow` / `Don't allow`, and full-width digits. Scripts that differ per language use
+`see any of "Save", "Speichern", "Guardar"`. Scripts with Indic or Thai text are not stripped of their vowel signs.
+
 ## Targets that are off screen
 
 `tap`, `type`, `long press`, `double tap` and `clear` scroll a target that exists in the widget tree into view first, like a

@@ -733,7 +733,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return e.client.Tap(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 		}
 		if a.Name != "" {
-			return e.client.Tap(ctx, probelink.SelectorParam{Kind: "text", Text: e.resolve(a.Name)})
+			return e.client.Tap(ctx, probelink.SelectorParam{Kind: "text", Text: e.resolve(a.Name), Loose: LooseMatching()})
 		}
 		return fmt.Errorf("toggle: missing selector at line %d", a.Line)
 
@@ -1077,7 +1077,7 @@ func (e *Executor) runAssertAny(ctx context.Context, a parser.AssertStep) error 
 	var present []string
 	for _, alt := range a.Any {
 		text := e.resolve(alt)
-		sel := probelink.SelectorParam{Kind: "text", Text: text}
+		sel := probelink.SelectorParam{Kind: "text", Text: text, Loose: LooseMatching()}
 		if strings.HasPrefix(text, "#") {
 			sel = probelink.SelectorParam{Kind: "id", Text: text}
 		}
@@ -1306,7 +1306,7 @@ func (e *Executor) waitAny(ctx context.Context, alts []string) error {
 	}
 	for {
 		for _, a := range resolved {
-			sel := probelink.SelectorParam{Kind: "text", Text: a}
+			sel := probelink.SelectorParam{Kind: "text", Text: a, Loose: LooseMatching()}
 			if strings.HasPrefix(a, "#") {
 				sel = probelink.SelectorParam{Kind: "id", Text: a}
 			}
@@ -1369,6 +1369,7 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 		Kind:     kindStr,
 		Target:   e.resolve(w.Target),
 		Pattern:  w.Pattern,
+		Loose:    LooseMatching(),
 		Duration: w.Duration,
 		Timeout:  agentWaitTimeout(e.timeout).Seconds(),
 	})
@@ -1381,7 +1382,7 @@ func (e *Executor) runConditional(ctx context.Context, c parser.ConditionalStep)
 	checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
-	sel := probelink.SelectorParam{Kind: "text", Text: c.Condition}
+	sel := probelink.SelectorParam{Kind: "text", Text: c.Condition, Loose: LooseMatching()}
 	if strings.HasPrefix(c.Condition, "#") {
 		sel = probelink.SelectorParam{Kind: "id", Text: c.Condition}
 	}
@@ -1865,5 +1866,6 @@ func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 		Container: s.Container,
 		Relation:  s.Relation,
 		Anchor:    s.Anchor,
+		Loose:     LooseMatching() && s.Kind != parser.SelectorID,
 	}
 }

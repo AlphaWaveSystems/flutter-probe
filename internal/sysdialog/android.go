@@ -114,6 +114,7 @@ func parseAndroid(dumpXML string, extraPackages []string) ([]androidDialog, erro
 				d.fieldRects = append(d.fieldRects, rect)
 			case n.Clickable == "true" && lbl != "":
 				d.Buttons = append(d.Buttons, lbl)
+				d.ButtonIDs = append(d.ButtonIDs, n.ResourceID)
 				d.buttonRects = append(d.buttonRects, rect)
 			case lbl != "":
 				d.Texts = append(d.Texts, lbl)
@@ -248,7 +249,7 @@ func (a *AndroidDriver) Tap(ctx context.Context, button, title string) (string, 
 	if d == nil {
 		return "", noDialogErr(title)
 	}
-	i := Match(button, d.Buttons)
+	i := MatchButton(d.Dialog, button)
 	if i < 0 {
 		return "", fmt.Errorf("no button %q in the dialog (buttons: %s)", button, strings.Join(d.Buttons, ", "))
 	}
@@ -297,7 +298,7 @@ func (a *AndroidDriver) Dismiss(ctx context.Context, title string) (bool, error)
 	if err != nil || d == nil {
 		return false, err
 	}
-	i := DismissIndex(d.Buttons)
+	i := DismissButton(d.Dialog)
 	if i < 0 {
 		return false, fmt.Errorf("no cancel-like button in the dialog (buttons: %s)", strings.Join(d.Buttons, ", "))
 	}

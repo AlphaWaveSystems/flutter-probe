@@ -12,6 +12,8 @@ Full editor support for `.probe` files:
 
 - **Syntax highlighting** — keywords, strings, selectors, tags, comments
 - **IntelliSense** — autocomplete for commands, permissions, tags, and recipes
+- **Named devices** — run results show the named simulator/emulator each test ran on (`probe device start --name …`)
+- **Multi-language suites** — snippets for `see any of`, `wait until any of` and `wait until … appears matching`; the grammar highlights them
 - **Snippets** — 19 built-in snippets (`test`, `tap`, `type`, `see`, `wait`, `recipe`, `if`, `repeat`, `dart`, `mock`, and more)
 - **Lint on save** — real-time diagnostics from the ProbeScript parser
 - **CodeLens** — inline Run / Debug buttons above every test

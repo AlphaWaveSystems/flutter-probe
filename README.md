@@ -406,11 +406,23 @@ grant all permissions
 revoke all permissions
 ```
 
-Or once for the whole run: `probe test tests/ --grant notifications,camera`. Android grants through
+Or once for the whole run: `probe test tests/ --grant notifications,camera`. On an iOS simulator `deny permission "notifications"` (app not running) reinstalls the app to reset the system decision, because iOS never asks twice. Android grants through
 `adb shell pm grant` (including `POST_NOTIFICATIONS`), the iOS simulator through `simctl privacy`. iOS
 notifications have no simctl service, so probe answers the system alert itself: `--grant notifications` (and
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
 (needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
+
+### Named devices
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device start --platform ios --name probe-checkout` boots (or creates) a simulator under that name; running Android emulators are listed and reported by their AVD name.
+
+### Multi-language apps
+
+One suite for every language. Select by `#key` (language-independent); use `--match-loose` (or `defaults.match: loose`) to fold
+case, accents, typographic apostrophes and whitespace in text selectors (`anderungen SPEICHERN` matches `Änderungen speichern`);
+list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**, so
+`tap "Don't Allow" in system dialog` and `deny permission "notifications"` work on a device set to any language.
+Guide: [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/).
 
 ### System dialogs (permission alerts, sign-in sheets)
 
@@ -426,6 +438,8 @@ dismiss system dialog                                # Cancel / Don't Allow / No
 sign in sandbox tester                               # StoreKit sandbox account, idempotent
 tap "Allow" in system dialog optional                # no-op when no dialog shows up
 ```
+
+On a device set to another language, buttons are matched by role (allow, deny, cancel, ...), so the English label still works.
 
 Secrets come from environment variables only and are masked in step output, reports and errors. The same
 operations are available without any test file or Flutter app: `probe system-dialog tap "Allow"`,

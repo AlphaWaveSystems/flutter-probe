@@ -1,0 +1,64 @@
+# language=hi locale=hi_IN  date=2026-10-09T12:08:19Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array hi ; AppleLocale hi_IN
+$ simctl spawn defaults read -g AppleLanguages
+(hi)
+$ simctl spawn defaults read -g AppleLocale
+hi_IN
+runner health: {"ok":true,"version":"0.19.5","driver":"flutter-probe-ios-driver"}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 61839
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” आपको सूचनाएँ भेजना चाहता है
+      buttons: अनुमति न दें | अनुमति दें
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 62408
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” को अपने स्थान का उपयोग करने की अनुमति दें?
+      buttons: एक बार अनुमति दें | ऐप उपयोग के दौरान अनुमति दें | अनुमति न दें
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 62823
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” कैमरा ऐक्सेस करना चाहता है।
+      buttons: अनुमति न दें | अनुमति दें
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 63013
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” माइक्रोफ़ोन ऐक्सेस करना चाहता है।
+      buttons: अनुमति न दें | अनुमति दें
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 63363
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” आपके रिमाइंडर ऐक्सेस करना चाहता है।
+      buttons: अनुमति न दें | अनुमति दें
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 63892
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” ने बोली पहचान को ऐक्सेस करने का अनुरोध किया है।
+      buttons: अनुमति न दें | अनुमति दें
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 64292
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” आपकी मोशन और फ़िटनेस ऐक्टिविटी को ऐक्सेस करना चाहता है।
+      buttons: अनुमति न दें | अनुमति दें

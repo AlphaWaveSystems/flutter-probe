@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/textfold"
 )
 
 // Dialog is a snapshot of one system dialog.
@@ -23,6 +25,9 @@ type Dialog struct {
 	Title   string   `json:"title"`
 	Texts   []string `json:"texts"`
 	Buttons []string `json:"buttons"`
+	// ButtonIDs are the platform ids of Buttons when the platform has stable ones (Android
+	// resource ids); parallel to Buttons, may be empty.
+	ButtonIDs []string `json:"button_ids,omitempty"`
 	Fields  []string `json:"fields"`
 	App     string   `json:"app,omitempty"`
 }
@@ -52,10 +57,7 @@ type Driver interface {
 
 // normalize folds case, typographic apostrophes and whitespace so that
 // "Don’t Allow" and "don't allow" compare equal.
-func normalize(s string) string {
-	s = strings.NewReplacer("’", "'", "‘", "'", " ", " ").Replace(s)
-	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
-}
+func normalize(s string) string { return textfold.Fold(s) }
 
 // Match returns the index of the best label for wanted: an exact (normalized)
 // match first, then a substring match; -1 if none.

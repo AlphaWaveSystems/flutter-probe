@@ -1,0 +1,64 @@
+# language=ru locale=ru_RU  date=2026-10-09T11:59:59Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array ru ; AppleLocale ru_RU
+$ simctl spawn defaults read -g AppleLanguages
+(ru)
+$ simctl spawn defaults read -g AppleLocale
+ru_RU
+runner health: {"driver":"flutter-probe-ios-driver","version":"0.19.5","ok":true}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 37689
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Приложение «AlertsTest» запрашивает разрешение на отправку уведомлений
+      buttons: Не разрешать | Разрешить
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 37888
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Разрешить приложению «AlertsTest» использовать Вашу геопозицию?
+      buttons: Однократно | При использовании приложения | Запретить
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 38055
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Приложение «AlertsTest» запрашивает доступ к Камере.
+      buttons: Не разрешать | Разрешить
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 38219
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Приложение «AlertsTest» запрашивает доступ к микрофону.
+      buttons: Не разрешать | Разрешить
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 38451
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Приложение «AlertsTest» запрашивает доступ к Напоминаниям.
+      buttons: Не разрешать | Разрешить
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 38745
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Приложение «AlertsTest» запрашивает доступ к распознаванию речи.
+      buttons: Не разрешать | Разрешить
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 39401
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Приложение «AlertsTest» запрашивает доступ к Вашим данным о движении и фитнесе.
+      buttons: Не разрешать | Разрешить

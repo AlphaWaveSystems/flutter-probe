@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 0.20.0 - 2026-10-09
+
+- Added: loose text matching (`loose` selector flag, `probe test --match-loose`): case, accents/diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and whitespace fold on both sides (`lib/src/textfold.dart`, identical to the CLI via a shared fixture). Off by default.
+- Fixed (regression in 0.19.2+): `scroll down in "<anchor>" until X appears` failed with `Widget not found: text("<anchor>")` once the anchor had scrolled off screen, because the scrollable was re-resolved from the anchor on every step. It is now resolved once.
+- Fixed: `wait for idle` (and the settle after every action) returned before the UI reflected a tap. A `setState` schedules a frame, but the scheduler phase still reads idle until it starts, so the next `see` read the stale tree ("UI one tap behind", intermittent, seen on bottom sheets). The settle check now lets a requested frame run first (bounded to 250 ms, so a screen that animates forever does not stall actions).
+
 ## 0.19.5 - 2026-10-09
 
 - No agent change (iOS driver and Android dialog fixes in the CLI); version aligned.

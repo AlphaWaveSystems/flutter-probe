@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart' show Tooltip;
 import 'package:flutter/widgets.dart';
 
+import 'textfold.dart';
+
 /// The [ModalRoute] [element] belongs to, found WITHOUT subscribing to it.
 ///
 /// `ModalRoute.of(context)` registers [context] as a dependent of the route's
@@ -61,6 +63,15 @@ class ProbeFinder {
   }
 
   List<Element> findElements(Map<String, dynamic> sel) {
+    _loose = sel['loose'] == true;
+    try {
+      return _findElements(sel);
+    } finally {
+      _loose = false;
+    }
+  }
+
+  List<Element> _findElements(Map<String, dynamic> sel) {
     final kind = sel['kind'] as String? ?? 'text';
     final text = sel['text'] as String? ?? '';
     final ordinal = (sel['ordinal'] as num?)?.toInt() ?? 1;
@@ -163,9 +174,9 @@ class ProbeFinder {
     // a Semantics wrapper around a Text never doubles a count.
     walkTree((e) {
       final w = e.widget;
-      if (w is Tooltip && (w.message?.contains(text) ?? false)) {
+      if (w is Tooltip && w.message != null && _textHit(w.message!, text)) {
         results.add(e);
-      } else if (w is Semantics && (w.properties.label?.contains(text) ?? false)) {
+      } else if (w is Semantics && w.properties.label != null && _textHit(w.properties.label!, text)) {
         results.add(e);
       }
     });
@@ -201,15 +212,24 @@ class ProbeFinder {
     return results;
   }
 
+  /// Text comparison: a plain substring by default; with `loose` matching (selector flag
+  /// `loose: true`, from `--match-loose` / `defaults.match: loose`) case, accents, typographic
+  /// apostrophes/dashes, full-width forms and whitespace are folded on both sides.
+  bool _textHit(String haystack, String needle) =>
+      _loose ? foldedContains(haystack, needle) : haystack.contains(needle);
+
+  bool _loose = false;
+
   bool _matchesText(Widget widget, String text) {
     if (widget is Text) {
-      return widget.data == text || (widget.data?.contains(text) ?? false);
+      final data = widget.data;
+      return data != null && (data == text || _textHit(data, text));
     }
     if (widget is RichText) {
-      return widget.text.toPlainText().contains(text);
+      return _textHit(widget.text.toPlainText(), text);
     }
     if (widget is EditableText) {
-      return widget.controller.text.contains(text);
+      return _textHit(widget.controller.text, text);
     }
     return false;
   }

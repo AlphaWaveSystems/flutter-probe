@@ -141,6 +141,7 @@ type DefaultsConfig struct {
 	RetryFailedTests        int           `yaml:"retry_failed_tests"`         // number of retries for failed tests
 	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
 	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation to 0.001 (animations end within a frame); 0 is not a valid Flutter value
+	Match                   string        `yaml:"match"`                      // text matching: "exact" (default, case-sensitive substring) or "loose" (fold case, accents, apostrophes, whitespace). Overridden by --match-loose.
 	ImplicitWait            time.Duration `yaml:"implicit_wait"`              // retry tap/type/see/... on "not found" for up to this long before failing (default: 0 = off). Overridden by --implicit-wait.
 }
 

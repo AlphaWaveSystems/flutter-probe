@@ -3,6 +3,16 @@ title: System Dialogs
 description: Drive OS-level dialogs — permission alerts, the iOS share sheet, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs — from ProbeScript or the command line.
 ---
 
+> **Any device language.** Buttons are resolved by role (allow, deny, allow once, allow while using, OK, cancel, not now, open, close):
+> `tap "Don't Allow" in system dialog` finds "Nicht erlauben" on a German device. Android uses the permission dialog's
+> language-independent resource ids; iOS uses a table of labels measured on real simulators (allow, deny, allow once, allow while using in 27 languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional)). An exact label always wins over a role.
+> Matching also folds case, accents and typographic apostrophes (`Don’t Allow` = `don't allow`).
+
+> **Notifications on iOS.** The system keeps the Allow / Don't Allow decision per app for good, and `simctl` has no command to
+> reset it. `deny permission "notifications"` therefore reinstalls the app (from a copy of its own bundle) when the app is not
+> running, so the next launch asks again; with the app running it answers the alert. Use it in `before each test` after
+> `kill the app` for first-run permission tests.
+
 Some UI is not part of your Flutter app: iOS permission alerts, the StoreKit **Sign in to Apple Account** sheet,
 Android's permission dialogs. They are drawn by the operating system, so the on-device Dart agent can neither see
 nor tap them. FlutterProbe drives them from outside the app:

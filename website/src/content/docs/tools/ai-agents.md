@@ -43,6 +43,9 @@ timing (add `wait until "<next screen's text>" appears`, or `wait for idle` afte
 
 - **Wait for the screen, then act.** After any navigation, `wait until "<text on the next screen>" appears` before
   tapping. A tap returns before the route has finished building.
+- **Do not depend on the language.** Select by `#key`; for visible text run with `--match-loose` (folds case, accents,
+  apostrophes) and use `see any of "Save", "Speichern"` for per-language labels. System-dialog buttons are matched by role, so
+  `tap "Don't Allow" in system dialog` works on any device language. See [Testing localized apps](/advanced/multi-language/).
 - **Prefer positive assertions.** `see "Dashboard"` is reliable. `don't see "X"` can pass for the wrong reason when
   the widget simply is not built yet (lists build rows lazily).
 - **Rows below the fold do not exist yet.** Use `scroll down until "X" appears`; `scroll down` reveals *later* content.

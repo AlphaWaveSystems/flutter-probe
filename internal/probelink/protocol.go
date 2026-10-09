@@ -96,6 +96,7 @@ type WaitParams struct {
 	Duration float64 `json:"duration,omitempty"` // seconds
 	Timeout  float64 `json:"timeout,omitempty"`
 	Pattern  string  `json:"pattern,omitempty"` // appears: the text must also match this regular expression
+	Loose    bool    `json:"loose,omitempty"`   // fold case, accents, apostrophes and whitespace when matching text
 }
 
 // SwipeParams controls a swipe gesture.
@@ -126,6 +127,7 @@ type SelectorParam struct {
 	Container string `json:"container,omitempty"`
 	Relation  string `json:"relation,omitempty"` // below | above | left_of | right_of
 	Anchor    string `json:"anchor,omitempty"`   // anchor element text for relational selectors
+	Loose     bool   `json:"loose,omitempty"`    // fold case, accents, apostrophes and whitespace when matching text
 }
 
 // ScreenshotResult is returned by the take_screenshot command.

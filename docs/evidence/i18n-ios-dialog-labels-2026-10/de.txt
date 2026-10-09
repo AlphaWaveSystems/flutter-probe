@@ -1,0 +1,64 @@
+# language=de locale=de_DE  date=2026-10-09T11:38:57Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array de ; AppleLocale de_DE
+$ simctl spawn defaults read -g AppleLanguages
+(de)
+$ simctl spawn defaults read -g AppleLocale
+de_DE
+runner health: {"driver":"flutter-probe-ios-driver","version":"0.19.5","ok":true}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 4159
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • „AlertsTest“ möchte dir Mitteilungen senden
+      buttons: Nicht erlauben | Erlauben
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 4615
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Darf „AlertsTest“ deinen Standort verwenden?
+      buttons: Einmal erlauben | Beim Verwenden der App erlauben | Nicht erlauben
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 4983
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • „AlertsTest“ möchte auf die Kamera zugreifen.
+      buttons: Nicht erlauben | Erlauben
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 5474
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • „AlertsTest“ möchte auf das Mikrofon zugreifen.
+      buttons: Nicht erlauben | Erlauben
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 5671
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • „AlertsTest“ möchte auf „Erinnerungen“ zugreifen.
+      buttons: Nicht erlauben | Erlauben
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 6132
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • „AlertsTest“ möchte auf die Spracherkennung zugreifen.
+      buttons: Nicht erlauben | Erlauben
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 6297
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • „AlertsTest“ möchte auf deine Aktivitäten in „Bewegung & Fitness“ zugreifen.
+      buttons: Nicht erlauben | Erlauben

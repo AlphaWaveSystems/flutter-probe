@@ -79,6 +79,38 @@ func (s *SimCtl) List(ctx context.Context) ([]Simulator, error) {
 	return sims, nil
 }
 
+// Create creates a simulator with the given name, device type and runtime and
+// returns its UDID. Every simulator probe creates is named: a nameless one
+// could not be tied to the test results it produced.
+func (s *SimCtl) Create(ctx context.Context, name, deviceType, runtime string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("simctl create: a simulator name is required")
+	}
+	out, err := s.run(ctx, "create", name, deviceType, runtime)
+	if err != nil {
+		return "", fmt.Errorf("simctl create: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Rename gives an existing simulator a new name.
+func (s *SimCtl) Rename(ctx context.Context, udid, name string) error {
+	if _, err := s.run(ctx, "rename", udid, name); err != nil {
+		return fmt.Errorf("simctl rename: %w", err)
+	}
+	return nil
+}
+
+// FindByName returns the simulator called name (exact match), or nil.
+func FindByName(sims []Simulator, name string) *Simulator {
+	for i := range sims {
+		if sims[i].Name == name {
+			return &sims[i]
+		}
+	}
+	return nil
+}
+
 // Boot boots a simulator by UDID.
 func (s *SimCtl) Boot(ctx context.Context, udid string) error {
 	_, err := s.run(ctx, "boot", udid)
@@ -280,6 +312,43 @@ func (s *SimCtl) AppDataPath(ctx context.Context, udid, bundleID string) string 
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// AppBundlePath returns the installed .app bundle of an app (empty when it is not installed).
+func (s *SimCtl) AppBundlePath(ctx context.Context, udid, bundleID string) string {
+	out, err := s.run(ctx, "get_app_container", udid, bundleID, "app")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// Reinstall uninstalls the app and installs it again from a copy of its own bundle, which
+// resets everything the system keeps per app that has no reset command: the notification
+// permission decision above all (simctl privacy has no notifications service). The data
+// container is new and empty afterwards. The app is left not running.
+func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
+	app := s.AppBundlePath(ctx, udid, bundleID)
+	if app == "" {
+		return fmt.Errorf("reinstall: %s is not installed on %s", bundleID, udid)
+	}
+	tmp, err := os.MkdirTemp("", "probe-reinstall-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	copyPath := filepath.Join(tmp, filepath.Base(app))
+	if out, err := exec.CommandContext(ctx, "cp", "-R", app, copyPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("reinstall: copy bundle: %v: %s", err, out)
+	}
+	_ = s.Terminate(ctx, udid, bundleID)
+	if err := s.Uninstall(ctx, udid, bundleID); err != nil {
+		return fmt.Errorf("reinstall: uninstall: %w", err)
+	}
+	if err := s.Install(ctx, udid, copyPath); err != nil {
+		return fmt.Errorf("reinstall: install: %w", err)
+	}
+	return nil
 }
 
 // simDataPath returns the data directory for a simulator UDID.
