@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **Agent: `scroll down in "<anchor>" until X appears` regression (0.19.2+):** failed with `Widget not found: text("<anchor>")` once the anchor scrolled off screen (the scrollable was re-resolved from the anchor every step). Resolved once now.
 - **Agent: "UI one tap behind":** the post-action settle (and `wait for idle`) now lets a scheduled frame run before declaring the UI idle, so `see` right after `tap` no longer reads the pre-tap state (bottom sheets, radio rows; intermittent).
 
 ### Added

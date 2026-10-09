@@ -1135,7 +1135,7 @@ class ProbeExecutor {
     await gesture.up();
   }
 
-  Future<void> _scroll(String direction, Map<String, dynamic>? sel) async {
+  Future<void> _scroll(String direction, Map<String, dynamic>? sel, {ScrollableState? resolved}) async {
     // PT-15: `scroll`'s job is "reveal more content," unlike `swipe`, which
     // tests a real gesture interaction (swipe-to-dismiss, swipe-to-refresh,
     // etc.) — it doesn't need to go through the gesture arena at all.
@@ -1147,7 +1147,7 @@ class ProbeExecutor {
     // past the first screen, while the same verb worked fine on a plain
     // list). Driving the nearest Scrollable's own ScrollPosition directly
     // sidesteps gesture-arena competition entirely.
-    final scrollable = _findScrollable(sel);
+    final scrollable = (resolved != null && resolved.mounted) ? resolved : _findScrollable(sel);
     if (scrollable == null) {
       // No Scrollable found (e.g. a custom scroll implementation that
       // doesn't use the standard widget) — fall back to the old
@@ -1195,6 +1195,10 @@ class ProbeExecutor {
   ) async {
     const maxScrolls = 25;
     var atEnd = false;
+    // Resolve the scrollable once, from the anchor while it is on screen: the
+    // anchor ("Last 30 Days" heading) scrolls away with the content, and
+    // re-resolving it every step then fails with "widget not found".
+    var scrollable = _findScrollable(sel);
     for (var i = 0; ; i++) {
       final found = _finder.findElements(until);
       if (found.isNotEmpty) {
@@ -1207,9 +1211,11 @@ class ProbeExecutor {
         return;
       }
       if (atEnd || i >= maxScrolls) break;
-      final before = _findScrollable(sel)?.position.pixels;
-      await _scroll(direction, sel);
-      final after = _findScrollable(sel)?.position.pixels;
+      if (scrollable != null && !scrollable.mounted) scrollable = null;
+      scrollable ??= _findScrollable(sel);
+      final before = scrollable?.position.pixels;
+      await _scroll(direction, sel, resolved: scrollable);
+      final after = (scrollable != null && scrollable.mounted ? scrollable : _findScrollable(sel))?.position.pixels;
       // Can't move: check once more (the last scroll may have built rows)
       // and then give up instead of burning the remaining attempts.
       if (before != null && before == after) atEnd = true;

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed (regression in 0.19.2+): `scroll down in "<anchor>" until X appears` failed with `Widget not found: text("<anchor>")` once the anchor had scrolled off screen, because the scrollable was re-resolved from the anchor on every step. It is now resolved once.
 - Fixed: `wait for idle` (and the settle after every action) returned before the UI reflected a tap. A `setState` schedules a frame, but the scheduler phase still reads idle until it starts, so the next `see` read the stale tree ("UI one tap behind", intermittent, seen on bottom sheets). The settle check now lets a requested frame run first (bounded to 250 ms, so a screen that animates forever does not stall actions).
 
 ## 0.19.5 - 2026-10-09
