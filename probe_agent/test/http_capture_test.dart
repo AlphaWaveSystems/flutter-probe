@@ -100,6 +100,8 @@ void main() {
     expect(e.error, isNotNull);
   });
 
+  redactionTests();
+
   test('since cursor, last and clear', () async {
     final c = HttpClient();
     await _get(c, base.replace(path: '/api/me'));
@@ -109,5 +111,14 @@ void main() {
     expect(ProbeHttpLog.instance.query(pattern: '/api/me', since: first), hasLength(1));
     ProbeHttpLog.instance.clear();
     expect(ProbeHttpLog.instance.query(pattern: '/api/me'), isEmpty);
+  });
+}
+
+void redactionTests() {
+  test('credentials in headers and query strings are redacted in the log output', () async {
+    expect(probeRedactUrl('https://x/api?key=SECRET&q=1'), 'https://x/api?key=<redacted>&q=1');
+    expect(probeRedactUrl('https://x/api?Access_Token=abc'), 'https://x/api?Access_Token=<redacted>');
+    expect(probeRedactUrl('https://x/api?q=1'), 'https://x/api?q=1');
+    expect(probeRedactUrl('https://x/api'), 'https://x/api');
   });
 }

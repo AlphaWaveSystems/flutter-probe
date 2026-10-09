@@ -31,7 +31,7 @@ class ProbeHttpEntry {
   Map<String, dynamic> toJson({bool bodies = true}) => {
         'seq': seq,
         'method': method,
-        'url': url,
+        'url': probeRedactUrl(url),
         'status': status,
         'durationMs': durationMs,
         'mocked': mocked,
@@ -210,7 +210,35 @@ class ProbeHttpLog {
 
 // ---------------------------------------------------------------------------
 
-const _redacted = {'authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key'};
+const _redacted = {
+  'authorization',
+  'proxy-authorization',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'x-goog-api-key',
+  'api-key',
+  'x-auth-token',
+  'x-access-token',
+  'x-amz-security-token',
+  'x-csrf-token',
+  'x-xsrf-token',
+};
+
+/// Query parameters whose values are credentials (`?key=...`, `?access_token=...`).
+const _redactedQuery = {'key', 'api_key', 'apikey', 'access_token', 'token', 'id_token', 'refresh_token', 'auth', 'secret', 'password', 'sig', 'signature'};
+
+/// [url] with the values of credential-looking query parameters replaced by `<redacted>`.
+String probeRedactUrl(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasQuery) return url;
+  final parts = uri.query.split('&').map((p) {
+    final i = p.indexOf('=');
+    if (i < 0) return p;
+    return _redactedQuery.contains(p.substring(0, i).toLowerCase()) ? '${p.substring(0, i)}=<redacted>' : p;
+  });
+  return uri.replace(query: parts.join('&')).toString().replaceAll('%3Credacted%3E', '<redacted>');
+}
 
 Map<String, String> _flatten(HttpHeaders h) {
   final out = <String, String>{};
