@@ -25,6 +25,9 @@ type Dialog struct {
 	Title   string   `json:"title"`
 	Texts   []string `json:"texts"`
 	Buttons []string `json:"buttons"`
+	// ButtonIDs are the platform ids of Buttons when the platform has stable ones (Android
+	// resource ids); parallel to Buttons, may be empty.
+	ButtonIDs []string `json:"button_ids,omitempty"`
 	Fields  []string `json:"fields"`
 	App     string   `json:"app,omitempty"`
 }

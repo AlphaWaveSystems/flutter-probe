@@ -177,6 +177,11 @@ Supports the full ProbeScript syntax:
                      (needs Xcode) and Android emulators/devices only. On iOS the app's
                      share sheet (activity sheet) is detected too when project.app is set:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
+  Languages:       prefer #key selectors. Run with --match-loose to fold case, accents and
+                     typographic apostrophes in text selectors; use see any of "A", "B" for
+                     per-language labels. System-dialog buttons resolve by role (allow, deny,
+                     cancel, ...), so tap "Don't Allow" in system dialog works on a device set
+                     to any language.
   Keyboard:        press enter — the keyboard action key on the focused text field.
   See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first

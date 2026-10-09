@@ -18,7 +18,9 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 
 ## Project Status
 
-FlutterProbe is in active development. Current version: **0.19.5**.
+FlutterProbe is in active development. Multi-language: see [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/) (loose text matching, alternatives, system dialog roles).
+
+Current version: **0.19.5**.
 
 ### Repository Structure
 

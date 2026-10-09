@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   whitespace on both sides (`Änderungen` ~ `anderungen`, `Don’t Allow` ~ `Don't allow`). Off by default. Ids are never folded.
   Marks that carry meaning (Indic vowel signs, Thai tone marks) are kept. A shared fixture file keeps the Go and Dart folding identical.
 - The system-dialog button/title matching now uses the same folding (accents included).
+- **System-dialog buttons resolve by role in any device language:** `tap "Don't Allow" in system dialog`, `deny permission "notifications"`,
+  `--grant notifications` and `dismiss system dialog` find the button with the same role (allow, deny, allow once, allow while using,
+  OK, cancel, not now, open, close) on a device set to another language. Android uses the permission dialog's resource ids; an exact
+  label always wins over a role. The iOS notification alert is recognised by its buttons (Allow + Don't Allow) instead of its English title.
+- Docs: new guide "Testing localized apps"; README, agent README (pub.dev), `internal/README`, llms.txt, MCP guide, VS Code snippet.
 
 ## [0.19.5] - 2026-10-09
 

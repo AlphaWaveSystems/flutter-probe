@@ -977,15 +977,29 @@ func (dc *DeviceContext) answerNotificationAlert(ctx context.Context, button str
 	if err != nil {
 		return fmt.Errorf("notifications: %w", err)
 	}
-	appeared, err := d.Wait(ctx, "Notifications", true, 5*time.Second)
-	if err != nil {
-		return fmt.Errorf("notifications: %w", err)
+	// The notification alert is recognised by its buttons (Allow + Don't Allow, in any language),
+	// not by its English title, so it works on a device set to any language.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		dialogs, err := d.Dialogs(ctx)
+		if err != nil {
+			return fmt.Errorf("notifications: %w", err)
+		}
+		for _, dlg := range dialogs {
+			if dlg.HasRoles(sysdialog.RoleAllow, sysdialog.RoleDeny) && !dlg.HasRoles(sysdialog.RoleAllowOnce) {
+				if _, err := d.Tap(ctx, button, ""); err != nil {
+					return fmt.Errorf("notifications: %w", err)
+				}
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return nil // no alert: nothing to answer
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+		}
 	}
-	if !appeared {
-		return nil
-	}
-	if _, err := d.Tap(ctx, button, "Notifications"); err != nil {
-		return fmt.Errorf("notifications: %w", err)
-	}
-	return nil
 }

@@ -271,6 +271,19 @@ func (d *IOSDriver) Wait(ctx context.Context, title string, appear bool, timeout
 }
 
 func (d *IOSDriver) Tap(ctx context.Context, button, title string) (string, error) {
+	// Resolve the wanted button to the label this device actually shows: an exact match, or the
+	// button with the same role in the device's language ("Don't Allow" -> "Nicht erlauben").
+	if ds, err := d.Dialogs(ctx); err == nil {
+		for _, dlg := range ds {
+			if !dlg.MatchesTitle(title) {
+				continue
+			}
+			if idx := MatchButton(dlg, button); idx >= 0 {
+				button = dlg.Buttons[idx]
+				break
+			}
+		}
+	}
 	var r iosReply
 	if err := d.call(ctx, "/tap", map[string]any{"button": button, "title": title}, &r); err != nil {
 		return "", err
@@ -292,6 +305,21 @@ func (d *IOSDriver) Type(ctx context.Context, field, text, title string) error {
 }
 
 func (d *IOSDriver) Dismiss(ctx context.Context, title string) (bool, error) {
+	// A cancel-like button by role, in the device's language; the runner's own English list
+	// (and the share-sheet handling) stays as the fallback.
+	if ds, err := d.Dialogs(ctx); err == nil {
+		for _, dlg := range ds {
+			if !dlg.MatchesTitle(title) {
+				continue
+			}
+			if idx := DismissButton(dlg); idx >= 0 {
+				if _, terr := d.Tap(ctx, dlg.Buttons[idx], title); terr == nil {
+					return true, nil
+				}
+			}
+			break
+		}
+	}
 	var r iosReply
 	if err := d.call(ctx, "/dismiss", map[string]any{"title": title}, &r); err != nil {
 		return false, err

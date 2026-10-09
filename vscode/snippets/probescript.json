@@ -156,5 +156,10 @@
     "prefix": "screenshot",
     "body": "take a screenshot called \"${1:name}\"",
     "description": "Capture a screenshot"
+  },
+  "See any of": {
+    "prefix": "seea",
+    "body": "see any of \"${1:first}\", \"${2:second}\"",
+    "description": "Assert that any one of several texts is on screen (per-language labels)"
   }
 }

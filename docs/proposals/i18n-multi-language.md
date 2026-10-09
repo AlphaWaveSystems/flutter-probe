@@ -37,6 +37,12 @@ localized apps without rewriting tests per language.
 6. **Docs and surfaces, in every phase:** grammar (EBNF) + conformance test, dictionary/syntax, MCP guide, VS Code
    snippets/grammar, a "Testing localized apps" guide, README, CHANGELOG.
 
+## Status
+
+- P3 loose matching: implemented (0.20.0).
+- P1 system-dialog roles: Android + role mechanics implemented; the iOS label table is being measured per language on real simulators.
+- P2, P5, P4: next.
+
 ## Releases (pub.dev allows 12 publishes a day, so batch)
 
 - R1: P3 + P1 (0.20.0)
