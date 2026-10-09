@@ -93,6 +93,7 @@ func init() {
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
+	f.Bool("match-loose", false, "match text selectors loosely: fold case, accents, typographic apostrophes/dashes and whitespace (also defaults.match: loose in probe.yaml)")
 	f.Duration("implicit-wait", 0, "retry tap/type/see steps whose target is not on screen yet for up to this long before failing (Maestro-style implicit waiting); 0 uses probe.yaml defaults.implicit_wait, default off")
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
@@ -301,6 +302,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 		cfg.Visual.PixelDelta = visualPixelDelta
 	}
 
+	if ml, _ := cmd.Flags().GetBool("match-loose"); ml || strings.EqualFold(cfg.Defaults.Match, "loose") {
+		runner.SetLooseMatching(true)
+	}
 	if iw, _ := cmd.Flags().GetDuration("implicit-wait"); iw > 0 {
 		cfg.Defaults.ImplicitWait = iw
 	}

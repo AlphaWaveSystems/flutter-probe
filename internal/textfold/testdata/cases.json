@@ -1,0 +1,19 @@
+[
+  {"in": "Don’t Allow", "out": "don't allow"},
+  {"in": "Don't allow", "out": "don't allow"},
+  {"in": "  Speichern  ", "out": "speichern"},
+  {"in": "Café Crème", "out": "cafe creme"},
+  {"in": "Çalış", "out": "calis"},
+  {"in": "STRASSE Straße", "out": "strasse strasse"},
+  {"in": "Łódź", "out": "lodz"},
+  {"in": "Œuvre Æther", "out": "oeuvre aether"},
+  {"in": "café", "out": "cafe"},
+  {"in": "Ａｂｃ　１２３", "out": "abc 123"},
+  {"in": "a​b﻿c", "out": "abc"},
+  {"in": "re–sume—x", "out": "re-sume-x"},
+  {"in": "“quoted” ‘single’", "out": "\"quoted\" 'single'"},
+  {"in": "مَرْحَبًا", "out": "مرحبا"},
+  {"in": "שָׁלוֹם", "out": "שלום"},
+  {"in": "日本語 テスト", "out": "日本語 テスト"},
+  {"in": "İstanbul ISPARTA", "out": "istanbul isparta"}
+]

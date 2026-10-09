@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Loose text matching (`--match-loose`, `defaults.match: loose`):** text selectors, `see`, `wait until` and tooltip/Semantics-label
+  matching fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and
+  whitespace on both sides (`Änderungen` ~ `anderungen`, `Don’t Allow` ~ `Don't allow`). Off by default. Ids are never folded.
+  Marks that carry meaning (Indic vowel signs, Thai tone marks) are kept. A shared fixture file keeps the Go and Dart folding identical.
+- The system-dialog button/title matching now uses the same folding (accents included).
+
 ## [0.19.5] - 2026-10-09
 
 ### Fixed

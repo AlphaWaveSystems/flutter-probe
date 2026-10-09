@@ -229,3 +229,18 @@ func TestSeeAnyOfAndTransientAssertionRetry(t *testing.T) {
 		t.Fatal("transient assertion detection is wrong")
 	}
 }
+
+func TestLooseMatchingFlagReachesSelectors(t *testing.T) {
+	defer SetLooseMatching(false)
+	sel := parser.Selector{Kind: parser.SelectorText, Text: "Save"}
+	if toSelectorParam(sel).Loose {
+		t.Fatal("loose must be off by default")
+	}
+	SetLooseMatching(true)
+	if !toSelectorParam(sel).Loose {
+		t.Fatal("loose must reach text selectors when enabled")
+	}
+	if toSelectorParam(parser.Selector{Kind: parser.SelectorID, Text: "#key"}).Loose {
+		t.Fatal("ids are never folded")
+	}
+}

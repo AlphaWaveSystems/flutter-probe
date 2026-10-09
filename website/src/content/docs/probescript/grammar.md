@@ -1161,6 +1161,10 @@ errors. The parser does not see this: a `${...}` is ordinary string content to t
 **Bare `type` and `clear` act on the focused field.** `type "x"` without `into`, and `clear` without a
 selector, target the text field that has focus (an error when none has).
 
+**Loose text matching.** With `--match-loose` (or `defaults.match: loose`) text selectors compare after folding case,
+accents and other diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and whitespace
+(the same folding on both sides; ids are never folded). It is a run setting, not syntax.
+
 **Implicit wait.** With `--implicit-wait <d>` (or `defaults.implicit_wait`) a `tap`, `type`, `long press`, `double tap`,
 `clear`, `drag` or plain `see` whose target is not on screen is retried for up to `<d>` before it fails. It is a run
 setting, not syntax; steps with `if visible` / `optional`, `don't see` and the `wait` steps are never retried.

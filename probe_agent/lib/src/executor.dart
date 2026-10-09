@@ -980,10 +980,11 @@ class ProbeExecutor {
         await Future.delayed(Duration(milliseconds: (duration * 1000).toInt()));
 
       case 'appears':
-        await _waitUntilVisible(target, timeoutDur, expect: true, pattern: params['pattern'] as String? ?? '');
+        await _waitUntilVisible(target, timeoutDur,
+            expect: true, pattern: params['pattern'] as String? ?? '', loose: params['loose'] == true);
 
       case 'disappears':
-        await _waitUntilVisible(target, timeoutDur, expect: false);
+        await _waitUntilVisible(target, timeoutDur, expect: false, loose: params['loose'] == true);
 
       case 'animations':
         await _waitForAnimations(timeoutDur);
@@ -1044,7 +1045,8 @@ class ProbeExecutor {
     throw ProbeError(ProbeError.timeout, 'Timed out waiting for animations to finish');
   }
 
-  Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect, String pattern = ''}) async {
+  Future<void> _waitUntilVisible(String text, Duration timeout,
+      {required bool expect, String pattern = '', bool loose = false}) async {
     // PT-06: WaitStep carries only a raw target string, not a selector kind
     // (unlike Selector/SelectorParam used by tap/type), so an id target must
     // be detected from its '#' prefix here — this previously always built a
@@ -1055,7 +1057,7 @@ class ProbeExecutor {
     // the same '#'-prefix check runConditional already uses for `if` steps.
     final sel = text.startsWith('#')
         ? {'kind': 'id', 'text': text}
-        : {'kind': 'text', 'text': text};
+        : {'kind': 'text', 'text': text, if (loose) 'loose': true};
     RegExp? re;
     if (pattern.isNotEmpty) {
       try {

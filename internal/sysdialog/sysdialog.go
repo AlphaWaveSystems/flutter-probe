@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/textfold"
 )
 
 // Dialog is a snapshot of one system dialog.
@@ -52,10 +54,7 @@ type Driver interface {
 
 // normalize folds case, typographic apostrophes and whitespace so that
 // "Don’t Allow" and "don't allow" compare equal.
-func normalize(s string) string {
-	s = strings.NewReplacer("’", "'", "‘", "'", " ", " ").Replace(s)
-	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
-}
+func normalize(s string) string { return textfold.Fold(s) }
 
 // Match returns the index of the best label for wanted: an exact (normalized)
 // match first, then a substring match; -1 if none.
