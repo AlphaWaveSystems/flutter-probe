@@ -95,6 +95,9 @@ func (r *Reporter) StreamResult(res TestResult) {
 		DeviceID:   res.DeviceID,
 		DeviceName: res.DeviceName,
 	}
+	if res.Attempts > 1 {
+		jr.Attempts = res.Attempts
+	}
 	for _, art := range res.Artifacts {
 		if r.outputDir != "" && filepath.IsAbs(art) {
 			if rel, err := filepath.Rel(r.outputDir, art); err == nil {
@@ -148,7 +151,11 @@ func (r *Reporter) writeTerminal(results []TestResult) {
 			}
 		case res.Passed:
 			passed++
-			fmt.Fprintf(r.out, "  \033[32m✓\033[0m  %s \033[2m(%s)\033[0m\n", res.TestName, res.Duration.Round(time.Millisecond))
+			note := ""
+			if res.Attempts > 1 {
+				note = fmt.Sprintf(" \033[33m(passed on attempt %d)\033[0m", res.Attempts)
+			}
+			fmt.Fprintf(r.out, "  \033[32m✓\033[0m  %s \033[2m(%s)\033[0m%s\n", res.TestName, res.Duration.Round(time.Millisecond), note)
 		default:
 			failed++
 			fmt.Fprintf(r.out, "  \033[31m✗\033[0m  %s \033[2m(%s)\033[0m\n", res.TestName, res.Duration.Round(time.Millisecond))
@@ -268,6 +275,7 @@ type jsonResult struct {
 	Artifacts  []string `json:"artifacts,omitempty"`
 	DeviceID   string   `json:"device_id,omitempty"`
 	DeviceName string   `json:"device_name,omitempty"`
+	Attempts   int      `json:"attempts,omitempty"` // only when a failed test was re-run (retry_failed_tests)
 }
 
 type jsonReport struct {
@@ -296,6 +304,9 @@ func (r *Reporter) writeJSON(results []TestResult) error {
 			Row:        res.Row,
 			DeviceID:   res.DeviceID,
 			DeviceName: res.DeviceName,
+		}
+		if res.Attempts > 1 {
+			jr.Attempts = res.Attempts
 		}
 		// Convert artifact paths to relative paths for portability (CI/CD)
 		for _, art := range res.Artifacts {

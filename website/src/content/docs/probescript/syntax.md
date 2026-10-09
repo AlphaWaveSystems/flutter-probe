@@ -195,6 +195,16 @@ when the app calls PATCH "/api/profile"
 
 Mocks are effective (agent 0.22+): the app's `dart:io` HTTP client receives them. They last for one test and survive `restart the app`.
 
+## Time Budgets
+
+```
+tap "Export" within 5 seconds
+wait until "Report ready" appears within 90 seconds
+wait for response "/api/export" status 200 within 120 seconds
+```
+
+`within N seconds|ms` gives that one step its own timeout and implicit-wait window. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/).
+
 ## Backend Responses
 
 ```

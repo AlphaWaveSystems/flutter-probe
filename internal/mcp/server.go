@@ -180,6 +180,11 @@ Supports the full ProbeScript syntax:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Devices:         start_device names every simulator it boots (name arg; created when
                      missing); results carry the device name and id.
+  Waiting:         steps have a timeout (--timeout, default 30s); --implicit-wait 7s retries a
+                     missing target; "... within 90 seconds" gives one step its own budget
+                     (wait until "X" appears within 90 seconds | wait for response ... within 5
+                     seconds); optional / if visible / if "X" appears fail gracefully; retry 3
+                     times re-runs a block; defaults.retry_failed_tests re-runs a failing test.
   Backend data:    the agent records the app's dart:io HTTP traffic: wait for response GET
                      "/api/orders" status 200 | see response "/api/me" json "data.plan" equals
                      "pro" | store response ... json "path" as var | if response ... otherwise |

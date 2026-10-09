@@ -13,6 +13,7 @@ Full editor support for `.probe` files:
 - **Syntax highlighting** — keywords, strings, selectors, tags, comments
 - **IntelliSense** — autocomplete for commands, permissions, tags, and recipes
 - **Named devices** — run results show the named simulator/emulator each test ran on (`probe device start --name …`)
+- **Time budgets** — `within N seconds` highlighted; snippet `within`
 - **Backend data** — snippets and completions for `wait for response`, `see response`, `if response`
 - **ARB labels** — snippet for `l10n "key"` selectors
 - **App language** — snippet for `set language "de"`; `probe test --locales de,ja,ar` runs a suite per language

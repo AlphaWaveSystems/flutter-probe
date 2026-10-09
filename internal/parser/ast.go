@@ -1,5 +1,7 @@
 package parser
 
+import "time"
+
 // ---- Selector types ----
 
 type SelectorKind int
@@ -399,6 +401,20 @@ type DartBlock struct {
 func (d DartBlock) nodeType() string { return "dart" }
 func (d DartBlock) GetLine() int     { return d.Line }
 func (d DartBlock) stepType() string { return "dart" }
+
+// ---- TimedStep ----
+
+// TimedStep is a step with its own time budget: `wait until "Done" appears within 90 seconds`.
+// The step's timeout and its implicit-wait retry window both become Within.
+type TimedStep struct {
+	Inner  Step
+	Within time.Duration
+	Line   int
+}
+
+func (t TimedStep) nodeType() string { return "timed" }
+func (t TimedStep) GetLine() int     { return t.Line }
+func (t TimedStep) stepType() string { return "timed" }
 
 // ---- Backend responses ----
 

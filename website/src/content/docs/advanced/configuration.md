@@ -103,7 +103,7 @@ environment:
 | `timeout` | duration | `30s` | Per-step timeout |
 | `screenshots` | string | `on_failure` | `always`, `on_failure`, or `never` |
 | `video` | bool | `false` | Enable video recording |
-| `retry_failed_tests` | int | `0` | Number of retries for failed tests |
+| `retry_failed_tests` | int | `0` | Re-run a failing test up to this many extra times (0 = off); also `--retry-failed N` |
 | `grant_permissions_on_clear` | bool | `false` | Auto-grant permissions after `clear app data` |
 
 ### devices

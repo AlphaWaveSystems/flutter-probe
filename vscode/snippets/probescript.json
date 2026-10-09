@@ -204,5 +204,13 @@
       "$0"
     ],
     "description": "Use the text of an ARB key in the current app language"
+  },
+  "Time budget": {
+    "prefix": "within",
+    "body": [
+      "wait until \"${1:element}\" appears within ${2:90} seconds",
+      "$0"
+    ],
+    "description": "Wait with its own time budget"
   }
 }

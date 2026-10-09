@@ -127,9 +127,10 @@ func quoteJoin(items []string) string {
 // descriptive "Timed out waiting for X (visible: ...)" error arrives before
 // the CLI's context expires and masks it with a generic deadline error.
 func agentWaitTimeout(stepTimeout time.Duration) time.Duration {
-	const margin = 2 * time.Second
-	if stepTimeout > 2*margin {
-		return stepTimeout - margin
+	// A short budget (`within 2 seconds`) keeps most of its time: the margin is a quarter of it, at most 2s.
+	margin := stepTimeout / 4
+	if margin > 2*time.Second {
+		margin = 2 * time.Second
 	}
-	return stepTimeout / 2
+	return stepTimeout - margin
 }

@@ -417,6 +417,9 @@ line-step  = tap-native-step | tap-step | type-native-step | type-step
            | http-call-step | wait-response-step | see-response-step | store-response-step
            | see-requests-step | clear-requests-step | recipe-call-step ;
 
+timed-step = line-step , "within" , ( INT | FLOAT ) , ( "seconds" | "second" | "s" | "ms" | "milliseconds" ) ;
+             (* a line-step except recipe-call-step, with its own time budget *)
+
 block-step = if-step | repeat-step | retry-step | dart-step | mock-step | travel-step ;
 
 wait-step  = wait-until-step | wait-any-step | wait-idle-step | wait-animations-step
@@ -438,6 +441,7 @@ The first matching row wins.
 | `open` followed by anything else | `recipe-call-step` (a recipe whose name starts with "open") |
 | `tap` followed by the word `native` | `tap-native-step`; otherwise `tap-step` |
 | `type` followed by the word `native` | `type-native-step`; otherwise `type-step` |
+| a line ending in `within N seconds` (or `s`, `ms`, `milliseconds`) | the step before it, as `timed-step` (not for recipe calls or block steps) |
 | `see` / `don't see` / `dont see` followed by the word `native` | `see-native-step`; otherwise `see-step` / `dont-see-step` |
 | `assert` | `assert-defects-step` |
 | `wait` | `wait-step` (see below for its order) |
@@ -1018,6 +1022,19 @@ test "http mocking"
   when the app calls patch "/api/profile"
     respond with network failure
   tap "Sign In"
+```
+
+### Time budget
+
+`within` gives one step its own time budget: it becomes the step's timeout and the window in which a missing target is
+retried (like `--implicit-wait` for that step only). It is a plain word recognised only at the end of a line.
+
+```probe
+test "time budgets"
+  tap "Export" within 5 seconds
+  wait until "Report ready" appears within 90 seconds
+  wait for response "/api/export" status 200 within 120 seconds
+  see "Done" within 500 ms
 ```
 
 ### Backend responses

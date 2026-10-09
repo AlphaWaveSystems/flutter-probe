@@ -30,6 +30,7 @@ type TestResult struct {
 	VideoURL   string // cloud provider video URL (session-level)
 	DeviceID   string // device serial/UDID that ran this test
 	DeviceName string // human-readable device name
+	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
 }
 
 // Runner coordinates parsing, connecting, and executing .probe files.
@@ -326,7 +327,29 @@ func (r *Runner) runDataDriven(ctx context.Context, prog *parser.Program, t pars
 	return results, nil
 }
 
+// runSingleTest runs a test and, when defaults.retry_failed_tests (or --retry-failed) is set,
+// runs it again after a failure, up to that many extra times. A test that passes on a retry
+// counts as passed and records how many attempts it took, so flakiness stays visible.
 func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
+	retries := r.cfg.Defaults.RetryFailedTests
+	if retries < 0 {
+		retries = 0
+	}
+	var res TestResult
+	var earlier []string
+	for attempt := 1; ; attempt++ {
+		res = r.runSingleAttempt(ctx, prog, t, file, vars, row)
+		res.Attempts = attempt
+		res.Artifacts = append(earlier, res.Artifacts...)
+		if res.Passed || attempt > retries || ctx.Err() != nil || r.client == nil {
+			return res
+		}
+		earlier = res.Artifacts
+		fmt.Printf("    \033[33m↻\033[0m  %s failed (attempt %d of %d): %v — retrying\n", res.TestName, attempt, retries+1, res.Error)
+	}
+}
+
+func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
 	start := time.Now()
 	exec := r.newExecutor()
 	for name, rec := range r.recipes {

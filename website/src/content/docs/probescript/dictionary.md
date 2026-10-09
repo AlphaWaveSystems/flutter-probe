@@ -261,6 +261,12 @@ Mock API responses for the app.
 | `when` | `when the app calls GET "/api/users"` | Define a mock rule |
 | `respond` | `respond with 200 and body "[]" after 2 seconds` · `respond with network failure` | Define the mock response; `after N seconds` delays it, `network failure` drops the connection |
 
+## Time budget
+
+| Command | Syntax | Description |
+|---|---|---|
+| `within` | `wait until "Done" appears within 90 seconds` · `tap "Go" within 2 seconds` · `see "Y" within 500 ms` | Per-step timeout and implicit-wait window. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
+
 ## Backend Responses
 
 React to what the backend returned (the app's `dart:io` HTTP traffic; agent 0.22+). See [Testing against backend data](/advanced/backend-data/).

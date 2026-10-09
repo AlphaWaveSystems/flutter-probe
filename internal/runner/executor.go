@@ -230,6 +230,14 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 }
 
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
+	if t, ok := step.(parser.TimedStep); ok {
+		// `... within N seconds`: this step gets its own time budget, both as its timeout
+		// and as the window an implicit wait keeps retrying a missing target.
+		oldTimeout, oldWait := e.timeout, e.implicitWait
+		e.timeout, e.implicitWait = t.Within, t.Within
+		defer func() { e.timeout, e.implicitWait = oldTimeout, oldWait }()
+		return e.runStep(ctx, t.Inner)
+	}
 	// Use a longer timeout for restart/clear — they kill the app and reconnect
 	stepTimeout := e.timeout
 	isLifecycleAction := false

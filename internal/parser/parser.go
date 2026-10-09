@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"time"
 	"fmt"
 	"strconv"
 	"strings"
@@ -302,6 +303,56 @@ func (p *Parser) parseBody() ([]Step, error) {
 }
 
 func (p *Parser) parseStep() (Step, error) {
+	p.skipFillers()
+	line := p.peek().Line
+	within, hasWithin := p.takeWithin()
+	step, err := p.parseStepInner()
+	if err != nil || !hasWithin {
+		return step, err
+	}
+	switch step.(type) {
+	case ActionStep, AssertStep, AssertNoDefectsStep, WaitStep, SystemDialogStep, HTTPStep:
+		return TimedStep{Inner: step, Within: within, Line: line}, nil
+	}
+	return nil, fmt.Errorf("line %d: \"within ...\" is not supported on this kind of step (use it on tap, type, see, wait, system dialog and response steps)", line)
+}
+
+// takeWithin removes a trailing `within N seconds|second|s|ms|milliseconds` from the
+// current line and returns the duration.
+func (p *Parser) takeWithin() (time.Duration, bool) {
+	end := p.pos
+	for end < len(p.tokens) {
+		t := p.tokens[end].Type
+		if t == TOKEN_NEWLINE || t == TOKEN_EOF || t == TOKEN_DEDENT || t == TOKEN_INDENT {
+			break
+		}
+		end++
+	}
+	if end-p.pos < 4 { // at least one word of the step, then within N unit
+		return 0, false
+	}
+	w, n, u := p.tokens[end-3], p.tokens[end-2], p.tokens[end-1]
+	if w.Type == TOKEN_STRING || strings.ToLower(w.Literal) != "within" || (n.Type != TOKEN_INT && n.Type != TOKEN_FLOAT) {
+		return 0, false
+	}
+	val, err := strconv.ParseFloat(n.Literal, 64)
+	if err != nil || val <= 0 {
+		return 0, false
+	}
+	var unit time.Duration
+	switch strings.ToLower(u.Literal) {
+	case "seconds", "second", "s":
+		unit = time.Second
+	case "ms", "milliseconds", "millisecond":
+		unit = time.Millisecond
+	default:
+		return 0, false
+	}
+	p.tokens = append(p.tokens[:end-3], p.tokens[end:]...)
+	return time.Duration(val * float64(unit)), true
+}
+
+func (p *Parser) parseStepInner() (Step, error) {
 	// Skip filler words at step start
 	p.skipFillers()
 	tok := p.peek()

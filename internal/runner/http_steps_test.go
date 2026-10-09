@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 // httpFake serves a fixed request log; every other client method panics (nil embedded interface).
 type httpFake struct {
 	probelink.ProbeClient
+	mu      sync.Mutex
 	entries []probelink.HTTPEntry
 	epoch   string
 	mocks   []probelink.MockParam
@@ -20,6 +22,8 @@ type httpFake struct {
 }
 
 func (f *httpFake) HTTPLog(_ context.Context, p probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []probelink.HTTPEntry
 	for _, e := range f.entries {
 		if e.Seq <= p.Since {
@@ -42,6 +46,7 @@ func (f *httpFake) HTTPLog(_ context.Context, p probelink.HTTPLogParams) (probel
 	}
 	return probelink.HTTPLogResult{Epoch: f.epoch, Latest: len(f.entries), Count: count, Entries: out}, nil
 }
+func (f *httpFake) Screenshot(context.Context, string) (string, error) { return "", nil }
 func (f *httpFake) HTTPClear(context.Context, bool) error { f.cleared++; return nil }
 func (f *httpFake) RegisterMock(_ context.Context, m probelink.MockParam) error {
 	f.mocks = append(f.mocks, m)
@@ -166,5 +171,40 @@ func TestMocksSurviveRestart(t *testing.T) {
 	e.reapplyMocks(context.Background()) // what a reconnect after `restart the app` does
 	if len(f.mocks) != 2 {
 		t.Errorf("mock must be re-sent after a restart, sent %d times", len(f.mocks))
+	}
+}
+
+func TestWithinGivesTheStepItsOwnBudget(t *testing.T) {
+	f := &httpFake{}
+	prog, err := parser.ParseFile("test \"t\"\n  wait for response \"/never\" within 1 second\n  see response \"/never\" status 200\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := NewExecutor(f, nil, nil, 30*time.Second, false)
+	start := time.Now()
+	err = e.RunBody(context.Background(), prog.Tests[0].Body)
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("a response that never comes must time out: %v", err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("within 1 second took %v: the 30s default applied", took)
+	}
+	if e.timeout != 30*time.Second || e.implicitWait != 0 {
+		t.Fatalf("the budget must not leak into later steps: timeout=%v implicitWait=%v", e.timeout, e.implicitWait)
+	}
+}
+
+func TestWithinRetriesSeeResponseUntilItArrives(t *testing.T) {
+	f := &httpFake{}
+	prog, _ := parser.ParseFile("test \"t\"\n  see response \"/late\" status 200 within 3 seconds\n")
+	e := NewExecutor(f, nil, nil, 30*time.Second, false)
+	go func() {
+		time.Sleep(700 * time.Millisecond)
+		f.mu.Lock()
+		f.entries = append(f.entries, probelink.HTTPEntry{Seq: 1, Method: "GET", URL: "https://x/late", Status: 200})
+		f.mu.Unlock()
+	}()
+	if err := e.RunBody(context.Background(), prog.Tests[0].Body); err != nil {
+		t.Fatalf("the response arrives inside the budget: %v", err)
 	}
 }

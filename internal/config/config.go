@@ -201,7 +201,7 @@ var defaultConfig = Config{
 		Timeout:          30 * time.Second,
 		Screenshots:      "on_failure",
 		VideoEnabled:     false,
-		RetryFailedTests: 1,
+		RetryFailedTests: 0,
 	},
 	Agent: AgentConfig{
 		Port:              48686,
@@ -406,7 +406,7 @@ defaults:
   timeout: 30s             # per-step timeout
   screenshots: on_failure  # always | on_failure | never
   video: false             # record device screen during test runs
-  retry_failed_tests: 1    # number of retries for failed tests
+  retry_failed_tests: 0    # re-run a failing test up to this many extra times (0 = off)
 
 # ProbeAgent WebSocket connection settings
 agent:
