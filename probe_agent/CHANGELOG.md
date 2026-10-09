@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.19.4 - 2026-10-08
+
+- No agent change (iOS `clear app data` fix in the CLI); version aligned.
+
 ## 0.19.3 - 2026-10-08
 
 - Fixed: the target of a bare `scroll` / `swipe` ranks scrollables that can scroll (extent > 0, physics accepting user input) before ones that cannot (a non-scrollable PageView).

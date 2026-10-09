@@ -83,6 +83,13 @@ It stops early when the list can't move further, and fails with the visible text
 shows up. It is the equivalent of Maestro's `scrollUntilVisible`. Use `on "List"` to pick which
 scrollable when a screen has several.
 
+## Targets that are off screen
+
+`tap`, `type`, `long press`, `double tap` and `clear` scroll a target that exists in the widget tree into view first, like a
+user would. A lazy list only builds the children near its viewport, so a target beyond that (a chip far to the left of a
+horizontal list) does not exist yet: scroll toward it with `scroll left until "All" appears`, then act. `see` and
+`don't see` only count what is on screen.
+
 ## Text matching is by substring
 
 A quoted text selector (`see "0 ml"`, `tap "Save"`, `wait until "Done" appears`) matches any widget whose text

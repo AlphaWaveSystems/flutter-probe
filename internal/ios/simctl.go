@@ -147,7 +147,7 @@ func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte
 
 // IsAppRunning reports whether the app has a live process in the simulator.
 func (s *SimCtl) IsAppRunning(ctx context.Context, udid, bundleID string) bool {
-	out, err := s.Spawn(ctx, udid, "launchctl", "list")
+	out, err := s.Spawn(ctx, udid, "/bin/launchctl", "list")
 	if err != nil {
 		return false
 	}
@@ -166,7 +166,7 @@ func (s *SimCtl) IsAppRunning(ctx context.Context, udid, bundleID string) bool {
 // serves the old values to the relaunched app and can even re-create the plist. launchd restarts
 // it on demand with an empty cache. Best effort; the error is returned for logging only.
 func (s *SimCtl) ResetPrefsDaemon(ctx context.Context, udid string) error {
-	_, err := s.Spawn(ctx, udid, "launchctl", "kill", "SIGKILL", "system/com.apple.cfprefsd.xpc.daemon")
+	_, err := s.Spawn(ctx, udid, "/bin/launchctl", "kill", "SIGKILL", "system/com.apple.cfprefsd.xpc.daemon")
 	return err
 }
 
