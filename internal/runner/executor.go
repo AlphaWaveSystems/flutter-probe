@@ -59,6 +59,7 @@ type Executor struct {
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64      // incremented on each successful reconnect
 	implicitWait         time.Duration      // retry a step whose target is not on screen yet for up to this long (0 = off)
+	http                 httpState          // recorded backend traffic bookkeeping (`wait for response`, mocks)
 	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 }
 
@@ -218,6 +219,8 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 		return e.runDart(stepCtx, s)
 	case parser.MockBlock:
 		return e.runMock(stepCtx, s)
+	case parser.HTTPStep:
+		return e.runHTTPStep(stepCtx, s)
 	case parser.RecipeCall:
 		return e.runRecipeCall(ctx, s)
 	case parser.HTTPCallStep:
@@ -578,7 +581,23 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "wait"
 		}
 	case parser.ConditionalStep:
+		if s.Response != nil {
+			return fmt.Sprintf("if response %s %s", refString(s.Response.Ref), describeCheck(s.Response.Check))
+		}
 		return fmt.Sprintf("if %q appears", s.Condition)
+	case parser.HTTPStep:
+		switch s.Kind {
+		case parser.HTTPWaitResponse:
+			return "wait for response " + refString(s.Ref)
+		case parser.HTTPSeeResponse:
+			return fmt.Sprintf("see response %s %s", refString(s.Ref), describeCheck(s.Check))
+		case parser.HTTPStoreResponse:
+			return fmt.Sprintf("store response %s json %q as %s", refString(s.Ref), s.Path, s.Var)
+		case parser.HTTPSeeRequests:
+			return fmt.Sprintf("see %s requests %s", countWord(s.Count), refString(s.Ref))
+		case parser.HTTPClearRequests:
+			return "clear recorded requests"
+		}
 	case parser.RecipeCall:
 		return s.Name
 	case parser.LoopStep:
@@ -641,6 +660,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return fmt.Errorf("open the app: %w", reconnErr)
 		}
 		e.client = newClient
+		e.reapplyMocks(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -840,6 +860,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return fmt.Errorf("restart the app: %w", reconnErr)
 		}
 		e.client = newClient
+		e.reapplyMocks(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -861,6 +882,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return fmt.Errorf("clear app data: %w", err)
 		}
 		e.client = newClient
+		e.reapplyMocks(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -1060,6 +1082,7 @@ func (e *Executor) relaunchApp(ctx context.Context, why string) error {
 		return fmt.Errorf("reconnect after %s: %w", why, err)
 	}
 	e.client = newClient
+	e.reapplyMocks(ctx)
 	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)
@@ -1400,6 +1423,16 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 // ---- Conditional execution ----
 
 func (e *Executor) runConditional(ctx context.Context, c parser.ConditionalStep) error {
+	if c.Response != nil {
+		ok, err := e.evalResponseCond(ctx, *c.Response)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return e.RunBody(ctx, c.Then)
+		}
+		return e.RunBody(ctx, c.Else)
+	}
 	// Check visibility with a short timeout
 	checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
@@ -1511,12 +1544,20 @@ func (e *Executor) runDart(ctx context.Context, d parser.DartBlock) error {
 // ---- Mock block execution ----
 
 func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
-	return e.client.RegisterMock(ctx, probelink.MockParam{
-		Method: m.Method,
-		Path:   m.Path,
-		Status: m.Status,
-		Body:   m.Body,
-	})
+	mp := probelink.MockParam{
+		Method:  m.Method,
+		Path:    e.resolve(m.Path),
+		Status:  m.Status,
+		Body:    e.resolve(m.Body),
+		DelayMs: m.DelayMs,
+		Fail:    m.Fail,
+	}
+	if err := e.client.RegisterMock(ctx, mp); err != nil {
+		return err
+	}
+	// Remember it: a restart of the app starts a new agent that knows nothing of it.
+	e.http.mocks = append(e.http.mocks, mp)
+	return nil
 }
 
 // ---- Recipe call execution ----
@@ -1665,6 +1706,7 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 		return fmt.Errorf("auto-reconnect failed: %w", err)
 	}
 	e.client = newClient
+	e.reapplyMocks(ctx)
 	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)

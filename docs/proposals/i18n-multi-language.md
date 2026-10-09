@@ -68,7 +68,7 @@ traffic. P6 starts by making interception real.
 - Named devices (hard rule, 2026-10-09): implemented (0.20.0). Every simulator/emulator probe opens is named (`device start --name`, AVD names, MCP `name`), every result records device name + id. The locale matrix (P5) reports per device + locale.
 - P2 `set language` / `--locale` and P5 `--locales` matrix: implemented (0.21.0), verified on an iOS simulator and an Android 14 emulator.
 - P4 `l10n "key"` from ARB: implemented (0.21.0), verified with real gen_l10n files on an iOS simulator.
-- P6 backend awareness: next (0.22.0).
+- P6 backend awareness: implemented (0.22.0): agent capture + real mocks, `wait for response`, `see response`, `store response`, `if response`, request counts, mock delay/failure; verified on an iOS simulator and an Android 14 emulator.
 
 ## Releases (pub.dev allows 12 publishes a day, so batch)
 

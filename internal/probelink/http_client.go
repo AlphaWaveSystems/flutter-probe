@@ -303,6 +303,24 @@ func (c *HTTPClient) RunDart(ctx context.Context, code string) error {
 	return err
 }
 
+func (c *HTTPClient) HTTPLog(ctx context.Context, p HTTPLogParams) (HTTPLogResult, error) {
+	raw, err := c.Call(ctx, MethodHTTPLog, p)
+	if err != nil {
+		return HTTPLogResult{}, err
+	}
+	var r HTTPLogResult
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return HTTPLogResult{}, err
+	}
+	return r, nil
+}
+
+// HTTPClear forgets the recorded exchanges (and the mocks when mocks is true).
+func (c *HTTPClient) HTTPClear(ctx context.Context, mocks bool) error {
+	_, err := c.Call(ctx, MethodHTTPClear, map[string]bool{"mocks": mocks})
+	return err
+}
+
 func (c *HTTPClient) RegisterMock(ctx context.Context, m MockParam) error {
 	_, err := c.Call(ctx, MethodMock, m)
 	return err

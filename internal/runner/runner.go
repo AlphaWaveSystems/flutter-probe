@@ -356,6 +356,8 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 
 	var runErr error
 
+	exec.beginHTTP(ctx) // each test starts with an empty request log and no mocks
+
 	// Run before-each hooks
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeEach {

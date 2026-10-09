@@ -74,6 +74,7 @@ export default defineConfig({
             { label: 'Visual Regression', slug: 'advanced/visual-regression' },
             { label: 'Self-Healing', slug: 'advanced/self-healing' },
             { label: 'Testing localized apps', slug: 'advanced/multi-language' },
+            { label: 'Testing against backend data', slug: 'advanced/backend-data' },
             { label: 'Configuration', slug: 'advanced/configuration' },
             { label: 'Architecture', slug: 'advanced/architecture' },
           ],

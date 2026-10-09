@@ -207,6 +207,8 @@ func describe(s parser.Step) string {
 		return "system_dialog:" + string(v.Op)
 	case parser.ConditionalStep:
 		return "if"
+	case parser.HTTPStep:
+		return "http:" + string(v.Kind)
 	case parser.LoopStep:
 		return "repeat"
 	case parser.RetryStep:
@@ -740,6 +742,15 @@ var grammarProductionExamples = []productionExample{
 		want: []string{"action:grant_all_permissions", "action:revoke_all_permissions", "action:grant_all_permissions"}},
 	{production: "copy-step", src: testBody(`copy "text" to clipboard`, `copy "text"`), want: repeat("action:copy_clipboard", 2)},
 	{production: "paste-step", src: testBody(`paste from clipboard`, `paste`), want: repeat("action:paste_clipboard", 2)},
+	{production: "wait-response-step", src: testBody(`wait for response GET "/api/orders"`, `wait for response "/api/me" status 200`, `wait response patch "/x"`),
+		want: repeat("http:wait_response", 3)},
+	{production: "see-response-step", src: testBody(`see response GET "/api/me" status 200`, `see response "/api/me" contains "pro"`, `see response "/api/me" json "data.plan" equals "pro"`, `see response "/api/me" json "data.items[0].id" exists`),
+		want: repeat("http:see_response", 4)},
+	{production: "store-response-step", src: testBody(`store response "/api/me" json "data.plan" as plan`),
+		want: []string{"http:store_response"}},
+	{production: "see-requests-step", src: testBody(`see exactly 2 requests GET "/api/orders"`, `see no requests "/api/boom"`, `see exactly 1 request POST "/api/pay"`),
+		want: repeat("http:see_requests", 3)},
+	{production: "clear-requests-step", src: testBody(`clear recorded requests`), want: []string{"http:clear_requests"}},
 	{production: "set-language-step", src: testBody(`set language "de"`, `set language "pt-BR"`, `set language "system"`),
 		want: repeat("action:set_language", 3),
 		check: func(t *testing.T, p *parser.Program) {

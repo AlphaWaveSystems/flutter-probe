@@ -113,6 +113,8 @@ class ProbeMethods {
   static const saveLogs = 'probe.save_logs';
   static const runDart = 'probe.run_dart';
   static const mock = 'probe.mock';
+  static const httpLog = 'probe.http_log';
+  static const httpClear = 'probe.http_clear';
   static const startRecording = 'probe.start_recording';
   static const stopRecording = 'probe.stop_recording';
   static const copyClipboard = 'probe.copy_clipboard';

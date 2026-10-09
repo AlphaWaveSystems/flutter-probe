@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Backend awareness (agent 0.22+):** `wait for response GET "/api/orders" [status 200]`, `see response <ref> status N | contains "x" | json "path" equals "v" | json "path" exists`, `store response <ref> json "path" as var`, `if response <ref> <check>` (+ `otherwise`), `see exactly N requests <ref>` / `see no requests <ref>`, `clear recorded requests`. References are `[METHOD] "path-with-*"` or a full URL. Failures list the app's recent requests. New guide "Testing against backend data". EBNF + conformance tests (`wait-response-step`, `see-response-step`, `store-response-step`, `see-requests-step`, `clear-requests-step`).
+- **`when the app calls` mocks are now real** (they used to be recorded but never applied): the app's `dart:io` client receives the status/body, `after N seconds` delays it, `respond with network failure` drops the connection; `patch`/`head`/`options` methods; they last one test and are re-applied after `restart the app`.
+
 ## [0.21.0] - 2026-10-09
 
 ### Added
