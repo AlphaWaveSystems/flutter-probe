@@ -89,7 +89,7 @@ Commands that control the app process.
 | `restart the app` | `restart the app` | Force-stop and relaunch (preserves data) |
 | `kill the app` | `kill the app` | Force-stop without relaunching |
 | `open the app` | `open the app` | Launch the app and reconnect |
-| `clear app data` | `clear app data` | Wipe all app data and relaunch (skipped on physical iOS). Asks for confirmation on a terminal; without one (CI, scripts) pass `probe test --yes` or the step fails |
+| `clear app data` | `clear app data` | Wipe all app data and relaunch (skipped on physical iOS). On iOS `--yes` cannot answer the notification alert (simctl cannot grant notifications): use `--grant notifications` for that. Asks for confirmation on a terminal; without one (CI, scripts) pass `probe test --yes` or the step fails |
 
 ## Permissions
 

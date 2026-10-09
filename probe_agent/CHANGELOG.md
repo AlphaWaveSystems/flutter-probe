@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.19.5 - 2026-10-09
+
+- No agent change (iOS driver and Android dialog fixes in the CLI); version aligned.
+
 ## 0.19.4 - 2026-10-08
 
 - No agent change (iOS `clear app data` fix in the CLI); version aligned.

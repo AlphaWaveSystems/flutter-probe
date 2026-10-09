@@ -272,14 +272,32 @@ func (a *ADB) AddMedia(ctx context.Context, serial, localPath string) error {
 // never see.
 func (a *ADB) UIAutomatorDump(ctx context.Context, serial string) (string, error) {
 	const dumpPath = "/sdcard/probe_uidump.xml"
-	if _, err := a.Shell(ctx, serial, "uiautomator", "dump", dumpPath); err != nil {
-		return "", fmt.Errorf("uiautomator dump: %w", err)
+	// A dump fails now and then while the screen is animating or the device is busy ("could not
+	// get idle state", a killed UiAutomation client). Retry a few times, and keep the tool's own
+	// output so the error says why instead of an empty message. `adb shell` hides the output of a
+	// command that exits non-zero, hence the wrapper that always exits 0.
+	var last string
+	for attempt := 0; attempt < 4; attempt++ {
+		out, err := a.Shell(ctx, serial, "sh", "-c", "'uiautomator dump "+dumpPath+" 2>&1; echo'")
+		if err == nil && strings.Contains(string(out), "dumped to") {
+			xml, rerr := a.Shell(ctx, serial, "cat", dumpPath)
+			if rerr != nil {
+				return "", fmt.Errorf("uiautomator dump: reading %s: %w", dumpPath, rerr)
+			}
+			return string(xml), nil
+		}
+		if err != nil {
+			last = err.Error()
+		} else {
+			last = strings.TrimSpace(string(out))
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
 	}
-	out, err := a.Shell(ctx, serial, "cat", dumpPath)
-	if err != nil {
-		return "", fmt.Errorf("uiautomator dump: reading %s: %w", dumpPath, err)
-	}
-	return string(out), nil
+	return "", fmt.Errorf("uiautomator dump failed after 4 attempts: %s", last)
 }
 
 // Tap issues a raw coordinate tap via `input tap`. Used internally by

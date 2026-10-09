@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.5] - 2026-10-09
+
+### Fixed
+- **iOS system-dialog buttons match across apostrophes and case:** iOS writes "Don’t Allow" (U+2019); a script written for
+  Android says "Don't allow". The iOS driver's button, title and dismiss matching now folds typographic apostrophes, case and
+  whitespace, so `tap "Don't Allow" in system dialog` and `deny permission "notifications"` work on iOS (the latter always
+  failed with `no button "Don't Allow" in the dialog (buttons: Don’t Allow, Allow)`). Checked on a real system alert.
+- **Android `wait for system dialog appears` survives a failed UI dump:** `uiautomator dump` fails now and then while the screen
+  animates or the device is loaded (the cause of "1-2 of 5 tests fail, a different one each run"). The dump is retried up to 4
+  times with its own output kept in the error, and the wait keeps polling until its deadline instead of ending on the first
+  failed dump; the dump error is reported only if the dialog never showed.
+- **Quieter iOS `clear app data`:** the benign non-zero status of restarting the preferences daemon is no longer printed as a
+  warning.
+
+### Docs
+- `--yes` cannot answer the iOS notification alert (simctl cannot grant notifications): use `--grant notifications`.
+
 ## [0.19.4] - 2026-10-08
 
 ### Fixed

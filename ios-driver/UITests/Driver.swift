@@ -6,7 +6,7 @@ import XCTest
 ///
 /// Secrets: `type` never echoes the text back in any response or log line.
 final class Driver {
-    static let version = "0.19.4"
+    static let version = "0.19.5"
 
     /// Processes that can present system UI. Only ones that are running are
     /// queried (asking an app that is not running for its UI would launch it).
@@ -43,8 +43,8 @@ final class Driver {
 
         func matches(title wanted: String?) -> Bool {
             guard let wanted = wanted, !wanted.isEmpty else { return true }
-            let w = wanted.lowercased()
-            return texts.contains { $0.lowercased().contains(w) } || element.label.lowercased().contains(w)
+            let w = Driver.normalized(wanted)
+            return texts.contains { Driver.normalized($0).contains(w) } || Driver.normalized(element.label).contains(w)
         }
     }
 
@@ -234,7 +234,7 @@ final class Driver {
             return (200, ["ok": false, "error": "could not close the share sheet", "buttons": d.buttonLabels, "title": d.title])
         }
         for label in dismissLabels {
-            if let b = d.buttons.first(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
+            if let b = d.buttons.first(where: { Driver.normalized($0.label) == Driver.normalized(label) }) {
                 let tappedLabel = b.label   // read before tapping: the element disappears with the dialog
                 b.tap()
                 return (200, ["ok": true, "dismissed": true, "tapped": tappedLabel])
@@ -288,10 +288,21 @@ final class Driver {
         return " matching \"\(t)\""
     }
 
-    /// Exact (case-insensitive) match first, then "contains".
+    /// Case-, apostrophe- and whitespace-insensitive form of a label: iOS writes "Don’t Allow"
+    /// (U+2019) where a script written for Android has "Don't allow".
+    static func normalized(_ s: String) -> String {
+        let folded = s.replacingOccurrences(of: "\u{2019}", with: "'")
+            .replacingOccurrences(of: "\u{2018}", with: "'")
+            .replacingOccurrences(of: "\u{02BC}", with: "'")
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
+            .lowercased()
+        return folded.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
+    /// Exact (normalized) match first, then "contains".
     private func match(_ wanted: String, in els: [XCUIElement], by label: (XCUIElement) -> String) -> XCUIElement? {
-        let w = wanted.lowercased()
-        return els.first { label($0).lowercased() == w } ?? els.first { label($0).lowercased().contains(w) }
+        let w = Driver.normalized(wanted)
+        return els.first { Driver.normalized(label($0)) == w } ?? els.first { Driver.normalized(label($0)).contains(w) }
     }
 
     private func fieldLabel(_ el: XCUIElement) -> String {
