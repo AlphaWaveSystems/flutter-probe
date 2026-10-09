@@ -337,6 +337,16 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 			return nil
 		}
 		if name == "notifications" {
+			simctl := dc.Manager.SimCtl()
+			if dc.AppID != "" && !simctl.IsAppRunning(ctx, dc.Serial, dc.AppID) {
+				// The app is not running, so there is no alert to answer, and iOS keeps an earlier
+				// decision (a previous Allow, or --grant) for good: the only way back to "not asked yet" is a reinstall.
+				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", dc.AppID)
+				if err := simctl.Reinstall(ctx, dc.Serial, dc.AppID); err != nil {
+					return fmt.Errorf("deny notifications: %w", err)
+				}
+				return nil
+			}
 			return dc.answerNotificationAlert(ctx, "Don't Allow")
 		}
 		svc, err := device.ResolveIOSService(name)

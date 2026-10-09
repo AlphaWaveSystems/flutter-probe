@@ -406,7 +406,7 @@ grant all permissions
 revoke all permissions
 ```
 
-Or once for the whole run: `probe test tests/ --grant notifications,camera`. Android grants through
+Or once for the whole run: `probe test tests/ --grant notifications,camera`. On an iOS simulator `deny permission "notifications"` (app not running) reinstalls the app to reset the system decision, because iOS never asks twice. Android grants through
 `adb shell pm grant` (including `POST_NOTIFICATIONS`), the iOS simulator through `simctl privacy`. iOS
 notifications have no simctl service, so probe answers the system alert itself: `--grant notifications` (and
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver

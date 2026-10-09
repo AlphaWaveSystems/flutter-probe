@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--grant notifications` and `dismiss system dialog` find the button with the same role (allow, deny, allow once, allow while using,
   OK, cancel, not now, open, close) on a device set to another language. Android uses the permission dialog's resource ids; an exact
   label always wins over a role. The iOS notification alert is recognised by its buttons (Allow + Don't Allow) instead of its English title.
+- **iOS `deny permission "notifications"` really resets the decision when the app is not running:** iOS keeps an earlier Allow (or
+  `--grant notifications`) for good and simctl cannot change it, so a "first run" notification test only saw the alert once. The
+  step now reinstalls the app from a copy of its own bundle (`SimCtl.Reinstall`), which brings notifications back to "not asked
+  yet" (verified on a simulator: Allow, relaunch shows no alert; reinstall, launch shows the alert again). With the app running it
+  still answers the alert. The reinstall leaves a new, empty data container.
 - Docs: new guide "Testing localized apps"; README, agent README (pub.dev), `internal/README`, llms.txt, MCP guide, VS Code snippet.
 
 ## [0.19.5] - 2026-10-09

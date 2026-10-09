@@ -282,6 +282,43 @@ func (s *SimCtl) AppDataPath(ctx context.Context, udid, bundleID string) string 
 	return strings.TrimSpace(string(out))
 }
 
+// AppBundlePath returns the installed .app bundle of an app (empty when it is not installed).
+func (s *SimCtl) AppBundlePath(ctx context.Context, udid, bundleID string) string {
+	out, err := s.run(ctx, "get_app_container", udid, bundleID, "app")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// Reinstall uninstalls the app and installs it again from a copy of its own bundle, which
+// resets everything the system keeps per app that has no reset command: the notification
+// permission decision above all (simctl privacy has no notifications service). The data
+// container is new and empty afterwards. The app is left not running.
+func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
+	app := s.AppBundlePath(ctx, udid, bundleID)
+	if app == "" {
+		return fmt.Errorf("reinstall: %s is not installed on %s", bundleID, udid)
+	}
+	tmp, err := os.MkdirTemp("", "probe-reinstall-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	copyPath := filepath.Join(tmp, filepath.Base(app))
+	if out, err := exec.CommandContext(ctx, "cp", "-R", app, copyPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("reinstall: copy bundle: %v: %s", err, out)
+	}
+	_ = s.Terminate(ctx, udid, bundleID)
+	if err := s.Uninstall(ctx, udid, bundleID); err != nil {
+		return fmt.Errorf("reinstall: uninstall: %w", err)
+	}
+	if err := s.Install(ctx, udid, copyPath); err != nil {
+		return fmt.Errorf("reinstall: install: %w", err)
+	}
+	return nil
+}
+
 // simDataPath returns the data directory for a simulator UDID.
 func (s *SimCtl) simDataPath(udid string) string {
 	home, _ := os.UserHomeDir()
