@@ -226,12 +226,15 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 			// The preferences daemon holds NSUserDefaults in memory and writes them back
 			// later: drop it before and after deleting the files, or the app relaunches
 			// with its old preferences (an "already onboarded" flag survived a clear).
-			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial)
-			for _, subdir := range []string{"Documents", "Library", "tmp"} {
-				target := dataPath + "/" + subdir
-				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-rf", target)
+			if err := simctl.ResetPrefsDaemon(ctx, dc.Serial); err != nil {
+				fmt.Printf("    \033[33m⚠\033[0m  preferences daemon reset: %v\n", err)
 			}
-			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial)
+			if err := wipeIOSContainer(dataPath); err != nil {
+				return fmt.Errorf("clear data: %w", err)
+			}
+			if err := simctl.ResetPrefsDaemon(ctx, dc.Serial); err != nil {
+				fmt.Printf("    \033[33m⚠\033[0m  preferences daemon reset: %v\n", err)
+			}
 			fmt.Printf("    \033[32m✓\033[0m  Cleared data container: %s\n", dataPath)
 		}
 
@@ -421,7 +424,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 			simctl := dc.Manager.SimCtl()
 			tokenPath := dc.iosTokenPath()
 			if tokenPath != "" {
-				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
+				_ = os.Remove(tokenPath) // a host path; a missing file is fine
 			}
 			// The connection often drops because the app went to the background (a link
 			// that opens Safari, a system sheet): iOS suspends it and its socket. If its

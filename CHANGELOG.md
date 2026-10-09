@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.4] - 2026-10-08
+
+### Fixed
+- **iOS simulator `clear app data` deleted nothing (since the command was written):** the files were removed with `xcrun simctl spawn <udid> rm -rf`, but `simctl spawn` runs the command with the simulator's PATH where a bare `rm` is not found (ENOENT). The error was discarded and "Cleared data container" was printed anyway, so onboarding flags, Hive/sqlite files and preferences survived every clear. The container is now emptied from the host (`Documents`, `Library`, `tmp`, recreated empty with `Library/Caches`, `Library/Preferences`, `Library/Application Support`), and a failure to wipe is an error. The same bare-`rm` bug left the stale agent-token file in place on iOS reconnects; that is removed from the host too. The preferences-daemon restart from 0.19.1 and the running-app check now use `/bin/launchctl`, and a failed daemon restart is reported instead of hidden.
+
+### Docs
+- `tap`, `type` and `long press` scroll a target that exists in the widget tree into view; a target a lazy list has not built (beyond its cache extent) needs `scroll <direction> until "X" appears`.
+
 ## [0.19.3] - 2026-10-08
 
 ### Fixed
