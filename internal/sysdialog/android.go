@@ -219,10 +219,25 @@ func (a *AndroidDriver) See(ctx context.Context, title string) (bool, error) {
 }
 
 func (a *AndroidDriver) Wait(ctx context.Context, title string, appear bool, timeout time.Duration) (bool, error) {
-	return pollUntil(ctx, timeout, func() (bool, error) {
+	// A single failed UI dump must not end the wait: keep polling, and only report the dump error
+	// if the dialog was never seen before the deadline.
+	var lastErr error
+	ok, err := pollUntil(ctx, timeout, func() (bool, error) {
 		present, err := a.See(ctx, title)
-		return present == appear, err
+		if err != nil {
+			lastErr = err
+			return false, nil
+		}
+		lastErr = nil
+		return present == appear, nil
 	})
+	if err != nil {
+		return ok, err
+	}
+	if !ok && lastErr != nil {
+		return false, lastErr
+	}
+	return ok, nil
 }
 
 func (a *AndroidDriver) Tap(ctx context.Context, button, title string) (string, error) {

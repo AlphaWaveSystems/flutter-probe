@@ -226,15 +226,11 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 			// The preferences daemon holds NSUserDefaults in memory and writes them back
 			// later: drop it before and after deleting the files, or the app relaunches
 			// with its old preferences (an "already onboarded" flag survived a clear).
-			if err := simctl.ResetPrefsDaemon(ctx, dc.Serial); err != nil {
-				fmt.Printf("    \033[33m⚠\033[0m  preferences daemon reset: %v\n", err)
-			}
+			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial) // best effort: launchd restarts it; the kill reports a benign non-zero status
 			if err := wipeIOSContainer(dataPath); err != nil {
 				return fmt.Errorf("clear data: %w", err)
 			}
-			if err := simctl.ResetPrefsDaemon(ctx, dc.Serial); err != nil {
-				fmt.Printf("    \033[33m⚠\033[0m  preferences daemon reset: %v\n", err)
-			}
+			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial) // best effort: launchd restarts it; the kill reports a benign non-zero status
 			fmt.Printf("    \033[32m✓\033[0m  Cleared data container: %s\n", dataPath)
 		}
 
