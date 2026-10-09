@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## 0.22.0 - 2026-10-09
+
+- Added: the agent records the app's `dart:io` HTTP traffic (`HttpOverrides`; method, URL, status, duration, redacted headers, 64 KB bodies, last 300 exchanges; `PROBE_HTTP_CAPTURE=false` disables) and answers `probe.http_log` / `probe.http_clear`.
+- Changed: `probe.mock` is now effective (it was only stored): matching requests are answered with the given status, body, headers, delay or connection failure (served by a loopback server so the app's client sees real HTTP). Mocks match a method and a path with `*` wildcards (or a full URL).
+
 ## 0.21.0 - 2026-10-09
 
 - No agent change (`set language`, `--locale`/`--locales` and `l10n "key"` live in the CLI); version aligned.

@@ -187,7 +187,39 @@ dart:
 ```
 when the app calls POST "/api/auth/login"
   respond with 503 and body "{ \"error\": \"Service Unavailable\" }"
+when the app calls GET "/api/orders"
+  respond with 200 and body "[]" after 3 seconds       # slow
+when the app calls PATCH "/api/profile"
+  respond with network failure                          # connection dropped
 ```
+
+Mocks are effective (agent 0.22+): the app's `dart:io` HTTP client receives them. They last for one test and survive `restart the app`.
+
+## Time Budgets
+
+```
+tap "Export" within 5 seconds
+wait until "Report ready" appears within 90 seconds
+wait for response "/api/export" status 200 within 120 seconds
+```
+
+`within N seconds|ms` gives that one step its own timeout and implicit-wait window. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/).
+
+## Backend Responses
+
+```
+wait for response GET "/api/orders" status 200
+see response "/api/me" json "data.plan" equals "pro"
+see response "/api/me" contains "premium"
+store response "/api/me" json "data.plan" as plan      # then <plan>
+if response "/api/me" json "data.plan" equals "pro"
+  see "Premium"
+see exactly 1 request GET "/api/orders"
+see no requests "/api/analytics/*"
+clear recorded requests
+```
+
+See [Testing against backend data](/advanced/backend-data/).
 
 ## Utility Commands
 

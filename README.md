@@ -412,6 +412,14 @@ notifications have no simctl service, so probe answers the system alert itself: 
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
 (needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
 
+### Timeouts, waiting and retries
+
+One system for "not there yet": the step timeout (`--timeout`), `--implicit-wait 7s` for the whole run, a per-step budget (`wait until "Report ready" appears within 90 seconds`), `optional` / `if visible` / `if "X" appears` to fail gracefully, `retry 3 times` blocks and `defaults.retry_failed_tests`. Guide: [Timeouts, waiting and retries](https://flutterprobe.dev/advanced/timeouts-and-retries/).
+
+### Testing against backend data
+
+React to what your backend or BFF returns: `wait for response GET "/api/orders" status 200`, `see response "/api/me" json "data.plan" equals "pro"`, `if response ... otherwise`, `store response ... as plan`, `see exactly 2 requests ...`, and real mocks (`when the app calls GET "/api/orders"` / `respond with 503 after 3 seconds` / `respond with network failure`). Needs agent 0.22+; records `dart:io` traffic (not WebViews or native SDKs). Guide: [Testing against backend data](https://flutterprobe.dev/advanced/backend-data/).
+
 ### Named devices
 
 Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device start --platform ios --name probe-checkout` boots (or creates) a simulator under that name; running Android emulators are listed and reported by their AVD name.

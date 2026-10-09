@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"time"
 	"fmt"
 	"strconv"
 	"strings"
@@ -302,6 +303,56 @@ func (p *Parser) parseBody() ([]Step, error) {
 }
 
 func (p *Parser) parseStep() (Step, error) {
+	p.skipFillers()
+	line := p.peek().Line
+	within, hasWithin := p.takeWithin()
+	step, err := p.parseStepInner()
+	if err != nil || !hasWithin {
+		return step, err
+	}
+	switch step.(type) {
+	case ActionStep, AssertStep, AssertNoDefectsStep, WaitStep, SystemDialogStep, HTTPStep:
+		return TimedStep{Inner: step, Within: within, Line: line}, nil
+	}
+	return nil, fmt.Errorf("line %d: \"within ...\" is not supported on this kind of step (use it on tap, type, see, wait, system dialog and response steps)", line)
+}
+
+// takeWithin removes a trailing `within N seconds|second|s|ms|milliseconds` from the
+// current line and returns the duration.
+func (p *Parser) takeWithin() (time.Duration, bool) {
+	end := p.pos
+	for end < len(p.tokens) {
+		t := p.tokens[end].Type
+		if t == TOKEN_NEWLINE || t == TOKEN_EOF || t == TOKEN_DEDENT || t == TOKEN_INDENT {
+			break
+		}
+		end++
+	}
+	if end-p.pos < 4 { // at least one word of the step, then within N unit
+		return 0, false
+	}
+	w, n, u := p.tokens[end-3], p.tokens[end-2], p.tokens[end-1]
+	if w.Type == TOKEN_STRING || strings.ToLower(w.Literal) != "within" || (n.Type != TOKEN_INT && n.Type != TOKEN_FLOAT) {
+		return 0, false
+	}
+	val, err := strconv.ParseFloat(n.Literal, 64)
+	if err != nil || val <= 0 {
+		return 0, false
+	}
+	var unit time.Duration
+	switch strings.ToLower(u.Literal) {
+	case "seconds", "second", "s":
+		unit = time.Second
+	case "ms", "milliseconds", "millisecond":
+		unit = time.Millisecond
+	default:
+		return 0, false
+	}
+	p.tokens = append(p.tokens[:end-3], p.tokens[end:]...)
+	return time.Duration(val * float64(unit)), true
+}
+
+func (p *Parser) parseStepInner() (Step, error) {
 	// Skip filler words at step start
 	p.skipFillers()
 	tok := p.peek()
@@ -355,6 +406,14 @@ func (p *Parser) parseStep() (Step, error) {
 	case TOKEN_DOUBLE_TAP:
 		return p.parseActionDoubleTap()
 	case TOKEN_CLEAR:
+		if (p.peekAt(1).Type != TOKEN_STRING && strings.EqualFold(p.peekAt(1).Literal, "recorded")) &&
+			(strings.EqualFold(p.peekAt(2).Literal, "requests") || strings.EqualFold(p.peekAt(2).Literal, "request")) {
+			p.advance()
+			p.advance()
+			p.advance()
+			p.consumeNewline()
+			return HTTPStep{Kind: HTTPClearRequests, Line: tok.Line}, nil
+		}
 		// FP-20: "clear" followed by a bare word (not a quoted text, #id or
 		// ordinal) is a recipe whose name starts with "clear" (e.g. "clear
 		// search"), the same collision "open" and "add" guard against.
@@ -944,6 +1003,17 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		return AssertStep{Negated: negated, Any: alts, Optional: optional, Line: line}, nil
 	}
 
+	// "see response GET "/api/me" status 200" / "see exactly 2 requests "/api/orders"" / "see no requests "/x""
+	if p.atResponseWord("response") {
+		return p.parseSeeResponse(line)
+	}
+	if p.peekLiteral("no") && p.requestsAhead(1) {
+		return p.parseSeeRequests(line)
+	}
+	if p.peek().Type == TOKEN_EXACTLY && p.peekAt(1).Type == TOKEN_INT && p.requestsAhead(2) {
+		return p.parseSeeRequests(line)
+	}
+
 	// "see exactly N ..."
 	count := 0
 	if p.peek().Type == TOKEN_EXACTLY {
@@ -1059,6 +1129,11 @@ func (p *Parser) parseWait() (Step, error) {
 	p.skipFillers()
 
 	tok := p.peek()
+
+	// "wait for response GET "/api/orders" [status 200]"
+	if p.atResponseWord("response") {
+		return p.parseWaitResponse(line)
+	}
 
 	// "wait until ..."
 	if tok.Type == TOKEN_UNTIL {
@@ -1226,6 +1301,30 @@ func (p *Parser) parseConditional() (Step, error) {
 	line := p.peek().Line
 	p.advance() // if
 	p.skipFillers()
+	if p.atResponseWord("response") {
+		p.advance() // response
+		p.skipFillers()
+		ref := p.parseResponseRef()
+		chk, err := p.parseResponseCheck(line)
+		if err != nil {
+			return nil, err
+		}
+		p.consumeNewline()
+		then, err := p.parseBody()
+		if err != nil {
+			return nil, err
+		}
+		var elseBody []Step
+		if p.peek().Type == TOKEN_OTHERWISE {
+			p.advance()
+			p.consumeNewline()
+			elseBody, err = p.parseBody()
+			if err != nil {
+				return nil, err
+			}
+		}
+		return ConditionalStep{Response: &ResponseCond{Ref: ref, Check: chk}, Then: then, Else: elseBody, Line: line}, nil
+	}
 	cond := p.expectString("condition text")
 	p.skipFillers()
 	// "appears" optional
@@ -1421,7 +1520,8 @@ func (p *Parser) parseMockBlock() (Step, error) {
 	for {
 		tt := p.peek().Type
 		if tt == TOKEN_GET || tt == TOKEN_POST || tt == TOKEN_PUT || tt == TOKEN_DELETE ||
-			tt == TOKEN_STRING || tt == TOKEN_NEWLINE || tt == TOKEN_EOF || tt == TOKEN_ID {
+			tt == TOKEN_STRING || tt == TOKEN_NEWLINE || tt == TOKEN_EOF || tt == TOKEN_ID ||
+			(tt == TOKEN_IDENT && (p.peekLiteral("patch") || p.peekLiteral("head") || p.peekLiteral("options"))) {
 			break
 		}
 		p.advance()
@@ -1430,6 +1530,8 @@ func (p *Parser) parseMockBlock() (Step, error) {
 	method := "GET"
 	if p.peek().Type == TOKEN_GET || p.peek().Type == TOKEN_POST ||
 		p.peek().Type == TOKEN_PUT || p.peek().Type == TOKEN_DELETE {
+		method = strings.ToUpper(p.advance().Literal)
+	} else if lit := strings.ToLower(p.peek().Literal); p.peek().Type == TOKEN_IDENT && (lit == "patch" || lit == "head" || lit == "options") {
 		method = strings.ToUpper(p.advance().Literal)
 	}
 	path := ""
@@ -1442,6 +1544,8 @@ func (p *Parser) parseMockBlock() (Step, error) {
 	// body: respond with STATUS [and body JSON]
 	status := 200
 	body := ""
+	delayMs := 0
+	fail := false
 	if p.peek().Type == TOKEN_INDENT {
 		p.advance()
 		if p.peek().Type == TOKEN_RESPOND {
@@ -1452,6 +1556,14 @@ func (p *Parser) parseMockBlock() (Step, error) {
 			}
 			if p.peek().Type == TOKEN_INT {
 				status, _ = strconv.Atoi(p.advance().Literal)
+			} else if p.peek().Type == TOKEN_NETWORK {
+				// respond with network failure: the connection is dropped instead of answered
+				p.advance()
+				p.skipFillers()
+				if p.peekLiteral("failure") {
+					p.advance()
+				}
+				fail = true
 			}
 			p.skipFillers()
 			if p.peek().Type == TOKEN_AND {
@@ -1463,13 +1575,25 @@ func (p *Parser) parseMockBlock() (Step, error) {
 			if p.peek().Type == TOKEN_STRING {
 				body = p.advance().Literal
 			}
+			// after N seconds: the answer (or the failure) comes late
+			if p.peekLiteral("after") && p.peekAt(1).Type == TOKEN_INT {
+				p.advance()
+				secs, _ := strconv.Atoi(p.advance().Literal)
+				delayMs = secs * 1000
+				if p.peekLiteral("seconds") || p.peekLiteral("second") {
+					p.advance()
+				} else if p.peekLiteral("ms") || p.peekLiteral("milliseconds") {
+					delayMs = secs
+					p.advance()
+				}
+			}
 		}
 		p.consumeNewline()
 		if p.peek().Type == TOKEN_DEDENT {
 			p.advance()
 		}
 	}
-	return MockBlock{Method: method, Path: path, Status: status, Body: body, Line: line}, nil
+	return MockBlock{Method: method, Path: path, Status: status, Body: body, DelayMs: delayMs, Fail: fail, Line: line}, nil
 }
 
 // ---- Recipe call ----
@@ -1672,6 +1796,13 @@ func (p *Parser) peek() Token {
 		return Token{Type: TOKEN_EOF}
 	}
 	return p.tokens[p.pos]
+}
+
+func (p *Parser) peekAt(n int) Token {
+	if p.pos+n >= len(p.tokens) {
+		return Token{Type: TOKEN_EOF}
+	}
+	return p.tokens[p.pos+n]
 }
 
 func (p *Parser) advance() Token {
@@ -2068,6 +2199,9 @@ func (p *Parser) parseStore() (Step, error) {
 	line := p.peek().Line
 	p.advance() // store
 	p.skipFillers()
+	if p.atResponseWord("response") {
+		return p.parseStoreResponse(line)
+	}
 	value := p.expectString("value to store")
 	p.skipFillers()
 	if p.peek().Type == TOKEN_AS {
@@ -2273,5 +2407,169 @@ func (p *Parser) parseSystemDialog() (Step, error) {
 	default:
 		return nil, fmt.Errorf("line %d: unrecognized system dialog step — use: tap \"X\" in system dialog | type \"$ENV\" into system field \"F\" | see system dialog \"T\" | wait for system dialog \"T\" appears | dismiss system dialog | sign in sandbox tester", line)
 	}
+	return step, nil
+}
+
+// ---- Backend responses ----
+
+var httpMethodWords = map[string]bool{"get": true, "post": true, "put": true, "delete": true, "patch": true, "head": true, "options": true}
+
+// atResponseRef reports whether the tokens from offset are `[METHOD] STRING`,
+// the reference form every response statement uses.
+func (p *Parser) atResponseRef(offset int) bool {
+	i := p.pos + offset
+	if i >= len(p.tokens) {
+		return false
+	}
+	if httpMethodWords[strings.ToLower(p.tokens[i].Literal)] && p.tokens[i].Type != TOKEN_STRING {
+		i++
+	}
+	return i < len(p.tokens) && p.tokens[i].Type == TOKEN_STRING
+}
+
+// atResponseWord reports whether the next token is the contextual word lit
+// followed by a response reference.
+func (p *Parser) atResponseWord(lit string) bool {
+	return p.peek().Type != TOKEN_STRING && p.peekLiteral(lit) && p.atResponseRef(1)
+}
+
+func (p *Parser) parseResponseRef() ResponseRef {
+	ref := ResponseRef{}
+	if t := p.peek(); t.Type != TOKEN_STRING && httpMethodWords[strings.ToLower(t.Literal)] {
+		ref.Method = strings.ToUpper(t.Literal)
+		p.advance()
+	}
+	p.skipFillers()
+	ref.Pattern = p.advance().Literal
+	return ref
+}
+
+// parseResponseCheck parses `status N`, `contains "x"`, `json "path" equals "v"`, `json "path" exists`.
+func (p *Parser) parseResponseCheck(line int) (ResponseCheck, error) {
+	p.skipFillers()
+	switch {
+	case p.peekLiteral("status"):
+		p.advance()
+		p.skipFillers()
+		if p.peek().Type != TOKEN_INT {
+			return ResponseCheck{}, fmt.Errorf("line %d: expected a status code after \"status\" (e.g. status 200)", line)
+		}
+		n, _ := strconv.Atoi(p.advance().Literal)
+		return ResponseCheck{Kind: CheckStatus, Status: n}, nil
+	case p.peek().Type == TOKEN_CONTAINS:
+		p.advance()
+		p.skipFillers()
+		if p.peek().Type != TOKEN_STRING {
+			return ResponseCheck{}, fmt.Errorf("line %d: expected quoted text after \"contains\"", line)
+		}
+		return ResponseCheck{Kind: CheckContains, Text: p.advance().Literal}, nil
+	case p.peekLiteral("json"):
+		p.advance()
+		p.skipFillers()
+		if p.peek().Type != TOKEN_STRING {
+			return ResponseCheck{}, fmt.Errorf("line %d: expected a quoted JSON path after \"json\" (e.g. json \"data.plan\" equals \"pro\")", line)
+		}
+		path := p.advance().Literal
+		p.skipFillers()
+		if p.peekLiteral("exists") {
+			p.advance()
+			return ResponseCheck{Kind: CheckJSONExists, Text: path}, nil
+		}
+		if !p.peekLiteral("equals") {
+			return ResponseCheck{}, fmt.Errorf("line %d: expected \"equals \\\"value\\\"\" or \"exists\" after the JSON path", line)
+		}
+		p.advance()
+		p.skipFillers()
+		if p.peek().Type != TOKEN_STRING && p.peek().Type != TOKEN_INT && p.peek().Type != TOKEN_FLOAT {
+			return ResponseCheck{}, fmt.Errorf("line %d: expected the expected value after \"equals\" (a quoted string or a number)", line)
+		}
+		return ResponseCheck{Kind: CheckJSONEquals, Text: path, Equals: p.advance().Literal}, nil
+	}
+	return ResponseCheck{}, fmt.Errorf("line %d: expected status N, contains \"text\" or json \"path\" equals \"value\" after the response", line)
+}
+
+// parseWaitResponse: `wait for response GET "/api/orders" [status 200]` (wait + fillers consumed).
+func (p *Parser) parseWaitResponse(line int) (Step, error) {
+	p.advance() // response
+	p.skipFillers()
+	step := HTTPStep{Kind: HTTPWaitResponse, Ref: p.parseResponseRef(), Line: line}
+	p.skipFillers()
+	if p.peekLiteral("status") {
+		chk, err := p.parseResponseCheck(line)
+		if err != nil {
+			return nil, err
+		}
+		step.Check = chk
+	}
+	p.consumeNewline()
+	return step, nil
+}
+
+// parseSeeResponse: `see response GET "/api/me" status 200 | contains "x" | json "a.b" equals "v"` (see consumed).
+func (p *Parser) parseSeeResponse(line int) (Step, error) {
+	p.advance() // response
+	p.skipFillers()
+	step := HTTPStep{Kind: HTTPSeeResponse, Ref: p.parseResponseRef(), Line: line}
+	chk, err := p.parseResponseCheck(line)
+	if err != nil {
+		return nil, err
+	}
+	step.Check = chk
+	p.consumeNewline()
+	return step, nil
+}
+
+// parseStoreResponse: `store response "/api/me" json "data.plan" as plan` (store consumed).
+func (p *Parser) parseStoreResponse(line int) (Step, error) {
+	p.advance() // response
+	p.skipFillers()
+	step := HTTPStep{Kind: HTTPStoreResponse, Ref: p.parseResponseRef(), Line: line}
+	p.skipFillers()
+	if !p.peekLiteral("json") {
+		return nil, fmt.Errorf("line %d: expected json \"path\" after the response (store response \"/api/me\" json \"data.plan\" as plan)", line)
+	}
+	p.advance()
+	p.skipFillers()
+	if p.peek().Type != TOKEN_STRING {
+		return nil, fmt.Errorf("line %d: expected a quoted JSON path after \"json\"", line)
+	}
+	step.Path = p.advance().Literal
+	p.skipFillers()
+	if p.peek().Type == TOKEN_AS {
+		p.advance()
+	}
+	p.skipFillers()
+	if p.peek().Type != TOKEN_IDENT && p.peek().Type != TOKEN_STRING {
+		return nil, fmt.Errorf("line %d: expected a variable name after \"as\"", line)
+	}
+	step.Var = p.advance().Literal
+	p.consumeNewline()
+	return step, nil
+}
+
+// requestsAhead reports whether the tokens from offset are `request|requests <ref>`.
+func (p *Parser) requestsAhead(offset int) bool {
+	i := p.pos + offset
+	if i >= len(p.tokens) {
+		return false
+	}
+	lit := strings.ToLower(p.tokens[i].Literal)
+	return p.tokens[i].Type != TOKEN_STRING && (lit == "request" || lit == "requests") && p.atResponseRef(offset+1)
+}
+
+// parseSeeRequests: `see exactly N requests GET "/x"` / `see no requests "/x"` (see consumed, at "exactly" or "no").
+func (p *Parser) parseSeeRequests(line int) (Step, error) {
+	count := 0
+	if p.peek().Type == TOKEN_EXACTLY {
+		p.advance()
+		count, _ = strconv.Atoi(p.advance().Literal)
+	} else {
+		p.advance() // no
+	}
+	p.skipFillers()
+	p.advance() // request(s)
+	p.skipFillers()
+	step := HTTPStep{Kind: HTTPSeeRequests, Count: count, Ref: p.parseResponseRef(), Line: line}
+	p.consumeNewline()
 	return step, nil
 }

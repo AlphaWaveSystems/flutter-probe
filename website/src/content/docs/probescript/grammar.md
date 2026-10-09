@@ -414,7 +414,11 @@ line-step  = tap-native-step | tap-step | type-native-step | type-step
            | take-screenshot-step | compare-screenshot-step | dump-tree-step | save-logs-step
            | store-step | read-ai-step | deliver-signal-step
            | biometric-step | enroll-biometric-step
-           | http-call-step | recipe-call-step ;
+           | http-call-step | wait-response-step | see-response-step | store-response-step
+           | see-requests-step | clear-requests-step | recipe-call-step ;
+
+timed-step = line-step , "within" , ( INT | FLOAT ) , ( "seconds" | "second" | "s" | "ms" | "milliseconds" ) ;
+             (* a line-step except recipe-call-step, with its own time budget *)
 
 block-step = if-step | repeat-step | retry-step | dart-step | mock-step | travel-step ;
 
@@ -437,6 +441,7 @@ The first matching row wins.
 | `open` followed by anything else | `recipe-call-step` (a recipe whose name starts with "open") |
 | `tap` followed by the word `native` | `tap-native-step`; otherwise `tap-step` |
 | `type` followed by the word `native` | `type-native-step`; otherwise `type-step` |
+| a line ending in `within N seconds` (or `s`, `ms`, `milliseconds`) | the step before it, as `timed-step` (not for recipe calls or block steps) |
 | `see` / `don't see` / `dont see` followed by the word `native` | `see-native-step`; otherwise `see-step` / `dont-see-step` |
 | `assert` | `assert-defects-step` |
 | `wait` | `wait-step` (see below for its order) |
@@ -452,6 +457,10 @@ The first matching row wins.
 | `store`, `read`, `deliver` | `store-step`, `read-ai-step`, `deliver-signal-step` |
 | `biometric`, `enroll` | `biometric-step`, `enroll-biometric-step` |
 | `call` | `http-call-step` |
+| `wait` followed by `response` and a response reference | `wait-response-step` (before the other `wait` forms) |
+| `see` followed by `response` and a response reference; `see exactly N request(s)` / `see no request(s)` and a reference | `see-response-step`, `see-requests-step` (before the other `see` forms) |
+| `store` followed by `response` and a response reference | `store-response-step` |
+| `clear recorded request(s)` | `clear-requests-step` |
 | `if`, `repeat`, `retry`, `run`, `when`, `travel` | `if-step`, `repeat-step`, `retry-step`, `dart-step`, `mock-step`, `travel-step` |
 | an empty line (NEWLINE) | nothing (ignored) |
 | anything else, including `press`, `pinch`, `sync` outside composite tests, unknown words | `recipe-call-step` |
@@ -913,11 +922,13 @@ A block statement is a header line followed by an indented block (`body`).
 ### Conditionals
 
 ```ebnf
-if-step = "if" , fillers , text-operand , fillers , [ "appears" ] , NEWLINE , body ,
+if-step = "if" , fillers , ( text-operand , fillers , [ "appears" ]
+                          | "response" , response-ref , response-check ) , NEWLINE , body ,
           [ ( "otherwise" | "else" ) , NEWLINE , body ] ;
 ```
 
-The condition is a text (or `#id`) that may be on screen. `otherwise` / `else` must follow the `if`
+The condition is a text (or `#id`) that may be on screen, or the newest recorded backend response matching a
+[response reference](#backend-responses) (`if response "/api/me" json "data.plan" equals "pro"`; false when there is none). `otherwise` / `else` must follow the `if`
 body directly, at the same indentation as the `if`.
 
 ```probe
@@ -987,11 +998,16 @@ test "dart block"
 mock-step = "when" , { ? any token except get, post, put, delete, STRING, ID and NEWLINE ? } ,
             [ "get" | "post" | "put" | "delete" ] , [ STRING | WORD ] , NEWLINE ,
             [ INDENT , [ respond-clause ] , NEWLINE , DEDENT ] ;
-respond-clause = "respond" , fillers , [ "with" ] , [ INT ] , fillers , [ "and" ] , [ "body" ] , [ STRING ] ;
+respond-clause = "respond" , fillers , [ "with" ] , [ INT | "network" , fillers , [ "failure" ] ] , fillers ,
+                 [ "and" ] , [ "body" ] , [ STRING ] , [ "after" , INT , [ "seconds" | "second" | "ms" ] ] ;
 ```
 
-The words between `when` and the method (`the app calls`) are ignored. The method defaults to
-`GET`, the status to `200`. The indented body is exactly one `respond` line.
+The words between `when` and the method (`the app calls`) are ignored. The method (`get`, `post`, `put`,
+`delete`, or the plain words `patch`, `head`, `options`) defaults to `GET`, the status to `200`. The indented body
+is exactly one `respond` line. `after N seconds` delays the answer; `respond with network failure` drops the
+connection instead of answering. The path is matched like a [response reference](#backend-responses). Mocks are
+real: the app's `dart:io` HTTP client gets the status, body and delay (agent 0.22+), they last for one test and
+are re-applied if the app restarts.
 
 ```probe
 test "http mocking"
@@ -1001,7 +1017,68 @@ test "http mocking"
     respond with 200 and body "[]"
   when the app calls DELETE "/api/session"
     respond with 204
+  when the app calls GET "/api/orders"
+    respond with 200 and body "[]" after 3 seconds
+  when the app calls patch "/api/profile"
+    respond with network failure
   tap "Sign In"
+```
+
+### Time budget
+
+`within` gives one step its own time budget: it becomes the step's timeout and the window in which a missing target is
+retried (like `--implicit-wait` for that step only). It is a plain word recognised only at the end of a line.
+
+```probe
+test "time budgets"
+  tap "Export" within 5 seconds
+  wait until "Report ready" appears within 90 seconds
+  wait for response "/api/export" status 200 within 120 seconds
+  see "Done" within 500 ms
+```
+
+### Backend responses
+
+The agent records the app's `dart:io` HTTP traffic (the `http` package, dio's default adapter and most Dart clients; not
+WebViews, `dart:html` or native SDK calls) so a test can react to what the backend returned.
+
+```ebnf
+response-ref   = [ http-method ] , fillers , STRING ;       (* GET "/api/orders", "/api/me", "/api/orders/*" *)
+http-method    = "get" | "post" | "put" | "delete" | "patch" | "head" | "options" ;
+response-check = "status" , INT
+               | "contains" , STRING
+               | "json" , STRING , ( "equals" , ( STRING | number ) | "exists" ) ;
+
+wait-response-step  = "wait" , fillers , "response" , response-ref , [ "status" , INT ] ;
+see-response-step   = "see" , fillers , "response" , response-ref , response-check ;
+store-response-step = "store" , fillers , "response" , response-ref , "json" , STRING , fillers , "as" ,
+                      fillers , ( WORD | STRING ) ;
+see-requests-step   = "see" , ( "exactly" , INT | "no" ) , fillers , ( "request" | "requests" ) , response-ref ;
+clear-requests-step = "clear" , "recorded" , ( "request" | "requests" ) ;
+```
+
+The `STRING` of a reference is a path with `*` wildcards that must match the whole path (`"/api/orders"` does not match
+`/api/orders/42`; use `"/api/orders/*"`), or a full URL when it contains `://`; the query is ignored unless the pattern
+contains `?`. The method is optional. `response`, `request`, `requests`, `status`, `json`, `equals`, `exists`, `recorded` and
+`no` are plain words recognised only in these positions.
+
+`wait for response` waits for a matching exchange that no earlier `wait for response` has taken (so
+`tap` then `wait for response` works even when the answer came quickly); `see response`, `store response` and
+`if response` look at the newest matching exchange. A JSON path is dotted with optional `[n]` indexes
+(`data.plan`, `items[0].id`); `equals` compares the value as text (`42`, `true`, `null`). `store response` puts the value in a
+variable usable as `<name>` afterwards. The log and the [mocks](#http-mocking) start empty in every test.
+
+```probe
+test "premium users see the premium badge"
+  open the app
+  wait for response GET "/api/me" status 200
+  store response "/api/me" json "data.plan" as plan
+  see exactly 1 request GET "/api/me"
+  if response "/api/me" json "data.plan" equals "pro"
+    see "Premium"
+  otherwise
+    see "Upgrade"
+  clear recorded requests
 ```
 
 ### GPS routes

@@ -14,6 +14,7 @@ import 'package:flutter/widgets.dart';
 import 'agent_version.dart';
 import 'biometric.dart' as biometric;
 import 'finder.dart';
+import 'http_capture.dart';
 import 'protocol.dart';
 import 'recorder.dart';
 import 'signal.dart' as signal_lib;
@@ -264,6 +265,13 @@ class ProbeExecutor {
       case ProbeMethods.mock:
         _registerMock(req.params);
         return {'ok': true};
+
+      case ProbeMethods.httpLog:
+        return _httpLog(req.params);
+
+      case ProbeMethods.httpClear:
+        ProbeHttpLog.instance.clear(mocks: req.params['mocks'] == true);
+        return {'ok': true, 'epoch': ProbeHttpLog.instance.epoch};
 
       // ---- Clipboard ----
       case ProbeMethods.copyClipboard:
@@ -1506,11 +1514,39 @@ class ProbeExecutor {
   // ---- Mock registration ----
 
   void _registerMock(Map<String, dynamic> params) {
-    final method = (params['method'] as String).toUpperCase();
+    final method = (params['method'] as String? ?? '').toUpperCase();
     final path = params['path'] as String;
-    _mocks['$method:$path'] = {
-      'status': (params['status'] as num?)?.toInt() ?? 200,
-      'body': params['body'] as String? ?? '',
+    final status = (params['status'] as num?)?.toInt() ?? 200;
+    final body = params['body'] as String? ?? '';
+    _mocks['$method:$path'] = {'status': status, 'body': body};
+    ProbeHttpLog.instance.addMock(ProbeMock(
+      method: method,
+      pattern: path,
+      status: status,
+      body: body,
+      headers: (params['headers'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? const {},
+      delayMs: (params['delay_ms'] as num?)?.toInt() ?? 0,
+      fail: params['fail'] == true,
+    ));
+  }
+
+  /// `probe.http_log`: finished exchanges matching {method, pattern} with seq > since.
+  /// {last: true} returns only the newest match, {count_only: true} no entries.
+  Map<String, dynamic> _httpLog(Map<String, dynamic> params) {
+    final log = ProbeHttpLog.instance;
+    var found = log.query(
+      method: params['method'] as String? ?? '',
+      pattern: params['pattern'] as String? ?? '',
+      since: (params['since'] as num?)?.toInt() ?? 0,
+    );
+    final count = found.length;
+    if (params['last'] == true && found.isNotEmpty) found = [found.last];
+    if (params['count_only'] == true) found = const [];
+    return {
+      'epoch': log.epoch,
+      'latest': log.latest,
+      'count': count,
+      'entries': [for (final e in found) e.toJson(bodies: params['no_bodies'] != true)],
     };
   }
 

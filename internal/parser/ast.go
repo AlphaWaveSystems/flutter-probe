@@ -1,5 +1,7 @@
 package parser
 
+import "time"
+
 // ---- Selector types ----
 
 type SelectorKind int
@@ -321,6 +323,7 @@ func (w WaitStep) stepType() string { return "wait" }
 // ---- ConditionalStep ----
 
 type ConditionalStep struct {
+	Response  *ResponseCond // `if response ...`; nil for the `if "text" appears` form
 	Condition string // text that may appear
 	Then      []Step
 	Else      []Step // otherwise branch
@@ -399,6 +402,79 @@ func (d DartBlock) nodeType() string { return "dart" }
 func (d DartBlock) GetLine() int     { return d.Line }
 func (d DartBlock) stepType() string { return "dart" }
 
+// ---- TimedStep ----
+
+// TimedStep is a step with its own time budget: `wait until "Done" appears within 90 seconds`.
+// The step's timeout and its implicit-wait retry window both become Within.
+type TimedStep struct {
+	Inner  Step
+	Within time.Duration
+	Line   int
+}
+
+func (t TimedStep) nodeType() string { return "timed" }
+func (t TimedStep) GetLine() int     { return t.Line }
+func (t TimedStep) stepType() string { return "timed" }
+
+// ---- Backend responses ----
+
+// ResponseRef names recorded HTTP exchanges: `GET "/api/orders"`. Method is
+// empty for "any method"; Pattern is a path with * wildcards, or a full URL.
+type ResponseRef struct {
+	Method  string
+	Pattern string
+}
+
+// ResponseCheckKind says what a `see response` / `if response` compares.
+type ResponseCheckKind string
+
+const (
+	CheckStatus     ResponseCheckKind = "status"   // status 200
+	CheckContains   ResponseCheckKind = "contains" // contains "premium"
+	CheckJSONEquals ResponseCheckKind = "json"     // json "data.plan" equals "pro"
+	CheckJSONExists ResponseCheckKind = "exists"   // json "data.plan" exists
+)
+
+// ResponseCheck is the condition part of a response statement.
+type ResponseCheck struct {
+	Kind   ResponseCheckKind
+	Status int    // CheckStatus
+	Text   string // CheckContains: the text; CheckJSON*: the path
+	Equals string // CheckJSONEquals: the expected value
+}
+
+// ResponseCond is the condition of `if response <ref> <check>`.
+type ResponseCond struct {
+	Ref   ResponseRef
+	Check ResponseCheck
+}
+
+// HTTPKind is the kind of backend statement an HTTPStep is.
+type HTTPKind string
+
+const (
+	HTTPWaitResponse  HTTPKind = "wait_response"
+	HTTPSeeResponse   HTTPKind = "see_response"
+	HTTPStoreResponse HTTPKind = "store_response"
+	HTTPSeeRequests   HTTPKind = "see_requests"
+	HTTPClearRequests HTTPKind = "clear_requests"
+)
+
+// HTTPStep is a statement about the app's recorded backend traffic.
+type HTTPStep struct {
+	Kind   HTTPKind
+	Ref    ResponseRef
+	Check  ResponseCheck // see_response; wait_response uses Status when Check.Kind == CheckStatus
+	Path   string        // store_response: the JSON path
+	Var    string        // store_response: the variable
+	Count  int           // see_requests: the expected number
+	Line   int
+}
+
+func (h HTTPStep) nodeType() string { return "http" }
+func (h HTTPStep) GetLine() int     { return h.Line }
+func (h HTTPStep) stepType() string { return "http" }
+
 // ---- MockBlock ----
 
 type MockBlock struct {
@@ -406,6 +482,8 @@ type MockBlock struct {
 	Path     string // /api/products
 	Status   int
 	Body     string // JSON string
+	DelayMs  int    // `after N seconds`
+	Fail     bool   // `respond with network failure`
 	Line     int
 }
 

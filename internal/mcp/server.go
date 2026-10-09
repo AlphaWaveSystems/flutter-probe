@@ -180,6 +180,17 @@ Supports the full ProbeScript syntax:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Devices:         start_device names every simulator it boots (name arg; created when
                      missing); results carry the device name and id.
+  Waiting:         steps have a timeout (--timeout, default 30s); --implicit-wait 7s retries a
+                     missing target; "... within 90 seconds" gives one step its own budget
+                     (wait until "X" appears within 90 seconds | wait for response ... within 5
+                     seconds); optional / if visible / if "X" appears fail gracefully; retry 3
+                     times re-runs a block; defaults.retry_failed_tests re-runs a failing test.
+  Backend data:    the agent records the app's dart:io HTTP traffic: wait for response GET
+                     "/api/orders" status 200 | see response "/api/me" json "data.plan" equals
+                     "pro" | store response ... json "path" as var | if response ... otherwise |
+                     see exactly N requests GET "/x" | clear recorded requests. Mocks are real:
+                     when the app calls GET "/x" / respond with 503 and body "{}" after 2 seconds |
+                     respond with network failure. Agent 0.22+.
   Localized text:  l10n "saveButton" is a string taken from the app's ARB files (probe.yaml
                      l10n.dir / l10n.default) in the language the app currently runs in; keys
                      are validated before the run starts. tap l10n "save", see l10n "title".

@@ -138,10 +138,46 @@ type ScreenshotResult struct {
 
 // MockParam registers an HTTP mock.
 type MockParam struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-	Status int    `json:"status"`
-	Body   string `json:"body,omitempty"`
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Status  int               `json:"status"`
+	Body    string            `json:"body,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	DelayMs int               `json:"delay_ms,omitempty"`
+	Fail    bool              `json:"fail,omitempty"` // drop the connection instead of answering
+}
+
+// HTTPLogParams selects recorded HTTP exchanges (probe.http_log).
+type HTTPLogParams struct {
+	Method    string `json:"method,omitempty"`
+	Pattern   string `json:"pattern,omitempty"` // path with * wildcards, or a full URL
+	Since     int    `json:"since,omitempty"`   // only exchanges with seq > Since
+	Last      bool   `json:"last,omitempty"`    // only the newest match
+	CountOnly bool   `json:"count_only,omitempty"`
+	NoBodies  bool   `json:"no_bodies,omitempty"` // omit request/response bodies (for summaries)
+}
+
+// HTTPEntry is one recorded request/response pair.
+type HTTPEntry struct {
+	Seq             int               `json:"seq"`
+	Method          string            `json:"method"`
+	URL             string            `json:"url"`
+	Status          int               `json:"status"`
+	DurationMs      int               `json:"durationMs"`
+	Mocked          bool              `json:"mocked"`
+	Error           string            `json:"error,omitempty"`
+	RequestHeaders  map[string]string `json:"requestHeaders"`
+	ResponseHeaders map[string]string `json:"responseHeaders"`
+	RequestBody     string            `json:"requestBody"`
+	ResponseBody    string            `json:"responseBody"`
+}
+
+// HTTPLogResult is the answer of probe.http_log.
+type HTTPLogResult struct {
+	Epoch   string      `json:"epoch"` // changes when the app process restarts (seq starts over)
+	Latest  int         `json:"latest"`
+	Count   int         `json:"count"` // matches, before Last / CountOnly
+	Entries []HTTPEntry `json:"entries"`
 }
 
 // DartParam runs Dart code on the agent.
@@ -229,6 +265,8 @@ const (
 	MethodSelectorBounds = "probe.selector_bounds"
 	MethodRunDart      = "probe.run_dart"
 	MethodMock         = "probe.mock"
+	MethodHTTPLog      = "probe.http_log"
+	MethodHTTPClear    = "probe.http_clear"
 	MethodDeviceAction = "probe.device_action"
 	MethodPing           = "probe.ping"
 	MethodSettled        = "probe.settled"   // wait for triple-signal sync

@@ -108,6 +108,32 @@
     ],
     "description": "HTTP mock response"
   },
+  "Wait for response": {
+    "prefix": "waitresponse",
+    "body": [
+      "wait for response ${1|GET,POST,PUT,DELETE,PATCH|} \"${2:/api/endpoint}\" status ${3:200}",
+      "$0"
+    ],
+    "description": "Wait for the app's backend call to answer"
+  },
+  "See response": {
+    "prefix": "seeresponse",
+    "body": [
+      "see response \"${1:/api/endpoint}\" json \"${2:data.field}\" equals \"${3:value}\"",
+      "$0"
+    ],
+    "description": "Assert on the newest recorded response"
+  },
+  "If response": {
+    "prefix": "ifresponse",
+    "body": [
+      "if response \"${1:/api/endpoint}\" json \"${2:data.field}\" equals \"${3:value}\"",
+      "  $0",
+      "otherwise",
+      "  "
+    ],
+    "description": "Branch on backend data"
+  },
   "Before each test hook": {
     "prefix": "before",
     "body": [
@@ -178,5 +204,13 @@
       "$0"
     ],
     "description": "Use the text of an ARB key in the current app language"
+  },
+  "Time budget": {
+    "prefix": "within",
+    "body": [
+      "wait until \"${1:element}\" appears within ${2:90} seconds",
+      "$0"
+    ],
+    "description": "Wait with its own time budget"
   }
 }

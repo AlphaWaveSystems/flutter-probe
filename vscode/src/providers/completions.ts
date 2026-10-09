@@ -16,6 +16,8 @@ const PROBESCRIPT_KEYWORDS = [
   'grant all permissions', 'revoke all permissions',
   'toggle wifi', 'toggle airplane mode',
   'when the app calls', 'respond with',
+  'wait for response', 'see response', 'store response', 'if response',
+  'see exactly', 'see no requests', 'clear recorded requests',
   'pause for', 'log',
 ];
 

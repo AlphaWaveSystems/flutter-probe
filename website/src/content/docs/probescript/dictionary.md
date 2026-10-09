@@ -259,7 +259,26 @@ Mock API responses for the app.
 | Command | Syntax | Description |
 |---|---|---|
 | `when` | `when the app calls GET "/api/users"` | Define a mock rule |
-| `respond` | `respond with 200 and body "[]"` | Define the mock response |
+| `respond` | `respond with 200 and body "[]" after 2 seconds` · `respond with network failure` | Define the mock response; `after N seconds` delays it, `network failure` drops the connection |
+
+## Time budget
+
+| Command | Syntax | Description |
+|---|---|---|
+| `within` | `wait until "Done" appears within 90 seconds` · `tap "Go" within 2 seconds` · `see "Y" within 500 ms` | Per-step timeout and implicit-wait window. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
+
+## Backend Responses
+
+React to what the backend returned (the app's `dart:io` HTTP traffic; agent 0.22+). See [Testing against backend data](/advanced/backend-data/).
+
+| Command | Syntax | Description |
+|---|---|---|
+| `wait for response` | `wait for response GET "/api/orders" status 200` | Wait for a new matching response |
+| `see response` | `see response "/api/me" status 200` · `contains "x"` · `json "data.plan" equals "pro"` · `json "a.b" exists` | Check the newest matching response |
+| `store response` | `store response "/api/me" json "data.plan" as plan` | Keep a value from the body in `<plan>` |
+| `if response` | `if response "/api/me" json "data.plan" equals "pro"` | Branch on the newest matching response |
+| `see exactly N requests` | `see exactly 2 requests GET "/api/orders"` · `see no requests "/x"` | Count the requests the app made |
+| `clear recorded requests` | `clear recorded requests` | Forget what was recorded so far |
 
 ## AI-Powered Assertions
 

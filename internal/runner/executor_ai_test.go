@@ -84,6 +84,10 @@ func (f *fakeAIClient) VerifyBrowser(ctx context.Context) error                 
 func (f *fakeAIClient) SetNextToken(ctx context.Context, token string) error          { return nil }
 func (f *fakeAIClient) OpenLink(ctx context.Context, url string) error                { return nil }
 func (f *fakeAIClient) SetTimeDilation(ctx context.Context, factor float64) error     { return nil }
+func (f *fakeAIClient) HTTPLog(ctx context.Context, p probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
+	return probelink.HTTPLogResult{}, nil
+}
+func (f *fakeAIClient) HTTPClear(ctx context.Context, mocks bool) error { return nil }
 func (f *fakeAIClient) DrainOutput(ctx context.Context) (map[string]string, error)    { return nil, nil }
 
 // fakeVisionProvider is a scripted ai.VisionProvider — no network calls.

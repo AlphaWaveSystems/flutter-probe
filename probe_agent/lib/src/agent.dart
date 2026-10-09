@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'advertiser.dart';
+import 'http_capture.dart';
 import 'relay_client.dart';
 import 'server.dart';
 
@@ -99,6 +100,9 @@ class ProbeAgent {
 
   static Future<void> _startInternal(int port, ProbeAdvertiser? advertiser) async {
     if (_server != null || _relayClient != null) return; // already running
+
+    // Record the app's dart:io HTTP traffic and make `mock` effective (HttpClients created from here on).
+    ProbeHttpOverrides.install();
 
     const relayUrl = String.fromEnvironment('PROBE_RELAY_URL', defaultValue: '');
     const relayToken = String.fromEnvironment('PROBE_RELAY_TOKEN', defaultValue: '');
