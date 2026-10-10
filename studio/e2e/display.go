@@ -82,6 +82,14 @@ func (d Display) contains(main Display, x, y int) bool {
 	return x >= left && x < left+int(d.W) && y >= top && y < top+int(d.H)
 }
 
+// clickArg is the cliclick argument for a left click at an absolute screen
+// point. The `=` prefix matters: cliclick reads a bare negative number (any
+// point on a display left of or above the main one) as a move RELATIVE to the
+// pointer, so without it every click on display 2 lands somewhere else.
+func clickArg(x, y int) string {
+	return fmt.Sprintf("c:=%d,=%d", x, y)
+}
+
 // moveWindowToDisplay places the window of process whose name starts with
 // namePrefix (empty = window 1) on the chosen display with a small inset, then
 // reads its position back and fails if it did not land there. A no-op on the

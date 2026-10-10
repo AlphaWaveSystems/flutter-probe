@@ -361,7 +361,7 @@ func (s *Studio) Click(x, y int) error {
 	}
 	time.Sleep(150 * time.Millisecond)
 	if path, err := exec.LookPath("cliclick"); err == nil {
-		if out, err := exec.Command(path, fmt.Sprintf("c:%d,%d", x, y)).CombinedOutput(); err != nil {
+		if out, err := exec.Command(path, clickArg(x, y)).CombinedOutput(); err != nil {
 			return fmt.Errorf("cliclick: %v: %s", err, strings.TrimSpace(string(out)))
 		}
 		return nil

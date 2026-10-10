@@ -148,7 +148,7 @@ end tell`, s.Name, s.Name)
 	}
 	cx, cy := x+int(float64(w)*fx), y+int(float64(h)*fy)
 	if path, err := exec.LookPath("cliclick"); err == nil {
-		if out, err := exec.Command(path, fmt.Sprintf("c:%d,%d", cx, cy)).CombinedOutput(); err != nil {
+		if out, err := exec.Command(path, clickArg(cx, cy)).CombinedOutput(); err != nil {
 			return fmt.Errorf("cliclick: %v: %s", err, out)
 		}
 		return nil
