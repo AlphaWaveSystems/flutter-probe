@@ -415,7 +415,8 @@ line-step  = tap-native-step | tap-step | type-native-step | type-step
            | store-step | read-ai-step | deliver-signal-step
            | biometric-step | enroll-biometric-step
            | http-call-step | wait-response-step | see-response-step | store-response-step
-           | see-requests-step | clear-requests-step | recipe-call-step ;
+           | see-requests-step | clear-requests-step
+           | start-measuring-step | stop-measuring-step | see-metric-step | recipe-call-step ;
 
 timed-step = line-step , "within" , ( INT | FLOAT ) , ( "seconds" | "second" | "s" | "ms" | "milliseconds" ) ;
              (* a line-step except recipe-call-step, with its own time budget *)
@@ -461,6 +462,8 @@ The first matching row wins.
 | `see` followed by `response` and a response reference; `see exactly N request(s)` / `see no request(s)` and a reference | `see-response-step`, `see-requests-step` (before the other `see` forms) |
 | `store` followed by `response` and a response reference | `store-response-step` |
 | `clear recorded request(s)` | `clear-requests-step` |
+| `start measuring` / `stop measuring` | `start-measuring-step` / `stop-measuring-step` |
+| `see` followed by a performance phrase (`memory below`, `cpu below`, `slow frames below`, ...) and a number | `see-metric-step` (before the other `see` forms) |
 | `if`, `repeat`, `retry`, `run`, `when`, `travel` | `if-step`, `repeat-step`, `retry-step`, `dart-step`, `mock-step`, `travel-step` |
 | an empty line (NEWLINE) | nothing (ignored) |
 | anything else, including `press`, `pinch`, `sync` outside composite tests, unknown words | `recipe-call-step` |
@@ -1037,6 +1040,43 @@ test "time budgets"
   see "Done" within 500 ms
 ```
 
+### Performance
+
+```ebnf
+start-measuring-step = "start" , "measuring" , [ STRING ] ;
+stop-measuring-step  = "stop" , "measuring" ;
+see-metric-step      = "see" , metric-phrase , number , [ unit ] ;
+metric-phrase = "memory" , "below"                  (* peak memory of the app, MB *)
+              | "memory" , "growth" , "below"       (* memory at the end minus at the start, MB *)
+              | "cpu" , "below"                     (* average CPU, percent of one core *)
+              | "cpu" , "peak" , "below"            (* busiest second *)
+              | "slow" , "frames" , "below"         (* percent of frames over 16.7 ms *)
+              | "frame" , "time" , "below"          (* 95th percentile frame time, ms *)
+              | "slowest" , "frame" , "below"       (* slowest frame, ms *)
+              | "data" , "transferred" , "below" ;  (* request + response bytes, KB *)
+unit = "MB" | "KB" | "GB" | "ms" | "percent" | "%" ;
+```
+
+`start measuring` opens a window that records, until `stop measuring`, the CPU of the app (read by the CLI from the device),
+its memory and frame timings (read by the agent) and the HTTP traffic. A `see ...` metric step checks the window that is open
+(the numbers so far) or else the last one that was closed. All limits are upper bounds. `start`, `stop`, `measuring`, `growth`,
+`peak`, `slow`, `frames`, `slowest`, `transferred` and the other words are plain words recognised only in these positions.
+
+```probe
+test "checkout stays light"
+  open the app
+  start measuring "checkout"
+  tap "Pay"
+  wait for response POST "/api/pay" status 200 within 10 seconds
+  stop measuring
+  see memory below 300 MB
+  see memory growth below 20 MB
+  see cpu below 60 percent
+  see slow frames below 5 percent
+  see data transferred below 500 KB
+  see response POST "/api/pay" below 2000 ms
+```
+
 ### Backend responses
 
 The agent records the app's `dart:io` HTTP traffic (the `http` package, dio's default adapter and most Dart clients; not
@@ -1046,6 +1086,7 @@ WebViews, `dart:html` or native SDK calls) so a test can react to what the backe
 response-ref   = [ http-method ] , fillers , STRING ;       (* GET "/api/orders", "/api/me", "/api/orders/*" *)
 http-method    = "get" | "post" | "put" | "delete" | "patch" | "head" | "options" ;
 response-check = "status" , INT
+               | "below" , number , [ "ms" | "milliseconds" | "s" | "seconds" ]       (* the response took less *)
                | "contains" , STRING
                | "json" , STRING , ( "equals" , ( STRING | number ) | "exists" ) ;
 

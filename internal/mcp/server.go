@@ -180,6 +180,15 @@ Supports the full ProbeScript syntax:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Devices:         start_device names every simulator it boots (name arg; created when
                      missing); results carry the device name and id.
+  Performance:     start measuring "checkout" ... stop measuring records memory + frames (agent
+                     0.23+), CPU (Android, iOS simulator) and the HTTP traffic of those steps; then
+                     see memory below 300 MB | see memory growth below 20 MB | see cpu below 60
+                     percent | see slow frames below 5 percent | see frame time below 16 ms | see
+                     slowest frame below 100 ms | see data transferred below 500 KB | see response
+                     "/api/x" below 800 ms. Measure profile builds (debug frames are slow). Gate
+                     regressions: probe test --perf-baseline perf.json [--perf-update-baseline]
+                     [--perf-tolerance 20]; read history with the perf_trend / perf_compare tools;
+                     get_report includes a perf array per test.
   Waiting:         steps have a timeout (--timeout, default 30s); --implicit-wait 7s retries a
                      missing target; "... within 90 seconds" gives one step its own budget
                      (wait until "X" appears within 90 seconds | wait for response ... within 5
@@ -303,6 +312,8 @@ Key flags for the flags parameter:
                                notifications: a watcher taps Allow when the alert appears)
   --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
+  --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
+  --retry-failed N            re-run a failing test up to N extra times
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
@@ -370,6 +381,32 @@ For composite multi-device tests use the composite_devices parameter.`,
 			Type: "object",
 			Properties: map[string]mcpProp{
 				"path": {Type: "string", Description: "Explicit report file path (default: most recently modified *.json in reports/)"},
+			},
+		},
+	},
+	{
+		Name: "perf_trend",
+		Description: `Show how a measured performance number changed over past runs (from reports/perf-history.jsonl, written by probe test whenever a test uses start measuring ... stop measuring). Returns one line per measurement with a sparkline, the latest value and the change since the first run. Metrics: memory, memory_growth, cpu, cpu_peak, slow_frames, frame_time, frame_max, data.`,
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"metric":  {Type: "string", Description: "memory (default) | memory_growth | cpu | cpu_peak | slow_frames | frame_time | frame_max | data"},
+				"filter":  {Type: "string", Description: "Only measurements whose key (file::test::name) contains this text"},
+				"last":    {Type: "string", Description: "How many of the latest runs to include (default 30)"},
+				"history": {Type: "string", Description: "History file (default reports/perf-history.jsonl)"},
+			},
+		},
+	},
+	{
+		Name:        "perf_compare",
+		Description: "Compare two performance baseline files (written by probe test --perf-baseline FILE --perf-update-baseline) and list every measurement that got worse by more than the tolerance in the second one. Use it to compare a branch with main.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"baseline", "candidate"},
+			Properties: map[string]mcpProp{
+				"baseline":  {Type: "string", Description: "The reference baseline file"},
+				"candidate": {Type: "string", Description: "The baseline file to check against it"},
+				"tolerance": {Type: "string", Description: "Percent a number may exceed the reference by (default 20)"},
 			},
 		},
 	},
@@ -537,6 +574,30 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.takeScreenshot(req.ID, args["name"], args["device"])
 	case "get_report":
 		return s.getReport(req.ID, args["path"])
+	case "perf_trend":
+		cmdArgs := []string{"perf", "trend"}
+		if args["metric"] != "" {
+			cmdArgs = append(cmdArgs, "--metric", args["metric"])
+		}
+		if args["filter"] != "" {
+			cmdArgs = append(cmdArgs, "--filter", args["filter"])
+		}
+		if args["last"] != "" {
+			cmdArgs = append(cmdArgs, "--last", args["last"])
+		}
+		if args["history"] != "" {
+			cmdArgs = append(cmdArgs, "--history", args["history"])
+		}
+		return s.runProbeArgs(req.ID, cmdArgs...)
+	case "perf_compare":
+		if args["baseline"] == "" || args["candidate"] == "" {
+			return errResp(req.ID, -32602, "baseline and candidate are required")
+		}
+		cmdArgs := []string{"perf", "compare", args["baseline"], args["candidate"]}
+		if args["tolerance"] != "" {
+			cmdArgs = append(cmdArgs, "--tolerance", args["tolerance"])
+		}
+		return s.runProbeArgs(req.ID, cmdArgs...)
 	case "generate_test":
 		return s.generateTest(req.ID, args["prompt"], args["output"])
 	case "init_project":
@@ -671,6 +732,14 @@ func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
 		cmdArgs = append(cmdArgs, "--composite-device", spec)
 	}
 	cmd := exec.Command(probeBin(), cmdArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	return textResp(id, string(out), err)
+}
+
+// runProbeArgs runs the probe binary with exactly these arguments and returns its output.
+func (s *Server) runProbeArgs(id any, args ...string) *mcpResponse {
+	cmd := exec.Command(probeBin(), args...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	return textResp(id, string(out), err)

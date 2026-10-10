@@ -147,6 +147,24 @@ type MockParam struct {
 	Fail    bool              `json:"fail,omitempty"` // drop the connection instead of answering
 }
 
+// PerfSnapshot is what the agent measured inside the app during a measuring window.
+type PerfSnapshot struct {
+	DurationMs    int     `json:"durationMs"`
+	Frames        int     `json:"frames"`
+	SlowFrames    int     `json:"slowFrames"`
+	SlowFramePct  float64 `json:"slowFramePct"`
+	FrameP50Ms    float64 `json:"frameP50Ms"`
+	FrameP95Ms    float64 `json:"frameP95Ms"`
+	FrameP99Ms    float64 `json:"frameP99Ms"`
+	FrameMaxMs    float64 `json:"frameMaxMs"`
+	BuildAvgMs    float64 `json:"buildAvgMs"`
+	RasterAvgMs   float64 `json:"rasterAvgMs"`
+	RSSStartBytes int64   `json:"rssStartBytes"`
+	RSSPeakBytes  int64   `json:"rssPeakBytes"`
+	RSSEndBytes   int64   `json:"rssEndBytes"`
+	Measuring     bool    `json:"measuring"`
+}
+
 // HTTPLogParams selects recorded HTTP exchanges (probe.http_log).
 type HTTPLogParams struct {
 	Method    string `json:"method,omitempty"`
@@ -170,6 +188,8 @@ type HTTPEntry struct {
 	ResponseHeaders map[string]string `json:"responseHeaders"`
 	RequestBody     string            `json:"requestBody"`
 	ResponseBody    string            `json:"responseBody"`
+	RequestBytes    int64             `json:"requestBytes"`
+	ResponseBytes   int64             `json:"responseBytes"`
 }
 
 // HTTPLogResult is the answer of probe.http_log.
@@ -267,6 +287,9 @@ const (
 	MethodMock         = "probe.mock"
 	MethodHTTPLog      = "probe.http_log"
 	MethodHTTPClear    = "probe.http_clear"
+	MethodPerfStart    = "probe.perf_start"
+	MethodPerfSnapshot = "probe.perf_snapshot"
+	MethodPerfStop     = "probe.perf_stop"
 	MethodDeviceAction = "probe.device_action"
 	MethodPing           = "probe.ping"
 	MethodSettled        = "probe.settled"   // wait for triple-signal sync

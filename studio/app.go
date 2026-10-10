@@ -22,6 +22,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -751,6 +752,8 @@ type RunResult struct {
 	Skipped  bool    `json:"skipped"`
 	Duration float64 `json:"durationMs"`
 	Error    string  `json:"error,omitempty"`
+	// Perf holds the `start measuring` windows of the test (memory, CPU, frames, network).
+	Perf []perf.Metrics `json:"perf,omitempty"`
 }
 
 // RunFile parses and executes a .probe file in-process. Per-test events are
@@ -793,6 +796,7 @@ func toRunResult(res runner.TestResult) RunResult {
 		Passed:   res.Passed,
 		Skipped:  res.Skipped,
 		Duration: float64(res.Duration.Milliseconds()),
+		Perf:     res.Perf,
 	}
 	if res.Error != nil {
 		rr.Error = res.Error.Error()

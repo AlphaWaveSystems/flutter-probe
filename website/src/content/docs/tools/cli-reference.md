@@ -10,6 +10,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe init` | Scaffold `probe.yaml` and `tests/` directory |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
+| `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
 | `probe device start` | Start an emulator/simulator. `--name` names the iOS simulator it boots (created when missing); Android emulators run under their AVD name |
 | `probe record` | Record user interactions as ProbeScript |
@@ -50,6 +51,10 @@ probe test [path] [flags]
 | `--locales <a,b,c>` | — | Run the whole suite once per language (`--locales de,ja,ar`), each in its own run with `--locale`; `-o report.json` becomes `report.de.json`, `report.ja.json`, ... and a pass/fail table per language is printed. Exit code is non-zero if any language fails |
 | `--match-loose` | `false` | Match text selectors loosely: fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms and whitespace on both sides (`Änderungen` matches `anderungen`, `Don't Allow` matches `Don’t Allow`). `defaults.match: loose` in probe.yaml sets it permanently. Ids (`#key`) are never folded |
 | `--timeout` | `30s` | Per-step timeout. A single step can override it: `... within 90 seconds`. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
+| `--perf-baseline FILE` | — | Compare every `start measuring` window with this baseline; a test whose numbers got worse than the tolerance fails. See [Performance testing](/advanced/performance/) |
+| `--perf-update-baseline` | `false` | Write this run's measurements of passing tests to the `--perf-baseline` file (default `perf-baseline.json`) |
+| `--perf-tolerance` | `20` | Percent a number may exceed its baseline by (small absolute changes are ignored) |
+| `--perf-history FILE` / `--no-perf-history` | `reports/perf-history.jsonl` | Where measurements are appended for `probe perf trend`, or turn it off |
 | `--retry-failed` | `0` (off) | Re-run a failing test up to N extra times before reporting it failed (also `defaults.retry_failed_tests`). A pass on a retry is reported with its attempt count |
 | `--implicit-wait` | `0` (off) | Retry `tap`, `type`, `long press`, `double tap`, `clear`, `drag` and plain `see` steps whose target is not on screen yet for up to this long before failing, like Maestro's implicit waiting (`--implicit-wait 7s`). `defaults.implicit_wait` in probe.yaml sets it permanently. Steps with `if visible` / `optional`, `don't see` and explicit waits are never retried |
 | `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog |

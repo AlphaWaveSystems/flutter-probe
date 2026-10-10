@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.23.0 - 2026-10-10
+
+- Added: `probe.perf_start` / `probe.perf_snapshot` / `probe.perf_stop`: frame timings (build/raster, slow-frame share, p50/p95/p99/max) from the engine's timings callback and resident memory sampled every 250 ms, between a start and a stop. `perf_stop` waits about a second for the last batch of frame timings.
+
 ## 0.22.1 - 2026-10-09
 
 - Changed: HTTP capture also redacts `x-goog-api-key`, `api-key`, `x-auth-token`, `x-access-token`, `x-amz-security-token`, `x-csrf-token`, `x-xsrf-token` headers and the values of credential query parameters (`key`, `api_key`, `access_token`, `token`, `id_token`, `refresh_token`, `auth`, `secret`, `password`, `sig`, `signature`) in logged URLs (reported by a user review of 0.22.0).

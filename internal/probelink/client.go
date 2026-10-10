@@ -642,6 +642,32 @@ func (c *Client) HTTPClear(ctx context.Context, mocks bool) error {
 	return err
 }
 
+func (c *Client) PerfStart(ctx context.Context) error {
+	_, err := c.Call(ctx, MethodPerfStart, nil)
+	return err
+}
+
+func (c *Client) PerfSnapshot(ctx context.Context) (PerfSnapshot, error) {
+	return c.perf(ctx, MethodPerfSnapshot)
+}
+
+// PerfStop returns the final numbers of the measuring window and closes it.
+func (c *Client) PerfStop(ctx context.Context) (PerfSnapshot, error) {
+	return c.perf(ctx, MethodPerfStop)
+}
+
+func (c *Client) perf(ctx context.Context, method string) (PerfSnapshot, error) {
+	raw, err := c.Call(ctx, method, nil)
+	if err != nil {
+		return PerfSnapshot{}, err
+	}
+	var s PerfSnapshot
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return PerfSnapshot{}, err
+	}
+	return s, nil
+}
+
 func (c *Client) RegisterMock(ctx context.Context, m MockParam) error {
 	_, err := c.Call(ctx, MethodMock, m)
 	return err

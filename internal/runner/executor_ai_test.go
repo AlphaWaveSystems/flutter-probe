@@ -87,6 +87,13 @@ func (f *fakeAIClient) SetTimeDilation(ctx context.Context, factor float64) erro
 func (f *fakeAIClient) HTTPLog(ctx context.Context, p probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
 	return probelink.HTTPLogResult{}, nil
 }
+func (f *fakeAIClient) PerfStart(ctx context.Context) error { return nil }
+func (f *fakeAIClient) PerfSnapshot(ctx context.Context) (probelink.PerfSnapshot, error) {
+	return probelink.PerfSnapshot{}, nil
+}
+func (f *fakeAIClient) PerfStop(ctx context.Context) (probelink.PerfSnapshot, error) {
+	return probelink.PerfSnapshot{}, nil
+}
 func (f *fakeAIClient) HTTPClear(ctx context.Context, mocks bool) error { return nil }
 func (f *fakeAIClient) DrainOutput(ctx context.Context) (map[string]string, error)    { return nil, nil }
 

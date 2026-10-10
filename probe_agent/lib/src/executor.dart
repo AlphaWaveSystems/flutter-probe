@@ -15,6 +15,7 @@ import 'agent_version.dart';
 import 'biometric.dart' as biometric;
 import 'finder.dart';
 import 'http_capture.dart';
+import 'perf.dart';
 import 'protocol.dart';
 import 'recorder.dart';
 import 'signal.dart' as signal_lib;
@@ -265,6 +266,21 @@ class ProbeExecutor {
       case ProbeMethods.mock:
         _registerMock(req.params);
         return {'ok': true};
+
+      // ---- Performance measuring window ----
+      case ProbeMethods.perfStart:
+        ProbePerf.instance.start();
+        return {'ok': true};
+
+      case ProbeMethods.perfSnapshot:
+        return ProbePerf.instance.snapshot();
+
+      case ProbeMethods.perfStop:
+        // The engine hands frame timings over in batches (about once a second): wait for the last one.
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        final result = ProbePerf.instance.snapshot();
+        ProbePerf.instance.stopWindow();
+        return result;
 
       case ProbeMethods.httpLog:
         return _httpLog(req.params);

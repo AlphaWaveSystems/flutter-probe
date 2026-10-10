@@ -10,6 +10,7 @@ Go packages behind the `probe` CLI and `probe-mcp`.
 | `device`, `ios` | adb / simctl / devicectl management, permissions |
 | `textfold` | Dependency-free text folding for loose, language-tolerant matching (case, accents, apostrophes, whitespace); the Dart agent has a tested mirror |
 | `device`, `ios` | Device lifecycle; simulators/emulators are always named (`StartIOSNamed`, `simctl create/rename`, AVD names) and results carry the device name + id |
+| `perf` | Performance measurements: CPU sampler (Android /proc, iOS simulator ps), metrics, baselines, history, trends |
 | `runner` (http_steps.go) | Backend statements: `wait for response`, `see response`, `store response`, `if response`, request counts, mock re-apply after restarts |
 | `l10n` | ARB catalog behind `l10n "key"` (language fallback, key validation, lexer marker) |
 | `locale` | Language tag parsing for `set language`, `--locale`, `--locales` (BCP-47/POSIX forms, RTL) |

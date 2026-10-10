@@ -292,6 +292,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   padding: 3px 12px;
   display: flex; align-items: center; gap: 6px;
 }
+#results-list li.perf { color: var(--fg-muted); font-size: 12px; font-family: monospace; padding-left: 28px; }
 #results-list li.empty { color: var(--fg-muted); padding: 12px; font-style: italic; }
 #results-list li .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 #results-list li.pass .dot { background: var(--pass); }

@@ -233,6 +233,8 @@ func describeCheck(c parser.ResponseCheck) string {
 		return fmt.Sprintf("json %q equals %q", c.Text, c.Equals)
 	case parser.CheckJSONExists:
 		return fmt.Sprintf("json %q exists", c.Text)
+	case parser.CheckTime:
+		return fmt.Sprintf("below %d ms", c.Status)
 	}
 	return ""
 }
@@ -242,6 +244,8 @@ func checkResponse(en probelink.HTTPEntry, c parser.ResponseCheck) (bool, string
 	switch c.Kind {
 	case parser.CheckStatus:
 		return en.Status == c.Status, strconv.Itoa(en.Status)
+	case parser.CheckTime:
+		return en.DurationMs < c.Status, fmt.Sprintf("%d ms", en.DurationMs)
 	case parser.CheckContains:
 		return strings.Contains(en.ResponseBody, c.Text), "a body without it"
 	case parser.CheckJSONExists:

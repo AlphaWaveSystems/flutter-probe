@@ -41,6 +41,8 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | Tool | Description |
 |---|---|
 | `get_report` | Read the most recently modified JSON test run report |
+| `perf_trend` | Show how a measured performance number (memory, CPU, frames, data) changed over past runs |
+| `perf_compare` | Compare two performance baseline files and list what got worse |
 | `generate_report` | Generate a standalone HTML report from a JSON results file |
 | `generate_test` | AI-generate a `.probe` test from a natural language prompt |
 | `system_dialog` | List, see, tap, dismiss or wait for OS system dialogs (permission alerts, the iOS share sheet, StoreKit sign-in) on a simulator/emulator; `sign-in-sandbox` provisions the StoreKit tester. Typing is deliberately not exposed (secrets) |

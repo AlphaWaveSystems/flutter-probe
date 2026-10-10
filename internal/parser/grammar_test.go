@@ -207,6 +207,8 @@ func describe(s parser.Step) string {
 		return "system_dialog:" + string(v.Op)
 	case parser.ConditionalStep:
 		return "if"
+	case parser.PerfStep:
+		return "perf:" + string(v.Kind)
 	case parser.TimedStep:
 		return "timed(" + describe(v.Inner) + ")"
 	case parser.HTTPStep:
@@ -744,6 +746,10 @@ var grammarProductionExamples = []productionExample{
 		want: []string{"action:grant_all_permissions", "action:revoke_all_permissions", "action:grant_all_permissions"}},
 	{production: "copy-step", src: testBody(`copy "text" to clipboard`, `copy "text"`), want: repeat("action:copy_clipboard", 2)},
 	{production: "paste-step", src: testBody(`paste from clipboard`, `paste`), want: repeat("action:paste_clipboard", 2)},
+	{production: "start-measuring-step", src: testBody(`start measuring "checkout"`, `start measuring`), want: repeat("perf:start", 2)},
+	{production: "stop-measuring-step", src: testBody(`stop measuring`), want: []string{"perf:stop"}},
+	{production: "see-metric-step", src: testBody(`see memory below 300 MB`, `see memory growth below 20 MB`, `see cpu below 60 percent`, `see cpu peak below 90 percent`, `see slow frames below 5 percent`, `see frame time below 16 ms`, `see slowest frame below 100 ms`, `see data transferred below 2 MB`),
+		want: repeat("perf:check", 8)},
 	{production: "timed-step", src: testBody(`tap "Go" within 2 seconds`, `wait until "Done" appears within 90 seconds`, `see "Y" within 500 ms`, `wait for response "/x" within 5 s`),
 		want: []string{"timed(action:tap)", "timed(wait:appears)", "timed(assert)", "timed(http:wait_response)"}},
 	{production: "wait-response-step", src: testBody(`wait for response GET "/api/orders"`, `wait for response "/api/me" status 200`, `wait response patch "/x"`),

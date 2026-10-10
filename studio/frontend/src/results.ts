@@ -12,7 +12,32 @@ type RunResult = {
   skipped: boolean;
   durationMs: number;
   error?: string;
+  perf?: PerfMetrics[];
 };
+
+// One `start measuring ... stop measuring` window (field names follow internal/perf.Metrics).
+type PerfMetrics = {
+  name: string;
+  duration_ms: number;
+  cpu_available: boolean;
+  cpu_avg_pct: number;
+  cpu_peak_pct: number;
+  mem_peak_mb: number;
+  mem_growth_mb: number;
+  frames: number;
+  slow_frame_pct: number;
+  frame_p95_ms: number;
+  requests: number;
+  data_kb: number;
+};
+
+function describePerf(m: PerfMetrics): string {
+  const parts = [`memory ${m.mem_peak_mb.toFixed(0)} MB (${m.mem_growth_mb >= 0 ? "+" : ""}${m.mem_growth_mb.toFixed(1)})`];
+  if (m.cpu_available) parts.push(`cpu ${m.cpu_avg_pct.toFixed(0)}% avg / ${m.cpu_peak_pct.toFixed(0)}% peak`);
+  if (m.frames > 0) parts.push(`${m.frames} frames, ${m.slow_frame_pct.toFixed(1)}% slow, p95 ${m.frame_p95_ms.toFixed(1)} ms`);
+  if (m.requests > 0) parts.push(`${m.requests} requests, ${m.data_kb.toFixed(1)} KB`);
+  return `${m.name || "measurement"}: ${parts.join("; ")}`;
+}
 
 let listEl: HTMLElement | null = null;
 let summaryEl: HTMLElement | null = null;
@@ -77,6 +102,13 @@ function appendResult(res: RunResult): void {
   li.appendChild(name);
   li.appendChild(duration);
   listEl.appendChild(li);
+
+  for (const m of res.perf ?? []) {
+    const perfLi = document.createElement("li");
+    perfLi.classList.add("perf");
+    perfLi.textContent = `⏱ ${describePerf(m)}`;
+    listEl.appendChild(perfLi);
+  }
 
   if (res.error) {
     const errLi = document.createElement("li");

@@ -412,6 +412,10 @@ notifications have no simctl service, so probe answers the system alert itself: 
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
 (needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
 
+### Performance testing
+
+`start measuring "checkout"` ... `stop measuring`, then `see memory below 300 MB`, `see cpu below 60 percent`, `see slow frames below 5 percent`, `see data transferred below 500 KB`, `see response "/api/pay" below 2000 ms`. Memory and frames come from the agent (0.23+, all devices), CPU from Android and iOS simulators, network from the recorded HTTP traffic. Gate regressions with `probe test --perf-baseline perf-baseline.json` (`--perf-update-baseline` writes it), watch `probe perf trend`. Guide: [Performance testing](https://flutterprobe.dev/advanced/performance/).
+
 ### Timeouts, waiting and retries
 
 One system for "not there yet": the step timeout (`--timeout`), `--implicit-wait 7s` for the whole run, a per-step budget (`wait until "Report ready" appears within 90 seconds`), `optional` / `if visible` / `if "X" appears` to fail gracefully, `retry 3 times` blocks and `defaults.retry_failed_tests`. Guide: [Timeouts, waiting and retries](https://flutterprobe.dev/advanced/timeouts-and-retries/).
@@ -588,7 +592,7 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
-| Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog` |
+| Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `record` |
 
 Every CLI feature is accessible from MCP. Key capabilities an agent can use:

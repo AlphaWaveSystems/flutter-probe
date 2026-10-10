@@ -39,6 +39,9 @@ type ProbeClient interface {
 	RegisterMock(ctx context.Context, m MockParam) error
 	HTTPLog(ctx context.Context, p HTTPLogParams) (HTTPLogResult, error)
 	HTTPClear(ctx context.Context, mocks bool) error
+	PerfStart(ctx context.Context) error
+	PerfSnapshot(ctx context.Context) (PerfSnapshot, error)
+	PerfStop(ctx context.Context) (PerfSnapshot, error)
 	DeviceAction(ctx context.Context, action, value string) error
 	SaveLogs(ctx context.Context) error
 	CopyToClipboard(ctx context.Context, text string) error

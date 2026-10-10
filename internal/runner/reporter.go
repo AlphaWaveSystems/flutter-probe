@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -94,6 +95,7 @@ func (r *Reporter) StreamResult(res TestResult) {
 		Row:        res.Row,
 		DeviceID:   res.DeviceID,
 		DeviceName: res.DeviceName,
+		Perf:       res.Perf,
 	}
 	if res.Attempts > 1 {
 		jr.Attempts = res.Attempts
@@ -275,6 +277,7 @@ type jsonResult struct {
 	Artifacts  []string `json:"artifacts,omitempty"`
 	DeviceID   string   `json:"device_id,omitempty"`
 	DeviceName string   `json:"device_name,omitempty"`
+	Perf       []perf.Metrics `json:"perf,omitempty"` // `start measuring` windows of the test
 	Attempts   int      `json:"attempts,omitempty"` // only when a failed test was re-run (retry_failed_tests)
 }
 
@@ -304,6 +307,7 @@ func (r *Reporter) writeJSON(results []TestResult) error {
 			Row:        res.Row,
 			DeviceID:   res.DeviceID,
 			DeviceName: res.DeviceName,
+			Perf:       res.Perf,
 		}
 		if res.Attempts > 1 {
 			jr.Attempts = res.Attempts
