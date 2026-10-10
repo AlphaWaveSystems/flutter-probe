@@ -21,7 +21,10 @@ passed.
 1. **Merge.** A PR merges only after CI and the `review-agent.yml` check pass.
    The review agent runs an automated review and submits an approving review
    on a clean verdict; without a configured reviewer it fails closed and the PR
-   waits for a human.
+   waits for a human. It only reviews same-repository branches from owners,
+   members and collaborators, reviews the diff (never a checkout of the PR
+   branch) as untrusted input, and fails a branch that is behind `main` so a
+   stale branch cannot silently revert what `main` merged since.
 2. **Canary.** Tagging `vX.Y.Z-next.N` publishes a GitHub pre-release, the
    `probe@next` Homebrew formula and pre-release Dart packages. The stable
    formula is untouched.
