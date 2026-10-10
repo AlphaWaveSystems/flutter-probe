@@ -375,12 +375,13 @@
         "flutterprobe.cloudProvider": {
           "type": "string",
           "default": "",
-          "enum": ["", "browserstack", "saucelabs", "lambdatest", "aws", "firebase"],
+          "enum": ["", "browserstack", "saucelabs", "lambdatest", "testingbot", "aws", "firebase"],
           "enumDescriptions": [
             "None (local testing)",
             "BrowserStack App Automate",
             "Sauce Labs Real Device Cloud",
             "LambdaTest Real Devices",
+            "TestingBot Real Device Cloud",
             "AWS Device Farm",
             "Firebase Test Lab"
           ],

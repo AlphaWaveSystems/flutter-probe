@@ -196,7 +196,7 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `cloudProvider` | | Provider: `browserstack`, `saucelabs`, `lambdatest`, `aws`, `firebase` |
+| `cloudProvider` | | Provider: `browserstack`, `saucelabs`, `lambdatest`, `testingbot`, `aws`, `firebase` |
 | `cloudDevice` | | Device string (e.g., `Google Pixel 7-13.0`) |
 | `cloudApp` | | Path to `.apk` or `.ipa` binary |
 | `cloudKey` | | Username or Access Key ID |
@@ -240,6 +240,13 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 1. Sign up at [lambdatest.com](https://www.lambdatest.com)
 2. Go to **Settings** > **Account Settings** for credentials
 3. Configure with `"flutterprobe.cloudProvider": "lambdatest"`
+
+### TestingBot
+
+1. Sign up at [testingbot.com](https://testingbot.com)
+2. Go to **Account** > **Credentials** for your key and secret
+3. Configure with `"flutterprobe.cloudProvider": "testingbot"`, putting the key
+   in `cloudKey` and the secret in `cloudSecret`
 
 ### AWS Device Farm
 

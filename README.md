@@ -812,6 +812,7 @@ Run tests on real devices without managing your own device lab. Bring your own a
 | BrowserStack App Automate | `browserstack` |
 | Sauce Labs Real Device Cloud | `saucelabs` |
 | LambdaTest Real Devices | `lambdatest` |
+| TestingBot Real Device Cloud | `testingbot` |
 | AWS Device Farm | `aws` |
 | Firebase Test Lab | `firebase` |
 

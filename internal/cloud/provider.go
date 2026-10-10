@@ -78,8 +78,10 @@ func NewProvider(name string, creds map[string]string) (CloudProvider, error) {
 		return newSauceLabs(creds)
 	case "lambdatest":
 		return newLambdaTest(creds)
+	case "testingbot":
+		return newTestingBot(creds)
 	default:
-		return nil, fmt.Errorf("unknown cloud provider %q (supported: browserstack, aws, firebase, saucelabs, lambdatest)", name)
+		return nil, fmt.Errorf("unknown cloud provider %q (supported: browserstack, aws, firebase, saucelabs, lambdatest, testingbot)", name)
 	}
 }
 
@@ -107,7 +109,7 @@ func DetectPlatform(device string) string {
 }
 
 // validProviders lists all supported provider names for validation and help text.
-var validProviders = []string{"browserstack", "aws", "firebase", "saucelabs", "lambdatest"}
+var validProviders = []string{"browserstack", "aws", "firebase", "saucelabs", "lambdatest", "testingbot"}
 
 // ValidProviders returns the list of supported cloud provider names.
 func ValidProviders() []string {

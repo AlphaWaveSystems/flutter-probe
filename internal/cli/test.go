@@ -155,7 +155,7 @@ func init() {
 	f.String("cloud-url", "", "cloud API base URL (must be set via this flag or cloud.url in probe.yaml)")
 
 	// Cloud device farm providers
-	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, firebase, saucelabs, lambdatest)")
+	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, firebase, saucelabs, lambdatest, testingbot)")
 	f.String("cloud-app", "", "path to app binary (.apk/.ipa) to upload to cloud provider")
 	f.String("cloud-device", "", "target device name on the cloud provider")
 	f.String("cloud-key", "", "cloud provider API key or username")
