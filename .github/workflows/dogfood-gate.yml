@@ -1,0 +1,80 @@
+name: Dogfood gate
+
+# Runs a canary against the fixture apps and then against an internal dogfood
+# app before it may be promoted to stable. Two consecutive green gates on two
+# days are the 48-hour soak. See docs/ops/release-pipeline.md.
+#
+# Stage 2 (fixture suite) needs a self-hosted macOS runner labelled
+# `dogfood-mac` with Xcode, an iOS simulator and an Android emulator. Until one
+# is registered the job is skipped and the gate must be reported manually via
+# the `dogfood/passed` or `dogfood/failed` label on the release issue.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Canary version to gate (e.g. 0.24.0-next.1)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+concurrency:
+  group: dogfood-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  fixtures:
+    name: Fixture suite on named devices
+    # The runner label is the only coupling; nothing here names the dogfood app.
+    runs-on: [self-hosted, macOS, dogfood-mac]
+    if: vars.DOGFOOD_RUNNER_READY == 'true'
+    timeout-minutes: 180
+    env:
+      PROBE_VERSION: ${{ inputs.version }}
+      PROBE_AGENT_NO_UPGRADE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned canary
+        run: |
+          mkdir -p "$HOME/.local/probe-${PROBE_VERSION}"
+          curl -fsSL -o "$HOME/.local/probe-${PROBE_VERSION}/probe" \
+            "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v${PROBE_VERSION}/probe-darwin-arm64"
+          chmod +x "$HOME/.local/probe-${PROBE_VERSION}/probe"
+          "$HOME/.local/probe-${PROBE_VERSION}/probe" version
+      - name: Fixture twin-app suite
+        run: |
+          export PATH="$HOME/.local/probe-${PROBE_VERSION}:$PATH"
+          scripts/test-all.sh
+      - name: Internal dogfood app gate
+        # Each dogfood app registers itself by placing a runnable at this path on
+        # the runner; the repo never names it. Exit code is the gate result.
+        run: |
+          export PATH="$HOME/.local/probe-${PROBE_VERSION}:$PATH"
+          if [ -x "$HOME/dogfood/gate.sh" ]; then "$HOME/dogfood/gate.sh" "${PROBE_VERSION}"; else echo "no dogfood gate registered on this runner"; exit 1; fi
+
+  request-manual-gate:
+    name: Request manual gate
+    if: vars.DOGFOOD_RUNNER_READY != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update the gate request issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          title="dogfood: gate request for ${VERSION}"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --search "$title in:title" --state open --json number --jq '.[0].number')
+          body="No self-hosted dogfood runner is registered. Run the fixture suite and the internal dogfood gate against \`${VERSION}\` locally, then add the label \`dogfood/passed\` or \`dogfood/failed\` with the failing test names. Two passes on consecutive days complete the soak."
+          if [ -z "$existing" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label "dogfood/pending"
+          else
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Gate requested again for ${VERSION}."
+          fi

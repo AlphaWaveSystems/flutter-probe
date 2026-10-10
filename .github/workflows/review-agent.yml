@@ -1,0 +1,81 @@
+name: Review agent
+
+# Automated code review that stands in for a human approval. When the
+# ANTHROPIC_API_KEY secret is present it runs Claude Code headless over the
+# diff; a verdict of APPROVE submits an approving review, anything else requests
+# changes with the findings. Without the secret the job fails closed and asks
+# for a human review, so an unreviewed PR can never merge.
+#
+# Branch protection must list this check as required and allow the
+# github-actions app's review to count (see docs/ops/release-pipeline.md).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fail closed without a reviewer key
+        if: env.KEY == ''
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "::error::ANTHROPIC_API_KEY is not configured; a human must review this PR."
+          exit 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Review the diff
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff "$BASE"...HEAD > pr.diff
+          cat > prompt.txt <<'EOF'
+          You are the release review agent for this repository. Review the diff in pr.diff
+          against the repository conventions (CLAUDE.md, CONTRIBUTING.md, the ProbeScript
+          grammar rule: every parser change must update the EBNF docs and conformance test;
+          every CLI feature must update MCP tool descriptions and docs; CHANGELOG must be
+          updated). Look for correctness bugs, silent failures, missing tests, secrets, and
+          credential-redaction regressions in HTTP capture.
+          Output exactly one line first: VERDICT: APPROVE or VERDICT: REQUEST_CHANGES,
+          then a markdown list of findings with file:line references.
+          EOF
+          claude -p "$(cat prompt.txt)" --allowedTools "Read,Grep,Glob" --output-format text > review.md
+          verdict=$(grep -m1 '^VERDICT:' review.md | awk '{print $2}')
+          echo "verdict=${verdict:-REQUEST_CHANGES}" >> "$GITHUB_OUTPUT"
+
+      - name: Submit review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          body=$(cat review.md)
+          if [ "${{ steps.review.outputs.verdict }}" = "APPROVE" ]; then
+            gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve --body "$body"
+          else
+            gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --request-changes --body "$body"
+            exit 1
+          fi
