@@ -1,0 +1,81 @@
+name: Auto-rollback
+
+# When an issue is labelled `prod-incident` within 24 hours of the latest stable
+# release, the previous stable release is re-published as the current one:
+# the Homebrew formula and the GitHub "latest" marker move back, and the
+# incident issue gets a comment. Tags are never deleted or moved.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  rollback:
+    if: github.event.label.name == 'prod-incident'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to roll back
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Stable releases only (no pre-release flag, no -next suffix).
+          releases=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 --json tagName,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isPrerelease == false and (.tagName | test("-next") | not))] | sort_by(.publishedAt) | reverse')
+          current=$(echo "$releases" | jq -r '.[0].tagName')
+          current_at=$(echo "$releases" | jq -r '.[0].publishedAt')
+          previous=$(echo "$releases" | jq -r '.[1].tagName // empty')
+          age=$(( $(date +%s) - $(date -d "$current_at" +%s) ))
+          echo "current=$current previous=$previous age=${age}s"
+          if [ -z "$previous" ] || [ "$age" -gt 86400 ]; then
+            echo "rollback=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "rollback=true" >> "$GITHUB_OUTPUT"
+            echo "current=$current" >> "$GITHUB_OUTPUT"
+            echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mark previous release as latest
+        if: steps.decide.outputs.rollback == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "${{ steps.decide.outputs.previous }}" --repo "$GITHUB_REPOSITORY" --latest
+          gh release edit "${{ steps.decide.outputs.current }}" --repo "$GITHUB_REPOSITORY" --prerelease \
+            --notes "Rolled back: a prod-incident (#${{ github.event.issue.number }}) was filed within 24h. Current stable is ${{ steps.decide.outputs.previous }}."
+
+      - name: Restore previous Homebrew formula
+        if: steps.decide.outputs.rollback == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          PREVIOUS: ${{ steps.decide.outputs.previous }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/AlphaWaveSystems/homebrew-tap.git"
+          cd homebrew-tap
+          git config user.name "Patrick Bertsch"
+          git config user.email "patrick@alphawavesystems.com"
+          commit=$(git log --format=%H --grep="update probe to ${PREVIOUS}" -n 1)
+          if [ -z "$commit" ]; then echo "no tap commit for ${PREVIOUS}; manual restore needed"; exit 1; fi
+          git checkout "$commit" -- Formula/probe.rb
+          git commit -m "chore: roll back probe to ${PREVIOUS} (prod-incident)"
+          git push
+
+      - name: Comment on the incident
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.decide.outputs.rollback }}" = "true" ]; then
+            msg="Auto-rollback: ${{ steps.decide.outputs.current }} was released less than 24h ago, so ${{ steps.decide.outputs.previous }} is stable again (GitHub latest + Homebrew). pub.dev cannot be unpublished; pin the agent to the previous version until a fix ships."
+          else
+            msg="Auto-rollback not triggered: the latest stable release is older than 24h or there is no previous release. A hotfix release is the path forward."
+          fi
+          gh issue comment "${{ github.event.issue.number }}" --repo "$GITHUB_REPOSITORY" --body "$msg"

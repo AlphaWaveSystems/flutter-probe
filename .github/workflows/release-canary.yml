@@ -1,0 +1,149 @@
+name: Release (canary)
+
+# A canary is a pre-release tag `vX.Y.Z-next.N`. It builds the CLI, publishes a
+# GitHub pre-release, updates the Homebrew `probe@next` formula and publishes
+# the Dart packages as pre-releases. Nothing touches the stable formula or the
+# stable pub.dev versions. Promotion to stable is a separate stable tag that
+# runs release.yml after the dogfood gate (see docs/ops/release-pipeline.md).
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+-next.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+      - name: Build binaries
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          go build -ldflags "-s -w -X github.com/alphawavesystems/flutter-probe/internal/cli.Version=${VERSION}" -o "probe-${GOOS}-${GOARCH}" ./cmd/probe/
+          go build -ldflags "-s -w -X main.Version=${VERSION}" -o "probe-mcp-${GOOS}-${GOARCH}" ./cmd/probe-mcp/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            probe-${{ matrix.goos }}-${{ matrix.goarch }}
+            probe-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  prerelease:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          prerelease: true
+          body: |
+            Canary build ${{ github.ref_name }}. Install with `brew install AlphaWaveSystems/tap/probe@next`.
+            Not promoted to stable until the dogfood gate passes.
+          files: artifacts/*
+
+  homebrew-next:
+    name: Update Homebrew probe@next
+    needs: prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Write probe@next formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sha() { shasum -a 256 "artifacts/$1" | awk '{print $1}'; }
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/AlphaWaveSystems/homebrew-tap.git"
+          cd homebrew-tap
+          git config user.name "Patrick Bertsch"
+          git config user.email "patrick@alphawavesystems.com"
+          cat > "Formula/probe@next.rb" <<EOF
+          class ProbeATNext < Formula
+            desc "E2E testing CLI for Flutter apps using ProbeScript (canary channel)"
+            homepage "https://flutterprobe.dev"
+            version "${VERSION}"
+            license "BUSL-1.1"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v#{version}/probe-darwin-arm64"
+                sha256 "$(sha probe-darwin-arm64)"
+              end
+              on_intel do
+                url "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v#{version}/probe-darwin-amd64"
+                sha256 "$(sha probe-darwin-amd64)"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v#{version}/probe-linux-amd64"
+                sha256 "$(sha probe-linux-amd64)"
+              end
+            end
+
+            conflicts_with "probe", because: "both install a probe binary"
+
+            def install
+              if OS.mac?
+                bin.install((Hardware::CPU.arm? ? "probe-darwin-arm64" : "probe-darwin-amd64") => "probe")
+              else
+                bin.install "probe-linux-amd64" => "probe"
+              end
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/probe version")
+            end
+          end
+          EOF
+          git add "Formula/probe@next.rb"
+          git commit -m "chore: probe@next ${VERSION}"
+          git push
+
+  pub-dev-prerelease:
+    name: Publish Dart packages (pre-release)
+    needs: prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - uses: flutter-actions/setup-flutter@v4
+        with:
+          channel: stable
+      - name: Publish flutter_probe_agent pre-release
+        working-directory: probe_agent
+        run: |
+          # The pubspec version must already carry the -next.N suffix (set by the
+          # release script); pub.dev treats it as a pre-release automatically.
+          ver=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          case "$ver" in *-next.*) ;; *) echo "pubspec version $ver is not a canary; skipping"; exit 0;; esac
+          dart pub get
+          dart pub publish --dry-run
+          dart pub publish -f
