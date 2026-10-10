@@ -48,6 +48,46 @@ passed.
    never moved or deleted. pub.dev packages cannot be unpublished; pin the
    agent to the previous version until the hotfix ships.
 
+## Review agent providers
+
+The repository variable `REVIEW_PROVIDER` selects who reviews (default `oauth`).
+Whatever the mode, a missing credential fails the check; it is never skipped.
+
+| `REVIEW_PROVIDER` | Credential | Runs on | Can approve |
+| --- | --- | --- | --- |
+| `oauth` (default) | secret `CLAUDE_CODE_OAUTH_TOKEN`, created with `claude setup-token` | hosted runner | yes |
+| `anthropic` | secret `ANTHROPIC_API_KEY` | hosted runner | yes |
+| `local` | variable `REVIEW_LOCAL_URL` (an OpenAI-compatible endpoint; optional `REVIEW_LOCAL_MODEL`) | self-hosted `dogfood-mac` runner | **no** |
+
+`local` is an extra required pre-screen only (secrets, leaked internal names,
+CHANGELOG and docs checks). It posts no review, so a human approval is still
+required by branch protection; the check just goes red when the pre-screen
+finds something. The runner needs `git`, `gh`, `jq`, `curl` and `openssl`.
+
+How the agent stays safe, in every mode:
+
+- It reviews only branches in this repository by owners, members and
+  collaborators. Anything else fails the check (a skipped required check would
+  count as passing, so it fails instead of skipping).
+- The model has no tools. It receives one prompt: the repository conventions
+  from the trusted base commit and the diff between random markers, declared
+  untrusted. Nothing from the PR (diff, title, body, branch name) reaches a
+  shell through `${{ }}`; values pass through `env:` and are validated.
+- A credential-shaped string in the added lines fails the check before any model
+  sees the diff. Diffs over 400 KB need a human.
+- The verdict counts only as the exact first line of the reply
+  (`VERDICT: APPROVE` or `VERDICT: REQUEST_CHANGES`); anything else rejects.
+- An approval is bound to the reviewed commit, so a later push cannot inherit
+  it. The branch must contain the current tip of its base at review time and
+  again just before the review is submitted. Branch protection should also keep
+  "require branches to be up to date" and the merge queue on, which re-check
+  at merge time.
+- The Claude Code CLI version is pinned (variable `CLAUDE_CODE_VERSION`
+  overrides the default) and the actions are pinned by commit.
+- Dependabot PRs are not reviewed by this agent (their author association is
+  not trusted and Actions secrets are not exposed to them); they follow their
+  own soak workflow.
+
 ## Rules
 
 - A hotfix for a `prod-incident` may skip the soak, never the fixture suite.
@@ -60,7 +100,8 @@ passed.
 - Branch protection on `main`: required checks `CI`, `Review agent`; allow
   reviews from the `github-actions` app to satisfy the approval requirement;
   merge queue enabled.
-- Secrets: `HOMEBREW_TAP_TOKEN` (exists), `ANTHROPIC_API_KEY` (review agent).
+- Secrets: `HOMEBREW_TAP_TOKEN` (exists) and the credential for the chosen
+  review provider (below).
 - Variable `DOGFOOD_RUNNER_READY=true` once a macOS self-hosted runner with the
   `dogfood-mac` label is registered.
 - Labels: `dogfood/pending`, `dogfood/passed`, `dogfood/failed`,
