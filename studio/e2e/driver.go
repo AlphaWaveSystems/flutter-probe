@@ -120,6 +120,9 @@ func Launch(ctx context.Context, opts LaunchOptions) (*Studio, error) {
 		s.Close()
 		return nil, fmt.Errorf("studio window did not appear: %w", err)
 	}
+	// STUDIO_E2E_DISPLAY=2 keeps test windows off the main screen.
+	moveWindowToDisplay(name)
+	moveWindowToDisplay("Simulator")
 	return s, nil
 }
 
