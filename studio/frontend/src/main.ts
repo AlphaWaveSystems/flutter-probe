@@ -2,10 +2,11 @@ import "./style.css";
 import * as monaco from "monaco-editor";
 import { PROBESCRIPT_LANGUAGE_ID, registerProbeScript } from "./probescript";
 import { initDeviceStream, startStream, stopStream } from "./device-stream";
-import { initResults } from "./results";
+import { initResults, type RunPlan, type RunStep } from "./results";
 import { toast } from "./toast";
 
 import {
+  CancelRun,
   Chat,
   Connect,
   ConnectWiFi,
@@ -118,6 +119,7 @@ const editor = monaco.editor.create($("editor"), {
   automaticLayout: true,
   scrollBeyondLastLine: false,
   renderWhitespace: "boundary",
+  glyphMargin: true,
   smoothScrolling: true,
   cursorBlinking: "smooth",
   padding: { top: 12 },
@@ -793,13 +795,104 @@ $("btn-run").addEventListener("click", async () => {
   }
   const btn = $("btn-run") as HTMLButtonElement;
   btn.disabled = true;
+  setRunning(true);
   try {
     await RunFile(currentPath);
   } catch (err) {
     toast(`Run failed: ${err}`, "error", 6000);
   } finally {
+    setRunning(false);
     btn.disabled = !connected || !currentPath;
   }
+});
+
+$("btn-cancel").addEventListener("click", () => {
+  ($("btn-cancel") as HTMLButtonElement).disabled = true;
+  CancelRun();
+});
+
+// ---- Live step highlight ---------------------------------------------------
+//
+// `run:step` events carry the line of the step that is executing. The editor
+// shows a gutter glyph plus a line highlight that follows the runner; the
+// verdict (✓ / ✗ / –) stays on the line until the next run. The toolbar shows
+// "step N of M" from the `run:plan` step counts.
+
+const stepDecorations = editor.createDecorationsCollection();
+const stepState = new Map<number, { status: RunStep["status"]; error?: string }>();
+let runFilePath = "";
+let stepsDone = 0;
+let stepsTotal = 0;
+
+function setRunning(active: boolean) {
+  const cancel = $("btn-cancel") as HTMLButtonElement;
+  cancel.hidden = !active;
+  cancel.disabled = !active;
+  const progress = $("run-progress");
+  progress.hidden = !active;
+  if (!active) progress.textContent = "";
+}
+
+function renderStepDecorations() {
+  const decs: monaco.editor.IModelDeltaDecoration[] = [];
+  for (const [line, st] of stepState) {
+    const running = st.status === "started";
+    decs.push({
+      range: new monaco.Range(line, 1, line, 1),
+      options: {
+        isWholeLine: true,
+        className: running ? "step-line-running" : st.status === "failed" ? "step-line-failed" : undefined,
+        glyphMarginClassName: `step-glyph step-glyph-${running ? "running" : st.status}`,
+        glyphMarginHoverMessage: st.error ? { value: st.error } : undefined,
+        hoverMessage: st.error ? { value: st.error } : undefined,
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+    });
+  }
+  stepDecorations.set(decs);
+}
+
+function updateProgress() {
+  const progress = $("run-progress");
+  if (stepsTotal > 0) progress.textContent = `step ${Math.min(stepsDone + 1, stepsTotal)} of ${stepsTotal}`;
+  else progress.textContent = `step ${stepsDone + 1}`;
+}
+
+EventsOn("run:started", (path: string) => {
+  runFilePath = path;
+  stepState.clear();
+  stepDecorations.clear();
+  stepsDone = 0;
+  stepsTotal = 0;
+});
+
+EventsOn("run:plan", (plan: RunPlan) => {
+  stepsTotal = (plan.tests ?? []).reduce((n, t) => n + t.steps, 0);
+  updateProgress();
+});
+
+EventsOn("run:step", (s: RunStep) => {
+  // Only decorate the file that is open in the editor.
+  if (s.file !== runFilePath || s.file !== currentPath || s.line <= 0) return;
+  if (s.status === "started") {
+    stepState.set(s.line, { status: "started" });
+    editor.revealLineInCenterIfOutsideViewport(s.line);
+  } else {
+    stepState.set(s.line, { status: s.status, error: s.error });
+    if (s.depth === 0) {
+      stepsDone++;
+      updateProgress();
+    }
+  }
+  renderStepDecorations();
+});
+
+document.addEventListener("studio:goto-line", (ev) => {
+  const line = (ev as CustomEvent<number>).detail;
+  if (!line) return;
+  editor.revealLineInCenter(line);
+  editor.setPosition({ lineNumber: line, column: 1 });
+  editor.focus();
 });
 
 // ---- Recorder -----------------------------------------------------------

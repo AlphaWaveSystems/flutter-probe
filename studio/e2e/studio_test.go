@@ -351,6 +351,70 @@ func Test10_ConnectWithoutAgentReportsError(t *testing.T) {
 	})
 }
 
+// Test12: while a file runs, each step gets a row under its test; the last
+// step of the passing fixture test ends as "step pass" and the toolbar
+// progress reaches the final step count.
+func Test12_LiveStepsReachLastStep(t *testing.T) {
+	run(t, func(t *testing.T, s *Studio) {
+		connect(t, s)
+		openFile(t, s, cfg.TestFile)
+		must(t, s.ClickButton("Run"), "click run")
+		// The fixture test finishes in well under a second, so the transient
+		// "step N of M" text and the Cancel button are not asserted here; the
+		// end state is: every step row has a verdict and Cancel is hidden again.
+		// The last step of counter.probe is `see "Taps: 0"`; it must end as a passed step row.
+		must(t, s.WaitFor(ctx, 120*time.Second, func(els []Element) bool {
+			for _, e := range els {
+				l := e.Label()
+				if strings.HasPrefix(l, "step pass: ") && strings.Contains(l, `see "Taps: 0"`) {
+					return true
+				}
+			}
+			return false
+		}), "last step row passed")
+		must(t, s.WaitFor(ctx, 60*time.Second, func(els []Element) bool {
+			for _, e := range els {
+				if strings.Contains(e.Label(), "pass: "+cfg.PassName) {
+					return true
+				}
+			}
+			return false
+		}), "test verdict row")
+		// No step was left running, and the Cancel button is hidden again.
+		must(t, s.WaitFor(ctx, 15*time.Second, func(els []Element) bool { return FindButton(els, "Cancel") == nil }), "cancel hidden after run")
+		els, err := s.Elements()
+		must(t, err, "elements")
+		for _, e := range els {
+			if strings.HasPrefix(e.Label(), "step running: ") {
+				t.Fatalf("step still marked running after the run: %q", e.Label())
+			}
+		}
+	})
+}
+
+// Test13: a failing step keeps a "step fail" row that names its line and
+// carries the error.
+func Test13_FailingStepRowNamesLine(t *testing.T) {
+	if cfg.FailFile == "" {
+		t.Skip("STUDIO_E2E_FAIL_FILE unset")
+	}
+	run(t, func(t *testing.T, s *Studio) {
+		connect(t, s)
+		openFile(t, s, cfg.FailFile)
+		must(t, s.ClickButton("Run"), "click run")
+		must(t, s.WaitFor(ctx, 120*time.Second, func(els []Element) bool {
+			for _, e := range els {
+				l := e.Label()
+				if strings.HasPrefix(l, "step fail: ") && strings.Contains(l, "(line ") {
+					return true
+				}
+			}
+			return false
+		}), "a failed step row with its line")
+		must(t, s.WaitForText(ctx, "This text does not exist", 30*time.Second), "step error text shown")
+	})
+}
+
 func Test11_WiFiDiscoveryOverlayOpensAndCloses(t *testing.T) {
 	run(t, func(t *testing.T, s *Studio) {
 		must(t, s.ClickButton("📡"), "open wifi overlay")

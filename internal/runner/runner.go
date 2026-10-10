@@ -46,7 +46,11 @@ type Runner struct {
 	missingUses     []string                     // `use` targets that do not exist, for error messages
 	visual          *visual.Comparator  // nil if visual regression is not configured
 	onResult        func(TestResult)    // optional per-result callback for streaming
+	onStep          func(StepEvent)     // optional per-step callback (live highlight)
 	compositeRunner *CompositeRunner    // nil if composite tests are not configured
+	curFile         string              // attribution for StepEvents from newExecutor
+	curTest         string
+	curAttempt      int
 }
 
 // RunOptions configures a test run.
@@ -110,6 +114,8 @@ func (r *Runner) newExecutor() *Executor {
 	exec.SetImplicitWait(r.cfg.Defaults.ImplicitWait)
 	exec.SetAI(r.cfg.AI)
 	exec.useNote = r.missingUsesNote()
+	exec.OnStep(r.onStep)
+	exec.SetStepContext(r.curFile, r.curTest, r.curAttempt)
 	return exec
 }
 
@@ -206,6 +212,9 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 
 	var results []TestResult
 
+	// Hooks outside a test are attributed to the file alone.
+	r.curFile, r.curTest, r.curAttempt = path, "", 1
+
 	// Run beforeAll hooks (fail-fast: if beforeAll fails, skip all tests in file)
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeAll {
@@ -261,6 +270,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 			for _, rec := range r.recipes {
 				r.compositeRunner.RegisterRecipe(rec)
 			}
+			r.compositeRunner.OnStep(r.onStep)
 			ctr := r.compositeRunner.RunCompositeTest(ctx, ct, path)
 			res = ctr.ToTestResult()
 			printCompositeResult(ctr)
@@ -343,6 +353,7 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 	var res TestResult
 	var earlier []string
 	for attempt := 1; ; attempt++ {
+		r.curFile, r.curTest, r.curAttempt = file, t.Name, attempt
 		res = r.runSingleAttempt(ctx, prog, t, file, vars, row)
 		r.applyPerfBaseline(&res)
 		res.Attempts = attempt

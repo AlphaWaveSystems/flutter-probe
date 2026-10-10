@@ -7,9 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Studio: live step highlight.** While a file runs, the editor's gutter follows the executing step (▶, then ✓ / ✗ / – stays on the line; a failed line keeps its error on hover), step rows nest under each test in the results timeline with line, duration and attempt (click one to jump to its line), the toolbar shows `step N of M`, and a **Cancel** button stops the run. Backed by a new runner hook, `Runner.OnStep` / `Executor.OnStep`, that emits a `StepEvent` before and after every step (including recipe bodies and composite devices).
 - **`probe license activate <key>` / `probe license status`:** stores and verifies an offline ed25519-signed license key in `~/.flutterprobe/license.key`. Only hosted features will ever need one; everything that runs locally stays free and works without a key.
 - **Release pipeline:** canary channel (`vX.Y.Z-next.N` tags publish `probe@next` on Homebrew and pre-release Dart packages), a dogfood gate workflow, an automated review-agent check on pull requests, and auto-rollback of a stable release when a `prod-incident` is filed within 24 hours. `scripts/release.sh` accepts canary versions. See `docs/ops/release-pipeline.md`.
 - **Studio E2E suite** (`make studio-e2e`, `studio/e2e/`): drives the real Studio window on macOS through the accessibility tree and screenshots — launch, device picker, connect, run, results, failures, performance lines, recorder, settings, AI-chat and WiFi overlays, error paths — against a new fixture app (`native-test-apps/studio-fixture/`). Optional vision assertions via `STUDIO_E2E_AI_PROVIDER`. Parameterised for dogfooding on any app (`studio/e2e/DOGFOOD.md`); self-hosted macOS workflow `studio-e2e.yml`.
+
+### Security
+- **Review-agent workflow:** runs only for same-repository branches from owners, members and collaborators (forks fail closed); the model reviews a scratch copy of the diff plus the repository conventions from the trusted base commit, never a checkout of the PR branch, and the diff is declared untrusted input; the verdict is passed through the environment and validated; a branch that is behind `main` fails before review (a stale branch could otherwise revert what `main` merged since).
+- **Dogfood-gate workflow:** the `version` input is validated against `X.Y.Z[-next.N]` before it is used in paths, download URLs or issue titles.
 
 ### Fixed
 - **Studio reads `probe.yaml` from the open workspace** (agent port, timeout, device ids) when connecting; it used to read the process working directory. `PROBE_STUDIO_WORKSPACE=/path` opens a workspace at launch.

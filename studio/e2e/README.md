@@ -33,6 +33,8 @@ Reports: `reports/studio-e2e/report.json`, `report.html`, `screenshots/`, `logs/
 | 09 | AI chat pane toggle and API-key overlay |
 | 10 | Connect with the app not running → error state |
 | 11 | WiFi discovery overlay |
+| 12 | Live steps: progress text, Cancel visible, every step row ends passed, verdict row heads the steps |
+| 13 | Failing step keeps a `step fail` row naming its line, with the error |
 
 Each test launches its own Studio, closes it, and relaunches the fixture app
 (self-contained; explicit cleanup).
