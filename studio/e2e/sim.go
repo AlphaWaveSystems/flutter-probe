@@ -120,6 +120,12 @@ func (s *Simulator) Terminate(ctx context.Context, bundleID string) {
 // Tap clicks inside this simulator's Simulator.app window at a fraction of
 // its width/height (0..1) — a real user gesture on the device, which the
 // agent's recorder sees. The window is found by the simulator's name.
+// MoveToTargetDisplay puts this simulator's own window (matched by its name,
+// never another session's simulator) on the suite's display.
+func (s *Simulator) MoveToTargetDisplay() error {
+	return moveWindowToDisplay("Simulator", s.Name)
+}
+
 func (s *Simulator) Tap(fx, fy float64) error {
 	script := fmt.Sprintf(`tell application "System Events" to tell process "Simulator"
   set frontmost to true

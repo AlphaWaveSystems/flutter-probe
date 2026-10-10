@@ -58,8 +58,4 @@ ios-driver:
 
 ## Run the Studio E2E suite (macOS; drives the real Studio window)
 studio-e2e:
-	@# Keep test windows off the main screen when a second display is attached.
-	@if [ -z "$$STUDIO_E2E_DISPLAY" ] && [ "$$(uname)" = Darwin ] && \
-	   [ "$$(osascript -l JavaScript -e 'ObjC.import("AppKit"); $$.NSScreen.screens.count' 2>/dev/null || echo 1)" -ge 2 ]; then \
-	  STUDIO_E2E_DISPLAY=2 scripts/studio-e2e.sh; \
-	else scripts/studio-e2e.sh; fi
+	scripts/studio-e2e.sh

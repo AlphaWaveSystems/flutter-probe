@@ -9,8 +9,8 @@ import (
 )
 
 // Display is one attached screen in AppKit coordinates (origin bottom-left of
-// the main screen; System Events window positions use top-left of the main
-// screen, converted in topLeft).
+// the main screen). System Events window positions use a top-left origin on
+// the main screen, converted in topLeft.
 type Display struct {
 	X, Y, W, H float64
 }
@@ -41,8 +41,11 @@ func displays() ([]Display, error) {
 	return ds, nil
 }
 
-// targetDisplay resolves STUDIO_E2E_DISPLAY (1 = main, default) to a screen.
-// A display that does not exist falls back to main with a warning.
+// targetDisplay resolves the display the suite's windows open on.
+// STUDIO_E2E_DISPLAY=n picks display n (1 = main). Unset, the suite uses
+// display 2 whenever a second display is attached and the main display
+// otherwise. A requested display that does not exist falls back to main with a
+// warning.
 func targetDisplay() (Display, int) {
 	ds, err := displays()
 	if err != nil {
@@ -51,9 +54,14 @@ func targetDisplay() (Display, int) {
 	}
 	n := 1
 	if v := os.Getenv("STUDIO_E2E_DISPLAY"); v != "" {
-		if k, err := strconv.Atoi(v); err == nil && k >= 1 {
+		k, err := strconv.Atoi(v)
+		if err != nil || k < 1 {
+			fmt.Fprintf(os.Stderr, "display: invalid STUDIO_E2E_DISPLAY=%q - using main\n", v)
+		} else {
 			n = k
 		}
+	} else if len(ds) >= 2 {
+		n = 2
 	}
 	if n > len(ds) {
 		fmt.Fprintf(os.Stderr, "display: STUDIO_E2E_DISPLAY=%d but only %d display(s) attached - using main\n", n, len(ds))
@@ -62,30 +70,52 @@ func targetDisplay() (Display, int) {
 	return ds[n-1], n
 }
 
-// topLeft returns the System Events position (top-left origin, main screen
-// y down) of a point offset from the display's top-left corner.
+// topLeft converts a point offset from the display's top-left corner into
+// System Events coordinates (top-left origin on the main screen, y down).
 func (d Display) topLeft(main Display, dx, dy float64) (int, int) {
-	x := d.X + dx
-	// AppKit y grows upward from the main screen's bottom; System Events y grows
-	// downward from the main screen's top.
-	y := (main.H - (d.Y + d.H)) + dy
-	return int(x), int(y)
+	return int(d.X + dx), int((main.H - (d.Y + d.H)) + dy)
 }
 
-// moveWindowToDisplay places window 1 of the named process on the chosen
-// display with a small inset. No-op on the main display.
-func moveWindowToDisplay(process string) {
+// contains reports whether a System Events point lies on the display.
+func (d Display) contains(main Display, x, y int) bool {
+	left, top := d.topLeft(main, 0, 0)
+	return x >= left && x < left+int(d.W) && y >= top && y < top+int(d.H)
+}
+
+// moveWindowToDisplay places the window of process whose name starts with
+// namePrefix (empty = window 1) on the chosen display with a small inset, then
+// reads its position back and fails if it did not land there. A no-op on the
+// main display.
+func moveWindowToDisplay(process, namePrefix string) error {
 	ds, err := displays()
 	if err != nil {
-		return
+		return err
 	}
 	d, n := targetDisplay()
 	if n == 1 {
-		return
+		return nil
 	}
 	x, y := d.topLeft(ds[0], 40, 60)
-	script := fmt.Sprintf(`tell application "System Events" to tell process %q to set position of window 1 to {%d, %d}`, process, x, y)
-	if err := osascript(script); err != nil {
-		fmt.Fprintf(os.Stderr, "display: could not move %s window: %v\n", process, err)
+	sel := "window 1"
+	if namePrefix != "" {
+		sel = fmt.Sprintf(`(first window whose name starts with %q)`, namePrefix)
 	}
+	script := fmt.Sprintf(`tell application "System Events" to tell process %q
+  set position of %s to {%d, %d}
+  set p to position of %s
+  return (item 1 of p as text) & "," & (item 2 of p as text)
+end tell`, process, sel, x, y, sel)
+	out, err := exec.Command("osascript", "-e", script).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("move %s window to display %d: %v: %s", process, n, err, strings.TrimSpace(string(out)))
+	}
+	var px, py int
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(out)), "%d,%d", &px, &py); err != nil {
+		return fmt.Errorf("read back %s window position %q: %w", process, out, err)
+	}
+	if !d.contains(ds[0], px, py) {
+		return fmt.Errorf("%s window is at (%d,%d), not on display %d", process, px, py, n)
+	}
+	fmt.Fprintf(os.Stderr, "display: %s window at (%d,%d) on display %d\n", process, px, py, n)
+	return nil
 }

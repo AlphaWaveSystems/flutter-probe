@@ -18,12 +18,14 @@ SKIP_BUILD=1 scripts/studio-e2e.sh -run Test04   # reuse builds, one test
 
 Reports: `reports/studio-e2e/report.json`, `report.html`, `screenshots/`, `logs/`.
 
-`STUDIO_E2E_DISPLAY=2` opens each Studio window (and the Simulator window) on
-the second display so runs stay off the screen you work on; `make studio-e2e`
-picks display 2 automatically when one is attached. A display number that does
-not exist falls back to the main display with a warning. The suite still needs
-the machine's keyboard focus: typing into another window while a test runs
-makes it fail.
+With a second display attached the suite opens every Studio window (and its own
+Simulator window) on **display 2**, so runs stay off the screen you work on;
+with one display it uses the main display. `STUDIO_E2E_DISPLAY=n` overrides
+(1 = main); a display number that does not exist falls back to main with a
+warning. After moving a window the driver reads its position back and fails the
+test if it did not land on the chosen display. A window is created on the main
+display for a moment before it is moved. The suite needs the machine's keyboard
+focus: typing into another window while a test runs makes it fail.
 
 ## Tests
 

@@ -87,6 +87,10 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "simulator:", err)
 		os.Exit(2)
 	}
+	// Keep the simulator's own window on the suite's display too.
+	if err := sim.MoveToTargetDisplay(); err != nil {
+		fmt.Fprintln(os.Stderr, "simulator window:", err)
+	}
 	if cfg.AppBundle != "" {
 		if _, statErr := os.Stat(cfg.AppBundle); statErr == nil {
 			if err := sim.InstallAndLaunch(ctx, cfg.AppBundle, cfg.BundleID); err != nil {
