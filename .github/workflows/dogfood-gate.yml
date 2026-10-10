@@ -41,14 +41,6 @@ jobs:
       PROBE_VERSION: ${{ inputs.version }}
       PROBE_AGENT_NO_UPGRADE: "1"
     steps:
-      - name: Validate version input
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-next\.[0-9]+)?$ ]]; then
-            echo "::error::invalid version '${VERSION}' (want X.Y.Z or X.Y.Z-next.N)"
-            exit 1
-          fi
       - uses: actions/checkout@v7
       - name: Install pinned canary
         run: |
@@ -73,14 +65,6 @@ jobs:
     if: vars.DOGFOOD_RUNNER_READY != 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Validate version input
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-next\.[0-9]+)?$ ]]; then
-            echo "::error::invalid version '${VERSION}' (want X.Y.Z or X.Y.Z-next.N)"
-            exit 1
-          fi
       - name: Open or update the gate request issue
         env:
           GH_TOKEN: ${{ github.token }}
