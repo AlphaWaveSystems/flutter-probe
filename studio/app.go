@@ -36,6 +36,7 @@ type App struct {
 	conn      *connection // nil when disconnected
 	deviceMgr *device.Manager
 	wifi      *wifiDiscovery
+	workspace string // directory whose probe.yaml governs connections; "" → cwd
 
 	recMu     sync.Mutex
 	recActive bool
@@ -96,6 +97,38 @@ func (a *App) PickWorkspace() (string, error) {
 	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Open workspace",
 	})
+}
+
+// InitialWorkspace returns the workspace the frontend should open at boot
+// instead of the one remembered in localStorage: the PROBE_STUDIO_WORKSPACE
+// environment variable. Empty when unset. Lets automation (the Studio E2E
+// suite) open a known workspace without driving the native folder picker.
+func (a *App) InitialWorkspace() string {
+	return os.Getenv("PROBE_STUDIO_WORKSPACE")
+}
+
+// SetWorkspace records the open workspace so Connect reads its probe.yaml
+// (agent port, timeout, device ids) instead of the process working directory.
+func (a *App) SetWorkspace(path string) {
+	a.mu.Lock()
+	a.workspace = path
+	a.mu.Unlock()
+}
+
+// workspaceConfig loads probe.yaml from the open workspace, falling back to
+// the process working directory (and then to built-in defaults) as before.
+func (a *App) workspaceConfig() *config.Config {
+	a.mu.Lock()
+	ws := a.workspace
+	a.mu.Unlock()
+	if ws == "" {
+		ws = "."
+	}
+	cfg, err := config.Load(ws)
+	if err != nil || cfg == nil {
+		cfg, _ = config.Load(".")
+	}
+	return cfg
 }
 
 // ListDir returns immediate children of dir. Hidden entries (dot-prefixed)
@@ -353,7 +386,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		return ConnectionStatus{}, fmt.Errorf("host, port, and token are all required")
 	}
 
-	cfg, _ := config.Load(".")
+	cfg := a.workspaceConfig()
 	dialTimeout := 5 * time.Second
 
 	client, err := probelink.DialWithOptions(a.ctx, probelink.DialOptions{
@@ -437,9 +470,9 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		return ConnectionStatus{}, fmt.Errorf("device %q not found", deviceID)
 	}
 
-	// Studio MVP uses defaults; reading probe.yaml from the workspace is a
-	// future feature.
-	cfg, _ := config.Load(".")
+	// probe.yaml comes from the open workspace (SetWorkspace), so per-app
+	// agent ports and timeouts apply; without a workspace, cwd/defaults.
+	cfg := a.workspaceConfig()
 	port := cfg.Agent.Port
 	// Studio is interactive — clamp the token wait and dial budget tighter
 	// than the CLI defaults so a "no agent running" state surfaces in

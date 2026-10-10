@@ -1,0 +1,20 @@
+test "form submit shows greeting after dialog"
+  @smoke
+  open the app
+  tap #nav_form
+  wait until "Name" appears
+  type "Ada" into the "Name" field
+  tap "Submit"
+  wait until "Confirm" appears
+  tap "OK"
+  see "Hello, Ada!"
+
+test "form dialog can be cancelled"
+  open the app
+  tap #nav_form
+  wait until "Name" appears
+  type "Bob" into the "Name" field
+  tap "Submit"
+  wait until "Confirm" appears
+  tap "Cancel"
+  see "Name"

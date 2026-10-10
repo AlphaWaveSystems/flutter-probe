@@ -1,0 +1,35 @@
+name: Studio E2E
+
+# Drives the real Studio window through macOS accessibility, so it needs a
+# self-hosted macOS runner with Accessibility + Screen Recording granted to
+# the runner process. Hosted macOS runners cannot grant those permissions.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  studio-e2e:
+    name: Studio E2E (self-hosted macOS)
+    runs-on: [self-hosted, macOS, studio-e2e]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Toolchain check
+        run: |
+          xcrun simctl list runtimes | grep iOS
+          flutter --version
+          wails version
+      - name: Run suite
+        run: scripts/studio-e2e.sh
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: studio-e2e-report
+          path: reports/studio-e2e/

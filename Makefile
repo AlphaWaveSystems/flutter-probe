@@ -1,4 +1,4 @@
-.PHONY: build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
+.PHONY: studio-e2e build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
 
 BINARY  = probe
 OUT_DIR = bin
@@ -55,3 +55,7 @@ clean:
 ## Build the iOS system-dialog driver (XCUITest runner) -> bin/probe-ios-driver.zip
 ios-driver:
 	scripts/build-ios-driver.sh bin
+
+## Run the Studio E2E suite (macOS; drives the real Studio window)
+studio-e2e:
+	scripts/studio-e2e.sh

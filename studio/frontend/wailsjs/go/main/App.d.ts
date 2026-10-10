@@ -6,15 +6,17 @@ export function Chat(arg1:Array<main.ChatMessage>,arg2:string):Promise<main.Chat
 
 export function Connect(arg1:string):Promise<main.ConnectionStatus>;
 
-export function DeleteAPIKey():Promise<void>;
-
-export function GetAPIKey():Promise<string>;
-
 export function ConnectWiFi(arg1:string,arg2:number,arg3:string):Promise<main.ConnectionStatus>;
+
+export function DeleteAPIKey():Promise<void>;
 
 export function Disconnect():Promise<void>;
 
+export function GetAPIKey():Promise<string>;
+
 export function GetWidgetTree():Promise<string>;
+
+export function InitialWorkspace():Promise<string>;
 
 export function Lint(arg1:string):Promise<Array<main.Diagnostic>>;
 
@@ -33,6 +35,8 @@ export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
 export function SetAPIKey(arg1:string):Promise<void>;
+
+export function SetWorkspace(arg1:string):Promise<void>;
 
 export function StartRecording():Promise<void>;
 

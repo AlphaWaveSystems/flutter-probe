@@ -1,0 +1,20 @@
+test "list scrolls to a far item"
+  @smoke
+  open the app
+  tap #nav_counter
+  tap #nav_list
+  wait until "Item 0" appears
+  scroll down until "Item 40" appears
+  see "Row number 41"
+
+test "list scrolling stays within budget"
+  @perf
+  open the app
+  tap #nav_counter
+  tap #nav_list
+  wait until "Item 0" appears
+  start measuring "scroll"
+  scroll down until "Item 60" appears
+  stop measuring
+  see frame time below 100 ms
+  see memory growth below 100 MB
