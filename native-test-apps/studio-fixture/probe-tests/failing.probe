@@ -1,0 +1,5 @@
+# Intentionally failing: lets the Studio suite assert the failure UI.
+test "expected failure for Studio results assertions"
+  @expectedfail
+  open the app
+  see "This text does not exist"

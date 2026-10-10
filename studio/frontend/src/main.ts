@@ -12,6 +12,8 @@ import {
   DeleteAPIKey,
   Disconnect,
   GetAPIKey,
+  InitialWorkspace,
+  SetWorkspace,
   Lint,
   ListDevices,
   ListDir,
@@ -178,6 +180,10 @@ async function refreshFiles(dir: string = currentDir) {
     for (const e of entries) {
       const li = document.createElement("li");
       li.textContent = e.name;
+      // Expose rows as buttons so assistive tech (and the Studio E2E suite,
+      // which drives the real accessibility tree) can find and activate them.
+      li.setAttribute("role", "button");
+      li.tabIndex = 0;
       if (e.isDir) li.classList.add("dir");
       li.dataset.path = e.path;
       li.dataset.isDir = String(e.isDir);
@@ -238,6 +244,7 @@ async function pickWorkspace() {
     const path = await PickWorkspace();
     if (!path) return;
     localStorage.setItem(WORKSPACE_KEY, path);
+    await SetWorkspace(path);
     refreshFiles(path);
     toast(`Workspace: ${path}`, "success", 1800);
   } catch (err) {
@@ -873,12 +880,24 @@ if (!isMac) {
 
 initDeviceStream();
 
-const savedWorkspace = localStorage.getItem(WORKSPACE_KEY);
-if (savedWorkspace) {
-  refreshFiles(savedWorkspace);
-} else {
-  refreshFiles();
-}
+// PROBE_STUDIO_WORKSPACE (env) wins over the remembered workspace so
+// automation can open a known folder without the native picker.
+(async () => {
+  let ws = "";
+  try {
+    ws = (await InitialWorkspace()) || "";
+  } catch {
+    ws = "";
+  }
+  if (!ws) ws = localStorage.getItem(WORKSPACE_KEY) ?? "";
+  if (ws) {
+    localStorage.setItem(WORKSPACE_KEY, ws);
+    await SetWorkspace(ws);
+    refreshFiles(ws);
+  } else {
+    refreshFiles();
+  }
+})();
 
 refreshDevices();
 runLint();

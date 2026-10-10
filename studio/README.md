@@ -16,6 +16,17 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > Stability is "beta" — expect rough edges, especially around physical
 > devices (not yet supported) and parallel multi-device authoring.
 
+## E2E tests
+
+`make studio-e2e` drives the real Studio window on macOS through the
+accessibility tree and screenshots against a bundled fixture app
+(`native-test-apps/studio-fixture/`). See [`e2e/README.md`](e2e/README.md),
+and [`e2e/DOGFOOD.md`](e2e/DOGFOOD.md) to run the same suite against your own app.
+
+Studio reads `probe.yaml` from the open workspace (agent port, timeout,
+device ids). `PROBE_STUDIO_WORKSPACE=/path` opens a workspace at launch
+without the folder picker.
+
 ## Run from source
 
 From this directory (`studio/`):

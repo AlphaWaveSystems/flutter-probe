@@ -10,24 +10,28 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
-export function DeleteAPIKey() {
-  return window['go']['main']['App']['DeleteAPIKey']();
-}
-
-export function GetAPIKey() {
-  return window['go']['main']['App']['GetAPIKey']();
-}
-
 export function ConnectWiFi(arg1, arg2, arg3) {
   return window['go']['main']['App']['ConnectWiFi'](arg1, arg2, arg3);
+}
+
+export function DeleteAPIKey() {
+  return window['go']['main']['App']['DeleteAPIKey']();
 }
 
 export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }
 
+export function GetAPIKey() {
+  return window['go']['main']['App']['GetAPIKey']();
+}
+
 export function GetWidgetTree() {
   return window['go']['main']['App']['GetWidgetTree']();
+}
+
+export function InitialWorkspace() {
+  return window['go']['main']['App']['InitialWorkspace']();
 }
 
 export function Lint(arg1) {
@@ -64,6 +68,10 @@ export function SaveWorkspaceSettings(arg1, arg2) {
 
 export function SetAPIKey(arg1) {
   return window['go']['main']['App']['SetAPIKey'](arg1);
+}
+
+export function SetWorkspace(arg1) {
+  return window['go']['main']['App']['SetWorkspace'](arg1);
 }
 
 export function StartRecording() {

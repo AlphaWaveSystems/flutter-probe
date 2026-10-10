@@ -101,3 +101,14 @@ AGENTS.md
 # iOS driver: generated project and build output
 ios-driver/ProbeDriver.xcodeproj/
 ios-driver/build/
+
+# Studio E2E local dogfood config (app names, devices, ports)
+studio/e2e/dogfood.local.yaml
+# Fixture app build output
+native-test-apps/studio-fixture/build/
+native-test-apps/studio-fixture/.dart_tool/
+native-test-apps/studio-fixture/ios/Pods/
+native-test-apps/studio-fixture/ios/.symlinks/
+native-test-apps/studio-fixture/pubspec.lock
+# Studio E2E reports
+reports/studio-e2e*/

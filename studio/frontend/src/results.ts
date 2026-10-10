@@ -89,7 +89,11 @@ function appendResult(res: RunResult): void {
   else totals.failed++;
 
   const li = document.createElement("li");
-  li.classList.add(res.skipped ? "skip" : res.passed ? "pass" : "fail");
+  const status = res.skipped ? "skip" : res.passed ? "pass" : "fail";
+  li.classList.add(status);
+  // Accessible name carries the verdict so screen readers (and the Studio
+  // E2E suite) can read "pass: <test>" without parsing colours.
+  li.setAttribute("aria-label", `${status}: ${res.name}`);
   const dot = document.createElement("span");
   dot.classList.add("dot");
   const name = document.createElement("span");

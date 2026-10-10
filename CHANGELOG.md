@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Studio E2E suite** (`make studio-e2e`, `studio/e2e/`): drives the real Studio window on macOS through the accessibility tree and screenshots — launch, device picker, connect, run, results, failures, performance lines, recorder, settings, AI-chat and WiFi overlays, error paths — against a new fixture app (`native-test-apps/studio-fixture/`). Optional vision assertions via `STUDIO_E2E_AI_PROVIDER`. Parameterised for dogfooding on any app (`studio/e2e/DOGFOOD.md`); self-hosted macOS workflow `studio-e2e.yml`.
+
+### Fixed
+- **Studio reads `probe.yaml` from the open workspace** (agent port, timeout, device ids) when connecting; it used to read the process working directory. `PROBE_STUDIO_WORKSPACE=/path` opens a workspace at launch.
+- Studio file-browser rows and result rows carry accessible names (`role=button`, `pass:`/`fail:` labels).
+
 ## [0.23.0] - 2026-10-10
 
 ### Added
