@@ -6,7 +6,7 @@ import XCTest
 ///
 /// Secrets: `type` never echoes the text back in any response or log line.
 final class Driver {
-    static let version = "0.22.1"
+    static let version = "0.23.0"
 
     /// Processes that can present system UI. Only ones that are running are
     /// queried (asking an app that is not running for its UI would launch it).

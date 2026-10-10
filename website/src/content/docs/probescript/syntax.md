@@ -195,6 +195,24 @@ when the app calls PATCH "/api/profile"
 
 Mocks are effective (agent 0.22+): the app's `dart:io` HTTP client receives them. They last for one test and survive `restart the app`.
 
+## Performance
+
+```
+start measuring "checkout"
+tap "Pay"
+wait for response POST "/api/pay" status 200 within 10 seconds
+stop measuring
+see memory below 300 MB
+see memory growth below 20 MB
+see cpu below 60 percent
+see slow frames below 5 percent
+see data transferred below 500 KB
+see response POST "/api/pay" below 2000 ms
+```
+
+Measures memory, frame timings and HTTP traffic (agent 0.23+) and CPU (Android, iOS simulator) between `start measuring` and `stop measuring`.
+See [Performance testing](/advanced/performance/).
+
 ## Time Budgets
 
 ```

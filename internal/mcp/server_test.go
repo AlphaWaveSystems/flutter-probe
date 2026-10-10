@@ -80,7 +80,7 @@ func TestToolsList(t *testing.T) {
 		"get_widget_tree", "read_test", "write_test", "run_script", "run_tests",
 		"list_files", "lint", "migrate_maestro", "take_screenshot",
 		// reporting
-		"get_report", "generate_test", "generate_report", "triage_failure", "system_dialog",
+		"get_report", "generate_test", "generate_report", "triage_failure", "system_dialog", "perf_trend", "perf_compare",
 		// project management
 		"init_project", "record",
 	}

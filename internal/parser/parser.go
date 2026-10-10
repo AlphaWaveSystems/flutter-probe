@@ -311,7 +311,7 @@ func (p *Parser) parseStep() (Step, error) {
 		return step, err
 	}
 	switch step.(type) {
-	case ActionStep, AssertStep, AssertNoDefectsStep, WaitStep, SystemDialogStep, HTTPStep:
+	case ActionStep, AssertStep, AssertNoDefectsStep, WaitStep, SystemDialogStep, HTTPStep, PerfStep:
 		return TimedStep{Inner: step, Within: within, Line: line}, nil
 	}
 	return nil, fmt.Errorf("line %d: \"within ...\" is not supported on this kind of step (use it on tap, type, see, wait, system dialog and response steps)", line)
@@ -363,6 +363,18 @@ func (p *Parser) parseStepInner() (Step, error) {
 	// never be mistaken for a Flutter selector.
 	if p.lineIsSystemDialog() {
 		return p.parseSystemDialog()
+	}
+
+	// "start measuring "checkout"" / "stop measuring": performance windows
+	if tok.Type != TOKEN_STRING && (strings.EqualFold(tok.Literal, "start") || strings.EqualFold(tok.Literal, "stop")) &&
+		p.peekAt(1).Type != TOKEN_STRING && strings.EqualFold(p.peekAt(1).Literal, "measuring") {
+		if strings.EqualFold(tok.Literal, "start") {
+			return p.parsePerfStart()
+		}
+		p.advance()
+		p.advance()
+		p.consumeNewline()
+		return PerfStep{Kind: PerfStop, Line: tok.Line}, nil
 	}
 
 	switch tok.Type {
@@ -1001,6 +1013,11 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		optional := p.checkOptional()
 		p.consumeNewline()
 		return AssertStep{Negated: negated, Any: alts, Optional: optional, Line: line}, nil
+	}
+
+	// "see memory below 300 MB" / "see cpu below 60 percent" / "see slow frames below 5 percent" ...
+	if metric, n := p.perfMetricAhead(); metric != "" {
+		return p.parsePerfCheck(line, metric, n)
 	}
 
 	// "see response GET "/api/me" status 200" / "see exactly 2 requests "/api/orders"" / "see no requests "/x""
@@ -2410,6 +2427,87 @@ func (p *Parser) parseSystemDialog() (Step, error) {
 	return step, nil
 }
 
+// ---- Performance ----
+
+// perfPhrases are the words after `see` of each performance assertion, longest first.
+var perfPhrases = []struct {
+	words  []string
+	metric string
+}{
+	{[]string{"memory", "growth", "below"}, "memory_growth"},
+	{[]string{"memory", "below"}, "memory"},
+	{[]string{"cpu", "peak", "below"}, "cpu_peak"},
+	{[]string{"cpu", "below"}, "cpu"},
+	{[]string{"slow", "frames", "below"}, "slow_frames"},
+	{[]string{"frame", "time", "below"}, "frame_time"},
+	{[]string{"slowest", "frame", "below"}, "frame_max"},
+	{[]string{"data", "transferred", "below"}, "data"},
+}
+
+// perfMetricAhead recognises `memory below N`, `cpu peak below N`, ... at the current position and
+// returns the metric and how many tokens its phrase takes (0 / "" when it is something else).
+func (p *Parser) perfMetricAhead() (string, int) {
+	for _, ph := range perfPhrases {
+		ok := true
+		for i, w := range ph.words {
+			t := p.peekAt(i)
+			if t.Type == TOKEN_STRING || !strings.EqualFold(t.Literal, w) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			if n := p.peekAt(len(ph.words)); n.Type == TOKEN_INT || n.Type == TOKEN_FLOAT {
+				return ph.metric, len(ph.words)
+			}
+		}
+	}
+	return "", 0
+}
+
+func (p *Parser) parsePerfStart() (Step, error) {
+	line := p.peek().Line
+	p.advance() // start
+	p.advance() // measuring
+	p.skipFillers()
+	name := ""
+	if p.peek().Type == TOKEN_STRING {
+		name = p.advance().Literal
+	}
+	p.consumeNewline()
+	return PerfStep{Kind: PerfStart, Name: name, Line: line}, nil
+}
+
+// parsePerfCheck: `memory below 300 MB`, `cpu below 60 percent`, `frame time below 16 ms`, ... (see consumed).
+func (p *Parser) parsePerfCheck(line int, metric string, words int) (Step, error) {
+	for i := 0; i < words; i++ {
+		p.advance()
+	}
+	limit, err := strconv.ParseFloat(p.advance().Literal, 64)
+	if err != nil {
+		return nil, fmt.Errorf("line %d: expected a number after \"below\"", line)
+	}
+	// optional unit word: MB, KB, ms, percent, %
+	if u := strings.ToLower(p.peek().Literal); p.peek().Type != TOKEN_STRING && p.peek().Type != TOKEN_NEWLINE && p.peek().Type != TOKEN_EOF {
+		switch u {
+		case "mb", "megabytes", "ms", "milliseconds", "percent", "%":
+			p.advance()
+		case "kb", "kilobytes":
+			p.advance()
+		case "gb":
+			p.advance()
+			limit *= 1024
+		default:
+			return nil, fmt.Errorf("line %d: unknown unit %q (use MB, KB, ms or percent)", line, p.peek().Literal)
+		}
+		if metric == "data" && (u == "mb" || u == "megabytes") {
+			limit *= 1024 // data is checked in KB
+		}
+	}
+	p.consumeNewline()
+	return PerfStep{Kind: PerfCheck, Metric: metric, Limit: limit, Line: line}, nil
+}
+
 // ---- Backend responses ----
 
 var httpMethodWords = map[string]bool{"get": true, "post": true, "put": true, "delete": true, "patch": true, "head": true, "options": true}
@@ -2463,6 +2561,16 @@ func (p *Parser) parseResponseCheck(line int) (ResponseCheck, error) {
 			return ResponseCheck{}, fmt.Errorf("line %d: expected quoted text after \"contains\"", line)
 		}
 		return ResponseCheck{Kind: CheckContains, Text: p.advance().Literal}, nil
+	case p.peekLiteral("below") && (p.peekAt(1).Type == TOKEN_INT || p.peekAt(1).Type == TOKEN_FLOAT):
+		p.advance()
+		ms, _ := strconv.Atoi(strings.SplitN(p.advance().Literal, ".", 2)[0])
+		if u := strings.ToLower(p.peek().Literal); u == "ms" || u == "milliseconds" {
+			p.advance()
+		} else if u == "seconds" || u == "second" || u == "s" {
+			p.advance()
+			ms *= 1000
+		}
+		return ResponseCheck{Kind: CheckTime, Status: ms}, nil
 	case p.peekLiteral("json"):
 		p.advance()
 		p.skipFillers()

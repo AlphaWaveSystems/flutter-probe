@@ -261,6 +261,20 @@ Mock API responses for the app.
 | `when` | `when the app calls GET "/api/users"` | Define a mock rule |
 | `respond` | `respond with 200 and body "[]" after 2 seconds` · `respond with network failure` | Define the mock response; `after N seconds` delays it, `network failure` drops the connection |
 
+## Performance
+
+| Command | Syntax | Description |
+|---|---|---|
+| `start measuring` | `start measuring "checkout"` | Open a measuring window (CPU, memory, frames, network) |
+| `stop measuring` | `stop measuring` | Close it and print the numbers |
+| `see memory below` | `see memory below 300 MB` · `see memory growth below 20 MB` | Peak memory / growth over the window |
+| `see cpu below` | `see cpu below 60 percent` · `see cpu peak below 90 percent` | Average / busiest-second CPU (percent of one core) |
+| `see slow frames below` | `see slow frames below 5 percent` · `see frame time below 16 ms` · `see slowest frame below 100 ms` | Frame timings |
+| `see data transferred below` | `see data transferred below 500 KB` | Request + response bytes |
+| `see response ... below` | `see response "/api/x" below 800 ms` | Response time |
+
+See [Performance testing](/advanced/performance/).
+
 ## Time budget
 
 | Command | Syntax | Description |

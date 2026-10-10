@@ -59,6 +59,7 @@ type Executor struct {
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64      // incremented on each successful reconnect
 	implicitWait         time.Duration      // retry a step whose target is not on screen yet for up to this long (0 = off)
+	perf                 perfState          // open measuring window and finished measurements
 	http                 httpState          // recorded backend traffic bookkeeping (`wait for response`, mocks)
 	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 }
@@ -221,6 +222,8 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 		return e.runMock(stepCtx, s)
 	case parser.HTTPStep:
 		return e.runHTTPStep(stepCtx, s)
+	case parser.PerfStep:
+		return e.runPerf(stepCtx, s)
 	case parser.RecipeCall:
 		return e.runRecipeCall(ctx, s)
 	case parser.HTTPCallStep:
@@ -593,6 +596,14 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("if response %s %s", refString(s.Response.Ref), describeCheck(s.Response.Check))
 		}
 		return fmt.Sprintf("if %q appears", s.Condition)
+	case parser.PerfStep:
+		switch s.Kind {
+		case parser.PerfStart:
+			return fmt.Sprintf("start measuring %q", s.Name)
+		case parser.PerfStop:
+			return "stop measuring"
+		}
+		return fmt.Sprintf("see %s below %g", strings.ReplaceAll(s.Metric, "_", " "), s.Limit)
 	case parser.HTTPStep:
 		switch s.Kind {
 		case parser.HTTPWaitResponse:

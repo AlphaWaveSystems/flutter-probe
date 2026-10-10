@@ -115,6 +115,9 @@ class ProbeMethods {
   static const mock = 'probe.mock';
   static const httpLog = 'probe.http_log';
   static const httpClear = 'probe.http_clear';
+  static const perfStart = 'probe.perf_start';
+  static const perfSnapshot = 'probe.perf_snapshot';
+  static const perfStop = 'probe.perf_stop';
   static const startRecording = 'probe.start_recording';
   static const stopRecording = 'probe.stop_recording';
   static const copyClipboard = 'probe.copy_clipboard';

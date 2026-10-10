@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"context"
 	"fmt"
@@ -30,6 +31,7 @@ type TestResult struct {
 	VideoURL   string // cloud provider video URL (session-level)
 	DeviceID   string // device serial/UDID that ran this test
 	DeviceName string // human-readable device name
+	Perf       []perf.Metrics // measurements the test took (`start measuring` ... `stop measuring`)
 	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
 }
 
@@ -60,6 +62,9 @@ type RunOptions struct {
 	DeviceID     string // device serial/UDID (for tagging results)
 	DeviceName   string // human-readable device name
 	Grant        []string // permissions to pre-grant before the first test (--grant)
+
+	PerfBaseline  *perf.Baseline // compare measurements with this baseline (nil = off)
+	PerfTolerance float64        // percent a metric may exceed its baseline by (default 20)
 }
 
 // New creates a Runner.
@@ -339,6 +344,7 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 	var earlier []string
 	for attempt := 1; ; attempt++ {
 		res = r.runSingleAttempt(ctx, prog, t, file, vars, row)
+		r.applyPerfBaseline(&res)
 		res.Attempts = attempt
 		res.Artifacts = append(earlier, res.Artifacts...)
 		if res.Passed || attempt > retries || ctx.Err() != nil || r.client == nil {
@@ -447,7 +453,10 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		name = fmt.Sprintf("%s [row %d]", t.Name, row+1)
 	}
 
+	exec.closePerf(ctx)
+
 	return TestResult{
+		Perf:       exec.PerfResults(),
 		TestName:   name,
 		File:       file,
 		Passed:     runErr == nil,
@@ -775,4 +784,30 @@ func (r *Runner) unresolvedCalls(prog *parser.Program, t parser.TestDef) error {
 		}
 	}
 	return check(t.Body)
+}
+
+// applyPerfBaseline fails a passing test whose measurements are clearly worse than the baseline.
+func (r *Runner) applyPerfBaseline(res *TestResult) {
+	b := r.opts.PerfBaseline
+	if b == nil || !res.Passed || len(res.Perf) == 0 {
+		return
+	}
+	tol := r.opts.PerfTolerance
+	if tol <= 0 {
+		tol = 20
+	}
+	var problems []string
+	for _, m := range res.Perf {
+		base, ok := b.Entries[perf.Key(res.File, res.TestName, m.Name)]
+		if !ok {
+			continue // a new measurement: nothing to compare with yet
+		}
+		for _, reg := range perf.Compare(base, m, tol) {
+			problems = append(problems, fmt.Sprintf("%s: %s", measurementLabel(m.Name), reg))
+		}
+	}
+	if len(problems) > 0 {
+		res.Passed = false
+		res.Error = fmt.Errorf("performance regression (tolerance %.0f%%): %s", tol, strings.Join(problems, "; "))
+	}
 }

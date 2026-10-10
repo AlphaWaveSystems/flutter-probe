@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-10
+
+### Added
+- **Performance testing:** `start measuring "name"` ... `stop measuring` measures, over those steps, the app's memory and frame timings (agent 0.23+, every device), its CPU (Android via /proc, iOS simulator via host ps; not a physical iPhone) and its HTTP traffic. Assertions: `see memory below N MB`, `see memory growth below N MB`, `see cpu below N percent`, `see cpu peak below N percent`, `see slow frames below N percent`, `see frame time below N ms`, `see slowest frame below N ms`, `see data transferred below N KB`, and `see response <ref> below N ms`. EBNF + conformance tests.
+- **Baselines and trends:** `probe test --perf-baseline FILE` fails a test whose numbers got worse than the baseline by the tolerance (`--perf-tolerance`, default 20%, with noise floors); `--perf-update-baseline` writes it; every run appends to `reports/perf-history.jsonl`; `probe perf trend` and `probe perf compare`.
+- **Reports:** a `perf` array per test in the JSON report, a Performance block in the HTML report, measurements under each result in Probe Studio.
+- **MCP:** tools `perf_trend` and `perf_compare`; the guide covers performance, backend data, waiting, localization and the new flags.
+- New guide "Performance testing"; proposal for the unified Studio UI (`docs/proposals/performance-testing.md`).
+
 ## [0.22.1] - 2026-10-09
 
 ### Security

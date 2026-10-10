@@ -212,5 +212,17 @@
       "$0"
     ],
     "description": "Wait with its own time budget"
+  },
+  "Measure performance": {
+    "prefix": "measure",
+    "body": [
+      "start measuring \"${1:name}\"",
+      "$2",
+      "stop measuring",
+      "see memory below ${3:300} MB",
+      "see slow frames below ${4:5} percent",
+      "$0"
+    ],
+    "description": "Measure memory, frames, CPU and network of some steps and assert on them"
   }
 }

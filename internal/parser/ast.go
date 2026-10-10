@@ -402,6 +402,30 @@ func (d DartBlock) nodeType() string { return "dart" }
 func (d DartBlock) GetLine() int     { return d.Line }
 func (d DartBlock) stepType() string { return "dart" }
 
+// ---- Performance ----
+
+// PerfKind is the kind of performance statement.
+type PerfKind string
+
+const (
+	PerfStart PerfKind = "start" // start measuring "checkout"
+	PerfStop  PerfKind = "stop"  // stop measuring
+	PerfCheck PerfKind = "check" // see memory below 300 MB
+)
+
+// PerfStep starts or stops a measuring window, or asserts a number measured in it.
+type PerfStep struct {
+	Kind   PerfKind
+	Name   string  // PerfStart: the measurement's name
+	Metric string  // PerfCheck: memory, memory_growth, cpu, cpu_peak, slow_frames, frame_time, frame_max, data
+	Limit  float64 // PerfCheck: the value must be below this
+	Line   int
+}
+
+func (p PerfStep) nodeType() string { return "perf" }
+func (p PerfStep) GetLine() int     { return p.Line }
+func (p PerfStep) stepType() string { return "perf" }
+
 // ---- TimedStep ----
 
 // TimedStep is a step with its own time budget: `wait until "Done" appears within 90 seconds`.
@@ -433,6 +457,7 @@ const (
 	CheckContains   ResponseCheckKind = "contains" // contains "premium"
 	CheckJSONEquals ResponseCheckKind = "json"     // json "data.plan" equals "pro"
 	CheckJSONExists ResponseCheckKind = "exists"   // json "data.plan" exists
+	CheckTime       ResponseCheckKind = "time"     // below 800 ms (Status holds the limit)
 )
 
 // ResponseCheck is the condition part of a response statement.
