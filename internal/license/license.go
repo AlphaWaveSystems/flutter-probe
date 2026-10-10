@@ -55,7 +55,9 @@ func (c Claims) Has(p Plan) bool {
 	return false
 }
 
-var b64 = base64.RawURLEncoding
+// Strict rejects non-canonical encodings (non-zero trailing bits), so a key has
+// exactly one valid spelling and cannot be "tampered" into an alias of itself.
+var b64 = base64.RawURLEncoding.Strict()
 
 // ErrNoPublicKey means no verification key is configured.
 var ErrNoPublicKey = errors.New("license: no verification key configured")
