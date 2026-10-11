@@ -118,10 +118,16 @@ func FindByName(sims []Simulator, name string) *Simulator {
 // Boot boots a simulator by UDID.
 func (s *SimCtl) Boot(ctx context.Context, udid string) error {
 	_, err := s.run(ctx, "boot", udid)
-	if err != nil && !strings.Contains(err.Error(), "already booted") {
+	if err != nil && !isAlreadyBooted(err.Error()) {
 		return fmt.Errorf("simctl boot: %w", err)
 	}
 	return nil
+}
+
+// isAlreadyBooted recognises simctl's answer to booting a simulator that is up already; the wording
+// differs between Xcode versions ("already booted", "Unable to boot device in current state: Booted").
+func isAlreadyBooted(msg string) bool {
+	return strings.Contains(msg, "already booted") || strings.Contains(msg, "current state: Booted")
 }
 
 // Shutdown shuts down a simulator.
