@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## 0.24.0 - 2026-10-10
+## 0.24.0 - 2026-10-11
 
 - Fixed: `double tap` and `long press` on a target that something else covers now return the same "covered by another widget" warning as `tap` (they used to succeed silently); `--fail-on-warning` turns it into a failure.
 
