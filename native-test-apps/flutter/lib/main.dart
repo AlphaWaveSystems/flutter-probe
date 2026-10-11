@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
+import 'probe_advertiser.dart';
+
 /// Flutter twin of the native fixture apps (native-test-apps/android and
 /// native-test-apps/ios): the identical 8-element surface with the identical
 /// identifiers and visible strings, so the same test scenarios run in three
@@ -9,8 +11,11 @@ import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   const probeEnabled = bool.fromEnvironment('PROBE_AGENT', defaultValue: false);
+  // PROBE_WIFI=true makes the agent listen on the network (a physical phone); the advertiser then lets
+  // Studio find it. Without it the agent listens on localhost only and nothing is advertised.
+  const wifi = bool.fromEnvironment('PROBE_WIFI', defaultValue: false);
   if (probeEnabled) {
-    await ProbeAgent.start();
+    await ProbeAgent.start(advertiser: wifi ? BonsoirAdvertiser() : null);
   }
   runApp(const FixtureApp());
 }
