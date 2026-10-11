@@ -72,10 +72,15 @@ func hostedUpload(cmd *cobra.Command, w io.Writer, cfg *config.Config, results [
 		statusWarn(w, "report upload skipped: %v", err)
 		return
 	}
-	env := hosted.Envelope{ProbeVersion: Version, DeviceClass: class, CI: hosted.CIFromEnv(nil)}
+	label, _ := cmd.Flags().GetString("upload-label")
+	if label == "" {
+		label = cfg.Hosted.Label
+	}
+	label = hosted.SanitizeLabel(label)
+	env := hosted.Envelope{ProbeVersion: Version, DeviceClass: class, CI: hosted.CIFromEnv(nil), RunLabel: label}
 	for _, r := range results {
 		if r.Attempts > 1 {
-			env.Retries = append(env.Retries, hosted.RetryOutcome{File: r.File, Test: r.TestName, Attempts: r.Attempts, Passed: r.Passed})
+			env.Retries = append(env.Retries, hosted.RetryOutcome{File: r.File, Test: r.TestName, Attempts: min(r.Attempts, 20), Passed: r.Passed})
 		}
 	}
 	var out io.Writer

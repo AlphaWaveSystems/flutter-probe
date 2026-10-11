@@ -58,6 +58,7 @@ type HostedConfig struct {
 	UploadReport bool          `yaml:"upload_report"` // upload the scrubbed run report after `probe test` (same as --upload-report)
 	URL          string        `yaml:"url"`           // service base URL; the default is a placeholder that is not live yet
 	Timeout      time.Duration `yaml:"timeout"`       // upload time limit (default 5s); an upload never fails the run
+	Label        string        `yaml:"label"`         // optional run label (a suite, shard or matrix leg; sanitized to [0-9A-Za-z._:/-], 64 chars). Two uploads of one CI job must differ in it
 }
 
 // PerfConfig holds performance-measuring defaults.

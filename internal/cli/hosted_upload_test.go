@@ -27,6 +27,15 @@ func uploadCmd(upload, dry bool) *cobra.Command {
 	return c
 }
 
+// ciEnv makes the process look like a GitHub Actions push run, which a real upload requires.
+func ciEnv(t *testing.T) {
+	t.Helper()
+	for k, v := range map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "push", "GITHUB_REPOSITORY": "o/r", "GITHUB_REF_NAME": "main",
+		"GITHUB_SHA": "0123456789abcdef0123456789abcdef01234567", "GITHUB_RUN_ID": "5", "GITHUB_RUN_ATTEMPT": "1"} {
+		t.Setenv(k, v)
+	}
+}
+
 func hostedSampleResults() []runner.TestResult {
 	return []runner.TestResult{{TestName: "login", File: "tests/login.probe", Passed: true, Attempts: 2}}
 }
@@ -36,7 +45,7 @@ func TestHostedUploadDoesNothingUnlessAskedFor(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
 	defer srv.Close()
 	var w bytes.Buffer
-	hostedUpload(uploadCmd(false, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{}, "simulator")
+	hostedUpload(uploadCmd(false, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{Platform: "ios"}, "simulator")
 	if hit || w.Len() != 0 {
 		t.Fatalf("not asked for, yet hit=%v out=%q", hit, w.String())
 	}
@@ -48,13 +57,14 @@ func TestHostedUploadWithoutKeySaysSoAndSendsNothing(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
 	defer srv.Close()
 	var w bytes.Buffer
-	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{}, "simulator")
+	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{Platform: "ios"}, "simulator")
 	if hit || !strings.Contains(w.String(), "hosted feature") || !strings.Contains(w.String(), "unaffected") {
 		t.Fatalf("hit=%v out=%q", hit, w.String())
 	}
 }
 
 func TestHostedUploadWithKeySendsOnceAndRetriesAreInTheEnvelope(t *testing.T) {
+	ciEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	pub, key := signedTestKey(t, license.Claims{ID: "l", Customer: "acme", Plans: []license.Plan{license.PlanProbeCloud}, Seats: 1, Expires: time.Now().Add(time.Hour)})
 	t.Setenv(license.KeyEnv, pub)
@@ -71,7 +81,7 @@ func TestHostedUploadWithKeySendsOnceAndRetriesAreInTheEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 	var w bytes.Buffer
-	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{ProbeVersion: "x"}, "simulator")
+	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{ProbeVersion: "x", Platform: "ios"}, "simulator")
 	if calls != 1 || auth != "Bearer "+key || !strings.Contains(string(body), `"attempts": 2`) || !strings.Contains(string(body), `"device_class": "simulator"`) {
 		t.Fatalf("calls=%d auth ok=%v body=%s out=%q", calls, auth == "Bearer "+key, body, w.String())
 	}
@@ -81,6 +91,7 @@ func TestHostedUploadWithKeySendsOnceAndRetriesAreInTheEnvelope(t *testing.T) {
 }
 
 func TestHostedUploadFailureIsAWarningOnly(t *testing.T) {
+	ciEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	pub, key := signedTestKey(t, license.Claims{ID: "l", Customer: "acme", Plans: []license.Plan{license.PlanProbeCloud}, Seats: 1, Expires: time.Now().Add(time.Hour)})
 	t.Setenv(license.KeyEnv, pub)
@@ -90,13 +101,14 @@ func TestHostedUploadFailureIsAWarningOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", http.StatusServiceUnavailable) }))
 	defer srv.Close()
 	var w bytes.Buffer
-	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL, Timeout: time.Second}}, hostedSampleResults(), runner.RunMetadata{}, "emulator")
+	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL, Timeout: time.Second}}, hostedSampleResults(), runner.RunMetadata{Platform: "android"}, "emulator")
 	if !strings.Contains(w.String(), "unaffected") || !strings.Contains(w.String(), "503") {
 		t.Fatalf("out=%q", w.String())
 	}
 }
 
 func TestHostedUploadRequiresTheProbeCloudPlan(t *testing.T) {
+	ciEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	pub, key := signedTestKey(t, license.Claims{ID: "l", Customer: "acme", Plans: []license.Plan{license.PlanTeam}, Seats: 1, Expires: time.Now().Add(time.Hour)})
 	t.Setenv(license.KeyEnv, pub)
@@ -107,7 +119,7 @@ func TestHostedUploadRequiresTheProbeCloudPlan(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
 	defer srv.Close()
 	var w bytes.Buffer
-	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{}, "emulator")
+	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, hostedSampleResults(), runner.RunMetadata{Platform: "android"}, "emulator")
 	if hit || !strings.Contains(w.String(), "probe_cloud") {
 		t.Fatalf("hit=%v out=%q", hit, w.String())
 	}
@@ -151,6 +163,7 @@ func TestDeviceClass(t *testing.T) {
 // A CI job supplies the key through PROBE_LICENSE_KEY: nothing is written to the runner, and the key
 // never shows up in any output, including a dry run, a failure and a server that echoes it back.
 func TestKeyFromEnvIsUsedAndNeverPrinted(t *testing.T) {
+	ciEnv(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	pub, key := signedTestKey(t, license.Claims{ID: "l", Customer: "acme", Plans: []license.Plan{license.PlanProbeCloud}, Seats: 1, Expires: time.Now().Add(time.Hour)})
@@ -168,7 +181,7 @@ func TestKeyFromEnvIsUsedAndNeverPrinted(t *testing.T) {
 	var status, cmdOut bytes.Buffer
 	c := uploadCmd(true, false)
 	c.SetOut(&cmdOut)
-	hostedUpload(c, &status, cfg, hostedSampleResults(), runner.RunMetadata{}, "simulator")
+	hostedUpload(c, &status, cfg, hostedSampleResults(), runner.RunMetadata{Platform: "ios"}, "simulator")
 	if auth != "Bearer "+key {
 		t.Fatalf("the key from %s was not used", license.KeyValueEnv)
 	}
@@ -176,7 +189,7 @@ func TestKeyFromEnvIsUsedAndNeverPrinted(t *testing.T) {
 	var dryStatus, dryOut bytes.Buffer
 	d := uploadCmd(false, true)
 	d.SetOut(&dryOut)
-	hostedUpload(d, &dryStatus, cfg, hostedSampleResults(), runner.RunMetadata{}, "simulator")
+	hostedUpload(d, &dryStatus, cfg, hostedSampleResults(), runner.RunMetadata{Platform: "ios"}, "simulator")
 
 	for name, stream := range map[string]string{"status": status.String(), "command output": cmdOut.String(), "dry-run status": dryStatus.String(), "dry-run output": dryOut.String()} {
 		if strings.Contains(stream, key) || strings.Contains(stream, "FP2.") {

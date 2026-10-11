@@ -59,6 +59,29 @@ prints the exact payload, after scrubbing, and sends nothing. It needs no licens
   (`GITHUB_REPOSITORY`, `GITHUB_REF_NAME`, `GITHUB_HEAD_REF`, `GITHUB_SHA`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`); no other
   environment variable is read.
 
+### Needed for a real upload
+
+The hosted service identifies a run by its CI facts, so a real upload (not a dry run) needs a GitHub Actions run with the standard
+variables set, and a report that names its platform (a connected device). Outside CI, or when the platform or commit hash is
+missing, the CLI prints a clear warning saying why nothing was uploaded; `--upload-dry-run` still prints the payload and notes
+that a real upload would be refused. Pull requests use the source branch (`GITHUB_HEAD_REF`, not `N/merge`) as the branch and
+send the target branch (`GITHUB_BASE_REF`) as `base_branch`; the job id (`GITHUB_JOB`, the job_id of the current job) is sent as
+`job`. At most 5,000 results are accepted.
+
+### Several uploads in one job
+
+Uploads are keyed by the CI run, the job and a label. Two uploads from the same job (a matrix, shards or two suites) **must**
+carry different labels, or the second is refused. Set it with `--upload-label` or `hosted.label`, for example `shard-2-of-4` or the
+matrix values:
+
+```bash
+probe test tests/ --upload-report --upload-label "ios-${{ matrix.os }}"
+```
+
+A label is 1 to 64 characters of letters, digits and `. _ : / -`; anything else is replaced by `-`. GitHub's documentation defines
+`GITHUB_JOB` as the job_id of the current job, and a matrix is defined under that job_id, so matrix legs most likely share it;
+the documentation does not say so in as many words, which is why the matrix values belong in the label.
+
 ## What is not sent
 
 - Screenshots, videos and logs.
@@ -82,6 +105,7 @@ key prints a warning and never changes the exit status of the run or delays it n
 | `--upload-report` / `hosted.upload_report` | Upload the scrubbed report after the run |
 | `--upload-dry-run` | Print the payload, send nothing |
 | `hosted.url` | Service base URL (https required; plain http only for localhost). The built-in default is a placeholder host that is not live |
+| `--upload-label` / `hosted.label` | Label for this upload (suite, shard or matrix leg); needed when one job uploads more than once |
 | `hosted.timeout` | Upload time limit, default `5s` |
 
 The wire format of the upload is a preview and may change.

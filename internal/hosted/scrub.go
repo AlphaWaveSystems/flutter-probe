@@ -91,6 +91,11 @@ func (s *Scrubber) walk(key string, v any) any {
 				s.st.DroppedFields++
 				continue
 			}
+			if n, ok := x.(json.Number); ok && k == "attempts" {
+				if v, err := n.Int64(); err == nil && v > 20 {
+					x = json.Number("20") // the service accepts 2 to 20 attempts
+				}
+			}
 			out[k] = s.walk(k, x)
 		}
 		return out

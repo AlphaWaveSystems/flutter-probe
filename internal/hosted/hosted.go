@@ -8,6 +8,7 @@ package hosted
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -25,6 +26,7 @@ type Envelope struct {
 	ProbeVersion string         `json:"probe_version"`
 	DeviceClass  string         `json:"device_class"` // emulator | simulator | physical | cloud | unknown
 	CI           *CIInfo        `json:"ci,omitempty"`
+	RunLabel     string         `json:"run_label,omitempty"` // optional free label for a suite, shard or matrix leg; part of the server's run key, so two uploads of one CI job must differ in it
 	Retries      []RetryOutcome `json:"retries,omitempty"`
 }
 
@@ -32,7 +34,9 @@ type Envelope struct {
 type CIInfo struct {
 	Provider    string `json:"provider"`
 	Repository  string `json:"repository,omitempty"`
-	Branch      string `json:"branch,omitempty"`
+	Branch      string `json:"branch,omitempty"`      // push: GITHUB_REF_NAME; pull request: GITHUB_HEAD_REF (the source branch, not "N/merge")
+	BaseBranch  string `json:"base_branch,omitempty"` // pull request only: GITHUB_BASE_REF (the target branch); omitted on push
+	Job         string `json:"job,omitempty"`         // GITHUB_JOB, the job id (1 to 100 of [0-9A-Za-z_-]); omitted if it does not fit
 	CommitSHA   string `json:"commit_sha,omitempty"`
 	PullRequest int    `json:"pull_request,omitempty"`
 	RunID       string `json:"run_id,omitempty"`
@@ -72,9 +76,12 @@ func CIFromEnv(getenv func(string) string) *CIInfo {
 		Provider:   "github-actions",
 		Repository: getenv("GITHUB_REPOSITORY"),
 		Branch:     getenv("GITHUB_REF_NAME"),
-		CommitSHA:  getenv("GITHUB_SHA"),
+		CommitSHA:  strings.ToLower(getenv("GITHUB_SHA")),
 		RunID:      getenv("GITHUB_RUN_ID"),
 		RunAttempt: getenv("GITHUB_RUN_ATTEMPT"),
+	}
+	if job := getenv("GITHUB_JOB"); jobRe.MatchString(job) {
+		ci.Job = job
 	}
 	if strings.HasPrefix(getenv("GITHUB_EVENT_NAME"), "pull_request") {
 		if m := prRef.FindStringSubmatch(getenv("GITHUB_REF_NAME")); m != nil {
@@ -87,6 +94,7 @@ func CIFromEnv(getenv func(string) string) *CIInfo {
 		if head := getenv("GITHUB_HEAD_REF"); head != "" {
 			ci.Branch = head
 		}
+		ci.BaseBranch = getenv("GITHUB_BASE_REF")
 	}
 	return ci
 }
@@ -95,4 +103,82 @@ func CIFromEnv(getenv func(string) string) *CIInfo {
 // the callers.
 type Transport interface {
 	Send(ctx context.Context, licenseKey string, body []byte) error
+}
+
+var (
+	sha40   = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	decimal = regexp.MustCompile(`^[0-9]+$`)
+	labelRe = regexp.MustCompile(`^[0-9A-Za-z._:/-]{1,64}$`)
+	jobRe   = regexp.MustCompile(`^[0-9A-Za-z_-]{1,100}$`)
+)
+
+// MaxResults is the most results one upload may carry.
+const MaxResults = 5000
+
+// ValidLabel reports whether s is an acceptable run label (1 to 64 of [0-9A-Za-z._:/-]) or empty.
+func ValidLabel(s string) bool { return s == "" || labelRe.MatchString(s) }
+
+// SanitizeLabel turns free text (for example matrix values) into a valid run label: characters outside
+// the allowed set become '-', and the result is cut to 64 characters.
+func SanitizeLabel(s string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(s) {
+		if r < 0x80 && (r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || strings.ContainsRune("._:/-", r)) {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('-')
+		}
+	}
+	out := b.String()
+	if len(out) > 64 {
+		out = out[:64]
+	}
+	return out
+}
+
+// Preflight lists why this upload would be refused, so the user gets a clear warning instead of a
+// rejected request: the run must be a GitHub Actions run with complete CI facts, the report must name its
+// platform (android or ios), carry at most MaxResults results, and the suite label must be valid.
+func Preflight(env Envelope, report []byte) []string {
+	var problems []string
+	switch ci := env.CI; {
+	case ci == nil:
+		problems = append(problems, "this is not a GitHub Actions run, and the hosted service needs the CI facts (repository, branch, commit); only --upload-dry-run works outside CI")
+	default:
+		if ci.Provider != "github-actions" {
+			problems = append(problems, "unsupported CI provider")
+		}
+		if ci.Repository == "" {
+			problems = append(problems, "GITHUB_REPOSITORY is empty")
+		}
+		if ci.Branch == "" {
+			problems = append(problems, "no branch (GITHUB_REF_NAME / GITHUB_HEAD_REF is empty)")
+		}
+		if !sha40.MatchString(ci.CommitSHA) {
+			problems = append(problems, "GITHUB_SHA is not a 40-character commit hash")
+		}
+		if !decimal.MatchString(ci.RunID) || !decimal.MatchString(ci.RunAttempt) {
+			problems = append(problems, "GITHUB_RUN_ID or GITHUB_RUN_ATTEMPT is not a number")
+		}
+	}
+	if !ValidLabel(env.RunLabel) {
+		problems = append(problems, "the run label must be 1 to 64 characters of letters, digits, '.', '_', ':', '/' or '-'")
+	}
+	var rep struct {
+		Metadata struct {
+			Platform string `json:"platform"`
+		} `json:"metadata"`
+		Results []json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal(report, &rep); err != nil {
+		problems = append(problems, "the report is not valid JSON")
+		return problems
+	}
+	if p := rep.Metadata.Platform; p != "android" && p != "ios" {
+		problems = append(problems, "the report has no platform (android or ios) in its metadata, which happens when no device was connected")
+	}
+	if len(rep.Results) > MaxResults {
+		problems = append(problems, fmt.Sprintf("the report has %d results; at most %d can be uploaded", len(rep.Results), MaxResults))
+	}
+	return problems
 }

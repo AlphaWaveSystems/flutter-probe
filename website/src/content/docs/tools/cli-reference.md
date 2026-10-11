@@ -54,6 +54,7 @@ probe test [path] [flags]
 | `--match-loose` | `false` | Match text selectors loosely: fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms and whitespace on both sides (`Änderungen` matches `anderungen`, `Don't Allow` matches `Don’t Allow`). `defaults.match: loose` in probe.yaml sets it permanently. Ids (`#key`) are never folded |
 | `--timeout` | `30s` | Per-step timeout. A single step can override it: `... within 90 seconds`. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
 | `--upload-report` | `false` | Upload the scrubbed JSON report to the hosted service (Probe Cloud, preview; needs a `probe_cloud` license; also `hosted.upload_report`). Warnings only, never fails the run. See [Probe Cloud (preview)](/tools/probe-cloud-preview/) |
+| `--upload-label NAME` | — | Label for this upload (also `hosted.label`): a suite, shard or matrix leg such as `shard-2-of-4`; two uploads of one CI job must differ in it |
 | `--upload-dry-run` | `false` | Print the exact payload `--upload-report` would send and send nothing (no license needed) |
 | `--measure-all` | `false` | Measure every test: open a performance window named after the test around its body (also `perf.measure_all` in probe.yaml). Tests that use `start measuring` themselves are left alone. See [Performance testing](/advanced/performance/) |
 | `--perf-baseline FILE` | — | Compare every `start measuring` window with this baseline; a test whose numbers got worse than the tolerance fails. See [Performance testing](/advanced/performance/) |
