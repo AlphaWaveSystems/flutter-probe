@@ -73,6 +73,7 @@ The **ProbeAgent** is a Dart package you add to your Flutter app as a dev depend
 ```bash
 brew tap AlphaWaveSystems/tap
 brew install probe
+# canary (pre-release) builds: brew install AlphaWaveSystems/tap/probe@next, see the installation docs
 ```
 
 Upgrades are handled automatically with `brew upgrade probe`.

@@ -23,6 +23,8 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
 | `probe studio` | Launch interactive test studio |
 
+`probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)).
+
 ## probe test
 
 Run `.probe` test files against a connected device.
