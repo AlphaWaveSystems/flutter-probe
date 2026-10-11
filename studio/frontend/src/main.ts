@@ -628,13 +628,19 @@ type DeviceInfo = {
 
 let lastDeviceList: DeviceInfo[] = [];
 
+let refreshSeq = 0;
+
 async function refreshDevices() {
   const select = $("device-picker") as HTMLSelectElement;
   const previous = select.value;
-  clearChildren(select);
-  select.appendChild(makeOption("", "— select device —"));
+  // Two refreshes can overlap (the one at start-up and a click on ↻): only the newest one may fill
+  // the list, and the list is rebuilt in one synchronous step, so no device is ever listed twice.
+  const seq = ++refreshSeq;
   try {
     const devs = ((await ListDevices()) ?? []) as DeviceInfo[];
+    if (seq !== refreshSeq) return;
+    clearChildren(select);
+    select.appendChild(makeOption("", "— select device —"));
     lastDeviceList = devs;
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
@@ -659,6 +665,9 @@ async function refreshDevices() {
       toast("All devices are shut down. Boot a simulator/emulator first.", "info");
     }
   } catch (err) {
+    if (seq !== refreshSeq) return;
+    clearChildren(select);
+    select.appendChild(makeOption("", "— select device —"));
     console.error("ListDevices failed", err);
     toast(`Device discovery failed: ${err}`, "error");
   }

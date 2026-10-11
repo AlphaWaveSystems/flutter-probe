@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-10
+
 ### Fixed
+- **`double tap` and `long press` on a covered target now warn like `tap`** (#265): when something unrelated is on top at the target's point and the screen does not change, the step returns the same "covered by another widget" warning, which `--fail-on-warning` turns into a failure. They used to succeed silently against a target hidden by an overlay.
+- **`probe device start --platform ios --name ...` failed on a simulator that was already booted** on Xcode versions that word the error "Unable to boot device in current state: Booted". It now treats that as success, like the older wording. Found by the browser UI suite.
+- **Studio's device picker listed every device twice** when two refreshes overlapped (start-up plus a click on refresh); only the newest refresh fills the list now. Found by the browser UI suite.
 - **Pricing page no longer advertises what does not exist:** the pay-per-use card is now "Pay-per-use for AI agents: Planned" with no features listed, the Team card is labelled planned/not available yet (badge "Planned", "Planned features"), and the waitlist is a plain email link instead of a form with placeholder fields that collected nothing. The experimental `--pay` flag and the `wallet` config key stay but are described as experimental (the flag is hidden from `--help`).
 
 ### Changed
@@ -16,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
 
 ### Added
+- **Compatibility policy for 1.x** (docs): what is frozen (ProbeScript grammar, `probe.yaml`, the agent protocol, report JSON), what is additive-only, what is outside the promise (Studio, experimental features, human-readable output) and the deprecation process.
+- **Studio UI E2E in a browser** (`make studio-e2e-web`, `studio/e2e-web/`): the real frontend and Go backend, served by Studio's new headless mode (`PROBE_STUDIO_HEADLESS=1`, test-only, loopback, per-launch token) and driven by Playwright in headless Chromium: no native window, cursor or focus. 9 tests need no device and run on any CI runner (`.github/workflows/studio-e2e-web.yml`); 9 more use a named simulator running the fixture app (`scripts/studio-e2e-web.sh`, macOS). The native-window suite remains for what needs a real window.
 - **Studio automation endpoint** (opt-in `PROBE_STUDIO_AUTOMATION=1`; confined to the workspace a person opened plus `PROBE_STUDIO_AUTOMATION_ROOTS`, symlinks resolved; the MCP client only talks to loopback): loopback-only control endpoint with a per-launch token and a 0600 discovery file, exposing open_workspace, connect, run_file (async), cancel, run_state, results, screenshot and more, so Studio can be driven without a window, cursor or focus. Refuses requests from browsers, non-loopback hosts and without the token.
 - **MCP tools `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`** drive a running Studio through that endpoint.
 - Studio tracks the current/last run (step, step history, results) for `RunState`; `RunFileAsync` starts a run in the background.
