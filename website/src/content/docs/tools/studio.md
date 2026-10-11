@@ -16,6 +16,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **Live device pane** — the connected simulator, emulator, or physical device's screen mirrored at the device's native pace via repeated `take_screenshot` RPCs. Frame metadata (`N fps · Mms/frame`) shown in the title.
 - **Live widget tree inspector** — every device frame is bundled with a `dump_widget_tree` snapshot, so the inspector pane updates per frame. No refresh button.
 - **In-process test execution** — Studio's Go backend imports `internal/runner` directly. No subprocess shell-out, no JSON wire format. Results stream into the timeline as `run:result` events fire.
+- **Live step highlight** — while a file runs, the editor gutter follows the executing step (▶ while running, then ✓ / ✗ / – stays on the line; a failed line shows its error on hover). Step rows nest under each test in the results timeline with line number, duration and attempt; click one to jump to its line. The toolbar shows `step N of M` and a **Cancel** button stops the run.
 - **Toast notifications**, dark theme, draggable native title bar, About panel.
 - **Keyboard shortcuts**: ⌘R run, ⌘S save, ⌘B connect/disconnect, ⌘P open workspace, ⌘K refresh devices, `?` help, `Esc` close help.
 

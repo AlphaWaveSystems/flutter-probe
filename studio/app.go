@@ -38,6 +38,9 @@ type App struct {
 	wifi      *wifiDiscovery
 	workspace string // directory whose probe.yaml governs connections; "" → cwd
 
+	runMu     sync.Mutex
+	runCancel context.CancelFunc // non-nil while RunFile is executing
+
 	recMu     sync.Mutex
 	recActive bool
 	recLines  []string
@@ -803,7 +806,25 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 		return nil, fmt.Errorf("not connected — pick a device first")
 	}
 
+	// One run at a time; CancelRun stops it.
+	runCtx, cancel := context.WithCancel(a.ctx)
+	a.runMu.Lock()
+	if a.runCancel != nil {
+		a.runMu.Unlock()
+		cancel()
+		return nil, fmt.Errorf("a run is already in progress")
+	}
+	a.runCancel = cancel
+	a.runMu.Unlock()
+	defer func() {
+		a.runMu.Lock()
+		a.runCancel = nil
+		a.runMu.Unlock()
+		cancel()
+	}()
+
 	wailsruntime.EventsEmit(a.ctx, "run:started", path)
+	wailsruntime.EventsEmit(a.ctx, "run:plan", planFile(path))
 
 	r := runner.New(conn.cfg, conn.client, conn.deviceCtx, runner.RunOptions{
 		Files:   []string{path},
@@ -813,13 +834,90 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 	r.OnResult(func(res runner.TestResult) {
 		wailsruntime.EventsEmit(a.ctx, "run:result", toRunResult(res))
 	})
-	results, err := r.Run(a.ctx)
+	r.OnStep(func(ev runner.StepEvent) {
+		wailsruntime.EventsEmit(a.ctx, "run:step", toRunStep(ev))
+	})
+	results, err := r.Run(runCtx)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))
 	}
 	wailsruntime.EventsEmit(a.ctx, "run:finished", out)
+	if err == nil && runCtx.Err() != nil {
+		err = fmt.Errorf("run cancelled")
+	}
 	return out, err
+}
+
+// CancelRun stops the run started by RunFile, if any. The current step is
+// interrupted; the runner reports the test as failed with a cancellation
+// error and `run:finished` is still emitted.
+func (a *App) CancelRun() {
+	a.runMu.Lock()
+	cancel := a.runCancel
+	a.runMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// RunStep is one `run:step` event: the step at Line of Test is started, or
+// finished with a verdict. Line numbers are 1-based in the open file.
+type RunStep struct {
+	File        string  `json:"file"`
+	Test        string  `json:"test"`
+	Line        int     `json:"line"`
+	Description string  `json:"description"`
+	Status      string  `json:"status"` // started | passed | failed | skipped
+	Duration    float64 `json:"durationMs"`
+	Error       string  `json:"error,omitempty"`
+	Attempt     int     `json:"attempt"`
+	Depth       int     `json:"depth"`
+}
+
+func toRunStep(ev runner.StepEvent) RunStep {
+	rs := RunStep{
+		File:        ev.File,
+		Test:        ev.TestName,
+		Line:        ev.Line,
+		Description: ev.Description,
+		Status:      string(ev.Status),
+		Duration:    float64(ev.Duration.Milliseconds()),
+		Attempt:     ev.Attempt,
+		Depth:       ev.Depth,
+	}
+	if ev.Error != nil {
+		rs.Error = ev.Error.Error()
+	}
+	return rs
+}
+
+// RunPlan lists the tests of a file with their top-level step counts so the
+// toolbar can show "step N of M" before the first result arrives.
+type RunPlan struct {
+	Tests []RunPlanTest `json:"tests"`
+}
+
+type RunPlanTest struct {
+	Name  string `json:"name"`
+	Line  int    `json:"line"`
+	Steps int    `json:"steps"`
+}
+
+func planFile(path string) RunPlan {
+	var plan RunPlan
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return plan
+	}
+	prog, err := parser.ParseFile(string(src))
+	if err != nil || prog == nil {
+		return plan
+	}
+	for _, t := range prog.Tests {
+		plan.Tests = append(plan.Tests, RunPlanTest{Name: t.Name, Line: t.Line, Steps: len(t.Body)})
+	}
+	return plan
 }
 
 func toRunResult(res runner.TestResult) RunResult {

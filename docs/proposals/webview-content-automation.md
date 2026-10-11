@@ -26,7 +26,7 @@ no equivalent today. This proposes whether, and how, to build one.
   WebView-related line in `executor.dart` is `_openLink`'s
   `'useWebView': false` (line 974), which forces every `open link` call out
   to the system browser instead of an in-app WebView. Second, and more
-  important: unlike N-2 (which opened with nect-flutter's real, blocking
+  important: unlike N-2 (which opened with the social app's real, blocking
   `image_picker` → `PHPickerViewController` flow), neither of this
   project's reference apps has any documented in-app WebView content
   anywhere in this repo's roadmap, gap-analysis, or evidence corpus. There
@@ -77,14 +77,14 @@ extend; a WebView verb would be new code end to end.
 ## No concrete justifying flow found
 
 N-2 didn't get built on the strength of "Maestro has this and we don't" —
-it got built because nect-flutter had a real, code-cited, currently-blocked
+it got built because the social app had a real, code-cited, currently-blocked
 flow (`post_form_page.dart:561`/`848`, an `image_picker.pickMultiImage()`
 call with no bypass). This proposal looked for the equivalent and didn't
 find one:
 
 - `docs/roadmap/gap-analysis-2026-08.md` and
   `docs/roadmap/maestro-competitive-roadmap.md`/`-COMPLETED.md` describe
-  water-sip as a "Firebase/IAP consumer app" and nect-flutter as a
+  the consumer app as a "Firebase/IAP consumer app" and the social app as a
   "Firebase/Firestore social app" with a 66+/76-flow Maestro suite — neither
   description, nor any of the individual task write-ups (`B-1`, `E-3`,
   `N-1`, `N-2`, or the `docs/evidence/**` folders they link to), mentions
@@ -212,7 +212,7 @@ Don't write any code yet. Before this proposal's status changes:
    prospective adopter's app embeds WebView content in a screen that needs
    test coverage (a help/FAQ page, a checkout or SSO redirect, a
    CMS-driven onboarding screen). This is the same bar N-2 met with
-   nect-flutter's photo picker; nothing here should be built without it.
+   the social app's photo picker; nothing here should be built without it.
 2. If and when one appears, scope Android-only first per Option C/B,
    sized against that real flow rather than the hypothetical sketch above
    — and separately validate whether an iOS mechanism is even viable

@@ -74,6 +74,7 @@ type CompositeRunner struct {
 	cfg     *config.Config
 	recipes map[string]parser.RecipeDef
 	opts    RunOptions
+	onStep  func(StepEvent) // optional per-step observer, set by Runner.OnStep
 }
 
 // NewCompositeRunner creates a CompositeRunner with the given devices.
@@ -165,6 +166,8 @@ func (cr *CompositeRunner) RunCompositeTest(ctx context.Context, test parser.Com
 			exec.SetReconnectPolicy(cr.cfg.Agent.ReconnectAttempts, cr.cfg.Agent.ReconnectBackoff)
 			exec.SetLaunchTimeout(cr.cfg.Agent.LaunchTimeout)
 			exec.SetAI(cr.cfg.AI)
+			exec.OnStep(cr.onStep)
+			exec.SetStepContext(file, test.Name, 1)
 			for _, rec := range cr.recipes {
 				exec.RegisterRecipe(rec)
 			}

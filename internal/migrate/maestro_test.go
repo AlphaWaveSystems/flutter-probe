@@ -129,7 +129,7 @@ func TestConvertYAML_UnknownCommand_GeneratesComment(t *testing.T) {
 //
 // The four commands named in the roadmap (setPermissions, relativePoint,
 // retry, assertScreenshot) turned out not to appear anywhere in
-// nect-flutter's real 76-flow suite — the actual, evidence-based gaps found
+// a real-world 76-flow Maestro suite — the actual, evidence-based gaps found
 // by running the converter against that corpus were extendedWaitUntil (341
 // uses), scrollUntilVisible (73), and eraseText (27). Both sets are covered
 // below.

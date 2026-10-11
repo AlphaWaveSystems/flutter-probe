@@ -6,7 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Pricing page no longer advertises what does not exist:** the pay-per-use card is now "Pay-per-use for AI agents: Planned" with no features listed, the Team card is labelled planned/not available yet (badge "Planned", "Planned features"), and the waitlist is a plain email link instead of a form with placeholder fields that collected nothing. The experimental `--pay` flag and the `wallet` config key stay but are described as experimental (the flag is hidden from `--help`).
+
+### Changed
+- **License keys use format FP2** (`FP2.<kid>.<payload>.<signature>`): the Ed25519 signature covers the exact text `FP2.<kid>.<payload>`, so the key id and the format tag are signed. The CLI verifies in a fixed order (shape, key id lookup, signature, claims, expiry), against a built-in trusted key set and a revoked key id list. A key signed with an unknown key id asks to update the CLI, a revoked one says so, `seats` must be at least 1 (0 is rejected), claims need `v: 2`, a `kid` equal to the key's, at least one plan and an expiry after the issue time. The old FP1 format is dropped and reported as an old format. The built-in key set is empty in this change; `PROBE_LICENSE_PUBKEY` (now `kid=publicKey[,kid=publicKey]`) still adds keys for development and tests. A shared test vector is checked in the unit tests.
+
+### Security
+- Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
+
 ### Added
+- **Studio: live step highlight.** While a file runs, the editor's gutter follows the executing step (▶, then ✓ / ✗ / – stays on the line; a failed line keeps its error on hover), step rows nest under each test in the results timeline with line, duration and attempt (click one to jump to its line), the toolbar shows `step N of M`, and a **Cancel** button stops the run. Backed by a new runner hook, `Runner.OnStep` / `Executor.OnStep`, that emits a `StepEvent` before and after every step (including recipe bodies and composite devices).
+- Website: draft pages for terms of service, privacy policy, refund and cancellation policy and contact (`/terms`, `/privacy`, `/refunds`, `/contact`), linked from the footers and the pricing page. Marked "draft for review" until confirmed.
 - **`probe license activate <key>` / `probe license status`:** stores and verifies an offline ed25519-signed license key in `~/.flutterprobe/license.key`. Only hosted features will ever need one; everything that runs locally stays free and works without a key.
 - **Release pipeline:** canary channel (`vX.Y.Z-next.N` tags publish `probe@next` on Homebrew and pre-release Dart packages), a dogfood gate workflow, an automated review-agent check on pull requests, and auto-rollback of a stable release when a `prod-incident` is filed within 24 hours. `scripts/release.sh` accepts canary versions. See `docs/ops/release-pipeline.md`.
 - **Studio E2E suite** (`make studio-e2e`, `studio/e2e/`): drives the real Studio window on macOS through the accessibility tree and screenshots — launch, device picker, connect, run, results, failures, performance lines, recorder, settings, AI-chat and WiFi overlays, error paths — against a new fixture app (`native-test-apps/studio-fixture/`). Optional vision assertions via `STUDIO_E2E_AI_PROVIDER`. Parameterised for dogfooding on any app (`studio/e2e/DOGFOOD.md`); self-hosted macOS workflow `studio-e2e.yml`.
@@ -672,7 +683,7 @@ Fixes for limitations hit during a release-gate run (FP-13), reported against CL
   machinery kills a busy-but-alive connection (four load-shape experiments, kept in the evidence
   folder). See `docs/evidence/i237-ws-drop-investigation-2026-08-15/`.
 - **`probe migrate maestro` hardened against 2.x syntax and two real bugs (G-3).** Audited the
-  converter against nect-flutter's real 76-flow suite: `setPermissions`, `retry` (with recursive
+  converter against a real-world 76-flow Maestro suite: `setPermissions`, `retry` (with recursive
   nested-command conversion, also fixed for `repeat`), and `assertScreenshot` are now supported,
   and `relativePoint`-style `{point: "x%,y%"}` selectors get a clear `# TODO` instead of a real bug
   the old code had — silently emitting `tap on "map[point:50%,10%]"`, confirmed against an actual
@@ -681,7 +692,7 @@ Fixes for limitations hit during a release-gate run (FP-13), reported against CL
   `eraseText` — are now supported too. Also fixed: a stale `setLocation` "not supported" comment
   (it's been a real ProbeScript verb since before this cycle), and `probe migrate maestro <dir>`
   silently finding zero files for any suite organized into feature subdirectories — the real-world
-  norm, including nect-flutter's own — because directory discovery was single-level, not recursive.
+  norm, including the social app's own — because directory discovery was single-level, not recursive.
   Every one of the 76 real flows converted and parses as valid ProbeScript.
   See `docs/evidence/g3-migrate-maestro-hardening-2026-08-15/`.
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown

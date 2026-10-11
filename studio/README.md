@@ -10,6 +10,7 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > - Device picker that filters to booted simulators / online emulators
 > - Live device stream + widget tree inspector (event-driven, parallel RPCs)
 > - In-process test execution with a streaming results timeline
+> - Live step highlight: the editor gutter follows the executing step, step rows nest under each test, `step N of M` in the toolbar, Cancel
 > - Performance lines (memory, CPU, frames, network) under each result that uses `start measuring`
 > - Keyboard shortcuts, toast notifications, dark theme
 >

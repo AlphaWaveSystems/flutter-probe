@@ -21,7 +21,7 @@ zero external dependencies. Build: `cd android && JAVA_HOME=$(/usr/libexec/java_
 ./gradlew assembleDebug`.
 
 **Run pattern** (`android/probe-tests/native_suite.probe`, verified 5/5 on a real emulator):
-probe's session lives in any ProbeAgent host app (e.g. water-sip); the native verbs are CLI-side
+probe's session lives in any ProbeAgent host app (e.g. the consumer app); the native verbs are CLI-side
 and never touch the Dart agent. Foreground this app over the host before the run:
 
 ```
