@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.24.0] - 2026-10-10
 
+> **Performance baselines on emulators and simulators:** the frame metrics (`frame_time`, `slow_frames`) vary a lot between runs of the same build there, even with the stable-metrics default. Gate with `--perf-metrics memory,data` (plus `cpu` for windows of 5 s or more) and keep frame metrics for physical devices in profile mode. In compare mode, windows that span an app restart are skipped.
+
 ### Fixed
 - **`double tap` and `long press` on a covered target now warn like `tap`** (#265): when something unrelated is on top at the target's point and the screen does not change, the step returns the same "covered by another widget" warning, which `--fail-on-warning` turns into a failure. They used to succeed silently against a target hidden by an overlay.
 - **`probe device start --platform ios --name ...` failed on a simulator that was already booted** on Xcode versions that word the error "Unable to boot device in current state: Booted". It now treats that as success, like the older wording. Found by the browser UI suite.
@@ -22,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **A zero or negative baseline made the comparison meaningless** (`+0%` on a failing test). It now compares the absolute change against the noise floor and prints the real delta.
 - **A measuring window that spans an app restart** warns, is marked `window_spans_restart` in the report and is not compared with the baseline.
 - **`start measuring` with no app connected** says "no app is connected ... open the app first" instead of blaming the agent version.
-- **A measuring window that contains a relaunch of the app no longer reports zero memory and zero frames.** The agent-side window is re-opened on the new process after `restart the app`, `open the app`, `clear app data` and the other relaunch paths, so memory and frames cover the time since the relaunch. Such a window is marked `window_spans_restart`, and `--perf-update-baseline` leaves it (and any window with no memory and no frames) out of the baseline, with a warning, instead of writing zeros.
+- **A measuring window that contains a relaunch of the app no longer reports zero memory and zero frames.** The agent-side window is re-opened on the new process after `restart the app`, `clear app data` and the other steps that relaunch the process (a plain `open the app` that only brings the app to the front is not a restart), so memory and frames cover the time since the relaunch. Such a window is marked `window_spans_restart`, and `--perf-update-baseline` leaves it (and any window with no memory and no frames) out of the baseline, with a warning, instead of writing zeros.
 - **A `start measuring` without a name** is reported as `measurement`, so its baseline key no longer ends in an empty name.
 
 ### Changed
