@@ -110,6 +110,7 @@ func init() {
 	f.String("perf-history", "", "append this run's measurements to this JSON-lines file for `probe perf trend` (default <reports>/perf-history.jsonl)")
 	f.Bool("no-perf-history", false, "do not record measurements in the history file")
 	f.Bool("upload-report", false, "upload the scrubbed JSON report to the hosted service (Probe Cloud, preview) after the run; needs a license with the probe_cloud plan (also hosted.upload_report in probe.yaml). Never fails the run")
+	f.String("upload-label", "", "label for this upload (also hosted.label): a suite, shard or matrix leg such as shard-2-of-4; two uploads of one CI job must differ in it")
 	f.Bool("upload-dry-run", false, "print the exact payload --upload-report would send (after scrubbing) and send nothing; needs no license")
 	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")

@@ -205,6 +205,7 @@ Opt-in report upload to the hosted service (Probe Cloud, preview). Unrelated to 
 |-----|------|---------|-------------|
 | `upload_report` | bool | `false` | Upload the scrubbed report after `probe test` (same as `--upload-report`); needs a license with the `probe_cloud` plan |
 | `url` | string | placeholder, not live | Service base URL; https required (http only for localhost) |
+| `label` | string | empty | Label for this upload (suite, shard or matrix leg); needed when one CI job uploads more than once |
 | `timeout` | duration | `5s` | Upload time limit; an upload never fails the run |
 
 ### perf

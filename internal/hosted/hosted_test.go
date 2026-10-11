@@ -95,10 +95,18 @@ func TestSecretPatterns(t *testing.T) {
 	}
 }
 
+const goodSHA = "0123456789abcdef0123456789abcdef01234567"
+
+func goodCI() *CIInfo {
+	return &CIInfo{Provider: "github-actions", Repository: "a/b", Branch: "main", CommitSHA: goodSHA, RunID: "7", RunAttempt: "1"}
+}
+
+// baseOpts is a valid upload: CI facts complete and the report names its platform.
 func baseOpts(report string) Options {
+	report = strings.Replace(report, "{", `{"metadata":{"platform":"android"},`, 1)
 	return Options{
 		Report:     []byte(report),
-		Envelope:   Envelope{ProbeVersion: "0.24.0", DeviceClass: "simulator", CI: &CIInfo{Provider: "github-actions", Repository: "a/b"}, Retries: []RetryOutcome{{File: "a.probe", Test: "t", Attempts: 2, Passed: true}}},
+		Envelope:   Envelope{ProbeVersion: "0.24.0", DeviceClass: "simulator", CI: goodCI(), Retries: []RetryOutcome{{File: "a.probe", Test: "t", Attempts: 2, Passed: true}}},
 		LicenseKey: "FP2.test.key.sig",
 		Scrubber:   &Scrubber{Cwd: "/work", Home: "/home/x"},
 	}
@@ -283,5 +291,62 @@ func TestSanitize(t *testing.T) {
 		if got := Sanitize(in, "SECRETKEY"); got != want {
 			t.Errorf("Sanitize(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestLabelsAndJobAreFittedToTheirCharsets(t *testing.T) {
+	for in, want := range map[string]string{"shard-2-of-4": "shard-2-of-4", "ios 18 [x]": "ios-18--x-", "ünï": "-n-", "a:b/c.d_e": "a:b/c.d_e", strings.Repeat("x", 90): strings.Repeat("x", 64)} {
+		got := SanitizeLabel(in)
+		if got != want || !ValidLabel(got) {
+			t.Errorf("SanitizeLabel(%q) = %q (valid=%v), want %q", in, got, ValidLabel(got), want)
+		}
+	}
+	if ValidLabel("has space") || ValidLabel(strings.Repeat("x", 65)) || !ValidLabel("") {
+		t.Error("ValidLabel")
+	}
+	env := map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_JOB": "e2e_tests-1"}
+	if ci := CIFromEnv(envMap(env)); ci.Job != "e2e_tests-1" {
+		t.Errorf("job = %q", ci.Job)
+	}
+	env["GITHUB_JOB"] = "bad job!"
+	if ci := CIFromEnv(envMap(env)); ci.Job != "" {
+		t.Errorf("an invalid job id must be omitted, got %q", ci.Job)
+	}
+}
+
+func TestPreflightNamesWhatWouldBeRefused(t *testing.T) {
+	ok := baseOpts(`{"results":[]}`)
+	if p := Preflight(ok.Envelope, ok.Report); len(p) != 0 {
+		t.Fatalf("a valid upload has problems: %v", p)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*Options)
+		want   string
+	}{
+		{"no CI", func(o *Options) { o.Envelope.CI = nil }, "not a GitHub Actions run"},
+		{"short sha", func(o *Options) { o.Envelope.CI.CommitSHA = "abc" }, "40-character"},
+		{"upper-case sha", func(o *Options) { o.Envelope.CI.CommitSHA = strings.ToUpper(goodSHA) }, "40-character"},
+		{"run id not a number", func(o *Options) { o.Envelope.CI.RunID = "x1" }, "not a number"},
+		{"no branch", func(o *Options) { o.Envelope.CI.Branch = "" }, "no branch"},
+		{"bad label", func(o *Options) { o.Envelope.RunLabel = "a b" }, "run label"},
+		{"no platform", func(o *Options) { o.Report = []byte(`{"results":[]}`) }, "platform"},
+		{"too many results", func(o *Options) {
+			o.Report = []byte(`{"metadata":{"platform":"ios"},"results":[` + strings.TrimSuffix(strings.Repeat("{},", MaxResults+1), ",") + `]}`)
+		}, "at most"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			o := baseOpts(`{"results":[]}`)
+			o.Envelope.CI = goodCI()
+			c.mutate(&o)
+			if p := strings.Join(Preflight(o.Envelope, o.Report), "; "); !strings.Contains(p, c.want) {
+				t.Fatalf("problems = %q, want %q", p, c.want)
+			}
+			o.LicenseKey = "k"
+			if err := Upload(context.Background(), o); err == nil || !strings.Contains(err.Error(), "nothing was uploaded") {
+				t.Fatalf("a refused upload must not be sent: %v", err)
+			}
+		})
 	}
 }

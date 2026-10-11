@@ -164,6 +164,10 @@ func BuildPayload(o Options) ([]byte, Stats, error) {
 // Upload builds the payload and either prints it (DryRun) or sends it once with a short timeout.
 // The returned error is meant to be shown as a warning; it never has to fail a run.
 func Upload(ctx context.Context, o Options) error {
+	problems := Preflight(o.Envelope, o.Report)
+	if len(problems) > 0 && !o.DryRun {
+		return fmt.Errorf("nothing was uploaded: %s", strings.Join(problems, "; "))
+	}
 	body, st, err := BuildPayload(o)
 	if err != nil {
 		return err
@@ -172,6 +176,9 @@ func Upload(ctx context.Context, o Options) error {
 		fmt.Fprintf(o.Out, "report scrubbed: %d field(s) dropped, %d string(s) redacted or made relative, %d shortened\n", st.DroppedFields, st.Redactions+st.PathsMadeRel, st.Truncated)
 	}
 	if o.DryRun {
+		if o.Out != nil && len(problems) > 0 {
+			fmt.Fprintf(o.Out, "note: a real upload would be refused before sending: %s\n", strings.Join(problems, "; "))
+		}
 		if o.Out != nil {
 			fmt.Fprintf(o.Out, "dry run: nothing is sent. The request would be POST %s/v1/reports with the license key as a bearer token and this body:\n%s\n", baseOrDefault(o.BaseURL), body)
 		}
