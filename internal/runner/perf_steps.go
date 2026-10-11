@@ -18,7 +18,8 @@ type perfRun struct {
 	started   time.Time
 	httpFrom  int // sequence number of the HTTP log when the window opened
 	cpu       *perf.CPUSampler
-	restarted bool // the app was restarted inside the window
+	restarted bool    // the app was restarted inside the window
+	budgetMs  float64 // slow-frame budget asked for (0 = the agent default)
 }
 
 // perfState is what an executor knows about its measurements.
@@ -26,6 +27,8 @@ type perfState struct {
 	active  *perfRun
 	last    *perf.Metrics
 	results []perf.Metrics
+	// budgetWarned: the note about an agent without frame-budget support was printed.
+	budgetWarned bool
 }
 
 // PerfResults are the measurements the test took, in order.
@@ -93,7 +96,8 @@ func (e *Executor) startMeasuring(ctx context.Context, name string) error {
 	if res, err := e.client.HTTPLog(ctx, probelink.HTTPLogParams{CountOnly: true}); err == nil {
 		run.httpFrom = res.Latest
 	}
-	if err := e.client.PerfStart(ctx); err != nil {
+	run.budgetMs = e.perfBudgetMs
+	if err := e.startAgentWindow(ctx, run.budgetMs); err != nil {
 		if connectionGone(err) {
 			return fmt.Errorf("start measuring: no app is connected (%v): open the app first", err)
 		}
@@ -136,6 +140,11 @@ func (e *Executor) finishMeasuring(ctx context.Context, stop bool) (perf.Metrics
 		RasterAvgMs:  snap.RasterAvgMs,
 	}
 	m.MemGrowthMB = m.MemEndMB - m.MemStartMB
+	m.FrameBudgetMs = snap.FrameBudgetMs
+	if run.budgetMs > 0 && snap.FrameBudgetMs == 0 && !e.perf.budgetWarned {
+		e.perf.budgetWarned = true
+		fmt.Printf("    \033[33m⚠\033[0m  perf.frame_budget_ms is set but the agent does not support it (needs flutter_probe_agent >= 0.25): slow frames use 16.7 ms\n")
+	}
 	if run.cpu != nil {
 		var avg, peak float64
 		var ok bool
@@ -177,6 +186,19 @@ func connectionGone(err error) bool {
 	return false
 }
 
+// startAgentWindow opens the agent-side window, with a slow-frame budget when one is configured.
+func (e *Executor) startAgentWindow(ctx context.Context, budgetMs float64) error {
+	if budgetMs > 0 {
+		if bs, ok := e.client.(probelink.PerfBudgetStarter); ok {
+			return bs.PerfStartBudget(ctx, budgetMs)
+		}
+	}
+	return e.client.PerfStart(ctx)
+}
+
+// SetPerfFrameBudget sets the slow-frame budget (ms) for measuring windows; 0 keeps the agent default.
+func (e *Executor) SetPerfFrameBudget(ms float64) { e.perfBudgetMs = ms }
+
 // reapplyPerf re-opens the agent-side measuring window on a fresh app process after a relaunch
 // (the old process, and its window, are gone). Memory and frames then cover the time since the
 // relaunch; the window is marked as spanning a restart and is left out of baselines.
@@ -185,7 +207,7 @@ func (e *Executor) reapplyPerf(ctx context.Context) {
 		return
 	}
 	e.noteRestart()
-	if err := e.client.PerfStart(ctx); err != nil {
+	if err := e.startAgentWindow(ctx, e.perf.active.budgetMs); err != nil {
 		fmt.Printf("    \033[33m⚠\033[0m  could not resume the measuring window after the restart: %v\n", err)
 	}
 }

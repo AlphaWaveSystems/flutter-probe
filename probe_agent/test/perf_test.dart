@@ -25,4 +25,17 @@ void main() {
     expect(perf.snapshot()['frames'], 0);
     perf.stopWindow();
   });
+
+  test('the frame budget defaults to 16.7 ms and a window can choose another', () {
+    final perf = ProbePerf.instance;
+    perf.start();
+    expect(perf.snapshot()['frameBudgetMs'], ProbePerf.slowFrameMs);
+    perf.start(frameBudgetMs: 8.3);
+    expect(perf.snapshot()['frameBudgetMs'], 8.3);
+    perf.start(frameBudgetMs: -1); // nonsense falls back to the default
+    expect(perf.snapshot()['frameBudgetMs'], ProbePerf.slowFrameMs);
+    perf.start(frameBudgetMs: 5000);
+    expect(perf.snapshot()['frameBudgetMs'], ProbePerf.slowFrameMs);
+    perf.stopWindow();
+  });
 }

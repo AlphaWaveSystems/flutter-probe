@@ -95,6 +95,17 @@ These are recorded and shown, but **not** gated unless you ask: `memory_growth` 
 
 **On emulators and simulators the default gate is `memory`, `data` and `cpu` (windows of 5 seconds or more); `frame_time` and `slow_frames` gate only on physical devices.** Even with the stable default above, the frame metrics (`frame_time`, `slow_frames`) vary a lot between two runs of the same build on an emulator or a simulator (software rendering, shared host, debug builds), and a rerun against a fresh baseline can report regressions that are noise. Name the frame metrics explicitly (`--perf-metrics memory,data,frame_time`) if you want them gated there anyway; otherwise keep them for physical devices in profile mode. A configurable frame budget and a median over several runs are planned.
 
+### Slow-frame budget
+
+A frame is "slow" when its build+raster time exceeds 16.7 ms (one 60 Hz interval). On a 120 Hz display, or in a debug build where every frame is above that, set another budget in `probe.yaml`:
+
+```yaml
+perf:
+  frame_budget_ms: 8.3   # 120 Hz; use a looser value (for example 33) for debug simulator builds
+```
+
+The budget is sent with `probe.perf_start` (agent 0.25 or later; an older agent keeps 16.7 ms and the run prints a note). The report records it as `frame_budget_ms`, and `slow_frames` is not compared between windows that used different budgets.
+
 ### Restarts and unavailable numbers
 
 - A window that contains `restart the app` (or any step that relaunches the process, for example `clear app data`) spans two processes; `open the app` is not treated as a restart, it only counts when it actually has to launch the app again. The measuring window is re-opened on the new process, so memory and frames cover the time since the relaunch; the run prints a warning, the report marks the window `window_spans_restart`, CPU is not reported, the comparison skips it (in compare mode the window is reported as skipped) and `--perf-update-baseline` leaves it out (a baseline never gets zeros or numbers of a half-window). Put the window around the steps after the restart if you want it in a baseline.

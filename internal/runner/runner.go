@@ -117,6 +117,7 @@ func (r *Runner) newExecutor() *Executor {
 	exec.SetReconnectPolicy(r.cfg.Agent.ReconnectAttempts, r.cfg.Agent.ReconnectBackoff)
 	exec.SetLaunchTimeout(r.cfg.Agent.LaunchTimeout)
 	exec.SetImplicitWait(r.cfg.Defaults.ImplicitWait)
+	exec.SetPerfFrameBudget(r.cfg.Perf.FrameBudgetMs)
 	exec.SetAI(r.cfg.AI)
 	exec.useNote = r.missingUsesNote()
 	exec.OnStep(r.onStep)

@@ -155,6 +155,9 @@ func CompareWith(base, cur Metrics, o CompareOptions) []Regression {
 		if !okB || !okC {
 			continue
 		}
+		if m == SlowFrames && base.FrameBudgetMs != cur.FrameBudgetMs {
+			continue // judged against different budgets: the percentages are not comparable
+		}
 		if (m == CPUAvg || m == CPUPeak) && (base.DurationMs < MinCPUWindowMs || cur.DurationMs < MinCPUWindowMs) {
 			continue
 		}

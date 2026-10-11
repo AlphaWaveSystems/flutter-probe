@@ -332,6 +332,12 @@ func (c *HTTPClient) PerfStart(ctx context.Context) error {
 	return err
 }
 
+// PerfStartBudget opens a measuring window whose slow-frame budget is budgetMs (an older agent ignores it).
+func (c *HTTPClient) PerfStartBudget(ctx context.Context, budgetMs float64) error {
+	_, err := c.Call(ctx, MethodPerfStart, map[string]float64{"frameBudgetMs": budgetMs})
+	return err
+}
+
 func (c *HTTPClient) PerfSnapshot(ctx context.Context) (PerfSnapshot, error) {
 	return c.perf(ctx, MethodPerfSnapshot)
 }

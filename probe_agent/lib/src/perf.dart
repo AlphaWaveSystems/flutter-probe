@@ -15,8 +15,14 @@ class ProbePerf {
   ProbePerf._();
   static final ProbePerf instance = ProbePerf._();
 
-  /// A frame whose build+raster span exceeds this is "slow" (one 60 Hz interval).
+  /// A frame whose build+raster span exceeds this is "slow" (one 60 Hz interval). A window can
+  /// choose another budget (`start(frameBudgetMs: ...)`, for example 8.3 for a 120 Hz display).
   static const double slowFrameMs = 16.7;
+
+  double _budgetMs = slowFrameMs;
+
+  /// The frame budget of the current window.
+  double get frameBudgetMs => _budgetMs;
 
   bool _measuring = false;
   DateTime? _startedAt;
@@ -41,8 +47,9 @@ class ProbePerf {
     }
   }
 
-  void start() {
+  void start({double? frameBudgetMs}) {
     if (_measuring) stopWindow();
+    _budgetMs = (frameBudgetMs != null && frameBudgetMs > 0 && frameBudgetMs <= 1000) ? frameBudgetMs : slowFrameMs;
     _total.clear();
     _buildSum = 0;
     _rasterSum = 0;
@@ -90,9 +97,10 @@ class ProbePerf {
       return sorted[i];
     }
 
-    final slow = _total.where((t) => t > slowFrameMs).length;
+    final slow = _total.where((t) => t > _budgetMs).length;
     return {
       'durationMs': durationMs,
+      'frameBudgetMs': _budgetMs,
       'frames': _total.length,
       'slowFrames': slow,
       'slowFramePct': _total.isEmpty ? 0.0 : slow * 100.0 / _total.length,

@@ -59,6 +59,7 @@ type Executor struct {
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64      // incremented on each successful reconnect
 	implicitWait         time.Duration      // retry a step whose target is not on screen yet for up to this long (0 = off)
+	perfBudgetMs         float64            // slow-frame budget for measuring windows (0 = agent default)
 	perf                 perfState          // open measuring window and finished measurements
 	http                 httpState          // recorded backend traffic bookkeeping (`wait for response`, mocks)
 	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)

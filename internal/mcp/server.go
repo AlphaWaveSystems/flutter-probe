@@ -191,7 +191,7 @@ Supports the full ProbeScript syntax:
                      slowest frame below 100 ms | see data transferred below 500 KB | see response
                      "/api/x" below 800 ms. Measure profile builds (debug frames are slow). Gate
                      regressions: probe test --perf-baseline perf.json [--perf-update-baseline]
-                     [--perf-tolerance 20] [--perf-metrics LIST]; read history with the perf_trend / perf_compare tools;
+                     [--perf-tolerance 20] [--perf-metrics LIST] (probe.yaml perf.frame_budget_ms changes the slow-frame budget, default 16.7); read history with the perf_trend / perf_compare tools;
                      get_report includes a perf array per test.
   Waiting:         steps have a timeout (--timeout, default 30s); --implicit-wait 7s retries a
                      missing target; "... within 90 seconds" gives one step its own budget

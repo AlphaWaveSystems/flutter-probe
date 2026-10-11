@@ -275,8 +275,9 @@ class ProbeExecutor {
 
       // ---- Performance measuring window ----
       case ProbeMethods.perfStart:
-        ProbePerf.instance.start();
-        return {'ok': true};
+        final budget = req.params['frameBudgetMs'];
+        ProbePerf.instance.start(frameBudgetMs: budget is num ? budget.toDouble() : null);
+        return {'ok': true, 'frameBudgetMs': ProbePerf.instance.frameBudgetMs};
 
       case ProbeMethods.perfSnapshot:
         return ProbePerf.instance.snapshot();

@@ -163,6 +163,7 @@ type PerfSnapshot struct {
 	RSSPeakBytes  int64   `json:"rssPeakBytes"`
 	RSSEndBytes   int64   `json:"rssEndBytes"`
 	Measuring     bool    `json:"measuring"`
+	FrameBudgetMs float64 `json:"frameBudgetMs,omitempty"` // the slow-frame budget the window used (absent on agents before 0.25)
 }
 
 // HTTPLogParams selects recorded HTTP exchanges (probe.http_log).
