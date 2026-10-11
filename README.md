@@ -593,6 +593,7 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
+| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot` (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
 | Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `record` |
 

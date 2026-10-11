@@ -20,6 +20,18 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **Toast notifications**, dark theme, draggable native title bar, About panel.
 - **Keyboard shortcuts**: ⌘R run, ⌘S save, ⌘B connect/disconnect, ⌘P open workspace, ⌘K refresh devices, `?` help, `Esc` close help.
 
+## Automation (no window, no cursor)
+
+Start Studio with `PROBE_STUDIO_AUTOMATION=1` and scripts or AI agents can drive it without touching the mouse or the keyboard focus. Studio then listens on **loopback only**, makes a random token for that launch and writes both to a private discovery file (`<user config dir>/flutter-probe-studio/automation.json`, mode 0600; `PROBE_STUDIO_AUTOMATION_FILE` moves it, `PROBE_STUDIO_AUTOMATION_PORT` fixes the port). The endpoint is **off by default**.
+
+`POST <url>/rpc` with `Authorization: Bearer <token>` and `{"method": "...", "params": {...}}` answers `{"result": ...}` or `{"error": "..."}`. Requests from a browser (any `Origin`), with a non-loopback `Host`, or without the token are refused. Methods: `open_workspace {path}`, `list_dir`, `read_file`, `list_devices`, `connect {deviceId}`, `connect_wifi`, `disconnect`, `status`, `run_file {path}` (returns at once), `cancel`, `run_state` (the running step, finished steps, plan, results), `results`, `ui_state`, `screenshot` (the connected device, base64 PNG), `widget_tree`.
+
+**What the token grants.** Whoever holds the token can drive the connected device (taps, typing, screenshots, running tests), open workspaces, list folders and read and run `.probe` files, but **only inside the allowed folders**: the workspace a person opened in the window (or `PROBE_STUDIO_WORKSPACE`) plus the folders in `PROBE_STUDIO_AUTOMATION_ROOTS` (separated like `PATH`). With neither, `open_workspace`, `list_dir`, `read_file` and `run_file` are refused. Paths must be absolute; symlinks are resolved on both sides before the check, so a link that points out of an allowed folder does not get out of it, and `.probe` is checked on the resolved file. A workspace chosen through automation does not widen the allowed folders. Keep the discovery file at mode 0600 (Studio creates it that way) and treat the token like a password: anything that can read it can run tests on your device. The MCP client refuses to send the token to any address that is not loopback.
+
+A workspace matters because Studio reads its `probe.yaml` (agent port, timeouts, device ids, and the AI and cloud endpoints) and runs its `.probe` files. Nothing in `probe.yaml` names a host command and Studio does not use the `tools:` paths, but a test file can make the host call a URL (`call GET ...`), copy a host file to the device (`add media`) or write screenshots and logs, which is why the folders are confined.
+
+The MCP server exposes the same through `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results` and `studio_screenshot`, so an AI client can open a workspace, connect, run a `.probe` file and read step-by-step progress.
+
 ## Architecture
 
 ```
