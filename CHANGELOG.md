@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **A wedged iOS XCUITest driver is reported directly** (#357): when the runner log shows "Timed out waiting for AX loaded notification" (xcodebuild exit 65), starting the driver or a later driver call now says the simulator's accessibility service is not responding and how to restart only the test simulator, instead of surfacing as unrelated step timeouts. A driver process that stopped mid-run is reported as stopped.
+
 ### Added
 - **Probe Cloud (preview): opt-in report upload.** `probe test --upload-report` (or `hosted.upload_report` in probe.yaml) sends a scrubbed copy of the JSON report plus a small envelope (Probe version, device class, retry outcomes, GitHub Actions run info) to a hosted service, with a license that has the `probe_cloud` plan. The scrubber drops artifacts, device ids and environment, makes paths relative, redacts credential-shaped strings and caps the size. `--upload-dry-run` prints the exact payload and sends nothing. One attempt with a 5 s timeout; every failure is a warning, never a failed or delayed run. The `hosted:` block is separate from the device-farm `cloud:` block. The default endpoint is a placeholder that is not live. New page: Probe Cloud (preview). In CI, supply the license key with the `PROBE_LICENSE_KEY` environment variable (read at run time, never printed or written). Redirects are never followed and server text is sanitized before it is shown.
 
