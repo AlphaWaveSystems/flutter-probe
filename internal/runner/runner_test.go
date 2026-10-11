@@ -1,8 +1,11 @@
 package runner_test
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -204,3 +207,22 @@ type testErr string
 
 func errStub(msg string) error { return testErr(msg) }
 func (e testErr) Error() string { return string(e) }
+
+func TestReporter_JUnitFailedResultWithoutAnError(t *testing.T) {
+	var buf bytes.Buffer
+	rep := runner.NewReporter(runner.FormatJUnit, &buf, false)
+	results := []runner.TestResult{
+		{TestName: "no error", File: "tests/a.probe", Passed: false},
+		{TestName: "with error", File: "tests/a.probe", Passed: false, Error: fmt.Errorf("boom")},
+	}
+	if err := rep.Report(results); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `<failure message="test failed">test failed</failure>`) || !strings.Contains(out, `<failure message="boom">boom</failure>`) {
+		t.Fatalf("junit = %s", out)
+	}
+	if !strings.Contains(out, `failures="2"`) {
+		t.Fatalf("both results count as failures: %s", out)
+	}
+}

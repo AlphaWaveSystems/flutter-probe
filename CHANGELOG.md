@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`--format junit` no longer panics on a failed result that has no error** (it reports `test failed`).
+
 ### Docs
 - **iOS guide: "Physical iPhone over WiFi (CLI and Studio): what must be true"**: build mode and flavor, `PROBE_WIFI`, the port, the token, network reachability, how the Mac finds the phone (mDNS only with a `ProbeAdvertiser`; Studio's WiFi overlay has no manual host/port field, the CLI `--host/--token` path always works), and a three-command check.
 

@@ -244,10 +244,12 @@ func (r *Reporter) writeJUnit(results []TestResult) error {
 			c.Skipped = &junitSkip{}
 		} else if !res.Passed {
 			s.Failures++
-			c.Failure = &junitFail{
-				Message: res.Error.Error(),
-				Text:    res.Error.Error(),
+			// A failed result without an error must not crash the report.
+			msg := "test failed"
+			if res.Error != nil {
+				msg = res.Error.Error()
 			}
+			c.Failure = &junitFail{Message: msg, Text: msg}
 		}
 		s.Cases = append(s.Cases, c)
 	}
