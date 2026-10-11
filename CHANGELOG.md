@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **A zero or negative baseline made the comparison meaningless** (`+0%` on a failing test). It now compares the absolute change against the noise floor and prints the real delta.
 - **A measuring window that spans an app restart** warns, is marked `window_spans_restart` in the report and is not compared with the baseline.
 - **`start measuring` with no app connected** says "no app is connected ... open the app first" instead of blaming the agent version.
+- **A measuring window that contains a relaunch of the app no longer reports zero memory and zero frames.** The agent-side window is re-opened on the new process after `restart the app`, `open the app`, `clear app data` and the other relaunch paths, so memory and frames cover the time since the relaunch. Such a window is marked `window_spans_restart`, and `--perf-update-baseline` leaves it (and any window with no memory and no frames) out of the baseline, with a warning, instead of writing zeros.
+- **A `start measuring` without a name** is reported as `measurement`, so its baseline key no longer ends in an empty name.
 
 ### Changed
 - **License keys use format FP2** (`FP2.<kid>.<payload>.<signature>`): the Ed25519 signature covers the exact text `FP2.<kid>.<payload>`, so the key id and the format tag are signed. The CLI verifies in a fixed order (shape, key id lookup, signature, claims, expiry), against a built-in trusted key set and a revoked key id list. A key signed with an unknown key id asks to update the CLI, a revoked one says so, `seats` must be at least 1 (0 is rejected), claims need `v: 2`, a `kid` equal to the key's, at least one plan and an expiry after the issue time. The old FP1 format is dropped and reported as an old format. The built-in key set is empty in this change; `PROBE_LICENSE_PUBKEY` (now `kid=publicKey[,kid=publicKey]`) still adds keys for development and tests. A shared test vector is checked in the unit tests.
@@ -53,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 - **Installation: "Try a canary build"** covers `brew install AlphaWaveSystems/tap/probe@next`, the pre-release binaries and taking the agent from the tagged source (git dependency) because canaries are not published to pub.dev.
+- Performance guide: what the numbers mean on simulators and emulators (every frame is "slow" in a debug build), what memory is, and that network assertions see `dart:io` traffic only.
 
 ## [0.23.0] - 2026-10-10
 

@@ -482,7 +482,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	exec.closePerf(ctx)
 
 	return TestResult{
-		Perf:       exec.PerfResults(),
+		Perf:       nameUnnamed(exec.PerfResults()),
 		TestName:   name,
 		File:       file,
 		Passed:     runErr == nil,
@@ -870,4 +870,15 @@ func hasMeasuring(steps []parser.Step) bool {
 		}
 	}
 	return false
+}
+
+// nameUnnamed gives a `start measuring` without a name the label "measurement", so its baseline key
+// does not end in an empty name.
+func nameUnnamed(ms []perf.Metrics) []perf.Metrics {
+	for i := range ms {
+		if ms[i].Name == "" {
+			ms[i].Name = "measurement"
+		}
+	}
+	return ms
 }

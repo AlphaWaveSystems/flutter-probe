@@ -49,7 +49,7 @@ func perfGateFromFlags(cmd *cobra.Command) ([]perf.Metric, error) {
 func perfPostProcess(cmd *cobra.Command, w io.Writer, results []runner.TestResult, reportsBase, baselinePath string, update bool, meta runner.RunMetadata) {
 	keyBase, _ := cmd.Flags().GetString("perf-key-base")
 	var recs []perf.HistoryRecord
-	newKeys := 0
+	newKeys, skipped := 0, 0
 	for _, res := range results {
 		newKeys += len(res.PerfNew)
 	}
@@ -61,13 +61,20 @@ func perfPostProcess(cmd *cobra.Command, w io.Writer, results []runner.TestResul
 		for _, m := range res.Perf {
 			key := perf.RelKey(keyBase, res.File, res.TestName, m.Name)
 			recs = append(recs, perf.HistoryRecord{Version: Version, Platform: meta.Platform, Device: meta.DeviceName, Key: key, Metrics: m})
-			if res.Passed {
+			switch {
+			case !res.Passed:
+			case m.SpansRestart || (m.MemPeakMB == 0 && m.Frames == 0):
+				skipped++ // numbers from a relaunched process (or none at all) must not become a baseline
+			default:
 				entries[key] = m
 			}
 		}
 	}
 	if len(recs) == 0 {
 		return
+	}
+	if skipped > 0 {
+		statusWarn(w, "%d measurement(s) span an app restart or have no memory/frame data and are left out of the baseline", skipped)
 	}
 	if no, _ := cmd.Flags().GetBool("no-perf-history"); !no {
 		path, _ := cmd.Flags().GetString("perf-history")

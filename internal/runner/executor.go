@@ -693,6 +693,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		e.client = newClient
 		e.reapplyMocks(ctx)
+		e.reapplyPerf(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -894,6 +895,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		e.client = newClient
 		e.reapplyMocks(ctx)
+		e.reapplyPerf(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -916,6 +918,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		e.client = newClient
 		e.reapplyMocks(ctx)
+		e.reapplyPerf(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -1117,6 +1120,7 @@ func (e *Executor) relaunchApp(ctx context.Context, why string) error {
 	}
 	e.client = newClient
 	e.reapplyMocks(ctx)
+	e.reapplyPerf(ctx)
 	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)
@@ -1741,6 +1745,7 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	}
 	e.client = newClient
 	e.reapplyMocks(ctx)
+	e.reapplyPerf(ctx)
 	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)

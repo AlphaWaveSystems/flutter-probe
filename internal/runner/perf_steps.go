@@ -177,6 +177,19 @@ func connectionGone(err error) bool {
 	return false
 }
 
+// reapplyPerf re-opens the agent-side measuring window on a fresh app process after a relaunch
+// (the old process, and its window, are gone). Memory and frames then cover the time since the
+// relaunch; the window is marked as spanning a restart and is left out of baselines.
+func (e *Executor) reapplyPerf(ctx context.Context) {
+	if e.perf.active == nil || e.client == nil {
+		return
+	}
+	e.noteRestart()
+	if err := e.client.PerfStart(ctx); err != nil {
+		fmt.Printf("    \033[33m⚠\033[0m  could not resume the measuring window after the restart: %v\n", err)
+	}
+}
+
 // noteRestart marks the open measuring window, if any, as spanning an app restart: the process
 // changes, so memory and CPU of the window come from different processes.
 func (e *Executor) noteRestart() {
