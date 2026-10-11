@@ -6,16 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-- **Baseline comparison gates only stable metrics by default** (`memory`, `cpu`, `slow_frames`, `frame_time`, `data`). `memory_growth`, `cpu_peak` and `frame_max` are single-sample extremes that differ a lot between two runs of the same build (a rerun of 106 unchanged tests failed 47 of them); they are still recorded and shown, and gate again with `--perf-metrics all` or by name. `cpu` is compared only for windows of 5 s or more. New flags `--perf-metrics`, `--perf-ignore`, `probe perf compare --metrics`.
-- **Baseline keys are relative to the current directory** (or `--perf-key-base DIR`), so the same tests match from another checkout; keys written by earlier versions are still found, and the run says how many measurements had no baseline entry.
-
-### Fixed
-- **CPU was reported as `0.0` when the sampler had no usable interval** (one sample, or a counter that went backwards after an app restart). It is now unavailable and skipped by comparisons.
-- **A zero or negative baseline made the comparison meaningless** (`+0%` on a failing test). It now compares the absolute change against the noise floor and prints the real delta.
-- **A measuring window that spans an app restart** warns, is marked `window_spans_restart` in the report and is not compared with the baseline.
-- **`start measuring` with no app connected** says "no app is connected ... open the app first" instead of blaming the agent version.
-
 ## [0.24.0] - 2026-10-10
 
 ### Fixed
@@ -25,9 +15,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Pricing page no longer advertises what does not exist:** the pay-per-use card is now "Pay-per-use for AI agents: Planned" with no features listed, the Team card is labelled planned/not available yet (badge "Planned", "Planned features"), and the waitlist is a plain email link instead of a form with placeholder fields that collected nothing. The experimental `--pay` flag and the `wallet` config key stay but are described as experimental (the flag is hidden from `--help`).
 - **JSON/HTML report metadata `probe_version` was empty**; it now carries the CLI version.
 - **Go directive is `go 1.26.1` in every module**, matching `go.work`, so CI jobs that read the version from `go.mod` (CodeQL) install the toolchain the workspace needs.
+- **CPU was reported as `0.0` when the sampler had no usable interval** (one sample, or a counter that went backwards after an app restart). It is now unavailable and skipped by comparisons.
+- **A zero or negative baseline made the comparison meaningless** (`+0%` on a failing test). It now compares the absolute change against the noise floor and prints the real delta.
+- **A measuring window that spans an app restart** warns, is marked `window_spans_restart` in the report and is not compared with the baseline.
+- **`start measuring` with no app connected** says "no app is connected ... open the app first" instead of blaming the agent version.
 
 ### Changed
 - **License keys use format FP2** (`FP2.<kid>.<payload>.<signature>`): the Ed25519 signature covers the exact text `FP2.<kid>.<payload>`, so the key id and the format tag are signed. The CLI verifies in a fixed order (shape, key id lookup, signature, claims, expiry), against a built-in trusted key set and a revoked key id list. A key signed with an unknown key id asks to update the CLI, a revoked one says so, `seats` must be at least 1 (0 is rejected), claims need `v: 2`, a `kid` equal to the key's, at least one plan and an expiry after the issue time. The old FP1 format is dropped and reported as an old format. The built-in key set is empty in this change; `PROBE_LICENSE_PUBKEY` (now `kid=publicKey[,kid=publicKey]`) still adds keys for development and tests. A shared test vector is checked in the unit tests.
+- **Baseline comparison gates only stable metrics by default** (`memory`, `cpu`, `slow_frames`, `frame_time`, `data`). `memory_growth`, `cpu_peak` and `frame_max` are single-sample extremes that differ a lot between two runs of the same build (a rerun of 106 unchanged tests failed 47 of them); they are still recorded and shown, and gate again with `--perf-metrics all` or by name. `cpu` is compared only for windows of 5 s or more. New flags `--perf-metrics`, `--perf-ignore`, `probe perf compare --metrics`.
+- **Baseline keys are relative to the current directory** (or `--perf-key-base DIR`), so the same tests match from another checkout; keys written by earlier versions are still found, and the run says how many measurements had no baseline entry.
 
 ### Security
 - Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
