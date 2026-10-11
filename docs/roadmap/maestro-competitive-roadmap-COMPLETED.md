@@ -21,7 +21,7 @@ caveats, and honest limitations live in each item's entry in
 |---|---|
 | D-1 | `dictionary.md` completeness pass — all missing verb rows added |
 | D-2 | `ai:` config block documented in `configuration.md` (provider/api_key/model/endpoint/timeout/redact) |
-| B-1 | water-sip's 9-flow suite written twice — ProbeScript and equivalent Maestro YAML — as the benchmark corpus |
+| B-1 | the consumer app's 9-flow suite written twice — ProbeScript and equivalent Maestro YAML — as the benchmark corpus |
 | B-2 | Reusable benchmark harness: `scripts/bench/run-comparison.sh` + `summarize.py` (later gained `--order` and `--android-adb-port` in G-1) |
 | B-3 | N=10 baseline: FlutterProbe 59.6s median / 0% flake vs Maestro 122.6s / 100% flake (~2.1×); device-connectivity finding flagged for replication, later retired in G-1 |
 

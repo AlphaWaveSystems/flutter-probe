@@ -45,3 +45,18 @@ func TestSetAppLanguageLaunchArgs(t *testing.T) {
 		t.Fatal("empty tag must remove the override")
 	}
 }
+
+func TestIsAlreadyBootedRecognisesBothXcodeWordings(t *testing.T) {
+	for _, msg := range []string{
+		"Unable to boot device in current state: Booted",
+		"An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\nUnable to boot device in current state: Booted",
+		"Unable to boot device because it is already booted",
+	} {
+		if !isAlreadyBooted(msg) {
+			t.Errorf("%q must count as already booted", msg)
+		}
+	}
+	if isAlreadyBooted("Unable to boot device in current state: Shutting Down") || isAlreadyBooted("No such device") {
+		t.Error("other failures must stay errors")
+	}
+}

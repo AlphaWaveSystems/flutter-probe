@@ -120,6 +120,13 @@ func Launch(ctx context.Context, opts LaunchOptions) (*Studio, error) {
 		s.Close()
 		return nil, fmt.Errorf("studio window did not appear: %w", err)
 	}
+	// With a second display attached the suite works there, off the screen
+	// you are using (STUDIO_E2E_DISPLAY overrides). The window is read back
+	// so a run never silently lands on the wrong screen.
+	if err := moveWindowToDisplay(name, ""); err != nil {
+		s.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -354,7 +361,7 @@ func (s *Studio) Click(x, y int) error {
 	}
 	time.Sleep(150 * time.Millisecond)
 	if path, err := exec.LookPath("cliclick"); err == nil {
-		if out, err := exec.Command(path, fmt.Sprintf("c:%d,%d", x, y)).CombinedOutput(); err != nil {
+		if out, err := exec.Command(path, clickArg(x, y)).CombinedOutput(); err != nil {
 			return fmt.Errorf("cliclick: %v: %s", err, strings.TrimSpace(string(out)))
 		}
 		return nil

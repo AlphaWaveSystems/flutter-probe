@@ -3,7 +3,10 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,9 +73,43 @@ func (s *Simulator) InstallAndLaunch(ctx context.Context, appPath, bundleID stri
 	if err := s.sim.Launch(ctx, s.UDID, bundleID); err != nil {
 		return fmt.Errorf("launch: %w", err)
 	}
-	// Give the agent a moment to write its token before Studio connects.
-	time.Sleep(3 * time.Second)
-	return nil
+	// Wait until the app's agent is accepting connections (it also writes
+	// its token on startup); a fixed sleep raced slow launches.
+	return waitForAgent(ctx, agentPort(), 20*time.Second)
+}
+
+// agentPort is the port the fixture app's agent listens on
+// (STUDIO_E2E_AGENT_PORT, default 48686 — the agent's default when the
+// workspace has no probe.yaml).
+func agentPort() int {
+	if v := os.Getenv("STUDIO_E2E_AGENT_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return 48686
+}
+
+func waitForAgent(ctx context.Context, port int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	for {
+		c, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		if err == nil {
+			c.Close()
+			// Let the agent finish its own startup after the socket opens.
+			time.Sleep(1 * time.Second)
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("agent not listening on %s after %s", addr, timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
+	}
 }
 
 // Terminate stops the app so the next test starts from a known state.
@@ -83,6 +120,12 @@ func (s *Simulator) Terminate(ctx context.Context, bundleID string) {
 // Tap clicks inside this simulator's Simulator.app window at a fraction of
 // its width/height (0..1) — a real user gesture on the device, which the
 // agent's recorder sees. The window is found by the simulator's name.
+// MoveToTargetDisplay puts this simulator's own window (matched by its name,
+// never another session's simulator) on the suite's display.
+func (s *Simulator) MoveToTargetDisplay() error {
+	return moveWindowToDisplay("Simulator", s.Name)
+}
+
 func (s *Simulator) Tap(fx, fy float64) error {
 	script := fmt.Sprintf(`tell application "System Events" to tell process "Simulator"
   set frontmost to true
@@ -105,7 +148,7 @@ end tell`, s.Name, s.Name)
 	}
 	cx, cy := x+int(float64(w)*fx), y+int(float64(h)*fy)
 	if path, err := exec.LookPath("cliclick"); err == nil {
-		if out, err := exec.Command(path, fmt.Sprintf("c:%d,%d", cx, cy)).CombinedOutput(); err != nil {
+		if out, err := exec.Command(path, clickArg(cx, cy)).CombinedOutput(); err != nil {
 			return fmt.Errorf("cliclick: %v: %s", err, out)
 		}
 		return nil

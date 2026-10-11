@@ -23,6 +23,8 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
 | `probe studio` | Launch interactive test studio |
 
+`probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)).
+
 ## probe test
 
 Run `.probe` test files against a connected device.
@@ -51,6 +53,7 @@ probe test [path] [flags]
 | `--locales <a,b,c>` | — | Run the whole suite once per language (`--locales de,ja,ar`), each in its own run with `--locale`; `-o report.json` becomes `report.de.json`, `report.ja.json`, ... and a pass/fail table per language is printed. Exit code is non-zero if any language fails |
 | `--match-loose` | `false` | Match text selectors loosely: fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms and whitespace on both sides (`Änderungen` matches `anderungen`, `Don't Allow` matches `Don’t Allow`). `defaults.match: loose` in probe.yaml sets it permanently. Ids (`#key`) are never folded |
 | `--timeout` | `30s` | Per-step timeout. A single step can override it: `... within 90 seconds`. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
+| `--measure-all` | `false` | Measure every test: open a performance window named after the test around its body (also `perf.measure_all` in probe.yaml). Tests that use `start measuring` themselves are left alone. See [Performance testing](/advanced/performance/) |
 | `--perf-baseline FILE` | — | Compare every `start measuring` window with this baseline; a test whose numbers got worse than the tolerance fails. See [Performance testing](/advanced/performance/) |
 | `--perf-update-baseline` | `false` | Write this run's measurements of passing tests to the `--perf-baseline` file (default `perf-baseline.json`) |
 | `--perf-tolerance` | `20` | Percent a number may exceed its baseline by (small absolute changes are ignored) |
@@ -145,7 +148,7 @@ probe device start --platform ios --name probe-checkout   # boot (or create) a s
 
 ### Named devices
 
-Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device list` shows running emulators by AVD name, so `probe-checkout` or `watersip-emu` appears in JUnit/JSON/HTML reports instead of a bare serial. `--name` on iOS boots the simulator with that name or, when none exists, creates one with the default simulator's device type and runtime. Android emulators are named by their AVD (create it with Android Studio or `avdmanager`, then `probe device start --avd <name>`).
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device list` shows running emulators by AVD name, so `probe-checkout` or `my-avd` appears in JUnit/JSON/HTML reports instead of a bare serial. `--name` on iOS boots the simulator with that name or, when none exists, creates one with the default simulator's device type and runtime. Android emulators are named by their AVD (create it with Android Studio or `avdmanager`, then `probe device start --avd <name>`).
 
 ## probe-convert
 

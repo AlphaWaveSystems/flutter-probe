@@ -76,7 +76,15 @@ jobs:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          sha() { shasum -a 256 "artifacts/$1" | awk '{print $1}'; }
+          # Absolute path: the step changes into the tap clone below, so a relative
+          # path would not find the artifacts and every checksum would come out empty.
+          sha() { shasum -a 256 "$GITHUB_WORKSPACE/artifacts/$1" | awk '{print $1}'; }
+          SHA_DARWIN_ARM64=$(sha probe-darwin-arm64)
+          SHA_DARWIN_AMD64=$(sha probe-darwin-amd64)
+          SHA_LINUX_AMD64=$(sha probe-linux-amd64)
+          for s in "$SHA_DARWIN_ARM64" "$SHA_DARWIN_AMD64" "$SHA_LINUX_AMD64"; do
+            [[ "$s" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::missing or invalid checksum for a canary asset; the formula was not written"; exit 1; }
+          done
           git clone "https://x-access-token:${GH_TOKEN}@github.com/AlphaWaveSystems/homebrew-tap.git"
           cd homebrew-tap
           git config user.name "Patrick Bertsch"
@@ -91,18 +99,18 @@ jobs:
             on_macos do
               on_arm do
                 url "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v#{version}/probe-darwin-arm64"
-                sha256 "$(sha probe-darwin-arm64)"
+                sha256 "${SHA_DARWIN_ARM64}"
               end
               on_intel do
                 url "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v#{version}/probe-darwin-amd64"
-                sha256 "$(sha probe-darwin-amd64)"
+                sha256 "${SHA_DARWIN_AMD64}"
               end
             end
 
             on_linux do
               on_intel do
                 url "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v#{version}/probe-linux-amd64"
-                sha256 "$(sha probe-linux-amd64)"
+                sha256 "${SHA_LINUX_AMD64}"
               end
             end
 

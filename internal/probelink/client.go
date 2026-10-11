@@ -533,12 +533,18 @@ func (c *Client) ScrollUntil(ctx context.Context, direction string, sel, until *
 }
 
 func (c *Client) LongPress(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 
 func (c *Client) DoubleTap(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodDoubleTap, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodDoubleTap, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 

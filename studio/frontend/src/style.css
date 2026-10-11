@@ -304,6 +304,32 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #results-list li .duration { color: var(--fg-muted); font-size: 11px; }
 #results-list li .err { color: var(--fail); margin-left: 14px; padding: 2px 0; }
 
+/* Step rows nest under their test; depth indents nested recipe/block steps. */
+#results-list li.step { padding-left: 28px; cursor: pointer; color: var(--fg-muted); }
+#results-list li.step:hover { background: var(--bg-hover, rgba(255,255,255,0.04)); }
+#results-list li.step .line { color: var(--fg-muted); font-size: 11px; min-width: 32px; }
+#results-list li.step .name { color: var(--fg-muted); }
+#results-list li.step.running .name { color: var(--fg); }
+#results-list li.step.fail .name { color: var(--fail); }
+#results-list li.step.skip .name { font-style: italic; }
+#results-list li.step .dot { width: 6px; height: 6px; }
+#results-list li.step-err { color: var(--fail); padding-left: 44px; white-space: pre-wrap; }
+
+/* Toolbar run progress + cancel */
+#btn-cancel[hidden], #run-progress[hidden] { display: none !important; }
+.run-progress { color: var(--fg-muted); font-size: 12px; font-family: ui-monospace, SF Mono, Menlo, monospace; padding: 0 6px; }
+.btn-cancel { border-color: var(--fail); color: var(--fail); }
+.btn-cancel:hover:not(:disabled) { background: var(--fail); color: #fff; }
+
+/* Monaco decorations for the live step highlight */
+.step-line-running { background: rgba(56, 189, 248, 0.14); }
+.step-line-failed { background: rgba(248, 113, 113, 0.16); }
+.step-glyph { width: 14px !important; margin-left: 2px; text-align: center; font-weight: 700; }
+.step-glyph-running::before { content: "▶"; color: var(--info); animation: pulse 1.2s infinite; }
+.step-glyph-passed::before { content: "✓"; color: var(--pass); }
+.step-glyph-failed::before { content: "✗"; color: var(--fail); }
+.step-glyph-skipped::before { content: "–"; color: var(--warn); }
+
 /* ------------------------------------------------------------------
    Toast notifications
 ------------------------------------------------------------------ */

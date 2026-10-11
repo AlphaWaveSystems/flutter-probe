@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -17,6 +18,10 @@ var Version = "dev"
 
 func main() {
 	app := NewApp()
+	if os.Getenv("PROBE_STUDIO_HEADLESS") == "1" {
+		runHeadless(app)
+		return
+	}
 
 	err := wails.Run(&options.App{
 		Title:     "FlutterProbe Studio",

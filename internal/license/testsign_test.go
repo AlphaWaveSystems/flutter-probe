@@ -2,27 +2,38 @@ package license
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/json"
 	"strings"
 	"testing"
 )
 
-// testKeypair and testIssue mirror the private issuing tool so the verifier
-// can be tested without shipping signing code in the public CLI.
-func testKeypair(t *testing.T) (pub, priv string) {
+// testSeed is the throwaway seed 00 01 02 ... 1f of the shared test vector. Its key must
+// never appear in a trusted key set of a release.
+func testSeed() []byte {
+	s := make([]byte, 32)
+	for i := range s {
+		s[i] = byte(i)
+	}
+	return s
+}
+
+func testKey(seed []byte) (ed25519.PrivateKey, string) {
+	sk := ed25519.NewKeyFromSeed(seed)
+	return sk, b64.EncodeToString(sk.Public().(ed25519.PublicKey))
+}
+
+// testIssue signs claims the way the issuing side does: over "FP2." + kid + "." + payload.
+func testIssue(t *testing.T, sk ed25519.PrivateKey, kid string, claims any) string {
 	t.Helper()
-	pk, sk, err := ed25519.GenerateKey(rand.Reader)
+	payload, err := json.Marshal(claims)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return b64.EncodeToString(pk), b64.EncodeToString(sk)
+	return testIssueRaw(sk, kid, payload)
 }
 
-func testIssue(t *testing.T, priv string, c Claims) string {
-	t.Helper()
-	sk, _ := b64.DecodeString(priv)
-	payload, _ := json.Marshal(c)
-	sig := ed25519.Sign(ed25519.PrivateKey(sk), payload)
-	return strings.Join([]string{Prefix, b64.EncodeToString(payload), b64.EncodeToString(sig)}, ".")
+func testIssueRaw(sk ed25519.PrivateKey, kid string, payload []byte) string {
+	p := b64.EncodeToString(payload)
+	sig := ed25519.Sign(sk, []byte(Prefix+"."+kid+"."+p))
+	return strings.Join([]string{Prefix, kid, p, b64.EncodeToString(sig)}, ".")
 }

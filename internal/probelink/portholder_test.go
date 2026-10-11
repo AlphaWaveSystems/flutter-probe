@@ -58,8 +58,8 @@ func TestDescribeHolders_DistinguishesAdbFromASimulatorApp(t *testing.T) {
 		t.Errorf("adb hint: %s", adb)
 	}
 	sim := describeHolders(48686, []Holder{{PID: "9", Name: "Runner",
-		Command: "/Users/x/Library/Developer/CoreSimulator/Devices/5BEA9EF5-91B4-4D9F-9529-5BD7959F6E6C/data/Containers/Bundle/Application/AAA/Runner.app/Runner"}})
-	if !strings.Contains(sim, "iOS simulator app") || !strings.Contains(sim, "5BEA9EF5-91B4-4D9F-9529-5BD7959F6E6C") || !strings.Contains(sim, "simctl terminate") {
+		Command: "/Users/x/Library/Developer/CoreSimulator/Devices/11111111-2222-3333-4444-555555555555/data/Containers/Bundle/Application/AAA/Runner.app/Runner"}})
+	if !strings.Contains(sim, "iOS simulator app") || !strings.Contains(sim, "11111111-2222-3333-4444-555555555555") || !strings.Contains(sim, "simctl terminate") {
 		t.Errorf("simulator hint: %s", sim)
 	}
 	if strings.Contains(sim, "adb forward") {

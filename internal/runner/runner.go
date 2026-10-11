@@ -46,7 +46,11 @@ type Runner struct {
 	missingUses     []string                     // `use` targets that do not exist, for error messages
 	visual          *visual.Comparator  // nil if visual regression is not configured
 	onResult        func(TestResult)    // optional per-result callback for streaming
+	onStep          func(StepEvent)     // optional per-step callback (live highlight)
 	compositeRunner *CompositeRunner    // nil if composite tests are not configured
+	curFile         string              // attribution for StepEvents from newExecutor
+	curTest         string
+	curAttempt      int
 }
 
 // RunOptions configures a test run.
@@ -63,6 +67,7 @@ type RunOptions struct {
 	DeviceName   string // human-readable device name
 	Grant        []string // permissions to pre-grant before the first test (--grant)
 
+	MeasureAll    bool           // open a measuring window around every test that does not measure itself
 	PerfBaseline  *perf.Baseline // compare measurements with this baseline (nil = off)
 	PerfTolerance float64        // percent a metric may exceed its baseline by (default 20)
 }
@@ -110,6 +115,8 @@ func (r *Runner) newExecutor() *Executor {
 	exec.SetImplicitWait(r.cfg.Defaults.ImplicitWait)
 	exec.SetAI(r.cfg.AI)
 	exec.useNote = r.missingUsesNote()
+	exec.OnStep(r.onStep)
+	exec.SetStepContext(r.curFile, r.curTest, r.curAttempt)
 	return exec
 }
 
@@ -206,6 +213,9 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 
 	var results []TestResult
 
+	// Hooks outside a test are attributed to the file alone.
+	r.curFile, r.curTest, r.curAttempt = path, "", 1
+
 	// Run beforeAll hooks (fail-fast: if beforeAll fails, skip all tests in file)
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeAll {
@@ -261,6 +271,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 			for _, rec := range r.recipes {
 				r.compositeRunner.RegisterRecipe(rec)
 			}
+			r.compositeRunner.OnStep(r.onStep)
 			ctr := r.compositeRunner.RunCompositeTest(ctx, ct, path)
 			res = ctr.ToTestResult()
 			printCompositeResult(ctr)
@@ -343,6 +354,7 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 	var res TestResult
 	var earlier []string
 	for attempt := 1; ; attempt++ {
+		r.curFile, r.curTest, r.curAttempt = file, t.Name, attempt
 		res = r.runSingleAttempt(ctx, prog, t, file, vars, row)
 		r.applyPerfBaseline(&res)
 		res.Attempts = attempt
@@ -394,6 +406,17 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 				runErr = fmt.Errorf("before each: %w", err)
 				break
 			}
+		}
+	}
+
+	// --measure-all: a window named after the test, unless the test measures on its own.
+	if runErr == nil && r.opts.MeasureAll && !hasMeasuring(t.Body) {
+		window := t.Name
+		if row >= 0 && t.Examples != nil {
+			window = fmt.Sprintf("%s [row %d]", t.Name, row+1)
+		}
+		if err := exec.startMeasuring(ctx, window); err != nil {
+			fmt.Printf("    \033[33m⚠\033[0m  --measure-all: %v\n", err)
 		}
 	}
 
@@ -810,4 +833,33 @@ func (r *Runner) applyPerfBaseline(res *TestResult) {
 		res.Passed = false
 		res.Error = fmt.Errorf("performance regression (tolerance %.0f%%): %s", tol, strings.Join(problems, "; "))
 	}
+}
+
+// hasMeasuring reports whether a test body opens its own measuring window.
+func hasMeasuring(steps []parser.Step) bool {
+	for _, st := range steps {
+		switch s := st.(type) {
+		case parser.PerfStep:
+			if s.Kind == parser.PerfStart {
+				return true
+			}
+		case parser.TimedStep:
+			if hasMeasuring([]parser.Step{s.Inner}) {
+				return true
+			}
+		case parser.ConditionalStep:
+			if hasMeasuring(s.Then) || hasMeasuring(s.Else) {
+				return true
+			}
+		case parser.LoopStep:
+			if hasMeasuring(s.Body) {
+				return true
+			}
+		case parser.RetryStep:
+			if hasMeasuring(s.Body) {
+				return true
+			}
+		}
+	}
+	return false
 }

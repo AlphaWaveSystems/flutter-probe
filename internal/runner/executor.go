@@ -62,6 +62,11 @@ type Executor struct {
 	perf                 perfState          // open measuring window and finished measurements
 	http                 httpState          // recorded backend traffic bookkeeping (`wait for response`, mocks)
 	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
+
+	onStep      func(StepEvent) // optional per-step observer (Studio live highlight)
+	stepFile    string          // attribution for StepEvents
+	stepTest    string
+	stepAttempt int
 }
 
 // NewExecutor creates an Executor.
@@ -258,6 +263,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 
 	start := time.Now()
 	desc := e.stepDescription(step)
+	e.emitStep(step, desc, StepStarted, 0, nil)
 
 	// Real-time feedback: print the step description before it runs.
 	if desc != "" {
@@ -374,9 +380,15 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// this from "if visible", which never even attempts the step.
 	if err != nil && !isConnectionError(err) && stepIsOptional(step) {
 		fmt.Printf("    \033[33m⚠\033[0m  optional step failed, continuing: %v\n", err)
+		e.emitStep(step, desc, StepSkipped, time.Since(start), err)
 		return nil
 	}
 
+	if err != nil {
+		e.emitStep(step, desc, StepFailed, time.Since(start), err)
+	} else {
+		e.emitStep(step, desc, StepPassed, time.Since(start), nil)
+	}
 	return err
 }
 

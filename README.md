@@ -73,6 +73,7 @@ The **ProbeAgent** is a Dart package you add to your Flutter app as a dev depend
 ```bash
 brew tap AlphaWaveSystems/tap
 brew install probe
+# canary (pre-release) builds: brew install AlphaWaveSystems/tap/probe@next, see the installation docs
 ```
 
 Upgrades are handled automatically with `brew upgrade probe`.
@@ -412,6 +413,10 @@ notifications have no simctl service, so probe answers the system alert itself: 
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
 (needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
 
+### Compatibility
+
+From 1.0, ProbeScript, `probe.yaml`, the agent protocol and the report JSON are frozen within 1.x and only grow additively; deprecations last at least two minor releases and 90 days. Probe Studio, experimental features and human-readable output are outside that promise. See the [compatibility policy](https://flutterprobe.dev/advanced/compatibility/).
+
 ### Performance testing
 
 `start measuring "checkout"` ... `stop measuring`, then `see memory below 300 MB`, `see cpu below 60 percent`, `see slow frames below 5 percent`, `see data transferred below 500 KB`, `see response "/api/pay" below 2000 ms`. Memory and frames come from the agent (0.23+, all devices), CPU from Android and iOS simulators, network from the recorded HTTP traffic. Gate regressions with `probe test --perf-baseline perf-baseline.json` (`--perf-update-baseline` writes it), watch `probe perf trend`. Guide: [Performance testing](https://flutterprobe.dev/advanced/performance/).
@@ -549,7 +554,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe triage --input results.json` | Optional: explain failures with the configured model (advisory) |
 | `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories; `runFlow` helpers become recipe files; regex selectors, `evalScript` and `${ENV}` placeholders are flagged with TODO comments and warnings) |
 | `probe version` | Print CLI version |
-| `probe license activate <key>` / `probe license status` | Store and verify a license key for hosted features (local use never needs one) |
+| `probe license activate <key>` / `probe license status` | Store and verify an offline-verified (Ed25519) license key for hosted features (local use never needs one) |
 | `probe-convert` | Convert tests from other frameworks |
 
 ### Key flags for `probe test`
@@ -586,13 +591,14 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 21 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 31 tools:
 
 | Category | Tools |
 |---|---|
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
+| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot` (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
 | Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `record` |
 
@@ -617,7 +623,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 21 tools appear in Claude.
+4. Done — all 31 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 

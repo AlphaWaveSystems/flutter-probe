@@ -4,6 +4,7 @@
 #   SKIP_BUILD=1       reuse existing Studio + fixture builds
 #   STUDIO_E2E_*       see studio/e2e/studio_test.go (workspace, files, device)
 #   STUDIO_E2E_LOCAL=path/to/dogfood.local.yaml  export its keys as STUDIO_E2E_* (see studio/e2e/DOGFOOD.md)
+#   STUDIO_E2E_DISPLAY=n  open Studio/Simulator windows on display n (1 = main); unset = display 2 when a second display is attached, else main
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

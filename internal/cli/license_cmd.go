@@ -26,7 +26,7 @@ without one.`,
 var licenseActivateCmd = &cobra.Command{
 	Use:     "activate <key>",
 	Short:   "Verify and store a license key",
-	Example: `  probe license activate FP1.eyJ...`,
+	Example: `  probe license activate FP2.k1.eyJ...`,
 	Args:    cobra.ExactArgs(1),
 	RunE:    runLicenseActivate,
 }
@@ -100,14 +100,7 @@ func describeClaims(c *license.Claims) string {
 		plans[i] = string(p)
 	}
 	s := strings.Join(plans, ", ")
-	if c.Seats > 0 {
-		s += fmt.Sprintf(", %d seats", c.Seats)
-	}
-	if !c.Expires.IsZero() {
-		s += fmt.Sprintf(", valid until %s", c.Expires.UTC().Format("2006-01-02"))
-	}
-	if c.Expires.IsZero() {
-		s += ", no expiry"
-	}
+	s += fmt.Sprintf(", %d seats", c.Seats)
+	s += fmt.Sprintf(", valid until %s", c.Expires.UTC().Format("2006-01-02"))
 	return s
 }
