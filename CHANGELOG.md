@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Go directive is `go 1.26.1` in every module**, matching `go.work`, so CI jobs that read the version from `go.mod` (CodeQL) install the toolchain the workspace needs.
+
 ### Docs
 - **Installation: "Try a canary build"** covers `brew install AlphaWaveSystems/tap/probe@next`, the pre-release binaries and taking the agent from the tagged source (git dependency) because canaries are not published to pub.dev.
 
