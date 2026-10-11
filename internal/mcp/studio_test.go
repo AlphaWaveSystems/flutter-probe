@@ -101,3 +101,23 @@ func TestStudioToolsSurfaceErrorsFromStudio(t *testing.T) {
 		t.Errorf("studio errors must come through: %v", res)
 	}
 }
+
+func TestStudioTokenIsNeverSentOffThisMachine(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "automation.json")
+	for _, url := range []string{"http://evil.example:8080", "http://192.168.1.5:9000", "https://127.0.0.1:1", "file:///etc/passwd"} {
+		doc, _ := json.Marshal(map[string]any{"url": url, "token": "secret", "pid": 1})
+		if err := os.WriteFile(file, doc, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PROBE_STUDIO_AUTOMATION_FILE", file)
+		res := callTool(t, "studio_run_state", nil)
+		if res["isError"] != true || !strings.Contains(textOf(res), "loopback") && !strings.Contains(textOf(res), "unusable") {
+			t.Errorf("%s must be refused before any request: %v", url, res)
+		}
+	}
+	for _, ok := range []string{"http://127.0.0.1:1234", "http://localhost:1234", "http://[::1]:1234"} {
+		if err := requireLoopbackURL(ok); err != nil {
+			t.Errorf("%s is loopback: %v", ok, err)
+		}
+	}
+}

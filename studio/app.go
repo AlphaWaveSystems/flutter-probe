@@ -47,6 +47,9 @@ type App struct {
 	deviceMgr *device.Manager
 	wifi      *wifiDiscovery
 	workspace string // directory whose probe.yaml governs connections; "" → cwd
+	// humanWorkspace is the last workspace a person opened in the window; it is what automation
+	// may work inside (see automationRoots).
+	humanWorkspace string
 
 	runMu     sync.Mutex
 	runCancel context.CancelFunc // non-nil while RunFile is executing
@@ -148,7 +151,37 @@ func (a *App) InitialWorkspace() string {
 func (a *App) SetWorkspace(path string) {
 	a.mu.Lock()
 	a.workspace = path
+	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.mu.Unlock()
+}
+
+// useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike
+// SetWorkspace it does not widen what automation may touch.
+func (a *App) useWorkspace(path string) {
+	a.mu.Lock()
+	a.workspace = path
+	a.mu.Unlock()
+}
+
+// automationRoots are the folders the automation endpoint may read from, list, open as a
+// workspace and run files from: the workspace a person opened (in the window or through
+// PROBE_STUDIO_WORKSPACE) and the folders listed in PROBE_STUDIO_AUTOMATION_ROOTS.
+func (a *App) automationRoots() []string {
+	a.mu.Lock()
+	roots := []string{}
+	if a.humanWorkspace != "" {
+		roots = append(roots, a.humanWorkspace)
+	}
+	a.mu.Unlock()
+	if env := os.Getenv("PROBE_STUDIO_WORKSPACE"); env != "" {
+		roots = append(roots, env)
+	}
+	for _, r := range filepath.SplitList(os.Getenv("PROBE_STUDIO_AUTOMATION_ROOTS")) {
+		if r != "" {
+			roots = append(roots, r)
+		}
+	}
+	return roots
 }
 
 // workspaceConfig loads probe.yaml from the open workspace, falling back to

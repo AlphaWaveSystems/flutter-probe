@@ -30,7 +30,8 @@ const automationFileName = "automation.json"
 
 // automationBackend is the part of App the endpoint exposes.
 type automationBackend interface {
-	SetWorkspace(path string)
+	useWorkspace(path string)
+	automationRoots() []string
 	ListDir(dir string) ([]FileEntry, error)
 	ReadFile(path string) (string, error)
 	ListDevices() ([]DeviceInfo, error)
@@ -174,6 +175,54 @@ func (s *automationServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"result": res})
 }
 
+// withinRoots resolves p (an absolute path) through every symlink and returns the real path when
+// it is one of the roots or inside one. Roots are resolved the same way, and containment is
+// decided with filepath.Rel, so a sibling such as /ws-evil is not inside /ws and a symlink inside
+// a root that points out of it does not get out.
+func withinRoots(roots []string, p string) (string, error) {
+	if len(roots) == 0 {
+		return "", fmt.Errorf("no folder is open to automation: open a workspace in Studio, or set PROBE_STUDIO_WORKSPACE or PROBE_STUDIO_AUTOMATION_ROOTS")
+	}
+	if !filepath.IsAbs(p) {
+		return "", fmt.Errorf("%s: use an absolute path", p)
+	}
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", fmt.Errorf("%s: %v", p, err)
+	}
+	for _, root := range roots {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rr, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(rr, real)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return real, nil
+		}
+	}
+	return "", fmt.Errorf("%s is outside the folders automation may use", p)
+}
+
+// probeFileWithinRoots is withinRoots for a .probe file; the suffix is checked on the
+// resolved path, so a link named x.probe that points at another file does not pass.
+func probeFileWithinRoots(roots []string, p string) (string, error) {
+	real, err := withinRoots(roots, p)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(real, ".probe") {
+		return "", fmt.Errorf("%s: only .probe files can be used", p)
+	}
+	if info, err := os.Stat(real); err != nil || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s: not a regular file", p)
+	}
+	return real, nil
+}
+
 func param[T any](raw json.RawMessage, into *T) error {
 	if len(raw) == 0 {
 		return nil
@@ -192,20 +241,27 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		if err := param(raw, &p); err != nil || p.Path == "" {
 			return nil, fmt.Errorf("open_workspace needs {\"path\": \"<folder>\"}")
 		}
-		info, err := os.Stat(p.Path)
-		if err != nil || !info.IsDir() {
+		real, err := withinRoots(b.automationRoots(), p.Path)
+		if err != nil {
+			return nil, err
+		}
+		if info, err := os.Stat(real); err != nil || !info.IsDir() {
 			return nil, fmt.Errorf("%s is not a folder", p.Path)
 		}
-		b.SetWorkspace(p.Path)
-		return b.ListDir(p.Path)
+		b.useWorkspace(real)
+		return b.ListDir(real)
 	case "list_dir":
 		var p struct {
 			Dir string `json:"dir"`
 		}
-		if err := param(raw, &p); err != nil {
+		if err := param(raw, &p); err != nil || p.Dir == "" {
+			return nil, fmt.Errorf("list_dir needs {\"dir\": ...}")
+		}
+		real, err := withinRoots(b.automationRoots(), p.Dir)
+		if err != nil {
 			return nil, err
 		}
-		return b.ListDir(p.Dir)
+		return b.ListDir(real)
 	case "read_file":
 		var p struct {
 			Path string `json:"path"`
@@ -213,7 +269,11 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		if err := param(raw, &p); err != nil || p.Path == "" {
 			return nil, fmt.Errorf("read_file needs {\"path\": ...}")
 		}
-		return b.ReadFile(p.Path)
+		real, err := probeFileWithinRoots(b.automationRoots(), p.Path)
+		if err != nil {
+			return nil, err
+		}
+		return b.ReadFile(real)
 	case "list_devices":
 		return b.ListDevices()
 	case "connect":
@@ -246,7 +306,11 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		if err := param(raw, &p); err != nil || p.Path == "" {
 			return nil, fmt.Errorf("run_file needs {\"path\": ...}")
 		}
-		if err := b.RunFileAsync(p.Path); err != nil {
+		real, err := probeFileWithinRoots(b.automationRoots(), p.Path)
+		if err != nil {
+			return nil, err
+		}
+		if err := b.RunFileAsync(real); err != nil {
 			return nil, err
 		}
 		return map[string]any{"started": true, "path": p.Path}, nil

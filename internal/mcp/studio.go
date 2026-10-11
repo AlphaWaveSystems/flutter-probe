@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,10 +95,30 @@ func loadStudioDiscovery() (studioDiscovery, error) {
 	return d, nil
 }
 
+// requireLoopbackURL refuses to send the bearer token anywhere but this machine: the discovery file
+// is only trusted for the address it names, and that must be loopback.
+func requireLoopbackURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" {
+		return fmt.Errorf("the Studio discovery file has an unusable address %q", raw)
+	}
+	h := u.Hostname()
+	if strings.EqualFold(h, "localhost") {
+		return nil
+	}
+	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
+		return nil
+	}
+	return fmt.Errorf("refusing to send the Studio token to %q: the discovery file must name a loopback address", h)
+}
+
 // studioCall sends one automation request and returns the raw result.
 func studioCall(method string, params any) (json.RawMessage, error) {
 	d, err := loadStudioDiscovery()
 	if err != nil {
+		return nil, err
+	}
+	if err := requireLoopbackURL(d.URL); err != nil {
 		return nil, err
 	}
 	body, _ := json.Marshal(map[string]any{"method": method, "params": params})
