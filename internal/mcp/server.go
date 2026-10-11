@@ -318,7 +318,7 @@ Key flags for the flags parameter:
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
   --measure-all               measure every test (a window per test) with no script edits
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
-  --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data; all = also memory_growth,cpu_peak,frame_max)
+  --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data on physical devices, memory,cpu,data on emulators/simulators; all = also memory_growth,cpu_peak,frame_max)
   --perf-ignore LIST          metrics to leave out of the comparison; --perf-key-base DIR makes baseline keys relative to DIR
   --retry-failed N            re-run a failing test up to N extra times
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame

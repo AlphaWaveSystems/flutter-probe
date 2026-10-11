@@ -55,7 +55,7 @@ probe test [path] [flags]
 | `--timeout` | `30s` | Per-step timeout. A single step can override it: `... within 90 seconds`. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
 | `--measure-all` | `false` | Measure every test: open a performance window named after the test around its body (also `perf.measure_all` in probe.yaml). Tests that use `start measuring` themselves are left alone. See [Performance testing](/advanced/performance/) |
 | `--perf-baseline FILE` | — | Compare every `start measuring` window with this baseline; a test whose numbers got worse than the tolerance fails. See [Performance testing](/advanced/performance/) |
-| `--perf-metrics LIST` | memory,cpu,slow_frames,frame_time,data | Metrics a baseline comparison fails on (comma separated, or `all`). `memory_growth`, `cpu_peak` and `frame_max` are single-sample extremes and only gate when listed; `cpu` only for windows of 5 s or more |
+| `--perf-metrics LIST` | memory,cpu,slow_frames,frame_time,data on physical devices; memory,cpu,data on emulators and simulators | Metrics a baseline comparison fails on (comma separated, or `all`). `memory_growth`, `cpu_peak` and `frame_max` are single-sample extremes and only gate when listed; `cpu` only for windows of 5 s or more |
 | `--perf-ignore LIST` | — | Metrics to leave out of the comparison |
 | `--perf-key-base DIR` | cwd | Directory baseline keys are relative to, so the same tests match from another checkout |
 | `--perf-update-baseline` | `false` | Write this run's measurements of passing tests to the `--perf-baseline` file (default `perf-baseline.json`) |
