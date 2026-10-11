@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Canary releases attach `probe-ios-driver.zip`** (a non-blocking `ios-driver` job in `release-canary.yml`, mirroring the stable workflow), so `probe ios-driver install` works against a canary. Applies from the next canary; documented in the install guide and the release pipeline notes.
+
 ## [0.24.0] - 2026-10-10
 
 ### Fixed

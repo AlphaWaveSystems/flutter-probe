@@ -27,7 +27,11 @@ passed.
    stale branch cannot silently revert what `main` merged since.
 2. **Canary.** Tagging `vX.Y.Z-next.N` publishes a GitHub pre-release, the
    `probe@next` Homebrew formula and pre-release Dart packages. The stable
-   formula is untouched.
+   formula is untouched. The iOS system-dialog driver (`probe-ios-driver.zip`)
+   is built by a separate, non-blocking `ios-driver` job and attached to the
+   pre-release afterwards, so `probe ios-driver install` works against a
+   canary; if that job fails the canary stays valid and the install reports a
+   404. Canaries carry no Studio, `.mcpb` or Windows assets; those are stable only.
 3. **Dogfood gate** (`dogfood-gate.yml`, dispatched with the canary version):
    - the fixture twin-app suite runs on named iOS simulator and Android
      emulator devices with the pinned canary (`PROBE_AGENT_NO_UPGRADE=1`);
@@ -87,6 +91,13 @@ How the agent stays safe, in every mode:
 - Dependabot PRs are not reviewed by this agent (their author association is
   not trusted and Actions secrets are not exposed to them); they follow their
   own soak workflow.
+
+## After a stable tag: verify
+
+- the release is "latest" and carries the CLI and MCP binaries for every platform, the Studio archives, the `.mcpb` extensions **and `probe-ios-driver.zip`** (`gh release view vX.Y.Z --json assets`);
+- the stable Homebrew formula has the new version and its sha256 values equal the downloaded assets;
+- pub.dev shows the new agent version;
+- `probe version` prints the new version and `probe ios-driver install` downloads the driver.
 
 ## Rules
 
