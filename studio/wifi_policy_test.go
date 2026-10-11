@@ -18,7 +18,7 @@ func TestIsLocalAddressClasses(t *testing.T) {
 		{"169.254.10.20", true}, {"fe80::1", true},
 		{"10.0.0.5", true}, {"10.255.255.255", true},
 		{"172.16.0.1", true}, {"172.31.255.1", true}, {"172.15.255.255", false}, {"172.32.0.1", false},
-		{"192.168.1.202", true}, {"192.169.0.1", false},
+		{"192.168.1.23", true}, {"192.169.0.1", false},
 		{"fc00::1", true}, {"fd12:3456::9", true}, {"fe00::1", false},
 		{"8.8.8.8", false}, {"1.1.1.1", false}, {"2001:4860:4860::8888", false},
 		{"::ffff:8.8.8.8", false}, {"::ffff:192.168.1.5", true},
@@ -49,7 +49,7 @@ func stubResolver(m map[string][]string) func(context.Context, string) ([]net.IP
 func TestCheckWiFiTargetByClass(t *testing.T) {
 	t.Setenv(allowPublicEnv, "")
 	a := &App{lookupHost: stubResolver(map[string][]string{
-		"iphone.local":    {"192.168.1.202"},
+		"iphone.local":    {"192.168.1.45"},
 		"printer":         {"10.0.0.9"},
 		"evil.example":    {"8.8.8.8"},
 		"mixed.example":   {"192.168.1.5", "8.8.4.4"},
@@ -60,7 +60,7 @@ func TestCheckWiFiTargetByClass(t *testing.T) {
 		host string
 		want string // "" = allowed, else a substring of the error
 	}{
-		{"127.0.0.1", ""}, {"[::1]", ""}, {"192.168.1.202", ""}, {"10.1.2.3", ""}, {"172.20.0.4", ""},
+		{"127.0.0.1", ""}, {"[::1]", ""}, {"192.168.1.23", ""}, {"10.1.2.3", ""}, {"172.20.0.4", ""},
 		{"169.254.7.7", ""}, {"fe80::1c2b%en0", ""}, {"fd00::1", ""},
 		{"iphone.local", ""}, {"printer", ""}, {"v6.local", ""},
 		{"8.8.8.8", "not on this machine or a local network"},
