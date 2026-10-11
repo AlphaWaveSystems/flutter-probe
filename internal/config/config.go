@@ -41,6 +41,7 @@ type Config struct {
 	Reports   string           `yaml:"reports_folder"`
 	L10n      L10nConfig       `yaml:"l10n"`
 	Perf      PerfConfig       `yaml:"perf"`
+	Hosted    HostedConfig     `yaml:"hosted"`
 	Env       map[string]string `yaml:"environment"`
 
 	// CLIVersion is the running probe binary's version (internal/cli.Version).
@@ -48,6 +49,15 @@ type Config struct {
 	// after loading, so runner/probelink code can include it in the connect
 	// handshake without importing internal/cli (which would be a cycle).
 	CLIVersion string `yaml:"-"`
+}
+
+// HostedConfig is the opt-in report upload of the hosted service (Probe Cloud, preview). It is
+// unrelated to the device-farm `cloud:` block above. Nothing is sent unless upload_report is true (or
+// --upload-report is given) and a license with the probe_cloud plan is activated.
+type HostedConfig struct {
+	UploadReport bool          `yaml:"upload_report"` // upload the scrubbed run report after `probe test` (same as --upload-report)
+	URL          string        `yaml:"url"`           // service base URL; the default is a placeholder that is not live yet
+	Timeout      time.Duration `yaml:"timeout"`       // upload time limit (default 5s); an upload never fails the run
 }
 
 // PerfConfig holds performance-measuring defaults.

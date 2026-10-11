@@ -94,6 +94,19 @@ func LoadLicense() (*license.Claims, error) {
 	return license.Verify(string(data))
 }
 
+// LoadLicenseKey returns the stored key text (the credential of hosted features). os.ErrNotExist when none.
+func LoadLicenseKey() (string, error) {
+	dir, err := cloud.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, licenseFile))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
 func describeClaims(c *license.Claims) string {
 	plans := make([]string, len(c.Plans))
 	for i, p := range c.Plans {

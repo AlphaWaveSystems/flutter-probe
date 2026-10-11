@@ -421,6 +421,8 @@ From 1.0, ProbeScript, `probe.yaml`, the agent protocol and the report JSON are 
 
 `start measuring "checkout"` ... `stop measuring`, then `see memory below 300 MB`, `see cpu below 60 percent`, `see slow frames below 5 percent`, `see data transferred below 500 KB`, `see response "/api/pay" below 2000 ms`. Memory and frames come from the agent (0.23+, all devices), CPU from Android and iOS simulators, network from the recorded HTTP traffic. Gate regressions with `probe test --perf-baseline perf-baseline.json` (`--perf-update-baseline` writes it), watch `probe perf trend`. Guide: [Performance testing](https://flutterprobe.dev/advanced/performance/).
 
+**Probe Cloud (preview, opt-in):** `probe test --upload-report` uploads a scrubbed copy of the JSON report (relative paths, no screenshots/videos/logs, no environment, credential-shaped strings redacted) to a hosted service with a `probe_cloud` license; `--upload-dry-run` prints the exact payload and sends nothing. The hosted service is not live yet; failures are warnings and never fail a run. See [Probe Cloud (preview)](https://flutterprobe.dev/tools/probe-cloud-preview/).
+
 ### Timeouts, waiting and retries
 
 One system for "not there yet": the step timeout (`--timeout`), `--implicit-wait 7s` for the whole run, a per-step budget (`wait until "Report ready" appears within 90 seconds`), `optional` / `if visible` / `if "X" appears` to fail gracefully, `retry 3 times` blocks and `defaults.retry_failed_tests`. Guide: [Timeouts, waiting and retries](https://flutterprobe.dev/advanced/timeouts-and-retries/).

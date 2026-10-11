@@ -60,6 +60,8 @@ type Plan string
 
 const (
 	PlanTeam Plan = "team"
+	// PlanProbeCloud entitles the opt-in hosted report upload (Probe Cloud, preview).
+	PlanProbeCloud Plan = "probe_cloud"
 )
 
 // Claims is the signed payload.
