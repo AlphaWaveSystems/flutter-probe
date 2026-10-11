@@ -58,6 +58,9 @@ export namespace main {
 	    state: string;
 	    osVersion: string;
 	    booted: boolean;
+	    transport?: string;
+	    model?: string;
+	    hint?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DeviceInfo(source);
@@ -72,6 +75,9 @@ export namespace main {
 	        this.state = source["state"];
 	        this.osVersion = source["osVersion"];
 	        this.booted = source["booted"];
+	        this.transport = source["transport"];
+	        this.model = source["model"];
+	        this.hint = source["hint"];
 	    }
 	}
 	export class Diagnostic {
