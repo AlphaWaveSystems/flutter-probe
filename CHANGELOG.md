@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **Installation: "Try a canary build"** covers `brew install AlphaWaveSystems/tap/probe@next`, the pre-release binaries and taking the agent from the tagged source (git dependency) because canaries are not published to pub.dev.
+
 ### Security
 - **Studio headless mode refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, on top of the existing loopback, Host and Origin checks. Test-only server; non-browser clients are unaffected.
 

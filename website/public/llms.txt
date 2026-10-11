@@ -5,7 +5,7 @@
 > an MCP server (`probe-mcp`) exposes the same capabilities to AI agents.
 
 Key facts for an AI agent:
-- Install: `brew install alphawavesystems/tap/probe`; add `flutter_probe_agent` to the app and build with `--dart-define=PROBE_AGENT=true`.
+- Install: `brew install alphawavesystems/tap/probe` (canary: `brew install alphawavesystems/tap/probe@next`, agent from a git dependency on the `vX.Y.Z-next.N` tag); add `flutter_probe_agent` to the app and build with `--dart-define=PROBE_AGENT=true`.
 - Run: `probe test tests/ -v --format json -o reports/results.json`.
 - Failures look like `line N: <step>: rpc error -3200x: ... visible texts: [...], keys: [...]` — compare the visible texts/keys with the selector you used.
 - Wait for each new screen (`wait until "Text" appears`) before tapping; use `#key` selectors; use `scroll down until "X" appears` for rows below the fold.

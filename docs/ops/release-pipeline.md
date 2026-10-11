@@ -9,7 +9,7 @@ timers.
 
 | Channel | Tag | Workflow | Installs as |
 | --- | --- | --- | --- |
-| Canary | `vX.Y.Z-next.N` | `release-canary.yml` | `brew install AlphaWaveSystems/tap/probe@next`; pub.dev pre-release `X.Y.Z-next.N` |
+| Canary | `vX.Y.Z-next.N` | `release-canary.yml` | `brew install AlphaWaveSystems/tap/probe@next`; agent from the tagged source (git dependency, `path: probe_agent`); a pub.dev pre-release is published only when the pubspec version carries `-next.N`. User guide: website `getting-started/installation` |
 | Stable | `vX.Y.Z` | `release.yml` + `publish-pub-dev.yml` | `brew install probe`; pub.dev stable |
 
 `scripts/release.sh 0.24.0-next.1` bumps the version files, commits and tags a
