@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
@@ -28,18 +29,33 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// Errors the automation layer tells apart from other failures.
+var (
+	errNotConnected  = fmt.Errorf("not connected — pick a device first")
+	errRunInProgress = fmt.Errorf("a run is already in progress")
+)
+
 // App is the Wails-bound backend.
 type App struct {
 	ctx context.Context
+	// runtimeUp is true once Wails has started the app: only then may events be emitted. Without
+	// it (tests, automation without a window) emit does nothing.
+	runtimeUp atomic.Bool
 
 	mu        sync.Mutex
 	conn      *connection // nil when disconnected
 	deviceMgr *device.Manager
 	wifi      *wifiDiscovery
 	workspace string // directory whose probe.yaml governs connections; "" → cwd
+	// humanWorkspace is the last workspace a person opened in the window; it is what automation
+	// may work inside (see automationRoots).
+	humanWorkspace string
 
 	runMu     sync.Mutex
 	runCancel context.CancelFunc // non-nil while RunFile is executing
+
+	track   runTracker        // what the current/last run looks like, for automation and the UI
+	autoSrv *automationServer // non-nil when PROBE_STUDIO_AUTOMATION=1
 
 	recMu     sync.Mutex
 	recActive bool
@@ -62,17 +78,37 @@ type connection struct {
 
 // NewApp creates a new App.
 func NewApp() *App {
-	return &App{deviceMgr: device.NewManager(), wifi: newWiFiDiscovery()}
+	return &App{ctx: context.Background(), deviceMgr: device.NewManager(), wifi: newWiFiDiscovery()}
 }
 
 // startup is called once when the Wails runtime is ready. The context is
 // stored so we can later use it for `runtime.EventsEmit` and friends.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.runtimeUp.Store(true)
+	if os.Getenv("PROBE_STUDIO_AUTOMATION") == "1" {
+		srv, err := startAutomation(a)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "studio automation:", err)
+		} else {
+			a.autoSrv = srv
+		}
+	}
+}
+
+// emit sends an event to the frontend; it does nothing before the Wails runtime is up.
+func (a *App) emit(name string, data ...interface{}) {
+	if !a.runtimeUp.Load() {
+		return
+	}
+	wailsruntime.EventsEmit(a.ctx, name, data...)
 }
 
 // shutdown closes any active connection. Called by Wails on app exit.
 func (a *App) shutdown(_ context.Context) {
+	if a.autoSrv != nil {
+		a.autoSrv.Close()
+	}
 	if a.wifi != nil {
 		a.wifi.Stop()
 	}
@@ -115,7 +151,37 @@ func (a *App) InitialWorkspace() string {
 func (a *App) SetWorkspace(path string) {
 	a.mu.Lock()
 	a.workspace = path
+	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.mu.Unlock()
+}
+
+// useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike
+// SetWorkspace it does not widen what automation may touch.
+func (a *App) useWorkspace(path string) {
+	a.mu.Lock()
+	a.workspace = path
+	a.mu.Unlock()
+}
+
+// automationRoots are the folders the automation endpoint may read from, list, open as a
+// workspace and run files from: the workspace a person opened (in the window or through
+// PROBE_STUDIO_WORKSPACE) and the folders listed in PROBE_STUDIO_AUTOMATION_ROOTS.
+func (a *App) automationRoots() []string {
+	a.mu.Lock()
+	roots := []string{}
+	if a.humanWorkspace != "" {
+		roots = append(roots, a.humanWorkspace)
+	}
+	a.mu.Unlock()
+	if env := os.Getenv("PROBE_STUDIO_WORKSPACE"); env != "" {
+		roots = append(roots, env)
+	}
+	for _, r := range filepath.SplitList(os.Getenv("PROBE_STUDIO_AUTOMATION_ROOTS")) {
+		if r != "" {
+			roots = append(roots, r)
+		}
+	}
+	return roots
 }
 
 // workspaceConfig loads probe.yaml from the open workspace, falling back to
@@ -441,7 +507,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 
 	go a.streamLoop(streamCtx, streamDone, client)
 
-	wailsruntime.EventsEmit(a.ctx, "connection:changed", a.Status())
+	a.emit("connection:changed", a.Status())
 	return a.Status(), nil
 }
 
@@ -602,7 +668,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 	// Kick off the streaming loop. It exits on streamCancel().
 	go a.streamLoop(streamCtx, streamDone, client)
 
-	wailsruntime.EventsEmit(a.ctx, "connection:changed", a.Status())
+	a.emit("connection:changed", a.Status())
 	return a.Status(), nil
 }
 
@@ -617,7 +683,7 @@ func (a *App) Disconnect() {
 		stopConnection(conn)
 	}
 	if a.ctx != nil {
-		wailsruntime.EventsEmit(a.ctx, "connection:changed", a.Status())
+		a.emit("connection:changed", a.Status())
 	}
 }
 
@@ -721,7 +787,7 @@ func (a *App) streamLoop(ctx context.Context, done chan struct{}, client probeli
 			// Surface the failure once, then back off so we don't spin
 			// during a bad period (e.g. agent restarting).
 			if a.ctx != nil {
-				wailsruntime.EventsEmit(a.ctx, "device:stream-error", err.Error())
+				a.emit("device:stream-error", err.Error())
 			}
 			select {
 			case <-ctx.Done():
@@ -732,7 +798,7 @@ func (a *App) streamLoop(ctx context.Context, done chan struct{}, client probeli
 		}
 		frame.FrameMs = time.Since(start).Milliseconds()
 		if a.ctx != nil {
-			wailsruntime.EventsEmit(a.ctx, "device:frame", frame)
+			a.emit("device:frame", frame)
 		}
 	}
 }
@@ -803,7 +869,7 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 	conn := a.conn
 	a.mu.Unlock()
 	if conn == nil {
-		return nil, fmt.Errorf("not connected — pick a device first")
+		return nil, errNotConnected
 	}
 
 	// One run at a time; CancelRun stops it.
@@ -812,7 +878,7 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 	if a.runCancel != nil {
 		a.runMu.Unlock()
 		cancel()
-		return nil, fmt.Errorf("a run is already in progress")
+		return nil, errRunInProgress
 	}
 	a.runCancel = cancel
 	a.runMu.Unlock()
@@ -823,8 +889,10 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 		cancel()
 	}()
 
-	wailsruntime.EventsEmit(a.ctx, "run:started", path)
-	wailsruntime.EventsEmit(a.ctx, "run:plan", planFile(path))
+	plan := planFile(path)
+	a.track.begin(path, plan)
+	a.emit("run:started", path)
+	a.emit("run:plan", plan)
 
 	r := runner.New(conn.cfg, conn.client, conn.deviceCtx, runner.RunOptions{
 		Files:   []string{path},
@@ -832,20 +900,25 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 		Verbose: false,
 	})
 	r.OnResult(func(res runner.TestResult) {
-		wailsruntime.EventsEmit(a.ctx, "run:result", toRunResult(res))
+		rr := toRunResult(res)
+		a.track.result(rr)
+		a.emit("run:result", rr)
 	})
 	r.OnStep(func(ev runner.StepEvent) {
-		wailsruntime.EventsEmit(a.ctx, "run:step", toRunStep(ev))
+		rs := toRunStep(ev)
+		a.track.step(rs)
+		a.emit("run:step", rs)
 	})
 	results, err := r.Run(runCtx)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))
 	}
-	wailsruntime.EventsEmit(a.ctx, "run:finished", out)
 	if err == nil && runCtx.Err() != nil {
 		err = fmt.Errorf("run cancelled")
 	}
+	a.track.finish(out, err)
+	a.emit("run:finished", out)
 	return out, err
 }
 
@@ -987,7 +1060,7 @@ func (a *App) StartRecording() error {
 			a.recMu.Lock()
 			a.recLines = append(a.recLines, l)
 			a.recMu.Unlock()
-			wailsruntime.EventsEmit(a.ctx, "recorder:line", l)
+			a.emit("recorder:line", l)
 		}
 	}
 
