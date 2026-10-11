@@ -106,3 +106,7 @@ How the agent stays safe, in every mode:
   `dogfood-mac` label is registered.
 - Labels: `dogfood/pending`, `dogfood/passed`, `dogfood/failed`,
   `prod-incident`.
+
+## Disclosure guard
+
+`.github/workflows/disclosure-guard.yml` scans every pull request (added lines, changed file names, commit messages, title and body) and every push to `main` against a maintainer-defined list of patterns kept in the repository secret `DISCLOSURE_DENYLIST`, one extended regex per line. The list is deliberately not in the repository. A match fails the check and is reported by file and line plus a rule number; the matched text is never printed. The scanner is `scripts/disclosure-scan.sh <repo> <git-range> <patterns-file>`; maintainers can run it locally with the same patterns file before opening a pull request. Pull requests from forks cannot see the secret and fail with instructions: a maintainer re-opens them from a branch in this repository. Add the check `Disclosure guard` to the required checks of the default branch once the secret is set.
