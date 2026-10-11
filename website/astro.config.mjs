@@ -67,6 +67,7 @@ export default defineConfig({
           items: [
             { label: 'GitHub Actions', slug: 'ci-cd/github-actions' },
             { label: 'Reports', slug: 'ci-cd/reports' },
+            { label: 'Results in other tools', slug: 'ci-cd/analytics-tools' },
           ],
         },
         {

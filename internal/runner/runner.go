@@ -35,6 +35,17 @@ type TestResult struct {
 	PerfNew    []string       // measurements with no entry in the baseline (not compared)
 	PerfSkipped int           // measurements not compared: the window spans an app restart or has no memory/frame data
 	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
+	StartedAt  time.Time        // when the (last) attempt started
+	AttemptLog []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
+}
+
+// AttemptOutcome is what one attempt of a test did. A test that failed and then passed on a retry keeps the
+// failed attempt here, so reports can show the flake instead of only the final pass.
+type AttemptOutcome struct {
+	Passed    bool
+	Error     error
+	Duration  time.Duration
+	StartedAt time.Time
 }
 
 // Runner coordinates parsing, connecting, and executing .probe files.
@@ -358,11 +369,14 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 	}
 	var res TestResult
 	var earlier []string
+	var log []AttemptOutcome
 	for attempt := 1; ; attempt++ {
 		r.curFile, r.curTest, r.curAttempt = file, t.Name, attempt
 		res = r.runSingleAttempt(ctx, prog, t, file, vars, row)
 		r.applyPerfBaseline(&res)
 		res.Attempts = attempt
+		log = append(log, AttemptOutcome{Passed: res.Passed, Error: res.Error, Duration: res.Duration, StartedAt: res.StartedAt})
+		res.AttemptLog = log
 		res.Artifacts = append(earlier, res.Artifacts...)
 		if res.Passed || attempt > retries || ctx.Err() != nil || r.client == nil {
 			return res
@@ -494,6 +508,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		Artifacts:  exec.Artifacts(),
 		DeviceID:   r.opts.DeviceID,
 		DeviceName: r.opts.DeviceName,
+		StartedAt:  start,
 	}
 }
 

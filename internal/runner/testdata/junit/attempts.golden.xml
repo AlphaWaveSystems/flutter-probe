@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="8" failures="3" errors="1" skipped="1" time="7.100">
+  <testsuite name="c.probe" file="c.probe" tests="1" failures="0" errors="0" skipped="0" time="1.000" timestamp="2026-10-11T12:00:05">
+    <properties>
+      <property name="probe_version" value="0.25.0"></property>
+      <property name="platform" value="android"></property>
+      <property name="os_version" value="Android 15"></property>
+      <property name="app_id" value="dev.example.app"></property>
+      <property name="app_version" value="1.2.3"></property>
+      <property name="device_name" value="Pixel 7"></property>
+      <property name="device_class" value="emulator"></property>
+      <property name="provider" value="local"></property>
+      <property name="run_label" value="shard-1"></property>
+    </properties>
+    <testcase name="elsewhere" classname="c.probe-android" file="c.probe" time="1.000"></testcase>
+  </testsuite>
+  <testsuite name="tests/a.probe" file="tests/a.probe" tests="5" failures="2" errors="1" skipped="1" time="3.700" timestamp="2026-10-11T12:00:00">
+    <properties>
+      <property name="probe_version" value="0.25.0"></property>
+      <property name="platform" value="android"></property>
+      <property name="os_version" value="Android 15"></property>
+      <property name="app_id" value="dev.example.app"></property>
+      <property name="app_version" value="1.2.3"></property>
+      <property name="device_name" value="Pixel 7"></property>
+      <property name="device_class" value="emulator"></property>
+      <property name="provider" value="local"></property>
+      <property name="run_label" value="shard-1"></property>
+    </properties>
+    <testcase name="login" classname="tests/a.probe-android" file="tests/a.probe" time="1.200"></testcase>
+    <testcase name="assertion fails" classname="tests/a.probe-android" file="tests/a.probe" time="2.000">
+      <failure message="expected &#34;Done&#34; to appear">expected &#34;Done&#34; to appear</failure>
+    </testcase>
+    <testcase name="agent died" classname="tests/a.probe-android" file="tests/a.probe" time="0.500">
+      <error type="error" message="probelink: write: use of closed network connection">probelink: write: use of closed network connection</error>
+    </testcase>
+    <testcase name="later" classname="tests/a.probe-android" file="tests/a.probe" time="0.000">
+      <skipped></skipped>
+    </testcase>
+    <testcase name="no error recorded" classname="tests/a.probe-android" file="tests/a.probe" time="0.000">
+      <failure message="test failed">test failed</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="tests/b.probe" file="tests/b.probe" tests="2" failures="1" errors="0" skipped="0" time="2.400" timestamp="2026-10-11T12:00:04">
+    <properties>
+      <property name="probe_version" value="0.25.0"></property>
+      <property name="platform" value="android"></property>
+      <property name="os_version" value="Android 15"></property>
+      <property name="app_id" value="dev.example.app"></property>
+      <property name="app_version" value="1.2.3"></property>
+      <property name="device_name" value="Pixel 7"></property>
+      <property name="device_class" value="emulator"></property>
+      <property name="provider" value="local"></property>
+      <property name="run_label" value="shard-1"></property>
+    </properties>
+    <testcase name="checkout [row 2]" classname="tests/b.probe-android" file="tests/b.probe" time="1.500">
+      <properties>
+        <property name="row" value="2"></property>
+        <property name="device" value="Pixel 7"></property>
+        <property name="attempt" value="1/2"></property>
+      </properties>
+      <failure message="expected to see &#34;Pay&#34;">expected to see &#34;Pay&#34;</failure>
+    </testcase>
+    <testcase name="checkout [row 2]" classname="tests/b.probe-android" file="tests/b.probe" time="0.900">
+      <properties>
+        <property name="row" value="2"></property>
+        <property name="device" value="Pixel 7"></property>
+        <property name="attempt" value="2/2"></property>
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>

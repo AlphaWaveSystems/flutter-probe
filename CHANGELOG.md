@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **`--format junit` works with flaky-test and test-analytics services** (checked against their public docs only, nothing uploaded): suites are sorted, with `file`, `timestamp`, a real `time` and `errors`; paths are relative with forward slashes (no home directory); `<error>` marks infrastructure problems (agent connection, setup hooks) and `<failure>` assertions; `<properties>` carry probe version, platform, OS version, app id and version, device name and class; data-driven rows get a `row` property and a re-run test an `attempts` property. New flags: `--junit-attempts` (one `<testcase>` per attempt of a re-run test, off by default because the extra failed cases change the counts of a run that finally passed), `--junit-suffix` (appended to classname) and `--junit-label` (`run_label` property). The JSON report's metadata gains `device_class`. New page: Results in other tools.
 - **Studio: manual WiFi entry** (phase 1 of the physical-device plan, `docs/proposals/studio-physical-devices.md`): the WiFi overlay has host, port (default 48686) and token fields with validation (IPv4, IPv6 or hostname; port range; token characters), a **Test connection** step that dials and pings without connecting, and error messages that say what to check (same network, app in the foreground and unlocked, profile build with `PROBE_AGENT=true` and `PROBE_WIFI=true`, port, fresh token). The automation endpoint has `test_wifi` next to `connect_wifi` (port defaults to 48686), and the MCP tool `studio_connect` accepts `host`, `port`, `token` (and `test_only`). Headless browser tests and a native E2E test cover it.
 
 ### Docs
@@ -16,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **A timed-out `wait for system dialog appears` explains itself on Android** (#367): it adds the focused window, the grant state of the permission the dialog is about (or the app's denied runtime permissions) and a hint such as "no system dialog was requested: the app is in the foreground and the permission is denied", so it is clear at once when the app never asked. Also in `probe system-dialog wait`.
 
 ### Fixed
+- **The suite `time` attribute of `--format junit` was always empty** (`time=""`); it is now the sum of its cases.
 - **A wedged iOS XCUITest driver is reported directly** (#357): when the runner log shows "Timed out waiting for AX loaded notification" (xcodebuild exit 65), starting the driver or a later driver call now says the simulator's accessibility service is not responding and how to restart only the test simulator, instead of surfacing as unrelated step timeouts. A driver process that stopped mid-run is reported as stopped.
 
 ### Added
