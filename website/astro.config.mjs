@@ -77,6 +77,7 @@ export default defineConfig({
             { label: 'Testing against backend data', slug: 'advanced/backend-data' },
             { label: 'Timeouts, waiting and retries', slug: 'advanced/timeouts-and-retries' },
             { label: 'Performance testing', slug: 'advanced/performance' },
+            { label: 'Compatibility policy (1.x)', slug: 'advanced/compatibility' },
             { label: 'Configuration', slug: 'advanced/configuration' },
             { label: 'Architecture', slug: 'advanced/architecture' },
           ],

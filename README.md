@@ -412,6 +412,10 @@ notifications have no simctl service, so probe answers the system alert itself: 
 `allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
 (needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
 
+### Compatibility
+
+From 1.0, ProbeScript, `probe.yaml`, the agent protocol and the report JSON are frozen within 1.x and only grow additively; deprecations last at least two minor releases and 90 days. Probe Studio, experimental features and human-readable output are outside that promise. See the [compatibility policy](https://flutterprobe.dev/advanced/compatibility/).
+
 ### Performance testing
 
 `start measuring "checkout"` ... `stop measuring`, then `see memory below 300 MB`, `see cpu below 60 percent`, `see slow frames below 5 percent`, `see data transferred below 500 KB`, `see response "/api/pay" below 2000 ms`. Memory and frames come from the agent (0.23+, all devices), CPU from Android and iOS simulators, network from the recorded HTTP traffic. Gate regressions with `probe test --perf-baseline perf-baseline.json` (`--perf-update-baseline` writes it), watch `probe perf trend`. Guide: [Performance testing](https://flutterprobe.dev/advanced/performance/).

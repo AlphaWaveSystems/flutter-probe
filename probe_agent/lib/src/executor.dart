@@ -129,14 +129,20 @@ class ProbeExecutor {
         return tapWarning == null ? {'ok': true} : {'ok': true, 'warning': tapWarning};
 
       case ProbeMethods.doubleTap:
+        _tapWarning = null;
         await _doubleTap(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
-        return {'ok': true};
+        final doubleTapWarning = _tapWarning;
+        _tapWarning = null;
+        return doubleTapWarning == null ? {'ok': true} : {'ok': true, 'warning': doubleTapWarning};
 
       case ProbeMethods.longPress:
+        _tapWarning = null;
         await _longPress(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
-        return {'ok': true};
+        final longPressWarning = _tapWarning;
+        _tapWarning = null;
+        return longPressWarning == null ? {'ok': true} : {'ok': true, 'warning': longPressWarning};
 
       // ---- Text input ----
       case ProbeMethods.type_:
@@ -678,21 +684,56 @@ class ProbeExecutor {
   Future<void> _doubleTap(Map<String, dynamic> sel) async {
     final element = await _resolveActionTarget(sel);
     final box = element.renderObject as RenderBox;
-    final center = box.localToGlobal(box.size.center(Offset.zero));
-    final g1 = await _createGesture(center);
+    final cover = await _coverageBefore(box);
+    final g1 = await _createGesture(cover.point);
     await g1.up();
     await Future.delayed(const Duration(milliseconds: 50));
-    final g2 = await _createGesture(center);
+    final g2 = await _createGesture(cover.point);
     await g2.up();
+    await _warnIfCoveredAndUnchanged('double tap', sel, cover);
   }
 
   Future<void> _longPress(Map<String, dynamic> sel) async {
     final element = await _resolveActionTarget(sel);
     final box = element.renderObject as RenderBox;
-    final center = box.localToGlobal(box.size.center(Offset.zero));
-    final gesture = await _createGesture(center);
+    final cover = await _coverageBefore(box);
+    final gesture = await _createGesture(cover.point);
     await Future.delayed(const Duration(milliseconds: 500));
     await gesture.up();
+    await _warnIfCoveredAndUnchanged('long press', sel, cover);
+  }
+
+  /// Where a pointer action on [box] will land, and whether something unrelated to the target is on
+  /// top there. An overlay that is still sliding in or out gets a moment to settle first, so a
+  /// transient state is not reported (same rule as `tap`).
+  Future<({Offset point, bool covered, String before})> _coverageBefore(RenderBox box) async {
+    var point = box.localToGlobal(box.size.center(Offset.zero));
+    for (var i = 0; i < 12 && box.attached; i++) {
+      point = box.localToGlobal(box.size.center(Offset.zero));
+      if (_hitState(box, point).related) break;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    final covered = box.attached && !_hitState(box, point).related;
+    return (point: point, covered: covered, before: covered ? _screenFingerprint() : '');
+  }
+
+  /// `tap`'s covered-target warning for `double tap` and `long press`: reported only when the
+  /// action also changed nothing on screen (the hit test can be wrong about overlays).
+  Future<void> _warnIfCoveredAndUnchanged(
+    String verb,
+    Map<String, dynamic> sel,
+    ({Offset point, bool covered, String before}) cover,
+  ) async {
+    if (!cover.covered) return;
+    for (var i = 0; i < 4; i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (_screenFingerprint() != cover.before) return;
+    }
+    _tapWarning = '$verb target ${_selDesc(sel)} is covered by another widget at '
+        '(${cover.point.dx.round()}, ${cover.point.dy.round()}); the $verb lands on whatever is on top '
+        'and the screen did not change (topmost hit: ${_hitPathDesc(cover.point)})'
+        '${_keyboardHint()}'
+        '${_visibleHint()}';
   }
 
   // ---- Text input helpers ----
