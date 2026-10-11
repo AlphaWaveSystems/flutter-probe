@@ -95,7 +95,8 @@ These are recorded and shown, but **not** gated unless you ask: `memory_growth` 
 
 ### Restarts and unavailable numbers
 
-- A window that contains `restart the app` (or any relaunch) spans two processes: the run prints a warning, the report marks the window `window_spans_restart`, CPU is not reported, and the baseline comparison skips it. Put the window around the steps after the restart instead.
+- A window that contains `restart the app` (or `open the app`, `clear app data`, a language change that relaunches) spans two processes. The measuring window is re-opened on the new process, so memory and frames cover the time since the relaunch; the run prints a warning, the report marks the window `window_spans_restart`, CPU is not reported, the comparison skips it and `--perf-update-baseline` leaves it out (a baseline never gets zeros or numbers of a half-window). Put the window around the steps after the restart if you want it in a baseline.
+- A `start measuring` without a name is reported as `measurement`.
 - CPU is reported only when the sampler read the app at least twice in the same process. Otherwise it is absent (not `0.0`) and skipped by comparisons.
 - `start measuring` while the app is not running fails with "no app is connected ... open the app first".
 
@@ -129,3 +130,9 @@ same data.
 - **Slow backend:** mock a 3-second answer (`respond with 200 ... after 3 seconds`) and assert the app stays smooth meanwhile.
 
 See also: [Testing against backend data](/advanced/backend-data/) and [Timeouts, waiting and retries](/advanced/timeouts-and-retries/).
+
+## What the numbers mean (and do not)
+
+- **Simulators and emulators:** an iOS simulator can only build debug, where build plus raster is usually above the 16.7 ms slow-frame threshold, so `slow_frames` sits near 100% in every test and says nothing; `frame_time` (p95) and the slowest frame are usable. An Android emulator that renders in software shows the same in quiet scenes. Numbers from simulators and emulators are only comparable from run to run on the same host; take absolute budgets from a profile build on a real device.
+- **Memory is the app process's resident set size.** On an iOS simulator in debug it includes the whole debug engine (several hundred MB), on an Android profile build about half of that. Compare it with a baseline from the same kind of build, not with a budget from another.
+- **Network assertions see `dart:io` traffic only** (`see response`, `see no requests`, `see data transferred`, the HTTP log). Requests made by native SDKs (Firebase, Crashlytics, Remote Config, fonts fetched natively) do not appear, so an "offline-first" assertion can only be about the Dart HTTP client.

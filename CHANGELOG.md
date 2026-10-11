@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **A measuring window that contains a relaunch of the app no longer reports zero memory and zero frames.** The agent-side window is re-opened on the new process after `restart the app`, `open the app`, `clear app data` and the other relaunch paths, so memory and frames cover the time since the relaunch. Such a window is marked `window_spans_restart`, and `--perf-update-baseline` leaves it (and any window with no memory and no frames) out of the baseline, with a warning, instead of writing zeros.
+- **A `start measuring` without a name** is reported as `measurement`, so its baseline key no longer ends in an empty name.
+
+### Docs
+- Performance guide: what the numbers mean on simulators and emulators (every frame is "slow" in a debug build), what memory is, and that network assertions see `dart:io` traffic only.
+
 ## [0.24.0] - 2026-10-10
 
 ### Fixed

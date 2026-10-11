@@ -166,3 +166,33 @@ func TestConnectionGoneTellsADeadAppFromAnOldAgent(t *testing.T) {
 		t.Error("an agent that lacks the call is not a dead connection")
 	}
 }
+
+func TestRelaunchResumesTheWindowAndMarksItAsSpanningARestart(t *testing.T) {
+	f := newPerfFake()
+	e := NewExecutor(f, nil, nil, 2*time.Second, false)
+	if err := e.startMeasuring(context.Background(), "t"); err != nil {
+		t.Fatal(err)
+	}
+	e.reapplyPerf(context.Background()) // what every relaunch path calls on the fresh process
+	if f.started != 2 {
+		t.Fatalf("the agent-side window must be started again on the new process: started=%d", f.started)
+	}
+	m, err := e.finishMeasuring(context.Background(), true)
+	if err != nil || !m.SpansRestart {
+		t.Fatalf("metrics = %+v, %v", m, err)
+	}
+	// Without an open window a relaunch must not start one.
+	f2 := newPerfFake()
+	e2 := NewExecutor(f2, nil, nil, 2*time.Second, false)
+	e2.reapplyPerf(context.Background())
+	if f2.started != 0 {
+		t.Fatalf("no window open, started=%d", f2.started)
+	}
+}
+
+func TestUnnamedWindowsGetALabel(t *testing.T) {
+	got := nameUnnamed([]perf.Metrics{{Name: ""}, {Name: "x"}})
+	if got[0].Name != "measurement" || got[1].Name != "x" {
+		t.Fatalf("%+v", got)
+	}
+}
