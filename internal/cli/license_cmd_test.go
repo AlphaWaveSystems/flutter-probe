@@ -13,17 +13,23 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/license"
 )
 
-// signedTestKey mirrors the private issuing tool: the public CLI only verifies.
-func signedTestKey(t *testing.T, c license.Claims) (pub, key string) {
+// signedTestKey mirrors the issuing side: the public CLI only verifies. It returns the
+// value for the PROBE_LICENSE_PUBKEY override and a key signed with a throwaway keypair.
+func signedTestKey(t *testing.T, c license.Claims) (keyEnv, key string) {
 	t.Helper()
 	pk, sk, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	enc := base64.RawURLEncoding
+	c.V, c.KID = 2, "t1"
+	if c.IssuedAt.IsZero() {
+		c.IssuedAt = time.Now().Add(-time.Hour)
+	}
 	payload, _ := json.Marshal(c)
-	sig := ed25519.Sign(sk, payload)
-	return enc.EncodeToString(pk), strings.Join([]string{license.Prefix, enc.EncodeToString(payload), enc.EncodeToString(sig)}, ".")
+	seg := enc.EncodeToString(payload)
+	sig := ed25519.Sign(sk, []byte(license.Prefix+".t1."+seg))
+	return "t1=" + enc.EncodeToString(pk), strings.Join([]string{license.Prefix, "t1", seg, enc.EncodeToString(sig)}, ".")
 }
 
 func TestLicenseActivateAndStatus(t *testing.T) {
@@ -32,7 +38,7 @@ func TestLicenseActivateAndStatus(t *testing.T) {
 		ID: "lic", Customer: "acme", Plans: []license.Plan{license.PlanTeam}, Seats: 5,
 		Expires: time.Now().Add(24 * time.Hour),
 	})
-	t.Setenv(license.PublicKeyEnv, pub)
+	t.Setenv(license.KeyEnv, pub)
 
 	var out bytes.Buffer
 	licenseActivateCmd.SetOut(&out)
@@ -67,8 +73,8 @@ func TestLicenseStatusWithoutKey(t *testing.T) {
 
 func TestLicenseActivateRejectsBadKey(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	pub, _ := signedTestKey(t, license.Claims{ID: "x", Customer: "c", Plans: []license.Plan{license.PlanTeam}})
-	t.Setenv(license.PublicKeyEnv, pub)
+	pub, _ := signedTestKey(t, license.Claims{ID: "x", Customer: "c", Plans: []license.Plan{license.PlanTeam}, Seats: 1, Expires: time.Now().Add(time.Hour)})
+	t.Setenv(license.KeyEnv, pub)
 	if err := runLicenseActivate(licenseActivateCmd, []string{"FP1.bad.key"}); err == nil {
 		t.Fatal("expected error")
 	}
