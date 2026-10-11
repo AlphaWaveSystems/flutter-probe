@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- **Studio headless mode refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, on top of the existing loopback, Host and Origin checks. Test-only server; non-browser clients are unaffected.
+
 ### Added
 - **`--measure-all`** (and `perf: {measure_all: true}` in probe.yaml): a measuring window named after the test around every test body, so an existing suite gets performance baselines with no script edits. Tests that use `start measuring` themselves are left alone.
 

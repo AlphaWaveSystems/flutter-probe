@@ -128,6 +128,12 @@ func (s *headlessServer) guard(next http.Handler) http.Handler {
 			http.Error(w, "cross-origin request refused", http.StatusForbidden)
 			return
 		}
+		// Browsers label every request with Sec-Fetch-Site; cross-site and same-site (a sibling
+		// subdomain or another local port's site) are never this page. Non-browser clients omit it.
+		if f := r.Header.Get("Sec-Fetch-Site"); f == "cross-site" || f == "same-site" {
+			http.Error(w, "cross-site request refused", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
