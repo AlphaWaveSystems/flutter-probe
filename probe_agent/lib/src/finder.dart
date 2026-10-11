@@ -1,4 +1,42 @@
+import 'package:flutter/material.dart' show Tooltip;
 import 'package:flutter/widgets.dart';
+
+import 'textfold.dart';
+
+/// The [ModalRoute] [element] belongs to, found WITHOUT subscribing to it.
+///
+/// `ModalRoute.of(context)` registers [context] as a dependent of the route's
+/// inherited scope. That is only legitimate during a build. The agent calls
+/// this from outside any build, on elements of routes that may be closing; when
+/// such a route is disposed its scope notifies the dependents it still holds,
+/// and the framework asserts that each one is still a descendant
+/// (`InheritedElement.notifyClients`, framework.dart) — a red screen in the
+/// app after closing a sheet or dialog. This was introduced with the route
+/// awareness added in agent 0.10.0 and broke apps in profile/debug test builds
+/// (FP-13).
+///
+/// Walking ancestors reads the same route without registering anything.
+/// `_ModalScopeStatus` is private, so it is matched by name and its public
+/// `route` field read dynamically; any mismatch (a future Flutter renaming it)
+/// degrades to `null`, which every caller already treats as "no route
+/// information — assume visible".
+ModalRoute<dynamic>? probeRouteOf(Element element) {
+  ModalRoute<dynamic>? found;
+  try {
+    element.visitAncestorElements((ancestor) {
+      final widget = ancestor.widget;
+      if (widget is InheritedWidget && widget.runtimeType.toString() == '_ModalScopeStatus') {
+        final route = (widget as dynamic).route;
+        if (route is ModalRoute) found = route;
+        return false;
+      }
+      return true;
+    });
+  } catch (_) {
+    return null;
+  }
+  return found;
+}
 
 /// ProbeFinder translates ProbeLink SelectorParam JSON into Flutter elements
 /// by walking the live widget tree. Does NOT use flutter_test finders since
@@ -10,7 +48,30 @@ class ProbeFinder {
   /// Returns all [Element]s matching the given selector map.
   /// Only returns elements that are currently visible on screen
   /// (not behind Offstage, Visibility(false), or off-screen routes).
+  bool _includeOffScreen = false;
+
+  /// Like [findElements], but also returns widgets that are built yet laid out entirely
+  /// off screen (a chip beyond the end of a horizontal list). Used by actions, which scroll
+  /// such a target into view; assertions must not see them.
+  List<Element> findElementsIncludingOffScreen(Map<String, dynamic> sel) {
+    _includeOffScreen = true;
+    try {
+      return findElements(sel);
+    } finally {
+      _includeOffScreen = false;
+    }
+  }
+
   List<Element> findElements(Map<String, dynamic> sel) {
+    _loose = sel['loose'] == true;
+    try {
+      return _findElements(sel);
+    } finally {
+      _loose = false;
+    }
+  }
+
+  List<Element> _findElements(Map<String, dynamic> sel) {
     final kind = sel['kind'] as String? ?? 'text';
     final text = sel['text'] as String? ?? '';
     final ordinal = (sel['ordinal'] as num?)?.toInt() ?? 1;
@@ -106,6 +167,19 @@ class ProbeFinder {
         results.add(e);
       }
     });
+    if (results.isNotEmpty) return results;
+    // Nothing shows this text: fall back to what the app labels for assistive
+    // technology and hover help — a Semantics label or a Tooltip message (an
+    // icon button has no Text, only a tooltip). Only when no visible text matches, so
+    // a Semantics wrapper around a Text never doubles a count.
+    walkTree((e) {
+      final w = e.widget;
+      if (w is Tooltip && w.message != null && _textHit(w.message!, text)) {
+        results.add(e);
+      } else if (w is Semantics && w.properties.label != null && _textHit(w.properties.label!, text)) {
+        results.add(e);
+      }
+    });
     return results;
   }
 
@@ -138,15 +212,24 @@ class ProbeFinder {
     return results;
   }
 
+  /// Text comparison: a plain substring by default; with `loose` matching (selector flag
+  /// `loose: true`, from `--match-loose` / `defaults.match: loose`) case, accents, typographic
+  /// apostrophes/dashes, full-width forms and whitespace are folded on both sides.
+  bool _textHit(String haystack, String needle) =>
+      _loose ? foldedContains(haystack, needle) : haystack.contains(needle);
+
+  bool _loose = false;
+
   bool _matchesText(Widget widget, String text) {
     if (widget is Text) {
-      return widget.data == text || (widget.data?.contains(text) ?? false);
+      final data = widget.data;
+      return data != null && (data == text || _textHit(data, text));
     }
     if (widget is RichText) {
-      return widget.text.toPlainText().contains(text);
+      return _textHit(widget.text.toPlainText(), text);
     }
     if (widget is EditableText) {
-      return widget.controller.text.contains(text);
+      return _textHit(widget.controller.text, text);
     }
     return false;
   }
@@ -169,15 +252,27 @@ class ProbeFinder {
   /// Navigator ancestor at all (e.g. the root scaffold) — that case is
   /// treated as visible, since there's no ambiguity to resolve.
   bool _isVisible(Element element) {
-    final ro = element.renderObject;
+    // An element that is mid-rebuild or unmounted has no render object yet; in debug builds the
+    // `renderObject` getter then asserts instead of returning null. Not visible, not an error.
+    final RenderObject? ro;
+    try {
+      ro = element.renderObject;
+    } catch (_) {
+      return false;
+    }
     if (ro == null || !ro.attached) return false;
     if (ro is RenderBox) {
       // Zero-size widgets are not visible
       if (ro.size == Size.zero) return false;
       // Check if the widget is actually painted (not behind Offstage etc.)
       if (!ro.hasSize) return false;
+      // A widget laid out entirely outside the screen is not visible to the user: the
+      // neighbouring page of a PageView, a tab kept alive off to the side, a list item in the
+      // cache area beyond the viewport. Without this `don't see X` counted such copies.
+      if (!_includeOffScreen && _isOffScreen(ro)) return false;
     }
-    if (ModalRoute.of(element)?.isCurrent == false) return false;
+    final route = probeRouteOf(element);
+    if (route != null && !route.isCurrent && !_routeOnScreen(route)) return false;
     // Walk up the tree to check for Offstage / Visibility ancestors
     Element? current = element;
     while (current != null) {
@@ -185,6 +280,62 @@ class ProbeFinder {
       if (widget is Offstage && widget.offstage) return false;
       if (widget is Visibility && !widget.visible) return false;
       current = _parentElement(current);
+    }
+    return true;
+  }
+
+  bool _isOffScreen(RenderBox ro) {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view == null || view.devicePixelRatio <= 0) return false;
+      final screen = Offset.zero & (view.physicalSize / view.devicePixelRatio);
+      final rect = ro.localToGlobal(Offset.zero) & ro.size;
+      return !rect.overlaps(screen);
+    } catch (_) {
+      return false; // cannot tell: assume visible
+    }
+  }
+
+  // The routes of the Navigator stack, bottom to top, as the tree lists them.
+  // Cached for a few milliseconds: _isVisible runs for every candidate element of
+  // one lookup, and the stack cannot change between them.
+  List<ModalRoute<dynamic>>? _stackCache;
+  int _stackStamp = -1;
+
+  List<ModalRoute<dynamic>> _routeStack() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final cached = _stackCache;
+    if (cached != null && now - _stackStamp < 5000) return cached;
+    final routes = <ModalRoute<dynamic>>[];
+    final root = WidgetsBinding.instance.rootElement;
+    void visit(Element e) {
+      final w = e.widget;
+      if (w is InheritedWidget && w.runtimeType.toString() == '_ModalScopeStatus') {
+        final r = (w as dynamic).route;
+        if (r is ModalRoute && !routes.contains(r)) routes.add(r);
+      }
+      e.visitChildren(visit);
+    }
+    if (root != null) {
+      try {
+        visit(root);
+      } catch (_) {}
+    }
+    _stackCache = routes;
+    _stackStamp = now;
+    return routes;
+  }
+
+  /// A route that is not current is still on screen when every route above it
+  /// is see-through (a dialog, a bottom sheet, a popup): the page underneath
+  /// stays painted, and so does what it shows — a SnackBar, say. Routes under
+  /// an opaque page are hidden and stay excluded (PT-03).
+  bool _routeOnScreen(ModalRoute<dynamic> route) {
+    final stack = _routeStack();
+    final i = stack.indexOf(route);
+    if (i < 0) return false;
+    for (var j = i + 1; j < stack.length; j++) {
+      if (stack[j].opaque) return false;
     }
     return true;
   }
@@ -211,6 +362,34 @@ class ProbeFinder {
     if (widget is Visibility && !widget.visible) return;
     visitor(element);
     element.visitChildren((child) => _visitElement(child, visitor));
+  }
+
+  /// FP-13: a short snapshot of what a user could currently see — visible
+  /// text strings and string-valued ValueKeys — for failure diagnostics.
+  /// A timed-out step used to report only "context deadline exceeded", leaving
+  /// the failure screenshot as the sole clue to what the screen showed.
+  /// Bounded by [max] per list so the message stays one readable line.
+  Map<String, List<String>> visibleSummary({int max = 25}) {
+    final texts = <String>[];
+    final keys = <String>[];
+    walkTree((e) {
+      if (texts.length >= max && keys.length >= max) return;
+      final widget = e.widget;
+      final key = widget.key;
+      if (key is ValueKey<String> && keys.length < max && !keys.contains(key.value) && _isVisible(e)) {
+        keys.add(key.value);
+      }
+      if (texts.length < max && (widget is Text || widget is EditableText)) {
+        final text = widget is Text
+            ? (widget.data ?? widget.textSpan?.toPlainText() ?? '')
+            : (widget as EditableText).controller.text;
+        final trimmed = text.trim();
+        if (trimmed.isNotEmpty && !texts.contains(trimmed) && _isVisible(e)) {
+          texts.add(trimmed);
+        }
+      }
+    });
+    return {'texts': texts, 'keys': keys};
   }
 
   /// Returns all element info for a given selector (used by dump_tree).

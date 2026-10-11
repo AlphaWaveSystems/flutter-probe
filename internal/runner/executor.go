@@ -10,6 +10,7 @@ import (
 	mathrand "math/rand"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,9 +20,11 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/l10n"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/redact"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
@@ -34,24 +37,36 @@ func generateToken() string {
 
 // Executor walks an AST body and dispatches commands to a ProbeLink client.
 type Executor struct {
-	client      probelink.ProbeClient
-	deviceCtx   *DeviceContext                // nil in dry-run mode
-	onReconnect func(probelink.ProbeClient)       // callback to update Runner's client ref
-	timeout     time.Duration
-	recipes     map[string]parser.RecipeDef   // loaded recipes by name
-	vars        map[string]string             // variable scope for data-driven tests
-	verbose     bool
-	depth       int      // indentation depth for verbose logging
-	artifacts   []string // collected screenshot paths (on-device)
-	visual      *visual.Comparator // nil if visual regression is not configured
-	aiCfg       config.AIConfig    // from probe.yaml's ai: block
-	aiProvider  ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
-	aiConfigErr error              // set by SetAI when ai.provider has an unrecognized value
-	maxReconnectAttempts int           // max auto-reconnect attempts per call (default 4)
-	reconnectBackoff     time.Duration // base delay for exponential reconnect backoff (default 1s)
-	reconnectMu          sync.Mutex    // serializes concurrent tryReconnect calls
-	clientGen            atomic.Uint64 // incremented on each successful reconnect
-	launchTimeout        time.Duration // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
+	client               probelink.ProbeClient
+	deviceCtx            *DeviceContext              // nil in dry-run mode
+	onReconnect          func(probelink.ProbeClient) // callback to update Runner's client ref
+	timeout              time.Duration
+	recipes              map[string]parser.RecipeDef // loaded recipes by name
+	envValues            []string                    // values expanded from ${NAME} in steps; scrubbed from errors
+	envWarned            map[string]bool
+	useNote              string            // appended to "unknown recipe call" (missing `use` targets)
+	vars                 map[string]string // variable scope for data-driven tests
+	verbose              bool
+	depth                int                // indentation depth for verbose logging
+	artifacts            []string           // collected screenshot paths (on-device)
+	visual               *visual.Comparator // nil if visual regression is not configured
+	aiCfg                config.AIConfig    // from probe.yaml's ai: block
+	aiProvider           ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
+	aiConfigErr          error              // set by SetAI when ai.provider has an unrecognized value
+	aiText               ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
+	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
+	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
+	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
+	clientGen            atomic.Uint64      // incremented on each successful reconnect
+	implicitWait         time.Duration      // retry a step whose target is not on screen yet for up to this long (0 = off)
+	perf                 perfState          // open measuring window and finished measurements
+	http                 httpState          // recorded backend traffic bookkeeping (`wait for response`, mocks)
+	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
+
+	onStep      func(StepEvent) // optional per-step observer (Studio live highlight)
+	stepFile    string          // attribution for StepEvents
+	stepTest    string
+	stepAttempt int
 }
 
 // NewExecutor creates an Executor.
@@ -81,6 +96,13 @@ const defaultLaunchTimeout = 120 * time.Second
 
 // SetLaunchTimeout configures the timeout applied to `restart the app`/`clear app data`,
 // taken from agent.launch_timeout in probe.yaml. A zero value falls back to the default.
+// SetImplicitWait makes tap/type/long press/double tap/clear/swipe/drag and plain `see`
+// steps wait up to d for their target to appear instead of failing at once (the
+// behaviour of Maestro's implicit waiting). 0 turns it off.
+func (e *Executor) SetImplicitWait(d time.Duration) {
+	e.implicitWait = d
+}
+
 func (e *Executor) SetLaunchTimeout(d time.Duration) {
 	e.launchTimeout = d
 }
@@ -130,6 +152,15 @@ func (e *Executor) SetAI(cfg config.AIConfig) {
 		return
 	}
 	e.aiProvider = provider
+	if !cfg.VisionEnabled() {
+		// Text-only model (FP-14): `see "..." with ai` is judged from the
+		// screen's visible texts, so a plain text completer is needed too.
+		e.aiText, err = ai.NewTextCompleter(cfg.Provider, config.ResolveEnvVar(cfg.APIKey), cfg.Model, config.ResolveEnvVar(cfg.Endpoint), cfg.Timeout)
+		if err != nil {
+			e.aiConfigErr = err
+			e.aiProvider = nil
+		}
+	}
 }
 
 // Artifacts returns the list of screenshot paths collected during execution.
@@ -178,6 +209,8 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 		return e.runAssert(stepCtx, s)
 	case parser.AssertNoDefectsStep:
 		return e.runAssertNoDefects(stepCtx, s)
+	case parser.SystemDialogStep:
+		return e.runSystemDialog(stepCtx, s)
 	case parser.WaitStep:
 		return e.runWait(stepCtx, s)
 	case parser.ConditionalStep:
@@ -192,6 +225,10 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 		return e.runDart(stepCtx, s)
 	case parser.MockBlock:
 		return e.runMock(stepCtx, s)
+	case parser.HTTPStep:
+		return e.runHTTPStep(stepCtx, s)
+	case parser.PerfStep:
+		return e.runPerf(stepCtx, s)
 	case parser.RecipeCall:
 		return e.runRecipeCall(ctx, s)
 	case parser.HTTPCallStep:
@@ -201,6 +238,14 @@ func (e *Executor) dispatchStep(ctx, stepCtx context.Context, step parser.Step) 
 }
 
 func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
+	if t, ok := step.(parser.TimedStep); ok {
+		// `... within N seconds`: this step gets its own time budget, both as its timeout
+		// and as the window an implicit wait keeps retrying a missing target.
+		oldTimeout, oldWait := e.timeout, e.implicitWait
+		e.timeout, e.implicitWait = t.Within, t.Within
+		defer func() { e.timeout, e.implicitWait = oldTimeout, oldWait }()
+		return e.runStep(ctx, t.Inner)
+	}
 	// Use a longer timeout for restart/clear — they kill the app and reconnect
 	stepTimeout := e.timeout
 	isLifecycleAction := false
@@ -218,6 +263,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 
 	start := time.Now()
 	desc := e.stepDescription(step)
+	e.emitStep(step, desc, StepStarted, 0, nil)
 
 	// Real-time feedback: print the step description before it runs.
 	if desc != "" {
@@ -240,6 +286,20 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	}
 
 	err := e.dispatchStep(ctx, stepCtx, step)
+
+	// Implicit wait: the target of a tap/type/see is often not there yet (a sign-in is
+	// still in flight, a screen is still animating in). Retry "not found" until the
+	// configured time has passed instead of failing at once.
+	if err != nil && e.implicitWait > 0 && implicitWaitable(step) && (isNotFoundError(err) || isTransientAssertion(err)) {
+		deadline := time.Now().Add(e.implicitWait)
+		for err != nil && (isNotFoundError(err) || isTransientAssertion(err)) && time.Now().Before(deadline) && ctx.Err() == nil {
+			select {
+			case <-time.After(300 * time.Millisecond):
+			case <-ctx.Done():
+			}
+			err = e.dispatchStep(ctx, stepCtx, step)
+		}
+	}
 
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
@@ -288,6 +348,15 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		}
 	}
 
+	// FP-13: a deadline error names nothing by itself — add the step line, the
+	// step and what the screen showed. Skipped for lifecycle actions (restart/
+	// kill/clear), where the agent is intentionally gone and can't be asked.
+	if !isLifecycleAction {
+		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
+	}
+	err = annotateStepError(step, desc, err)
+	err = e.scrubEnv(err)
+
 	// Stop the ticker goroutine and wait for it to fully exit before reading
 	// extraLines or printing the result — this eliminates any output race.
 	if desc != "" {
@@ -311,9 +380,15 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// this from "if visible", which never even attempts the step.
 	if err != nil && !isConnectionError(err) && stepIsOptional(step) {
 		fmt.Printf("    \033[33m⚠\033[0m  optional step failed, continuing: %v\n", err)
+		e.emitStep(step, desc, StepSkipped, time.Since(start), err)
 		return nil
 	}
 
+	if err != nil {
+		e.emitStep(step, desc, StepFailed, time.Since(start), err)
+	} else {
+		e.emitStep(step, desc, StepPassed, time.Since(start), nil)
+	}
 	return err
 }
 
@@ -324,6 +399,8 @@ func stepIsOptional(step parser.Step) bool {
 	case parser.ActionStep:
 		return s.Optional
 	case parser.AssertStep:
+		return s.Optional
+	case parser.SystemDialogStep:
 		return s.Optional
 	}
 	return false
@@ -383,6 +460,8 @@ func runStepTicker(
 // stepDescription returns a human-readable description of the step.
 func (e *Executor) stepDescription(step parser.Step) string {
 	switch s := step.(type) {
+	case parser.SystemDialogStep:
+		return systemDialogDescription(s)
 	case parser.ActionStep:
 		switch s.Verb {
 		case parser.VerbTap:
@@ -398,7 +477,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			if s.Sel != nil {
 				target = fmt.Sprintf(" into %q", s.Sel.Text)
 			}
-			return fmt.Sprintf("type %q%s", e.resolve(s.Text), target)
+			return fmt.Sprintf("type %q%s", e.resolveVars(s.Text), target)
 		case parser.VerbClear:
 			if s.Sel != nil {
 				return fmt.Sprintf("clear %q", s.Sel.Text)
@@ -406,6 +485,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbSwipe:
 			return fmt.Sprintf("swipe %s", s.Direction)
 		case parser.VerbScroll:
+			if s.Until != nil {
+				return fmt.Sprintf("scroll %s until %q appears", s.Direction, s.Until.Text)
+			}
 			return fmt.Sprintf("scroll %s", s.Direction)
 		case parser.VerbOpen:
 			return "open the app"
@@ -418,6 +500,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "close the app"
 		case parser.VerbGoBack:
 			return "go back"
+		case parser.VerbPressEnter:
+			return "press enter"
 		case parser.VerbTakeShot:
 			return fmt.Sprintf("screenshot %q", s.Name)
 		case parser.VerbCompareShot:
@@ -460,6 +544,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "paste from clipboard"
 		case parser.VerbSetLocation:
 			return fmt.Sprintf("set location %s", s.Name)
+		case parser.VerbSetLanguage:
+			return fmt.Sprintf("set language %q", s.Name)
 		case parser.VerbVerifyBrowser:
 			return "verify external browser opened"
 		case parser.VerbEnrollBiometric:
@@ -486,6 +572,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		if s.Negated {
 			neg = "don't "
 		}
+		if len(s.Any) > 0 {
+			return fmt.Sprintf("%ssee any of %q", neg, s.Any)
+		}
 		if s.Native {
 			return fmt.Sprintf("%ssee native %q", neg, s.Sel.Text)
 		}
@@ -497,9 +586,14 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.WaitDuration:
 			return fmt.Sprintf("wait %.0f seconds", s.Duration)
 		case parser.WaitAppears:
+			if s.Pattern != "" {
+				return fmt.Sprintf("wait until %q appears matching %q", s.Target, s.Pattern)
+			}
 			return fmt.Sprintf("wait until %q appears", s.Target)
 		case parser.WaitDisappears:
 			return fmt.Sprintf("wait until %q disappears", s.Target)
+		case parser.WaitAny:
+			return fmt.Sprintf("wait until any of %q appears", s.Any)
 		case parser.WaitPageLoad:
 			return "wait for page to load"
 		case parser.WaitNetworkIdle:
@@ -510,7 +604,31 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "wait"
 		}
 	case parser.ConditionalStep:
+		if s.Response != nil {
+			return fmt.Sprintf("if response %s %s", refString(s.Response.Ref), describeCheck(s.Response.Check))
+		}
 		return fmt.Sprintf("if %q appears", s.Condition)
+	case parser.PerfStep:
+		switch s.Kind {
+		case parser.PerfStart:
+			return fmt.Sprintf("start measuring %q", s.Name)
+		case parser.PerfStop:
+			return "stop measuring"
+		}
+		return fmt.Sprintf("see %s below %g", strings.ReplaceAll(s.Metric, "_", " "), s.Limit)
+	case parser.HTTPStep:
+		switch s.Kind {
+		case parser.HTTPWaitResponse:
+			return "wait for response " + refString(s.Ref)
+		case parser.HTTPSeeResponse:
+			return fmt.Sprintf("see response %s %s", refString(s.Ref), describeCheck(s.Check))
+		case parser.HTTPStoreResponse:
+			return fmt.Sprintf("store response %s json %q as %s", refString(s.Ref), s.Path, s.Var)
+		case parser.HTTPSeeRequests:
+			return fmt.Sprintf("see %s requests %s", countWord(s.Count), refString(s.Ref))
+		case parser.HTTPClearRequests:
+			return "clear recorded requests"
+		}
 	case parser.RecipeCall:
 		return s.Name
 	case parser.LoopStep:
@@ -573,6 +691,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return fmt.Errorf("open the app: %w", reconnErr)
 		}
 		e.client = newClient
+		e.reapplyMocks(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -606,7 +725,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbClear:
 		if a.Sel == nil {
-			return nil
+			// Bare `clear`: the field that has focus (an empty selector; the agent
+			// resolves it). This used to be a silent no-op.
+			return e.client.Clear(ctx, probelink.SelectorParam{})
 		}
 		return e.client.Clear(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 
@@ -624,10 +745,16 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			sp := toSelectorParam(e.resolveSelector(*a.Sel))
 			sel = &sp
 		}
+		if a.Until != nil {
+			return e.scrollUntilVisible(ctx, a, sel)
+		}
 		return e.client.Scroll(ctx, string(a.Direction), sel)
 
 	case parser.VerbGoBack:
 		return e.client.DeviceAction(ctx, "go_back", "")
+
+	case parser.VerbPressEnter:
+		return e.client.DeviceAction(ctx, "press_enter", "")
 
 	case parser.VerbClose:
 		return e.client.DeviceAction(ctx, "close", a.Name)
@@ -660,7 +787,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return e.client.Tap(ctx, toSelectorParam(e.resolveSelector(*a.Sel)))
 		}
 		if a.Name != "" {
-			return e.client.Tap(ctx, probelink.SelectorParam{Kind: "text", Text: e.resolve(a.Name)})
+			return e.client.Tap(ctx, probelink.SelectorParam{Kind: "text", Text: e.resolve(a.Name), Loose: LooseMatching()})
 		}
 		return fmt.Errorf("toggle: missing selector at line %d", a.Line)
 
@@ -764,6 +891,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return fmt.Errorf("restart the app: %w", reconnErr)
 		}
 		e.client = newClient
+		e.reapplyMocks(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -785,6 +913,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return fmt.Errorf("clear app data: %w", err)
 		}
 		e.client = newClient
+		e.reapplyMocks(ctx)
 		if e.onReconnect != nil {
 			e.onReconnect(newClient)
 		}
@@ -845,6 +974,16 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		e.vars["clipboard"] = text
 		return nil
+
+	case parser.VerbSetLanguage:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping set language (cloud mode)")
+			return nil
+		}
+		if err := e.deviceCtx.SetLanguage(ctx, e.resolve(a.Name)); err != nil {
+			return err
+		}
+		return e.relaunchApp(ctx, "language change")
 
 	case parser.VerbSetLocation:
 		if e.deviceCtx == nil {
@@ -956,15 +1095,25 @@ func (e *Executor) relaunchAfterIOSPermissionChange(ctx context.Context) error {
 	if dc == nil || dc.Platform != device.PlatformIOS || dc.IsPhysical {
 		return nil
 	}
+	return e.relaunchApp(ctx, "permission change")
+}
+
+// relaunchApp force-stops and relaunches the app, then reconnects the agent client.
+func (e *Executor) relaunchApp(ctx context.Context, why string) error {
+	dc := e.deviceCtx
+	if dc == nil {
+		return nil
+	}
 	e.client.Close()
 	if err := dc.RestartApp(ctx); err != nil {
-		return fmt.Errorf("relaunch after permission change: %w", err)
+		return fmt.Errorf("relaunch after %s: %w", why, err)
 	}
 	newClient, err := dc.Reconnect(ctx)
 	if err != nil {
-		return fmt.Errorf("reconnect after permission change: %w", err)
+		return fmt.Errorf("reconnect after %s: %w", why, err)
 	}
 	e.client = newClient
+	e.reapplyMocks(ctx)
 	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)
@@ -998,7 +1147,46 @@ func (e *Executor) runAssertNative(ctx context.Context, a parser.AssertStep) err
 
 // ---- Assert execution ----
 
+// runAssertAny handles `see any of "A", "B"` (passes when any alternative is on screen) and
+// `don't see any of "A", "B"` (passes when none is).
+func (e *Executor) runAssertAny(ctx context.Context, a parser.AssertStep) error {
+	var present []string
+	for _, alt := range a.Any {
+		text := e.resolve(alt)
+		sel := probelink.SelectorParam{Kind: "text", Text: text, Loose: LooseMatching()}
+		if strings.HasPrefix(text, "#") {
+			sel = probelink.SelectorParam{Kind: "id", Text: text}
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		err := e.client.See(probeCtx, probelink.SeeParams{Selector: sel})
+		cancel()
+		if err == nil {
+			present = append(present, text)
+			continue
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if isConnectionError(err) {
+			return err
+		}
+	}
+	if a.Negated {
+		if len(present) > 0 {
+			return fmt.Errorf("expected NOT to see any of %q but found %q", a.Any, present)
+		}
+		return nil
+	}
+	if len(present) == 0 {
+		return fmt.Errorf("expected to see any of %q, but none of them is on screen", a.Any)
+	}
+	return nil
+}
+
 func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
+	if len(a.Any) > 0 {
+		return e.runAssertAny(ctx, a)
+	}
 	if a.Native {
 		return e.runAssertNative(ctx, a)
 	}
@@ -1046,6 +1234,10 @@ func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) err
 	}
 	assertion := e.resolve(a.Sel.Text)
 
+	if !e.aiCfg.VisionEnabled() {
+		return e.runAssertWithAIText(ctx, assertion)
+	}
+
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "with_ai")
 	if err != nil {
 		return fmt.Errorf("with ai: %w", err)
@@ -1071,6 +1263,9 @@ func (e *Executor) runAssertNoDefects(ctx context.Context, a parser.AssertNoDefe
 			return fmt.Errorf("assert no visual defects: %w", e.aiConfigErr)
 		}
 		return fmt.Errorf(`"assert no visual defects with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	if !e.aiCfg.VisionEnabled() {
+		return errNeedsVision("assert no visual defects with ai")
 	}
 
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "no_defects")
@@ -1099,6 +1294,9 @@ func (e *Executor) runReadWithAI(ctx context.Context, a parser.ActionStep) error
 			return fmt.Errorf("read ... with ai: %w", e.aiConfigErr)
 		}
 		return fmt.Errorf(`"read ... with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
+	}
+	if !e.aiCfg.VisionEnabled() {
+		return errNeedsVision("read ... with ai")
 	}
 	query := e.resolve(a.Text)
 
@@ -1168,6 +1366,50 @@ func redactSelector(raw string) parser.Selector {
 
 // ---- Wait execution ----
 
+// waitAny polls until any of the alternatives is on screen, or the step timeout
+// passes. Each probe is a short `see`, so a flow that shows one of several
+// screens (a consent dialog, the login screen, or the home screen) proceeds
+// as soon as one appears.
+func (e *Executor) waitAny(ctx context.Context, alts []string) error {
+	timeout := e.timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	resolved := make([]string, len(alts))
+	for i, a := range alts {
+		resolved[i] = e.resolve(a)
+	}
+	for {
+		for _, a := range resolved {
+			sel := probelink.SelectorParam{Kind: "text", Text: a, Loose: LooseMatching()}
+			if strings.HasPrefix(a, "#") {
+				sel = probelink.SelectorParam{Kind: "id", Text: a}
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+			err := e.client.See(probeCtx, probelink.SeeParams{Selector: sel})
+			cancel()
+			if err == nil {
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if isConnectionError(err) {
+				return err
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("none of %q appeared within %s", resolved, timeout)
+		}
+		select {
+		case <-time.After(300 * time.Millisecond):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	// Campaign finding: a plain `wait N seconds` used to round-trip through
 	// the agent as an RPC — so `kill the app` followed by `wait 2 seconds`
@@ -1185,6 +1427,10 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 		}
 	}
 
+	if w.Kind == parser.WaitAny {
+		return e.waitAny(ctx, w.Any)
+	}
+
 	kindStr := map[parser.WaitKind]string{
 		parser.WaitAppears:     "appears",
 		parser.WaitDisappears:  "disappears",
@@ -1192,24 +1438,37 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 		parser.WaitNetworkIdle: "network_idle",
 		parser.WaitSelector:    "selector",
 		parser.WaitAnimations:  "animations",
+		parser.WaitIdle:        "idle",
 	}[w.Kind]
 
 	return e.client.Wait(ctx, probelink.WaitParams{
 		Kind:     kindStr,
 		Target:   e.resolve(w.Target),
+		Pattern:  w.Pattern,
+		Loose:    LooseMatching(),
 		Duration: w.Duration,
-		Timeout:  e.timeout.Seconds(),
+		Timeout:  agentWaitTimeout(e.timeout).Seconds(),
 	})
 }
 
 // ---- Conditional execution ----
 
 func (e *Executor) runConditional(ctx context.Context, c parser.ConditionalStep) error {
+	if c.Response != nil {
+		ok, err := e.evalResponseCond(ctx, *c.Response)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return e.RunBody(ctx, c.Then)
+		}
+		return e.RunBody(ctx, c.Else)
+	}
 	// Check visibility with a short timeout
 	checkCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
-	sel := probelink.SelectorParam{Kind: "text", Text: c.Condition}
+	sel := probelink.SelectorParam{Kind: "text", Text: c.Condition, Loose: LooseMatching()}
 	if strings.HasPrefix(c.Condition, "#") {
 		sel = probelink.SelectorParam{Kind: "id", Text: c.Condition}
 	}
@@ -1316,40 +1575,64 @@ func (e *Executor) runDart(ctx context.Context, d parser.DartBlock) error {
 // ---- Mock block execution ----
 
 func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
-	return e.client.RegisterMock(ctx, probelink.MockParam{
-		Method: m.Method,
-		Path:   m.Path,
-		Status: m.Status,
-		Body:   m.Body,
-	})
+	mp := probelink.MockParam{
+		Method:  m.Method,
+		Path:    e.resolve(m.Path),
+		Status:  m.Status,
+		Body:    e.resolve(m.Body),
+		DelayMs: m.DelayMs,
+		Fail:    m.Fail,
+	}
+	if err := e.client.RegisterMock(ctx, mp); err != nil {
+		return err
+	}
+	// Remember it: a restart of the app starts a new agent that knows nothing of it.
+	e.http.mocks = append(e.http.mocks, mp)
+	return nil
 }
 
 // ---- Recipe call execution ----
 
-func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
-	recipe, ok := e.recipes[rc.Name]
-	stripped := rc.Name
-	if !ok {
-		// Try matching by stripping <arg> placeholders and filler words from the call name.
-		// e.g., call "enter credentials <arg> and <arg>" should match recipe "enter credentials"
-		stripped = stripRecipeCallArgs(rc.Name)
-		recipe, ok = e.recipes[stripped]
+// lookupRecipe resolves a recipe call name against the loaded recipes: exactly,
+// then with <arg> placeholders and filler words stripped from the call name,
+// then with the same normalization applied to the definition names (a recipe
+// whose own name contains a filler word, e.g. `recipe "add and verify" (x)`,
+// would otherwise be unreachable by its written name). It also returns the
+// stripped call name for error messages. Shared by execution and --dry-run.
+func lookupRecipe(recipes map[string]parser.RecipeDef, name string) (parser.RecipeDef, string, bool) {
+	if r, ok := recipes[name]; ok {
+		return r, name, true
 	}
-	if !ok {
-		// Campaign finding: stripping was applied to the CALL name only,
-		// never the DEFINITION name — so a recipe whose own name contains a
-		// filler word, e.g. `recipe "add and verify" (x)`, was unreachable
-		// by its exact written name: the call `add and verify "v"` parses as
-		// "add and verify <arg>", strips to "add verify", and "add verify"
-		// matches nothing because the definition kept its "and". Normalize
-		// both sides the same way before comparing.
-		for defName, def := range e.recipes {
-			if stripRecipeCallArgs(defName) == stripped {
-				recipe, ok = def, true
-				break
-			}
+	stripped := stripRecipeCallArgs(name)
+	if r, ok := recipes[stripped]; ok {
+		return r, stripped, true
+	}
+	for defName, def := range recipes {
+		if stripRecipeCallArgs(defName) == stripped {
+			return def, stripped, true
 		}
 	}
+	return parser.RecipeDef{}, stripped, false
+}
+
+// resolveCall finds the recipe a call refers to and the arguments to bind. A call
+// with bare numbers is tried as written first (numbers part of the name), then
+// with the numbers as arguments.
+func resolveCall(recipes map[string]parser.RecipeDef, rc parser.RecipeCall) (parser.RecipeDef, []string, string, bool) {
+	rec, stripped, ok := lookupRecipe(recipes, rc.Name)
+	if ok {
+		return rec, rc.Args, stripped, true
+	}
+	if rc.NumName != "" {
+		if rec, _, ok := lookupRecipe(recipes, rc.NumName); ok {
+			return rec, rc.NumArgs, stripped, true
+		}
+	}
+	return rec, rc.Args, stripped, false
+}
+
+func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) error {
+	recipe, args, stripped, ok := resolveCall(e.recipes, rc)
 	if !ok {
 		// PT-02(a): an unrecognized recipe call used to silently no-op ("may
 		// be a filler line"), which masked genuine typos and broken recipe
@@ -1358,14 +1641,14 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 		// this executor already errors loudly (see runAction's default
 		// case) — this was the sole silent exception.
 		if stripped != rc.Name {
-			return fmt.Errorf("line %d: unknown recipe call %q (also tried %q with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name, stripped)
+			return fmt.Errorf("line %d: unknown recipe call %q (also tried %q with placeholders/fillers stripped) — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file%s", rc.Line, rc.Name, stripped, e.useNote)
 		}
-		return fmt.Errorf("line %d: unknown recipe call %q — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file", rc.Line, rc.Name)
+		return fmt.Errorf("line %d: unknown recipe call %q — no recipe with that name is defined; check recipes_folder and 'use' statements for a typo or a missing recipe file%s", rc.Line, rc.Name, e.useNote)
 	}
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
-		if i < len(rc.Args) {
-			e.vars[param] = rc.Args[i]
+		if i < len(args) {
+			e.vars[param] = args[i]
 		}
 	}
 	e.depth++
@@ -1387,7 +1670,7 @@ func isConnectionError(err error) bool {
 		strings.Contains(msg, "broken pipe") ||
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "EOF") ||
-		strings.Contains(msg, "rpc error -32000")
+		strings.Contains(msg, fmt.Sprintf("rpc error %d", probelink.CodeConnectionClosed))
 }
 
 // tryReconnect attempts to re-establish the connection to the agent. The app
@@ -1454,6 +1737,7 @@ func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 		return fmt.Errorf("auto-reconnect failed: %w", err)
 	}
 	e.client = newClient
+	e.reapplyMocks(ctx)
 	e.clientGen.Add(1)
 	if e.onReconnect != nil {
 		e.onReconnect(newClient)
@@ -1494,6 +1778,72 @@ func reconnectDelay(base time.Duration, attempt int) time.Duration {
 // resolve substitutes <variable> placeholders with values from the vars map
 // and expands <random.*> generators.
 func (e *Executor) resolve(s string) string {
+	s = e.expandEnv(e.resolveVars(s))
+	if strings.Contains(s, "\x1el10n:") {
+		lang := ""
+		if e.deviceCtx != nil {
+			lang = e.deviceCtx.Language
+		}
+		out, err := l10n.Expand(s, func(key string) (string, error) { return L10nLookup(key, lang) })
+		if err != nil {
+			if e.envWarned == nil {
+				e.envWarned = map[string]bool{}
+			}
+			if !e.envWarned[err.Error()] {
+				e.envWarned[err.Error()] = true
+				fmt.Fprintf(os.Stderr, "  warning: %v\n", err)
+			}
+		}
+		s = out
+	}
+	return s
+}
+
+// expandEnv replaces ${NAME} with the value of the environment variable NAME
+// (the braced form only: a bare $ stays text, so "$5" and "$name" are untouched).
+// The values are remembered so they can be scrubbed from step errors, and the step
+// line shows the template (see stepDescription), never the value. An unset
+// variable is left as written, with a one-time warning.
+func (e *Executor) expandEnv(s string) string {
+	if !strings.Contains(s, "${") {
+		return s
+	}
+	return envRef.ReplaceAllStringFunc(s, func(m string) string {
+		name := m[2 : len(m)-1]
+		v, ok := os.LookupEnv(name)
+		if !ok {
+			if e.envWarned == nil {
+				e.envWarned = map[string]bool{}
+			}
+			if !e.envWarned[name] {
+				e.envWarned[name] = true
+				fmt.Fprintf(os.Stderr, "  warning: environment variable %s is not set; ${%s} is used as written\n", name, name)
+			}
+			return m
+		}
+		if v != "" {
+			e.envValues = append(e.envValues, v)
+		}
+		return v
+	})
+}
+
+var envRef = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*\}`)
+
+// scrubEnv removes expanded environment values from an error before it is shown.
+func (e *Executor) scrubEnv(err error) error {
+	if err == nil || len(e.envValues) == 0 {
+		return err
+	}
+	msg := err.Error()
+	scrubbed := sysdialog.Scrub(msg, e.envValues...)
+	if scrubbed == msg {
+		return err
+	}
+	return fmt.Errorf("%s", scrubbed)
+}
+
+func (e *Executor) resolveVars(s string) string {
 	// First: expand random data generators
 	s = resolveRandomVars(s)
 	// Then: substitute data-driven and recipe variables
@@ -1528,7 +1878,8 @@ var recipeFillerWords = map[string]bool{
 // stripRecipeCallArgs removes <arg> placeholders and common filler words
 // from a recipe call name so it can match the recipe definition name.
 // e.g., "sign in with <arg> and <arg>" → "sign in with"
-//       "enter credentials <arg> and <arg>" → "enter credentials"
+//
+//	"enter credentials <arg> and <arg>" → "enter credentials"
 func stripRecipeCallArgs(name string) string {
 	words := strings.Fields(name)
 	var result []string
@@ -1610,17 +1961,23 @@ func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error
 // nothing instead of the intended target.
 func (e *Executor) resolveSelector(s parser.Selector) parser.Selector {
 	s.Text = e.resolve(s.Text)
+	if s.Container != "" {
+		s.Container = e.resolve(s.Container)
+	}
+	if s.Anchor != "" {
+		s.Anchor = e.resolve(s.Anchor)
+	}
 	return s
 }
 
 func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 	kinds := map[parser.SelectorKind]string{
-		parser.SelectorText:        "text",
-		parser.SelectorID:          "id",
-		parser.SelectorType:        "type",
-		parser.SelectorOrdinal:     "ordinal",
-		parser.SelectorPositional:  "positional",
-		parser.SelectorRelational:  "relational",
+		parser.SelectorText:       "text",
+		parser.SelectorID:         "id",
+		parser.SelectorType:       "type",
+		parser.SelectorOrdinal:    "ordinal",
+		parser.SelectorPositional: "positional",
+		parser.SelectorRelational: "relational",
 	}
 	return probelink.SelectorParam{
 		Kind:      kinds[s.Kind],
@@ -1629,5 +1986,6 @@ func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 		Container: s.Container,
 		Relation:  s.Relation,
 		Anchor:    s.Anchor,
+		Loose:     LooseMatching() && s.Kind != parser.SelectorID,
 	}
 }

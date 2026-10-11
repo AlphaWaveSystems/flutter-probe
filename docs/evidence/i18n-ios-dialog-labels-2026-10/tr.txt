@@ -1,0 +1,64 @@
+# language=tr locale=tr_TR  date=2026-10-09T11:58:25Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array tr ; AppleLocale tr_TR
+$ simctl spawn defaults read -g AppleLanguages
+(tr)
+$ simctl spawn defaults read -g AppleLocale
+tr_TR
+runner health: {"ok":true,"driver":"flutter-probe-ios-driver","version":"0.19.5"}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 35345
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” Size Bildirimler Göndermek İstiyor
+      buttons: İzin Verme | İzin Ver
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 35588
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”, konumunuzu kullanabilsin mi?
+      buttons: Bir Kez İzin Ver | Uygulamayı Kullanırken İzin Ver | İzin Verme
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 35811
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”, kameraya erişmek istiyor.
+      buttons: İzin Verme | İzin Ver
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 35994
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”, mikrofona erişmek istiyor.
+      buttons: İzin Verme | İzin Ver
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 36164
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”, anımsatıcılarınıza erişmek istiyor.
+      buttons: İzin Verme | İzin Ver
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 36375
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”, konuşma tanımaya erişmek istiyor.
+      buttons: İzin Verme | İzin Ver
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 36609
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”, Hareket ve Fitness aktivitenize erişmek istiyor.
+      buttons: İzin Verme | İzin Ver

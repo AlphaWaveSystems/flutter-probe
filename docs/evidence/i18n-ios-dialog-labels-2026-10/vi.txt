@@ -1,0 +1,64 @@
+# language=vi locale=vi_VN  date=2026-10-09T12:12:25Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array vi ; AppleLocale vi_VN
+$ simctl spawn defaults read -g AppleLanguages
+(vi)
+$ simctl spawn defaults read -g AppleLocale
+vi_VN
+runner health: {"driver":"flutter-probe-ios-driver","ok":true,"version":"0.19.5"}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 69791
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” muốn gửi thông báo cho bạn
+      buttons: Từ chối | Cho phép
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 70171
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Cho phép “AlertsTest” sử dụng vị trí của bạn?
+      buttons: Cho phép một lần | Cho phép khi dùng ứng dụng | Từ chối
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 70536
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” muốn truy cập vào camera.
+      buttons: Từ chối | Cho phép
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 71332
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” muốn truy cập vào micrô.
+      buttons: Từ chối | Cho phép
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 72181
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” muốn truy cập Lời nhắc của bạn.
+      buttons: Từ chối | Cho phép
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 72987
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” muốn truy cập Nhận dạng lời nói.
+      buttons: Từ chối | Cho phép
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 73280
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest” muốn truy cập hoạt động Di chuyển & Thể chất của bạn.
+      buttons: Từ chối | Cho phép

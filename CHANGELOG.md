@@ -6,6 +6,564 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **Installation: "Try a canary build"** covers `brew install AlphaWaveSystems/tap/probe@next`, the pre-release binaries and taking the agent from the tagged source (git dependency) because canaries are not published to pub.dev.
+
+### Security
+- **Studio headless mode refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, on top of the existing loopback, Host and Origin checks. Test-only server; non-browser clients are unaffected.
+
+### Added
+- **`--measure-all`** (and `perf: {measure_all: true}` in probe.yaml): a measuring window named after the test around every test body, so an existing suite gets performance baselines with no script edits. Tests that use `start measuring` themselves are left alone.
+
+### Fixed
+- **JSON/HTML report metadata `probe_version` was empty**; it now carries the CLI version.
+
+## [0.24.0] - 2026-10-10
+
+### Fixed
+- **`double tap` and `long press` on a covered target now warn like `tap`** (#265): when something unrelated is on top at the target's point and the screen does not change, the step returns the same "covered by another widget" warning, which `--fail-on-warning` turns into a failure. They used to succeed silently against a target hidden by an overlay.
+- **`probe device start --platform ios --name ...` failed on a simulator that was already booted** on Xcode versions that word the error "Unable to boot device in current state: Booted". It now treats that as success, like the older wording. Found by the browser UI suite.
+- **Studio's device picker listed every device twice** when two refreshes overlapped (start-up plus a click on refresh); only the newest refresh fills the list now. Found by the browser UI suite.
+- **Pricing page no longer advertises what does not exist:** the pay-per-use card is now "Pay-per-use for AI agents: Planned" with no features listed, the Team card is labelled planned/not available yet (badge "Planned", "Planned features"), and the waitlist is a plain email link instead of a form with placeholder fields that collected nothing. The experimental `--pay` flag and the `wallet` config key stay but are described as experimental (the flag is hidden from `--help`).
+
+### Changed
+- **License keys use format FP2** (`FP2.<kid>.<payload>.<signature>`): the Ed25519 signature covers the exact text `FP2.<kid>.<payload>`, so the key id and the format tag are signed. The CLI verifies in a fixed order (shape, key id lookup, signature, claims, expiry), against a built-in trusted key set and a revoked key id list. A key signed with an unknown key id asks to update the CLI, a revoked one says so, `seats` must be at least 1 (0 is rejected), claims need `v: 2`, a `kid` equal to the key's, at least one plan and an expiry after the issue time. The old FP1 format is dropped and reported as an old format. The built-in key set is empty in this change; `PROBE_LICENSE_PUBKEY` (now `kid=publicKey[,kid=publicKey]`) still adds keys for development and tests. A shared test vector is checked in the unit tests.
+
+### Security
+- Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
+
+### Added
+- **Compatibility policy for 1.x** (docs): what is frozen (ProbeScript grammar, `probe.yaml`, the agent protocol, report JSON), what is additive-only, what is outside the promise (Studio, experimental features, human-readable output) and the deprecation process.
+- **Studio UI E2E in a browser** (`make studio-e2e-web`, `studio/e2e-web/`): the real frontend and Go backend, served by Studio's new headless mode (`PROBE_STUDIO_HEADLESS=1`, test-only, loopback, per-launch token) and driven by Playwright in headless Chromium: no native window, cursor or focus. 9 tests need no device and run on any CI runner (`.github/workflows/studio-e2e-web.yml`); 9 more use a named simulator running the fixture app (`scripts/studio-e2e-web.sh`, macOS). The native-window suite remains for what needs a real window.
+- **Studio automation endpoint** (opt-in `PROBE_STUDIO_AUTOMATION=1`; confined to the workspace a person opened plus `PROBE_STUDIO_AUTOMATION_ROOTS`, symlinks resolved; the MCP client only talks to loopback): loopback-only control endpoint with a per-launch token and a 0600 discovery file, exposing open_workspace, connect, run_file (async), cancel, run_state, results, screenshot and more, so Studio can be driven without a window, cursor or focus. Refuses requests from browsers, non-loopback hosts and without the token.
+- **MCP tools `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`** drive a running Studio through that endpoint.
+- Studio tracks the current/last run (step, step history, results) for `RunState`; `RunFileAsync` starts a run in the background.
+- **Studio: live step highlight.** While a file runs, the editor's gutter follows the executing step (▶, then ✓ / ✗ / – stays on the line; a failed line keeps its error on hover), step rows nest under each test in the results timeline with line, duration and attempt (click one to jump to its line), the toolbar shows `step N of M`, and a **Cancel** button stops the run. Backed by a new runner hook, `Runner.OnStep` / `Executor.OnStep`, that emits a `StepEvent` before and after every step (including recipe bodies and composite devices).
+- Website: draft pages for terms of service, privacy policy, refund and cancellation policy and contact (`/terms`, `/privacy`, `/refunds`, `/contact`), linked from the footers and the pricing page. Marked "draft for review" until confirmed.
+- **`probe license activate <key>` / `probe license status`:** stores and verifies an offline ed25519-signed license key in `~/.flutterprobe/license.key`. Only hosted features will ever need one; everything that runs locally stays free and works without a key.
+- **Release pipeline:** canary channel (`vX.Y.Z-next.N` tags publish `probe@next` on Homebrew and pre-release Dart packages), a dogfood gate workflow, an automated review-agent check on pull requests, and auto-rollback of a stable release when a `prod-incident` is filed within 24 hours. `scripts/release.sh` accepts canary versions. See `docs/ops/release-pipeline.md`.
+- **Studio E2E suite** (`make studio-e2e`, `studio/e2e/`): drives the real Studio window on macOS through the accessibility tree and screenshots — launch, device picker, connect, run, results, failures, performance lines, recorder, settings, AI-chat and WiFi overlays, error paths — against a new fixture app (`native-test-apps/studio-fixture/`). Optional vision assertions via `STUDIO_E2E_AI_PROVIDER`. Parameterised for dogfooding on any app (`studio/e2e/DOGFOOD.md`); self-hosted macOS workflow `studio-e2e.yml`.
+
+### Security
+- **Review-agent workflow:** reviews only same-repository branches from owners, members and collaborators, and fails (never skips) for anything else, since a skipped required check counts as passing; the model gets no tools and one prompt (conventions from the trusted base commit plus the diff between random markers, declared untrusted), so it cannot read files or the environment; nothing PR-controlled reaches a shell through `${{ }}`; the verdict counts only as the exact first line of the reply; an approval is bound to the reviewed commit; a branch behind the current tip of its base fails both before the review and again just before it is submitted; credential-shaped strings in the diff fail the check before any model sees it; the CLI version and actions are pinned. New `REVIEW_PROVIDER` variable (`oauth` default, `anthropic`, or `local` as a never-approving pre-screen).
+- **Dogfood-gate workflow:** the `version` input is validated against `X.Y.Z[-next.N]` before it is used in paths, download URLs or issue titles.
+
+### Fixed
+- **License keys have exactly one valid spelling:** the verifier now decodes base64url strictly, so a key re-spelled with non-zero trailing bits is rejected instead of verifying as an alias (not a forgery: the signed bytes were unchanged). The tamper test is deterministic; it failed about once in a few hundred runs before.
+- **Studio reads `probe.yaml` from the open workspace** (agent port, timeout, device ids) when connecting; it used to read the process working directory. `PROBE_STUDIO_WORKSPACE=/path` opens a workspace at launch.
+- Studio file-browser rows and result rows carry accessible names (`role=button`, `pass:`/`fail:` labels).
+
+## [0.23.0] - 2026-10-10
+
+### Added
+- **Performance testing:** `start measuring "name"` ... `stop measuring` measures, over those steps, the app's memory and frame timings (agent 0.23+, every device), its CPU (Android via /proc, iOS simulator via host ps; not a physical iPhone) and its HTTP traffic. Assertions: `see memory below N MB`, `see memory growth below N MB`, `see cpu below N percent`, `see cpu peak below N percent`, `see slow frames below N percent`, `see frame time below N ms`, `see slowest frame below N ms`, `see data transferred below N KB`, and `see response <ref> below N ms`. EBNF + conformance tests.
+- **Baselines and trends:** `probe test --perf-baseline FILE` fails a test whose numbers got worse than the baseline by the tolerance (`--perf-tolerance`, default 20%, with noise floors); `--perf-update-baseline` writes it; every run appends to `reports/perf-history.jsonl`; `probe perf trend` and `probe perf compare`.
+- **Reports:** a `perf` array per test in the JSON report, a Performance block in the HTML report, measurements under each result in Probe Studio.
+- **MCP:** tools `perf_trend` and `perf_compare`; the guide covers performance, backend data, waiting, localization and the new flags.
+- New guide "Performance testing"; proposal for the unified Studio UI (`docs/proposals/performance-testing.md`).
+
+## [0.22.1] - 2026-10-09
+
+### Security
+- The agent's HTTP capture redacts more credentials: `x-goog-api-key`, `api-key`, `x-auth-token`, `x-access-token`, `x-amz-security-token`, `x-csrf-token`, `x-xsrf-token` headers and credential query parameters (`?key=`, `?access_token=`, `?token=`, ...) in recorded URLs. Bodies are unchanged and documented as such.
+
+## [0.22.0] - 2026-10-09
+
+### Fixed
+- **`defaults.retry_failed_tests` now does something** (it was read but never applied) and its default is 0: a failing test is re-run up to that many extra times, also `probe test --retry-failed N`; a pass on a retry is reported (`passed on attempt N`, `attempts` in JSON).
+
+### Added
+- **`within N seconds|ms`** on a step (tap, type, see, wait, system dialog, response steps): its own timeout and implicit-wait window, e.g. `wait until "Report ready" appears within 90 seconds`. New guide "Timeouts, waiting and retries" explaining every layer (step timeout, implicit wait, `within`, `optional`/`if visible`, `retry N times`, `retry_failed_tests`).
+- **Backend awareness (agent 0.22+):** `wait for response GET "/api/orders" [status 200]`, `see response <ref> status N | contains "x" | json "path" equals "v" | json "path" exists`, `store response <ref> json "path" as var`, `if response <ref> <check>` (+ `otherwise`), `see exactly N requests <ref>` / `see no requests <ref>`, `clear recorded requests`. References are `[METHOD] "path-with-*"` or a full URL. Failures list the app's recent requests. New guide "Testing against backend data". EBNF + conformance tests (`wait-response-step`, `see-response-step`, `store-response-step`, `see-requests-step`, `clear-requests-step`).
+- **`when the app calls` mocks are now real** (they used to be recorded but never applied): the app's `dart:io` client receives the status/body, `after N seconds` delays it, `respond with network failure` drops the connection; `patch`/`head`/`options` methods; they last one test and are re-applied after `restart the app`.
+
+## [0.21.0] - 2026-10-09
+
+### Added
+- **`l10n "key"`**: a string whose text comes from the app's ARB files in the current app language (`probe.yaml` `l10n: {dir, default}`; language fallback `de-AT` -> `de` -> default). Keys are validated for the run language, every `set language` literal and the default before any device work; placeholder/plural messages are rejected. EBNF + conformance test updated (`l10n-string`).
+- **`set language "de"`** (ProbeScript) and **`probe test --locale de`**: run the app in another language (BCP-47 tag, `"system"` resets). Android 13+ per-app locales; iOS simulator launch arguments (also applied on `restart the app`/`clear app data`). Right-to-left languages flip the layout. Physical iOS devices are rejected with a clear message. Grammar page and conformance test updated.
+- **`probe test --locales de,ja,ar`**: the suite once per language in separate runs; `-o r.json` becomes `r.de.json`, ...; per-language pass/fail table; reports record `locale`.
+
+## [0.20.0] - 2026-10-09
+
+### Fixed
+- **Agent: `scroll down in "<anchor>" until X appears` regression (0.19.2+):** failed with `Widget not found: text("<anchor>")` once the anchor scrolled off screen (the scrollable was re-resolved from the anchor every step). Resolved once now.
+- **Agent: "UI one tap behind":** the post-action settle (and `wait for idle`) now lets a scheduled frame run before declaring the UI idle, so `see` right after `tap` no longer reads the pre-tap state (bottom sheets, radio rows; intermittent).
+
+### Added
+- **iOS system-dialog labels for 27 languages:** allow / deny / allow once / allow while using measured on a real simulator (iOS 26.3) per language, raw output in `docs/evidence/i18n-ios-dialog-labels-2026-10/`. `tap "Allow" in system dialog` now works on a device set to any of them. Not measured (so exact label needed): `ok`, `cancel`, `open` outside English, photo/calendar/contacts alerts.
+- **Named devices (hard rule):** `probe device start --platform ios --name <n>` (and MCP `start_device` `name`) boots the simulator with that name, or creates one (same device type/runtime as the default) when missing. Running Android emulators are listed and reported by their AVD name instead of the hardware model, and a run never has an unnamed device (falls back to the serial/UDID). Every result records device name and id.
+- **Loose text matching (`--match-loose`, `defaults.match: loose`):** text selectors, `see`, `wait until` and tooltip/Semantics-label
+  matching fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and
+  whitespace on both sides (`Änderungen` ~ `anderungen`, `Don’t Allow` ~ `Don't allow`). Off by default. Ids are never folded.
+  Marks that carry meaning (Indic vowel signs, Thai tone marks) are kept. A shared fixture file keeps the Go and Dart folding identical.
+- The system-dialog button/title matching now uses the same folding (accents included).
+- **System-dialog buttons resolve by role in any device language:** `tap "Don't Allow" in system dialog`, `deny permission "notifications"`,
+  `--grant notifications` and `dismiss system dialog` find the button with the same role (allow, deny, allow once, allow while using,
+  OK, cancel, not now, open, close) on a device set to another language. Android uses the permission dialog's resource ids; an exact
+  label always wins over a role. The iOS notification alert is recognised by its buttons (Allow + Don't Allow) instead of its English title.
+- **iOS `deny permission "notifications"` really resets the decision when the app is not running:** iOS keeps an earlier Allow (or
+  `--grant notifications`) for good and simctl cannot change it, so a "first run" notification test only saw the alert once. The
+  step now reinstalls the app from a copy of its own bundle (`SimCtl.Reinstall`), which brings notifications back to "not asked
+  yet" (verified on a simulator: Allow, relaunch shows no alert; reinstall, launch shows the alert again). With the app running it
+  still answers the alert. The reinstall leaves a new, empty data container.
+- Docs: new guide "Testing localized apps"; README, agent README (pub.dev), `internal/README`, llms.txt, MCP guide, VS Code snippet.
+
+## [0.19.5] - 2026-10-09
+
+### Fixed
+- **iOS system-dialog buttons match across apostrophes and case:** iOS writes "Don’t Allow" (U+2019); a script written for
+  Android says "Don't allow". The iOS driver's button, title and dismiss matching now folds typographic apostrophes, case and
+  whitespace, so `tap "Don't Allow" in system dialog` and `deny permission "notifications"` work on iOS (the latter always
+  failed with `no button "Don't Allow" in the dialog (buttons: Don’t Allow, Allow)`). Checked on a real system alert.
+- **Android `wait for system dialog appears` survives a failed UI dump:** `uiautomator dump` fails now and then while the screen
+  animates or the device is loaded (the cause of "1-2 of 5 tests fail, a different one each run"). The dump is retried up to 4
+  times with its own output kept in the error, and the wait keeps polling until its deadline instead of ending on the first
+  failed dump; the dump error is reported only if the dialog never showed.
+- **Quieter iOS `clear app data`:** the benign non-zero status of restarting the preferences daemon is no longer printed as a
+  warning.
+
+### Docs
+- `--yes` cannot answer the iOS notification alert (simctl cannot grant notifications): use `--grant notifications`.
+
+## [0.19.4] - 2026-10-08
+
+### Fixed
+- **iOS simulator `clear app data` deleted nothing (since the command was written):** the files were removed with `xcrun simctl spawn <udid> rm -rf`, but `simctl spawn` runs the command with the simulator's PATH where a bare `rm` is not found (ENOENT). The error was discarded and "Cleared data container" was printed anyway, so onboarding flags, Hive/sqlite files and preferences survived every clear. The container is now emptied from the host (`Documents`, `Library`, `tmp`, recreated empty with `Library/Caches`, `Library/Preferences`, `Library/Application Support`), and a failure to wipe is an error. The same bare-`rm` bug left the stale agent-token file in place on iOS reconnects; that is removed from the host too. The preferences-daemon restart from 0.19.1 and the running-app check now use `/bin/launchctl`, and a failed daemon restart is reported instead of hidden.
+
+### Docs
+- `tap`, `type` and `long press` scroll a target that exists in the widget tree into view; a target a lazy list has not built (beyond its cache extent) needs `scroll <direction> until "X" appears`.
+
+## [0.19.3] - 2026-10-08
+
+### Fixed
+- **A bare `scroll down` / `swipe` picks a scrollable that can scroll.** It chose the largest scrollable under the touch point, which
+  could be a `PageView` with `NeverScrollableScrollPhysics` (the biggest scrollable on its screen) and then moved nothing, while
+  the page inside it needed the scroll (`scroll down until "..." appears` reported "not found after scrolling" on an onboarding
+  flow). Scrollables with a scrollable extent that accept user input now rank first, then the one that receives touches, then
+  the largest.
+- **iOS `probe system-dialog tap` no longer reports a tap that did nothing as done:** after tapping, the driver checks that the
+  dialog went away (it polls for about a second), retries once with a tap on the button's centre point, and otherwise
+  fails with `tapped "Open" but the dialog is still showing` (seen with SpringBoard's "Open in <app>?" confirmation).
+  Not verified against that dialog here; the driver builds and the other dialog paths are unchanged.
+
+## [0.19.2] - 2026-10-08
+
+### Fixed
+- **Actions scroll an off-screen target into view:** since 0.19.0 `tap "Service"` failed on a chip that is built but beyond the
+  viewport of a horizontal list (assertions rightly do not see it). `tap`, `long press`, `double tap`, `type` and `clear` now
+  scroll such a target into view first (`Scrollable.ensureVisible`), like a user. `see` / `don't see` still ignore it.
+- **iOS simulator, connection lost while the app is in the background** (a link that opens Safari): the reconnect brings the app
+  back to the foreground first when its process is alive, instead of redialing a suspended socket. A crashed app is still not
+  relaunched silently.
+- **`probe migrate maestro`:** a text-entry step (`eraseText`, `inputText`) after a `tapOn` that became a `# TODO` is no longer
+  emitted as a bare `clear` / `type` (nothing is focused); it becomes a TODO as well.
+
+## [0.19.1] - 2026-10-08
+
+### Fixed
+- **`clear app data` on an iOS simulator now resets `shared_preferences` / `NSUserDefaults`:** the files were deleted, but the
+  simulator's preferences daemon (cfprefsd) kept the old values in memory (and can write them back), so a relaunched app
+  could still be "already onboarded". The daemon is restarted before and after the container is wiped. The mechanism
+  (`launchctl kill` of the daemon through `simctl spawn`) was checked on a simulator, but the full effect on an app that
+  persists a flag was not reproduced here.
+
+## [0.19.0] - 2026-10-08
+
+### Added
+- **`see any of "A", "B"` / `don't see any of "A", "B"`:** an assertion over alternatives (passes when any one is on screen; the
+  negated form when none is). `probe migrate maestro` converts a plain `assertVisible: "A|B"` / `assertNotVisible: "A|B"` to it.
+  With implicit wait it retries like any other `see`. Grammar page, conformance test, dictionary and MCP guide updated.
+
+### Fixed
+- **`see` / `don't see` / `wait until` only count widgets that are on screen:** a widget laid out entirely outside the screen (the
+  neighbouring page of a `PageView`, a tab kept alive to the side, list items in the cache area) no longer matches. `don't see X`
+  used to fail on such off-screen copies ("found 2 element(s)") while Maestro's `assertNotVisible` passed. **Behavior change:** a
+  `see` of a widget that is built but off screen now fails (it is not visible to the user).
+- **Elements caught mid-rebuild no longer crash lookups:** `tap "Add Community"` right after a route change failed with a Flutter
+  assertion (`'_renderObject != null'`); such elements are treated as not visible, and with `--implicit-wait` the step retries.
+- **`screenshot` right after a navigation** no longer fails with `'!debugNeedsPaint'`: the capture waits for the pending frame
+  and retries (bounded).
+- **`probe migrate maestro`:** relative selectors (`tapOn: {below: ...}`, `childOf`, `index`, ...) become a `# TODO` with a warning
+  instead of the garbage selector `tap "map[below:...]"`.
+
+## [0.18.1] - 2026-10-08
+
+### Fixed
+- **`--disable-animations` / `defaults.disable_animations` set `timeDilation` to 0**, which Flutter does not accept: an assert in
+  debug builds, and in profile and release builds a division by zero in every frame. A frame that throws can leave the UI a
+  tap behind (the change appears only after the next input). The CLI now sends 0.001 (time runs about 1000x faster, so
+  animations end within a frame) and the agent maps any non-positive factor to 0.001.
+
+## [0.18.0] - 2026-10-08
+
+### Added
+- **Implicit waiting (`probe test --implicit-wait 7s`, `defaults.implicit_wait`):** a `tap`, `type`, `long press`, `double tap`,
+  `clear`, `drag` or plain `see` whose target is not on screen yet is retried (every 0.3 s) for up to the given time before
+  failing, like Maestro's implicit waiting. Off by default, so existing suites behave as before. Steps with `if visible` /
+  `optional`, `don't see`, and the explicit `wait` steps are never retried. `probe migrate maestro` prints the recommended
+  setting: migrated flows rely on it (a login step used to fail while the sign-in was still in flight, 55 of 75 migrated flows
+  in one project).
+
+## [0.17.2] - 2026-10-08
+
+### Fixed
+- **`probe migrate maestro`, `scrollUntilVisible`:** converts exactly to `scroll <direction> until <#id | "text"> appears`
+  (it was approximated as one blind `scroll`, so the target was often not reached).
+- **`probe migrate maestro`, soft keyboard:** after `inputText` a `close keyboard` is emitted when the next step acts on
+  something that is not another text field (a button tap, a scroll toward a target). The keyboard otherwise stays open and
+  covers the button; Maestro's own tap or scroll dismisses it implicitly. This was the cause of most migrated login helpers
+  failing.
+
+## [0.17.1] - 2026-10-08
+
+### Fixed
+- **`see #x is checked` / `don't see #x is checked` now read the real value.** The agent had no `checked` check at all:
+  it fell through and passed for every widget, so `is checked` always succeeded and `don't see ... is checked` always
+  failed. It now reads `Switch`, `SwitchListTile`, `CupertinoSwitch`, `Checkbox`, `CheckboxListTile`, `Radio`,
+  `RadioListTile`, `FilterChip` and `ChoiceChip` (the matched widget, a control inside it, or the control enclosing the
+  matched label text), and says so when the widget is not a checkable control. **Tests that passed only because
+  `is checked` was always true will now fail where the control is off.**
+
+## [0.17.0] - 2026-10-08
+
+### Fixed
+- **`see "Submit" is disabled` / `is enabled` read the control that labels the text:** the selector matches the `Text`
+  inside a button, which was never itself a button, so every labelled button counted as enabled. The nearest enclosing
+  button (`ElevatedButton`, `TextButton`, `OutlinedButton`, `FilledButton`), `IconButton`, `FloatingActionButton`,
+  `TextField` (`enabled`), `Switch` or `Checkbox` decides.
+
+### Added
+- **`wait until "X" appears matching "<regex>"`:** the exact-text form of a wait (text selectors match substrings), the
+  same suffix as `see ... matching`. Grammar page and conformance test updated.
+- **`probe test --no-grant-on-clear`:** after `clear app data` keep runtime permissions revoked even with `--yes`
+  (which implies granting), so a test can see the first-run permission dialog.
+- **Tooltips and Semantics labels are matched** by text selectors when no visible text matches: `see "Show password"` finds
+  an icon button whose only label is its tooltip. A visible text always wins, so counts do not double.
+- **iOS share sheet in `probe system-dialog`:** `list` / `see` / `wait` / `tap` / `dismiss` (and the ProbeScript
+  system-dialog steps) now handle the share (activity) sheet an app opens with `UIActivityViewController`, which
+  previously reported "No system dialog is showing." The driver looks inside the app under test (`project.app`, or the
+  new `--app <bundle-id>`); the sheet's title is the shared item's caption and `Share sheet` always matches; buttons are
+  Close (where the OS draws one) plus the share targets and actions; `dismiss` taps Close, else taps outside the sheet,
+  else swipes down. Alerts are unchanged. The driver host app gets a `-probeShowShareSheet` self-test argument.
+- **Android `open link "scheme://..." in the app`** is restricted to the app under test (`am start -p <package>`; retried
+  unrestricted if the app cannot handle the link) and the URL is quoted for the device shell. With two flavours of one app
+  installed, the wrong one could start, and the CLI then never found an agent (`reconnect: read token`).
+- **`--driver-port` / `agent.driver_port`:** choose the iOS system-dialog driver's loopback port (1024-65535) on
+  `probe test`, `probe system-dialog` and `probe ios-driver status|stop`; the flag wins over probe.yaml; the default
+  (derived from the simulator UDID) is unchanged.
+
+## [0.16.9] - 2026-10-08
+
+Fixes from the first full campaigns on 0.16.6-0.16.8.
+
+### Fixed
+- **`use` resolution:** a `use`d file's own `use` lines are followed, each relative to the file that contains it (nested
+  helpers did not load). `probe test --dry-run` resolves each file on its own, so it matches running that file alone (it
+  pooled all files' recipes and passed what a single run could not resolve). An unresolved call names `use` targets that do
+  not exist.
+- **Bare `type "x"` / `clear`** act on the text field that has focus. `type` went to the first text field on the screen
+  (LIM-15), and a bare `clear` did nothing. With no focused field they fail with a clear message.
+- **Texts under a dialog:** a SnackBar (or any content) of the page underneath a see-through route (dialog, bottom sheet,
+  popup) is found by `see` / `wait until`; only routes under an opaque page are excluded.
+- **Android `restart the app`:** the reconnect re-creates the `adb forward` while dials are refused. A forward removed by
+  another tool on the same adb server (for example `adb forward --remove-all` from a parallel run) caused sporadic
+  `agent not reachable within 30s` failures.
+- **`clear app data` without a terminal** (CI, scripts) fails at once with "pass --yes" instead of blocking on a prompt;
+  documented in the dictionary.
+- **`probe migrate maestro`:** `optional: true` is kept (`tap ... if visible`, assertions get `optional`); `tapOn` of a
+  field followed by `inputText` / `eraseText` becomes `type "x" into <field>` / `clear <field>`; `waitForAnimationToEnd`
+  becomes `wait for idle` (it was `wait for the page to load`, which does not wait for animations).
+
+### Added
+- **Environment variables in steps:** `${NAME}` inside a quoted text is replaced from the environment when the step runs.
+  The step line shows `${NAME}`, the value is scrubbed from errors and reports, an unset variable is left as written with a
+  warning. Migrated Maestro flows that use `${TEST_EMAIL}` now run as they are.
+
+## [0.16.8] - 2026-10-08
+
+### Fixed
+- **`see "X" matching "<regex>"` never checked the pattern:** the agent received it and only used it in the
+  not-found message, so the assertion passed whenever the text selector found something. It now requires that some
+  matched widget's text matches the regular expression (an invalid regex is an error). With text selectors matching
+  substrings, `see "0 ml" matching "^0 ml$"` is the exact-text form.
+
+### Added
+- **`probe test --fail-on-warning`:** agent warnings (a tap that did nothing, `press enter` with no focused field,
+  `go back` at the root) fail the step. Off by default.
+
+### Docs
+- Text selectors match substrings (`see "0 ml"` passes on "250 ml"); documented on the syntax, dictionary and grammar pages
+  with the exact-match forms.
+
+## [0.16.7] - 2026-10-08
+
+### Added
+- **New step `press enter`:** presses the keyboard action key (done / go / search / send / next) on the focused
+  text field; warns when no field has focus. `probe migrate maestro` converts `pressKey: Enter` to it (it emitted
+  `press key "Enter"`, which does not exist). Other `pressKey` values (home, volume, ...) become a `# TODO` comment.
+  It is a compound keyword, so recipes whose names start with `press` or `submit` are unaffected.
+
+### Fixed
+- **`probe migrate maestro`, conditional `runFlow`:** `runFlow: {when: {visible: "X"}, commands: [...]}` becomes an
+  `if "X" appears` block, and `notVisible` becomes `if "X" appears` / `otherwise` with the commands (a `file:` target works
+  too). Conditions on platform or scripts, and regex conditions, stay `# TODO`.
+- **`probe migrate maestro`, regex selectors that mean a literal:** `.*TEXT.*` becomes `TEXT` (text selectors already
+  match substrings), escaped characters (`time\\.`) are unescaped, parentheses are literal, and plain alternations
+  with those forms become `wait until any of`. Only real regex syntax (a wildcard in the middle, classes,
+  quantifiers) keeps a `# TODO`.
+- **`before each` / `after each` without `test`** (what the Hooks and Dictionary pages show) kept the keyword but
+  silently dropped the hook body. They are now the same hook as `before each test` / `after each test`.
+- **`probe migrate maestro` now warns when a `runFlow` target is outside the migrate root** (it was never converted, so
+  the generated `use` pointed at a file that does not exist). Migrate the parent directory that holds both flows and
+  helpers to convert them together.
+
+## [0.16.6] - 2026-10-07
+
+### Fixed
+- **`probe migrate maestro` and `runFlow`:** a `runFlow` target is now converted to a recipe file
+  (`recipe "flow <file name>"`, written at the mirrored path) and the caller gets `use "<file>.probe"` plus a call to the
+  recipe. Before it emitted `use "<helper>.yaml"`, which is not ProbeScript, so every migrated flow with a helper failed.
+  `runFlow` options (`env`, `when`) are dropped with a warning.
+- **`probe migrate maestro`:** `evalScript` becomes a `# TODO` comment (it was emitted as a step line that failed as an
+  unknown recipe call); Maestro regex selectors (`"A|B"`, `.*x.*`) get a `# TODO` and a warning because ProbeScript
+  matches text literally; `${ENV}` placeholders are reported in a warning. Migrated tests are named after the file.
+- **Complete ProbeScript grammar in EBNF** (`website/src/content/docs/probescript/grammar.md`): lexical rules, layout,
+  every statement, selector, modifier and block, with a runnable example per production. A conformance test
+  (`internal/parser/grammar_test.go`) parses every example and fails when a keyword is added to or removed from the
+  lexer without the grammar page changing. The page also lists where the other docs and the parser disagree.
+- **New step `wait until any of "A", "B", "C" appears`** (the first alternative on screen satisfies it; times out
+  with the step timeout). `probe migrate maestro` converts a plain `"A|B|C"` wait to it; other regex selectors still get
+  a `# TODO`. Documented in the dictionary, syntax page, VS Code snippet/grammar and the MCP guide.
+- **A recipe call with a bare number argument resolves:** `increment counter "x" 3` for
+  `recipe "increment counter" (identifier, times)` failed with `unknown recipe call "increment counter <arg> 3"`
+  because only quoted values counted as arguments. Bare numbers are now arguments too (a number that is part of a
+  recipe's name, `step 2 of onboarding`, still matches as before).
+- **Converters no longer emit steps ProbeScript does not have:** `probe-convert` turned Maestro `openLink` into
+  `open "<url>"` (the valid form is `open link "<url>"`) and `setAirplaneMode` into `toggle wifi off`/`on` (no such
+  step); both converters now emit `open link` and a `# TODO` comment. The new dry-run check found these.
+- **`--composite-device` flags replace `composite.devices` from probe.yaml** instead of merging with it: a configured
+  device that was down used to skip the whole composite test even when the flags named other devices.
+- **`probe test --dry-run` now resolves every step.** A step that is not a built-in and matches no recipe (a typo, a
+  verb that does not exist, such as `hide keyboard`) fails the dry run, also when it sits inside a recipe the test calls
+  or in a hook. Before, dry-run reported such tests as passed and they only failed at runtime.
+- **A tap that nothing receives is no longer a silent success** (Android: a submit button under the on-screen
+  keyboard, or clipped away). A hit that stops at a passive ancestor or the root view now counts as "covered", so the
+  existing warning appears when the screen also did not change; it says when the keyboard is open and suggests
+  `close keyboard`. A hit that stops at a parent that handles taps is still normal.
+
+## [0.16.5] - 2026-10-06
+
+### Fixed
+- **A recipe whose name starts with `clear`** (for example `recipe "clear search"`, called as `clear search`) is called
+  instead of being parsed as the built-in `clear` with a type selector. The built-in forms (`clear "Email"`,
+  `clear #id`) are unchanged.
+- **False "covered by another widget" warning** (seen on a SnackBar action): the hit test can disagree with what a
+  real tap reaches on overlays. The warning now appears only when the hit test says covered *and* the screen did not
+  change after the tap, which is the silent-tap case it exists for. Its text now includes the topmost hit render objects.
+
+- **Stale Android token file after an app restart:** if the token read from the app's cache is rejected again on a
+  re-read (the agent could not rewrite the file), the CLI now falls back to the newest `PROBE_TOKEN=` line in logcat
+  instead of retrying the same file until it gives up. The port-holder hint no longer blames the CLI's own `adb forward`
+  for a rejected token on Android.
+
+- **`go back` at the root route no longer exits the app on Android.** It used to call the system Back, which killed
+  the app and the agent: the step hung until its timeout and every later test failed with a broken pipe. It is now a
+  no-op with a warning ("already at the root route"); use `close the app` to leave the app on purpose. **Behavior
+  change:** a test that relied on `go back` to exit the app must use `close the app`.
+- A lost Android connection now says when the app process is gone ("the app process ... is not running") instead of
+  only "probe token not found".
+
+### Changed
+- When the agent port refuses connections for 5 s the CLI now says so (is the app running and built with
+  `--dart-define=PROBE_AGENT=true`?) instead of waiting silently for the dial timeout.
+
+## [0.16.4] - 2026-10-06
+
+### Fixed
+- **False "covered by another widget" warning on a SnackBar action (Android):** when several widgets match a
+  selector (an exiting SnackBar or route keeps its widgets in the tree briefly) `tap` now picks the one a pointer can
+  actually reach, and a tap only warns after the target has stayed covered for ~0.6 s, so overlays that are still
+  sliding in or out are not reported. A really covered target still warns (and costs that extra 0.6 s).
+
+## [0.16.3] - 2026-10-06
+
+Follow-ups from a real project's gate on 0.16.2 (FP-20).
+
+### Fixed
+- **Silent tap after `scroll ... until`:** after a scroll the agent now waits (up to 2 s) until the target is actually
+  hit-testable before tapping, and the "covered by another widget" warning only fires when the widget at the tap point
+  is unrelated to the target (a descendant or ancestor hit, such as a button's inner text, is no longer reported).
+- **`connection refused` after a cold launch (Android):** while dials are refused the CLI re-creates the `adb forward`
+  every ~3 s, so a forward that vanished no longer turns into a full dial timeout. A refused timeout now says what
+  it means (agent never started vs. forward gone).
+- **iOS simulator port clashes:** `Address already in use` while forwarding now names the process holding the port.
+
+### Docs
+- `wait for idle` does not wait for application-level async loads (a list fetched in `initState`); use
+  `wait until "<text>" appears` after navigation.
+
+## [0.16.2] - 2026-10-06
+
+Fixes for issues found by running a real project's full gate on 0.16.1 (FP-19).
+
+### Fixed
+- **Android failure screenshots were corrupt.** The screenshot is saved on the host from the RPC's base64 data, and
+  `PullArtifacts` then re-read that *host* path through `adb exec-out run-as ... cat`; `cat` printed "No such file" on
+  stdout (exit 0) and that text overwrote the PNG. A screenshot already on the host is now kept, and anything pulled from
+  a device must start with a PNG/JPEG signature or it is reported as an error instead of written as an image.
+- **Cold-launch race on Android (and iOS simulators):** dialing a few seconds after launch could end in
+  `unexpected EOF` and then a 401, because the token readable on the device was still the previous app instance's. When
+  the CLI auto-detected the token it now re-reads it on a 401 and retries for up to 12 seconds. An explicit `--token`
+  still fails fast.
+- **The "agent port is held by" hint now says what holds it:** an `adb` port forward (with `adb forward --remove`), an iOS
+  simulator app (with its simulator UDID and `simctl terminate`), or any other process. It used to print the same text for
+  the first two.
+
+### Changed
+- **A tap that cannot reach its target is no longer silent.** When something else is on top at the tap point, the agent
+  returns a warning (`tap target #id is covered by another widget at (x, y) ...`, with the visible texts/keys) and the
+  CLI prints it. The tap still happens, as for a real user.
+- A tap now waits (up to 1.5 s) while a scrollable around its target is still scrolling: Flutter ignores pointer events
+  during scroll activity, so a tap right after `scroll ... until ... appears` could be dropped. Costs nothing when
+  nothing is scrolling.
+
+### Not changed
+- `--grant notifications` taps Allow as soon as the iOS notification alert is up, which can be right after a relaunch and
+  before the app has visibly asked. That is intended (the alert is what is answered); it is harmless.
+- Whether the silent tap after `scroll ... until` on Android is fully explained by the two changes above could not be
+  reproduced without that app; the new warning will name the cause if it happens again.
+
+## [0.16.1] - 2026-10-06
+
+### Fixed
+- **The Windows build of 0.16.0 failed**, so no 0.16.0 GitHub release or Homebrew update was published (the 0.16.0 agent
+  did reach pub.dev; it is unaffected). The iOS system-dialog driver used `syscall.Setpgid` / `syscall.Kill`, which do
+  not exist on Windows; process-group handling now lives in build-tagged files. 0.16.1 carries everything in 0.16.0
+  below.
+- CI now cross-compiles `probe` and `probe-mcp` for linux/amd64, darwin/amd64, darwin/arm64 and windows/amd64 on every
+  PR, so a platform-specific API fails the PR instead of the release.
+
+## [0.16.0] - 2026-10-06
+
+### Added: system dialogs (FP-16)
+OS-level dialogs (iOS permission alerts, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs)
+live outside the Flutter widget tree and were invisible to probe. They can now be driven from ProbeScript and the
+command line.
+
+- **ProbeScript steps:** `tap "Allow" in system dialog`, `type "$ENV" into system field "Password"`,
+  `see system dialog "Title"` / `don't see system dialog`, `wait for system dialog "Title" appears|disappears`,
+  `dismiss system dialog`, `sign in sandbox tester` (idempotent; `PROBE_SANDBOX_USER` / `PROBE_SANDBOX_PASSWORD`). Any
+  of them accepts a trailing `optional`.
+- **iOS** (simulators; needs Xcode): a new XCUITest runner app (`ios-driver/`) serves a loopback HTTP API from inside the
+  UI-test process and drives SpringBoard's accessibility tree. Built in CI on every release and attached as
+  `probe-ios-driver.zip`; downloaded on first use (`probe ios-driver install|status|stop`). Physical devices are not
+  supported (code signing).
+- **Android:** `uiautomator` dumps scoped to system packages (permission controller, package installer, Play, GMS,
+  systemui) plus `adb input`. Typed text is single-quoted for the remote shell, so `& ; $ ' "` in a password are safe
+  (the existing `type native` only escaped spaces).
+- **Secrets:** values come from environment variables only (`$NAME` / `${NAME}`), are **always masked** in step output,
+  reports and error text (including literals), and are never accepted as command-line arguments.
+- **`probe system-dialog list|see|wait|tap|type|dismiss|sign-in-sandbox`**: the same driver without any test file or
+  Flutter app, for one-time provisioning such as signing a sandbox tester in on a CI simulator.
+- **iOS notifications**, which `simctl privacy` cannot grant: `allow permission "notifications"` and
+  `--grant notifications` now tap **Allow** on the system alert (a watcher for `--grant`).
+- **Docs:** new System Dialogs, On-Device Agent and Using Probe from AI Agents pages, `llms.txt`, a reworked
+  `flutter_probe_agent` README for pub.dev, and `ios-driver/README.md`.
+
+### Fixed (reported from real-project runs of 0.15.0)
+- A bare `scroll down` picked the largest scrollable in the tree, which could be a hidden tab kept alive by an
+  `IndexedStack`, so the visible list never moved. It now prefers a scrollable that receives touches on screen.
+- Agent errors showed an id selector as `id("#settings_screen")`; it is now `#settings_screen`.
+- The CLI/agent version-mismatch warning compared raw strings, so a pre-release CLI (`0.15.0-fp13`) warned against its
+  own release (`0.15.0`). Pre-release and build suffixes are now ignored.
+- Android `uiautomator` failures now explain that only one UI-automation client can run per device.
+
+### Verification
+iOS driver, steps and CLI verified on an iOS 26.5 simulator (real notification alert, and a StoreKit-shaped sheet with a
+secure field: the app received `tester+1@example.com|P@ss w0rd!&;$x`); Android verified on an API 35 emulator (real
+camera/location permission dialogs: see, tap, dismiss, wait, apostrophe matching, wrong-button error) and the shell
+quoting on a real device shell. **Not verified:** the genuine StoreKit "Sign in to Apple Account" sheet (no StoreKit app
+available here; use `probe system-dialog list` and `PROBE_DRIVER_APPS` if a given iOS version hosts it in another
+process), typing into an Android system dialog field, and the CI job that builds the iOS driver.
+
+## [0.15.0] - 2026-10-06
+
+### Changed (BREAKING for WiFi auto-discovery only) — FP-15
+- **`flutter_probe_agent` no longer depends on the native `bonsoir` mDNS plugin.** A plugin in an app's
+  dependencies is linked into every build of that app, release included, regardless of
+  `--dart-define=PROBE_AGENT` (release size, privacy, possible local-network prompt).
+  mDNS advertising is now an optional `ProbeAdvertiser` hook
+  (`ProbeAgent.start(advertiser: ...)`) that the app implements with its own `bonsoir` dependency; a
+  copy-paste example is in the Studio docs. No new pub.dev package is published. Without it WiFi testing is
+  unchanged (`--host <ip> --token <token>`); Studio's WiFi auto-discovery needs an advertiser in the device build.
+  The advertised port is now the actually bound one.
+
+### Optional local-LLM support (FP-14)
+
+AI stays strictly opt-in: no `ai:` block means no AI code runs, and none of the additions below can change a
+test result, a report or the exit code (they run after results are final, are time-bounded, make no retries,
+and stop after the first provider error).
+
+- **`probe ai doctor`** — checks the configured `ai:` provider: endpoint, model listed, a text round trip, and
+  whether the model accepts images. Verified live against LM Studio (a 0.5B text-only Qwen: text OK, vision
+  not accepted) and Ollama (Gemma 4 31B: both OK).
+- **Failure triage** — `probe test --ai-triage` (after the run) and `probe triage --input results.json`
+  produce a short advisory probable cause and next step per failure, printed and written to
+  `<reports>/triage.md`. MCP tool `triage_failure` wraps it (20 tools now; docs previously said 18).
+- **`ai.vision: false`** — text-only models: `see "..." with ai` is judged from the screen's visible
+  texts/keys instead of a screenshot. `assert no visual defects with ai` and `read ... with ai` report that
+  they need a vision model; the mode is refused when `ai.redact` rules exist (they can't apply to text).
+- **`probe generate` and AI selector suggestions honour `ai.provider`**, including `local` with no API key.
+  With no `ai.provider` the original Claude-only behavior is unchanged.
+- Docs: new [AI & Local Models](https://flutterprobe.dev/tools/ai/) page, plan in
+  `docs/prd/optional-local-llm-plan.md`. A 0.5B model gives weak triage advice; 7B+ is recommended.
+- READMEs added for `cmd/`, `internal/`, `scripts/`, `docker/`, `plugins/`, `mcpb/`, `tests/`,
+  `tools/probe-convert/`.
+
+### Fixed (docs)
+- `scroll down until "X" appears` was documented in the VS Code README and snippets but not implemented by the
+  parser; it is now (FP-13, below).
+
+Fixes for limitations hit during a release-gate run (FP-13), reported against CLI 0.14.0.
+
+### Added
+- **`scroll [dir] until <target> appears`** — scrollIntoView for lazily built lists (Maestro's
+  `scrollUntilVisible`). Resolved agent-side: scrolls half a viewport at a time, then brings the
+  target fully on screen (`Scrollable.ensureVisible`), stops early when the list can't move, and
+  fails with the visible texts if the target never shows up. Older agents fall back to a CLI-side
+  loop (25 attempts).
+- **`wait for idle`** (also `wait until idle`) — route transitions finished and no pending frames,
+  animations or HTTP requests. `tap` also waits (max 2 s) for an in-flight dialog/sheet/page
+  transition before firing.
+- **`probe test --grant <list>`** — pre-grant OS permissions once before the first test
+  (`--grant notifications,camera,location`). Android: `adb shell pm grant` incl. `POST_NOTIFICATIONS`;
+  iOS simulator: every `simctl privacy` service. **iOS notifications cannot be pre-granted** (no simctl
+  service; the prompt is a SpringBoard alert the agent cannot tap) — `--grant` warns instead of failing,
+  and `allow permission "notifications"` on iOS now fails with that explanation instead of a
+  contradictory "unknown permission — available: notifications".
+- **`--agent-port <n>`** on `probe test` / `probe record` (alias of `--port`) and the matching
+  **`--dart-define=PROBE_PORT=<n>`** for the app, so simulators can't fight over 48686.
+- **Port-holder report:** a failed agent dial on loopback now names the process holding the port
+  (`agent port 48686 is held by pid 4242 (Runner)`) and how to move off it.
+- **`probe.visible_summary`** agent RPC (visible texts + string ValueKeys) used for failure diagnostics.
+
+### Changed
+- **Timeout errors say what timed out.** A step that hit its deadline used to fail with a bare
+  `context deadline exceeded`. It now reports the line, the step, the timeout and the visible texts/keys
+  at that moment. Agent-side `Widget not found` / `Timed out waiting for` errors carry the same
+  suffix, and `wait` hands the agent a timeout 2 s shorter than the CLI's so the agent's descriptive
+  error arrives first.
+- **`type` and `clear` go through the platform text-input path**
+  (`EditableTextState.userUpdateTextEditingValue`) instead of assigning `controller.text`, so
+  `onChanged`, `inputFormatters` and form validation run as with real keystrokes.
+
+### Fixed
+- `dont see "X"` (no apostrophe) is accepted as an alias of `don't see "X"`; it previously failed
+  with `unknown recipe call "dont see <arg>"`.
+
+## [0.14.0] - 2026-08-31
+
 ### Added
 - **GPS route simulation (`travel to ... over N seconds`, FP-6).** A new block-style ProbeScript
   construct — matching Maestro's `travel` command — that walks the device's GPS location through
@@ -34,6 +592,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Added `studio/app_test.go` — the studio module previously had zero test coverage — covering the
   pure/testable surface (`isDeviceReady`, `extractLineCol`, file-path guards, `Lint`, `ListDir`,
   `Connect`/`ConnectWiFi` input validation).
+- **`tap` could invoke a Semantics-wrapped button's `onTap` even when something else covered it
+  on screen (FP-10, #265).** `_tryDirectTap` walks the Element tree structurally to find a
+  `GestureDetector`/`InkResponse` descendant and calls its `onTap` directly (added for PT-04/PT-05,
+  since a real hit-tested pointer tap doesn't reliably reach focus/`onTap` through a `Semantics`
+  wrapper) — but that walk has no relationship to paint order, so it could fire on a button hidden
+  behind a modal barrier, loading overlay, or an unrelated `Stack` sibling that a real user's tap
+  would hit instead. `tap` now runs a read-only hit test (the same `hitTestInView` call Flutter's
+  own pointer dispatch makes internally) before taking the direct-invoke path, and only uses it
+  when the target is genuinely the topmost thing at its own screen position — otherwise it falls
+  through to the existing real hit-tested pointer tap, which already lands on whatever's actually
+  on top. `probe_agent/lib/src/executor.dart`; `probe_agent/test/tap_occlusion_test.dart`.
 
 ## [0.13.0] - 2026-08-15
 
@@ -136,7 +705,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   machinery kills a busy-but-alive connection (four load-shape experiments, kept in the evidence
   folder). See `docs/evidence/i237-ws-drop-investigation-2026-08-15/`.
 - **`probe migrate maestro` hardened against 2.x syntax and two real bugs (G-3).** Audited the
-  converter against nect-flutter's real 76-flow suite: `setPermissions`, `retry` (with recursive
+  converter against a real-world 76-flow Maestro suite: `setPermissions`, `retry` (with recursive
   nested-command conversion, also fixed for `repeat`), and `assertScreenshot` are now supported,
   and `relativePoint`-style `{point: "x%,y%"}` selectors get a clear `# TODO` instead of a real bug
   the old code had — silently emitting `tap on "map[point:50%,10%]"`, confirmed against an actual
@@ -145,7 +714,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `eraseText` — are now supported too. Also fixed: a stale `setLocation` "not supported" comment
   (it's been a real ProbeScript verb since before this cycle), and `probe migrate maestro <dir>`
   silently finding zero files for any suite organized into feature subdirectories — the real-world
-  norm, including nect-flutter's own — because directory discovery was single-level, not recursive.
+  norm, including the social app's own — because directory discovery was single-level, not recursive.
   Every one of the 76 real flows converted and parses as valid ProbeScript.
   See `docs/evidence/g3-migrate-maestro-hardening-2026-08-15/`.
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown

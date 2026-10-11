@@ -38,6 +38,7 @@ class ProbeSync {
     final deadline = DateTime.now().add(timeout);
 
     while (DateTime.now().isBefore(deadline)) {
+      await _flushScheduledFrame();
       if (_isSettled()) return;
       // Pump a frame tick then re-check
       await _pumpFrame();
@@ -49,6 +50,24 @@ class ProbeSync {
       'ProbeSync: UI did not settle within ${timeout.inSeconds}s '
       '(frames=${_pendingFrames()}, animations=${_animations.where((a) => a.isAnimating).length}, http=$_httpPending)',
       timeout,
+    );
+  }
+
+  /// A setState / markNeedsBuild (a tap's effect) schedules a frame, but
+  /// schedulerPhase keeps reading idle until that frame starts, so the
+  /// settled check below would pass before the UI reflects the action
+  /// ("UI one tap behind"). Let a requested frame run first. Bounded: a
+  /// screen that animates forever always has a frame scheduled and must
+  /// not stall every action.
+  Future<void> _flushScheduledFrame() async {
+    final binding = SchedulerBinding.instance;
+    if (!binding.framesEnabled || !binding.hasScheduledFrame) return;
+    // Test bindings only run frames when the test pumps them; waiting here
+    // would hang a widget test, so keep their (immediate) behaviour.
+    if (binding is! WidgetsFlutterBinding) return;
+    await binding.endOfFrame.timeout(
+      const Duration(milliseconds: 250),
+      onTimeout: () {},
     );
   }
 

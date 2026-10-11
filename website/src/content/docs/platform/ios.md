@@ -23,7 +23,10 @@ xcrun simctl list devices available
 
 ```bash
 probe device start --platform ios
+probe device start --platform ios --name my-sim   # named; created if it does not exist
 ```
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial).
 
 Or manually:
 
@@ -90,13 +93,20 @@ The iOS simulator shares the host's `localhost` network. No port forwarding is n
 iOS simulator permissions are managed via `xcrun simctl privacy`:
 
 ```
-allow permission "notifications"   # simctl privacy grant <UDID> notifications <bundleID>
-deny permission "camera"           # simctl privacy revoke <UDID> camera <bundleID>
+allow permission "camera"          # simctl privacy grant <UDID> camera <bundleID>
+deny permission "location"         # simctl privacy revoke <UDID> location <bundleID>
 grant all permissions
 revoke all permissions
 ```
 
-This works on iOS 14+ simulators.
+This works on iOS 14+ simulators for camera, location, microphone, photos, contacts, calendar and sms.
+`probe test --grant camera,location` applies the same grants once before the first test.
+
+**Notifications have no simctl service**, so they cannot be granted by name. Since 0.16.0 probe answers the system
+alert instead: `allow permission "notifications"` and `probe test --grant notifications` tap **Allow** when the alert
+appears, through the iOS system-dialog driver (an XCUITest runner; needs Xcode, simulators only). See
+[System dialogs](/tools/system-dialogs/). Android is unaffected: `POST_NOTIFICATIONS` is granted with
+`adb shell pm grant`.
 
 :::note[Permission changes relaunch the app (v0.12.1+)]
 `simctl privacy grant/revoke` silently **terminates the target app** — an Apple behavior, not a
@@ -106,21 +116,22 @@ next step. Follow a permission step with `wait until "<your screen>" appears` be
 exactly as you would after `restart the app`.
 :::
 
-:::caution[Notification permissions cannot be pre-granted]
-Apple does not support granting notification permissions via `simctl privacy`. If your app requests notification permission (e.g. via `UNUserNotificationCenter` or Firebase Messaging), the native dialog will block the Flutter UI and prevent tests from proceeding.
+:::tip[Notification permissions]
+`xcrun simctl privacy` cannot grant notifications, but probe can answer the system alert itself (see above), so
+you no longer have to remove the request from your app. If you prefer to skip it under test anyway, guard the
+request with `bool.fromEnvironment('PROBE_AGENT')`.
+:::
 
-**Solution:** Guard notification permission requests in your app's `main.dart`:
+## App language
 
-```dart
-const probeEnabled = bool.fromEnvironment('PROBE_AGENT');
-if (!probeEnabled) {
-  await requestNotificationPermission();
-  await FirebaseMessaging.instance.requestPermission();
-}
+```
+set language "de"        # relaunches the simulator app with -AppleLanguages (de) -AppleLocale de
 ```
 
-Build with `--dart-define=PROBE_AGENT=true` to skip these requests during testing.
-:::
+The language is passed as launch arguments on every later launch of the app (including `restart the app` and `clear app data`), which
+Flutter's locale follows. System dialogs (permissions, share sheet) keep the simulator's language: use the role-based
+`tap "Don't Allow" in system dialog` for those. Not supported on physical devices (change the language in Settings > Apps).
+`probe test --locale de` and `--locales de,ja,ar` apply it per run.
 
 ## Device Media
 

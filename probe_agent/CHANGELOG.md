@@ -2,6 +2,166 @@
 
 ## [Unreleased]
 
+## 0.24.0 - 2026-10-10
+
+- Fixed: `double tap` and `long press` on a target that something else covers now return the same "covered by another widget" warning as `tap` (they used to succeed silently); `--fail-on-warning` turns it into a failure.
+
+## 0.23.0 - 2026-10-10
+
+- Added: `probe.perf_start` / `probe.perf_snapshot` / `probe.perf_stop`: frame timings (build/raster, slow-frame share, p50/p95/p99/max) from the engine's timings callback and resident memory sampled every 250 ms, between a start and a stop. `perf_stop` waits about a second for the last batch of frame timings.
+
+## 0.22.1 - 2026-10-09
+
+- Changed: HTTP capture also redacts `x-goog-api-key`, `api-key`, `x-auth-token`, `x-access-token`, `x-amz-security-token`, `x-csrf-token`, `x-xsrf-token` headers and the values of credential query parameters (`key`, `api_key`, `access_token`, `token`, `id_token`, `refresh_token`, `auth`, `secret`, `password`, `sig`, `signature`) in logged URLs (reported by a user review of 0.22.0).
+
+## 0.22.0 - 2026-10-09
+
+- Added: the agent records the app's `dart:io` HTTP traffic (`HttpOverrides`; method, URL, status, duration, redacted headers, 64 KB bodies, last 300 exchanges; `PROBE_HTTP_CAPTURE=false` disables) and answers `probe.http_log` / `probe.http_clear`.
+- Changed: `probe.mock` is now effective (it was only stored): matching requests are answered with the given status, body, headers, delay or connection failure (served by a loopback server so the app's client sees real HTTP). Mocks match a method and a path with `*` wildcards (or a full URL).
+
+## 0.21.0 - 2026-10-09
+
+- No agent change (`set language`, `--locale`/`--locales` and `l10n "key"` live in the CLI); version aligned.
+
+## 0.20.0 - 2026-10-09
+
+- Added: loose text matching (`loose` selector flag, `probe test --match-loose`): case, accents/diacritics, typographic apostrophes and dashes, full-width forms, invisible characters and whitespace fold on both sides (`lib/src/textfold.dart`, identical to the CLI via a shared fixture). Off by default.
+- Fixed (regression in 0.19.2+): `scroll down in "<anchor>" until X appears` failed with `Widget not found: text("<anchor>")` once the anchor had scrolled off screen, because the scrollable was re-resolved from the anchor on every step. It is now resolved once.
+- Fixed: `wait for idle` (and the settle after every action) returned before the UI reflected a tap. A `setState` schedules a frame, but the scheduler phase still reads idle until it starts, so the next `see` read the stale tree ("UI one tap behind", intermittent, seen on bottom sheets). The settle check now lets a requested frame run first (bounded to 250 ms, so a screen that animates forever does not stall actions).
+
+## 0.19.5 - 2026-10-09
+
+- No agent change (iOS driver and Android dialog fixes in the CLI); version aligned.
+
+## 0.19.4 - 2026-10-08
+
+- No agent change (iOS `clear app data` fix in the CLI); version aligned.
+
+## 0.19.3 - 2026-10-08
+
+- Fixed: the target of a bare `scroll` / `swipe` ranks scrollables that can scroll (extent > 0, physics accepting user input) before ones that cannot (a non-scrollable PageView).
+
+## 0.19.2 - 2026-10-08
+
+- Fixed: tap, long press, double tap, type and clear scroll a built but off-screen target into view (since 0.19.0 they failed on it).
+
+## 0.19.1 - 2026-10-08
+
+- No agent change (iOS `clear app data` fix in the CLI); version aligned.
+
+## 0.19.0 - 2026-10-08
+
+- Fixed: text/id lookups ignore widgets laid out entirely off screen and elements without a render object (mid-rebuild); `screenshot` retries while a boundary still needs paint.
+
+## 0.18.1 - 2026-10-08
+
+- Fixed: `probe.set_time_dilation` with a non-positive factor sets 0.001 instead of an invalid 0.
+
+## 0.18.0 - 2026-10-08
+
+- No agent change (implicit waiting is a CLI feature); version aligned.
+
+## 0.17.2 - 2026-10-08
+
+- No agent change (CLI migrate fixes); version aligned.
+
+## 0.17.1 - 2026-10-08
+
+- Fixed: the `checked` state check was missing and passed for every widget; it now reads Switch, SwitchListTile, CupertinoSwitch, Checkbox, CheckboxListTile, Radio, RadioListTile, FilterChip and ChoiceChip.
+
+## 0.17.0 - 2026-10-08
+
+- Fixed: `is disabled` / `is enabled` use the control enclosing the matched text (button, icon button, FAB, text field, switch, checkbox).
+- Added: `wait` accepts a `pattern` for `appears` (`matching`); text selectors fall back to Tooltip messages and Semantics labels when no visible text matches.
+
+## 0.16.9 - 2026-10-08
+
+- Fixed: bare `type` / `clear` (empty selector) act on the focused text field (error when none is focused).
+- Fixed: `see` / `wait until` find content of a page under a see-through route (dialog, bottom sheet, popup), for example a SnackBar.
+
+## 0.16.8 - 2026-10-08
+
+- Fixed: `probe.see` applies the `pattern` parameter (`matching`); it was received and ignored.
+
+## 0.16.7 - 2026-10-08
+
+- Added: device action `press_enter` (keyboard action key on the focused text field; warns when nothing has focus).
+
+## 0.16.6 - 2026-10-07
+
+- Fixed: a tap whose point is received by nothing (clipped, off screen, under the keyboard) produces the covered
+  warning (when the screen also did not change) instead of a plain success; the warning mentions an open keyboard.
+
+## 0.16.5 - 2026-10-06
+
+- Changed: `go back` at the root route is a no-op with a warning instead of leaving the app (Android).
+- Fixed: the "covered by another widget" tap warning is only reported when the tap also changed nothing on screen
+  (no more false positives on SnackBar actions); `tap` prefers the reachable copy among several matches.
+
+## 0.16.4 - 2026-10-06
+
+- Fixed: `tap` prefers the reachable widget among several matches and warns about a covered target only after it stays
+  covered for ~0.6 s (FP-21).
+
+## 0.16.3 - 2026-10-06
+
+- Fixed: `tap` waits (up to 2 s) until the target is hit-testable after a scroll, and only warns when the widget at the
+  tap point is unrelated to the target (FP-20).
+
+## 0.16.2 - 2026-10-06
+
+- Changed: `tap` returns a `warning` in its result when another widget covers the tap point (the tap still happens), and
+  waits up to 1.5 s while a scrollable around the target is still scrolling (Flutter ignores pointer events during
+  scroll activity) (FP-19).
+
+## 0.16.1 - 2026-10-06
+
+- No agent change. Version bump to match the CLI release 0.16.1 (the 0.16.0 CLI release failed to build on Windows; see the root
+  changelog).
+
+## 0.16.0 - 2026-10-06
+
+- Fixed: a bare `scroll` chose the largest scrollable even when it was a hidden `IndexedStack` tab; it now prefers a
+  scrollable that receives touches at its center (FP-16).
+- Fixed: id selectors in error messages read `id("#key")`; they now read `#key`.
+- Docs: full agent reference in the README (build flags, ports and tokens, modes, troubleshooting) and a documentation
+  link on pub.dev. The agent still has no native plugin dependency.
+
+## 0.15.0 - 2026-10-06
+
+- Fixed: `agent_version.dart` reported 0.13.0 in 0.14.0, causing a bogus CLI/agent version-mismatch warning.
+- **BREAKING (WiFi auto-discovery only):** the core agent no longer depends on `bonsoir`. A native plugin in an
+  app's dependencies is linked into every build of that app, release included (size, privacy, a possible
+  local-network prompt) regardless of `--dart-define=PROBE_AGENT`. mDNS advertising is now an optional hook:
+  implement `ProbeAdvertiser` in your own app (copy-paste `bonsoir` example in the Studio docs) and pass it to
+  `ProbeAgent.start(advertiser: ...)` in the build flavor that wants it. No separate package is published. Without
+  it WiFi testing is unchanged (`--host <ip> --token <token>`) and the agent logs `PROBE_MDNS=off`. New public
+  API: `ProbeAdvertiser`, `mdnsServiceType`. The advertised port is now the actually bound port (it used to be
+  the preferred one even after a fallback) (FP-15).
+- Fixed: the finder/executor resolved routes with `ModalRoute.of(element)`, subscribing queried elements to a
+  route scope from outside a build; since 0.10.0 that could trip a framework assertion (red screen) after
+  closing a sheet or dialog. Routes are now read without subscribing (`probeRouteOf`) (FP-13).
+
+- Added: `probe.scroll` accepts `until` (selector) — scroll until the target is on screen, then
+  `ensureVisible` it; stops early at the end of the list (FP-13).
+- Added: `probe.wait` kind `idle` (route transitions + frames/animations/HTTP settled); `tap` waits up
+  to 2 s for an in-flight route transition (FP-13).
+- Added: `probe.visible_summary` RPC; `Widget not found` / `Timed out waiting for` errors now list the
+  visible texts and keys (FP-13).
+- Added: `--dart-define=PROBE_PORT=<n>` moves the agent off 48686 (pairs with `probe test --agent-port`).
+- Fixed: `type`/`clear` assigned `controller.text`, which never reached `onChanged`/`inputFormatters`;
+  they now use `EditableTextState.userUpdateTextEditingValue` like real keystrokes (FP-13).
+
+## 0.14.0 - 2026-08-31
+
+- Fixed: `tap #id` could invoke a Semantics-wrapped button's `onTap` directly even when something
+  else (a modal barrier, a loading overlay, an unrelated `Stack` sibling) covered it on screen —
+  `_tryDirectTap`'s Element-tree walk has no relationship to paint order. Now gated behind a
+  read-only hit test (the same `hitTestInView` call Flutter's own pointer dispatch uses
+  internally); only takes the direct-invoke fast path when the target is genuinely the topmost
+  thing at its own screen position, otherwise falls through to the existing real hit-tested
+  pointer tap (FP-10).
+
 ## 0.13.0 - 2026-08-15
 
 - No agent-side changes — version kept in lockstep with the CLI's 0.13.0 release.

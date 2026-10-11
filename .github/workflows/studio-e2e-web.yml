@@ -1,0 +1,49 @@
+name: Studio UI E2E (browser)
+
+# The device-free half of the Studio UI suite: the real frontend served by Studio's headless mode and
+# driven by Playwright in headless Chromium. No window, no accessibility permissions, so it runs on a
+# normal hosted runner. The device tests (simulator + fixture app) run locally with
+# scripts/studio-e2e-web.sh and on the self-hosted macOS runner.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "studio/**"
+      - "scripts/studio-e2e-web.sh"
+      - ".github/workflows/studio-e2e-web.yml"
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  studio-ui:
+    name: Studio UI (headless browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Run UI tests
+        env:
+          STUDIO_E2E_NO_DEVICE: "1"
+        run: scripts/studio-e2e-web.sh
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-e2e-web-report
+          path: reports/studio-e2e-web
+          retention-days: 7

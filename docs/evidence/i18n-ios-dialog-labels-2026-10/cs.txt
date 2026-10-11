@@ -1,0 +1,64 @@
+# language=cs locale=cs_CZ  date=2026-10-09T11:56:48Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array cs ; AppleLocale cs_CZ
+$ simctl spawn defaults read -g AppleLanguages
+(cs)
+$ simctl spawn defaults read -g AppleLocale
+cs_CZ
+runner health: {"version":"0.19.5","driver":"flutter-probe-ios-driver","ok":true}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 33111
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Aplikace „AlertsTest“ vám chce posílat oznámení
+      buttons: Zakázat | Povolit
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 33275
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Chcete aplikaci AlertsTest povolit přístup k polohovým údajům?
+      buttons: Povolit jednou | Povolit jen při používání aplikace | Zakázat
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 33448
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Aplikace AlertsTest žádá o přístup k fotoaparátu.
+      buttons: Nepovolovat | Povolit
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 33628
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Aplikace AlertsTest žádá o přístup k mikrofonu.
+      buttons: Nepovolovat | Povolit
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 33791
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Aplikace AlertsTest žádá o přístup k vašim připomínkám.
+      buttons: Nepovolovat | Povolit
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 34002
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Aplikace AlertsTest žádá o přístup k rozpoznávání řeči.
+      buttons: Nepovolovat | Povolit
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 34328
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • Aplikace AlertsTest žádá o přístup k vaší pohybové a kondiční aktivitě.
+      buttons: Nepovolovat | Povolit

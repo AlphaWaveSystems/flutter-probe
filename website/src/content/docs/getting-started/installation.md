@@ -64,6 +64,33 @@ mv flutter-probe-studio /usr/local/bin/
 
 Studio is **Beta Preview** in v0.6.0 — production-ready for editor + lint workflows but expect rough edges around physical device support and parallel multi-device authoring.
 
+## Try a canary build
+
+Before a stable release, pre-release builds named `vX.Y.Z-next.N` are published so you can try upcoming changes early. A canary never replaces the stable install: it is a GitHub pre-release (not "latest"), and pub.dev keeps its stable version.
+
+```bash
+# CLI via Homebrew (cannot be installed next to the stable "probe" formula)
+brew uninstall probe          # only if the stable formula is installed
+brew install AlphaWaveSystems/tap/probe@next
+probe version                 # prints e.g. 0.24.0-next.2
+
+# or download the binary from the pre-release page
+# https://github.com/AlphaWaveSystems/flutter-probe/releases (pick the vX.Y.Z-next.N entry)
+```
+
+The canary CLI and the agent must come from the same build. The agent is **not** published to pub.dev for a canary, so take it from the tagged source with a git dependency in your app's `pubspec.yaml`:
+
+```yaml
+dev_dependencies:
+  flutter_probe_agent:
+    git:
+      url: https://github.com/AlphaWaveSystems/flutter-probe.git
+      ref: v0.24.0-next.2      # the canary tag
+      path: probe_agent
+```
+
+To go back to stable, `brew uninstall probe@next && brew install probe` and restore the pub.dev version constraint. See [Compatibility](/advanced/compatibility/) for what a CLI and agent of different versions can do together.
+
 ## Step 2: Add the Agent to Your App
 
 Add `flutter_probe_agent` to your Flutter app's `pubspec.yaml`:

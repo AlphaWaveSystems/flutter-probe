@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'advertiser.dart';
+import 'http_capture.dart';
 import 'relay_client.dart';
 import 'server.dart';
 
@@ -49,6 +51,7 @@ class ProbeAgent {
   static Future<void> start({
     int port = 48686,
     bool allowReleaseBuild = false,
+    ProbeAdvertiser? advertiser,
   }) async {
     const enabled = bool.fromEnvironment('PROBE_AGENT', defaultValue: false);
     if (!enabled) return;
@@ -92,11 +95,14 @@ class ProbeAgent {
       print('ProbeAgent: starting in profile mode (physical device testing)');
     }
 
-    await _startInternal(port);
+    await _startInternal(port, advertiser);
   }
 
-  static Future<void> _startInternal(int port) async {
+  static Future<void> _startInternal(int port, ProbeAdvertiser? advertiser) async {
     if (_server != null || _relayClient != null) return; // already running
+
+    // Record the app's dart:io HTTP traffic and make `mock` effective (HttpClients created from here on).
+    ProbeHttpOverrides.install();
 
     const relayUrl = String.fromEnvironment('PROBE_RELAY_URL', defaultValue: '');
     const relayToken = String.fromEnvironment('PROBE_RELAY_TOKEN', defaultValue: '');
@@ -112,7 +118,15 @@ class ProbeAgent {
       // Local mode: listen on port
       // PROBE_WIFI=true enables binding to 0.0.0.0 for WiFi testing
       const allowWifi = bool.fromEnvironment('PROBE_WIFI', defaultValue: false);
-      _server = ProbeServer(port: port, allowRemoteConnections: allowWifi);
+      // FP-13: --dart-define=PROBE_PORT=<n> moves the agent off 48686 without
+      // a code change, pairing with `probe test --agent-port <n>` so two
+      // simulators (or a stale process on the default port) can't collide.
+      const portOverride = int.fromEnvironment('PROBE_PORT', defaultValue: 0);
+      _server = ProbeServer(
+        port: portOverride > 0 ? portOverride : port,
+        allowRemoteConnections: allowWifi,
+        advertiser: advertiser,
+      );
       await _server!.start();
     }
   }

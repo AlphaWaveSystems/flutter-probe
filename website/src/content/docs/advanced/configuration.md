@@ -19,6 +19,8 @@ defaults:
   video: false
   retry_failed_tests: 1
   grant_permissions_on_clear: true
+  match: exact                 # text matching: exact (default) or loose (fold case, accents, apostrophes, whitespace); --match-loose overrides
+  implicit_wait: 0s            # retry tap/type/see on "not found" for up to this long (Maestro-style); 0 = off. --implicit-wait overrides
 
 devices:
   - name: iPhone 16 Pro
@@ -36,6 +38,7 @@ agent:
   reconnect_attempts: 4
   reconnect_backoff: 1s
   launch_timeout: 120s
+  # driver_port: 49100     # iOS system-dialog driver port (default: derived from the simulator UDID)
 
 device:
   emulator_boot_timeout: 120s
@@ -74,6 +77,10 @@ ai:
 recipes_folder: tests/recipes
 reports_folder: reports
 
+l10n:
+  dir: lib/l10n             # folder with your .arb files, for l10n "key" in tests
+  default: en               # fallback language / language before any set language
+
 environment:
   TEST_USER: "admin@test.com"
   API_BASE: "http://localhost:8080"
@@ -96,7 +103,7 @@ environment:
 | `timeout` | duration | `30s` | Per-step timeout |
 | `screenshots` | string | `on_failure` | `always`, `on_failure`, or `never` |
 | `video` | bool | `false` | Enable video recording |
-| `retry_failed_tests` | int | `0` | Number of retries for failed tests |
+| `retry_failed_tests` | int | `0` | Re-run a failing test up to this many extra times (0 = off); also `--retry-failed N` |
 | `grant_permissions_on_clear` | bool | `false` | Auto-grant permissions after `clear app data` |
 
 ### devices
@@ -123,6 +130,7 @@ WebSocket connection settings:
 | `reconnect_attempts` | int | `4` | Max auto-reconnect attempts after a connection drop mid-test |
 | `reconnect_backoff` | duration | `1s` | Base for exponential reconnect backoff: `delay = base << (attempt-1)` capped at 8s, ±20% jitter |
 | `launch_timeout` | duration | `120s` | Max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — distinct from `dial_timeout` since a real app's cold-launch path (e.g. Firebase App Check init) can cost far more than a warm reconnect. Raise this if `restart the app` times out on a slow-starting app. Also settable per-run with `--launch-timeout` |
+| `driver_port` | int | derived | Loopback port of the iOS system-dialog driver (1024-65535). Derived per simulator from its UDID (48790-48989) when unset; pin it when a port range is reserved per test lane. Also settable with `--driver-port`, which wins. Single-device runs only |
 
 ### device
 
@@ -177,6 +185,7 @@ this is a deliberate departure from Maestro's mandatory-cloud-upload model).
 | `model` | string | `claude-sonnet-4-20250514` | Model name. Required, no default, for `provider: local` |
 | `endpoint` | string | — | OpenAI-compatible base URL (e.g. `http://localhost:11434/v1`) for `provider: local`. Supports `${ENV_VAR}`. Required when `provider: local` — a test using `with ai` fails fast if it's missing |
 | `timeout` | duration | `60s` | Per-request HTTP timeout for AI provider calls. Raise this for slow local models — the step timeout alone doesn't cover the provider HTTP call |
+| `vision` | bool | `true` | Set `false` for a text-only model (most small local models have no image support). `see "..." with ai` is then judged from the screen's visible texts and keys instead of a screenshot; `assert no visual defects with ai` and `read ... with ai` need pixels and fail with a clear message. Refused when `redact` rules exist, since those can't be applied to text. See [AI & local models](/tools/ai/) |
 | `redact` | list | — | Widgets to black out in the screenshot before it's sent to any provider (local or cloud). Each entry: `selector:` — a ProbeScript selector (`"#credit_card_field"` or `"Card Number"`) |
 
 ```yaml
@@ -187,6 +196,21 @@ ai:
     - selector: "#credit_card_field"
     - selector: "Email"
 ```
+
+### perf
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `measure_all` | bool | `false` | Wrap every test in a measuring window named after the test (same as `--measure-all`) |
+
+### l10n
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `dir` | string | — | Folder with the app's `.arb` files (`app_en.arb`, `app_de.arb`, ...). Enables `l10n "key"` in tests |
+| `default` | string | — | Language used before any `set language` / `--locale`, and the fallback for keys missing from a translation |
+
+See [Testing localized apps](/advanced/multi-language/#your-arb-files-l10n-key).
 
 ### environment
 
