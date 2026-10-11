@@ -6,6 +6,7 @@ name: Disclosure guard
 # list itself is never published. Matches are reported by location and rule
 # number only; the matched text is never printed.
 #
+# Also runs for merge-queue groups (so the check can be required with the queue on).
 # Scanned: lines a pull request adds, its changed file names, its commit
 # messages, and its title and body. The scanner runs from the trusted base
 # commit, never from the pull request's own checkout. Pushes to the default
@@ -21,6 +22,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -64,6 +67,8 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_SHA: ${{ github.sha }}
+          MQ_BASE: ${{ github.event.merge_group.base_sha }}
+          MQ_HEAD: ${{ github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
           if [ -z "$DENYLIST" ]; then
@@ -79,6 +84,9 @@ jobs:
             git fetch --no-tags origin "pull/${PR}/head:prhead"
             ( umask 077; printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" > "$RUNNER_TEMP/prtext.txt" )
             scripts/disclosure-scan.sh . "${BASE_SHA}...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt"
+          elif [ "$EVENT" = "merge_group" ]; then
+            [[ "$MQ_BASE" =~ ^[0-9a-f]{40}$ && "$MQ_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid merge group shas"; exit 1; }
+            scripts/disclosure-scan.sh . "${MQ_BASE}...${MQ_HEAD}" "$patterns"
           else
             if [[ ! "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] || [[ "$PUSH_BEFORE" =~ ^0+$ ]]; then
               echo "no previous commit to compare against; nothing to scan"
