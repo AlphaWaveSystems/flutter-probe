@@ -71,6 +71,47 @@ test.describe("Studio UI (no device needed)", () => {
     await expect(page.locator("#wifi-overlay")).toBeHidden();
   });
 
+  test("19 manual WiFi entry refuses a malformed host and says why", async ({ page }) => {
+    await openStudio(page);
+    await page.click("#btn-wifi");
+    await page.locator("#wifi-manual summary").click();
+    await page.fill("#wifi-manual-host", "ws://10.0.0.5");
+    await page.fill("#wifi-manual-token", "abcdefghijklmnopqrstuvwxyz012345");
+    await page.click("#btn-wifi-manual-test");
+    const msg = page.locator("#wifi-manual-msg");
+    await expect(msg).toBeVisible();
+    await expect(msg).toContainText("no scheme");
+    await expect(msg).toHaveClass(/err/);
+    await expect(page.locator("#status-text")).toHaveText("disconnected");
+  });
+
+  test("20 manual WiFi entry to an unreachable agent says what to check", async ({ page }) => {
+    await openStudio(page);
+    await page.click("#btn-wifi");
+    await page.locator("#wifi-manual summary").click();
+    await page.fill("#wifi-manual-host", "127.0.0.1");
+    await page.fill("#wifi-manual-port", "1"); // nothing listens on port 1
+    await page.fill("#wifi-manual-token", "abcdefghijklmnopqrstuvwxyz012345");
+    await page.click("#btn-wifi-manual-test");
+    const msg = page.locator("#wifi-manual-msg");
+    await expect(msg).toContainText("PROBE_WIFI=true", { timeout: 20_000 });
+    await expect(msg).toContainText("foreground");
+    await expect(page.locator("#btn-wifi-manual-connect")).toBeEnabled();
+    await expect(page.locator("#status-text")).toHaveText("disconnected");
+  });
+
+  test("21 the manual entry's token is not kept when the overlay is reopened", async ({ page }) => {
+    await openStudio(page);
+    await page.click("#btn-wifi");
+    await page.locator("#wifi-manual summary").click();
+    await page.fill("#wifi-manual-token", "abcdefghijklmnopqrstuvwxyz012345");
+    await page.click("#btn-wifi-close");
+    await page.click("#btn-wifi");
+    await page.locator("#wifi-manual summary").click();
+    await expect(page.locator("#wifi-manual-token")).toHaveValue("");
+    await expect(page.locator("#wifi-manual-port")).toHaveValue("48686");
+  });
+
   test("07 the help overlay opens with ? and closes with Escape", async ({ page }) => {
     await openStudio(page);
     await page.locator("body").press("?");

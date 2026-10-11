@@ -24,7 +24,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 
 Start Studio with `PROBE_STUDIO_AUTOMATION=1` and scripts or AI agents can drive it without touching the mouse or the keyboard focus. Studio then listens on **loopback only**, makes a random token for that launch and writes both to a private discovery file (`<user config dir>/flutter-probe-studio/automation.json`, mode 0600; `PROBE_STUDIO_AUTOMATION_FILE` moves it, `PROBE_STUDIO_AUTOMATION_PORT` fixes the port). The endpoint is **off by default**.
 
-`POST <url>/rpc` with `Authorization: Bearer <token>` and `{"method": "...", "params": {...}}` answers `{"result": ...}` or `{"error": "..."}`. Requests from a browser (any `Origin`, or `Sec-Fetch-Site: cross-site` or `same-site`), with a non-loopback `Host`, or without the token are refused. Methods: `open_workspace {path}`, `list_dir`, `read_file`, `list_devices`, `connect {deviceId}`, `connect_wifi`, `disconnect`, `status`, `run_file {path}` (returns at once), `cancel`, `run_state` (the running step, finished steps, plan, results), `results`, `ui_state`, `screenshot` (the connected device, base64 PNG), `widget_tree`.
+`POST <url>/rpc` with `Authorization: Bearer <token>` and `{"method": "...", "params": {...}}` answers `{"result": ...}` or `{"error": "..."}`. Requests from a browser (any `Origin`, or `Sec-Fetch-Site: cross-site` or `same-site`), with a non-loopback `Host`, or without the token are refused. Methods: `open_workspace {path}`, `list_dir`, `read_file`, `list_devices`, `connect {deviceId}`, `connect_wifi {host, port, token}`, `test_wifi {host, port, token}`, `disconnect`, `status`, `run_file {path}` (returns at once), `cancel`, `run_state` (the running step, finished steps, plan, results), `results`, `ui_state`, `screenshot` (the connected device, base64 PNG), `widget_tree`.
 
 **What the token grants.** Whoever holds the token can drive the connected device (taps, typing, screenshots, running tests), open workspaces, list folders and read and run `.probe` files, but **only inside the allowed folders**: the workspace a person opened in the window (or `PROBE_STUDIO_WORKSPACE`) plus the folders in `PROBE_STUDIO_AUTOMATION_ROOTS` (separated like `PATH`). With neither, `open_workspace`, `list_dir`, `read_file` and `run_file` are refused. Paths must be absolute; symlinks are resolved on both sides before the check, so a link that points out of an allowed folder does not get out of it, and `.probe` is checked on the resolved file. A workspace chosen through automation does not widen the allowed folders. Keep the discovery file at mode 0600 (Studio creates it that way) and treat the token like a password: anything that can read it can run tests on your device. The MCP client refuses to send the token to any address that is not loopback.
 
@@ -82,7 +82,7 @@ Studio connects to physical iOS and Android devices through the exact same `inte
 - **USB** — plug in the device, launch the app with `--dart-define=PROBE_AGENT=true`, click ↻ to refresh the device picker, and pick the entry tagged `physical`. Physical iOS gets an `iproxy` tunnel automatically before Studio dials the agent; physical Android goes through `adb forward`, the same path as emulators. Connection errors for a missing `iproxy` or `adb` binary surface inline with an actionable fix (e.g. "install via: brew install libimobiledevice").
 - **WiFi (preferred for iOS)** — matching the CLI's own documented preference, WiFi is more stable than USB-C for physical iOS: a USB-C cable's charge/data mode-flipping can drop the `iproxy` tunnel mid-run, where WiFi has no such failure mode. Build the Flutter app with `--dart-define=PROBE_WIFI=true` and pass an advertiser to `ProbeAgent.start` (see [WiFi auto-discovery](#wifi-auto-discovery)), click the 📡 button to open the WiFi discovery overlay, and pick the device once it appears via mDNS (`_flutterprobe._tcp`). Paste the token printed in the app's `PROBE_TOKEN=...` log line — Studio remembers it per device in local storage for next time (with a "forget" control).
 - The exact conditions for a physical iPhone over WiFi, with a three-command check, are in [Physical iPhone over WiFi](/platform/ios/#physical-iphone-over-wifi-cli-and-studio-what-must-be-true).
-- Devices that don't advertise over mDNS (no advertiser in the build, older agent versions, or networks that block mDNS) currently need the CLI's `--host <ip> --token <token>` flow instead — Studio's WiFi overlay only supports discovered devices, not a manual host/port entry field, as of this release.
+- Devices that don't advertise over mDNS (no advertiser in the build, older agent versions, or networks that block mDNS): use **Connect manually** in the WiFi overlay (host, port, token) — see [Manual WiFi entry](#manual-wifi-entry) — or the CLI's `--host <ip> --token <token>`.
 
 ## Quick start
 
@@ -128,7 +128,6 @@ wails build
 
 ## Known limitations
 
-- No manual WiFi host/port entry — the WiFi overlay only connects to devices discovered via mDNS (`_flutterprobe._tcp`). Networks that block mDNS, or older agent builds that don't advertise, need the CLI's `--host <ip> --token <token>` flow instead.
 - No multi-device side-by-side view.
 - No per-step replay / time-travel debugging — see the Results pane for pass/fail, but stack inspection requires re-running.
 - The MCP-driven AI chat pane is designed for but not built; use the standalone `probe-mcp` binary with Claude Desktop or Cursor in the meantime.
@@ -140,6 +139,17 @@ Studio reuses `probe.yaml` from the workspace root. Connection-related fields (`
 ## Reporting issues
 
 Studio bugs go to the same tracker as the CLI: [github.com/AlphaWaveSystems/flutter-probe/issues](https://github.com/AlphaWaveSystems/flutter-probe/issues). Please include the OS, Wails version (`wails version`), the connected device platform and OS version, and any relevant `studio/build/bin/.../*.log` output.
+
+## Manual WiFi entry
+
+The 📡 overlay has a **Connect manually (host, port, token)** section for a phone that does not show up in the discovered list.
+
+- **Host**: an IPv4 address, an IPv6 address or a hostname (such as `iphone.local`): no `ws://`, path or port. **Port**: 1 to 65535, default 48686 (the port the app printed as `PROBE_PORT=` if it moved). **Token**: the value after `PROBE_TOKEN=` in the app's console (8 to 128 letters, digits and `_ . ~ -`; without the `PROBE_TOKEN=` part).
+- **Test connection** dials the agent and pings it without making it the active connection, and says whether the agent is reachable and the token accepted. **Connect** does the same and then connects. The host and port are remembered for next time; the token never is.
+- When it fails, the message says what to check: the phone and this computer on the same network (and `curl http://<host>:<port>/probe/status` from this computer), the app in the foreground with the screen unlocked, a **profile build made with `--dart-define=PROBE_AGENT=true` and `--dart-define=PROBE_WIFI=true`** (a production or debug build does not listen), the port, and a fresh token (a new one is created whenever the app restarts).
+- An agent can do the same through the automation endpoint (`test_wifi`, `connect_wifi`) or the MCP tool `studio_connect` with `host`, `port` and `token` (and `test_only` to only check).
+
+The full list of conditions on the phone and the network is in [Physical iPhone over WiFi](/platform/ios/#physical-iphone-over-wifi-cli-and-studio-what-must-be-true).
 
 ## WiFi auto-discovery
 

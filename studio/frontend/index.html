@@ -176,6 +176,31 @@
         <ul id="wifi-devices" class="wifi-device-list">
           <li class="empty">Searching…</li>
         </ul>
+        <details id="wifi-manual" class="wifi-manual">
+          <summary>Connect manually (host, port, token)</summary>
+          <p class="dim">
+            For a phone that does not show up above. It needs a <strong>profile build</strong> of your app made with
+            <code>PROBE_AGENT=true</code> and <code>PROBE_WIFI=true</code>, running in the foreground with the screen unlocked, on the
+            same network as this computer. The token is the value after <code>PROBE_TOKEN=</code> in the app's console.
+          </p>
+          <label class="settings-row">
+            <span>Host</span>
+            <input id="wifi-manual-host" type="text" placeholder="192.168.1.20 or iphone.local" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="settings-row">
+            <span>Port</span>
+            <input id="wifi-manual-port" type="number" min="1" max="65535" value="48686" />
+          </label>
+          <label class="settings-row">
+            <span>Token</span>
+            <input id="wifi-manual-token" type="password" placeholder="agent token" autocomplete="off" spellcheck="false" />
+          </label>
+          <div id="wifi-manual-msg" class="wifi-manual-msg" role="status" aria-live="polite" hidden></div>
+          <div class="wifi-actions">
+            <button id="btn-wifi-manual-test" class="btn" type="button">Test connection</button>
+            <button id="btn-wifi-manual-connect" class="btn btn-primary" type="button">Connect</button>
+          </div>
+        </details>
         <div id="wifi-token-row" hidden>
           <div class="wifi-selected" id="wifi-selected-label"></div>
           <label for="wifi-token-input" class="dim">

@@ -455,25 +455,29 @@ func (a *App) StopWiFiDiscovery() {
 // Use the values from a wifi:device-found event, plus the token the user
 // reads from their app's logs (PROBE_TOKEN=...).
 func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus, error) {
+	host, token = strings.TrimSpace(host), strings.TrimSpace(token)
 	if host == "" || port == 0 || token == "" {
 		return ConnectionStatus{}, fmt.Errorf("host, port, and token are all required")
+	}
+	if err := ValidateWiFiTarget(host, port, token); err != nil {
+		return ConnectionStatus{}, err
 	}
 
 	cfg := a.workspaceConfig()
 	dialTimeout := 5 * time.Second
 
 	client, err := probelink.DialWithOptions(a.ctx, probelink.DialOptions{
-		Host:        host,
+		Host:        strings.Trim(host, "[]"),
 		Port:        port,
 		Token:       token,
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("dial: %w", err)
+		return ConnectionStatus{}, fmt.Errorf("dial: %w. %s", err, wifiHint(host, port, err))
 	}
 	if err := client.Ping(a.ctx); err != nil {
 		_ = client.Close()
-		return ConnectionStatus{}, fmt.Errorf("ping: %w", err)
+		return ConnectionStatus{}, fmt.Errorf("ping: %w. %s", err, wifiHint(host, port, err))
 	}
 
 	// WiFi connections have no host-side cleanup (no iproxy, no adb forward).

@@ -17,6 +17,7 @@ type fakeBackend struct {
 	read      string
 	workspace string
 	connected string
+	wifiPort  int
 	ran       string
 	cancelled int
 	state     RunState
@@ -40,7 +41,12 @@ func (f *fakeBackend) Connect(id string) (ConnectionStatus, error) {
 	return ConnectionStatus{Connected: true, DeviceID: id}, nil
 }
 func (f *fakeBackend) ConnectWiFi(h string, p int, t string) (ConnectionStatus, error) {
+	f.wifiPort = p
 	return ConnectionStatus{Connected: true, DeviceID: h}, nil
+}
+func (f *fakeBackend) TestWiFi(h string, p int, t string) (string, error) {
+	f.wifiPort = p
+	return "reachable " + h, nil
 }
 func (f *fakeBackend) Disconnect() { f.connected = "" }
 func (f *fakeBackend) Status() ConnectionStatus {
@@ -339,5 +345,20 @@ func TestAutomationRootsFromTheAppAndEnvironment(t *testing.T) {
 	r := a.automationRoots()
 	if len(r) != 3 || r[0] != "/opened/by/person" || r[1] != "/x" || r[2] != "/y" {
 		t.Errorf("roots = %v", r)
+	}
+}
+
+func TestWiFiMethodsReachTheBackendWithTheDefaultPort(t *testing.T) {
+	s, f, _ := startTest(t)
+	code, out := rpc(t, s, s.token, "test_wifi", map[string]any{"host": "10.0.0.5", "token": "abcdefgh1234"}, nil)
+	if code != http.StatusOK || !strings.Contains(string(out["result"]), "reachable") || f.wifiPort != 48686 {
+		t.Fatalf("test_wifi: %d %s port=%d", code, out["result"], f.wifiPort)
+	}
+	code, _ = rpc(t, s, s.token, "connect_wifi", map[string]any{"host": "10.0.0.5", "port": 5000, "token": "abcdefgh1234"}, nil)
+	if code != http.StatusOK || f.wifiPort != 5000 {
+		t.Fatalf("connect_wifi: %d port=%d", code, f.wifiPort)
+	}
+	if _, out = rpc(t, s, s.token, "test_wifi", map[string]any{"token": "x"}, nil); out["error"] == nil {
+		t.Fatalf("test_wifi without a host must fail: %s", out["result"])
 	}
 }
