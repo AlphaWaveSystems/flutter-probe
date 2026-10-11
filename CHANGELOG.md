@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Studio automation endpoint** (opt-in `PROBE_STUDIO_AUTOMATION=1`): loopback-only control endpoint with a per-launch token and a 0600 discovery file, exposing open_workspace, connect, run_file (async), cancel, run_state, results, screenshot and more, so Studio can be driven without a window, cursor or focus. Refuses requests from browsers, non-loopback hosts and without the token.
+- **MCP tools `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`** drive a running Studio through that endpoint.
+- Studio tracks the current/last run (step, step history, results) for `RunState`; `RunFileAsync` starts a run in the background.
+
 ### Security
 - Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
 

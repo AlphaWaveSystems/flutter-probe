@@ -20,6 +20,14 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **Toast notifications**, dark theme, draggable native title bar, About panel.
 - **Keyboard shortcuts**: ⌘R run, ⌘S save, ⌘B connect/disconnect, ⌘P open workspace, ⌘K refresh devices, `?` help, `Esc` close help.
 
+## Automation (no window, no cursor)
+
+Start Studio with `PROBE_STUDIO_AUTOMATION=1` and scripts or AI agents can drive it without touching the mouse or the keyboard focus. Studio then listens on **loopback only**, makes a random token for that launch and writes both to a private discovery file (`<user config dir>/flutter-probe-studio/automation.json`, mode 0600; `PROBE_STUDIO_AUTOMATION_FILE` moves it, `PROBE_STUDIO_AUTOMATION_PORT` fixes the port). The endpoint is **off by default**.
+
+`POST <url>/rpc` with `Authorization: Bearer <token>` and `{"method": "...", "params": {...}}` answers `{"result": ...}` or `{"error": "..."}`. Requests from a browser (any `Origin`), with a non-loopback `Host`, or without the token are refused. Methods: `open_workspace {path}`, `list_dir`, `read_file`, `list_devices`, `connect {deviceId}`, `connect_wifi`, `disconnect`, `status`, `run_file {path}` (returns at once), `cancel`, `run_state` (the running step, finished steps, plan, results), `results`, `ui_state`, `screenshot` (the connected device, base64 PNG), `widget_tree`.
+
+The MCP server exposes the same through `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results` and `studio_screenshot`, so an AI client can open a workspace, connect, run a `.probe` file and read step-by-step progress.
+
 ## Architecture
 
 ```

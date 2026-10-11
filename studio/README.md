@@ -156,3 +156,7 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 - Multi-device side-by-side
 - Time-travel widget tree per step
 - AI chat pane (spawns `probe-mcp` and proxies)
+
+## Automation endpoint
+
+With `PROBE_STUDIO_AUTOMATION=1` Studio opens a loopback-only control endpoint (random per-launch token, discovery file `<user config dir>/flutter-probe-studio/automation.json`, mode 0600) that exposes the bound methods (`open_workspace`, `connect`, `run_file`, `run_state`, `results`, `screenshot`, ...) without a window or cursor. Off by default. The `studio_*` tools of `probe-mcp` use it. See the [Studio page](https://flutterprobe.dev/tools/studio/#automation-no-window-no-cursor).
