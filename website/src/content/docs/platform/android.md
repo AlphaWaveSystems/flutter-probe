@@ -20,7 +20,7 @@ probe device list
 ### Start an emulator
 
 ```bash
-probe device start --platform android
+probe device start --platform android --avd my-avd   # emulators are identified by AVD name in results
 ```
 
 Or start manually:
@@ -140,10 +140,30 @@ registered by your app is delivered to the app itself — including cold-launchi
 terminated (unlike iOS Simulator; see the iOS page). Plain `open link "https://..."` (no suffix)
 still opens the external browser via `url_launcher`.
 
+## App language
+
+```
+set language "de"        # cmd locale set-app-locales (Android 13+ / API 33)
+```
+
+Per-app language, then a relaunch. Older images fail with a clear error. `probe test --locale de` or `--locales de,ja,ar` do the
+same for a whole run. The emulator's own language and its permission dialogs are unchanged.
+
 ## Location
 
 ```
 set location 48.1351, 11.5820      # adb emu geo fix (emulators only)
+```
+
+Simulate movement through an ordered route with `travel to` — interpolates between waypoints and
+calls the same `adb emu geo fix` primitive repeatedly at ~1-second intervals, rather than jumping
+instantly:
+
+```
+travel to
+  48.1351, 11.5820
+  48.1451, 11.5920
+over 10 seconds
 ```
 
 ## Video Recording

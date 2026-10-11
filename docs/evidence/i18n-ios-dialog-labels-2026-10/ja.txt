@@ -1,0 +1,64 @@
+# language=ja locale=ja_JP  date=2026-10-09T12:16:26Z
+# device: iPhone 17e F571FA50-BCFC-4E2C-A059-FCCCF44677A1  runtime: iOS-26-3
+$ simctl spawn defaults write -g AppleLanguages -array ja ; AppleLocale ja_JP
+$ simctl spawn defaults read -g AppleLanguages
+(ja)
+$ simctl spawn defaults read -g AppleLocale
+ja_JP
+runner health: {"driver":"flutter-probe-ios-driver","version":"0.19.5","ok":true}
+== req=notif
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req notif
+dev.example.alerts: 79638
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”は通知を送信します。よろしいですか?
+      buttons: 許可しない | 許可
+== req=locwhen
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req locwhen
+dev.example.alerts: 80478
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”に位置情報の使用を許可しますか?
+      buttons: 1度だけ許可 | アプリの使用中は許可 | 許可しない
+== req=camera
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req camera
+dev.example.alerts: 81128
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”から、“カメラ”へのアクセス権を求められています。
+      buttons: 許可しない | 許可
+== req=mic
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req mic
+dev.example.alerts: 81703
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”から、マイクへのアクセス権を求められています。
+      buttons: 許可しない | 許可
+== req=reminders
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req reminders
+dev.example.alerts: 82293
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”から、“リマインダー”へのアクセス権を求められています。
+      buttons: 許可しない | 許可
+== req=speech
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req speech
+dev.example.alerts: 82844
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”から、音声認識へのアクセス権を求められています。
+      buttons: 許可しない | 許可
+== req=motion
+$ simctl privacy reset all; simctl uninstall+install test app (fresh permission state)
+$ simctl launch dev.example.alerts -req motion
+dev.example.alerts: 83549
+$ probe system-dialog list
+  iOS driver already running on port 48991
+  • “AlertsTest”から、モーションとフィットネスのアクティビティへのアクセス権を求められています。
+      buttons: 許可しない | 許可

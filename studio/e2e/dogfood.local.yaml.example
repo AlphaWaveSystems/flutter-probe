@@ -1,0 +1,15 @@
+# Copy to dogfood.local.yaml (gitignored) to point the Studio E2E suite at
+# one of your own apps instead of the bundled fixture. Keys map 1:1 to the
+# STUDIO_E2E_* environment variables; run with:
+#   STUDIO_E2E_LOCAL=studio/e2e/dogfood.local.yaml SKIP_BUILD=1 scripts/studio-e2e.sh
+workspace: /path/to/my-app            # folder with probe.yaml; its agent.port is honoured
+test_file: tests/smoke.probe          # short file to run (relative to workspace)
+pass_name: "user can log in"          # a test name expected to pass in test_file
+fail_file: ""                         # a file whose first test fails, or "" to skip
+perf_file: ""                         # a file with `start measuring`, or "" to skip
+app_bundle: /path/to/my-app/build/ios/iphonesimulator/Runner.app   # "" if already installed and running
+bundle_id: com.example.myapp
+sim_name: MyApp-Test-iPhone           # named simulator (created if missing)
+sim_type: com.apple.CoreSimulator.SimDeviceType.iPhone-17
+sim_runtime: ""                       # "" = newest installed iOS runtime
+out: reports/studio-e2e-my-app

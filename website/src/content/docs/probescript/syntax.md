@@ -54,7 +54,7 @@ type "secret123" into the "Password" field
 
 ```
 see "Dashboard"                    # text is visible
-don't see "Error"                  # text is NOT visible
+don't see "Error"                  # text is NOT visible (dont see "Error" also works)
 see 3 "Item"                       # exactly 3 matches
 see "Submit" is enabled            # widget state
 see "Terms" is checked             # checkbox state
@@ -71,8 +71,39 @@ swipe left
 swipe up on "Card"
 scroll down
 scroll up on "ListView"
+scroll down until "Rate this app" appears      # keep scrolling until it is on screen
+scroll until #share_button is visible           # direction defaults to down
 drag "Item A" to "Item B"
 ```
+
+`scroll down` reveals **later** content (the list offset grows); `scroll up` goes back toward the top.
+`scroll ... until <target> appears` scrolls half a viewport at a time — lists build rows lazily, so
+the target only exists once enough has been scrolled — and then brings the target fully on screen.
+It stops early when the list can't move further, and fails with the visible texts if the target never
+shows up. It is the equivalent of Maestro's `scrollUntilVisible`. Use `on "List"` to pick which
+scrollable when a screen has several.
+
+## Matching text in several languages
+
+Prefer `#key` selectors (locale-independent). When you select by visible text, matching is a case-sensitive substring by
+default. Run with `--match-loose` (or `defaults.match: loose`) to fold case, accents/diacritics, typographic
+apostrophes and dashes, full-width forms and whitespace on both sides, so one script tolerates `Änderungen speichern` /
+`anderungen SPEICHERN`, `Don’t Allow` / `Don't allow`, and full-width digits. Scripts that differ per language use
+`see any of "Save", "Speichern", "Guardar"`. Scripts with Indic or Thai text are not stripped of their vowel signs.
+
+## Targets that are off screen
+
+`tap`, `type`, `long press`, `double tap` and `clear` scroll a target that exists in the widget tree into view first, like a
+user would. A lazy list only builds the children near its viewport, so a target beyond that (a chip far to the left of a
+horizontal list) does not exist yet: scroll toward it with `scroll left until "All" appears`, then act. `see` and
+`don't see` only count what is on screen.
+
+## Text matching is by substring
+
+A quoted text selector (`see "0 ml"`, `tap "Save"`, `wait until "Done" appears`) matches any widget whose text
+**contains** it: `see "0 ml"` passes while only "250 ml" is on screen. For an exact check use an anchored pattern,
+`see "0 ml" matching "^0 ml$"` (some matched widget's text must match the regular expression), or select by key
+(`see #counter_text`). Before 0.16.8 the `matching` pattern was accepted but never applied.
 
 ## Wait Commands
 
@@ -80,9 +111,20 @@ drag "Item A" to "Item B"
 wait 5 seconds
 wait until "Dashboard" appears
 wait until "Loading" disappears
+wait until any of "Got it", "Login", "Home" appears   # whichever shows first
+wait until "0 ml" appears matching "^0 ml$"            # exact text (selectors match substrings)
 wait for the page to load
 wait for network idle
+wait for idle
 ```
+
+`wait for idle` waits until route transitions (dialogs, sheets, pages closing or opening) have finished
+and no frames, animations or HTTP requests are pending. Use it after closing a dialog or bottom sheet
+instead of a fixed `wait 2 seconds`. `tap` also waits (up to 2 seconds) for an in-flight route transition
+before it fires.
+
+When a step times out, the error names the line, the step, the timeout and what was on screen
+(`visible texts: [...], keys: [...]`), so a failure no longer reduces to `context deadline exceeded`.
 
 ## Conditionals
 
@@ -145,7 +187,57 @@ dart:
 ```
 when the app calls POST "/api/auth/login"
   respond with 503 and body "{ \"error\": \"Service Unavailable\" }"
+when the app calls GET "/api/orders"
+  respond with 200 and body "[]" after 3 seconds       # slow
+when the app calls PATCH "/api/profile"
+  respond with network failure                          # connection dropped
 ```
+
+Mocks are effective (agent 0.22+): the app's `dart:io` HTTP client receives them. They last for one test and survive `restart the app`.
+
+## Performance
+
+```
+start measuring "checkout"
+tap "Pay"
+wait for response POST "/api/pay" status 200 within 10 seconds
+stop measuring
+see memory below 300 MB
+see memory growth below 20 MB
+see cpu below 60 percent
+see slow frames below 5 percent
+see data transferred below 500 KB
+see response POST "/api/pay" below 2000 ms
+```
+
+Measures memory, frame timings and HTTP traffic (agent 0.23+) and CPU (Android, iOS simulator) between `start measuring` and `stop measuring`.
+See [Performance testing](/advanced/performance/).
+
+## Time Budgets
+
+```
+tap "Export" within 5 seconds
+wait until "Report ready" appears within 90 seconds
+wait for response "/api/export" status 200 within 120 seconds
+```
+
+`within N seconds|ms` gives that one step its own timeout and implicit-wait window. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/).
+
+## Backend Responses
+
+```
+wait for response GET "/api/orders" status 200
+see response "/api/me" json "data.plan" equals "pro"
+see response "/api/me" contains "premium"
+store response "/api/me" json "data.plan" as plan      # then <plan>
+if response "/api/me" json "data.plan" equals "pro"
+  see "Premium"
+see exactly 1 request GET "/api/orders"
+see no requests "/api/analytics/*"
+clear recorded requests
+```
+
+See [Testing against backend data](/advanced/backend-data/).
 
 ## Utility Commands
 
@@ -154,7 +246,8 @@ take screenshot "checkout_page"    # save PNG to screenshots folder
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
-go back                            # device back button
+press enter                        # keyboard action key on the focused field (Maestro pressKey: Enter)
+go back                            # pop the current route (no-op + warning at the root; use "close the app" to exit)
 rotate landscape                   # rotate device
 shake                              # simulate device shake gesture
 log "checkpoint reached"           # print to test output
@@ -178,11 +271,46 @@ paste from clipboard               # stores result in <clipboard> variable
 type "<clipboard>" into "Email"    # use the pasted value
 ```
 
+## Localized text from ARB files
+
+```
+tap l10n "saveButton"        # the text of key saveButton in the app's current language
+see l10n "title"
+```
+
+`l10n "key"` is a string wherever a string works. It needs `l10n.dir` in probe.yaml; a key that does not resolve fails the run before
+it starts. See [Testing localized apps](/advanced/multi-language/#your-arb-files-l10n-key).
+
+## App Language
+
+```
+set language "de"                  # relaunch the app in German (also "pt-BR", "ja", "ar", ...)
+see "Einstellungen"
+set language "system"              # back to the device language
+```
+
+The app is force-stopped and relaunched, so app state is lost (data on disk is kept). Android 13+ uses per-app locales; an iOS
+simulator gets the language as a launch argument. Right-to-left languages (`ar`, `he`, `fa`, `ur`) flip the layout because
+Flutter follows the locale. Not supported on physical iOS devices. See [Testing localized apps](/advanced/multi-language/).
+
 ## Device Location
 
 ```
 set location 37.7749, -122.4194    # set GPS coordinates (lat, lng)
 ```
+
+Simulate movement through an ordered route of waypoints over a duration:
+
+```
+travel to
+  37.7749, -122.4194
+  37.7849, -122.4094
+over 10 seconds
+```
+
+The device's location moves through the waypoints in order, interpolated at roughly 1-second
+intervals. `over N seconds` is optional (defaults to ~1 second per leg). Emulator/simulator only,
+same as `set location` — skips with a warning on physical devices.
 
 ## Device Media
 
@@ -308,6 +436,39 @@ revoke all permissions
 ```
 
 See [App Lifecycle](/platform/app-lifecycle/) for details on how these work across platforms.
+
+To grant permissions once, before the first test, instead of in every test, pass `--grant`:
+
+```bash
+probe test tests/ --grant notifications,camera,location
+```
+
+Android grants via `adb shell pm grant` (including `POST_NOTIFICATIONS`); the iOS simulator grants the
+services `xcrun simctl privacy` supports (camera, location, microphone, photos, contacts, calendar, sms).
+**iOS notifications** have no simctl service. Since 0.16.0 probe answers the SpringBoard alert itself:
+`--grant notifications` and `allow permission "notifications"` tap **Allow** when it appears (needs Xcode,
+simulators only; see [System dialogs](#system-dialogs)).
+
+## System dialogs
+
+OS-level dialogs (permission alerts, the StoreKit "Sign in to Apple Account" sheet, Android permission
+dialogs) live outside the Flutter widget tree. These steps drive them:
+
+```
+tap "Allow" in system dialog
+tap "OK" in system dialog "Apple Account"            # optional title filter
+type "$PROBE_SANDBOX_PASSWORD" into system field "Password"
+see system dialog "Sign in to Apple Account"
+don't see system dialog "Notifications"
+wait for system dialog "Notifications" appears       # or: disappears
+dismiss system dialog                                # Cancel / Don't Allow / Not Now; no-op if none
+sign in sandbox tester                               # StoreKit sandbox account; no-op if no sheet appears
+tap "Allow" in system dialog optional                # any step: don't fail when no dialog shows up
+```
+
+Values typed into a system field come from an environment variable (`$NAME` or `${NAME}`) or a literal, and are
+**always masked** in step output, reports and error messages. See [System dialogs](/tools/system-dialogs/) for
+setup, the standalone `probe system-dialog` command and troubleshooting.
 
 ## Conditional Actions
 

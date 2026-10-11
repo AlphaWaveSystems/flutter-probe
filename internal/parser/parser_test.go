@@ -714,6 +714,82 @@ func TestParser_DontSee(t *testing.T) {
 	}
 }
 
+// FP-13: `dont see` (no apostrophe) is an alias for `don't see`.
+func TestParser_DontSee_NoApostropheAlias(t *testing.T) {
+	src := `test "t"
+  dont see "Loading..."
+  dont see #spinner
+`
+	prog := mustParse(t, src)
+	if len(prog.Tests[0].Body) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(prog.Tests[0].Body))
+	}
+	a := firstAssert(t, prog.Tests[0].Body)
+	if !a.Negated {
+		t.Error("`dont see` should be negated")
+	}
+	if a.Sel.Text != "Loading..." {
+		t.Errorf("sel text: %q", a.Sel.Text)
+	}
+}
+
+// FP-13: `scroll [dir] until <target> [appears]` and `wait for idle`.
+func TestParser_ScrollUntil(t *testing.T) {
+	cases := []struct {
+		line      string
+		dir       parser.SwipeDirection
+		untilText string
+	}{
+		{`scroll down until "Rate this app" appears`, parser.SwipeDown, "Rate this app"},
+		{`scroll until "Share streak" is visible`, parser.SwipeDown, "Share streak"},
+		{`scroll up until "Top" appears`, parser.SwipeUp, "Top"},
+		{`scroll down until #share_streak_button appears`, parser.SwipeDown, "#share_streak_button"},
+	}
+	for _, c := range cases {
+		prog := mustParse(t, "test \"t\"\n  "+c.line+"\n")
+		if len(prog.Tests[0].Body) != 1 {
+			t.Fatalf("%q: want 1 step, got %d (trailing words leaked into a second step?)", c.line, len(prog.Tests[0].Body))
+		}
+		a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+		if !ok || a.Verb != parser.VerbScroll {
+			t.Fatalf("%q: want scroll action, got %#v", c.line, prog.Tests[0].Body[0])
+		}
+		if a.Direction != c.dir {
+			t.Errorf("%q: direction %q, want %q", c.line, a.Direction, c.dir)
+		}
+		if a.Until == nil || a.Until.Text != c.untilText {
+			t.Errorf("%q: until %+v, want text %q", c.line, a.Until, c.untilText)
+		}
+	}
+}
+
+func TestParser_PlainScrollHasNoUntil(t *testing.T) {
+	prog := mustParse(t, "test \"t\"\n  scroll down\n")
+	a := prog.Tests[0].Body[0].(parser.ActionStep)
+	if a.Until != nil {
+		t.Errorf("plain scroll must not set Until, got %+v", a.Until)
+	}
+}
+
+func TestParser_ScrollUntilRequiresTarget(t *testing.T) {
+	if _, err := parser.ParseFile("test \"t\"\n  scroll down until\n"); err == nil {
+		t.Fatal("expected a parse error for `scroll down until` with no target")
+	}
+}
+
+func TestParser_WaitForIdle(t *testing.T) {
+	for _, line := range []string{"wait for idle", "wait until idle"} {
+		prog := mustParse(t, "test \"t\"\n  "+line+"\n")
+		if len(prog.Tests[0].Body) != 1 {
+			t.Fatalf("%q: want 1 step, got %d", line, len(prog.Tests[0].Body))
+		}
+		w, ok := prog.Tests[0].Body[0].(parser.WaitStep)
+		if !ok || w.Kind != parser.WaitIdle {
+			t.Errorf("%q: want WaitIdle step, got %#v", line, prog.Tests[0].Body[0])
+		}
+	}
+}
+
 func TestParser_SeeExactly(t *testing.T) {
 	src := `test "t"
   see exactly 3 "Product" cards
@@ -1689,6 +1765,137 @@ func TestParser_SetLocation(t *testing.T) {
 	}
 }
 
+// TestParser_Travel covers the FP-6 `travel to ... over N seconds` block:
+// an indented list of waypoints followed by a sibling duration clause at the
+// same indent level as "travel to" (the same trailing-clause shape as `test
+// "..." ... with examples:`). Also confirms a step following the whole
+// block still parses as a normal sibling, not swallowed into the route.
+func TestParser_Travel(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749, -122.4194
+    37.7849, -122.4094
+  over 10 seconds
+  see "Arrived"
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 2)
+
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if len(tr.Waypoints) != 2 {
+		t.Fatalf("waypoints: got %d, want 2", len(tr.Waypoints))
+	}
+	if tr.Waypoints[0].Lat != "37.7749" || tr.Waypoints[0].Lng != "-122.4194" {
+		t.Errorf("waypoint 0: got %+v", tr.Waypoints[0])
+	}
+	if tr.Waypoints[1].Lat != "37.7849" || tr.Waypoints[1].Lng != "-122.4094" {
+		t.Errorf("waypoint 1: got %+v", tr.Waypoints[1])
+	}
+	if tr.Duration != 10 {
+		t.Errorf("duration: got %v, want 10", tr.Duration)
+	}
+
+	if _, ok := prog.Tests[0].Body[1].(parser.AssertStep); !ok {
+		t.Fatalf("step 1: got %T, want parser.AssertStep (sibling after the travel block)", prog.Tests[0].Body[1])
+	}
+}
+
+// TestParser_Travel_NoOverClause confirms "over N seconds" is optional —
+// Duration stays 0 (unspecified) when it's omitted, leaving the executor to
+// pick a sane default rather than the parser rejecting a route with no
+// explicit pace.
+func TestParser_Travel_NoOverClause(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749, -122.4194
+    37.7849, -122.4094
+`
+	prog := mustParse(t, src)
+	assertStepCount(t, prog.Tests[0].Body, 1)
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if len(tr.Waypoints) != 2 {
+		t.Fatalf("waypoints: got %d, want 2", len(tr.Waypoints))
+	}
+	if tr.Duration != 0 {
+		t.Errorf("duration: got %v, want 0 (unspecified)", tr.Duration)
+	}
+}
+
+// TestParser_Travel_NegativeCoordinates guards the same PT-24-class
+// regression TestParser_SetLocationNegativeCoordinates guards for `set
+// location` — travel waypoints reuse the exact same coordinate-line parsing
+// (parseCoordinateLine), so a standalone "-" must still lex as its own
+// token and reattach to the number that follows it.
+func TestParser_Travel_NegativeCoordinates(t *testing.T) {
+	src := `test "t"
+  travel to
+    -33.8688, 151.2093
+    -33.8788, 151.2193
+  over 4 seconds
+`
+	prog := mustParse(t, src)
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if tr.Waypoints[0].Lat != "-33.8688" || tr.Waypoints[0].Lng != "151.2093" {
+		t.Errorf("waypoint 0: got %+v", tr.Waypoints[0])
+	}
+	if tr.Waypoints[1].Lat != "-33.8788" || tr.Waypoints[1].Lng != "151.2193" {
+		t.Errorf("waypoint 1: got %+v", tr.Waypoints[1])
+	}
+}
+
+// TestParser_Travel_ThreeWaypoints confirms waypoint order is preserved for
+// routes with more than one leg.
+func TestParser_Travel_ThreeWaypoints(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749, -122.4194
+    37.7849, -122.4094
+    37.7949, -122.3994
+  over 20 seconds
+`
+	prog := mustParse(t, src)
+	tr, ok := prog.Tests[0].Body[0].(parser.TravelStep)
+	if !ok {
+		t.Fatalf("step 0: got %T, want parser.TravelStep", prog.Tests[0].Body[0])
+	}
+	if len(tr.Waypoints) != 3 {
+		t.Fatalf("waypoints: got %d, want 3", len(tr.Waypoints))
+	}
+	wantLat := []string{"37.7749", "37.7849", "37.7949"}
+	for i, w := range wantLat {
+		if tr.Waypoints[i].Lat != w {
+			t.Errorf("waypoint %d lat: got %q, want %q", i, tr.Waypoints[i].Lat, w)
+		}
+	}
+	if tr.Duration != 20 {
+		t.Errorf("duration: got %v, want 20", tr.Duration)
+	}
+}
+
+// TestParser_Travel_MalformedWaypointIsParseError confirms a line inside the
+// block that isn't a "lat, lng" pair (here, a single bare number) is
+// rejected at parse time rather than silently producing a garbage waypoint.
+func TestParser_Travel_MalformedWaypointIsParseError(t *testing.T) {
+	src := `test "t"
+  travel to
+    37.7749
+  over 5 seconds
+`
+	_, err := parser.ParseFile(src)
+	if err == nil {
+		t.Fatal("expected a parse error for a waypoint missing its longitude, got nil")
+	}
+}
+
 func TestParser_VerifyBrowser(t *testing.T) {
 	src := `test "t"
   verify external browser opened
@@ -2182,5 +2389,33 @@ func TestParser_ToggleByText(t *testing.T) {
 	}
 	if a.Sel == nil || a.Sel.Text != "Dark Mode" {
 		t.Errorf("selector: got %+v, want text Dark Mode", a.Sel)
+	}
+}
+
+// A recipe named "clear search" must be called, not parsed as the built-in
+// clear verb with a type selector "search"; the documented forms still work.
+func TestParser_RecipeCallStartingWithClear(t *testing.T) {
+	src := `recipe "clear search"
+  tap #search_clear_button
+
+test "t"
+  clear search
+  clear "Email"
+  clear #email_field
+`
+	prog := mustParse(t, src)
+	body := prog.Tests[0].Body
+	if len(body) != 3 {
+		t.Fatalf("body: got %d steps, want 3: %+v", len(body), body)
+	}
+	call, ok := body[0].(parser.RecipeCall)
+	if !ok || call.Name != "clear search" {
+		t.Fatalf("step 1: got %#v, want RecipeCall \"clear search\"", body[0])
+	}
+	for i := 1; i < 3; i++ {
+		a, ok := body[i].(parser.ActionStep)
+		if !ok || a.Verb != parser.VerbClear {
+			t.Errorf("step %d: got %#v, want the built-in clear", i+1, body[i])
+		}
 	}
 }

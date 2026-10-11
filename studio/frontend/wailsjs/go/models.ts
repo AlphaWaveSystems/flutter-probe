@@ -1,13 +1,13 @@
 export namespace main {
-
+	
 	export class ChatMessage {
 	    role: string;
 	    content: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ChatMessage(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.role = source["role"];
@@ -19,11 +19,11 @@ export namespace main {
 	    inputTokens: number;
 	    outputTokens: number;
 	    costUSD: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ChatResponse(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.content = source["content"];
@@ -58,11 +58,11 @@ export namespace main {
 	    state: string;
 	    osVersion: string;
 	    booted: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new DeviceInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -119,6 +119,7 @@ export namespace main {
 	    skipped: boolean;
 	    durationMs: number;
 	    error?: string;
+	    perf?: perf.Metrics[];
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -132,24 +133,94 @@ export namespace main {
 	        this.skipped = source["skipped"];
 	        this.durationMs = source["durationMs"];
 	        this.error = source["error"];
+	        this.perf = this.convertValues(source["perf"], perf.Metrics);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;
 	    iosDeviceId: string;
 	    androidDeviceId: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new WorkspaceSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.agentPort = source["agentPort"];
 	        this.defaultsTimeout = source["defaultsTimeout"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
+	    }
+	}
+
+}
+
+export namespace perf {
+	
+	export class Metrics {
+	    name: string;
+	    duration_ms: number;
+	    cpu_available: boolean;
+	    cpu_avg_pct: number;
+	    cpu_peak_pct: number;
+	    mem_start_mb: number;
+	    mem_peak_mb: number;
+	    mem_end_mb: number;
+	    mem_growth_mb: number;
+	    frames: number;
+	    slow_frame_pct: number;
+	    frame_p95_ms: number;
+	    frame_max_ms: number;
+	    build_avg_ms: number;
+	    raster_avg_ms: number;
+	    requests: number;
+	    data_kb: number;
+	    slowest_request_ms: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Metrics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.duration_ms = source["duration_ms"];
+	        this.cpu_available = source["cpu_available"];
+	        this.cpu_avg_pct = source["cpu_avg_pct"];
+	        this.cpu_peak_pct = source["cpu_peak_pct"];
+	        this.mem_start_mb = source["mem_start_mb"];
+	        this.mem_peak_mb = source["mem_peak_mb"];
+	        this.mem_end_mb = source["mem_end_mb"];
+	        this.mem_growth_mb = source["mem_growth_mb"];
+	        this.frames = source["frames"];
+	        this.slow_frame_pct = source["slow_frame_pct"];
+	        this.frame_p95_ms = source["frame_p95_ms"];
+	        this.frame_max_ms = source["frame_max_ms"];
+	        this.build_avg_ms = source["build_avg_ms"];
+	        this.raster_avg_ms = source["raster_avg_ms"];
+	        this.requests = source["requests"];
+	        this.data_kb = source["data_kb"];
+	        this.slowest_request_ms = source["slowest_request_ms"];
 	    }
 	}
 

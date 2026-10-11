@@ -34,6 +34,11 @@
     "body": "wait until \"${1:element}\" appears",
     "description": "Wait until an element appears"
   },
+  "Wait until any appears": {
+    "prefix": "waita",
+    "body": "wait until any of \"${1:first}\", \"${2:second}\" appears",
+    "description": "Wait until any one of several texts appears"
+  },
   "Wait until disappears": {
     "prefix": "waitd",
     "body": "wait until \"${1:element}\" disappears",
@@ -103,6 +108,32 @@
     ],
     "description": "HTTP mock response"
   },
+  "Wait for response": {
+    "prefix": "waitresponse",
+    "body": [
+      "wait for response ${1|GET,POST,PUT,DELETE,PATCH|} \"${2:/api/endpoint}\" status ${3:200}",
+      "$0"
+    ],
+    "description": "Wait for the app's backend call to answer"
+  },
+  "See response": {
+    "prefix": "seeresponse",
+    "body": [
+      "see response \"${1:/api/endpoint}\" json \"${2:data.field}\" equals \"${3:value}\"",
+      "$0"
+    ],
+    "description": "Assert on the newest recorded response"
+  },
+  "If response": {
+    "prefix": "ifresponse",
+    "body": [
+      "if response \"${1:/api/endpoint}\" json \"${2:data.field}\" equals \"${3:value}\"",
+      "  $0",
+      "otherwise",
+      "  "
+    ],
+    "description": "Branch on backend data"
+  },
   "Before each test hook": {
     "prefix": "before",
     "body": [
@@ -132,9 +163,66 @@
     "body": "scroll down until \"${1:element}\" appears",
     "description": "Scroll until element appears"
   },
+  "Tap in system dialog": {
+    "prefix": "systemtap",
+    "body": "tap \"${1:Allow}\" in system dialog",
+    "description": "Tap a button in an OS system dialog (permission alert, sign-in sheet)"
+  },
+  "Type into system field": {
+    "prefix": "systemtype",
+    "body": "type \"\\$${1:PROBE_SANDBOX_PASSWORD}\" into system field \"${2:Password}\"",
+    "description": "Type a value from an environment variable into a system dialog field (masked)"
+  },
+  "Wait for system dialog": {
+    "prefix": "systemwait",
+    "body": "wait for system dialog \"${1:Notifications}\" appears",
+    "description": "Wait for an OS system dialog"
+  },
   "Take screenshot": {
     "prefix": "screenshot",
     "body": "take a screenshot called \"${1:name}\"",
     "description": "Capture a screenshot"
+  },
+  "See any of": {
+    "prefix": "seea",
+    "body": "see any of \"${1:first}\", \"${2:second}\"",
+    "description": "Assert that any one of several texts is on screen (per-language labels)"
+  },
+  "Set app language": {
+    "prefix": "setlanguage",
+    "body": [
+      "set language \"${1:de}\"",
+      "wait until \"${2:element}\" appears",
+      "$0"
+    ],
+    "description": "Relaunch the app in another language (Android 13+, iOS simulator)"
+  },
+  "ARB label": {
+    "prefix": "l10n",
+    "body": [
+      "${1|tap,see|} l10n \"${2:key}\"",
+      "$0"
+    ],
+    "description": "Use the text of an ARB key in the current app language"
+  },
+  "Time budget": {
+    "prefix": "within",
+    "body": [
+      "wait until \"${1:element}\" appears within ${2:90} seconds",
+      "$0"
+    ],
+    "description": "Wait with its own time budget"
+  },
+  "Measure performance": {
+    "prefix": "measure",
+    "body": [
+      "start measuring \"${1:name}\"",
+      "$2",
+      "stop measuring",
+      "see memory below ${3:300} MB",
+      "see slow frames below ${4:5} percent",
+      "$0"
+    ],
+    "description": "Measure memory, frames, CPU and network of some steps and assert on them"
   }
 }

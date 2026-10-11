@@ -17,9 +17,11 @@ Commands that interact with the app's UI.
 | `type` | `type "text" into "Field"` | Enter text into a text field |
 | `clear` | `clear "Field"` | Clear the contents of a text field |
 | `swipe` | `swipe up/down/left/right` | Swipe gesture on screen or widget |
-| `scroll` | `scroll up/down` | Scroll within a scrollable widget |
+| `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
+| `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |
-| `go back` | `go back` | Press the device back button |
+| `press enter` | `press enter` | Press the keyboard action key (done / go / search / send) on the focused text field; warns if no field has focus |
+| `go back` | `go back` | Pop the current route. At the root route it does nothing and warns (it never exits the app; use `close the app`) |
 | `open` | `open the app` | Launch the app (CLI-side) and reconnect |
 | `close` | `close the app` | Close the app |
 | `close` | `close keyboard` | Dismiss the on-screen keyboard |
@@ -28,7 +30,7 @@ Commands that interact with the app's UI.
 | `shake` | `shake` | Simulate a device shake gesture |
 | `pause` | `pause` | Pause for 1 second |
 | `open link` | `open link "https://example.com"` | Open a URL in the external browser via `url_launcher` |
-| `open link ... in the app` | `open link "watersip://item/42" in the app` | Route a URL to the app itself via the OS's intent/URL handling (`adb`/`simctl`), not the external browser. Also accepts `into the app` / `in app`. CLI-side only — skipped in cloud mode. On iOS Simulator this reliably works only when the app is already running (see the CHANGELOG for the cold-launch caveat) |
+| `open link ... in the app` | `open link "myapp://item/42" in the app` | Route a URL to the app itself via the OS's intent/URL handling (`adb`/`simctl`), not the external browser. Also accepts `into the app` / `in app`. CLI-side only — skipped in cloud mode. On iOS Simulator this reliably works only when the app is already running (see the CHANGELOG for the cold-launch caveat) |
 | `add media` | `add media "path/to/photo.jpg"` | Seed a local file into the device's camera roll/gallery (`adb push` + media scan on Android, `simctl addmedia` on iOS). CLI-side only — skipped in cloud mode. Makes a photo available to pick, but does not drive the app's own native image-picker UI to select it |
 | `store` | `store "value" as myVar` | Store a literal or `<var>` value for use in later steps |
 | `log` | `log "message"` | Emit a message into the run output |
@@ -42,16 +44,17 @@ Commands that verify the state of the UI.
 | Command | Syntax | Description |
 |---|---|---|
 | `see` | `see "Text"` | Assert that text is visible on screen |
-| `don't see` | `don't see "Text"` | Assert that text is NOT visible |
+| `don't see` | `don't see "Text"` | Assert that text is NOT visible (`dont see` is accepted too) |
 | `see native` | `see native "..."` | Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as "not found" on other platforms |
 | `don't see native` | `don't see native "..."` | Assert a native UI element matching the query is NOT present |
 | `see exactly` | `see exactly 3 "Item"` | Assert exact count of matching widgets |
 | `see enabled` | `see "Submit" is enabled` | Assert widget is enabled |
 | `see disabled` | `see "Submit" is disabled` | Assert widget is disabled |
-| `see checked` | `see "Agree" is checked` | Assert checkbox/toggle is checked |
+| `see checked` | `see "Agree" is checked` | Assert the switch, checkbox, radio (or their list tiles, filter or choice chips) is on; "not a checkable control" for anything else. `don't see "Agree" is checked` asserts it is off |
 | `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
-| `see matching` | `see "Email" matching ".*@.*"` | Assert widget text matches regex pattern |
+| `see any of` | `see any of "Create Your Account", "Confirm Your Details"` | Assert that any one of the texts is on screen; `don't see any of "A", "B"` asserts none is |
+| `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so use an anchored pattern for exact text: `see "0 ml" matching "^0 ml$"` |
 
 State suffixes compose: `see "Field" is enabled contains "y" matching "z"` checks all three at once.
 
@@ -64,6 +67,15 @@ Commands that pause execution until a condition is met.
 | `wait N seconds` | `wait 5 seconds` | Wait for a fixed duration |
 | `wait until appears` | `wait until "Dashboard" appears` | Wait until text becomes visible |
 | `wait until disappears` | `wait until "Loading" disappears` | Wait until text is no longer visible |
+| `wait until appears matching` | `wait until "0 ml" appears matching "^0 ml$"` | Wait until a matched widget's text also matches the regular expression (exact text) |
+| `wait until any of` | `wait until any of "Got it", "Login", "Home" appears` | Wait until any one of the texts is visible (screens that vary, e.g. an optional consent dialog) |
+| `wait for idle` | `wait for idle` | Wait for route transitions, frames, animations and HTTP requests to settle |
+| `tap in system dialog` | `tap "Allow" in system dialog` | Tap a button in an OS system dialog (outside the Flutter app) |
+| `type into system field` | `type "$PW_ENV" into system field "Password"` | Type a value (from an env var; always masked) into a system dialog field |
+| `see system dialog` | `see system dialog "Title"` | Assert a system dialog is showing (`don't see system dialog` asserts none) |
+| `wait for system dialog` | `wait for system dialog "Title" appears` | Wait for a system dialog to appear or disappear |
+| `dismiss system dialog` | `dismiss system dialog` | Tap Cancel / Don't Allow / Not Now; no-op when nothing is showing |
+| `sign in sandbox tester` | `sign in sandbox tester` | Sign the StoreKit sandbox tester in (`PROBE_SANDBOX_USER` / `PROBE_SANDBOX_PASSWORD`); no-op if no sheet |
 | `wait for page to load` | `wait for page to load` | Wait for the UI to settle (triple-signal sync) |
 | `wait for network idle` | `wait for network idle` | Wait for pending HTTP requests to complete |
 | `wait for animations to end` | `wait for animations to end` | Wait until no scheduled animation frames remain |
@@ -77,7 +89,7 @@ Commands that control the app process.
 | `restart the app` | `restart the app` | Force-stop and relaunch (preserves data) |
 | `kill the app` | `kill the app` | Force-stop without relaunching |
 | `open the app` | `open the app` | Launch the app and reconnect |
-| `clear app data` | `clear app data` | Wipe all app data and relaunch (skipped on physical iOS) |
+| `clear app data` | `clear app data` | Wipe all app data and relaunch (skipped on physical iOS). On iOS `--yes` cannot answer the notification alert (simctl cannot grant notifications): use `--grant notifications` for that. Asks for confirmation on a terminal; without one (CI, scripts) pass `probe test --yes` or the step fails |
 
 ## Permissions
 
@@ -120,7 +132,27 @@ Commands for device-level operations.
 | Command | Syntax | Description |
 |---|---|---|
 | `set location` | `set location 37.7749, -122.4194` | Set GPS coordinates (emulator/simulator only) |
+| `l10n "key"` | `tap l10n "saveButton"` · `see l10n "title"` | A string from the app's ARB files in the current app language (needs `l10n.dir`). Works wherever a quoted string does |
+| `set language` | `set language "de"` · `"pt-BR"` · `"ar"` · `"system"` | Run the app in another language and relaunch it (Android 13+, iOS simulator). `"system"` removes the override. The device language and system dialogs are unchanged |
+| `travel to` | `travel to` (indented waypoints) `over N seconds` | Simulate GPS movement through an ordered list of waypoints over a duration (emulator/simulator only) — see example below |
 | `verify external browser` | `verify external browser opened` | Assert that `url_launcher` was called |
+
+`travel to` example — an ordered, indented list of `lat, lng` waypoints followed by a sibling
+`over N seconds` clause at the same indent level as `travel to`:
+
+```probescript
+travel to
+  37.7749, -122.4194
+  37.7849, -122.4094
+  37.7949, -122.3994
+over 10 seconds
+```
+
+The device's GPS location moves through the waypoints in order, interpolated at roughly 1-second
+intervals so it looks like continuous movement rather than instant jumps — useful for maps,
+delivery, rideshare, or fitness flows that react to location changes over time. Reuses the same
+`set location` primitive under the hood, so it shares its emulator/simulator-only limitation. The
+`over N seconds` clause is optional; omitting it defaults to about 1 second per leg of the route.
 
 ## HTTP Calls
 
@@ -227,7 +259,40 @@ Mock API responses for the app.
 | Command | Syntax | Description |
 |---|---|---|
 | `when` | `when the app calls GET "/api/users"` | Define a mock rule |
-| `respond` | `respond with 200 and body "[]"` | Define the mock response |
+| `respond` | `respond with 200 and body "[]" after 2 seconds` · `respond with network failure` | Define the mock response; `after N seconds` delays it, `network failure` drops the connection |
+
+## Performance
+
+| Command | Syntax | Description |
+|---|---|---|
+| `start measuring` | `start measuring "checkout"` | Open a measuring window (CPU, memory, frames, network) |
+| `stop measuring` | `stop measuring` | Close it and print the numbers |
+| `see memory below` | `see memory below 300 MB` · `see memory growth below 20 MB` | Peak memory / growth over the window |
+| `see cpu below` | `see cpu below 60 percent` · `see cpu peak below 90 percent` | Average / busiest-second CPU (percent of one core) |
+| `see slow frames below` | `see slow frames below 5 percent` · `see frame time below 16 ms` · `see slowest frame below 100 ms` | Frame timings |
+| `see data transferred below` | `see data transferred below 500 KB` | Request + response bytes |
+| `see response ... below` | `see response "/api/x" below 800 ms` | Response time |
+
+See [Performance testing](/advanced/performance/).
+
+## Time budget
+
+| Command | Syntax | Description |
+|---|---|---|
+| `within` | `wait until "Done" appears within 90 seconds` · `tap "Go" within 2 seconds` · `see "Y" within 500 ms` | Per-step timeout and implicit-wait window. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
+
+## Backend Responses
+
+React to what the backend returned (the app's `dart:io` HTTP traffic; agent 0.22+). See [Testing against backend data](/advanced/backend-data/).
+
+| Command | Syntax | Description |
+|---|---|---|
+| `wait for response` | `wait for response GET "/api/orders" status 200` | Wait for a new matching response |
+| `see response` | `see response "/api/me" status 200` · `contains "x"` · `json "data.plan" equals "pro"` · `json "a.b" exists` | Check the newest matching response |
+| `store response` | `store response "/api/me" json "data.plan" as plan` | Keep a value from the body in `<plan>` |
+| `if response` | `if response "/api/me" json "data.plan" equals "pro"` | Branch on the newest matching response |
+| `see exactly N requests` | `see exactly 2 requests GET "/api/orders"` · `see no requests "/x"` | Count the requests the app made |
+| `clear recorded requests` | `clear recorded requests` | Forget what was recorded so far |
 
 ## AI-Powered Assertions
 

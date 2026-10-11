@@ -39,6 +39,8 @@ type Config struct {
 	AI        AIConfig         `yaml:"ai"`
 	Recipes   string           `yaml:"recipes_folder"`
 	Reports   string           `yaml:"reports_folder"`
+	L10n      L10nConfig       `yaml:"l10n"`
+	Perf      PerfConfig       `yaml:"perf"`
 	Env       map[string]string `yaml:"environment"`
 
 	// CLIVersion is the running probe binary's version (internal/cli.Version).
@@ -46,6 +48,17 @@ type Config struct {
 	// after loading, so runner/probelink code can include it in the connect
 	// handshake without importing internal/cli (which would be a cycle).
 	CLIVersion string `yaml:"-"`
+}
+
+// PerfConfig holds performance-measuring defaults.
+type PerfConfig struct {
+	MeasureAll bool `yaml:"measure_all"` // wrap every test in a measuring window named after the test (same as --measure-all)
+}
+
+// L10nConfig points `l10n "key"` at the app's ARB files.
+type L10nConfig struct {
+	Dir     string `yaml:"dir"`     // folder with the .arb files (e.g. lib/l10n)
+	Default string `yaml:"default"` // language used until set language / --locale picks one (e.g. en)
 }
 
 // CloudConfig holds settings for FlutterProbe Cloud integration and cloud device farm providers.
@@ -75,7 +88,16 @@ type AIConfig struct {
 	Endpoint string        `yaml:"endpoint"` // OpenAI-compatible base URL (e.g. http://localhost:11434/v1) for provider: local; supports ${ENV_VAR}
 	Redact   []RedactRule  `yaml:"redact"`   // screenshot regions to black out before any "with ai" call
 	Timeout  time.Duration `yaml:"timeout"`  // per-request HTTP timeout for AI provider calls (default: 60s). Raise for slow local models.
+	// Vision: set false for a text-only model (many small local models have no
+	// image support). `see "..." with ai` is then judged against the screen's
+	// visible texts/keys instead of a screenshot; `assert no visual defects` and
+	// `read ... with ai` need pixels and report that clearly. Unset = true.
+	Vision *bool `yaml:"vision"`
 }
+
+// VisionEnabled reports whether the configured model is treated as
+// vision-capable (the default).
+func (c AIConfig) VisionEnabled() bool { return c.Vision == nil || *c.Vision }
 
 // Configured reports whether enough of the ai: block is set for a "with ai"
 // step to actually run. A provider alone isn't enough for the cloud
@@ -131,7 +153,9 @@ type DefaultsConfig struct {
 	VideoEnabled            bool          `yaml:"video"`                      // enable video recording
 	RetryFailedTests        int           `yaml:"retry_failed_tests"`         // number of retries for failed tests
 	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
-	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation=0 to disable Flutter animations
+	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation to 0.001 (animations end within a frame); 0 is not a valid Flutter value
+	Match                   string        `yaml:"match"`                      // text matching: "exact" (default, case-sensitive substring) or "loose" (fold case, accents, apostrophes, whitespace). Overridden by --match-loose.
+	ImplicitWait            time.Duration `yaml:"implicit_wait"`              // retry tap/type/see/... on "not found" for up to this long before failing (default: 0 = off). Overridden by --implicit-wait.
 }
 
 // AgentConfig controls the ProbeAgent WebSocket connection.
@@ -144,6 +168,7 @@ type AgentConfig struct {
 	ReconnectDelay    time.Duration `yaml:"reconnect_delay"`     // delay after app restart before attempting WebSocket reconnect (default: 2s)
 	ReconnectAttempts int           `yaml:"reconnect_attempts"`  // max auto-reconnect attempts after a connection drop mid-test (default: 4)
 	ReconnectBackoff  time.Duration `yaml:"reconnect_backoff"`   // base delay for exponential reconnect backoff: delay = base << (attempt-1), capped at 8s, ±20% jitter (default: 1s)
+	DriverPort        int           `yaml:"driver_port"`         // loopback port of the iOS system-dialog driver, 1024-65535 (default: derived from the simulator UDID, 48790-48989). Pin it when a port range is reserved per test lane. Overridden by --driver-port.
 	LaunchTimeout     time.Duration `yaml:"launch_timeout"`      // max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — distinct from dial_timeout/token_read_timeout since a real app's cold-launch path (e.g. Firebase App Check init) can cost far more than a warm reconnect (default: 120s)
 }
 
@@ -182,7 +207,7 @@ var defaultConfig = Config{
 		Timeout:          30 * time.Second,
 		Screenshots:      "on_failure",
 		VideoEnabled:     false,
-		RetryFailedTests: 1,
+		RetryFailedTests: 0,
 	},
 	Agent: AgentConfig{
 		Port:              48686,
@@ -242,6 +267,10 @@ func LoadFile(path string) (*Config, error) {
 	// Validate security-sensitive fields
 	if cfg.Project.App != "" && !validAppID.MatchString(cfg.Project.App) {
 		return nil, fmt.Errorf("invalid project.app %q: must be alphanumeric with dots/underscores (e.g. com.example.myapp)", cfg.Project.App)
+	}
+
+	if p := cfg.Agent.DriverPort; p != 0 && (p < 1024 || p > 65535) {
+		return nil, fmt.Errorf("invalid agent.driver_port %d: use a value between 1024 and 65535", p)
 	}
 
 	return &cfg, nil
@@ -383,7 +412,7 @@ defaults:
   timeout: 30s             # per-step timeout
   screenshots: on_failure  # always | on_failure | never
   video: false             # record device screen during test runs
-  retry_failed_tests: 1    # number of retries for failed tests
+  retry_failed_tests: 0    # re-run a failing test up to this many extra times (0 = off)
 
 # ProbeAgent WebSocket connection settings
 agent:
@@ -392,6 +421,7 @@ agent:
   ping_interval: 5s        # WebSocket keepalive ping interval
   token_read_timeout: 30s  # max time to wait for the agent auth token
   reconnect_delay: 2s      # delay after app restart before reconnecting
+  # driver_port: 48800    # loopback port of the iOS system-dialog driver (1024-65535); default is derived per simulator. --driver-port wins
   launch_timeout: 120s     # max time for restart/clear-data to force-stop, relaunch, and reconnect — raise this if your app has an expensive cold-launch path (e.g. Firebase App Check init)
 
 # Emulator / simulator startup settings

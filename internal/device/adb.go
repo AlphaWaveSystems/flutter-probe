@@ -58,6 +58,13 @@ func (a *ADB) Devices(ctx context.Context) ([]Device, error) {
 				break
 			}
 		}
+		// A running emulator is identified by its AVD name (the name it was
+		// created and started under), not by the hardware model it emulates.
+		if strings.HasPrefix(serial, "emulator-") && state == "device" {
+			if avd := a.AVDName(ctx, serial); avd != "" {
+				name = avd
+			}
+		}
 		devices = append(devices, Device{
 			ID:       serial,
 			Name:     name,
@@ -66,6 +73,17 @@ func (a *ADB) Devices(ctx context.Context) ([]Device, error) {
 		})
 	}
 	return devices, nil
+}
+
+// AVDName returns the AVD name of a running emulator ("" when unknown or the
+// serial is not an emulator).
+func (a *ADB) AVDName(ctx context.Context, serial string) string {
+	out, err := a.run(ctx, "-s", serial, "emu", "avd", "name")
+	if err != nil {
+		return ""
+	}
+	first := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	return strings.TrimSpace(strings.TrimSuffix(first, "\r"))
 }
 
 // StartEmulator boots an AVD and returns a Device once it appears.
@@ -91,7 +109,7 @@ func (a *ADB) StartEmulator(ctx context.Context, avdName string, bootTimeout, po
 		devices, err := a.Devices(ctx)
 		if err == nil {
 			for _, d := range devices {
-				if strings.Contains(d.Name, avdName) || strings.Contains(d.ID, "emulator") {
+				if d.Name == avdName || strings.Contains(d.Name, avdName) || strings.Contains(d.ID, "emulator") {
 					return &d, nil
 				}
 			}
@@ -151,7 +169,24 @@ func (a *ADB) RevokePermission(ctx context.Context, serial, appID, permission st
 // App Links URL registered by the app under test is delivered to *that
 // app*, not launched externally.
 func (a *ADB) OpenURL(ctx context.Context, serial, url string) error {
-	_, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", url)
+	return a.OpenURLIn(ctx, serial, url, "")
+}
+
+// OpenURLIn fires the VIEW intent for url, restricted to package pkg when set. Without
+// the restriction Android picks any app that claims the scheme: with two flavours of
+// one app installed (production and staging) the wrong one can start, and the CLI then
+// waits for an agent that never comes. If pkg cannot handle the link, the intent is
+// retried unrestricted so links meant for other apps (a browser) keep working. The
+// URL is single-quoted for the device shell, so characters like & and ? survive.
+func (a *ADB) OpenURLIn(ctx context.Context, serial, url, pkg string) error {
+	quoted := "'" + strings.ReplaceAll(url, "'", `'\''`) + "'"
+	if pkg != "" {
+		out, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", quoted, "-p", pkg)
+		if err == nil && !strings.Contains(string(out), "Error") {
+			return nil
+		}
+	}
+	_, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", quoted)
 	return err
 }
 
@@ -255,14 +290,32 @@ func (a *ADB) AddMedia(ctx context.Context, serial, localPath string) error {
 // never see.
 func (a *ADB) UIAutomatorDump(ctx context.Context, serial string) (string, error) {
 	const dumpPath = "/sdcard/probe_uidump.xml"
-	if _, err := a.Shell(ctx, serial, "uiautomator", "dump", dumpPath); err != nil {
-		return "", fmt.Errorf("uiautomator dump: %w", err)
+	// A dump fails now and then while the screen is animating or the device is busy ("could not
+	// get idle state", a killed UiAutomation client). Retry a few times, and keep the tool's own
+	// output so the error says why instead of an empty message. `adb shell` hides the output of a
+	// command that exits non-zero, hence the wrapper that always exits 0.
+	var last string
+	for attempt := 0; attempt < 4; attempt++ {
+		out, err := a.Shell(ctx, serial, "sh", "-c", "'uiautomator dump "+dumpPath+" 2>&1; echo'")
+		if err == nil && strings.Contains(string(out), "dumped to") {
+			xml, rerr := a.Shell(ctx, serial, "cat", dumpPath)
+			if rerr != nil {
+				return "", fmt.Errorf("uiautomator dump: reading %s: %w", dumpPath, rerr)
+			}
+			return string(xml), nil
+		}
+		if err != nil {
+			last = err.Error()
+		} else {
+			last = strings.TrimSpace(string(out))
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
 	}
-	out, err := a.Shell(ctx, serial, "cat", dumpPath)
-	if err != nil {
-		return "", fmt.Errorf("uiautomator dump: reading %s: %w", dumpPath, err)
-	}
-	return string(out), nil
+	return "", fmt.Errorf("uiautomator dump failed after 4 attempts: %s", last)
 }
 
 // Tap issues a raw coordinate tap via `input tap`. Used internally by
@@ -311,4 +364,25 @@ func (a *ADB) ListAVDs(ctx context.Context) ([]string, error) {
 		}
 	}
 	return avds, nil
+}
+
+// SetAppLocale sets the per-app language of pkg (Android 13+ / API 33). An
+// empty bcp47 removes the override so the app follows the system language.
+func (a *ADB) SetAppLocale(ctx context.Context, serial, pkg, bcp47 string) error {
+	sdk, _ := a.GetProp(ctx, serial, "ro.build.version.sdk")
+	if n, err := strconv.Atoi(strings.TrimSpace(sdk)); err == nil && n < 33 {
+		return fmt.Errorf("set language needs Android 13+ (API 33) for per-app languages; this device is API %d. Use an API 33+ emulator image", n)
+	}
+	args := []string{"cmd", "locale", "set-app-locales", pkg}
+	if bcp47 != "" {
+		args = append(args, "--locales", bcp47)
+	}
+	out, err := a.Shell(ctx, serial, args...)
+	if err != nil {
+		return fmt.Errorf("set-app-locales: %w", err)
+	}
+	if s := strings.TrimSpace(string(out)); strings.Contains(strings.ToLower(s), "exception") || strings.Contains(strings.ToLower(s), "error") {
+		return fmt.Errorf("set-app-locales: %s", s)
+	}
+	return nil
 }

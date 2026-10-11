@@ -192,18 +192,23 @@ func (o *openAIVision) ExtractText(ctx context.Context, image []byte, query stri
 // returns the raw text content of the first choice. Shared by AssertScreen
 // and ExtractText — only the system/user prompt differ between them.
 func (o *openAIVision) chatCompletion(ctx context.Context, system, user string, image []byte) (string, error) {
-	b64 := base64.StdEncoding.EncodeToString(image)
+	// FP-14: with no image this is a plain text request (non-vision local
+	// models, triage, generation) — content is a bare string, which every
+	// OpenAI-compatible server accepts, including ones with no multimodal
+	// support at all.
+	var userContent any = user
+	if len(image) > 0 {
+		b64 := base64.StdEncoding.EncodeToString(image)
+		userContent = []map[string]any{
+			{"type": "text", "text": user},
+			{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + b64}},
+		}
+	}
 	reqBody := map[string]any{
 		"model": o.model,
 		"messages": []map[string]any{
 			{"role": "system", "content": system},
-			{
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "text", "text": user},
-					{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + b64}},
-				},
-			},
+			{"role": "user", "content": userContent},
 		},
 	}
 

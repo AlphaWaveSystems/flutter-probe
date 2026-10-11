@@ -73,6 +73,7 @@ The **ProbeAgent** is a Dart package you add to your Flutter app as a dev depend
 ```bash
 brew tap AlphaWaveSystems/tap
 brew install probe
+# canary (pre-release) builds: brew install AlphaWaveSystems/tap/probe@next, see the installation docs
 ```
 
 Upgrades are handled automatically with `brew upgrade probe`.
@@ -116,6 +117,11 @@ flutter build ios --profile --dart-define=PROBE_AGENT=true --dart-define=PROBE_W
 # Run tests (find token in app console: PROBE_TOKEN=...)
 probe test tests/ --host <device-ip> --token <probe-token>
 ```
+
+Studio can auto-discover WiFi devices (mDNS) if the device build passes a `ProbeAdvertiser` to
+`ProbeAgent.start(advertiser: ...)`; a copy-paste `bonsoir` example is in the
+[Studio docs](https://flutterprobe.dev/tools/studio/#wifi-auto-discovery). It is left to the app so the core agent
+has no native plugin and nothing native is linked into release builds.
 
 **USB** — requires libimobiledevice (may experience USB-C drops):
 ```bash
@@ -264,6 +270,10 @@ call GET "https://api.example.com/health"
 copy "user@test.com" to clipboard
 paste from clipboard
 set location 37.7749, -122.4194
+travel to                                 # simulate GPS movement through waypoints
+  37.7749, -122.4194
+  37.7849, -122.4094
+over 10 seconds
 add media "fixtures/photo.jpg"            # seed the camera roll/gallery
 kill the app
 open the app
@@ -289,6 +299,16 @@ take screenshot "checkout_page"                # capture
 compare screenshot "checkout_page"             # baseline on first run, diff after
 compare screenshot "total_price" of "Total"    # crop the comparison to one widget
 ```
+
+### Scrolling, idling and negative checks
+
+```
+scroll down until "Rate this app" appears   # keep scrolling until it is on screen (scroll down = later content)
+wait for idle                                # dialogs/sheets/animations/requests settled
+dont see "Error"                             # alias of don't see "Error"
+```
+
+Failures name the line and step (`line 14: wait until "X" appears timed out after 28s — visible texts: [...]`).
 
 ### Conditionals, loops, and retries
 
@@ -382,10 +402,71 @@ Composite tests without configured devices are reported as **SKIPPED**, so singl
 
 ```
 allow permission "camera"
-deny permission "notifications"
+deny permission "location"
 grant all permissions
 revoke all permissions
 ```
+
+Or once for the whole run: `probe test tests/ --grant notifications,camera`. On an iOS simulator `deny permission "notifications"` (app not running) reinstalls the app to reset the system decision, because iOS never asks twice. Android grants through
+`adb shell pm grant` (including `POST_NOTIFICATIONS`), the iOS simulator through `simctl privacy`. iOS
+notifications have no simctl service, so probe answers the system alert itself: `--grant notifications` (and
+`allow permission "notifications"`) tap **Allow** when the alert appears, using the iOS system-dialog driver
+(needs Xcode; see [System dialogs](#system-dialogs-permission-alerts-sign-in-sheets)).
+
+### Compatibility
+
+From 1.0, ProbeScript, `probe.yaml`, the agent protocol and the report JSON are frozen within 1.x and only grow additively; deprecations last at least two minor releases and 90 days. Probe Studio, experimental features and human-readable output are outside that promise. See the [compatibility policy](https://flutterprobe.dev/advanced/compatibility/).
+
+### Performance testing
+
+`start measuring "checkout"` ... `stop measuring`, then `see memory below 300 MB`, `see cpu below 60 percent`, `see slow frames below 5 percent`, `see data transferred below 500 KB`, `see response "/api/pay" below 2000 ms`. Memory and frames come from the agent (0.23+, all devices), CPU from Android and iOS simulators, network from the recorded HTTP traffic. Gate regressions with `probe test --perf-baseline perf-baseline.json` (`--perf-update-baseline` writes it), watch `probe perf trend`. Guide: [Performance testing](https://flutterprobe.dev/advanced/performance/).
+
+### Timeouts, waiting and retries
+
+One system for "not there yet": the step timeout (`--timeout`), `--implicit-wait 7s` for the whole run, a per-step budget (`wait until "Report ready" appears within 90 seconds`), `optional` / `if visible` / `if "X" appears` to fail gracefully, `retry 3 times` blocks and `defaults.retry_failed_tests`. Guide: [Timeouts, waiting and retries](https://flutterprobe.dev/advanced/timeouts-and-retries/).
+
+### Testing against backend data
+
+React to what your backend or BFF returns: `wait for response GET "/api/orders" status 200`, `see response "/api/me" json "data.plan" equals "pro"`, `if response ... otherwise`, `store response ... as plan`, `see exactly 2 requests ...`, and real mocks (`when the app calls GET "/api/orders"` / `respond with 503 after 3 seconds` / `respond with network failure`). Needs agent 0.22+; records `dart:io` traffic (not WebViews or native SDKs). Guide: [Testing against backend data](https://flutterprobe.dev/advanced/backend-data/).
+
+### Named devices
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device start --platform ios --name probe-checkout` boots (or creates) a simulator under that name; running Android emulators are listed and reported by their AVD name.
+
+### Multi-language apps
+
+Use your Flutter ARB files for labels: set `l10n: {dir: lib/l10n, default: en}` in probe.yaml, then `tap l10n "saveButton"` finds "Speichern" on a German run (keys are checked before the run starts).
+
+Change the app language from a test or per run: `set language "de"`, `probe test --locale de`, or the whole suite once per language with `probe test --locales de,ja,ar -o reports/r.json` (reports `r.de.json`, `r.ja.json`, ...). Android 13+ and iOS simulators; right-to-left languages work (`ar`, `he`, `fa`).
+
+One suite for every language. Select by `#key` (language-independent); use `--match-loose` (or `defaults.match: loose`) to fold
+case, accents, typographic apostrophes and whitespace in text selectors (`anderungen SPEICHERN` matches `Änderungen speichern`);
+list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**, so
+`tap "Don't Allow" in system dialog` and `deny permission "notifications"` work on a device set to any language.
+Guide: [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/).
+
+### System dialogs (permission alerts, sign-in sheets)
+
+OS-level dialogs live outside the Flutter widget tree, so the Dart agent cannot see them. FlutterProbe drives
+them through an XCUITest runner on iOS simulators and uiautomator on Android:
+
+```
+tap "Allow" in system dialog                        # permission alert button
+type "$PROBE_SANDBOX_PASSWORD" into system field "Password"   # value from the environment, always masked
+see system dialog "Sign in to Apple Account"
+wait for system dialog "Notifications" appears
+dismiss system dialog                                # Cancel / Don't Allow / Not Now
+sign in sandbox tester                               # StoreKit sandbox account, idempotent
+tap "Allow" in system dialog optional                # no-op when no dialog shows up
+```
+
+On a device set to another language, buttons are matched by role (allow, deny, cancel, ...), so the English label still works.
+
+Secrets come from environment variables only and are masked in step output, reports and errors. The same
+operations are available without any test file or Flutter app: `probe system-dialog tap "Allow"`,
+`probe system-dialog sign-in-sandbox`. iOS needs Xcode and downloads a small runner once
+(`probe ios-driver install`); physical iOS devices are not supported. Full guide:
+[flutterprobe.dev/tools/system-dialogs](https://flutterprobe.dev/tools/system-dialogs/).
 
 ### Dart escape hatch
 
@@ -466,9 +547,14 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe report --input results.json` | Generate HTML report |
 | `probe device list` | List connected devices and simulators |
 | `probe studio` | Open interactive widget tree inspector |
-| `probe generate --prompt "test login flow"` | AI-generate a test from a description |
-| `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories) |
+| `probe generate --prompt "test login flow"` | AI-generate a test from a description (cloud or local model) |
+| `probe system-dialog tap\|type\|see\|wait\|dismiss\|list\|sign-in-sandbox` | Drive OS system dialogs (permission alerts, StoreKit sign-in sheet) on a simulator/emulator |
+| `probe ios-driver install\|status\|stop` | Manage the iOS system-dialog driver (XCUITest runner) |
+| `probe ai doctor` | Optional: check the configured `ai:` provider |
+| `probe triage --input results.json` | Optional: explain failures with the configured model (advisory) |
+| `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories; `runFlow` helpers become recipe files; regex selectors, `evalScript` and `${ENV}` placeholders are flagged with TODO comments and warnings) |
 | `probe version` | Print CLI version |
+| `probe license activate <key>` / `probe license status` | Store and verify an offline-verified (Ed25519) license key for hosted features (local use never needs one) |
 | `probe-convert` | Convert tests from other frameworks |
 
 ### Key flags for `probe test`
@@ -485,6 +571,9 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `--tag <tag>` | — | Run only tests with this tag |
 | `--name <pattern>` | — | Run only tests matching name |
 | `--adb <path>` | PATH | Custom ADB binary |
+| `--agent-port <n>` | `48686` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators can't collide. A failed dial names the process holding the port |
+| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera` (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
+| `--ai-triage` | off | Optional: after the run, explain failures with the configured `ai:` model (advisory; never changes results) |
 
 ## Studio (Beta Preview)
 
@@ -502,14 +591,15 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 18 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 31 tools:
 
 | Category | Tools |
 |---|---|
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
-| Reporting | `get_report`, `generate_report`, `generate_test` |
+| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot` (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
+| Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `record` |
 
 Every CLI feature is accessible from MCP. Key capabilities an agent can use:
@@ -533,7 +623,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 18 tools appear in Claude.
+4. Done — all 31 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 
@@ -638,6 +728,22 @@ This is currently the only "fully local" option FlutterProbe ships. Native on-de
 support (Apple Intelligence on iOS/macOS, Gemini Nano on Android) is **not** implemented —
 those are in-app, entitlement-gated platform SDKs a CLI process has no route to, a materially
 larger effort than this feature, tracked separately rather than folded in silently.
+
+### Optional AI helpers — and tests never depend on them
+
+The `ai:` block can also power, with the same provider (a local model needs no API key):
+
+| What | How |
+|---|---|
+| Check the provider | `probe ai doctor` — endpoint, model, text, and whether the model can see images |
+| Explain failures | `probe test --ai-triage`, or later `probe triage --input reports/results.json`; MCP tool `triage_failure` |
+| Generate tests | `probe generate ...` uses the configured provider (Claude stays the default with no `ai.provider`) |
+| Text-only models | `ai.vision: false` judges `see "..." with ai` from the screen's visible texts instead of a screenshot |
+
+**AI is strictly opt-in and off the pass/fail path.** With no `ai:` block nothing runs and nothing is sent.
+Triage runs only after results are final; if the model is down, slow or wrong it prints a one-line note and
+results, reports and the exit code are untouched. Small models (about 0.5B) give weak advice; use 7B+ for
+triage. Details: [flutterprobe.dev/tools/ai](https://flutterprobe.dev/tools/ai/).
 
 `with ai` cannot be negated, and fails fast with a clear error at parse time — before any
 device connects — if `ai:` isn't configured. See
@@ -833,6 +939,7 @@ Full documentation: [alphawavesystems.github.io/flutter-probe](https://flutterpr
 - [Installation Guide](https://flutterprobe.dev/getting-started/installation/)
 - [Quick Start](https://flutterprobe.dev/getting-started/quick-start/)
 - [ProbeScript Syntax](https://flutterprobe.dev/probescript/syntax/)
+- [ProbeScript Grammar (complete EBNF)](https://flutterprobe.dev/probescript/grammar/)
 - [CLI Reference](https://flutterprobe.dev/tools/cli-reference/)
 - [CI/CD Integration](https://flutterprobe.dev/ci-cd/github-actions/)
 - [Configuration Reference](https://flutterprobe.dev/advanced/configuration/)

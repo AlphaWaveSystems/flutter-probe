@@ -5,6 +5,21 @@ description: Run the same test with multiple data sets using Examples blocks and
 
 Data-driven tests let you run the same test logic with different input values. ProbeScript uses `with examples:` blocks with `<variable>` substitution.
 
+## Environment variables
+
+`${NAME}` inside a quoted text is replaced by the value of the environment variable `NAME` when the step runs:
+
+```probe
+test "login"
+  type "${TEST_EMAIL}" into #email_field
+  type "${TEST_PASSWORD}" into #password_field
+```
+
+Only the braced form is expanded (a `$5` price stays text). The step line in the output shows `${TEST_EMAIL}`, never the
+value, and the values are scrubbed from error messages and reports. An unset variable is left as written, with a
+warning on stderr. Screenshots show what is on screen, so keep real secrets out of fields captured by failure screenshots.
+`probe migrate maestro` leaves Maestro's `${VAR}` placeholders as they are for exactly this reason.
+
 ## Basic Example
 
 ```

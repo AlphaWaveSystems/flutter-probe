@@ -1,5 +1,7 @@
 package parser
 
+import "time"
+
 // ---- Selector types ----
 
 type SelectorKind int
@@ -137,6 +139,7 @@ const (
 	VerbSwipe      ActionVerb = "swipe"
 	VerbScroll     ActionVerb = "scroll"
 	VerbGoBack     ActionVerb = "go_back"
+	VerbPressEnter ActionVerb = "press_enter"
 	VerbLongPress  ActionVerb = "long_press"
 	VerbDoubleTap  ActionVerb = "double_tap"
 	VerbClear      ActionVerb = "clear"
@@ -163,6 +166,7 @@ const (
 	VerbCopyClipboard   ActionVerb = "copy_clipboard"
 	VerbPasteClipboard  ActionVerb = "paste_clipboard"
 	VerbSetLocation     ActionVerb = "set_location"
+	VerbSetLanguage     ActionVerb = "set_language"
 	VerbVerifyBrowser   ActionVerb = "verify_browser"
 	VerbOpenLink        ActionVerb = "open_link"   // open link "url"
 	VerbStore           ActionVerb = "store"        // store "value" as varName
@@ -210,6 +214,7 @@ type ActionStep struct {
 	Direction SwipeDirection // for swipe / scroll
 	Name      string      // for screenshot name, rotate direction, locale, etc.
 	To        *Selector   // for drag: destination
+	Until     *Selector   // for scroll: keep scrolling until this target is visible
 	IfVisible bool        // if true, skip silently when selector is not found
 	Optional  bool        // if true, attempt the step but don't fail the test if it errors
 	DeepLink  bool        // for VerbOpenLink: "in/into the app" — route via OS intent handling, not url_launcher
@@ -231,6 +236,7 @@ type AssertStep struct {
 	Pattern  string     // regex for "matching"
 	WithAI   bool       // see "<natural-language assertion>" with ai
 	Optional bool       // if true, attempt the assertion but don't fail the test if it doesn't hold
+	Any      []string   // see any of "A", "B": passes when any alternative is on screen (don't see any of: none is)
 	Native   bool       // see native "..." — matched against uiautomator's text/resource-id, not the Flutter agent
 	Line     int
 }
@@ -238,6 +244,38 @@ type AssertStep struct {
 func (a AssertStep) nodeType() string { return "assert" }
 func (a AssertStep) GetLine() int     { return a.Line }
 func (a AssertStep) stepType() string { return "assert" }
+
+// ---- SystemDialogStep ----
+
+// SystemDialogOp is what a SystemDialogStep does.
+type SystemDialogOp string
+
+const (
+	SysTap     SystemDialogOp = "tap"     // tap "Allow" in system dialog
+	SysType    SystemDialogOp = "type"    // type "$PW" into system field "Password"
+	SysSee     SystemDialogOp = "see"     // see system dialog "Title" / don't see system dialog
+	SysWait    SystemDialogOp = "wait"    // wait for system dialog "Title" appears|disappears
+	SysDismiss SystemDialogOp = "dismiss" // dismiss system dialog
+	SysSandbox SystemDialogOp = "sandbox" // sign in sandbox tester
+)
+
+// SystemDialogStep drives an OS-level system dialog (permission alert, StoreKit
+// sign-in sheet, ...) that lives outside the Flutter widget tree.
+type SystemDialogStep struct {
+	Op       SystemDialogOp
+	Button   string // SysTap: button label
+	Text     string // SysType: text to type, or $ENV_VAR / ${ENV_VAR} — always masked
+	Field    string // SysType: field label
+	Title    string // optional dialog-title filter
+	Appear   bool   // SysWait: true = wait to appear, false = to disappear
+	Negated  bool   // SysSee: don't see
+	Optional bool   // do not fail the test when the step fails (e.g. no dialog showed up)
+	Line     int
+}
+
+func (s SystemDialogStep) nodeType() string { return "system_dialog" }
+func (s SystemDialogStep) GetLine() int     { return s.Line }
+func (s SystemDialogStep) stepType() string { return "system_dialog" }
 
 // ---- AssertNoDefectsStep ----
 
@@ -265,12 +303,16 @@ const (
 	WaitNetworkIdle                // wait until network is idle
 	WaitSelector                   // wait until #id disappears/appears
 	WaitAnimations                 // wait for animations to end
+	WaitIdle                       // wait for idle: route transitions + frames/animations/HTTP settled
+	WaitAny                        // wait until any of "A", "B" appears
 )
 
 type WaitStep struct {
 	Kind     WaitKind
 	Target   string   // text or selector
 	Duration float64  // seconds
+	Pattern  string   // WaitAppears: "matching" regular expression the text must match
+	Any      []string // WaitAny: alternatives; the first one that appears satisfies the wait
 	Line     int
 }
 
@@ -281,6 +323,7 @@ func (w WaitStep) stepType() string { return "wait" }
 // ---- ConditionalStep ----
 
 type ConditionalStep struct {
+	Response  *ResponseCond // `if response ...`; nil for the `if "text" appears` form
 	Condition string // text that may appear
 	Then      []Step
 	Else      []Step // otherwise branch
@@ -320,6 +363,34 @@ func (r RetryStep) nodeType() string { return "retry" }
 func (r RetryStep) GetLine() int     { return r.Line }
 func (r RetryStep) stepType() string { return "retry" }
 
+// ---- TravelStep ----
+
+// Waypoint is a single GPS coordinate in a travel route. Lat/Lng are kept as
+// raw strings (not parsed to float64) here, mirroring how the single-point
+// `set location` verb (ActionStep.Name) carries its coordinates — parsing
+// happens once, at execution time, in the executor.
+type Waypoint struct {
+	Lat string
+	Lng string
+}
+
+// TravelStep walks the device's GPS location through an ordered list of
+// waypoints, simulating movement over Duration seconds (0 means no "over N
+// seconds" clause was given — the executor picks a sane default). It's the
+// route/travel analogue of the single-point `set location` verb: the
+// executor interpolates along the path and calls the same device-level
+// SetLocation primitive repeatedly, it does not add any new device
+// integration.
+type TravelStep struct {
+	Waypoints []Waypoint
+	Duration  float64 // total seconds over the whole route; 0 = unspecified
+	Line      int
+}
+
+func (t TravelStep) nodeType() string { return "travel" }
+func (t TravelStep) GetLine() int     { return t.Line }
+func (t TravelStep) stepType() string { return "travel" }
+
 // ---- DartBlock ----
 
 type DartBlock struct {
@@ -331,6 +402,104 @@ func (d DartBlock) nodeType() string { return "dart" }
 func (d DartBlock) GetLine() int     { return d.Line }
 func (d DartBlock) stepType() string { return "dart" }
 
+// ---- Performance ----
+
+// PerfKind is the kind of performance statement.
+type PerfKind string
+
+const (
+	PerfStart PerfKind = "start" // start measuring "checkout"
+	PerfStop  PerfKind = "stop"  // stop measuring
+	PerfCheck PerfKind = "check" // see memory below 300 MB
+)
+
+// PerfStep starts or stops a measuring window, or asserts a number measured in it.
+type PerfStep struct {
+	Kind   PerfKind
+	Name   string  // PerfStart: the measurement's name
+	Metric string  // PerfCheck: memory, memory_growth, cpu, cpu_peak, slow_frames, frame_time, frame_max, data
+	Limit  float64 // PerfCheck: the value must be below this
+	Line   int
+}
+
+func (p PerfStep) nodeType() string { return "perf" }
+func (p PerfStep) GetLine() int     { return p.Line }
+func (p PerfStep) stepType() string { return "perf" }
+
+// ---- TimedStep ----
+
+// TimedStep is a step with its own time budget: `wait until "Done" appears within 90 seconds`.
+// The step's timeout and its implicit-wait retry window both become Within.
+type TimedStep struct {
+	Inner  Step
+	Within time.Duration
+	Line   int
+}
+
+func (t TimedStep) nodeType() string { return "timed" }
+func (t TimedStep) GetLine() int     { return t.Line }
+func (t TimedStep) stepType() string { return "timed" }
+
+// ---- Backend responses ----
+
+// ResponseRef names recorded HTTP exchanges: `GET "/api/orders"`. Method is
+// empty for "any method"; Pattern is a path with * wildcards, or a full URL.
+type ResponseRef struct {
+	Method  string
+	Pattern string
+}
+
+// ResponseCheckKind says what a `see response` / `if response` compares.
+type ResponseCheckKind string
+
+const (
+	CheckStatus     ResponseCheckKind = "status"   // status 200
+	CheckContains   ResponseCheckKind = "contains" // contains "premium"
+	CheckJSONEquals ResponseCheckKind = "json"     // json "data.plan" equals "pro"
+	CheckJSONExists ResponseCheckKind = "exists"   // json "data.plan" exists
+	CheckTime       ResponseCheckKind = "time"     // below 800 ms (Status holds the limit)
+)
+
+// ResponseCheck is the condition part of a response statement.
+type ResponseCheck struct {
+	Kind   ResponseCheckKind
+	Status int    // CheckStatus
+	Text   string // CheckContains: the text; CheckJSON*: the path
+	Equals string // CheckJSONEquals: the expected value
+}
+
+// ResponseCond is the condition of `if response <ref> <check>`.
+type ResponseCond struct {
+	Ref   ResponseRef
+	Check ResponseCheck
+}
+
+// HTTPKind is the kind of backend statement an HTTPStep is.
+type HTTPKind string
+
+const (
+	HTTPWaitResponse  HTTPKind = "wait_response"
+	HTTPSeeResponse   HTTPKind = "see_response"
+	HTTPStoreResponse HTTPKind = "store_response"
+	HTTPSeeRequests   HTTPKind = "see_requests"
+	HTTPClearRequests HTTPKind = "clear_requests"
+)
+
+// HTTPStep is a statement about the app's recorded backend traffic.
+type HTTPStep struct {
+	Kind   HTTPKind
+	Ref    ResponseRef
+	Check  ResponseCheck // see_response; wait_response uses Status when Check.Kind == CheckStatus
+	Path   string        // store_response: the JSON path
+	Var    string        // store_response: the variable
+	Count  int           // see_requests: the expected number
+	Line   int
+}
+
+func (h HTTPStep) nodeType() string { return "http" }
+func (h HTTPStep) GetLine() int     { return h.Line }
+func (h HTTPStep) stepType() string { return "http" }
+
 // ---- MockBlock ----
 
 type MockBlock struct {
@@ -338,6 +507,8 @@ type MockBlock struct {
 	Path     string // /api/products
 	Status   int
 	Body     string // JSON string
+	DelayMs  int    // `after N seconds`
+	Fail     bool   // `respond with network failure`
 	Line     int
 }
 
@@ -348,9 +519,14 @@ func (m MockBlock) stepType() string { return "mock" }
 // ---- RecipeCall ----
 
 type RecipeCall struct {
-	Name   string
-	Args   []string
-	Line   int
+	Name string
+	Args []string
+	// NumName / NumArgs are the same call with bare numbers treated as arguments
+	// too ("increment counter <arg> <arg>" for `increment counter "x" 3`); they are
+	// tried when Name matches no recipe. Empty when the call has no bare number.
+	NumName string
+	NumArgs []string
+	Line    int
 }
 
 func (r RecipeCall) nodeType() string { return "recipe_call" }

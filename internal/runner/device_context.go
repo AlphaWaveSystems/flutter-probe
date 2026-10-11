@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // ConfirmFunc is called before destructive operations. It receives a description
@@ -22,22 +26,61 @@ type ConfirmFunc func(message string) bool
 // the running app, so they handle reconnection transparently.
 type DeviceContext struct {
 	Manager                 *device.Manager
-	Serial                  string          // ADB serial or iOS UDID
+	Serial                  string // ADB serial or iOS UDID
 	Platform                device.Platform
-	AppID                   string          // bundle ID / package name
-	Port                    int             // host-side agent port (default 48686)
-	DevicePort              int             // on-device agent port (default: same as Port)
-	IsPhysical              bool            // true for physical devices (vs emulator/simulator)
-	UseHTTP                 bool            // if true, use HTTP POST instead of WebSocket for reconnection
-	AgentHost               string          // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
-	AllowClearData          bool            // if true, skip confirmation for clear app data (CI/CD mode)
-	Confirm                 ConfirmFunc     // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
-	GrantPermissionsOnClear bool            // if true, auto-grant all permissions after clearing data
-	ReconnectDelay          time.Duration   // delay after app restart before reconnecting WebSocket (default 2s)
-	RestartDelay            time.Duration   // delay after force-stop before relaunching (default 500ms)
-	TokenReadTimeout        time.Duration   // max time to wait for agent token during reconnect (default 30s)
-	DialTimeout             time.Duration   // max time to establish WebSocket connection (default 30s)
-	CLIVersion              string          // running probe binary's version, sent during the reconnect handshake
+	AppID                   string        // bundle ID / package name
+	Port                    int           // host-side agent port (default 48686)
+	DevicePort              int           // on-device agent port (default: same as Port)
+	IsPhysical              bool          // true for physical devices (vs emulator/simulator)
+	UseHTTP                 bool          // if true, use HTTP POST instead of WebSocket for reconnection
+	AgentHost               string        // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
+	AllowClearData          bool          // if true, skip confirmation for clear app data (CI/CD mode)
+	Confirm                 ConfirmFunc   // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
+	GrantPermissionsOnClear bool          // if true, auto-grant all permissions after clearing data
+	ReconnectDelay          time.Duration // delay after app restart before reconnecting WebSocket (default 2s)
+	RestartDelay            time.Duration // delay after force-stop before relaunching (default 500ms)
+	TokenReadTimeout        time.Duration // max time to wait for agent token during reconnect (default 30s)
+	DialTimeout             time.Duration // max time to establish WebSocket connection (default 30s)
+	DriverPort              int           // iOS system-dialog driver port (0 = derived from the simulator UDID)
+	CLIVersion              string        // running probe binary's version, sent during the reconnect handshake
+	Language                string        // app language set by `set language` / --locale ("" = device default)
+
+	sysMu     sync.Mutex
+	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
+}
+
+// SystemDriver returns the run's shared system-dialog driver, creating it on
+// first use (this starts the iOS runner on a simulator, ~5s). Only steps that
+// use system dialogs ever call it, so ordinary runs never pay for it.
+func (dc *DeviceContext) SystemDriver(ctx context.Context) (sysdialog.Driver, error) {
+	dc.sysMu.Lock()
+	defer dc.sysMu.Unlock()
+	if dc.sysDriver != nil {
+		return dc.sysDriver, nil
+	}
+	version := dc.CLIVersion
+	d, err := sysdialog.ForDevice(ctx, dc.Manager, dc.Serial, dc.Platform, sysdialog.IOSOptions{
+		Version:     version,
+		AppID:       dc.AppID,
+		Port:        dc.DriverPort,
+		AutoInstall: true,
+		Logf:        func(f string, a ...any) { fmt.Printf("    \033[36mℹ\033[0m  "+f+"\n", a...) },
+	})
+	if err != nil {
+		return nil, err
+	}
+	dc.sysDriver = d
+	return d, nil
+}
+
+// CloseSystemDriver stops the system-dialog driver if one was started.
+func (dc *DeviceContext) CloseSystemDriver() {
+	dc.sysMu.Lock()
+	defer dc.sysMu.Unlock()
+	if dc.sysDriver != nil {
+		_ = dc.sysDriver.Close()
+		dc.sysDriver = nil
+	}
 }
 
 // agentHost returns the configured agent host or the default.
@@ -140,7 +183,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 	if !dc.AllowClearData {
 		if dc.Confirm == nil {
 			return fmt.Errorf("clear app data: this is a destructive operation that wipes all app data for %s. "+
-				"Use --allow-clear-data flag to permit this, or run interactively", dc.AppID)
+				"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", dc.AppID)
 		}
 		msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
 			"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
@@ -182,10 +225,14 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		}
 
 		if dataPath != "" {
-			for _, subdir := range []string{"Documents", "Library", "tmp"} {
-				target := dataPath + "/" + subdir
-				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-rf", target)
+			// The preferences daemon holds NSUserDefaults in memory and writes them back
+			// later: drop it before and after deleting the files, or the app relaunches
+			// with its old preferences (an "already onboarded" flag survived a clear).
+			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial) // best effort: launchd restarts it; the kill reports a benign non-zero status
+			if err := wipeIOSContainer(dataPath); err != nil {
+				return fmt.Errorf("clear data: %w", err)
 			}
+			_ = simctl.ResetPrefsDaemon(ctx, dc.Serial) // best effort: launchd restarts it; the kill reports a benign non-zero status
 			fmt.Printf("    \033[32m✓\033[0m  Cleared data container: %s\n", dataPath)
 		}
 
@@ -258,6 +305,10 @@ func (dc *DeviceContext) AllowPermission(ctx context.Context, name string) error
 			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
 			return nil
 		}
+		if name == "notifications" {
+			// simctl cannot grant this one: answer the system alert instead.
+			return dc.answerNotificationAlert(ctx, "Allow")
+		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
 			return err
@@ -266,6 +317,31 @@ func (dc *DeviceContext) AllowPermission(ctx context.Context, name string) error
 			return fmt.Errorf("grant %s: %w", name, err)
 		}
 	}
+	return nil
+}
+
+// SetLanguage sets the app's own language (not the device's): "de", "pt-BR", or
+// "system" to remove the override. The caller relaunches the app afterwards.
+// Android 13+ uses per-app locales; an iOS simulator gets language launch
+// arguments for every later launch. Right-to-left languages flip the layout on
+// their own, because Flutter follows the locale.
+func (dc *DeviceContext) SetLanguage(ctx context.Context, tag string) error {
+	t, err := locale.Parse(tag)
+	if err != nil {
+		return fmt.Errorf("set language: %w", err)
+	}
+	switch dc.Platform {
+	case device.PlatformAndroid:
+		if err := dc.Manager.ADB().SetAppLocale(ctx, dc.Serial, dc.AppID, t.BCP47); err != nil {
+			return fmt.Errorf("set language: %w", err)
+		}
+	case device.PlatformIOS:
+		if dc.IsPhysical {
+			return fmt.Errorf("set language is not supported on physical iOS devices: change the language in Settings > Apps > %s", dc.AppID)
+		}
+		dc.Manager.SimCtl().SetAppLanguage(dc.Serial, dc.AppID, t.BCP47, t.POSIX)
+	}
+	dc.Language = t.BCP47
 	return nil
 }
 
@@ -286,6 +362,19 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 		if dc.IsPhysical {
 			fmt.Printf("    \033[33m⚠\033[0m  permission management is not supported on physical iOS devices — skipping\n")
 			return nil
+		}
+		if name == "notifications" {
+			simctl := dc.Manager.SimCtl()
+			if dc.AppID != "" && !simctl.IsAppRunning(ctx, dc.Serial, dc.AppID) {
+				// The app is not running, so there is no alert to answer, and iOS keeps an earlier
+				// decision (a previous Allow, or --grant) for good: the only way back to "not asked yet" is a reinstall.
+				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", dc.AppID)
+				if err := simctl.Reinstall(ctx, dc.Serial, dc.AppID); err != nil {
+					return fmt.Errorf("deny notifications: %w", err)
+				}
+				return nil
+			}
+			return dc.answerNotificationAlert(ctx, "Don't Allow")
 		}
 		svc, err := device.ResolveIOSService(name)
 		if err != nil {
@@ -368,7 +457,14 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 			simctl := dc.Manager.SimCtl()
 			tokenPath := dc.iosTokenPath()
 			if tokenPath != "" {
-				_, _ = simctl.Spawn(ctx, dc.Serial, "rm", "-f", tokenPath)
+				_ = os.Remove(tokenPath) // a host path; a missing file is fine
+			}
+			// The connection often drops because the app went to the background (a link
+			// that opens Safari, a system sheet): iOS suspends it and its socket. If its
+			// process is alive, bring it back to the foreground before redialing; a
+			// crashed app is not relaunched here (that stays a clear failure).
+			if dc.AppID != "" && simctl.IsAppRunning(ctx, dc.Serial, dc.AppID) {
+				_ = simctl.Launch(ctx, dc.Serial, dc.AppID)
 			}
 		}
 	}
@@ -394,6 +490,18 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		Port:        dc.Port,
 		Token:       token,
 		DialTimeout: dc.dialTimeoutVal(),
+		// The token was read from the device a moment ago, possibly before the
+		// new app instance rewrote it: re-read on a 401 (FP-19).
+		OnConnectRefused: dc.reforwardHook(),
+		RefreshToken: func(c context.Context) (string, error) {
+			switch dc.Platform {
+			case device.PlatformAndroid:
+				return dc.Manager.ReadTokenAndroid(c, dc.Serial, 5*time.Second, dc.AppID, nil)
+			case device.PlatformIOS:
+				return dc.Manager.ReadTokenIOS(c, dc.Serial, 5*time.Second, dc.AppID)
+			}
+			return "", fmt.Errorf("no token source for %s", dc.Platform)
+		},
 	}
 
 	if dc.UseHTTP {
@@ -421,6 +529,18 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	return client, nil
 }
 
+// reforwardHook returns a probelink.DialOptions.OnConnectRefused that re-creates
+// the Android `adb forward` for the agent port; nil on other platforms or without
+// a device manager.
+func (dc *DeviceContext) reforwardHook() func(context.Context) {
+	if dc.Platform != device.PlatformAndroid || dc.Manager == nil || dc.UseHTTP {
+		return nil
+	}
+	return func(c context.Context) {
+		_ = dc.Manager.ForwardPort(c, dc.Serial, dc.Port, dc.DevicePort)
+	}
+}
+
 // ReconnectWithToken reconnects using a pre-shared token (set via set_next_token
 // before restart). This skips token reading from device logs — critical for WiFi
 // mode where idevicesyslog is unavailable.
@@ -433,6 +553,10 @@ func (dc *DeviceContext) ReconnectWithToken(ctx context.Context, token string) (
 		Port:        dc.Port,
 		Token:       token,
 		DialTimeout: dc.dialTimeoutVal(),
+		// The `adb forward` can disappear while the app restarts (another tool on the
+		// same adb server clearing forwards, an adb restart): re-create it while
+		// dials are refused instead of waiting out the token window.
+		OnConnectRefused: dc.reforwardHook(),
 	}
 
 	// For WiFi: use the original host (not 127.0.0.1)
@@ -549,6 +673,105 @@ func (dc *DeviceContext) SetLocation(ctx context.Context, lat, lng string) error
 	return nil
 }
 
+// LatLng is a single GPS coordinate, used by Travel.
+type LatLng struct {
+	Lat float64
+	Lng float64
+}
+
+// travelInterval is the target spacing between SetLocation calls while
+// walking a route — frequent enough to look like continuous movement,
+// nowhere near tight enough to hammer adb/simctl.
+const travelInterval = 1 * time.Second
+
+// travelFrame is one point along an interpolated route, plus how long to
+// wait after setting it before moving to the next frame (0 for the last).
+type travelFrame struct {
+	lat, lng float64
+}
+
+// buildTravelRoute interpolates waypoints into a sequence of frames spaced
+// roughly travelInterval apart, plus the wait to sleep after each frame
+// (len(gaps) == len(frames)-1; the last frame has nothing to wait for).
+// Total route time is split evenly across legs (each consecutive waypoint
+// pair); within a leg, position is linearly interpolated. If duration is
+// unspecified (<=0), each leg defaults to exactly one travelInterval, so a
+// bare `travel to` with no "over" clause still moves at a sane pace instead
+// of jumping instantly.
+//
+// This is a pure function (no device I/O) specifically so the interpolation
+// math can be unit-tested without needing a real or faked adb/simctl.
+func buildTravelRoute(waypoints []LatLng, duration time.Duration) (frames []travelFrame, gaps []time.Duration) {
+	legs := len(waypoints) - 1
+	if legs < 1 {
+		return nil, nil
+	}
+	if duration <= 0 {
+		duration = time.Duration(legs) * travelInterval
+	}
+	legDuration := duration / time.Duration(legs)
+
+	frames = append(frames, travelFrame{lat: waypoints[0].Lat, lng: waypoints[0].Lng})
+	for i := 0; i < legs; i++ {
+		from, to := waypoints[i], waypoints[i+1]
+		steps := int(legDuration / travelInterval)
+		if steps < 1 {
+			steps = 1
+		}
+		gap := legDuration / time.Duration(steps)
+		for s := 1; s <= steps; s++ {
+			frac := float64(s) / float64(steps)
+			frames = append(frames, travelFrame{
+				lat: from.Lat + (to.Lat-from.Lat)*frac,
+				lng: from.Lng + (to.Lng-from.Lng)*frac,
+			})
+			gaps = append(gaps, gap)
+		}
+	}
+	return frames, gaps
+}
+
+// Travel walks the device's GPS location through an ordered list of
+// waypoints, simulating movement over duration by calling SetLocation
+// repeatedly at ~travelInterval spacing along linearly-interpolated points
+// between each pair of waypoints (see buildTravelRoute). This is pure
+// orchestration on top of the existing single-point SetLocation primitive —
+// no new device-level GPS integration.
+//
+// Not supported on physical devices — skips with a single warning, matching
+// the existing pattern (see SetLocation, OpenDeepLink, AddMedia above).
+// SetLocation itself also checks IsPhysical, but Travel checks it first so a
+// route with many interpolated frames prints exactly one warning, not one
+// per frame.
+func (dc *DeviceContext) Travel(ctx context.Context, waypoints []LatLng, duration time.Duration) error {
+	if dc.IsPhysical {
+		fmt.Printf("    \033[33m⚠\033[0m  travel is not supported on physical devices — skipping\n")
+		return nil
+	}
+	if len(waypoints) < 2 {
+		return fmt.Errorf("travel: requires at least 2 waypoints, got %d", len(waypoints))
+	}
+
+	frames, gaps := buildTravelRoute(waypoints, duration)
+	fmt.Printf("    \033[36m🧭\033[0m  Traveling through %d waypoints (%d frames)\n", len(waypoints), len(frames))
+
+	for i, f := range frames {
+		lat := strconv.FormatFloat(f.lat, 'f', -1, 64)
+		lng := strconv.FormatFloat(f.lng, 'f', -1, 64)
+		if err := dc.SetLocation(ctx, lat, lng); err != nil {
+			return fmt.Errorf("travel: %w", err)
+		}
+		if i < len(gaps) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(gaps[i]):
+			}
+		}
+	}
+	return nil
+}
+
 // OpenDeepLink opens url through the OS's own URL/intent handling — the
 // same path a user tapping a link or push notification would trigger.
 // Unlike `open link` (the Dart agent's probe.open_link, which calls
@@ -569,7 +792,7 @@ func (dc *DeviceContext) OpenDeepLink(ctx context.Context, url string) error {
 	fmt.Printf("    \033[36m🔗\033[0m  Opening %s via the OS (not the app's own url_launcher)\n", url)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if err := dc.Manager.ADB().OpenURL(ctx, dc.Serial, url); err != nil {
+		if err := dc.Manager.ADB().OpenURLIn(ctx, dc.Serial, url, dc.AppID); err != nil {
 			return fmt.Errorf("open link into the app: %w", err)
 		}
 	case device.PlatformIOS:
@@ -778,4 +1001,42 @@ func (dc *DeviceContext) biometricCapture(ctx context.Context, match bool) error
 		}
 	}
 	return nil
+}
+
+// answerNotificationAlert taps button on the iOS notification-permission
+// alert, if one is showing within a few seconds. There is no simctl service
+// for notifications, so this is the only way to answer the prompt (FP-16).
+// No alert is not an error: the permission may already have been decided, and
+// that keeps `allow permission "notifications"` idempotent. Needs the iOS
+// system-dialog driver (Xcode).
+func (dc *DeviceContext) answerNotificationAlert(ctx context.Context, button string) error {
+	d, err := dc.SystemDriver(ctx)
+	if err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
+	// The notification alert is recognised by its buttons (Allow + Don't Allow, in any language),
+	// not by its English title, so it works on a device set to any language.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		dialogs, err := d.Dialogs(ctx)
+		if err != nil {
+			return fmt.Errorf("notifications: %w", err)
+		}
+		for _, dlg := range dialogs {
+			if dlg.HasRoles(sysdialog.RoleAllow, sysdialog.RoleDeny) && !dlg.HasRoles(sysdialog.RoleAllowOnce) {
+				if _, err := d.Tap(ctx, button, ""); err != nil {
+					return fmt.Errorf("notifications: %w", err)
+				}
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return nil // no alert: nothing to answer
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
 }

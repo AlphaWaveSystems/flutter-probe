@@ -75,7 +75,7 @@ This trade-off is deliberate. ProbeScript optimizes for readability by non-devel
 | Visual regression | No | [Yes](/advanced/visual-regression/) |
 | Test recording | No | [Yes](/tools/recording/) |
 | HTTP mocking | Manual setup | Built-in |
-| GPS / location mocking | Manual | `set location lat, lng` |
+| GPS / location mocking | Manual | `set location lat, lng`, plus route simulation with `travel to ... over N seconds` |
 | Clipboard control | Manual | `set clipboard "text"` |
 | Parallel execution | No | `--parallel`, `--shard` |
 | Cloud farm support | Limited | 5 farms (BrowserStack, Firebase Test Lab, AWS Device Farm, Sauce Labs, LambdaTest) |

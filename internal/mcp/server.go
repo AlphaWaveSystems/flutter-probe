@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,6 +120,7 @@ var tools = []mcpTool{
 				"platform": {Type: "string", Description: "Target platform: android or ios"},
 				"avd":      {Type: "string", Description: "Android AVD name (required for android; use list_avds to discover)"},
 				"udid":     {Type: "string", Description: "iOS simulator UDID (optional for ios; auto-selects if omitted)"},
+				"name":     {Type: "string", Description: "iOS simulator name: boots the simulator with this name, creating it when missing. Every simulator probe opens is named so test results are tied to a device"},
 				"timeout":  {Type: "string", Description: "Boot timeout as a Go duration, e.g. 90s (default 120s)"},
 			},
 		},
@@ -162,6 +164,64 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
+  Scrolling:       scroll down until "Text" appears (or until #key_id appears) keeps
+                     scrolling until the target is on screen — use it for rows below
+                     the fold instead of counting plain "scroll down" steps. Note
+                     "scroll down" reveals LATER content, "scroll up" earlier content.
+  System dialogs:  OS-level dialogs outside the Flutter app (permission alerts, the
+                     StoreKit "Sign in to Apple Account" sheet): tap "Allow" in system
+                     dialog | type "$PROBE_SANDBOX_PASSWORD" into system field "Password"
+                     (value from an environment variable; always masked in logs) |
+                     see system dialog "Title" | wait for system dialog "Title" appears |
+                     dismiss system dialog | sign in sandbox tester (idempotent). Append
+                     optional to make a step a no-op when no dialog shows. iOS simulators
+                     (needs Xcode) and Android emulators/devices only. On iOS the app's
+                     share sheet (activity sheet) is detected too when project.app is set:
+                     see system dialog "Share sheet", tap "Copy", dismiss system dialog.
+  Devices:         start_device names every simulator it boots (name arg; created when
+                     missing); results carry the device name and id.
+  Studio:          studio_* tools drive a running Probe Studio started with
+                     PROBE_STUDIO_AUTOMATION=1: studio_open_workspace -> studio_list_devices ->
+                     studio_connect -> studio_run_file -> poll studio_run_state (current step) ->
+                     studio_results; studio_cancel stops a run; studio_screenshot shows the device.
+  Performance:     start measuring "checkout" ... stop measuring records memory + frames (agent
+                     0.23+), CPU (Android, iOS simulator) and the HTTP traffic of those steps; then
+                     see memory below 300 MB | see memory growth below 20 MB | see cpu below 60
+                     percent | see slow frames below 5 percent | see frame time below 16 ms | see
+                     slowest frame below 100 ms | see data transferred below 500 KB | see response
+                     "/api/x" below 800 ms. Measure profile builds (debug frames are slow). Gate
+                     regressions: probe test --perf-baseline perf.json [--perf-update-baseline]
+                     [--perf-tolerance 20]; read history with the perf_trend / perf_compare tools;
+                     get_report includes a perf array per test.
+  Waiting:         steps have a timeout (--timeout, default 30s); --implicit-wait 7s retries a
+                     missing target; "... within 90 seconds" gives one step its own budget
+                     (wait until "X" appears within 90 seconds | wait for response ... within 5
+                     seconds); optional / if visible / if "X" appears fail gracefully; retry 3
+                     times re-runs a block; defaults.retry_failed_tests re-runs a failing test.
+  Backend data:    the agent records the app's dart:io HTTP traffic: wait for response GET
+                     "/api/orders" status 200 | see response "/api/me" json "data.plan" equals
+                     "pro" | store response ... json "path" as var | if response ... otherwise |
+                     see exactly N requests GET "/x" | clear recorded requests. Mocks are real:
+                     when the app calls GET "/x" / respond with 503 and body "{}" after 2 seconds |
+                     respond with network failure. Agent 0.22+.
+  Localized text:  l10n "saveButton" is a string taken from the app's ARB files (probe.yaml
+                     l10n.dir / l10n.default) in the language the app currently runs in; keys
+                     are validated before the run starts. tap l10n "save", see l10n "title".
+  Languages:       set language "de" (or "pt-BR", "ar", "system") relaunches the app in that
+                     language; probe test --locale de / --locales de,ja,ar do it per run.
+                     prefer #key selectors. Run with --match-loose to fold case, accents and
+                     typographic apostrophes in text selectors; use see any of "A", "B" for
+                     per-language labels. System-dialog buttons resolve by role (allow, deny,
+                     cancel, ...), so tap "Don't Allow" in system dialog works on a device set
+                     to any language.
+  Keyboard:        press enter — the keyboard action key on the focused text field.
+  See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
+  Any of:          wait until any of "A", "B", "C" appears — whichever text shows first
+                     (an optional consent dialog, a login or home screen).
+  Idle:            wait for idle — after closing a dialog/sheet, waits for route
+                     transitions and pending frames/animations/requests to settle
+                     (prefer it to a fixed "wait 2 seconds"). "dont see" is an alias
+                     of "don't see".
   AI assertions:   see "<natural-language assertion>" with ai — for checks that are
                      hard to express structurally (e.g. see "checkout total looks
                      correct" with ai). assert no visual defects with ai — a fixed
@@ -197,6 +257,12 @@ Supports the full ProbeScript syntax:
                      via uiautomator, matched by text or resource-id. Android only.
   Device media:    add media "path/to/photo.jpg" — seeds a file into the camera
                      roll/gallery (Android + iOS simulator).
+  GPS routes:      travel to — indented "lat, lng" waypoints followed by a sibling
+                     "over N seconds" clause, e.g. travel to\n  37.7749, -122.4194\n
+                     37.7849, -122.4094\nover 10 seconds. Simulates GPS movement through
+                     the waypoints in order (interpolated, ~1s steps) for maps/delivery/
+                     rideshare flows. Same emulator/simulator-only limitation as the
+                     single-point set location.
   Deep links:      open link "scheme://…" in the app — routes via OS intent/URL
                      handling to the app's own registered scheme, instead of the
                      external browser that plain open link uses.
@@ -243,7 +309,17 @@ Key flags for the flags parameter:
   --parallel                  distribute tests across all connected devices
   --shard 1/3                 run 1/3 of test files (for CI matrix builds)
   --host <ip> --token <tok>   WiFi mode for physical devices
-  --disable-animations        set timeDilation=0 to speed up Flutter animations
+  --agent-port 48700          agent port (alias of --port); pair with the app's
+                               --dart-define=PROBE_PORT=48700 so simulators don't collide
+  --grant notifications,camera  pre-grant OS permissions before the first test
+                               (Android: pm grant; iOS simulator: simctl privacy; iOS
+                               notifications: a watcher taps Allow when the alert appears)
+  --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
+  --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
+  --measure-all               measure every test (a window per test) with no script edits
+  --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
+  --retry-failed N            re-run a failing test up to N extra times
+  --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
   --stream                    emit one ndjson line per test as it completes (requires --format json)
@@ -314,6 +390,32 @@ For composite multi-device tests use the composite_devices parameter.`,
 		},
 	},
 	{
+		Name: "perf_trend",
+		Description: `Show how a measured performance number changed over past runs (from reports/perf-history.jsonl, written by probe test whenever a test uses start measuring ... stop measuring). Returns one line per measurement with a sparkline, the latest value and the change since the first run. Metrics: memory, memory_growth, cpu, cpu_peak, slow_frames, frame_time, frame_max, data.`,
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"metric":  {Type: "string", Description: "memory (default) | memory_growth | cpu | cpu_peak | slow_frames | frame_time | frame_max | data"},
+				"filter":  {Type: "string", Description: "Only measurements whose key (file::test::name) contains this text"},
+				"last":    {Type: "string", Description: "How many of the latest runs to include (default 30)"},
+				"history": {Type: "string", Description: "History file (default reports/perf-history.jsonl)"},
+			},
+		},
+	},
+	{
+		Name:        "perf_compare",
+		Description: "Compare two performance baseline files (written by probe test --perf-baseline FILE --perf-update-baseline) and list every measurement that got worse by more than the tolerance in the second one. Use it to compare a branch with main.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"baseline", "candidate"},
+			Properties: map[string]mcpProp{
+				"baseline":  {Type: "string", Description: "The reference baseline file"},
+				"candidate": {Type: "string", Description: "The baseline file to check against it"},
+				"tolerance": {Type: "string", Description: "Percent a number may exceed the reference by (default 20)"},
+			},
+		},
+	},
+	{
 		Name:        "generate_test",
 		Description: "Use AI to generate a .probe test file from a natural language description.",
 		InputSchema: mcpSchema{
@@ -340,6 +442,35 @@ For composite multi-device tests use the composite_devices parameter.`,
 				"input":  {Type: "string", Description: "JSON report path (default: most recently modified *.json in reports/)"},
 				"output": {Type: "string", Description: "HTML output path (default: reports/report.html)"},
 				"flags":  {Type: "string", Description: "Extra probe report flags (e.g. --open)"},
+			},
+		},
+	},
+	{
+		Name: "triage_failure",
+		Description: `OPTIONAL and advisory: explain the failed tests in a JSON results file using the AI model configured in probe.yaml (ai: block — a local OpenAI-compatible model such as Ollama or LM Studio works with no API key).
+Returns a short probable cause and next step per failure. It never re-runs tests and never changes results. If no ai: block is configured, or the model is unreachable, it says so and nothing else is affected — tests do not need it. Run ` + "`probe ai doctor`" + ` to check a provider. Failure text from FlutterProbe includes the failing line, the step and the visible texts/keys, which is what the model reasons over.`,
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"input":  {Type: "string", Description: "JSON report path from run_tests --format json (default: most recently modified *.json in reports/)"},
+				"output": {Type: "string", Description: "Optional markdown file to also write the advice to"},
+			},
+		},
+	},
+	{
+		Name: "system_dialog",
+		Description: `Inspect and answer OS-level system dialogs that live outside the Flutter app and are invisible to get_widget_tree: iOS permission alerts, the StoreKit "Sign in to Apple Account" sheet, the app's iOS share (activity) sheet, Android permission dialogs. Works on iOS simulators (needs Xcode; the driver downloads on first use) and Android emulators/devices.
+Actions: list (titles, buttons, fields of what is showing), see, tap (needs button), dismiss (Cancel / Don't Allow / Not Now; closes a share sheet via its Close button, a tap outside or a swipe down; no-op if none), wait (appears; set gone=true to wait for it to disappear), sign-in-sandbox (StoreKit sandbox tester from the PROBE_SANDBOX_USER / PROBE_SANDBOX_PASSWORD environment variables; no-op if no sheet shows).
+Typing into system fields is intentionally not available here so secrets never pass through an agent: use the ProbeScript step type "$ENV_VAR" into system field "Password" in a test, which reads the environment and masks the value.`,
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"action"},
+			Properties: map[string]mcpProp{
+				"action": {Type: "string", Description: "list | see | tap | dismiss | wait | sign-in-sandbox"},
+				"button": {Type: "string", Description: "Button label for tap, e.g. Allow"},
+				"title":  {Type: "string", Description: "Only match a dialog whose text contains this"},
+				"gone":   {Type: "string", Description: "For wait: \"true\" waits for the dialog to disappear"},
+				"device": {Type: "string", Description: "Simulator UDID or Android serial (default: the only booted/connected device)"},
 			},
 		},
 	},
@@ -446,14 +577,45 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return textResp(req.ID, out, err)
 	case "take_screenshot":
 		return s.takeScreenshot(req.ID, args["name"], args["device"])
+	case "studio_open_workspace", "studio_list_devices", "studio_connect", "studio_run_file", "studio_cancel",
+		"studio_run_state", "studio_results", "studio_screenshot":
+		return s.studioTool(req.ID, params.Name, args)
 	case "get_report":
 		return s.getReport(req.ID, args["path"])
+	case "perf_trend":
+		cmdArgs := []string{"perf", "trend"}
+		if args["metric"] != "" {
+			cmdArgs = append(cmdArgs, "--metric", args["metric"])
+		}
+		if args["filter"] != "" {
+			cmdArgs = append(cmdArgs, "--filter", args["filter"])
+		}
+		if args["last"] != "" {
+			cmdArgs = append(cmdArgs, "--last", args["last"])
+		}
+		if args["history"] != "" {
+			cmdArgs = append(cmdArgs, "--history", args["history"])
+		}
+		return s.runProbeArgs(req.ID, cmdArgs...)
+	case "perf_compare":
+		if args["baseline"] == "" || args["candidate"] == "" {
+			return errResp(req.ID, -32602, "baseline and candidate are required")
+		}
+		cmdArgs := []string{"perf", "compare", args["baseline"], args["candidate"]}
+		if args["tolerance"] != "" {
+			cmdArgs = append(cmdArgs, "--tolerance", args["tolerance"])
+		}
+		return s.runProbeArgs(req.ID, cmdArgs...)
 	case "generate_test":
 		return s.generateTest(req.ID, args["prompt"], args["output"])
 	case "init_project":
 		return s.initProject(req.ID)
 	case "generate_report":
 		return s.generateReport(req.ID, args["input"], args["output"], args["flags"])
+	case "triage_failure":
+		return s.triageFailure(req.ID, args["input"], args["output"])
+	case "system_dialog":
+		return s.systemDialog(req.ID, args)
 	case "record":
 		return s.record(req.ID, args["output"], args["device"], args["timeout"])
 	default:
@@ -583,6 +745,14 @@ func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
 	return textResp(id, string(out), err)
 }
 
+// runProbeArgs runs the probe binary with exactly these arguments and returns its output.
+func (s *Server) runProbeArgs(id any, args ...string) *mcpResponse {
+	cmd := exec.Command(probeBin(), args...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	return textResp(id, string(out), err)
+}
+
 func (s *Server) getReport(id any, path string) *mcpResponse {
 	if path == "" {
 		// Use modification time, not alphabetical order, to find the latest report.
@@ -706,6 +876,74 @@ func (s *Server) generateReport(id any, input, output, flags string) *mcpRespons
 	}}
 }
 
+// systemDialog wraps `probe system-dialog` (FP-16). Typing is deliberately not
+// exposed: secrets must not pass through an agent.
+func (s *Server) systemDialog(id any, args map[string]string) *mcpResponse {
+	action := args["action"]
+	var cmdArgs []string
+	switch action {
+	case "list", "see", "dismiss", "sign-in-sandbox":
+		cmdArgs = []string{"system-dialog", action}
+	case "tap":
+		if args["button"] == "" {
+			return errResp(id, -32602, "tap needs a button, e.g. \"Allow\"")
+		}
+		cmdArgs = []string{"system-dialog", "tap", args["button"]}
+	case "wait":
+		cmdArgs = []string{"system-dialog", "wait"}
+		if args["gone"] == "true" {
+			cmdArgs = append(cmdArgs, "--gone")
+		}
+	default:
+		return errResp(id, -32602, "unknown action "+strconv.Quote(action)+": use list, see, tap, dismiss, wait or sign-in-sandbox")
+	}
+	if args["title"] != "" && action != "list" && action != "sign-in-sandbox" {
+		cmdArgs = append(cmdArgs, "--title", args["title"])
+	}
+	if args["device"] != "" {
+		cmdArgs = append(cmdArgs, "--device", args["device"])
+	}
+	cmd := exec.Command(probeBin(), cmdArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return textResp(id, string(out), err)
+	}
+	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
+		"content": []map[string]any{{"type": "text", "text": string(out)}},
+	}}
+}
+
+// triageFailure wraps `probe triage` (FP-14). Advisory only: any failure is
+// returned as text for the agent to read; it affects nothing else.
+func (s *Server) triageFailure(id any, input, output string) *mcpResponse {
+	if input == "" {
+		matches, _ := filepath.Glob(filepath.Join("reports", "*.json"))
+		var newestMod time.Time
+		for _, m := range matches {
+			if info, err := os.Stat(m); err == nil && (input == "" || info.ModTime().After(newestMod)) {
+				input, newestMod = m, info.ModTime()
+			}
+		}
+		if input == "" {
+			return textResp(id, "No JSON reports found in reports/. Run tests with --format json first.", fmt.Errorf("no reports"))
+		}
+	}
+	cmdArgs := []string{"triage", "--input", input}
+	if output != "" {
+		cmdArgs = append(cmdArgs, "--output", output)
+	}
+	cmd := exec.Command(probeBin(), cmdArgs...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return textResp(id, string(out), err)
+	}
+	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
+		"content": []map[string]any{{"type": "text", "text": string(out)}},
+	}}
+}
+
 func (s *Server) record(id any, output, deviceID, timeout string) *mcpResponse {
 	d := 30 * time.Second
 	if timeout != "" {
@@ -753,6 +991,7 @@ type devManager interface {
 	List(ctx context.Context) ([]device.Device, error)
 	Start(ctx context.Context, avdName string, bootTimeout, pollInterval time.Duration) (*device.Device, error)
 	StartIOS(ctx context.Context, udid string) (*device.Device, error)
+	StartIOSNamed(ctx context.Context, udid, name string) (*device.Device, error)
 	SimCtl() *ios.SimCtl
 	ADB() *device.ADB
 }
@@ -825,6 +1064,7 @@ func (s *Server) startDevice(id any, raw json.RawMessage) *mcpResponse {
 		Platform string `json:"platform"`
 		AVD      string `json:"avd"`
 		UDID     string `json:"udid"`
+		Name     string `json:"name"`
 		Timeout  string `json:"timeout"`
 	}
 	if len(raw) > 0 {
@@ -859,7 +1099,7 @@ func (s *Server) startDevice(id any, raw json.RawMessage) *mcpResponse {
 		}
 		booted, err = dm.Start(ctx, args.AVD, timeout, 0)
 	case "ios":
-		booted, err = dm.StartIOS(ctx, args.UDID)
+		booted, err = dm.StartIOSNamed(ctx, args.UDID, args.Name)
 	}
 	if err != nil {
 		return textResp(id, "start device: "+err.Error(), err)

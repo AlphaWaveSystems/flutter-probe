@@ -10,10 +10,23 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > - Device picker that filters to booted simulators / online emulators
 > - Live device stream + widget tree inspector (event-driven, parallel RPCs)
 > - In-process test execution with a streaming results timeline
+> - Live step highlight: the editor gutter follows the executing step, step rows nest under each test, `step N of M` in the toolbar, Cancel
+> - Performance lines (memory, CPU, frames, network) under each result that uses `start measuring`
 > - Keyboard shortcuts, toast notifications, dark theme
 >
 > Stability is "beta" — expect rough edges, especially around physical
 > devices (not yet supported) and parallel multi-device authoring.
+
+## E2E tests
+
+`make studio-e2e` drives the real Studio window on macOS through the
+accessibility tree and screenshots against a bundled fixture app
+(`native-test-apps/studio-fixture/`). See [`e2e/README.md`](e2e/README.md),
+and [`e2e/DOGFOOD.md`](e2e/DOGFOOD.md) to run the same suite against your own app.
+
+Studio reads `probe.yaml` from the open workspace (agent port, timeout,
+device ids). `PROBE_STUDIO_WORKSPACE=/path` opens a workspace at launch
+without the folder picker.
 
 ## Run from source
 
@@ -129,8 +142,8 @@ studio/
 | Android Emulator | adb forward | Token from cache, /data/local/tmp, or logcat |
 | Physical iOS (USB) | iproxy tunnel | Requires `brew install libimobiledevice`; token via idevicesyslog |
 | Physical Android (USB) | adb forward | Same path as emulator |
-| Physical iOS (WiFi) | direct | Auto-discovered via mDNS; user pastes token from app logs |
-| Physical Android (WiFi) | direct | Auto-discovered via mDNS; user pastes token from app logs |
+| Physical iOS (WiFi) | direct | Auto-discovered via mDNS (needs a `ProbeAdvertiser` in the app, see the Studio docs); user pastes token from app logs |
+| Physical Android (WiFi) | direct | Auto-discovered via mDNS (needs a `ProbeAdvertiser` in the app, see the Studio docs); user pastes token from app logs |
 
 WiFi discovery requires `flutter_probe_agent` v0.7.0+ in your Flutter
 app's pubspec, and the app must run with `--dart-define=PROBE_WIFI=true`
@@ -143,3 +156,12 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 - Multi-device side-by-side
 - Time-travel widget tree per step
 - AI chat pane (spawns `probe-mcp` and proxies)
+
+## Testing Studio
+
+- `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
+- `make studio-e2e`: the real window, driven through macOS accessibility (needs a display and focus).
+
+## Automation endpoint
+
+With `PROBE_STUDIO_AUTOMATION=1` Studio opens a loopback-only control endpoint (random per-launch token, discovery file `<user config dir>/flutter-probe-studio/automation.json`, mode 0600) that exposes the bound methods (`open_workspace`, `connect`, `run_file`, `run_state`, `results`, `screenshot`, ...) without a window or cursor. Off by default. The `studio_*` tools of `probe-mcp` use it. Automation can only list, read, run and open workspaces inside the folder a person opened in the window (or `PROBE_STUDIO_WORKSPACE`) plus `PROBE_STUDIO_AUTOMATION_ROOTS`; keep the discovery file at 0600. See the [Studio page](https://flutterprobe.dev/tools/studio/#automation-no-window-no-cursor).

@@ -31,7 +31,7 @@ no new DSL surface)
 
 ## The concrete justifying flow
 
-nect-flutter's post-creation screen has a real, unavoidable native-UI gap:
+the social app's post-creation screen has a real, unavoidable native-UI gap:
 an "Add Images" button (`identifier: 'post_form_image_button'`,
 `lib/features/posts/presentation/pages/post_form_page.dart:561`) calls
 `image_picker`'s `pickMultiImage()`
@@ -41,7 +41,7 @@ in `ios/Runner/Info.plist`. Since iOS 14, `PHPickerViewController` runs in
 a **separate, out-of-process extension** — not even part of the host app's
 own view hierarchy or process. It has no Flutter involvement whatsoever and
 no OS-level bypass (unlike permission dialogs, already solved). A test
-covering nect-flutter's actual post-creation flow cannot proceed past this
+covering the social app's actual post-creation flow cannot proceed past this
 button today.
 
 This mirrors N-1's Android evidence almost exactly: same DSL gap, same
@@ -181,7 +181,7 @@ validate the specific claims above against this repo's actual toolchain —
 building WDA from source (or vendoring a release build), launching it
 against a booted simulator via `xcodebuild test-without-building`, and
 confirming its HTTP API can find and tap an element in a real app (ideally
-nect-flutter's own `PHPickerViewController` flow, to close the loop on the
+the social app's own `PHPickerViewController` flow, to close the loop on the
 concrete justifying case this proposal opened with). That spike is what
 should turn this proposal's cost estimates from "well-documented elsewhere
 in the ecosystem" into "verified against this codebase," the same bar N-1's
