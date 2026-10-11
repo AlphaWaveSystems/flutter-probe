@@ -168,7 +168,8 @@ func init() {
 	f.String("cloud-secret", "", "cloud provider API secret or access key")
 
 	// x402 pay-per-use
-	f.String("pay", "", `payment method for cloud upload: "x402" for pay-per-use via crypto wallet`)
+	f.String("pay", "", `experimental: payment method for uploads to a cloud endpoint you configure (no hosted service is provided yet)`)
+	_ = f.MarkHidden("pay")
 
 	// Relay mode
 	f.Bool("relay", false, "force enable relay mode for cloud device farm testing")
