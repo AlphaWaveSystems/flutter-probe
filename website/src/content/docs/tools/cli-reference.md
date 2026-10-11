@@ -47,6 +47,9 @@ probe test [path] [flags]
 | `--tag <tag>` | — | Run only tests matching this tag |
 | `--timeout <duration>` | `30s` | Per-step timeout |
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |
+| `--junit-attempts` | `false` | With `--format junit`: one `<testcase>` per attempt of a test that was re-run (failed attempts as `<failure>`/`<error>`), so flaky tests are visible to tools that track them. See [Results in other tools](/ci-cd/analytics-tools/) |
+| `--junit-suffix <text>` | — | With `--format junit`: appended to every `classname` (for example `-ios`) so the same test on several devices has distinct identities |
+| `--junit-label <name>` | — | With `--format junit`: written as the `run_label` property of every suite |
 | `-o, --output <path>` | — | Output file path for reports |
 | `-v, --verbose` | `false` | Verbose output |
 | `--locale <tag>` | — | Run the app in this language (`de`, `pt-BR`, `ar`, `system`) from the start: sets the per-app language and relaunches before the agent connects. Android 13+ and iOS simulators; the device language and system dialogs are unchanged. The tag is recorded in the JSON/HTML report |

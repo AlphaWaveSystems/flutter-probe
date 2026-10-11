@@ -4,7 +4,6 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +34,7 @@ type RunMetadata struct {
 	ProbeVersion string `json:"probe_version"`  // FlutterProbe CLI version
 	ConfigFile   string `json:"config_file"`    // which probe.yaml was used
 	Locale       string `json:"locale,omitempty"` // --locale: app language the run used ("" = device default)
+	DeviceClass  string `json:"device_class,omitempty"` // emulator | simulator | physical | cloud | unknown
 }
 
 // Reporter writes test results to various output formats.
@@ -45,6 +45,7 @@ type Reporter struct {
 	outputDir string // directory of the output file, used to relativize artifact paths
 	metadata  *RunMetadata
 	streaming bool // when true, StreamResult emits one JSON line per result as tests complete
+	junit     JUnitOptions
 }
 
 // NewReporter creates a reporter writing to the given writer.
@@ -191,78 +192,6 @@ func (r *Reporter) PrintStep(step string) {
 	if r.format == FormatTerminal && r.verbose {
 		fmt.Fprintf(r.out, "        \033[2m%s\033[0m\n", step)
 	}
-}
-
-// ---- JUnit XML ----
-
-type junitSuites struct {
-	XMLName xml.Name     `xml:"testsuites"`
-	Suites  []junitSuite `xml:"testsuite"`
-}
-
-type junitSuite struct {
-	Name     string      `xml:"name,attr"`
-	Tests    int         `xml:"tests,attr"`
-	Failures int         `xml:"failures,attr"`
-	Skipped  int         `xml:"skipped,attr"`
-	Time     string      `xml:"time,attr"`
-	Cases    []junitCase `xml:"testcase"`
-}
-
-type junitCase struct {
-	Name      string       `xml:"name,attr"`
-	Classname string       `xml:"classname,attr"`
-	Time      string       `xml:"time,attr"`
-	Failure   *junitFail   `xml:"failure,omitempty"`
-	Skipped   *junitSkip   `xml:"skipped,omitempty"`
-}
-
-type junitFail struct {
-	Message string `xml:"message,attr"`
-	Text    string `xml:",chardata"`
-}
-
-type junitSkip struct{}
-
-func (r *Reporter) writeJUnit(results []TestResult) error {
-	// Group by file
-	suiteMap := make(map[string]*junitSuite)
-	for _, res := range results {
-		s, ok := suiteMap[res.File]
-		if !ok {
-			s = &junitSuite{Name: res.File}
-			suiteMap[res.File] = s
-		}
-		s.Tests++
-		c := junitCase{
-			Name:      res.TestName,
-			Classname: res.File,
-			Time:      fmt.Sprintf("%.3f", res.Duration.Seconds()),
-		}
-		if res.Skipped {
-			s.Skipped++
-			c.Skipped = &junitSkip{}
-		} else if !res.Passed {
-			s.Failures++
-			c.Failure = &junitFail{
-				Message: res.Error.Error(),
-				Text:    res.Error.Error(),
-			}
-		}
-		s.Cases = append(s.Cases, c)
-	}
-
-	var suites junitSuites
-	for _, s := range suiteMap {
-		suites.Suites = append(suites.Suites, *s)
-	}
-
-	enc := xml.NewEncoder(r.out)
-	enc.Indent("", "  ")
-	if _, err := io.WriteString(r.out, xml.Header); err != nil {
-		return err
-	}
-	return enc.Encode(suites)
 }
 
 // ---- JSON ----

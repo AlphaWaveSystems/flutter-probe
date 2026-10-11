@@ -25,6 +25,7 @@ These grow in minor releases, never in a way that changes what existing input do
 - **New `probe.yaml` keys, CLI flags and commands**, with defaults that keep the old behaviour.
 - **New protocol methods and new fields** in requests and results. Readers ignore fields they do not know.
 - **New report fields.** Consumers of the JSON report must ignore fields they do not know.
+- **New JUnit attributes and `<properties>`.** JUnit output stays valid JUnit XML; consumers ignore attributes and properties they do not know. Behaviour that changes the number of test cases (such as `--junit-attempts`) is opt-in.
 - **New MCP tools and tool arguments.**
 
 A feature that needs a newer agent says so (`needs flutter_probe_agent >= x`) instead of failing obscurely. A CLI works with any agent of the same major version; it warns when versions differ, and features introduced after the agent's version are unavailable.

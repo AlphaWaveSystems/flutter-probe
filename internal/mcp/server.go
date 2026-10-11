@@ -316,6 +316,7 @@ Key flags for the flags parameter:
                                notifications: a watcher taps Allow when the alert appears)
   --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
+  --format junit              JUnit XML (add --junit-attempts to list every attempt of a re-run test, --junit-suffix/--junit-label to tell devices apart)
   --measure-all               measure every test (a window per test) with no script edits
   --upload-report             upload the scrubbed report to the hosted service (Probe Cloud, preview; needs a probe_cloud license); --upload-dry-run prints the payload and sends nothing
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)

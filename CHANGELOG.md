@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`--format junit` works with flaky-test and test-analytics services** (checked against their public docs only, nothing uploaded): suites are sorted, with `file`, `timestamp`, a real `time` and `errors`; paths are relative with forward slashes (no home directory); `<error>` marks infrastructure problems (agent connection, setup hooks) and `<failure>` assertions; `<properties>` carry probe version, platform, OS version, app id and version, device name and class; data-driven rows get a `row` property and a re-run test an `attempts` property. New flags: `--junit-attempts` (one `<testcase>` per attempt of a re-run test, off by default because the extra failed cases change the counts of a run that finally passed), `--junit-suffix` (appended to classname) and `--junit-label` (`run_label` property). The JSON report's metadata gains `device_class`. New page: Results in other tools.
+
+### Fixed
+- **The suite `time` attribute of `--format junit` was always empty** (`time=""`); it is now the sum of its cases.
+
 ### Docs
 - **iOS guide: "Physical iPhone over WiFi (CLI and Studio): what must be true"**: build mode and flavor, `PROBE_WIFI`, the port, the token, network reachability, how the Mac finds the phone (mDNS only with a `ProbeAdvertiser`; Studio's WiFi overlay has no manual host/port field, the CLI `--host/--token` path always works), and a three-command check.
 

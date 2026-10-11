@@ -94,6 +94,9 @@ func init() {
 	f.BoolP("watch", "w", false, "watch mode — re-run tests automatically on file changes")
 	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
 	f.String("format", "terminal", "output format: terminal | junit | json")
+	f.Bool("junit-attempts", false, "with --format junit: write one testcase per attempt of a test that was re-run (retry_failed_tests), failed attempts as failure/error, so flaky tests are visible to tools that track them; off by default because it adds failed cases to a run that finally passed")
+	f.String("junit-suffix", "", "with --format junit: text appended to every classname (for example -ios), so the same test on several devices has distinct identities")
+	f.String("junit-label", "", "with --format junit: written as the run_label property of every suite")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
 	f.Bool("match-loose", false, "match text selectors loosely: fold case, accents, typographic apostrophes/dashes and whitespace (also defaults.match: loose in probe.yaml)")
@@ -512,6 +515,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		} else {
 			report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 		}
+		report.SetJUnitOptions(junitOptionsFromFlags(cmd))
 		if err := report.Report(results); err != nil {
 			return err
 		}
@@ -1047,6 +1051,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	} else {
 		report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 	}
+	report.SetJUnitOptions(junitOptionsFromFlags(cmd))
 
 	// Streaming ndjson output during the run (JSON format only).
 	stream, _ := cmd.Flags().GetBool("stream")
@@ -1165,6 +1170,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,
 			DialTimeout:             cfg.Agent.DialTimeout,
 		}
+	}
+
+	// The device class (emulator, simulator, physical, cloud) is only known now; add it to the report metadata.
+	if runMeta.Platform != "" || runMeta.DeviceName != "" {
+		runMeta.DeviceClass = deviceClass(devCtx, platform, cloudSession != nil)
+		report.SetMetadata(runMeta)
 	}
 
 	// Resolve video setting: CLI flags > probe.yaml
@@ -1532,4 +1543,12 @@ func promptUserConfirm(message string) bool {
 	}
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	return answer == "y" || answer == "yes"
+}
+
+// junitOptionsFromFlags reads the --junit-* flags of `probe test`.
+func junitOptionsFromFlags(cmd *cobra.Command) runner.JUnitOptions {
+	attempts, _ := cmd.Flags().GetBool("junit-attempts")
+	suffix, _ := cmd.Flags().GetString("junit-suffix")
+	label, _ := cmd.Flags().GetString("junit-label")
+	return runner.JUnitOptions{Attempts: attempts, ClassSuffix: suffix, Label: label}
 }
