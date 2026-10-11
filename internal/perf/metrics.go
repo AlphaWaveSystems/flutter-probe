@@ -29,6 +29,10 @@ type Metrics struct {
 	BuildAvgMs   float64 `json:"build_avg_ms"`
 	RasterAvgMs  float64 `json:"raster_avg_ms"`
 
+	// SpansRestart is true when the app was restarted inside the window: the numbers then come from
+	// different processes and are not compared with a baseline.
+	SpansRestart bool `json:"window_spans_restart,omitempty"`
+
 	Requests     int     `json:"requests"`
 	DataKB       float64 `json:"data_kb"` // request + response bytes
 	SlowestReqMs int     `json:"slowest_request_ms"`

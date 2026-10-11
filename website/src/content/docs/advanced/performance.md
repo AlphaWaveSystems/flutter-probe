@@ -75,10 +75,29 @@ probe test tests/perf/ --yes --perf-baseline perf-baseline.json --perf-update-ba
 probe test tests/perf/ --yes --perf-baseline perf-baseline.json --perf-tolerance 20
 ```
 
-Every measurement is stored under `file::test::name`. A measurement fails its test when a number exceeds the baseline by more than
+Every measurement is stored under `file::test::name`, with the file relative to the current directory (or to `--perf-key-base DIR`), so the same tests give the same keys from another checkout. Baselines written by earlier versions (the path as passed) are still found. A measurement fails its test when a number exceeds the baseline by more than
 the tolerance (default 20%) **and** by more than a noise floor (5 MB memory, 5 points CPU, 2 points slow frames, 3 ms frame time,
-20 KB data), so a big percentage of a tiny number does not break the build. A measurement without a baseline entry is new and passes.
+20 KB data), so a big percentage of a tiny number does not break the build. When the baseline is zero or negative (memory growth can be) only the absolute change against the floor counts, and the message shows the real delta. A measurement without a baseline entry is new and passes; the run prints how many there were, so keys that did not match (another directory) do not go unnoticed.
 `--retry-failed N` re-runs a test that failed this way, which smooths a noisy device.
+
+### Which metrics are safe to gate on
+
+Two runs of the same build differ a lot in single-sample numbers. By default a comparison fails only on the stable ones:
+
+| Gated by default | Why |
+|---|---|
+| `memory` (peak RSS) | stable between runs of one build |
+| `slow_frames`, `frame_time` (p95) | percentages and percentiles over many frames |
+| `data` | deterministic for a given flow |
+| `cpu` (average) | only for windows of 5 seconds or more, over a shorter window a few busy milliseconds swing the average by tens of points |
+
+These are recorded and shown, but **not** gated unless you ask: `memory_growth` (end minus start of a noisy RSS, 3 to 50 MB between identical runs), `frame_max` (one slowest frame) and `cpu_peak` (the busiest second). Choose the set with `--perf-metrics memory,cpu,frame_max` (or `all`) and drop some with `--perf-ignore cpu`; `probe perf compare --metrics` takes the same list. Debug builds and simulators are noisier than profile builds on a device: prefer a wider `--perf-tolerance` there.
+
+### Restarts and unavailable numbers
+
+- A window that contains `restart the app` (or any relaunch) spans two processes: the run prints a warning, the report marks the window `window_spans_restart`, CPU is not reported, and the baseline comparison skips it. Put the window around the steps after the restart instead.
+- CPU is reported only when the sampler read the app at least twice in the same process. Otherwise it is absent (not `0.0`) and skipped by comparisons.
+- `start measuring` while the app is not running fails with "no app is connected ... open the app first".
 
 To compare two baselines (a branch against main): `probe perf compare perf-baseline.main.json perf-baseline.branch.json`.
 

@@ -61,3 +61,31 @@ func TestCPUSamplerUnavailable(t *testing.T) {
 		t.Fatal("a reader that never works must report CPU unavailable")
 	}
 }
+
+func TestCPUUnavailableWithoutAnIntervalOrAfterARestart(t *testing.T) {
+	// One reading only: there is no interval to average over, so no number (not 0.0).
+	s := NewCPUSampler(func(context.Context) (time.Duration, error) { return time.Second, nil }, time.Hour)
+	s.Start(context.Background())
+	if _, _, ok := s.Result(); ok {
+		t.Fatal("a single sample must not report CPU")
+	}
+	s.Stop(context.Background())
+
+	// The counter went backwards: the app restarted, the window has no CPU number.
+	readings := []time.Duration{10 * time.Second, 12 * time.Second, time.Second, 2 * time.Second}
+	i := 0
+	r := NewCPUSampler(func(context.Context) (time.Duration, error) {
+		v := readings[i%len(readings)]
+		i++
+		return v, nil
+	}, time.Hour)
+	r.Start(context.Background())
+	r.sample(context.Background())
+	r.sample(context.Background())
+	r.sample(context.Background())
+	if _, _, ok := r.Result(); ok {
+		t.Fatal("a restart inside the window must make CPU unavailable")
+	}
+	r.cancel()
+	<-r.done
+}

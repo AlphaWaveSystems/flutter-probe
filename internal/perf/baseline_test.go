@@ -69,3 +69,74 @@ func TestBaselineRoundTripAndHistoryTrend(t *testing.T) {
 		t.Fatalf("sparkline = %q", sp)
 	}
 }
+
+func TestCompareIgnoresSingleSampleExtremesByDefault(t *testing.T) {
+	base := Metrics{DurationMs: 8000, MemGrowthMB: 4, FrameMaxMs: 37, CPUAvailable: true, CPUAvgPct: 20, CPUPeakPct: 53}
+	cur := base
+	cur.MemGrowthMB, cur.FrameMaxMs, cur.CPUPeakPct = 50, 60, 109
+	if regs := Compare(base, cur, 20); len(regs) != 0 {
+		t.Fatalf("noisy extremes must not gate by default: %v", regs)
+	}
+	regs := CompareWith(base, cur, CompareOptions{TolerancePct: 20, Metrics: []Metric{MemGrowth, FrameMax, CPUPeak}})
+	if len(regs) != 3 {
+		t.Fatalf("explicitly requested metrics gate: %v", regs)
+	}
+}
+
+func TestCompareCPUNeedsALongWindow(t *testing.T) {
+	base := Metrics{DurationMs: 2000, CPUAvailable: true, CPUAvgPct: 10}
+	cur := Metrics{DurationMs: 2000, CPUAvailable: true, CPUAvgPct: 60}
+	if regs := Compare(base, cur, 20); len(regs) != 0 {
+		t.Fatalf("a 2 s window's CPU is noise: %v", regs)
+	}
+	base.DurationMs, cur.DurationMs = 6000, 6000
+	if regs := Compare(base, cur, 20); len(regs) != 1 {
+		t.Fatalf("a 6 s window's CPU is compared: %v", regs)
+	}
+}
+
+func TestCompareNonPositiveBaselineUsesTheAbsoluteChange(t *testing.T) {
+	base := Metrics{MemGrowthMB: -1.9}
+	cur := Metrics{MemGrowthMB: 8}
+	regs := CompareWith(base, cur, CompareOptions{TolerancePct: 20, Metrics: []Metric{MemGrowth}})
+	if len(regs) != 1 || !strings.Contains(regs[0].String(), "+9.9 MB") || strings.Contains(regs[0].String(), "+0%") {
+		t.Fatalf("regs = %v", regs)
+	}
+	if regs := CompareWith(Metrics{}, Metrics{MemGrowthMB: 3}, CompareOptions{TolerancePct: 20, Metrics: []Metric{MemGrowth}}); len(regs) != 0 {
+		t.Fatalf("below the floor: %v", regs)
+	}
+}
+
+func TestCompareSkipsWindowsThatSpanARestart(t *testing.T) {
+	if regs := Compare(Metrics{MemPeakMB: 100}, Metrics{MemPeakMB: 900, SpansRestart: true}, 20); len(regs) != 0 {
+		t.Fatalf("restart window compared: %v", regs)
+	}
+}
+
+func TestRelKeyAndLookupSurviveAnotherDirectory(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "tests", "a.probe")
+	if k := RelKey(root, file, "t", "m"); k != "tests/a.probe::t::m" {
+		t.Fatalf("key = %q", k)
+	}
+	if k := RelKey(root, "/elsewhere/b.probe", "t", "m"); k != "b.probe::t::m" {
+		t.Fatalf("outside the base keeps the name: %q", k)
+	}
+	b := &Baseline{Entries: map[string]Metrics{"tests/old.probe::t::m": {MemPeakMB: 7}}}
+	if _, ok := b.Lookup(root, "tests/old.probe", "t", "m"); !ok {
+		t.Fatal("a key written by an earlier version (path as passed) must still be found")
+	}
+}
+
+func TestParseMetricList(t *testing.T) {
+	got, err := ParseMetricList("memory, frame_max")
+	if err != nil || len(got) != 2 || got[1] != FrameMax {
+		t.Fatalf("%v %v", got, err)
+	}
+	if all, _ := ParseMetricList("all"); len(all) != len(Order) {
+		t.Fatalf("all = %v", all)
+	}
+	if _, err := ParseMetricList("nope"); err == nil {
+		t.Fatal("unknown metric must be refused")
+	}
+}

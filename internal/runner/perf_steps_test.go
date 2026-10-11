@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -154,5 +155,14 @@ func TestMeasureAllWrapsTestsThatDoNotMeasure(t *testing.T) {
 	off := New(cfg, f, nil, RunOptions{Timeout: 2 * time.Second})
 	if res := off.runSingleTest(context.Background(), prog, prog.Tests[0], "x.probe", nil, -1); len(res.Perf) != 0 {
 		t.Fatalf("without --measure-all nothing is measured: %+v", res.Perf)
+	}
+}
+
+func TestConnectionGoneTellsADeadAppFromAnOldAgent(t *testing.T) {
+	if !connectionGone(fmt.Errorf("write tcp 127.0.0.1:1->127.0.0.1:2: use of closed network connection")) {
+		t.Error("a closed connection means no app is connected")
+	}
+	if connectionGone(fmt.Errorf("method not found: probe.perf_start")) {
+		t.Error("an agent that lacks the call is not a dead connection")
 	}
 }

@@ -191,7 +191,7 @@ Supports the full ProbeScript syntax:
                      slowest frame below 100 ms | see data transferred below 500 KB | see response
                      "/api/x" below 800 ms. Measure profile builds (debug frames are slow). Gate
                      regressions: probe test --perf-baseline perf.json [--perf-update-baseline]
-                     [--perf-tolerance 20]; read history with the perf_trend / perf_compare tools;
+                     [--perf-tolerance 20] [--perf-metrics LIST]; read history with the perf_trend / perf_compare tools;
                      get_report includes a perf array per test.
   Waiting:         steps have a timeout (--timeout, default 30s); --implicit-wait 7s retries a
                      missing target; "... within 90 seconds" gives one step its own budget
@@ -318,6 +318,8 @@ Key flags for the flags parameter:
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
   --measure-all               measure every test (a window per test) with no script edits
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
+  --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data; all = also memory_growth,cpu_peak,frame_max)
+  --perf-ignore LIST          metrics to leave out of the comparison; --perf-key-base DIR makes baseline keys relative to DIR
   --retry-failed N            re-run a failing test up to N extra times
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
   -y                          auto-approve destructive operations (CI/CD mode)

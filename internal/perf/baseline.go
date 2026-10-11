@@ -64,10 +64,11 @@ type Regression struct {
 }
 
 func (r Regression) String() string {
-	pct := 0.0
-	if r.Baseline > 0 {
-		pct = (r.Current - r.Baseline) / r.Baseline * 100
+	if r.Baseline <= 0 {
+		// A relative change means nothing against zero or a negative number: show the real delta.
+		return fmt.Sprintf("%s %.1f %s vs baseline %.1f (%+.1f %s)", r.Metric, r.Current, Unit(r.Metric), r.Baseline, r.Current-r.Baseline, Unit(r.Metric))
 	}
+	pct := (r.Current - r.Baseline) / r.Baseline * 100
 	return fmt.Sprintf("%s %.1f %s vs baseline %.1f (%+.0f%%)", r.Metric, r.Current, Unit(r.Metric), r.Baseline, pct)
 }
 
@@ -76,21 +77,133 @@ var floors = map[Metric]float64{
 	MemPeak: 5, MemGrowth: 5, CPUAvg: 5, CPUPeak: 10, SlowFrames: 2, FrameTime: 3, FrameMax: 8, DataTransfer: 20,
 }
 
+// DefaultGated are the metrics a baseline comparison fails on by default. The others are still
+// recorded and shown, but they are single-sample extremes (the slowest frame, the busiest second,
+// end minus start of a noisy RSS) that differ by large factors between two runs of the same build;
+// ask for them with --perf-metrics.
+var DefaultGated = []Metric{MemPeak, CPUAvg, SlowFrames, FrameTime, DataTransfer}
+
+// MinCPUWindowMs is the shortest window whose CPU numbers are compared: over one or two seconds
+// a few busy milliseconds swing the average by tens of points.
+const MinCPUWindowMs = 5000
+
+// CompareOptions tunes Compare. The zero value gates DefaultGated at 20%.
+type CompareOptions struct {
+	TolerancePct float64
+	Metrics      []Metric // nil = DefaultGated
+}
+
+// ParseMetricList turns "memory,cpu" (or "all") into metrics; names are those of the `see ... below` phrases.
+func ParseMetricList(list string) ([]Metric, error) {
+	var out []Metric
+	for _, f := range strings.Split(list, ",") {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		if f == "all" {
+			return append([]Metric(nil), Order...), nil
+		}
+		found := false
+		for _, m := range Order {
+			if string(m) == f {
+				out = append(out, m)
+				found = true
+			}
+		}
+		if !found {
+			names := make([]string, len(Order))
+			for i, m := range Order {
+				names[i] = string(m)
+			}
+			return nil, fmt.Errorf("unknown metric %q (use: %s, or all)", f, strings.Join(names, ", "))
+		}
+	}
+	return out, nil
+}
+
 // Compare lists the metrics of cur that are worse than base by more than tolerancePct
-// (and by more than the metric's noise floor). Lower is better for every metric.
+// (and by more than the metric's noise floor), for the default gated metrics.
 func Compare(base, cur Metrics, tolerancePct float64) []Regression {
+	return CompareWith(base, cur, CompareOptions{TolerancePct: tolerancePct})
+}
+
+// CompareWith is Compare with a choice of metrics. Lower is better for every metric. A baseline of
+// zero or less (memory growth can be negative) is compared by absolute change against the noise
+// floor. CPU needs a window of at least MinCPUWindowMs on both sides, and a window that spans an
+// app restart is not compared at all.
+func CompareWith(base, cur Metrics, o CompareOptions) []Regression {
+	if base.SpansRestart || cur.SpansRestart {
+		return nil
+	}
+	gate := o.Metrics
+	if gate == nil {
+		gate = DefaultGated
+	}
 	var out []Regression
 	for _, m := range Order {
+		if !containsMetric(gate, m) {
+			continue
+		}
 		b, okB := base.Value(m)
 		c, okC := cur.Value(m)
 		if !okB || !okC {
 			continue
 		}
-		if c-b > floors[m] && c > b*(1+tolerancePct/100) {
-			out = append(out, Regression{Metric: m, Baseline: b, Current: c})
+		if (m == CPUAvg || m == CPUPeak) && (base.DurationMs < MinCPUWindowMs || cur.DurationMs < MinCPUWindowMs) {
+			continue
 		}
+		if c-b <= floors[m] {
+			continue
+		}
+		if b > 0 && c <= b*(1+o.TolerancePct/100) {
+			continue
+		}
+		out = append(out, Regression{Metric: m, Baseline: b, Current: c})
 	}
 	return out
+}
+
+func containsMetric(list []Metric, m Metric) bool {
+	for _, x := range list {
+		if x == m {
+			return true
+		}
+	}
+	return false
+}
+
+// RelKey is Key with the file made relative to base (the project root, default the working
+// directory) so the same tests give the same key from any checkout; a file outside base keeps
+// only its name. Baselines written before this used the path as passed: see LegacyKey.
+func RelKey(base, file, test, name string) string {
+	return Key(relPath(base, file), test, name)
+}
+
+func relPath(base, file string) string {
+	if base == "" {
+		base = "."
+	}
+	absBase, err1 := filepath.Abs(base)
+	absFile, err2 := filepath.Abs(file)
+	if err1 != nil || err2 != nil {
+		return file
+	}
+	rel, err := filepath.Rel(absBase, absFile)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.Base(file)
+	}
+	return rel
+}
+
+// Lookup finds a measurement in a baseline by its root-relative key, falling back to the key
+// written by earlier versions (the file path as passed).
+func (b *Baseline) Lookup(base, file, test, name string) (Metrics, bool) {
+	if m, ok := b.Entries[RelKey(base, file, test, name)]; ok {
+		return m, true
+	}
+	m, ok := b.Entries[Key(file, test, name)]
+	return m, ok
 }
 
 // HistoryRecord is one line of the history file.

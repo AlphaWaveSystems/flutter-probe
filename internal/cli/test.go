@@ -103,6 +103,9 @@ func init() {
 	f.Int("retry-failed", 0, "re-run a failing test up to N extra times before reporting it failed (also defaults.retry_failed_tests); a pass on a retry is reported with its attempt count")
 	f.String("perf-baseline", "", "compare every `start measuring` window with this baseline file; a test whose memory/CPU/frames/data got worse than the tolerance fails (create it with --perf-update-baseline)")
 	f.Float64("perf-tolerance", 20, "percent a measured number may exceed its baseline by before it counts as a regression (small absolute changes are ignored)")
+	f.String("perf-metrics", "", "metrics a baseline comparison fails on, comma separated, or `all` (default: memory,cpu,slow_frames,frame_time,data; cpu only for windows of 5 s or more). memory_growth, cpu_peak and frame_max are single-sample extremes that differ a lot between runs of the same build, so they are recorded but not gated unless listed here")
+	f.String("perf-ignore", "", "metrics to leave out of the baseline comparison, comma separated (applied after --perf-metrics)")
+	f.String("perf-key-base", "", "directory the baseline keys' file paths are relative to (default: the current directory), so the same tests give the same keys from another checkout")
 	f.Bool("perf-update-baseline", false, "write this run's measurements of passing tests to the --perf-baseline file (default perf-baseline.json) instead of comparing")
 	f.String("perf-history", "", "append this run's measurements to this JSON-lines file for `probe perf trend` (default <reports>/perf-history.jsonl)")
 	f.Bool("no-perf-history", false, "do not record measurements in the history file")
@@ -1179,6 +1182,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 	perfBaselinePath, _ := cmd.Flags().GetString("perf-baseline")
 	perfUpdate, _ := cmd.Flags().GetBool("perf-update-baseline")
 	perfTolerance, _ := cmd.Flags().GetFloat64("perf-tolerance")
+	perfGate, gerr := perfGateFromFlags(cmd)
+	if gerr != nil {
+		return gerr
+	}
+	perfKeyBase, _ := cmd.Flags().GetString("perf-key-base")
 	var perfBaseline *perf.Baseline
 	if perfBaselinePath != "" && !perfUpdate {
 		b, berr := perf.LoadBaseline(perfBaselinePath)
@@ -1195,6 +1203,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 		MeasureAll:    measureAll || cfg.Perf.MeasureAll,
 		PerfBaseline:  perfBaseline,
 		PerfTolerance: perfTolerance,
+		PerfGate:      perfGate,
+		PerfKeyBase:   perfKeyBase,
 		Files:        files,
 		Tags:         tags,
 		Timeout:      timeout,
