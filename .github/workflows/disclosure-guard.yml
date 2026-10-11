@@ -39,10 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Trusted code only: the base commit for pull requests, the pushed commit otherwise.
+      # Trusted code only: the CURRENT tip of the base branch for pull requests (not the
+      # base sha in the event, which can lag behind the branch right after a merge), the
+      # pushed or queued commit otherwise.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -62,7 +64,6 @@ jobs:
           DENYLIST: ${{ secrets.DISCLOSURE_DENYLIST }}
           EVENT: ${{ github.event_name }}
           PR: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PUSH_BEFORE: ${{ github.event.before }}
@@ -80,10 +81,11 @@ jobs:
 
           if [ "$EVENT" = "pull_request" ]; then
             [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::invalid pull request number"; exit 1; }
-            [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid base sha"; exit 1; }
+            [ -x scripts/disclosure-scan.sh ] || { echo "::error::scripts/disclosure-scan.sh is missing on the base branch"; exit 1; }
             git fetch --no-tags origin "pull/${PR}/head:prhead"
             ( umask 077; printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" > "$RUNNER_TEMP/prtext.txt" )
-            scripts/disclosure-scan.sh . "${BASE_SHA}...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt"
+            # HEAD is the checked-out tip of the base branch: the range is what the PR adds.
+            scripts/disclosure-scan.sh . "HEAD...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt"
           elif [ "$EVENT" = "merge_group" ]; then
             [[ "$MQ_BASE" =~ ^[0-9a-f]{40}$ && "$MQ_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid merge group shas"; exit 1; }
             scripts/disclosure-scan.sh . "${MQ_BASE}...${MQ_HEAD}" "$patterns"
