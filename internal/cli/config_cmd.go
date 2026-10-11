@@ -22,7 +22,7 @@ var configCmd = &cobra.Command{
 	Short: "Manage FlutterProbe user configuration",
 	Long: `Manage user-level configuration stored in ~/.flutterprobe/config.json.
 
-This includes wallet addresses for x402 payments, API keys, and other
+This includes a wallet address (experimental), API keys, and other
 settings that persist across projects.`,
 }
 
@@ -32,7 +32,7 @@ var configSetCmd = &cobra.Command{
 	Long: `Set a configuration value.
 
 Supported keys:
-  wallet       Ethereum wallet address for x402 payments
+  wallet       wallet address (experimental, for uploads to a cloud endpoint you configure)
   ai.api_key   API key for AI-powered features`,
 	Example: `  probe config set wallet 0x1234...abcd
   probe config set ai.api_key sk-...`,
@@ -46,7 +46,7 @@ var configGetCmd = &cobra.Command{
 	Long: `Get a configuration value.
 
 Supported keys:
-  wallet       Ethereum wallet address for x402 payments
+  wallet       wallet address (experimental, for uploads to a cloud endpoint you configure)
   ai.api_key   API key for AI-powered features`,
 	Example: `  probe config get wallet
   probe config get ai.api_key`,
