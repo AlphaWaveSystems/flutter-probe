@@ -683,6 +683,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		// never was (kill force-stopped it), so this used to retry a dial to
 		// a genuinely dead process until it gave up. Launch the app for real
 		// here, the same way `restart the app` does, before reconnecting.
+		e.noteRestart()
 		if err := e.deviceCtx.RestartApp(ctx); err != nil {
 			return fmt.Errorf("open the app: %w", err)
 		}
@@ -877,6 +878,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			nextToken = ""
 		}
 		e.client.Close()
+		e.noteRestart()
 		if err := e.deviceCtx.RestartApp(ctx); err != nil {
 			return err
 		}
@@ -1105,6 +1107,7 @@ func (e *Executor) relaunchApp(ctx context.Context, why string) error {
 		return nil
 	}
 	e.client.Close()
+	e.noteRestart()
 	if err := dc.RestartApp(ctx); err != nil {
 		return fmt.Errorf("relaunch after %s: %w", why, err)
 	}

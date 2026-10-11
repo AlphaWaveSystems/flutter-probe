@@ -14,10 +14,11 @@ import (
 
 // perfRun is a measuring window that is open.
 type perfRun struct {
-	name     string
-	started  time.Time
-	httpFrom int // sequence number of the HTTP log when the window opened
-	cpu      *perf.CPUSampler
+	name      string
+	started   time.Time
+	httpFrom  int // sequence number of the HTTP log when the window opened
+	cpu       *perf.CPUSampler
+	restarted bool // the app was restarted inside the window
 }
 
 // perfState is what an executor knows about its measurements.
@@ -93,6 +94,9 @@ func (e *Executor) startMeasuring(ctx context.Context, name string) error {
 		run.httpFrom = res.Latest
 	}
 	if err := e.client.PerfStart(ctx); err != nil {
+		if connectionGone(err) {
+			return fmt.Errorf("start measuring: no app is connected (%v): open the app first", err)
+		}
 		return fmt.Errorf("start measuring: %w (needs flutter_probe_agent >= 0.23)", err)
 	}
 	if read := e.deviceCtx.cpuReader(ctx); read != nil {
@@ -119,6 +123,7 @@ func (e *Executor) finishMeasuring(ctx context.Context, stop bool) (perf.Metrics
 	}
 	m := perf.Metrics{
 		Name:         run.name,
+		SpansRestart: run.restarted,
 		DurationMs:   int(time.Since(run.started).Milliseconds()),
 		MemStartMB:   mb(snap.RSSStartBytes),
 		MemPeakMB:    mb(snap.RSSPeakBytes),
@@ -158,6 +163,27 @@ func (e *Executor) finishMeasuring(ctx context.Context, stop bool) (perf.Metrics
 	}
 	e.perf.last = &m
 	return m, nil
+}
+
+// connectionGone reports whether err means there is no live connection to the app, as opposed to
+// an agent that does not know the call.
+func connectionGone(err error) bool {
+	s := err.Error()
+	for _, frag := range []string{"closed network connection", "connection refused", "broken pipe", "connection reset", "EOF", "not connected"} {
+		if strings.Contains(s, frag) {
+			return true
+		}
+	}
+	return false
+}
+
+// noteRestart marks the open measuring window, if any, as spanning an app restart: the process
+// changes, so memory and CPU of the window come from different processes.
+func (e *Executor) noteRestart() {
+	if run := e.perf.active; run != nil && !run.restarted {
+		run.restarted = true
+		fmt.Printf("    \033[33m⚠\033[0m  %s: the app restarted inside this measuring window; memory and frames come from the last process only and CPU is not reported\n", measurementLabel(run.name))
+	}
 }
 
 func mb(bytes int64) float64 { return float64(bytes) / (1024 * 1024) }

@@ -14,12 +14,52 @@ import (
 
 // perfPostProcess writes what a run measured: the history file (for trends) and, with
 // --perf-update-baseline, the baseline. Comparison with a baseline already happened per test.
+// perfGateFromFlags resolves --perf-metrics and --perf-ignore into the metrics a comparison fails on.
+func perfGateFromFlags(cmd *cobra.Command) ([]perf.Metric, error) {
+	list, _ := cmd.Flags().GetString("perf-metrics")
+	ignore, _ := cmd.Flags().GetString("perf-ignore")
+	if list == "" && ignore == "" {
+		return nil, nil
+	}
+	gate := perf.DefaultGated
+	if list != "" {
+		g, err := perf.ParseMetricList(list)
+		if err != nil {
+			return nil, fmt.Errorf("--perf-metrics: %w", err)
+		}
+		gate = g
+	}
+	skip, err := perf.ParseMetricList(ignore)
+	if err != nil {
+		return nil, fmt.Errorf("--perf-ignore: %w", err)
+	}
+	var out []perf.Metric
+	for _, m := range gate {
+		drop := false
+		for _, s := range skip {
+			drop = drop || s == m
+		}
+		if !drop {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+
 func perfPostProcess(cmd *cobra.Command, w io.Writer, results []runner.TestResult, reportsBase, baselinePath string, update bool, meta runner.RunMetadata) {
+	keyBase, _ := cmd.Flags().GetString("perf-key-base")
 	var recs []perf.HistoryRecord
+	newKeys := 0
+	for _, res := range results {
+		newKeys += len(res.PerfNew)
+	}
+	if newKeys > 0 && baselinePath != "" && !update {
+		statusWarn(w, "%d measurement(s) have no entry in %s and were not compared (new tests, or keys from another directory: see --perf-key-base)", newKeys, baselinePath)
+	}
 	entries := map[string]perf.Metrics{}
 	for _, res := range results {
 		for _, m := range res.Perf {
-			key := perf.Key(res.File, res.TestName, m.Name)
+			key := perf.RelKey(keyBase, res.File, res.TestName, m.Name)
 			recs = append(recs, perf.HistoryRecord{Version: Version, Platform: meta.Platform, Device: meta.DeviceName, Key: key, Metrics: m})
 			if res.Passed {
 				entries[key] = m
@@ -109,6 +149,14 @@ var perfCompareCmd = &cobra.Command{
 			return err
 		}
 		tol, _ := cmd.Flags().GetFloat64("tolerance")
+		var gate []perf.Metric
+		if list, _ := cmd.Flags().GetString("metrics"); list != "" {
+			g, perr := perf.ParseMetricList(list)
+			if perr != nil {
+				return fmt.Errorf("--metrics: %w", perr)
+			}
+			gate = g
+		}
 		worse := 0
 		for key, cur := range b.Entries {
 			base, ok := a.Entries[key]
@@ -116,7 +164,7 @@ var perfCompareCmd = &cobra.Command{
 				fmt.Fprintf(cmd.OutOrStdout(), "new      %s\n", key)
 				continue
 			}
-			for _, reg := range perf.Compare(base, cur, tol) {
+			for _, reg := range perf.CompareWith(base, cur, perf.CompareOptions{TolerancePct: tol, Metrics: gate}) {
 				worse++
 				fmt.Fprintf(cmd.OutOrStdout(), "worse    %s: %s\n", key, reg)
 			}
@@ -135,6 +183,7 @@ func init() {
 	perfTrendCmd.Flags().String("filter", "", "only measurements whose key (file::test::name) contains this text")
 	perfTrendCmd.Flags().Int("last", 30, "how many of the latest runs to show")
 	perfCompareCmd.Flags().Float64("tolerance", 20, "percent a number may exceed the first file's by")
+	perfCompareCmd.Flags().String("metrics", "", "metrics to compare, comma separated, or all (default: memory,cpu,slow_frames,frame_time,data)")
 	perfCmd.AddCommand(perfTrendCmd, perfCompareCmd)
 	rootCmd.AddCommand(perfCmd)
 }

@@ -136,6 +136,8 @@ type CPUSampler struct {
 	last   cpuPoint
 	peak   float64
 	ok     bool
+	// restarted is set when a reading is lower than the one before: the app process changed.
+	restarted bool
 }
 
 type cpuPoint struct {
@@ -190,6 +192,9 @@ func (s *CPUSampler) sample(ctx context.Context) {
 		s.ok = true
 		return
 	}
+	if cpu < s.last.cpu {
+		s.restarted = true
+	}
 	if dt := now.Sub(s.last.at); dt > 0 && cpu >= s.last.cpu {
 		if pct := float64(cpu-s.last.cpu) / float64(dt) * 100; pct > s.peak {
 			s.peak = pct
@@ -198,16 +203,20 @@ func (s *CPUSampler) sample(ctx context.Context) {
 	s.last = cpuPoint{now, cpu}
 }
 
-// Result is the average and peak CPU percent so far; ok is false when CPU time was never readable.
+// Result is the average and peak CPU percent so far. ok is false when there is no usable number:
+// CPU time was never readable, only one sample was taken (no interval to average over), or the
+// counter went backwards because the app was restarted (a new process) during the window.
 func (s *CPUSampler) Result() (avg, peak float64, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.ok {
 		return 0, 0, false
 	}
-	if dt := s.last.at.Sub(s.first.at); dt > 0 && s.last.cpu >= s.first.cpu {
-		avg = float64(s.last.cpu-s.first.cpu) / float64(dt) * 100
+	dt := s.last.at.Sub(s.first.at)
+	if dt <= 0 || s.last.cpu < s.first.cpu || s.restarted {
+		return 0, 0, false
 	}
+	avg = float64(s.last.cpu-s.first.cpu) / float64(dt) * 100
 	return avg, s.peak, true
 }
 

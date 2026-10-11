@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Baseline comparison gates only stable metrics by default** (`memory`, `cpu`, `slow_frames`, `frame_time`, `data`). `memory_growth`, `cpu_peak` and `frame_max` are single-sample extremes that differ a lot between two runs of the same build (a rerun of 106 unchanged tests failed 47 of them); they are still recorded and shown, and gate again with `--perf-metrics all` or by name. `cpu` is compared only for windows of 5 s or more. New flags `--perf-metrics`, `--perf-ignore`, `probe perf compare --metrics`.
+- **Baseline keys are relative to the current directory** (or `--perf-key-base DIR`), so the same tests match from another checkout; keys written by earlier versions are still found, and the run says how many measurements had no baseline entry.
+
+### Fixed
+- **CPU was reported as `0.0` when the sampler had no usable interval** (one sample, or a counter that went backwards after an app restart). It is now unavailable and skipped by comparisons.
+- **A zero or negative baseline made the comparison meaningless** (`+0%` on a failing test). It now compares the absolute change against the noise floor and prints the real delta.
+- **A measuring window that spans an app restart** warns, is marked `window_spans_restart` in the report and is not compared with the baseline.
+- **`start measuring` with no app connected** says "no app is connected ... open the app first" instead of blaming the agent version.
+
 ## [0.24.0] - 2026-10-10
 
 ### Fixed

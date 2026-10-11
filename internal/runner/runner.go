@@ -32,6 +32,7 @@ type TestResult struct {
 	DeviceID   string // device serial/UDID that ran this test
 	DeviceName string // human-readable device name
 	Perf       []perf.Metrics // measurements the test took (`start measuring` ... `stop measuring`)
+	PerfNew    []string       // measurements with no entry in the baseline (not compared)
 	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
 }
 
@@ -70,6 +71,8 @@ type RunOptions struct {
 	MeasureAll    bool           // open a measuring window around every test that does not measure itself
 	PerfBaseline  *perf.Baseline // compare measurements with this baseline (nil = off)
 	PerfTolerance float64        // percent a metric may exceed its baseline by (default 20)
+	PerfGate      []perf.Metric  // metrics the baseline comparison fails on (nil = perf.DefaultGated)
+	PerfKeyBase   string         // directory baseline keys are relative to (default: the working directory)
 }
 
 // New creates a Runner.
@@ -821,11 +824,16 @@ func (r *Runner) applyPerfBaseline(res *TestResult) {
 	}
 	var problems []string
 	for _, m := range res.Perf {
-		base, ok := b.Entries[perf.Key(res.File, res.TestName, m.Name)]
+		base, ok := b.Lookup(r.opts.PerfKeyBase, res.File, res.TestName, m.Name)
 		if !ok {
+			res.PerfNew = append(res.PerfNew, perf.RelKey(r.opts.PerfKeyBase, res.File, res.TestName, m.Name))
 			continue // a new measurement: nothing to compare with yet
 		}
-		for _, reg := range perf.Compare(base, m, tol) {
+		if m.SpansRestart {
+			fmt.Printf("    \033[33m⚠\033[0m  %s: the window spans an app restart, not compared with the baseline\n", measurementLabel(m.Name))
+			continue
+		}
+		for _, reg := range perf.CompareWith(base, m, perf.CompareOptions{TolerancePct: tol, Metrics: r.opts.PerfGate}) {
 			problems = append(problems, fmt.Sprintf("%s: %s", measurementLabel(m.Name), reg))
 		}
 	}
