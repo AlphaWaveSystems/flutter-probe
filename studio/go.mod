@@ -1,6 +1,6 @@
 module github.com/alphawavesystems/flutter-probe/studio
 
-go 1.26
+go 1.26.0
 
 // Always build against the local sibling module rather than the published
 // version on proxy.golang.org. The studio MVP depends on internal/* APIs
@@ -45,7 +45,7 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 )
 
