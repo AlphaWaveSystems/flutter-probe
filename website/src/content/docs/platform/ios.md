@@ -125,6 +125,9 @@ scripts/physical-ios-fixture.sh --ip <phone-ip>          # steps for the connect
 It lists the connected iPhones, prints the signing step (your Apple developer team), the
 `flutter run --profile -d <id> --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true` command, the checks below and the CLI and Studio connect steps.
 
+To verify the whole path with Studio in about ten minutes, with the expected result of each step, follow the checklist in the repository
+(`studio/e2e-web/PHYSICAL.md`); its automated half is `scripts/studio-e2e-physical.sh --host <phone-ip> --token <token>`, opt-in and never run in CI.
+
 **Check from the Mac, in this order:**
 
 ```bash
