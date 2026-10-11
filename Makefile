@@ -1,4 +1,4 @@
-.PHONY: studio-e2e build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
+.PHONY: studio-e2e studio-e2e-web build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
 
 BINARY  = probe
 OUT_DIR = bin
@@ -59,3 +59,6 @@ ios-driver:
 ## Run the Studio E2E suite (macOS; drives the real Studio window)
 studio-e2e:
 	scripts/studio-e2e.sh
+
+studio-e2e-web:
+	scripts/studio-e2e-web.sh

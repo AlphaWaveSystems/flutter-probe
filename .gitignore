@@ -11,6 +11,9 @@ coverage.out
 # Studio (Wails) build artifacts
 studio/build/bin/
 studio/frontend/node_modules/
+studio/e2e-web/node_modules/
+studio/e2e-web/test-results/
+reports/studio-e2e-web/
 studio/frontend/dist/
 studio/frontend/.vite/
 

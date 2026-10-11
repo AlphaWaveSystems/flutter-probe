@@ -32,6 +32,10 @@ A workspace matters because Studio reads its `probe.yaml` (agent port, timeouts,
 
 The MCP server exposes the same through `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results` and `studio_screenshot`, so an AI client can open a workspace, connect, run a `.probe` file and read step-by-step progress.
 
+## Testing Studio
+
+Studio's own UI is tested two ways. `make studio-e2e-web` runs the real frontend and Go backend in headless Chromium (Studio's headless mode serves the UI over loopback; a small bridge stands in for the window runtime), so it needs no window, cursor or focus and its device-free half runs on a normal CI runner. `make studio-e2e` drives the real window through macOS accessibility for what needs one (native dialogs, focus, recording). Headless mode is for tests only; to drive Studio from a script or an AI client use the [automation endpoint](#automation-no-window-no-cursor), which is confined to the project.
+
 ## Architecture
 
 ```

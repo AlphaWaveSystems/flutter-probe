@@ -41,6 +41,7 @@ type App struct {
 	// runtimeUp is true once Wails has started the app: only then may events be emitted. Without
 	// it (tests, automation without a window) emit does nothing.
 	runtimeUp atomic.Bool
+	hub       *eventHub // set in headless mode (PROBE_STUDIO_HEADLESS=1)
 
 	mu        sync.Mutex
 	conn      *connection // nil when disconnected
@@ -98,6 +99,9 @@ func (a *App) startup(ctx context.Context) {
 
 // emit sends an event to the frontend; it does nothing before the Wails runtime is up.
 func (a *App) emit(name string, data ...interface{}) {
+	if a.hub != nil {
+		a.hub.publish(name, data) // headless mode: pages in a browser
+	}
 	if !a.runtimeUp.Load() {
 		return
 	}
