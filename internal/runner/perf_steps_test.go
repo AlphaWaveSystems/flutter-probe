@@ -225,3 +225,42 @@ func TestFrameBudgetIsPassedToTheAgentAndRecorded(t *testing.T) {
 		t.Fatalf("budget=%v started=%d", f2.budget, f2.started)
 	}
 }
+
+func TestFrameMetricsGateOnPhysicalDevicesOnly(t *testing.T) {
+	base := &perf.Baseline{Entries: map[string]perf.Metrics{perf.Key("a.probe", "t", "w"): {Name: "w", MemPeakMB: 100, Frames: 100, FrameP95Ms: 20}}}
+	slow := perf.Metrics{Name: "w", MemPeakMB: 100, Frames: 100, FrameP95Ms: 40}
+	opts := RunOptions{PerfBaseline: base, PerfTolerance: 20}
+
+	virtual := New(&config.Config{}, nil, &DeviceContext{IsPhysical: false}, opts)
+	res := TestResult{File: "a.probe", TestName: "t", Passed: true, Perf: []perf.Metrics{slow}}
+	virtual.applyPerfBaseline(&res)
+	if !res.Passed {
+		t.Fatalf("frame_time must not gate on an emulator or simulator: %+v", res.Error)
+	}
+
+	physical := New(&config.Config{}, nil, &DeviceContext{IsPhysical: true}, opts)
+	res = TestResult{File: "a.probe", TestName: "t", Passed: true, Perf: []perf.Metrics{slow}}
+	physical.applyPerfBaseline(&res)
+	if res.Passed {
+		t.Fatal("frame_time gates on a physical device")
+	}
+
+	// An explicit list wins on a virtual device too.
+	opts.PerfGate = []perf.Metric{perf.FrameTime}
+	explicit := New(&config.Config{}, nil, &DeviceContext{IsPhysical: false}, opts)
+	res = TestResult{File: "a.probe", TestName: "t", Passed: true, Perf: []perf.Metrics{slow}}
+	explicit.applyPerfBaseline(&res)
+	if res.Passed {
+		t.Fatal("--perf-metrics frame_time must gate everywhere")
+	}
+}
+
+func TestRestartWindowsAreCountedOnceAsSkipped(t *testing.T) {
+	base := &perf.Baseline{Entries: map[string]perf.Metrics{}}
+	r := New(&config.Config{}, nil, nil, RunOptions{PerfBaseline: base, PerfTolerance: 20})
+	res := TestResult{File: "a.probe", TestName: "t", Passed: true, Perf: []perf.Metrics{{Name: "w", MemPeakMB: 100, SpansRestart: true}}}
+	r.applyPerfBaseline(&res)
+	if res.PerfSkipped != 1 || len(res.PerfNew) != 0 {
+		t.Fatalf("skipped=%d new=%v", res.PerfSkipped, res.PerfNew)
+	}
+}

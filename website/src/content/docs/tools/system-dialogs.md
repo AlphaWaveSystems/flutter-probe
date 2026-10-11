@@ -188,6 +188,7 @@ source is in `ios-driver/`).
 
 - **"no system dialog found"** — run `probe system-dialog list` while the dialog is up. If it is empty, the dialog
   belongs to a process the driver does not look at: find its bundle id and set `PROBE_DRIVER_APPS`.
+- **"the simulator's accessibility service is not responding" (xcodebuild exit 65, "Timed out waiting for AX loaded notification")** — the XCUITest runner could not start because the simulator's accessibility service is wedged, which can happen after another UI-test tool used the same simulator. Without this message the failure shows up later as unrelated step timeouts. Restart only the test simulator (`xcrun simctl shutdown <udid> && xcrun simctl boot <udid>`) and rerun; run the Probe lane before other UI-test tools on that simulator, or restart it between them. The driver now reports this directly, both when it fails to start and when it stops during a run.
 - **"needs Xcode"** — install Xcode and run `sudo xcode-select -s /Applications/Xcode.app`.
 - **Android: "uiautomator ... killed"** — only one UI-automation client can run per device. Stop Maestro's driver or
   another uiautomator session on that device.

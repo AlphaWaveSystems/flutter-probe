@@ -287,3 +287,14 @@ func TestIOSCall_SendsAppID(t *testing.T) {
 		}
 	}
 }
+
+func TestWedgeHintNamesTheSimulatorRestart(t *testing.T) {
+	log := "Test Suite 'All tests' started\nTimed out waiting for AX loaded notification\n** TEST EXECUTE FAILED **"
+	got := WedgeHint(log, "UDID-1")
+	if !strings.Contains(got, "xcrun simctl shutdown UDID-1") || !strings.Contains(got, "boot UDID-1") || !strings.Contains(got, "exit 65") {
+		t.Fatalf("hint = %q", got)
+	}
+	if WedgeHint("everything fine", "UDID-1") != "" {
+		t.Fatal("no hint without the marker")
+	}
+}

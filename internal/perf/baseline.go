@@ -83,6 +83,11 @@ var floors = map[Metric]float64{
 // ask for them with --perf-metrics.
 var DefaultGated = []Metric{MemPeak, CPUAvg, SlowFrames, FrameTime, DataTransfer}
 
+// DefaultGatedVirtual is the default set on emulators and simulators: their frame metrics vary a lot
+// between runs of the same build (software rendering, shared host, debug builds), so only memory,
+// CPU and data gate there. Physical devices in profile mode keep DefaultGated.
+var DefaultGatedVirtual = []Metric{MemPeak, CPUAvg, DataTransfer}
+
 // MinCPUWindowMs is the shortest window whose CPU numbers are compared: over one or two seconds
 // a few busy milliseconds swing the average by tens of points.
 const MinCPUWindowMs = 5000
