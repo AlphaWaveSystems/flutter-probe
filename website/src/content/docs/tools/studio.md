@@ -84,6 +84,12 @@ Studio connects to physical iOS and Android devices through the exact same `inte
 - The exact conditions for a physical iPhone over WiFi, with a three-command check, are in [Physical iPhone over WiFi](/platform/ios/#physical-iphone-over-wifi-cli-and-studio-what-must-be-true).
 - Devices that don't advertise over mDNS (no advertiser in the build, older agent versions, or networks that block mDNS): use **Connect manually** in the WiFi overlay (host, port, token) — see [Manual WiFi entry](#manual-wifi-entry) — or the CLI's `--host <ip> --token <token>`.
 
+### The device picker and physical phones
+
+Physical iPhones come from two sources and are labelled by how Studio can reach them: **USB** (seen by `libimobiledevice`, reached through `iproxy`) and **WiFi only** (paired and reachable over the local network, seen by `xcrun devicectl list devices`, Xcode 15 or later). Before this, a phone that was paired over the network but not on a cable simply did not appear. Each entry shows the name you gave the phone and its model (for example `Jane's phone (iPhone 15) · physical · WiFi only`).
+
+Selecting a physical device shows what it needs in a line under the toolbar, instead of leaving you with a Connect button that fails: the app must be **running in the foreground with the agent** (a profile build made with `--dart-define=PROBE_AGENT=true`; add `--dart-define=PROBE_WIFI=true` for WiFi). A WiFi-only phone has Connect disabled, and the line and the button's tooltip say to use the 📡 button and **Connect manually**. An Android phone that is `unauthorized` or `offline` says to unlock it and accept the USB debugging prompt. When nothing is found at all, the message points at the 📡 button too.
+
 ## Quick start
 
 1. **Boot a simulator/emulator, or connect a physical device.** Xcode → Devices, or `xcrun simctl boot <udid>` for iOS sim; Android Studio → Device Manager for Android emu; or plug in a physical iOS/Android device over USB (see [Physical devices](#physical-devices) for WiFi).

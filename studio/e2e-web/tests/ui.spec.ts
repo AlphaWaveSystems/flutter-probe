@@ -112,6 +112,46 @@ test.describe("Studio UI (no device needed)", () => {
     await expect(page.locator("#wifi-manual-port")).toHaveValue("48686");
   });
 
+  test("22 the picker shows physical phones with what they need instead of hiding them", async ({ page }) => {
+    // The headless bridge's App is a Proxy, so the Go call is answered at the network level instead.
+    await page.route("**/__headless/call", async (route) => {
+      const body = JSON.parse(route.request().postData() || "{}");
+      if (body.method !== "ListDevices") return route.continue();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: [
+            { id: "SIM-1", name: "Test Sim", platform: "ios", kind: "simulator", state: "booted", osVersion: "iOS 18", booted: true },
+            { id: "U-USB", name: "Wired Phone", platform: "ios", kind: "physical", state: "online", osVersion: "iOS 18", booted: true, transport: "usb", model: "iPhone 15", hint: "Attached by USB (needs iproxy): the app must be running in the foreground with the agent." },
+            { id: "U-NET", name: "Wireless Phone", platform: "ios", kind: "physical", state: "paired", osVersion: "iOS 18", booted: false, transport: "network", model: "iPhone 14", hint: "Paired over the network, not attached by USB: use the WiFi button, then Connect manually." },
+          ],
+        }),
+      });
+    });
+    await openStudio(page);
+    await page.click("#btn-refresh");
+    const picker = page.locator("#device-picker");
+    await expect(picker.locator("option", { hasText: "Wireless Phone (iPhone 14)" })).toHaveText(/physical.*WiFi only/);
+    await expect(picker.locator("option", { hasText: "Wired Phone (iPhone 15)" })).toHaveText(/physical.*USB/);
+    // A refresh that started before the choice resets it when it finishes: let the in-flight ones end, then choose.
+    await page.waitForTimeout(500);
+    const choose = (id: string) =>
+      expect(async () => {
+        await picker.selectOption(id);
+        await expect(picker).toHaveValue(id, { timeout: 500 });
+      }).toPass();
+    await choose("U-NET");
+    await expect(page.locator("#device-hint")).toBeVisible();
+    await expect(page.locator("#device-hint")).toContainText("Connect manually");
+    await expect(page.locator("#btn-connect")).toBeDisabled();
+    await expect(page.locator("#btn-connect")).toHaveAttribute("title", /WiFi button/);
+    await choose("U-USB");
+    await expect(page.locator("#device-hint")).toContainText("foreground");
+    await expect(page.locator("#btn-connect")).toBeEnabled();
+    await choose("SIM-1");
+    await expect(page.locator("#device-hint")).toBeHidden();
+  });
+
   test("07 the help overlay opens with ? and closes with Escape", async ({ page }) => {
     await openStudio(page);
     await page.locator("body").press("?");

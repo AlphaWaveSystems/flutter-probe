@@ -339,6 +339,11 @@ type DeviceInfo struct {
 	State     string `json:"state"`
 	OSVersion string `json:"osVersion"`
 	Booted    bool   `json:"booted"` // true when the device is ready to accept connections
+	// Transport is "usb" or "network" for a physical iOS device; Model is its marketing name (iPhone 15).
+	Transport string `json:"transport,omitempty"`
+	Model     string `json:"model,omitempty"`
+	// Hint says what a physical device needs before Studio can use it ("needs the app running with the agent").
+	Hint string `json:"hint,omitempty"`
 }
 
 // ListDevices returns connected emulators, simulators, and USB-attached
@@ -352,14 +357,18 @@ func (a *App) ListDevices() ([]DeviceInfo, error) {
 	}
 	out := make([]DeviceInfo, 0, len(devs))
 	for _, d := range devs {
+		kind := a.deviceKind(d)
 		out = append(out, DeviceInfo{
 			ID:        d.ID,
 			Name:      d.Name,
 			Platform:  string(d.Platform),
-			Kind:      a.deviceKind(d),
+			Kind:      kind,
 			State:     d.State,
 			OSVersion: d.OSVersion,
 			Booted:    isDeviceReady(d),
+			Transport: d.Transport,
+			Model:     d.Model,
+			Hint:      physicalHint(d, kind),
 		})
 	}
 	return out, nil
@@ -1107,4 +1116,24 @@ func (a *App) StopRecording() (string, error) {
 	a.recMu.Unlock()
 
 	return strings.Join(lines, "\n") + "\n", nil
+}
+
+// physicalHint says what a physical device needs before Studio can connect to it, so the picker shows a state
+// instead of a device that silently fails or is missing. It is empty for simulators and emulators.
+func physicalHint(d device.Device, kind string) string {
+	if kind != "physical" {
+		return ""
+	}
+	const agent = "the app must be running in the foreground with the agent: a profile build made with --dart-define=PROBE_AGENT=true"
+	switch {
+	case d.Platform == device.PlatformIOS && d.Transport == "network":
+		return "Paired over the network, not attached by USB: use the WiFi button, then Connect manually (host, port, token); " + agent + " and --dart-define=PROBE_WIFI=true."
+	case d.Platform == device.PlatformIOS:
+		return "Attached by USB (needs iproxy: brew install libimobiledevice): " + agent + ". For WiFi, build with --dart-define=PROBE_WIFI=true and use the WiFi button."
+	case d.Platform == device.PlatformAndroid && !isDeviceReady(d):
+		return "The device is " + strings.ToLower(d.State) + ": unlock it and accept the USB debugging prompt, then refresh."
+	case d.Platform == device.PlatformAndroid:
+		return "Attached through adb: " + agent + " (debug or profile)."
+	}
+	return ""
 }
