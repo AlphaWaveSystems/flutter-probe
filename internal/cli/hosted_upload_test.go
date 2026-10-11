@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -86,7 +87,7 @@ func TestHostedUploadFailureIsAWarningOnly(t *testing.T) {
 	if err := runLicenseActivate(licenseActivateCmd, []string{key}); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", 503) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", http.StatusServiceUnavailable) }))
 	defer srv.Close()
 	var w bytes.Buffer
 	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL, Timeout: time.Second}}, hostedSampleResults(), runner.RunMetadata{}, "emulator")
@@ -144,5 +145,49 @@ func TestDeviceClass(t *testing.T) {
 		if got := deviceClass(c.dc, c.platform, c.cloud); got != c.want {
 			t.Errorf("%+v = %q, want %q", c, got, c.want)
 		}
+	}
+}
+
+// A CI job supplies the key through PROBE_LICENSE_KEY: nothing is written to the runner, and the key
+// never shows up in any output, including a dry run, a failure and a server that echoes it back.
+func TestKeyFromEnvIsUsedAndNeverPrinted(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	pub, key := signedTestKey(t, license.Claims{ID: "l", Customer: "acme", Plans: []license.Plan{license.PlanProbeCloud}, Seats: 1, Expires: time.Now().Add(time.Hour)})
+	t.Setenv(license.KeyEnv, pub)
+	t.Setenv(license.KeyValueEnv, key)
+
+	var auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		http.Error(w, "rejected, your key was "+key, http.StatusUnauthorized) // a hostile or buggy server echoing it
+	}))
+	defer srv.Close()
+	cfg := &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}
+
+	var status, cmdOut bytes.Buffer
+	c := uploadCmd(true, false)
+	c.SetOut(&cmdOut)
+	hostedUpload(c, &status, cfg, hostedSampleResults(), runner.RunMetadata{}, "simulator")
+	if auth != "Bearer "+key {
+		t.Fatalf("the key from %s was not used", license.KeyValueEnv)
+	}
+
+	var dryStatus, dryOut bytes.Buffer
+	d := uploadCmd(false, true)
+	d.SetOut(&dryOut)
+	hostedUpload(d, &dryStatus, cfg, hostedSampleResults(), runner.RunMetadata{}, "simulator")
+
+	for name, stream := range map[string]string{"status": status.String(), "command output": cmdOut.String(), "dry-run status": dryStatus.String(), "dry-run output": dryOut.String()} {
+		if strings.Contains(stream, key) || strings.Contains(stream, "FP2.") {
+			t.Errorf("the license key appears in the %s:\n%s", name, stream)
+		}
+	}
+	if _, err := LoadLicenseKey(); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing was written to the home directory by the env path.
+	if matches, _ := filepath.Glob(filepath.Join(home, ".flutterprobe", "*")); len(matches) != 0 {
+		t.Errorf("the env key must not create files: %v", matches)
 	}
 }

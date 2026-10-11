@@ -83,6 +83,9 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 
 // LoadLicense reads and verifies the stored key. os.ErrNotExist when none.
 func LoadLicense() (*license.Claims, error) {
+	if k := strings.TrimSpace(os.Getenv(license.KeyValueEnv)); k != "" {
+		return license.Verify(k)
+	}
 	dir, err := cloud.ConfigDir()
 	if err != nil {
 		return nil, err
@@ -96,6 +99,9 @@ func LoadLicense() (*license.Claims, error) {
 
 // LoadLicenseKey returns the stored key text (the credential of hosted features). os.ErrNotExist when none.
 func LoadLicenseKey() (string, error) {
+	if k := strings.TrimSpace(os.Getenv(license.KeyValueEnv)); k != "" {
+		return k, nil
+	}
 	dir, err := cloud.ConfigDir()
 	if err != nil {
 		return "", err

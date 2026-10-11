@@ -36,6 +36,10 @@ const Prefix = "FP2"
 // "k1=A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg".
 const KeyEnv = "PROBE_LICENSE_PUBKEY"
 
+// KeyValueEnv supplies the license key itself at run time (for CI, where `probe license activate` would
+// write a file on the runner). It is read, never printed, and takes precedence over the stored key.
+const KeyValueEnv = "PROBE_LICENSE_KEY"
+
 // TrustedKey is a public key keys may be signed with.
 type TrustedKey struct {
 	KID       string

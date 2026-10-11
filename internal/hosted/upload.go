@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -56,20 +57,65 @@ func (t HTTPTransport) Send(ctx context.Context, licenseKey string, body []byte)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+licenseKey)
-	client := t.Client
-	if client == nil {
-		client = &http.Client{}
-	}
-	resp, err := client.Do(req)
+	resp, err := noRedirects(t.Client).Do(req)
 	if err != nil {
-		return fmt.Errorf("upload failed: %w", err)
+		return fmt.Errorf("upload failed: %s", Sanitize(err.Error(), licenseKey))
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode/100 == 3 {
+		return fmt.Errorf("the hosted service answered with a redirect (HTTP %d); redirects are never followed so the license key cannot be forwarded", resp.StatusCode)
+	}
 	if resp.StatusCode/100 != 2 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
-		return fmt.Errorf("the hosted service answered HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet)))
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		snippet := []rune(Sanitize(string(raw), licenseKey))
+		if len(snippet) > 200 {
+			snippet = append(snippet[:200], '…')
+		}
+		return fmt.Errorf("the hosted service answered HTTP %d: %s", resp.StatusCode, string(snippet))
 	}
 	return nil
+}
+
+// noRedirects returns a copy of c (or a new client) that never follows a redirect: Go would forward the
+// Authorization header to the redirect target on the same host, for example from https to http.
+func noRedirects(c *http.Client) *http.Client {
+	var out http.Client
+	if c != nil {
+		out = *c
+	}
+	out.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &out
+}
+
+var (
+	licenseLike = regexp.MustCompile(`FP2\.[A-Za-z0-9._-]*`)
+	ansiCSI     = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]")
+	ansiOSC     = regexp.MustCompile("\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?")
+)
+
+// Sanitize makes text from a remote server safe to print in a terminal: ANSI escape sequences, control
+// characters and invalid UTF-8 are removed (newlines become spaces), the license key is redacted if
+// the server echoes it, and the result is trimmed.
+func Sanitize(s, licenseKey string) string {
+	if licenseKey != "" {
+		s = strings.ReplaceAll(s, licenseKey, "[redacted]")
+	}
+	s = licenseLike.ReplaceAllString(s, "[redacted]") // a key, whole or cut off, in any case
+	s = strings.ToValidUTF8(s, "")
+	s = ansiOSC.ReplaceAllString(s, "")
+	s = ansiCSI.ReplaceAllString(s, "")
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			b.WriteRune(' ')
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f):
+			// dropped
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // Options is one upload.
@@ -142,7 +188,7 @@ func Upload(ctx context.Context, o Options) error {
 	defer cancel()
 	tr := o.Transport
 	if tr == nil {
-		tr = HTTPTransport{BaseURL: baseOrDefault(o.BaseURL), Client: &http.Client{Timeout: timeout}}
+		tr = HTTPTransport{BaseURL: baseOrDefault(o.BaseURL), Client: noRedirects(&http.Client{Timeout: timeout})}
 	}
 	return tr.Send(cctx, o.LicenseKey, body)
 }

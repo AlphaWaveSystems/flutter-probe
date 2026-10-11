@@ -136,8 +136,8 @@ func TestUploadErrorsAreReturnedNotFatal(t *testing.T) {
 		handler http.HandlerFunc
 		wantErr string
 	}{
-		{"server error", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "boom", 500) }, "HTTP 500"},
-		{"unauthorized", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "no plan", 403) }, "HTTP 403"},
+		{"server error", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "boom", http.StatusInternalServerError) }, "HTTP 500"},
+		{"unauthorized", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "no plan", http.StatusForbidden) }, "HTTP 403"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -213,6 +213,75 @@ func TestValidateBaseURL(t *testing.T) {
 	} {
 		if _, err := ValidateBaseURL(url); (err == nil) != ok {
 			t.Errorf("%q: err=%v want ok=%v", url, err, ok)
+		}
+	}
+}
+
+func TestRedirectsAreNeverFollowedSoTheKeyCannotLeak(t *testing.T) {
+	leaked := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked = r.Header.Get("Authorization") != ""
+	}))
+	defer target.Close()
+	for _, code := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL+"/v1/reports", code)
+		}))
+		o := baseOpts(`{"results":[]}`)
+		o.BaseURL = srv.URL
+		err := Upload(context.Background(), o)
+		srv.Close()
+		if err == nil || !strings.Contains(err.Error(), "redirect") {
+			t.Fatalf("HTTP %d: err = %v", code, err)
+		}
+	}
+	if leaked {
+		t.Fatal("the Authorization header was forwarded to a redirect target")
+	}
+}
+
+func TestServerTextIsSanitizedBeforeItIsShown(t *testing.T) {
+	hostile := "\x1b[31mRED\x1b[0m \x1b]0;pwned title\x07ok\x00\x07\x08 bell\r\nnext line\xff\xfe \u0085 and the key FP2.test.key.sig echoed"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(hostile))
+	}))
+	defer srv.Close()
+	o := baseOpts(`{"results":[]}`)
+	o.BaseURL = srv.URL
+	err := Upload(context.Background(), o)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	msg := err.Error()
+	for _, r := range msg {
+		if r < 0x20 && r != '\t' || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			t.Fatalf("control character %U in %q", r, msg)
+		}
+	}
+	for _, bad := range []string{"\x1b", "pwned", "FP2.test.key.sig"} {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("%q must not be shown: %q", bad, msg)
+		}
+	}
+	if !strings.Contains(msg, "HTTP 502") || !strings.Contains(msg, "RED") || !strings.Contains(msg, "[redacted]") {
+		t.Fatalf("message = %q", msg)
+	}
+}
+
+func TestSanitize(t *testing.T) {
+	cases := map[string]string{
+		"plain":                    "plain",
+		"a\x1b[2Jb":                "ab",
+		"tab\tnew\nline":           "tab new line",
+		"bad\xffutf8":              "badutf8",
+		"c1\u009bcontrol":          "c1control",
+		"key=SECRETKEY here":       "key=[redacted] here",
+		"\x1b]8;;http://x\x07link": "link",
+	}
+	for in, want := range cases {
+		if got := Sanitize(in, "SECRETKEY"); got != want {
+			t.Errorf("Sanitize(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

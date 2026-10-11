@@ -27,6 +27,20 @@ The `hosted:` block is unrelated to the device-farm `cloud:` block and the `--cl
 Uploading needs a license with the `probe_cloud` plan (`probe license activate <key>`). Without a key the CLI prints a short
 note that this is a hosted feature, nothing is sent, and the run is unaffected.
 
+### In CI
+
+`probe license activate` writes the key to a file in your home directory, which you may not want on a CI runner. Set the key at
+run time instead, from your CI secret store:
+
+```yaml
+env:
+  PROBE_LICENSE_KEY: ${{ secrets.PROBE_LICENSE_KEY }}
+```
+
+`PROBE_LICENSE_KEY` takes precedence over a stored key, is only read (nothing is written to the runner), and is never printed:
+not in the job log, not in warnings, not in the `--upload-dry-run` output. If a server echoes it back in an error, it is
+redacted before it is shown.
+
 ## See what would be sent
 
 ```bash
@@ -58,7 +72,7 @@ prints the exact payload, after scrubbing, and sends nothing. It needs no licens
 
 ## Failure behaviour
 
-An upload is one attempt with a short timeout (5 seconds by default) and no retries. A failure, a slow endpoint or a missing
+An upload is one attempt with a short timeout (5 seconds by default) and no retries. Redirects are never followed, so the key cannot be forwarded to another address; a redirect is reported as an error. Text that comes back from the server is stripped of control characters and escape sequences before it is printed. A failure, a slow endpoint or a missing
 key prints a warning and never changes the exit status of the run or delays it noticeably.
 
 ## Reference
