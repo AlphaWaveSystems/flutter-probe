@@ -121,3 +121,28 @@ func TestStudioTokenIsNeverSentOffThisMachine(t *testing.T) {
 		}
 	}
 }
+
+func TestStudioConnectOverWiFiAndItsTestOnlyMode(t *testing.T) {
+	calls := fakeStudio(t, map[string]any{
+		"connect_wifi": map[string]any{"connected": true, "deviceId": "10.0.0.5:48686"},
+		"test_wifi":    map[string]any{"message": "Agent reachable"},
+	})
+	callTool(t, "studio_connect", map[string]any{"host": "10.0.0.5", "port": "48690", "token": "abcdefgh1234"})
+	callTool(t, "studio_connect", map[string]any{"host": "phone.local", "token": "abcdefgh1234", "test_only": "true"})
+	if res := callTool(t, "studio_connect", nil); res["isError"] != true || !strings.Contains(textOf(res), "device_id, or host") {
+		t.Errorf("no target must be explained: %v", res)
+	}
+	if res := callTool(t, "studio_connect", map[string]any{"host": "10.0.0.5", "port": "abc", "token": "t"}); res["isError"] != true {
+		t.Errorf("a bad port must be refused: %v", res)
+	}
+	if len(*calls) != 2 || (*calls)[0]["method"] != "connect_wifi" || (*calls)[1]["method"] != "test_wifi" {
+		t.Fatalf("calls = %v", *calls)
+	}
+	p := (*calls)[0]["params"].(map[string]any)
+	if p["host"] != "10.0.0.5" || p["port"] != float64(48690) || p["token"] != "abcdefgh1234" {
+		t.Errorf("params = %v", p)
+	}
+	if q := (*calls)[1]["params"].(map[string]any); q["port"] != float64(0) {
+		t.Errorf("an omitted port is sent as 0 (Studio applies its default): %v", q)
+	}
+}

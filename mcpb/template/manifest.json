@@ -69,7 +69,7 @@
     {"name": "record", "description": "Record user interactions with the running Flutter app and generate a .probe test file."},
     {"name": "studio_open_workspace", "description": "Open a folder as the workspace of a running Probe Studio (the one started with PROBE_STUDIO_AUTOMATION=1) and list it."},
     {"name": "studio_list_devices", "description": "List the simulators/emulators Studio can connect to (booted/online ones), as Studio's device picker shows them."},
-    {"name": "studio_connect", "description": "Connect Studio to a device (id from studio_list_devices): sets up the port forward, reads the agent token and opens the live connection."},
+    {"name": "studio_connect", "description": "Connect Studio to a device (id from studio_list_devices), or to a phone on the network with host, port and token (profile build with PROBE_AGENT=true and PROBE_WIFI=true); test_only=true only checks reachability."},
     {"name": "studio_run_file", "description": "Start running a .probe file in Studio."},
     {"name": "studio_cancel", "description": "Cancel the run Studio is executing."},
     {"name": "studio_run_state", "description": "The state of the current or last run in Studio: running, the plan (tests and step counts), the step being executed now (line, description), the finished steps with the..."},

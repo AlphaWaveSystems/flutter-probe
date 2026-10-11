@@ -426,3 +426,17 @@ func Test11_WiFiDiscoveryOverlayOpensAndCloses(t *testing.T) {
 		must(t, s.ClickButton("✕"), "close wifi overlay")
 	})
 }
+
+func Test14_ManualWiFiEntryExplainsAnEmptyHost(t *testing.T) {
+	run(t, func(t *testing.T, s *Studio) {
+		must(t, s.ClickButton("📡"), "open wifi overlay")
+		must(t, s.WaitForText(ctx, "Connect manually", 10*time.Second), "manual entry section")
+		must(t, s.ClickText("Connect manually"), "expand the manual entry")
+		must(t, s.WaitForText(ctx, "PROBE_WIFI=true", 10*time.Second), "the manual entry says what the build needs")
+		must(t, s.ClickButton("Test connection"), "test with empty fields")
+		must(t, s.WaitForText(ctx, "IP address or hostname", 10*time.Second), "the empty host is explained")
+		shot := filepath.Join(cfg.Out, "screenshots", t.Name()+"-manual-wifi.png")
+		must(t, s.Screenshot(shot), "screenshot")
+		must(t, s.ClickButton("✕"), "close wifi overlay")
+	})
+}

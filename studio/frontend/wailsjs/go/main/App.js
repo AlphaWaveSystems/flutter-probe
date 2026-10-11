@@ -66,6 +66,14 @@ export function RunFile(arg1) {
   return window['go']['main']['App']['RunFile'](arg1);
 }
 
+export function RunFileAsync(arg1) {
+  return window['go']['main']['App']['RunFileAsync'](arg1);
+}
+
+export function RunState() {
+  return window['go']['main']['App']['RunState']();
+}
+
 export function SaveWorkspaceSettings(arg1, arg2) {
   return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
 }
@@ -100,6 +108,10 @@ export function StopWiFiDiscovery() {
 
 export function TakeScreenshot() {
   return window['go']['main']['App']['TakeScreenshot']();
+}
+
+export function TestWiFi(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TestWiFi'](arg1, arg2, arg3);
 }
 
 export function WriteFile(arg1, arg2) {
