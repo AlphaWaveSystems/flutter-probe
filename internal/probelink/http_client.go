@@ -215,12 +215,18 @@ func (c *HTTPClient) ScrollUntil(ctx context.Context, direction string, sel, unt
 }
 
 func (c *HTTPClient) LongPress(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 
 func (c *HTTPClient) DoubleTap(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodDoubleTap, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodDoubleTap, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 
