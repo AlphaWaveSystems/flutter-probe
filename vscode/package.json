@@ -5,9 +5,28 @@
   "version": "0.23.0",
   "publisher": "flutterprobe",
   "icon": "resources/probe-icon.png",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Testing", "Languages", "Snippets"],
-  "keywords": ["flutter", "testing", "e2e", "probe", "probescript", "mobile", "browserstack", "saucelabs", "device-farm", "firebase", "visual-regression", "cloud-testing"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "flutter",
+    "testing",
+    "e2e",
+    "probe",
+    "probescript",
+    "mobile",
+    "browserstack",
+    "saucelabs",
+    "device-farm",
+    "firebase",
+    "visual-regression",
+    "cloud-testing"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/AlphaWaveSystems/flutter-probe"
@@ -22,8 +41,13 @@
     "languages": [
       {
         "id": "probescript",
-        "aliases": ["ProbeScript", "probe"],
-        "extensions": [".probe"],
+        "aliases": [
+          "ProbeScript",
+          "probe"
+        ],
+        "extensions": [
+          ".probe"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -304,7 +328,11 @@
         "flutterprobe.outputFormat": {
           "type": "string",
           "default": "terminal",
-          "enum": ["terminal", "junit", "json"],
+          "enum": [
+            "terminal",
+            "junit",
+            "json"
+          ],
           "description": "Default output format for test results"
         },
         "flutterprobe.outputPath": {
@@ -375,7 +403,14 @@
         "flutterprobe.cloudProvider": {
           "type": "string",
           "default": "",
-          "enum": ["", "browserstack", "saucelabs", "lambdatest", "aws", "firebase"],
+          "enum": [
+            "",
+            "browserstack",
+            "saucelabs",
+            "lambdatest",
+            "aws",
+            "firebase"
+          ],
           "enumDescriptions": [
             "None (local testing)",
             "BrowserStack App Automate",
@@ -422,8 +457,12 @@
       {
         "type": "flutterprobe",
         "properties": {
-          "file": { "type": "string" },
-          "tag": { "type": "string" }
+          "file": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
         }
       }
     ]
@@ -436,9 +475,9 @@
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
-    "typescript": "^5.3.0",
-    "@vscode/vsce": "^3.9.2"
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^4.0.0",
+    "typescript": "^5.3.0"
   }
 }

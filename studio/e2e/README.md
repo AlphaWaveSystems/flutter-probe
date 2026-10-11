@@ -18,6 +18,15 @@ SKIP_BUILD=1 scripts/studio-e2e.sh -run Test04   # reuse builds, one test
 
 Reports: `reports/studio-e2e/report.json`, `report.html`, `screenshots/`, `logs/`.
 
+With a second display attached the suite opens every Studio window (and its own
+Simulator window) on **display 2**, so runs stay off the screen you work on;
+with one display it uses the main display. `STUDIO_E2E_DISPLAY=n` overrides
+(1 = main); a display number that does not exist falls back to main with a
+warning. After moving a window the driver reads its position back and fails the
+test if it did not land on the chosen display. A window is created on the main
+display for a moment before it is moved. The suite needs the machine's keyboard
+focus: typing into another window while a test runs makes it fail.
+
 ## Tests
 
 | # | Covers |
@@ -33,6 +42,8 @@ Reports: `reports/studio-e2e/report.json`, `report.html`, `screenshots/`, `logs/
 | 09 | AI chat pane toggle and API-key overlay |
 | 10 | Connect with the app not running → error state |
 | 11 | WiFi discovery overlay |
+| 12 | Live steps: progress text, Cancel visible, every step row ends passed, verdict row heads the steps |
+| 13 | Failing step keeps a `step fail` row naming its line, with the error |
 
 Each test launches its own Studio, closes it, and relaunches the fixture app
 (self-contained; explicit cleanup).

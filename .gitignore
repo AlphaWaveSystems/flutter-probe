@@ -83,6 +83,8 @@ credentials.json
 # Local probe configs (project-specific, not framework defaults)
 probe.yaml
 probe.*.yaml
+# ...except the Studio E2E fixture's config, which the suite needs on every checkout
+!native-test-apps/studio-fixture/probe.yaml
 
 # Playwright MCP artifacts
 .playwright-mcp/
