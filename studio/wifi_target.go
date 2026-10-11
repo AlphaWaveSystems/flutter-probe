@@ -96,17 +96,23 @@ func (a *App) TestWiFi(host string, port int, token string) (string, error) {
 	if err := ValidateWiFiTarget(host, port, token); err != nil {
 		return "", err
 	}
+	if err := a.wifiLimit.allow(); err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 8*time.Second)
 	defer cancel()
+	if err := a.checkWiFiTarget(ctx, host); err != nil {
+		return "", err
+	}
 	client, err := probelink.DialWithOptions(ctx, probelink.DialOptions{
 		Host: strings.Trim(host, "[]"), Port: port, Token: token, DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		return "", fmt.Errorf("could not reach an agent at %s:%d: %v. %s", host, port, err, wifiHint(host, port, err))
+		return "", fmt.Errorf("%s", redactToken(fmt.Sprintf("could not reach an agent at %s:%d: %v. %s", host, port, err, wifiHint(host, port, err)), token))
 	}
 	defer client.Close()
 	if err := client.Ping(ctx); err != nil {
-		return "", fmt.Errorf("the agent at %s:%d did not answer: %v. %s", host, port, err, wifiHint(host, port, err))
+		return "", fmt.Errorf("%s", redactToken(fmt.Sprintf("the agent at %s:%d did not answer: %v. %s", host, port, err, wifiHint(host, port, err)), token))
 	}
 	return fmt.Sprintf("Agent reachable at %s:%d and the token is accepted.", host, port), nil
 }

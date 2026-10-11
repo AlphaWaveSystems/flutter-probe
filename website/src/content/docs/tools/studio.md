@@ -155,6 +155,8 @@ The 📡 overlay has a **Connect manually (host, port, token)** section for a ph
 - When it fails, the message says what to check: the phone and this computer on the same network (and `curl http://<host>:<port>/probe/status` from this computer), the app in the foreground with the screen unlocked, a **profile build made with `--dart-define=PROBE_AGENT=true` and `--dart-define=PROBE_WIFI=true`** (a production or debug build does not listen), the port, and a fresh token (a new one is created whenever the app restarts).
 - An agent can do the same through the automation endpoint (`test_wifi`, `connect_wifi`) or the MCP tool `studio_connect` with `host`, `port` and `token` (and `test_only` to only check).
 
+**Where Studio will connect.** The manual entry sends the agent token to the address you type, so it only accepts a target on this machine or a local network: loopback, link-local, private IPv4 (10.x, 172.16 to 31.x, 192.168.x), IPv6 unique-local, and hostnames such as `iphone.local` or a single-label name. A hostname is resolved and every address it resolves to must be local too (a name that resolves to a public address is refused like the address itself). To connect to a public address on purpose, start Studio with `PROBE_STUDIO_ALLOW_PUBLIC_TARGETS=1`; automation and MCP callers cannot switch this on. Test and connect attempts are limited to 6 per minute, and error messages never contain the token.
+
 The full list of conditions on the phone and the network is in [Physical iPhone over WiFi](/platform/ios/#physical-iphone-over-wifi-cli-and-studio-what-must-be-true).
 
 ## WiFi auto-discovery
