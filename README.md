@@ -549,7 +549,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe triage --input results.json` | Optional: explain failures with the configured model (advisory) |
 | `probe migrate maestro [dir\|file]` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories; `runFlow` helpers become recipe files; regex selectors, `evalScript` and `${ENV}` placeholders are flagged with TODO comments and warnings) |
 | `probe version` | Print CLI version |
-| `probe license activate <key>` / `probe license status` | Store and verify a license key for hosted features (local use never needs one) |
+| `probe license activate <key>` / `probe license status` | Store and verify an offline-verified (Ed25519) license key for hosted features (local use never needs one) |
 | `probe-convert` | Convert tests from other frameworks |
 
 ### Key flags for `probe test`
