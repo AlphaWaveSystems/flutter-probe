@@ -40,6 +40,7 @@ type Config struct {
 	Recipes   string           `yaml:"recipes_folder"`
 	Reports   string           `yaml:"reports_folder"`
 	L10n      L10nConfig       `yaml:"l10n"`
+	Perf      PerfConfig       `yaml:"perf"`
 	Env       map[string]string `yaml:"environment"`
 
 	// CLIVersion is the running probe binary's version (internal/cli.Version).
@@ -47,6 +48,11 @@ type Config struct {
 	// after loading, so runner/probelink code can include it in the connect
 	// handshake without importing internal/cli (which would be a cycle).
 	CLIVersion string `yaml:"-"`
+}
+
+// PerfConfig holds performance-measuring defaults.
+type PerfConfig struct {
+	MeasureAll bool `yaml:"measure_all"` // wrap every test in a measuring window named after the test (same as --measure-all)
 }
 
 // L10nConfig points `l10n "key"` at the app's ARB files.

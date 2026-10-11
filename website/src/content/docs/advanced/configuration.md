@@ -197,6 +197,12 @@ ai:
     - selector: "Email"
 ```
 
+### perf
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `measure_all` | bool | `false` | Wrap every test in a measuring window named after the test (same as `--measure-all`) |
+
 ### l10n
 
 | Key | Type | Default | Description |

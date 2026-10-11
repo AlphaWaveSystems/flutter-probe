@@ -106,6 +106,7 @@ func init() {
 	f.Bool("perf-update-baseline", false, "write this run's measurements of passing tests to the --perf-baseline file (default perf-baseline.json) instead of comparing")
 	f.String("perf-history", "", "append this run's measurements to this JSON-lines file for `probe perf trend` (default <reports>/perf-history.jsonl)")
 	f.Bool("no-perf-history", false, "do not record measurements in the history file")
+	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
@@ -1054,6 +1055,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var runMeta runner.RunMetadata
 	if !dryRun && dm != nil { //nolint:nestif
 		meta := runner.RunMetadata{
+			ProbeVersion: Version,
 			Locale:   func() string { l, _ := cmd.Flags().GetString("locale"); return strings.TrimSpace(l) }(),
 			DeviceID: deviceSerial,
 			Platform: string(platform),
@@ -1099,6 +1101,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		detectedPlatform := cloud.DetectPlatform(cloudSession.DeviceName)
 		_, osVer := cloud.ParseDeviceString(cloudSession.DeviceName)
 		meta := runner.RunMetadata{
+			ProbeVersion: Version,
 			DeviceID:   deviceSerial,
 			DeviceName: cloudSession.DeviceName,
 			Platform:   detectedPlatform,
@@ -1185,8 +1188,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 		perfBaseline = b
 	}
 
+	measureAll, _ := cmd.Flags().GetBool("measure-all")
+
 	// Build and run
 	opts := runner.RunOptions{
+		MeasureAll:    measureAll || cfg.Perf.MeasureAll,
 		PerfBaseline:  perfBaseline,
 		PerfTolerance: perfTolerance,
 		Files:        files,

@@ -134,3 +134,25 @@ func TestPerfBaselineRegressionFailsTheTest(t *testing.T) {
 		t.Fatal("a measurement without a baseline entry is new, not a regression")
 	}
 }
+
+func TestMeasureAllWrapsTestsThatDoNotMeasure(t *testing.T) {
+	f := newPerfFake()
+	cfg := &config.Config{}
+	r := New(cfg, f, nil, RunOptions{Timeout: 2 * time.Second, MeasureAll: true})
+	prog, err := parser.ParseFile("test \"plain\"\n  see no requests \"/never\"\n\ntest \"own window\"\n  start measuring \"mine\"\n  stop measuring\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := r.runSingleTest(context.Background(), prog, prog.Tests[0], "x.probe", nil, -1)
+	if !plain.Passed || len(plain.Perf) != 1 || plain.Perf[0].Name != "plain" {
+		t.Fatalf("a test without its own window gets one named after it: %+v", plain.Perf)
+	}
+	own := r.runSingleTest(context.Background(), prog, prog.Tests[1], "x.probe", nil, -1)
+	if len(own.Perf) != 1 || own.Perf[0].Name != "mine" {
+		t.Fatalf("a test that measures itself is left alone: %+v", own.Perf)
+	}
+	off := New(cfg, f, nil, RunOptions{Timeout: 2 * time.Second})
+	if res := off.runSingleTest(context.Background(), prog, prog.Tests[0], "x.probe", nil, -1); len(res.Perf) != 0 {
+		t.Fatalf("without --measure-all nothing is measured: %+v", res.Perf)
+	}
+}

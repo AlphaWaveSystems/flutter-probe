@@ -39,6 +39,14 @@ window that is open (the numbers so far) or the last one closed. A window left o
 | `see data transferred below 500 KB` | request + response bytes of the app's HTTP traffic in the window |
 | `see response GET "/api/x" below 800 ms` | how long the newest matching response took |
 
+## Measure every test without editing them
+
+```bash
+probe test tests/ --measure-all --perf-baseline perf-baseline.json --perf-update-baseline
+```
+
+`--measure-all` (or `perf: {measure_all: true}` in `probe.yaml`) opens a measuring window named after the test around each test body, so an existing suite gets baselines with no script edits. A test that opens its own `start measuring` window is left alone, so you can mix both: measure everything by default and add precise windows where it matters. Measurements are keyed `file::test::test`. Memory and frames need agent 0.23+; on an older agent the run continues with a warning and no numbers.
+
 ## Where the numbers come from
 
 | Number | Source | Android | iOS simulator | Physical iPhone |
