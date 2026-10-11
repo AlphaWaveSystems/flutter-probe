@@ -166,7 +166,19 @@ var sysWaitCmd = &cobra.Command{
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("timed out after %s waiting for the dialog", timeout)
+			msg := fmt.Sprintf("timed out after %s waiting for the dialog", timeout)
+			if dg, can := d.(sysdialog.Diagnoser); can && !gone {
+				appID, _ := cmd.Flags().GetString("app")
+				if appID == "" {
+					if cfg, cerr := loadConfig(cmd); cerr == nil {
+						appID = cfg.Project.App
+					}
+				}
+				if why := dg.Diagnose(ctx, appID, title); why != "" {
+					msg += " [" + why + "]"
+				}
+			}
+			return fmt.Errorf("%s", msg)
 		}
 		return nil
 	}),

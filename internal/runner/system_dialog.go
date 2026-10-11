@@ -101,7 +101,7 @@ func (e *Executor) runSystemDialog(ctx context.Context, s parser.SystemDialogSte
 			if !s.Appear {
 				state = "disappear"
 			}
-			return fmt.Errorf("timed out waiting for the system dialog%s to %s%s", titleSuffix(s.Title), state, e.showingNow(ctx, d))
+			return fmt.Errorf("timed out waiting for the system dialog%s to %s%s%s", titleSuffix(s.Title), state, e.showingNow(ctx, d), e.whyNoDialog(ctx, d, s))
 		}
 		return nil
 
@@ -123,6 +123,23 @@ func titleSuffix(title string) string {
 		return ""
 	}
 	return fmt.Sprintf(" matching %q", title)
+}
+
+// whyNoDialog adds, when a wait for a dialog to appear timed out, what the device says about it: the focused
+// window and the permission's grant state. Best effort, and empty when the driver cannot say.
+func (e *Executor) whyNoDialog(ctx context.Context, d sysdialog.Driver, s parser.SystemDialogStep) string {
+	dg, ok := d.(sysdialog.Diagnoser)
+	if !ok || !s.Appear {
+		return ""
+	}
+	appID := ""
+	if e.deviceCtx != nil {
+		appID = e.deviceCtx.AppID
+	}
+	if msg := dg.Diagnose(ctx, appID, s.Title); msg != "" {
+		return " [" + msg + "]"
+	}
+	return ""
 }
 
 // showingNow describes what system dialogs are actually up, to make a failed

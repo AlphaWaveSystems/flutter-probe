@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **A timed-out `wait for system dialog appears` explains itself on Android** (#367): it adds the focused window, the grant state of the permission the dialog is about (or the app's denied runtime permissions) and a hint such as "no system dialog was requested: the app is in the foreground and the permission is denied", so it is clear at once when the app never asked. Also in `probe system-dialog wait`.
+
 ### Fixed
 - **A wedged iOS XCUITest driver is reported directly** (#357): when the runner log shows "Timed out waiting for AX loaded notification" (xcodebuild exit 65), starting the driver or a later driver call now says the simulator's accessibility service is not responding and how to restart only the test simulator, instead of surfacing as unrelated step timeouts. A driver process that stopped mid-run is reported as stopped.
 
