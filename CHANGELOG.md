@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - **Canary releases attach `probe-ios-driver.zip`** (a non-blocking `ios-driver` job in `release-canary.yml`, mirroring the stable workflow), so `probe ios-driver install` works against a canary. Applies from the next canary; documented in the install guide and the release pipeline notes.
 
-## [0.24.0] - 2026-10-10
+## [0.24.0] - 2026-10-11
 
 > **Performance baselines on emulators and simulators:** the frame metrics (`frame_time`, `slow_frames`) vary a lot between runs of the same build there, even with the stable-metrics default. Gate with `--perf-metrics memory,data` (plus `cpu` for windows of 5 s or more) and keep frame metrics for physical devices in profile mode. In compare mode, windows that span an app restart are skipped.
 
