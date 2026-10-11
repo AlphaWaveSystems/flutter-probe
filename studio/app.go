@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,7 +48,10 @@ type App struct {
 	conn      *connection // nil when disconnected
 	deviceMgr *device.Manager
 	wifi      *wifiDiscovery
-	workspace string // directory whose probe.yaml governs connections; "" → cwd
+	wifiLimit wifiLimiter
+	// lookupHost resolves a hostname for the WiFi target policy; nil uses the system resolver (tests replace it).
+	lookupHost func(ctx context.Context, host string) ([]net.IP, error)
+	workspace  string // directory whose probe.yaml governs connections; "" → cwd
 	// humanWorkspace is the last workspace a person opened in the window; it is what automation
 	// may work inside (see automationRoots).
 	humanWorkspace string
@@ -462,6 +466,12 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 	if err := ValidateWiFiTarget(host, port, token); err != nil {
 		return ConnectionStatus{}, err
 	}
+	if err := a.wifiLimit.allow(); err != nil {
+		return ConnectionStatus{}, err
+	}
+	if err := a.checkWiFiTarget(a.ctx, host); err != nil {
+		return ConnectionStatus{}, err
+	}
 
 	cfg := a.workspaceConfig()
 	dialTimeout := 5 * time.Second
@@ -473,11 +483,11 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("dial: %w. %s", err, wifiHint(host, port, err))
+		return ConnectionStatus{}, fmt.Errorf("%s", redactToken(fmt.Sprintf("dial: %v. %s", err, wifiHint(host, port, err)), token))
 	}
 	if err := client.Ping(a.ctx); err != nil {
 		_ = client.Close()
-		return ConnectionStatus{}, fmt.Errorf("ping: %w. %s", err, wifiHint(host, port, err))
+		return ConnectionStatus{}, fmt.Errorf("%s", redactToken(fmt.Sprintf("ping: %v. %s", err, wifiHint(host, port, err)), token))
 	}
 
 	// WiFi connections have no host-side cleanup (no iproxy, no adb forward).
