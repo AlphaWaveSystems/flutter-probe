@@ -676,7 +676,7 @@ Fixes for limitations hit during a release-gate run (FP-13), reported against CL
   machinery kills a busy-but-alive connection (four load-shape experiments, kept in the evidence
   folder). See `docs/evidence/i237-ws-drop-investigation-2026-08-15/`.
 - **`probe migrate maestro` hardened against 2.x syntax and two real bugs (G-3).** Audited the
-  converter against nect-flutter's real 76-flow suite: `setPermissions`, `retry` (with recursive
+  converter against a real-world 76-flow Maestro suite: `setPermissions`, `retry` (with recursive
   nested-command conversion, also fixed for `repeat`), and `assertScreenshot` are now supported,
   and `relativePoint`-style `{point: "x%,y%"}` selectors get a clear `# TODO` instead of a real bug
   the old code had — silently emitting `tap on "map[point:50%,10%]"`, confirmed against an actual
@@ -685,7 +685,7 @@ Fixes for limitations hit during a release-gate run (FP-13), reported against CL
   `eraseText` — are now supported too. Also fixed: a stale `setLocation` "not supported" comment
   (it's been a real ProbeScript verb since before this cycle), and `probe migrate maestro <dir>`
   silently finding zero files for any suite organized into feature subdirectories — the real-world
-  norm, including nect-flutter's own — because directory discovery was single-level, not recursive.
+  norm, including the social app's own — because directory discovery was single-level, not recursive.
   Every one of the 76 real flows converted and parses as valid ProbeScript.
   See `docs/evidence/g3-migrate-maestro-hardening-2026-08-15/`.
 - **`dump tree`, `dump the widget tree`, and `save device logs` always misparsed as an unknown

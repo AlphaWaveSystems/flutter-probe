@@ -9,9 +9,9 @@ day-to-day tracking).
 
 **Test targets:** two real Flutter apps outside this repo, used for reproduction and comparison
 evidence:
-- `~/dev/water-sip` — Firebase/IAP consumer app. Has an existing `.probe` suite
+- a local checkout of a Firebase/IAP consumer app. Has an existing `.probe` suite
   (`tests/*.probe`) but **no Maestro suite** — Maestro flows must be written from scratch here.
-- `~/dev/nect-flutter` — Firebase/Firestore social app. Has both a `.probe` suite
+- a local checkout of a Firebase/Firestore social app. Has both a `.probe` suite
   (`tests/smoke/*.probe`, 10 flows) **and a real, git-tracked Maestro suite**
   (`.maestro/flows/**`, 66+ flows across auth/groups/home/posts/navigation/settings/profile/
   messaging/help/invitations/subscription) — this is the primary comparison base.
@@ -46,11 +46,11 @@ speculative — every item has a documented repro or root cause already.
   `resolveSelector()` helper in `internal/runner/executor.go`, applied at every selector-taking
   call site (including `runAssert`, for consistency with the rest). Regression tests:
   `TestResolveSelector_ResolvesVariablePlaceholder`, `TestResolveSelector_LeavesPlainTextUnchanged`.
-  Real-device evidence (water-sip, Android emulator): `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
+  Real-device evidence (the consumer app, Android emulator): `docs/evidence/r1-tap-var-resolve-2026-08-14/`.
   PR: #217
 
 - [!] **R-2 / PT-25 — Android WebSocket drop (`close 1006`) root cause, still open.** Attempted
-  with real background load against water-sip (Firebase Crashlytics/Analytics/RemoteConfig/
+  with real background load against the consumer app (Firebase Crashlytics/Analytics/RemoteConfig/
   Performance/InAppMessaging + IAP billing calls): a ~100s continuous-foreground stress session
   did **not** reproduce the drop — clean negative result, logcat-confirmed. A first attempt with
   deliberate app backgrounding conflated an expected lifecycle disconnect with the actual bug and
@@ -66,7 +66,7 @@ speculative — every item has a documented repro or root cause already.
   re-print in `server.dart` now also re-attempts `_writeTokenFile()`. Regression test:
   `token_reprint_test.dart`, using a new `@visibleForTesting tokenFileWriteAttempts` counter
   (the only thing observable from a host test, since the real file write no-ops off-device).
-  Real-device attempt against nect-flutter surfaced a *pre-existing, unrelated* environment issue
+  Real-device attempt against the social app surfaced a *pre-existing, unrelated* environment issue
   — `cache/probe/` was never created at all on that build, independent of this fix — documented
   honestly rather than forced; likely the same root cause as R-2/PT-25's WS-drop investigation.
   See `docs/evidence/r3-android-token-cache-clear-2026-08-14/`.
@@ -77,16 +77,16 @@ speculative — every item has a documented repro or root cause already.
   `finder.dart` as originally noted). Fixed by reusing the existing `_findTextController` up/down
   search rather than duplicating a tree walk. Regression tests:
   `see_contains_editabletext_test.dart` (3 widget tests, confirmed to fail pre-fix). Real-device
-  attempt against nect-flutter hit an unrelated emulator/connectivity issue (`unexpected EOF` on
+  attempt against the social app hit an unrelated emulator/connectivity issue (`unexpected EOF` on
   WS dial, likely same class as R-2/PT-25) — documented honestly rather than forced; see
   `docs/evidence/r4-textof-editabletext-2026-08-14/`.
   PR: —
 
 - [x] **V-1 / PT-03 — Re-verify scroll targeting holds.** Confirmed holding: a real-device test
-  against water-sip (18 quick-adds overflow one screen of History's lazy `ListView.builder`, then
+  against the consumer app (18 quick-adds overflow one screen of History's lazy `ListView.builder`, then
   `scroll down`) passes cleanly, consistent with the existing `scroll_scrollposition_test.dart`
-  widget-test evidence. No code change needed. nect-flutter's Android build has an unrelated
-  connectivity issue in this environment (see R-2/R-3/R-4 evidence) so water-sip stood in.
+  widget-test evidence. No code change needed. the social app's Android build has an unrelated
+  connectivity issue in this environment (see R-2/R-3/R-4 evidence) so the consumer app stood in.
   See `docs/evidence/v1-scroll-pt03-2026-08-14/`.
   PR: —
 
@@ -94,7 +94,7 @@ speculative — every item has a documented repro or root cause already.
   explicitly consuming `TOKEN_WIDGET`/`TOKEN_TREE`/`TOKEN_DEVICE`/`TOKEN_LOGS` when present,
   mirroring `parseActionClose`'s existing pattern. Regression tests: `TestParser_DumpTree_Short`,
   `TestParser_DumpTree_Long`, `TestParser_SaveDeviceLogs` (all confirmed to fail pre-fix with
-  "step count: got 2, want 1"). Real-device evidence against water-sip:
+  "step count: got 2, want 1"). Real-device evidence against the consumer app:
   `docs/evidence/r5-dump-tree-save-logs-2026-08-14/`.
   PR: —
   PR: —
@@ -122,19 +122,19 @@ speculative — every item has a documented repro or root cause already.
 ## Phase 0.5 — Benchmark harness (build once, reuse every phase after)
 
 Moves G-1 from "phase 3" up front: we now have a real, extensive Maestro suite
-(`nect-flutter/.maestro/flows/`) and a `.probe` suite for the same app
-(`nect-flutter/tests/smoke/`), so the comparison harness can be built immediately instead of
+(`<social-app>/.maestro/flows/`) and a `.probe` suite for the same app
+(`<social-app>/tests/smoke/`), so the comparison harness can be built immediately instead of
 waiting.
 
-- [x] **B-1 — Pick a representative flow slice and write the missing half.** water-sip: wrote and
+- [x] **B-1 — Pick a representative flow slice and write the missing half.** the consumer app: wrote and
   live-verified a full 9-flow Maestro suite matching `tests/smoke.probe` 1:1 (8/9 pass reliably;
   the 9th is a genuine, documented tool-speed finding, not an authoring bug — see below). PR open:
-  water-sip#51. nect-flutter: static-analysis mapping of all 9 `tests/smoke/*.probe` files against
+  consumer-app issue #51. the social app: static-analysis mapping of all 9 `tests/smoke/*.probe` files against
   the real `.maestro/flows/**` suite (live execution blocked by the same connectivity issue as
   R-2/R-3/R-4) — 7/9 full parity, 2 partial/gap (browse-feed scroll, filter-categories
   exhaustiveness), both narrower on the Maestro side. Two reusable findings surfaced along the
   way: (1) Maestro's out-of-process accessibility polling can miss a narrow-window UI element
-  (water-sip's Undo snackbar) that FlutterProbe's in-process tree access catches reliably — real
+  (the consumer app's Undo snackbar) that FlutterProbe's in-process tree access catches reliably — real
   evidence for G-1's speed thesis; (2) Maestro's text selector needs an explicit `(?s)` DOTALL flag
   to match two-line `content-desc` labels, undocumented, no FlutterProbe equivalent gotcha.
   Full writeup: `docs/evidence/b1-flow-mapping-2026-08-14/`.
@@ -143,12 +143,12 @@ waiting.
 - [x] **B-2 — Harness script.** `scripts/bench/run-comparison.sh` + `scripts/bench/summarize.py`
   (stdlib-only) run both suites N times against the same device, capture wall-clock + probe's JSON
   report + Maestro's JUnit XML per run, and print a median/P90/flake-rate comparison table.
-  End-to-end smoke-tested (N=2, water-sip) — correctly parsed both output formats and correctly
+  End-to-end smoke-tested (N=2, the consumer app) — correctly parsed both output formats and correctly
   flagged the known `undo-last-entry` flake rather than reporting a false pass. See
   `docs/evidence/b2-harness-smoketest-2026-08-14/`. A real N≥10 baseline is B-3.
   PR: —
 
-- [x] **B-3 — Baseline run + published numbers.** N=10 per tool against water-sip's 9-flow suite.
+- [x] **B-3 — Baseline run + published numbers.** N=10 per tool against the consumer app's 9-flow suite.
   **FlutterProbe: 10/10 clean, 59.6s median, 0% flake.** Maestro: 0/10 fully clean — runs 1–6 hit
   only the known `undo-last-entry` timing flake (~122s median across those); run 7 added two more
   failures and logged an `IOException: device offline` from Maestro's own driver-uninstall step;
@@ -170,7 +170,7 @@ waiting.
   connection errors with a warning). Matches Maestro's `retry` block and `optional: true`.
   Regression tests: 5 parser tests + 5 executor tests (scripted client failing N times then
   succeeding, for `retry`; always-failing for `optional`'s swallow + the non-optional regression
-  guard). Real-device evidence against water-sip (Android emulator): all 3 designed outcomes
+  guard). Real-device evidence against the consumer app (Android emulator): all 3 designed outcomes
   confirmed exactly (retry executes cleanly, optional swallows a genuine failure with the expected
   warning, the non-optional identical case still fails). `dictionary.md` updated.
   See `docs/evidence/e1-retry-optional-2026-08-15/`.
@@ -180,7 +180,7 @@ waiting.
   `visual.CropToBounds`, using the existing `probe.selector_bounds` RPC (already powers AI
   redaction) rather than new geometry plumbing. Regression: 3 `internal/visual` tests (correct
   region extracted — not just correct size — plus clamping and out-of-bounds error handling) + 3
-  parser tests. Real-device evidence against water-sip: baseline-vs-itself passes at 0% diff,
+  parser tests. Real-device evidence against the consumer app: baseline-vs-itself passes at 0% diff,
   baseline-vs-genuinely-changed-content fails at a precise 37.61% diff, confirmed cropped to
   68×44px (not full-screen). `dictionary.md` updated.
   See `docs/evidence/e2-element-visual-regression-2026-08-15/`.
@@ -190,7 +190,7 @@ waiting.
   / `am start -a android.intent.action.VIEW` via `DeviceContext`, alongside the existing
   external-browser `open link`. New `open link "url" in the app` / `into the app` / `in app`
   suffix; CLI-side dispatch, cloud mode skips with a warning. Parser + executor unit tests.
-  Real-device evidence against water-sip's genuine `watersip://` scheme on both Android emulator
+  Real-device evidence against the consumer app's genuine `myapp://` scheme on both Android emulator
   and iOS simulator — Android proves a full foreground-from-browser round trip; iOS proves the
   running-app case and documents a real platform limitation: `simctl openurl` cannot cold-launch a
   fully-terminated app (it raises an unactionable "Open in App?" confirmation dialog), unlike
@@ -201,7 +201,7 @@ waiting.
 - [x] **E-4 — `add media` — seed camera roll / gallery.** `simctl addmedia` / `adb push` + media
   scan broadcast. Unblocks image-picker-adjacent flows (relevant to R-3/PT-27's repro too).
   Parser + executor unit tests, including the same PT-23-style recipe-name collision guard `open`
-  needed. Real-device evidence against water-sip on both Android emulator (confirmed
+  needed. Real-device evidence against the consumer app on both Android emulator (confirmed
   MediaStore-indexed via `content query`, not just written to disk) and iOS simulator (confirmed
   visually via the Photos app). Documents a real scope limitation found along the way: seeding the
   media store doesn't drive the app's own native image-picker UI to select the photo — that's
@@ -233,9 +233,9 @@ proposal.
   PR: —
 
 - [x] **N-2 — iOS native bridging proposal.** Write the proposal (own doc, per PT-13's
-  recommendation) before any code — needs a concrete justifying flow (e.g. nect-flutter's photo
+  recommendation) before any code — needs a concrete justifying flow (e.g. the social app's photo
   picker or share sheet on iOS).
-  Grounded in nect-flutter's real "Add Images" → `image_picker.pickMultiImage()` →
+  Grounded in the social app's real "Add Images" → `image_picker.pickMultiImage()` →
   `PHPickerViewController` flow. Finding: PT-13's iOS cost estimate was the right shape but wrong
   granularity — the real integration point is WebDriverAgent (WDA), a *separate* app (the same
   mechanism Appium has used for iOS since ~2016), not a per-adopter Xcode project change. On
@@ -284,7 +284,7 @@ proposal.
   PR: —
 
 - [x] **G-3 — Harden `probe migrate maestro`** against 2.x Maestro syntax
-  (`setPermissions`, `relativePoint`, `retry`, `assertScreenshot`) using nect-flutter's real
+  (`setPermissions`, `relativePoint`, `retry`, `assertScreenshot`) using the social app's real
   66-flow suite as the test corpus — a uniquely good migration-fidelity testbed we now have
   on hand.
   A command-frequency audit against the real suite (76 flows, not 66 — grew since this was
@@ -294,7 +294,7 @@ proposal.
   used to silently produce a corrupted, non-functional selector (`tap on "map[point:...]"`) rather
   than erroring or flagging it — confirmed against a real occurrence in the corpus — and directory
   discovery was single-level, not recursive, so any suite organized into feature subdirectories
-  (nect-flutter's own real layout) silently converted zero files. All 76 real flows now convert
+  (the social app's own real layout) silently converted zero files. All 76 real flows now convert
   and parse as valid ProbeScript. `CHANGELOG.md` updated.
   See `docs/evidence/g3-migrate-maestro-hardening-2026-08-15/`.
   PR: —
@@ -307,4 +307,4 @@ proposal.
   confirmed already shipped in v0.11.0 (`see ... with ai`, `assert no visual defects with ai`,
   `ai.provider: local`, `read ... with ai into <var>`). Reduced Phase 0 from a speculative list to
   the exact remaining items in `IMPROVEMENT_TASKS.md`/`DONE.md`. Added Phase 0.5 after discovering
-  nect-flutter's real 66-flow Maestro suite.
+  a real-world 66-flow Maestro suite.

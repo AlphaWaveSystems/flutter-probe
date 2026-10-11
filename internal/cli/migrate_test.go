@@ -9,7 +9,7 @@ import (
 )
 
 // TestDiscoverYAMLFiles_Recursive covers the G-3 fix: real Maestro suites
-// commonly organize flows into subdirectories (nect-flutter's own real
+// commonly organize flows into subdirectories (the social app's own real
 // 76-flow suite is laid out exactly this way — flows/auth/, flows/settings/,
 // etc.) — a single-level os.ReadDir here used to silently report "No
 // Maestro YAML files found" for any project organized that way, rather than
