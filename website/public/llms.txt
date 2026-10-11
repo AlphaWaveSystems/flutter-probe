@@ -28,7 +28,7 @@ Key facts for an AI agent:
 - [Dictionary of steps](https://flutterprobe.dev/probescript/dictionary/)
 - [On-device agent](https://flutterprobe.dev/tools/agent/): build flags, ports, tokens, RPC methods, troubleshooting.
 - [System dialogs](https://flutterprobe.dev/tools/system-dialogs/)
-- [MCP server (21 tools)](https://flutterprobe.dev/tools/mcp/)
+- [MCP server (31 tools)](https://flutterprobe.dev/tools/mcp/)
 - [CLI reference](https://flutterprobe.dev/tools/cli-reference/)
 - [AI and local models](https://flutterprobe.dev/tools/ai/)
 - [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/): keys, loose matching, alternatives, system dialogs in any language.

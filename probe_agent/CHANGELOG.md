@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.24.0 - 2026-10-10
+
+- Fixed: `double tap` and `long press` on a target that something else covers now return the same "covered by another widget" warning as `tap` (they used to succeed silently); `--fail-on-warning` turns it into a failure.
+
 ## 0.23.0 - 2026-10-10
 
 - Added: `probe.perf_start` / `probe.perf_snapshot` / `probe.perf_stop`: frame timings (build/raster, slow-frame share, p50/p95/p99/max) from the engine's timings callback and resident memory sampled every 250 ms, between a start and a stop. `perf_stop` waits about a second for the last batch of frame timings.
