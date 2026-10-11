@@ -79,6 +79,58 @@ When targeting a physical device, the CLI runs `iproxy <host-port> <device-port>
 `iproxy` is **not** needed for iOS simulators (they share the host loopback network) or Android devices (which use `adb forward` for port forwarding).
 :::
 
+### Physical iPhone over WiFi (CLI and Studio): what must be true
+
+WiFi avoids the USB tunnel and its cable mode-flipping, and it is the path Studio's 📡 button uses. Everything below must hold; the
+checks at the end tell you which one does not.
+
+1. **The phone runs a build of your app that contains the agent.** The App Store or production build has none: it does not listen on
+   port 48686 and never will. `ProbeAgent.start()` is a no-op unless the app was built with `--dart-define=PROBE_AGENT=true`, and the
+   agent refuses to start in a release build unless the app passes `allowReleaseBuild: true`.
+2. **Build mode is profile, with your flavor if the project has one, and WiFi is switched on at build time:**
+   ```bash
+   flutter build ios --profile --flavor <your-flavor> \
+     --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true
+   ```
+   Without `PROBE_WIFI=true` the agent listens on localhost only and nothing on the network can reach it. Debug builds cannot be launched
+   from the home screen of a physical iPhone, so use profile. Install with `xcrun devicectl device install app --device <UDID> <Runner.app>`.
+3. **The app is running in the foreground with the screen unlocked.** iOS suspends background apps and the listener stops with them.
+   The agent binds `0.0.0.0` on port **48686** (`--dart-define=PROBE_PORT=<n>` moves it; if the port is busy it takes the next one, up to
+   48695, and prints `PROBE_PORT=<n>`).
+4. **You have the session token.** The agent prints `PROBE_TOKEN=<token>` to the app's console every 3 seconds. It is never advertised on
+   the network. Read it with `xcrun devicectl device process launch --console --device <UDID> <bundle-id>`, or from Xcode's console.
+5. **The Mac can reach the phone's IP directly.** Both must be on the same network segment. A Mac on Ethernet and a phone on WiFi work
+   only if the router bridges them (no client isolation, no separate guest or IoT network, and for discovery no mDNS filtering between
+   the wired and wireless side). The Mac's own WiFi being off is fine.
+6. **How the Mac finds the phone:**
+   - **CLI, always works:** `probe test tests/ --host <phone-ip> --token <token>` (add `--agent-port <n>` if you moved the port).
+   - **Studio's 📡 overlay, only with mDNS:** it browses the Bonjour service `_flutterprobe._tcp` and lists what answers; you pick the
+     device and **paste the token** (the overlay asks for exactly that, from the app's `PROBE_TOKEN=` line) and press Connect. There is
+     **no field for a manual host and port**, so a phone that does not advertise cannot be connected from Studio today. The agent only
+     advertises when the app passes a `ProbeAdvertiser` (for example one built on `bonsoir`) to `ProbeAgent.start(advertiser: ...)`,
+     which needs the `_flutterprobe._tcp` entry in `NSBonjourServices` and a `NSLocalNetworkUsageDescription` in that build's `Info.plist`
+     (see [Studio: WiFi auto-discovery](/tools/studio/#wifi-auto-discovery)). Without an advertiser the app logs `PROBE_MDNS=off`.
+   - **Studio over USB** (not WiFi): the device picker lists the phone as `physical`, uses an `iproxy` tunnel and reads the token from the
+     device log with `idevicesyslog` (`brew install libimobiledevice`); the build still has to be profile with `PROBE_AGENT=true`.
+
+**Check from the Mac, in this order:**
+
+```bash
+xcrun devicectl list devices                      # the phone is paired, developer mode on, state "connected"
+dns-sd -B _flutterprobe._tcp local.               # does the app advertise? (only with a ProbeAdvertiser)
+curl -s http://<phone-ip>:48686/probe/status      # {"agent":"flutter_probe","version":"..."}: the agent is reachable
+```
+
+The status endpoint needs no token. If `curl` is refused or times out: the build has no agent or no `PROBE_WIFI=true`, the app is not in the
+foreground, or the network is blocking the Mac from the phone. If `curl` answers but `dns-sd` shows nothing: the app has no
+`ProbeAdvertiser` or mDNS is filtered; use the CLI `--host/--token` path.
+
+:::note
+Not verified here: whether iOS asks for the Local Network permission for an app that only listens for incoming connections (the
+Info.plist keys above are what the advertiser path needs), and whether a CoreDevice network tunnel (`devicectl`) can carry the `iproxy`
+path; the WiFi path does not use it.
+:::
+
 ## Connection Flow (Simulator)
 
 The iOS simulator shares the host's `localhost` network. No port forwarding is needed.

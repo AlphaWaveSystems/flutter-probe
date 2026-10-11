@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **iOS guide: "Physical iPhone over WiFi (CLI and Studio): what must be true"**: build mode and flavor, `PROBE_WIFI`, the port, the token, network reachability, how the Mac finds the phone (mDNS only with a `ProbeAdvertiser`; Studio's WiFi overlay has no manual host/port field, the CLI `--host/--token` path always works), and a three-command check.
+
 ### Changed
 - **A timed-out `wait for system dialog appears` explains itself on Android** (#367): it adds the focused window, the grant state of the permission the dialog is about (or the app's denied runtime permissions) and a hint such as "no system dialog was requested: the app is in the foreground and the permission is denied", so it is clear at once when the app never asked. Also in `probe system-dialog wait`.
 
