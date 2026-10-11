@@ -13,9 +13,10 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-# Validate semver format (X.Y.Z)
-if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-  echo "Error: version must be in semver format X.Y.Z (e.g., 0.2.0)"
+# Validate semver format: X.Y.Z (stable) or X.Y.Z-next.N (canary, see
+# docs/ops/release-pipeline.md). A canary tag runs release-canary.yml only.
+if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-next\.[0-9]+)?$'; then
+  echo "Error: version must be X.Y.Z or X.Y.Z-next.N (e.g., 0.2.0 or 0.2.0-next.1)"
   exit 1
 fi
 

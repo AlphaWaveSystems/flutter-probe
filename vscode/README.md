@@ -12,6 +12,13 @@ Full editor support for `.probe` files:
 
 - **Syntax highlighting** — keywords, strings, selectors, tags, comments
 - **IntelliSense** — autocomplete for commands, permissions, tags, and recipes
+- **Named devices** — run results show the named simulator/emulator each test ran on (`probe device start --name …`)
+- **Performance** — snippets and completions for `start measuring`, `see memory below`, `see cpu below`, `see slow frames below`
+- **Time budgets** — `within N seconds` highlighted; snippet `within`
+- **Backend data** — snippets and completions for `wait for response`, `see response`, `if response`
+- **ARB labels** — snippet for `l10n "key"` selectors
+- **App language** — snippet for `set language "de"`; `probe test --locales de,ja,ar` runs a suite per language
+- **Multi-language suites** — snippets for `see any of`, `wait until any of` and `wait until … appears matching`; the grammar highlights them
 - **Snippets** — 19 built-in snippets (`test`, `tap`, `type`, `see`, `wait`, `recipe`, `if`, `repeat`, `dart`, `mock`, and more)
 - **Lint on save** — real-time diagnostics from the ProbeScript parser
 - **CodeLens** — inline Run / Debug buttons above every test
@@ -323,11 +330,14 @@ open the app
 tap on "Button"
 type "text" into the "Field" field
 see "Expected text"
-don't see "Hidden text"
+don't see "Hidden text"      # "dont see" works too
 wait until "Element" appears
 wait 3 seconds
 swipe up / down / left / right
 scroll down until "Item" appears
+wait for idle
+tap "Allow" in system dialog       # OS permission alerts / sign-in sheets
+type "$ENV_VAR" into system field "Password"   # masked
 take screenshot "name"
 compare screenshot "name"
 

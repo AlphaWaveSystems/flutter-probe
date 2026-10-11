@@ -2,6 +2,7 @@
 package report
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -49,6 +50,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		DurMs    int64    `json:"dur_ms"`
 		Error    string   `json:"error,omitempty"`
 		Shots    []string `json:"shots,omitempty"`
+		Perf     []perf.Metrics `json:"perf,omitempty"`
 	}
 	var rows []resultJSON
 	for _, r := range results {
@@ -67,6 +69,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 			Passed:  r.Passed,
 			Skipped: r.Skipped,
 			DurMs:   r.Duration.Milliseconds(),
+			Perf:    r.Perf,
 		}
 		if r.Error != nil {
 			rj.Error = r.Error.Error()
@@ -93,7 +96,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 	}
 
 	// Build metadata display strings
-	metaDevice, metaPlatform, metaOS, metaApp := "", "", "", ""
+	metaDevice, metaPlatform, metaOS, metaApp, metaLocale := "", "", "", "", ""
 	if h.Metadata != nil {
 		m := h.Metadata
 		if m.DeviceName != "" {
@@ -105,6 +108,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 			metaDevice = m.DeviceID
 		}
 		metaPlatform = m.Platform
+		metaLocale = m.Locale
 		metaOS = m.OSVersion
 		if m.AppID != "" {
 			metaApp = m.AppID
@@ -124,6 +128,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Total        int
 		ResultsJSON  string
 		MetaDevice   string
+		MetaLocale   string
 		MetaPlatform string
 		MetaOS       string
 		MetaApp      string
@@ -137,6 +142,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Total:        len(results),
 		ResultsJSON:  string(resultsJSON),
 		MetaDevice:   metaDevice,
+		MetaLocale:   metaLocale,
 		MetaPlatform: metaPlatform,
 		MetaOS:       metaOS,
 		MetaApp:      metaApp,
@@ -219,6 +225,11 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
 .shots{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .shots img{max-height:160px;border-radius:6px;border:1px solid #333}
 .shots video{max-height:160px;border-radius:6px;border:1px solid #333}
+.perf{margin-top:10px;border:1px solid #2a2a2a;border-radius:6px;padding:10px 12px;font-size:13px}
+.perf h4{margin:0 0 6px;font-size:13px;color:#9ad}
+.perf table{border-collapse:collapse;width:100%}
+.perf td{padding:2px 12px 2px 0;font-family:monospace;color:#bbb}
+.perf td:first-child{color:#777;width:200px}
 .bar{height:4px;background:#1a1a1a;border-radius:2px;margin-bottom:32px;overflow:hidden}
 .bar-pass{height:100%;background:#4caf81;transition:width .5s}
 .empty{text-align:center;color:#444;padding:60px;font-size:16px}
@@ -231,7 +242,7 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
     <span class="project">/ {{.ProjectName}}</span>
   </div>
   <div class="meta">Generated {{.GeneratedAt}} · Total duration {{.TotalDur}}</div>
-{{if or .MetaDevice .MetaOS .MetaApp}}  <div class="meta" style="margin-top:4px">{{if .MetaDevice}}Device: {{.MetaDevice}}{{end}}{{if .MetaOS}} · OS: {{.MetaOS}}{{end}}{{if .MetaPlatform}} · Platform: {{.MetaPlatform}}{{end}}{{if .MetaApp}} · App: {{.MetaApp}}{{end}}</div>
+{{if or .MetaDevice .MetaOS .MetaApp}}  <div class="meta" style="margin-top:4px">{{if .MetaDevice}}Device: {{.MetaDevice}}{{end}}{{if .MetaOS}} · OS: {{.MetaOS}}{{end}}{{if .MetaPlatform}} · Platform: {{.MetaPlatform}}{{end}}{{if .MetaApp}} · App: {{.MetaApp}}{{end}}{{if .MetaLocale}} · Language: {{.MetaLocale}}{{end}}</div>
 {{end}}</header>
 
 <div class="summary">
@@ -280,6 +291,16 @@ function render(results) {
     }).join('');
     const err = r.error ? '<div class="error-msg">'+escHtml(r.error)+'</div>' : '';
     const shotsHtml = shots ? '<div class="shots">'+shots+'</div>' : '';
+    const perfHtml = (r.perf||[]).map(m => {
+      const rows = [
+        ['Memory (peak / growth)', m.mem_peak_mb.toFixed(1)+' MB / '+(m.mem_growth_mb>=0?'+':'')+m.mem_growth_mb.toFixed(1)+' MB'],
+        m.cpu_available ? ['CPU (avg / peak)', m.cpu_avg_pct.toFixed(0)+'% / '+m.cpu_peak_pct.toFixed(0)+'%'] : null,
+        m.frames ? ['Frames', m.frames+' ('+m.slow_frame_pct.toFixed(1)+'% slow, p95 '+m.frame_p95_ms.toFixed(1)+' ms, max '+m.frame_max_ms.toFixed(0)+' ms)'] : null,
+        m.requests ? ['Network', m.requests+' requests, '+m.data_kb.toFixed(0)+' KB, slowest '+m.slowest_request_ms+' ms'] : null,
+        ['Duration', m.duration_ms+' ms'],
+      ].filter(Boolean).map(x => '<tr><td>'+x[0]+'</td><td>'+escHtml(x[1])+'</td></tr>').join('');
+      return '<div class="perf"><h4>Performance: '+escHtml(m.name||'measurement')+'</h4><table>'+rows+'</table></div>';
+    }).join('');
     return '<div class="test-card '+cls+'" data-name="'+escHtml(r.name)+'" data-status="'+cls+'">' +
       '<div class="test-header" onclick="toggle('+i+')">' +
         '<span class="status-dot '+dot+'"></span>' +
@@ -288,7 +309,7 @@ function render(results) {
         '<span class="test-dur">'+r.dur_ms+'ms</span>' +
       '</div>' +
       '<div class="test-detail" id="detail-'+i+'">' +
-        (err||shotsHtml ? err+shotsHtml : '<div style="color:#555;font-size:13px;padding-top:8px">No additional details</div>') +
+        (err||shotsHtml||perfHtml ? err+perfHtml+shotsHtml : '<div style="color:#555;font-size:13px;padding-top:8px">No additional details</div>') +
       '</div>' +
     '</div>';
   }).join('');

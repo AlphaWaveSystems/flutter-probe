@@ -39,6 +39,12 @@ var migrateMaestroCmd = &cobra.Command{
 			return nil
 		}
 
+		recipeFiles := migrate.RunFlowTargets(yamlFiles)
+		convertedSet := map[string]bool{}
+		for _, yf := range yamlFiles {
+			abs, _ := filepath.Abs(yf.Path)
+			convertedSet[abs] = true
+		}
 		converted := 0
 		for _, yf := range yamlFiles {
 			outPath := ""
@@ -47,7 +53,7 @@ var migrateMaestroCmd = &cobra.Command{
 				outPath = filepath.Join(outputDir, yf.RelDir, base+".probe")
 			}
 
-			result, err := migrate.ConvertFile(yf.Path, outPath)
+			result, err := migrate.ConvertFileWith(yf.Path, outPath, migrate.Options{RecipeFiles: recipeFiles, Converted: convertedSet})
 			if err != nil {
 				fmt.Printf("  \033[31m✗\033[0m  %s — %s\n", filepath.Base(yf.Path), err)
 				continue
@@ -57,6 +63,10 @@ var migrateMaestroCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\n  Converted %d/%d file(s)\n", converted, len(yamlFiles))
+		if converted > 0 {
+			fmt.Println("  Note: Maestro waits implicitly for elements to appear; ProbeScript steps fail at once.")
+			fmt.Println("        Run migrated tests with `probe test --implicit-wait 7s` (or defaults.implicit_wait: 7s in probe.yaml).")
+		}
 
 		// Optionally lint the output
 		if outputDir != "" && converted > 0 {

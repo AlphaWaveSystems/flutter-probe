@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ios"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 // Platform indicates the target platform.
@@ -276,6 +277,47 @@ func (m *Manager) Start(ctx context.Context, avdName string, bootTimeout, pollIn
 
 // StartIOS boots an iOS simulator by UDID. If udid is empty, auto-selects one.
 func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
+	return m.StartIOSNamed(ctx, udid, "")
+}
+
+// StartIOSNamed boots an iOS simulator and guarantees it carries a name.
+//   - name set, a simulator with that name exists: it is booted (udid ignored
+//     unless it disagrees, which is an error).
+//   - name set, none exists: a new simulator is created from the udid's (or the
+//     auto-selected simulator's) device type and runtime, under that name.
+//   - name empty and udid names a simulator: that simulator keeps its own name.
+func (m *Manager) StartIOSNamed(ctx context.Context, udid, name string) (*Device, error) {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		sims, err := m.simctl.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if found := ios.FindByName(sims, name); found != nil {
+			if udid != "" && udid != found.UDID {
+				return nil, fmt.Errorf("simulator %q is %s, not %s", name, found.UDID, udid)
+			}
+			udid = found.UDID
+		} else {
+			var tmpl *ios.Simulator
+			for i := range sims {
+				if sims[i].UDID == udid {
+					tmpl = &sims[i]
+				}
+			}
+			if tmpl == nil {
+				if tmpl, err = m.simctl.AutoSelect(ctx); err != nil {
+					return nil, err
+				}
+			}
+			newUDID, err := m.simctl.Create(ctx, name, tmpl.DeviceTypeID, tmpl.Runtime)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("  Created simulator %q (%s)\n", name, newUDID)
+			udid = newUDID
+		}
+	}
 	if udid == "" {
 		sim, err := m.simctl.AutoSelect(ctx)
 		if err != nil {
@@ -293,7 +335,7 @@ func (m *Manager) StartIOS(ctx context.Context, udid string) (*Device, error) {
 
 	// Resolve name
 	sims, _ := m.simctl.List(ctx)
-	name := udid
+	name = udid
 	for _, s := range sims {
 		if s.UDID == udid {
 			name = s.Name
@@ -392,7 +434,13 @@ func (m *Manager) WaitForBoot(ctx context.Context, serial string, pollInterval t
 
 // ForwardPort sets up adb forward so the host can reach localhost:agentPort on the device.
 func (m *Manager) ForwardPort(ctx context.Context, serial string, hostPort, devicePort int) error {
-	return m.adb.Forward(ctx, serial, hostPort, devicePort)
+	err := m.adb.Forward(ctx, serial, hostPort, devicePort)
+	if err != nil && strings.Contains(err.Error(), "Address already in use") {
+		// Something other than this forward owns the host port — typically an iOS
+		// simulator app from an earlier run. Say what (FP-19).
+		return fmt.Errorf("%w%s", err, probelink.PortHolderHint("127.0.0.1", hostPort))
+	}
+	return err
 }
 
 // RemoveForward cleans up an adb port forward.
@@ -545,6 +593,11 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 	trace.log("android: giving up after %d attempt(s), %s elapsed — no source produced a token", attempt, timeout)
 	// No "— is the app running with probe_agent?" suffix here: the caller in
 	// internal/cli/test.go already appends this suggestion when wrapping.
+	if appID != "" {
+		if out, err := m.adb.Shell(ctx, serial, "pidof", appID); err == nil && strings.TrimSpace(string(out)) == "" {
+			return "", fmt.Errorf("android: probe token not found within %s: the app process %s is not running (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, appID)
+		}
+	}
 	return "", fmt.Errorf("android: probe token not found within %s", timeout)
 }
 
@@ -559,6 +612,19 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 // tokens from multiple app-process generations, including already-dead
 // ones. The agent reprints its token every ~3s, so the most recent matching
 // line is always the live process's token, if one is currently running.
+// ReadTokenAndroidLogcat returns the newest PROBE_TOKEN= line in the device's
+// logcat, or "" when there is none. The agent reprints its token every few
+// seconds, so this is the live process's token even when the token file in the
+// app's cache is stale (e.g. the agent could not rewrite it after a restart).
+func (m *Manager) ReadTokenAndroidLogcat(ctx context.Context, serial string) string {
+	out, err := m.adb.Shell(ctx, serial, "logcat", "-d", "-s", "flutter:I")
+	if err != nil {
+		return ""
+	}
+	t, _ := latestProbeToken(string(out))
+	return t
+}
+
 func latestProbeToken(logOutput string) (token string, matches int) {
 	const marker = "PROBE_TOKEN="
 	for _, line := range strings.Split(logOutput, "\n") {

@@ -1,7 +1,7 @@
 # Native-verb suite against the purpose-built Probe Native Test app
 # (native-test-apps/android). Run pattern (same as the N-1 evidence runs):
 #
-#   1. water-sip (or any ProbeAgent host app) is running and connected —
+#   1. the consumer app (or any ProbeAgent host app) is running and connected —
 #      probe's session lives there; native verbs are CLI-side and don't
 #      touch the Dart agent at all.
 #   2. Bring this native app to the foreground BEFORE the run:

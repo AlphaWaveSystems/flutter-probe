@@ -70,6 +70,16 @@ jobs:
         run: |
           test -x bin/probe
           test -x bin/probe-convert
+      # The Release workflow builds the CLI for these targets. Compile them here too
+      # so a Unix-only API (e.g. syscall.Kill) fails the PR, not the tag.
+      - name: Cross-compile release targets
+        run: |
+          for target in linux/amd64 darwin/amd64 darwin/arm64 windows/amd64; do
+            for pkg in ./cmd/probe ./cmd/probe-mcp; do
+              echo "building $pkg for $target"
+              GOOS="${target%/*}" GOARCH="${target#*/}" go build -o /dev/null "$pkg"
+            done
+          done
       - name: Upload probe binary
         uses: actions/upload-artifact@v7
         with:

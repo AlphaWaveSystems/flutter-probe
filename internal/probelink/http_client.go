@@ -176,7 +176,10 @@ func (c *HTTPClient) Open(ctx context.Context, screen string) error {
 }
 
 func (c *HTTPClient) Tap(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodTap, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 
@@ -205,13 +208,25 @@ func (c *HTTPClient) Scroll(ctx context.Context, direction string, sel *Selector
 	return err
 }
 
+// ScrollUntil asks the agent to scroll until until is on screen (FP-13).
+func (c *HTTPClient) ScrollUntil(ctx context.Context, direction string, sel, until *SelectorParam) error {
+	_, err := c.Call(ctx, MethodScroll, ScrollParams{Direction: direction, Selector: sel, Until: until})
+	return err
+}
+
 func (c *HTTPClient) LongPress(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodLongPress, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 
 func (c *HTTPClient) DoubleTap(ctx context.Context, sel SelectorParam) error {
-	_, err := c.Call(ctx, MethodDoubleTap, TapParams{Selector: sel})
+	raw, err := c.Call(ctx, MethodDoubleTap, TapParams{Selector: sel})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 
@@ -262,6 +277,21 @@ func (c *HTTPClient) DumpWidgetTree(ctx context.Context) (string, error) {
 	return result.Tree, nil
 }
 
+// VisibleSummary returns the visible texts/keys snapshot (FP-13). Agents older
+// than the version that added probe.visible_summary answer "method not found";
+// callers treat any error as "no summary available".
+func (c *HTTPClient) VisibleSummary(ctx context.Context) (VisibleSummaryResult, error) {
+	raw, err := c.Call(ctx, MethodVisibleSummary, nil)
+	if err != nil {
+		return VisibleSummaryResult{}, err
+	}
+	var result VisibleSummaryResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return VisibleSummaryResult{}, err
+	}
+	return result, nil
+}
+
 func (c *HTTPClient) SelectorBounds(ctx context.Context, sel SelectorParam) (BoundsResult, error) {
 	raw, err := c.Call(ctx, MethodSelectorBounds, SelectorBoundsParams{Selector: sel})
 	if err != nil {
@@ -279,13 +309,60 @@ func (c *HTTPClient) RunDart(ctx context.Context, code string) error {
 	return err
 }
 
+func (c *HTTPClient) HTTPLog(ctx context.Context, p HTTPLogParams) (HTTPLogResult, error) {
+	raw, err := c.Call(ctx, MethodHTTPLog, p)
+	if err != nil {
+		return HTTPLogResult{}, err
+	}
+	var r HTTPLogResult
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return HTTPLogResult{}, err
+	}
+	return r, nil
+}
+
+// HTTPClear forgets the recorded exchanges (and the mocks when mocks is true).
+func (c *HTTPClient) HTTPClear(ctx context.Context, mocks bool) error {
+	_, err := c.Call(ctx, MethodHTTPClear, map[string]bool{"mocks": mocks})
+	return err
+}
+
+func (c *HTTPClient) PerfStart(ctx context.Context) error {
+	_, err := c.Call(ctx, MethodPerfStart, nil)
+	return err
+}
+
+func (c *HTTPClient) PerfSnapshot(ctx context.Context) (PerfSnapshot, error) {
+	return c.perf(ctx, MethodPerfSnapshot)
+}
+
+// PerfStop returns the final numbers of the measuring window and closes it.
+func (c *HTTPClient) PerfStop(ctx context.Context) (PerfSnapshot, error) {
+	return c.perf(ctx, MethodPerfStop)
+}
+
+func (c *HTTPClient) perf(ctx context.Context, method string) (PerfSnapshot, error) {
+	raw, err := c.Call(ctx, method, nil)
+	if err != nil {
+		return PerfSnapshot{}, err
+	}
+	var s PerfSnapshot
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return PerfSnapshot{}, err
+	}
+	return s, nil
+}
+
 func (c *HTTPClient) RegisterMock(ctx context.Context, m MockParam) error {
 	_, err := c.Call(ctx, MethodMock, m)
 	return err
 }
 
 func (c *HTTPClient) DeviceAction(ctx context.Context, action, value string) error {
-	_, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
+	raw, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
+	if err == nil {
+		return reportWarning(raw)
+	}
 	return err
 }
 

@@ -108,10 +108,16 @@ class ProbeMethods {
   static const close = 'probe.close';
   static const screenshot = 'probe.screenshot';
   static const dumpTree = 'probe.dump_tree';
+  static const visibleSummary = 'probe.visible_summary';
   static const selectorBounds = 'probe.selector_bounds';
   static const saveLogs = 'probe.save_logs';
   static const runDart = 'probe.run_dart';
   static const mock = 'probe.mock';
+  static const httpLog = 'probe.http_log';
+  static const httpClear = 'probe.http_clear';
+  static const perfStart = 'probe.perf_start';
+  static const perfSnapshot = 'probe.perf_snapshot';
+  static const perfStop = 'probe.perf_stop';
   static const startRecording = 'probe.start_recording';
   static const stopRecording = 'probe.stop_recording';
   static const copyClipboard = 'probe.copy_clipboard';

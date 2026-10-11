@@ -22,11 +22,16 @@ import (
 //   - "<android-serial>"  — Android device (ADB forward, token read, WebSocket)
 func parseCompositeDeviceSpecs(flags []string, yamlDevices map[string]string) map[string]string {
 	specs := make(map[string]string)
-	// probe.yaml values as baseline
-	for k, v := range yamlDevices {
-		specs[k] = v
+	// probe.yaml values are the baseline — but --composite-device flags REPLACE
+	// the configured list instead of adding to it: merging made every configured
+	// device that happened to be down (and not wanted for this run) skip the whole
+	// composite test.
+	if len(flags) == 0 {
+		for k, v := range yamlDevices {
+			specs[k] = v
+		}
 	}
-	// CLI flags override
+	// CLI flags
 	for _, f := range flags {
 		parts := strings.SplitN(f, "=", 2)
 		if len(parts) == 2 {
