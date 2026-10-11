@@ -116,6 +116,15 @@ checks at the end tell you which one does not.
    - **Studio over USB** (not WiFi): the device picker lists the phone as `physical`, uses an `iproxy` tunnel and reads the token from the
      device log with `idevicesyslog` (`brew install libimobiledevice`); the build still has to be profile with `PROBE_AGENT=true`.
 
+**The fastest way to try all of this** is the repository's Flutter fixture app and one script that prints the exact commands for your phone:
+
+```bash
+scripts/physical-ios-fixture.sh --ip <phone-ip>          # steps for the connected iPhone; add --check once the app runs
+```
+
+It lists the connected iPhones, prints the signing step (your Apple developer team), the
+`flutter run --profile -d <id> --dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true` command, the checks below and the CLI and Studio connect steps.
+
 To verify the whole path with Studio in about ten minutes, with the expected result of each step, follow the checklist in the repository
 (`studio/e2e-web/PHYSICAL.md`); its automated half is `scripts/studio-e2e-physical.sh --host <phone-ip> --token <token>`, opt-in and never run in CI.
 

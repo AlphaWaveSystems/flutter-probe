@@ -35,6 +35,11 @@ dependencies:
     # current agent. External adopters would use the pub.dev release instead.
     path: ../../probe_agent
 
+  # LAN discovery for a physical phone (Studio's WiFi overlay): only used when the app is built with
+  # PROBE_WIFI=true, but linked into every build of this fixture app. A real app would put this in a
+  # dedicated flavor; the fixture is never shipped.
+  bonsoir: 6.0.2
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
