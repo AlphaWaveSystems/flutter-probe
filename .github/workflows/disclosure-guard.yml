@@ -1,0 +1,88 @@
+name: Disclosure guard
+
+# Blocks text that must not be published (names, identifiers and internal
+# wording the maintainers keep out of this repository). The patterns live in
+# the repository secret DISCLOSURE_DENYLIST, one extended regex per line, so the
+# list itself is never published. Matches are reported by location and rule
+# number only; the matched text is never printed.
+#
+# Scanned: lines a pull request adds, its changed file names, its commit
+# messages, and its title and body. The scanner runs from the trusted base
+# commit, never from the pull request's own checkout. Pushes to the default
+# branch are scanned too, which catches anything merged around the checks.
+#
+# Fails closed when the secret is missing. Pull requests from forks cannot see
+# secrets, so they fail with instructions: a maintainer re-opens them from a
+# branch in this repository. Bot dependency updates only touch dependency files
+# and are skipped.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: disclosure-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Disclosure guard
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Trusted code only: the base commit for pull requests, the pushed commit otherwise.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pull request from this repository only
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+            echo "::error::Pull requests from forks cannot be scanned (secrets are not available to them). A maintainer must review the change and re-open it from a branch in this repository."
+            exit 1
+          fi
+
+      - name: Scan
+        env:
+          DENYLIST: ${{ secrets.DISCLOSURE_DENYLIST }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DENYLIST" ]; then
+            echo "::error::DISCLOSURE_DENYLIST is not configured; a maintainer must add it before changes can be merged."
+            exit 1
+          fi
+          patterns="$RUNNER_TEMP/patterns.txt"
+          ( umask 077; printf '%s\n' "$DENYLIST" > "$patterns" )
+
+          if [ "$EVENT" = "pull_request" ]; then
+            [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::invalid pull request number"; exit 1; }
+            [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid base sha"; exit 1; }
+            git fetch --no-tags origin "pull/${PR}/head:prhead"
+            ( umask 077; printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" > "$RUNNER_TEMP/prtext.txt" )
+            scripts/disclosure-scan.sh . "${BASE_SHA}...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt"
+          else
+            if [[ ! "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] || [[ "$PUSH_BEFORE" =~ ^0+$ ]]; then
+              echo "no previous commit to compare against; nothing to scan"
+              exit 0
+            fi
+            scripts/disclosure-scan.sh . "${PUSH_BEFORE}...${PUSH_SHA}" "$patterns"
+          fi
