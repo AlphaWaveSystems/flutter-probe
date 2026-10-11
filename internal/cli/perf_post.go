@@ -73,8 +73,17 @@ func perfPostProcess(cmd *cobra.Command, w io.Writer, results []runner.TestResul
 	if len(recs) == 0 {
 		return
 	}
-	if skipped > 0 {
+	if update && skipped > 0 {
 		statusWarn(w, "%d measurement(s) span an app restart or have no memory/frame data and are left out of the baseline", skipped)
+	}
+	if !update && baselinePath != "" {
+		compareSkipped := 0
+		for _, res := range results {
+			compareSkipped += res.PerfSkipped
+		}
+		if compareSkipped > 0 {
+			statusWarn(w, "%d measurement(s) were skipped in the comparison (they span an app restart or have no memory/frame data)", compareSkipped)
+		}
 	}
 	if no, _ := cmd.Flags().GetBool("no-perf-history"); !no {
 		path, _ := cmd.Flags().GetString("perf-history")

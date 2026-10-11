@@ -33,6 +33,7 @@ type TestResult struct {
 	DeviceName string // human-readable device name
 	Perf       []perf.Metrics // measurements the test took (`start measuring` ... `stop measuring`)
 	PerfNew    []string       // measurements with no entry in the baseline (not compared)
+	PerfSkipped int           // measurements not compared: the window spans an app restart or has no memory/frame data
 	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
 }
 
@@ -822,18 +823,23 @@ func (r *Runner) applyPerfBaseline(res *TestResult) {
 	if tol <= 0 {
 		tol = 20
 	}
+	gate := r.opts.PerfGate
+	if gate == nil && r.deviceCtx != nil && !r.deviceCtx.IsPhysical {
+		gate = perf.DefaultGatedVirtual // emulator or simulator: frame metrics are noise there
+	}
 	var problems []string
 	for _, m := range res.Perf {
+		if m.SpansRestart || (m.MemPeakMB == 0 && m.Frames == 0) {
+			res.PerfSkipped++
+			fmt.Printf("    \033[33m⚠\033[0m  %s: skipped, the window spans an app restart or has no memory/frame data\n", measurementLabel(m.Name))
+			continue
+		}
 		base, ok := b.Lookup(r.opts.PerfKeyBase, res.File, res.TestName, m.Name)
 		if !ok {
 			res.PerfNew = append(res.PerfNew, perf.RelKey(r.opts.PerfKeyBase, res.File, res.TestName, m.Name))
 			continue // a new measurement: nothing to compare with yet
 		}
-		if m.SpansRestart {
-			fmt.Printf("    \033[33m⚠\033[0m  %s: the window spans an app restart, not compared with the baseline\n", measurementLabel(m.Name))
-			continue
-		}
-		for _, reg := range perf.CompareWith(base, m, perf.CompareOptions{TolerancePct: tol, Metrics: r.opts.PerfGate}) {
+		for _, reg := range perf.CompareWith(base, m, perf.CompareOptions{TolerancePct: tol, Metrics: gate}) {
 			problems = append(problems, fmt.Sprintf("%s: %s", measurementLabel(m.Name), reg))
 		}
 	}

@@ -6,11 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-- **Report upload (preview) follows the hosted service contract:** the PR source branch (`GITHUB_HEAD_REF`) is the branch for pull requests and the target branch is sent as `base_branch`; `ci.job` (`GITHUB_JOB`) and `run_label` are sent, the latter set with `--upload-label` / `hosted.label` (needed when one CI job uploads more than once); commit hashes must be 40 lower-case hex; `attempts` is capped at 20. A real upload needs a GitHub Actions run and a report with a platform, otherwise a clear warning says why nothing was sent; `--upload-dry-run` still prints the payload and says a real upload would be refused.
+### Fixed
+- **A wedged iOS XCUITest driver is reported directly** (#357): when the runner log shows "Timed out waiting for AX loaded notification" (xcodebuild exit 65), starting the driver or a later driver call now says the simulator's accessibility service is not responding and how to restart only the test simulator, instead of surfacing as unrelated step timeouts. A driver process that stopped mid-run is reported as stopped.
 
 ### Added
 - **Probe Cloud (preview): opt-in report upload.** `probe test --upload-report` (or `hosted.upload_report` in probe.yaml) sends a scrubbed copy of the JSON report plus a small envelope (Probe version, device class, retry outcomes, GitHub Actions run info) to a hosted service, with a license that has the `probe_cloud` plan. The scrubber drops artifacts, device ids and environment, makes paths relative, redacts credential-shaped strings and caps the size. `--upload-dry-run` prints the exact payload and sends nothing. One attempt with a 5 s timeout; every failure is a warning, never a failed or delayed run. The `hosted:` block is separate from the device-farm `cloud:` block. The default endpoint is a placeholder that is not live. New page: Probe Cloud (preview). In CI, supply the license key with the `PROBE_LICENSE_KEY` environment variable (read at run time, never printed or written). Redirects are never followed and server text is sanitized before it is shown.
+
+### Changed
+- **Report upload (preview) follows the hosted service contract:** the PR source branch (`GITHUB_HEAD_REF`) is the branch for pull requests and the target branch is sent as `base_branch`; `ci.job` (`GITHUB_JOB`) and `run_label` are sent, the latter set with `--upload-label` / `hosted.label` (needed when one CI job uploads more than once); commit hashes must be 40 lower-case hex; `attempts` is capped at 20. A real upload needs a GitHub Actions run and a report with a platform, otherwise a clear warning says why nothing was sent; `--upload-dry-run` still prints the payload and says a real upload would be refused.
+- **On emulators and simulators the baseline comparison gates `memory`, `cpu` and `data` by default**; `frame_time` and `slow_frames` gate only on physical devices (they flapped on same-build reruns on virtual devices, #356). `--perf-metrics` still names any set explicitly. In compare mode windows that span an app restart (or have no memory/frame data) are reported as skipped, counted once, and no longer also as "no entry".
 
 ### Changed
 - **Canary releases attach `probe-ios-driver.zip`** (a non-blocking `ios-driver` job in `release-canary.yml`, mirroring the stable workflow), so `probe ios-driver install` works against a canary. Applies from the next canary; documented in the install guide and the release pipeline notes.
