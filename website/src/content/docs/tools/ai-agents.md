@@ -4,7 +4,7 @@ description: A practical guide for LLM agents (Claude, Cursor, Copilot, local mo
 ---
 
 FlutterProbe is built to be driven by an AI agent as much as by a person. This page is the playbook. It assumes the
-agent either has the [MCP server](/tools/mcp/) (`probe-mcp`, 21 tools) or can run the `probe` CLI in a shell. A
+agent either has the [MCP server](/tools/mcp/) (`probe-mcp`, 31 tools) or can run the `probe` CLI in a shell. A
 machine-readable summary lives at [`/llms.txt`](https://flutterprobe.dev/llms.txt).
 
 ## The loop
