@@ -28,6 +28,10 @@ type Device struct {
 	Platform  Platform
 	State     string // online | offline | booting
 	OSVersion string // e.g. "iOS 18.6" or "Android 14"
+	// Transport is how a physical iOS device is reachable: "usb" (seen by libimobiledevice, so iproxy can tunnel to it),
+	// "network" (paired and reachable over the local network, seen only by devicectl: use WiFi mode) or "".
+	Transport string
+	Model     string // marketing name of a physical iOS device, such as "iPhone 15"
 }
 
 // ToolPaths holds configurable paths to external tools.
@@ -85,24 +89,15 @@ func (m *Manager) List(ctx context.Context) ([]Device, error) {
 		}
 	}
 
-	// Physical iOS devices (via libimobiledevice)
-	physicalUDIDs, err := ios.ListPhysicalDevices(ctx)
-	if err == nil {
-		simUDIDs := make(map[string]bool)
-		for _, s := range sims {
-			simUDIDs[s.UDID] = true
-		}
-		for _, udid := range physicalUDIDs {
-			if !simUDIDs[udid] { // avoid duplicates if somehow listed in both
-				all = append(all, Device{
-					ID:       udid,
-					Name:     "Physical iOS Device",
-					Platform: PlatformIOS,
-					State:    "online",
-				})
-			}
-		}
+	// Physical iOS devices: libimobiledevice sees those attached by USB, devicectl also those paired and
+	// reachable over the network (which would otherwise be silently absent).
+	simUDIDs := make(map[string]bool)
+	for _, s := range sims {
+		simUDIDs[s.UDID] = true
 	}
+	usb, _ := ios.ListPhysicalDevices(ctx)
+	core, _ := ios.ListCoreDevices(ctx)
+	all = append(all, mergePhysicalIOS(usb, core, simUDIDs)...)
 
 	return all, nil
 }
@@ -659,4 +654,42 @@ func (m *Manager) RunFlutter(ctx context.Context, projectDir, serial string) (*e
 		return nil, fmt.Errorf("device: flutter run: %w", err)
 	}
 	return cmd, nil
+}
+
+// mergePhysicalIOS combines the UDIDs libimobiledevice lists (USB) with the devices devicectl lists. A device in both
+// keeps the USB transport and gets devicectl's name and model; a device only devicectl sees is "network" (the app can be
+// reached in WiFi mode, not through an iproxy tunnel). Simulators are never listed here.
+func mergePhysicalIOS(usb []string, core []ios.CoreDevice, simUDIDs map[string]bool) []Device {
+	byUDID := map[string]ios.CoreDevice{}
+	for _, c := range core {
+		byUDID[c.UDID] = c
+	}
+	var out []Device
+	seen := map[string]bool{}
+	add := func(udid, transport string) {
+		if simUDIDs[udid] || seen[udid] {
+			return
+		}
+		seen[udid] = true
+		d := Device{ID: udid, Name: "Physical iOS Device", Platform: PlatformIOS, State: "online", Transport: transport}
+		if c, ok := byUDID[udid]; ok {
+			if c.Name != "" {
+				d.Name = c.Name
+			}
+			d.Model, d.OSVersion = c.Model, c.OSVersion
+			if transport == "network" {
+				d.State = "paired"
+			}
+		}
+		out = append(out, d)
+	}
+	for _, udid := range usb {
+		add(udid, "usb")
+	}
+	for _, c := range core {
+		if c.Paired || c.Transport == "wired" {
+			add(c.UDID, "network")
+		}
+	}
+	return out
 }

@@ -112,6 +112,7 @@ checks at the end tell you which one does not.
      advertises when the app passes a `ProbeAdvertiser` (for example one built on `bonsoir`) to `ProbeAgent.start(advertiser: ...)`,
      which needs the `_flutterprobe._tcp` entry in `NSBonjourServices` and a `NSLocalNetworkUsageDescription` in that build's `Info.plist`
      (see [Studio: WiFi auto-discovery](/tools/studio/#wifi-auto-discovery)). Without an advertiser the app logs `PROBE_MDNS=off`.
+   - **Studio's device picker** lists the phone even when it is only paired over the network (as "WiFi only") and says what it needs; see [Studio: the device picker and physical phones](/tools/studio/#the-device-picker-and-physical-phones).
    - **Studio over USB** (not WiFi): the device picker lists the phone as `physical`, uses an `iproxy` tunnel and reads the token from the
      device log with `idevicesyslog` (`brew install libimobiledevice`); the build still has to be profile with `PROBE_AGENT=true`.
 
