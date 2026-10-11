@@ -10,16 +10,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Simulator represents an iOS simulator.
 type Simulator struct {
-	UDID          string
-	Name          string
-	State         string // Booted | Shutdown
-	Runtime       string // com.apple.CoreSimulator.SimRuntime.iOS-17-5
-	DeviceTypeID  string
+	UDID         string
+	Name         string
+	State        string // Booted | Shutdown
+	Runtime      string // com.apple.CoreSimulator.SimRuntime.iOS-17-5
+	DeviceTypeID string
 }
 
 // HumanRuntime converts the raw runtime string (e.g.
@@ -41,7 +42,10 @@ func (s Simulator) HumanRuntime() string {
 }
 
 // SimCtl wraps xcrun simctl.
-type SimCtl struct{}
+type SimCtl struct {
+	mu         sync.Mutex
+	launchArgs map[string][]string // udid+"/"+bundle -> extra `simctl launch` arguments
+}
 
 func New() *SimCtl { return &SimCtl{} }
 
@@ -79,13 +83,51 @@ func (s *SimCtl) List(ctx context.Context) ([]Simulator, error) {
 	return sims, nil
 }
 
+// Create creates a simulator with the given name, device type and runtime and
+// returns its UDID. Every simulator probe creates is named: a nameless one
+// could not be tied to the test results it produced.
+func (s *SimCtl) Create(ctx context.Context, name, deviceType, runtime string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("simctl create: a simulator name is required")
+	}
+	out, err := s.run(ctx, "create", name, deviceType, runtime)
+	if err != nil {
+		return "", fmt.Errorf("simctl create: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Rename gives an existing simulator a new name.
+func (s *SimCtl) Rename(ctx context.Context, udid, name string) error {
+	if _, err := s.run(ctx, "rename", udid, name); err != nil {
+		return fmt.Errorf("simctl rename: %w", err)
+	}
+	return nil
+}
+
+// FindByName returns the simulator called name (exact match), or nil.
+func FindByName(sims []Simulator, name string) *Simulator {
+	for i := range sims {
+		if sims[i].Name == name {
+			return &sims[i]
+		}
+	}
+	return nil
+}
+
 // Boot boots a simulator by UDID.
 func (s *SimCtl) Boot(ctx context.Context, udid string) error {
 	_, err := s.run(ctx, "boot", udid)
-	if err != nil && !strings.Contains(err.Error(), "already booted") {
+	if err != nil && !isAlreadyBooted(err.Error()) {
 		return fmt.Errorf("simctl boot: %w", err)
 	}
 	return nil
+}
+
+// isAlreadyBooted recognises simctl's answer to booting a simulator that is up already; the wording
+// differs between Xcode versions ("already booted", "Unable to boot device in current state: Booted").
+func isAlreadyBooted(msg string) bool {
+	return strings.Contains(msg, "already booted") || strings.Contains(msg, "current state: Booted")
 }
 
 // Shutdown shuts down a simulator.
@@ -123,8 +165,35 @@ func (s *SimCtl) Install(ctx context.Context, udid, appPath string) error {
 
 // Launch launches an installed app by bundle ID.
 func (s *SimCtl) Launch(ctx context.Context, udid, bundleID string) error {
-	_, err := s.run(ctx, "launch", udid, bundleID)
+	args := append([]string{"launch", udid, bundleID}, s.extraLaunchArgs(udid, bundleID)...)
+	_, err := s.run(ctx, args...)
 	return err
+}
+
+// SetAppLanguage makes every later Launch of bundleID on the simulator start
+// with the given language and region (-AppleLanguages / -AppleLocale launch
+// arguments, which Flutter's PlatformDispatcher.locale follows; writing the
+// preferences with `defaults` is refused for apps on a simulator). The running
+// app is not affected until it is relaunched. Empty bcp47 removes the override.
+// System dialogs keep the device language: it is a device setting, not an app one.
+func (s *SimCtl) SetAppLanguage(udid, bundleID, bcp47, posix string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := udid + "/" + bundleID
+	if bcp47 == "" {
+		delete(s.launchArgs, key)
+		return
+	}
+	if s.launchArgs == nil {
+		s.launchArgs = map[string][]string{}
+	}
+	s.launchArgs[key] = []string{"-AppleLanguages", "(" + bcp47 + ")", "-AppleLocale", posix}
+}
+
+func (s *SimCtl) extraLaunchArgs(udid, bundleID string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.launchArgs[udid+"/"+bundleID]
 }
 
 // Terminate kills a running app.
@@ -143,6 +212,31 @@ func (s *SimCtl) Screenshot(ctx context.Context, udid, outPath string) error {
 func (s *SimCtl) Spawn(ctx context.Context, udid string, args ...string) ([]byte, error) {
 	cmdArgs := append([]string{"spawn", udid}, args...)
 	return s.run(ctx, cmdArgs...)
+}
+
+// IsAppRunning reports whether the app has a live process in the simulator.
+func (s *SimCtl) IsAppRunning(ctx context.Context, udid, bundleID string) bool {
+	out, err := s.Spawn(ctx, udid, "/bin/launchctl", "list")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "UIKitApplication:"+bundleID) {
+			fields := strings.Fields(line)
+			return len(fields) > 0 && fields[0] != "-" // a PID in the first column
+		}
+	}
+	return false
+}
+
+// ResetPrefsDaemon kills the simulator's preferences daemon (cfprefsd). It keeps every app's
+// NSUserDefaults (shared_preferences on iOS) in memory and writes them back to the app
+// container on its own schedule, so deleting the files alone does not reset an app: the daemon
+// serves the old values to the relaunched app and can even re-create the plist. launchd restarts
+// it on demand with an empty cache. Best effort; the error is returned for logging only.
+func (s *SimCtl) ResetPrefsDaemon(ctx context.Context, udid string) error {
+	_, err := s.Spawn(ctx, udid, "/bin/launchctl", "kill", "SIGKILL", "system/com.apple.cfprefsd.xpc.daemon")
+	return err
 }
 
 // ReadToken reads the ProbeAgent token. It first tries the token file written
@@ -255,6 +349,43 @@ func (s *SimCtl) AppDataPath(ctx context.Context, udid, bundleID string) string 
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// AppBundlePath returns the installed .app bundle of an app (empty when it is not installed).
+func (s *SimCtl) AppBundlePath(ctx context.Context, udid, bundleID string) string {
+	out, err := s.run(ctx, "get_app_container", udid, bundleID, "app")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// Reinstall uninstalls the app and installs it again from a copy of its own bundle, which
+// resets everything the system keeps per app that has no reset command: the notification
+// permission decision above all (simctl privacy has no notifications service). The data
+// container is new and empty afterwards. The app is left not running.
+func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
+	app := s.AppBundlePath(ctx, udid, bundleID)
+	if app == "" {
+		return fmt.Errorf("reinstall: %s is not installed on %s", bundleID, udid)
+	}
+	tmp, err := os.MkdirTemp("", "probe-reinstall-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	copyPath := filepath.Join(tmp, filepath.Base(app))
+	if out, err := exec.CommandContext(ctx, "cp", "-R", app, copyPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("reinstall: copy bundle: %v: %s", err, out)
+	}
+	_ = s.Terminate(ctx, udid, bundleID)
+	if err := s.Uninstall(ctx, udid, bundleID); err != nil {
+		return fmt.Errorf("reinstall: uninstall: %w", err)
+	}
+	if err := s.Install(ctx, udid, copyPath); err != nil {
+		return fmt.Errorf("reinstall: install: %w", err)
+	}
+	return nil
 }
 
 // simDataPath returns the data directory for a simulator UDID.

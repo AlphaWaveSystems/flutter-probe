@@ -10,13 +10,20 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe init` | Scaffold `probe.yaml` and `tests/` directory |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
+| `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
-| `probe device start` | Start an emulator/simulator |
+| `probe device start` | Start an emulator/simulator. `--name` names the iOS simulator it boots (created when missing); Android emulators run under their AVD name |
 | `probe record` | Record user interactions as ProbeScript |
 | `probe report` | Generate HTML report from test results |
-| `probe migrate` | Convert Maestro YAML flows to ProbeScript |
-| `probe generate` | AI-assisted test generation |
+| `probe migrate` | Convert Maestro YAML flows to ProbeScript. A flow pulled in with `runFlow` is converted to a recipe file (`recipe "flow <file name>"`) and the caller gets `use "<file>.probe"` plus a call to it. Maestro regex selectors (`A\|B`, `.*x.*`), `evalScript` and `${ENV}` placeholders are not translated: they get a `# TODO` comment and a warning |
+| `probe generate` | AI-assisted test generation (any `ai:` provider, including a local model) |
+| `probe system-dialog` | Drive OS system dialogs (permission alerts, sign-in sheets): `tap`, `type`, `see`, `wait`, `dismiss`, `list`, `sign-in-sandbox`. See [System dialogs](/tools/system-dialogs/) |
+| `probe ios-driver` | Manage the iOS system-dialog driver: `install`, `status`, `stop` |
+| `probe ai doctor` | Check the configured `ai:` provider: endpoint, model, text, vision. Optional — see [AI & local models](/tools/ai/) |
+| `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
 | `probe studio` | Launch interactive test studio |
+
+`probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)).
 
 ## probe test
 
@@ -42,7 +49,19 @@ probe test [path] [flags]
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |
 | `-o, --output <path>` | — | Output file path for reports |
 | `-v, --verbose` | `false` | Verbose output |
-| `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions |
+| `--locale <tag>` | — | Run the app in this language (`de`, `pt-BR`, `ar`, `system`) from the start: sets the per-app language and relaunches before the agent connects. Android 13+ and iOS simulators; the device language and system dialogs are unchanged. The tag is recorded in the JSON/HTML report |
+| `--locales <a,b,c>` | — | Run the whole suite once per language (`--locales de,ja,ar`), each in its own run with `--locale`; `-o report.json` becomes `report.de.json`, `report.ja.json`, ... and a pass/fail table per language is printed. Exit code is non-zero if any language fails |
+| `--match-loose` | `false` | Match text selectors loosely: fold case, accents and diacritics, typographic apostrophes and dashes, full-width forms and whitespace on both sides (`Änderungen` matches `anderungen`, `Don't Allow` matches `Don’t Allow`). `defaults.match: loose` in probe.yaml sets it permanently. Ids (`#key`) are never folded |
+| `--timeout` | `30s` | Per-step timeout. A single step can override it: `... within 90 seconds`. See [Timeouts, waiting and retries](/advanced/timeouts-and-retries/) |
+| `--measure-all` | `false` | Measure every test: open a performance window named after the test around its body (also `perf.measure_all` in probe.yaml). Tests that use `start measuring` themselves are left alone. See [Performance testing](/advanced/performance/) |
+| `--perf-baseline FILE` | — | Compare every `start measuring` window with this baseline; a test whose numbers got worse than the tolerance fails. See [Performance testing](/advanced/performance/) |
+| `--perf-update-baseline` | `false` | Write this run's measurements of passing tests to the `--perf-baseline` file (default `perf-baseline.json`) |
+| `--perf-tolerance` | `20` | Percent a number may exceed its baseline by (small absolute changes are ignored) |
+| `--perf-history FILE` / `--no-perf-history` | `reports/perf-history.jsonl` | Where measurements are appended for `probe perf trend`, or turn it off |
+| `--retry-failed` | `0` (off) | Re-run a failing test up to N extra times before reporting it failed (also `defaults.retry_failed_tests`). A pass on a retry is reported with its attempt count |
+| `--implicit-wait` | `0` (off) | Retry `tap`, `type`, `long press`, `double tap`, `clear`, `drag` and plain `see` steps whose target is not on screen yet for up to this long before failing, like Maestro's implicit waiting (`--implicit-wait 7s`). `defaults.implicit_wait` in probe.yaml sets it permanently. Steps with `if visible` / `optional`, `don't see` and explicit waits are never retried |
+| `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog |
+| `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions (on an iOS simulator notifications cannot be granted this way: pass `--grant notifications` to answer the alert) |
 | `--watch` | `false` | Watch mode — re-run on file changes |
 | `--video` | `false` | Enable video recording per test |
 | `--video-resolution` | `720x1280` | Android screenrecord resolution |
@@ -50,6 +69,9 @@ probe test [path] [flags]
 | `--visual-threshold` | `0.5` | Max allowed pixel diff % for visual regression |
 | `--visual-pixel-delta` | `8` | Pixel color delta tolerance |
 | `--port <int>` | `48686` | Agent WebSocket port |
+| `--agent-port <int>` | — | Alias of `--port`. Pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators (or a stale process on 48686) can't collide. A failed dial on loopback names the process holding the port. |
+| `--ai-triage` | `false` | After the run, ask the configured `ai:` model to explain failures (advisory, needs `ai:` in `probe.yaml`). Runs after results are final; cannot change results, reports or the exit code. Writes `<reports>/triage.md` |
+| `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera,location`. Android: `adb shell pm grant`; iOS simulator: `simctl privacy`. iOS notifications have no simctl service: a watcher taps Allow when the alert appears (needs Xcode, see [System dialogs](/tools/system-dialogs/)). |
 | `--dial-timeout` | `30s` | WebSocket connection timeout |
 | `--token-timeout` | `30s` | Agent auth token wait timeout |
 | `--reconnect-delay` | `2s` | Post-restart reconnect delay |
@@ -58,7 +80,8 @@ probe test [path] [flags]
 | `--flutter <path>` | `flutter` | Override Flutter binary path |
 | `--config <path>` | `probe.yaml` | Config file path |
 | `--shard <N/M>` | — | Run shard N of M (for parallel CI) |
-| `--dry-run` | `false` | Parse and validate without executing |
+| `--fail-on-warning` | `false` | Treat agent warnings as step failures: a tap that provably did nothing (covered, screen unchanged), `press enter` with no focused field, `go back` at the root route |
+| `--dry-run` | `false` | Parse and validate without executing; also fails on any step that is not built in and matches no recipe (typos, unknown verbs), including inside recipes |
 
 ### Examples
 
@@ -120,7 +143,12 @@ Manage connected devices and emulators.
 probe device list
 probe device start --platform android
 probe device start --platform ios
+probe device start --platform ios --name probe-checkout   # boot (or create) a simulator called probe-checkout
 ```
+
+### Named devices
+
+Every simulator or emulator probe opens has a name, and every test result records the device it ran on (name and id/serial; physical devices by model or serial). `probe device list` shows running emulators by AVD name, so `probe-checkout` or `my-avd` appears in JUnit/JSON/HTML reports instead of a bare serial. `--name` on iOS boots the simulator with that name or, when none exists, creates one with the default simulator's device type and runtime. Android emulators are named by their AVD (create it with Android Studio or `avdmanager`, then `probe device start --avd <name>`).
 
 ## probe-convert
 

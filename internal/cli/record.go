@@ -35,6 +35,7 @@ func init() {
 	f.String("device", "", "target device serial or UDID (default: first available)")
 	f.Duration("timeout", 5*time.Minute, "maximum recording duration")
 	f.Int("port", 0, "ProbeAgent WebSocket port (default: 48686)")
+	f.Int("agent-port", 0, "alias for --port")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token (default: 30s)")
 	rootCmd.AddCommand(recordCmd)
 }
@@ -52,6 +53,9 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	deviceSerial, _ := cmd.Flags().GetString("device")
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	portFlag, _ := cmd.Flags().GetInt("port")
+	if portFlag == 0 {
+		portFlag, _ = cmd.Flags().GetInt("agent-port")
+	}
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 
 	// Load config (respects --config flag for platform-specific configs)

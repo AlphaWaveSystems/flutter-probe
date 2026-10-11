@@ -41,11 +41,35 @@ func ResolveAndroidPermissions(name string) ([]string, error) {
 	return perms, nil
 }
 
+// ErrIOSNotificationsUnsupported is returned by ResolveIOSService for the iOS
+// "notifications" permission: `xcrun simctl privacy` has no notifications
+// service, so it cannot be granted by name. FlutterProbe answers the system
+// alert through its iOS system-dialog driver instead (DeviceContext.AllowPermission,
+// `--grant notifications`); callers of ResolveIOSService must route
+// "notifications" there first.
+var ErrIOSNotificationsUnsupported = fmt.Errorf(
+	"iOS cannot grant \"notifications\" through simctl; probe answers the system alert via its iOS driver (`allow permission \"notifications\"` or `--grant notifications`, needs Xcode)")
+
 // ResolveIOSService returns the simctl privacy service for a human-readable name.
 func ResolveIOSService(name string) (string, error) {
+	if name == "notifications" {
+		return "", ErrIOSNotificationsUnsupported
+	}
 	svc, ok := IOSPrivacyServices[name]
 	if !ok {
-		return "", fmt.Errorf("unknown permission %q — available: notifications, camera, location, microphone, photos, contacts, calendar", name)
+		return "", fmt.Errorf("unknown permission %q — available on iOS: camera, location, microphone, photos, contacts, calendar, sms", name)
 	}
 	return svc, nil
+}
+
+// ValidPermissionName reports whether name is a permission FlutterProbe knows
+// on at least one platform, so a typo in --grant fails before any device work.
+func ValidPermissionName(name string) bool {
+	if _, ok := AndroidPermissions[name]; ok {
+		return true
+	}
+	if _, ok := IOSPrivacyServices[name]; ok {
+		return true
+	}
+	return name == "notifications"
 }

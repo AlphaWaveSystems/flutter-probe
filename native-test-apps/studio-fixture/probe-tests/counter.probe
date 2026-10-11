@@ -1,0 +1,10 @@
+test "counter increments and resets"
+  @smoke
+  open the app
+  tap #nav_counter
+  wait until "Taps: 0" appears
+  tap "Tap Me"
+  tap "Tap Me"
+  see "Taps: 2"
+  tap "Reset"
+  see "Taps: 0"

@@ -21,7 +21,7 @@ type AIHealResult struct {
 // If autoHeal is true the suggestion is returned directly. When false the
 // caller should present the suggestion to the user for confirmation.
 func (g *Generator) HealSelector(ctx context.Context, original string, widgetTree string, autoHeal bool) (*AIHealResult, error) {
-	if g.APIKey == "" {
+	if !g.usable() {
 		return nil, fmt.Errorf("ai: API key is required for LLM-based healing")
 	}
 

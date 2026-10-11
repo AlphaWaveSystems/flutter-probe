@@ -4,7 +4,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' show ElevatedButton, GestureDetector, InkResponse, TextButton, OutlinedButton;
+import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoSwitch;
+import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, CheckboxListTile, ChoiceChip, Dialog, FilterChip, FloatingActionButton, GestureDetector, IconButton, InkResponse, Radio, RadioListTile, Scaffold, Switch, SwitchListTile, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -13,6 +14,8 @@ import 'package:flutter/widgets.dart';
 import 'agent_version.dart';
 import 'biometric.dart' as biometric;
 import 'finder.dart';
+import 'http_capture.dart';
+import 'perf.dart';
 import 'protocol.dart';
 import 'recorder.dart';
 import 'signal.dart' as signal_lib;
@@ -121,17 +124,25 @@ class ProbeExecutor {
       case ProbeMethods.tap:
         await _tap(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
-        return {'ok': true};
+        final tapWarning = _tapWarning;
+        _tapWarning = null;
+        return tapWarning == null ? {'ok': true} : {'ok': true, 'warning': tapWarning};
 
       case ProbeMethods.doubleTap:
+        _tapWarning = null;
         await _doubleTap(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
-        return {'ok': true};
+        final doubleTapWarning = _tapWarning;
+        _tapWarning = null;
+        return doubleTapWarning == null ? {'ok': true} : {'ok': true, 'warning': doubleTapWarning};
 
       case ProbeMethods.longPress:
+        _tapWarning = null;
         await _longPress(req.params['selector'] as Map<String, dynamic>);
         await _sync.waitForSettled();
-        return {'ok': true};
+        final longPressWarning = _tapWarning;
+        _tapWarning = null;
+        return longPressWarning == null ? {'ok': true} : {'ok': true, 'warning': longPressWarning};
 
       // ---- Text input ----
       case ProbeMethods.type_:
@@ -163,13 +174,20 @@ class ProbeExecutor {
         final sel = req.params['selector'] as Map<String, dynamic>?;
         await _swipe(dir, sel);
         await _sync.waitForSettled();
+        _lastScrollAt = DateTime.now();
         return {'ok': true};
 
       case ProbeMethods.scroll:
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
-        await _scroll(dir, sel);
+        final until = req.params['until'] as Map<String, dynamic>?;
+        if (until != null) {
+          await _scrollUntil(dir, sel, until);
+        } else {
+          await _scroll(dir, sel);
+        }
         await _sync.waitForSettled();
+        _lastScrollAt = DateTime.now();
         return {'ok': true};
 
       case ProbeMethods.drag:
@@ -178,16 +196,20 @@ class ProbeExecutor {
           req.params['to'] as Map<String, dynamic>,
         );
         await _sync.waitForSettled();
+        _lastScrollAt = DateTime.now();
         return {'ok': true};
 
       // ---- Device actions ----
       case ProbeMethods.deviceAction:
+        _tapWarning = null;
         await _deviceAction(
           req.params['action'] as String,
           req.params['value'] as String? ?? '',
         );
         await _sync.waitForSettled();
-        return {'ok': true};
+        final actionWarning = _tapWarning;
+        _tapWarning = null;
+        return actionWarning == null ? {'ok': true} : {'ok': true, 'warning': actionWarning};
 
       case ProbeMethods.close:
         await SystemNavigator.pop();
@@ -211,6 +233,9 @@ class ProbeExecutor {
       case ProbeMethods.dumpTree:
         final tree = _dumpWidgetTree();
         return {'tree': tree};
+
+      case ProbeMethods.visibleSummary:
+        return _finder.visibleSummary();
 
       case ProbeMethods.selectorBounds:
         final sel = req.params['selector'] as Map<String, dynamic>;
@@ -248,6 +273,28 @@ class ProbeExecutor {
         _registerMock(req.params);
         return {'ok': true};
 
+      // ---- Performance measuring window ----
+      case ProbeMethods.perfStart:
+        ProbePerf.instance.start();
+        return {'ok': true};
+
+      case ProbeMethods.perfSnapshot:
+        return ProbePerf.instance.snapshot();
+
+      case ProbeMethods.perfStop:
+        // The engine hands frame timings over in batches (about once a second): wait for the last one.
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        final result = ProbePerf.instance.snapshot();
+        ProbePerf.instance.stopWindow();
+        return result;
+
+      case ProbeMethods.httpLog:
+        return _httpLog(req.params);
+
+      case ProbeMethods.httpClear:
+        ProbeHttpLog.instance.clear(mocks: req.params['mocks'] == true);
+        return {'ok': true, 'epoch': ProbeHttpLog.instance.epoch};
+
       // ---- Clipboard ----
       case ProbeMethods.copyClipboard:
         final text = req.params['text'] as String? ?? '';
@@ -275,7 +322,11 @@ class ProbeExecutor {
       // ---- Animation control ----
       case ProbeMethods.setTimeDilation:
         final factor = (req.params['factor'] as num?)?.toDouble() ?? 1.0;
-        timeDilation = factor;
+        // Flutter requires timeDilation > 0 (an assert in debug builds; in profile and
+        // release a 0 divides frame times by zero and throws inside every frame, which
+        // leaves the UI a tap behind). "No animations" is a tiny positive factor, so
+        // time runs ~1000x faster and every animation ends within a frame.
+        timeDilation = factor > 0 ? factor : 0.001;
         return {'ok': true};
 
       // ---- Output variables ----
@@ -308,8 +359,103 @@ class ProbeExecutor {
 
   // ---- Touch helpers ----
 
+  /// Set by [_tap] when it had to proceed with a tap that probably will not do
+  /// what the test expects; returned to the CLI as a warning instead of the tap
+  /// silently doing nothing (FP-19).
+  String? _tapWarning;
+
+  /// When the last scroll/swipe/drag finished. A tap shortly after one waits for
+  /// its target to become hit-testable (see [_waitUntilHittableAfterScroll]).
+  DateTime _lastScrollAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// FP-19 (reported from an Android gate): a tap issued right after
+  /// `scroll ... until ... appears` was silently lost, although the target was
+  /// fully visible afterwards and a 3-second wait avoided it. At the moment of
+  /// the tap a hit test at the target's center did not reach it, so the
+  /// synthetic pointer event went nowhere. Whatever transiently blocks hits
+  /// after a scroll (overscroll/ballistic activity, an IgnorePointer, an
+  /// animating overlay), waiting until the target is hit-testable again is the
+  /// reliable fix, so this polls — but only within [window] of the last scroll,
+  /// and only until the target is reachable. Costs nothing when no scroll just
+  /// happened or the target is already reachable.
+  Future<void> _waitUntilHittableAfterScroll(Element element,
+      {Duration window = const Duration(seconds: 2)}) async {
+    final deadline = _lastScrollAt.add(window);
+    while (DateTime.now().isBefore(deadline)) {
+      final box = element.renderObject;
+      if (box is! RenderBox || !box.attached || !box.hasSize) return;
+      if (_hitState(box, box.localToGlobal(box.size.center(Offset.zero))).strict) return;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
+  /// True while any scrollable that contains [element] is scrolling. Flutter's
+  /// Scrollable ignores pointer events for the duration of a scroll activity, so
+  /// a tap issued right after a scroll can be dropped without any error.
+  bool _scrollingAround(Element element) {
+    var scrolling = false;
+    try {
+      element.visitAncestorElements((a) {
+        if (a is StatefulElement && a.state is ScrollableState) {
+          final position = (a.state as ScrollableState).position;
+          if (position.isScrollingNotifier.value) {
+            scrolling = true;
+            return false;
+          }
+        }
+        return true;
+      });
+    } catch (_) {
+      return false;
+    }
+    return scrolling;
+  }
+
+  /// Lets a scroll that is still in progress around [element] finish (bounded).
+  /// Costs nothing — not even a frame — when nothing is scrolling.
+  Future<void> _waitForScrollIdle(Element element, {Duration timeout = const Duration(milliseconds: 1500)}) async {
+    if (!_scrollingAround(element)) return;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline) && _scrollingAround(element)) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
+  /// When several widgets match (an exiting SnackBar or route keeps its
+  /// widgets in the tree for a moment), prefer the first one a pointer can
+  /// actually reach, instead of whichever comes first in tree order.
+  Element _preferReachable(Element first, Map<String, dynamic> sel) {
+    try {
+      final all = _finder.findElements(sel);
+      if (all.length < 2) return first;
+      Element? related;
+      for (final e in all) {
+        final b = e.renderObject;
+        if (b is! RenderBox || !b.attached || !b.hasSize) continue;
+        final state = _hitState(b, b.localToGlobal(b.size.center(Offset.zero)));
+        if (state.strict) return e;
+        // A text label is often wider than its glyphs, so the hit at its
+        // center lands on the enclosing button instead of the paragraph:
+        // that still means this copy is the reachable one.
+        if (state.related && related == null) related = e;
+      }
+      if (related != null) return related;
+    } catch (_) {}
+    return first;
+  }
+
   Future<void> _tap(Map<String, dynamic> sel) async {
-    final element = _requireElement(sel);
+    _tapWarning = null;
+    // FP-13: a tap issued right after a dialog/bottom sheet closes lands on
+    // its modal barrier while the exit animation is still running and is
+    // swallowed. Let any in-flight route transition finish first (bounded —
+    // never blocks a tap for more than a couple of seconds).
+    await _waitForRouteTransitions();
+    final element = _preferReachable(await _resolveActionTarget(sel), sel);
+    // FP-19: same idea for a scroll that has not finished (e.g. right after
+    // `scroll down until ... appears`).
+    await _waitForScrollIdle(element);
+    await _waitUntilHittableAfterScroll(element);
     final box = element.renderObject as RenderBox;
     final center = box.localToGlobal(box.size.center(Offset.zero));
 
@@ -347,8 +493,61 @@ class ProbeExecutor {
       // pointer tap, which lands on whatever is actually on top instead.
     }
 
-    final gesture = await _createGesture(center);
+    // A real pointer tap lands on whatever is on top at the point. If that is
+    // a widget unrelated to the target (neither inside it nor around it), say so:
+    // otherwise the tap "succeeds" and nothing happens. A hit on a widget that
+    // contains the target (a parent GestureDetector/InkWell) is normal and does
+    // not warn — an earlier version warned there too (false positive on a
+    // snackbar action).
+    // An overlay that is still sliding in or out (a SnackBar action, a sheet)
+    // can sit over the target for a few frames; give it a moment to settle
+    // before calling the tap covered, so a transient state is not reported.
+    var warnCenter = center;
+    for (var i = 0; i < 12 && box.attached; i++) {
+      warnCenter = box.localToGlobal(box.size.center(Offset.zero));
+      if (_hitState(box, warnCenter).related) break;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    final covered = !_hitState(box, warnCenter).related;
+    final before = covered ? _screenFingerprint() : '';
+    final gesture = await _createGesture(warnCenter);
     await gesture.up();
+    if (covered) {
+      // The hit test says something unrelated is on top, but it can be wrong
+      // about overlays (a SnackBar action reported "covered" although tapping
+      // it worked). So only report it when the tap also changed nothing on
+      // screen — that is the case where a test would otherwise pass silently.
+      for (var i = 0; i < 4; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (_screenFingerprint() != before) return;
+      }
+      _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
+          '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top '
+          'and the screen did not change (topmost hit: ${_hitPathDesc(warnCenter)})'
+          '${_keyboardHint()}'
+          '${_visibleHint()}';
+    }
+  }
+
+  /// A soft keyboard that is open can hide a button (a login form's submit
+  /// button): say so, since the fix is a `close keyboard` step.
+  String _keyboardHint() {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view != null && view.viewInsets.bottom > 0) {
+        return ' — the on-screen keyboard is open and may be covering it; add `close keyboard` before this step';
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  String _screenFingerprint() {
+    try {
+      final s = _finder.visibleSummary(max: 500);
+      return '${s['texts']!.join('|')}#${s['keys']!.join('|')}';
+    } catch (_) {
+      return '';
+    }
   }
 
   /// Walks down from [element] to find the nearest GestureDetector or
@@ -412,6 +611,61 @@ class ProbeExecutor {
   /// makes internally (see `GestureBinding.handlePointerEvent`), but as a
   /// read-only query — no event is actually dispatched, so this has no
   /// side effects on the widget tree.
+  /// Hit-test result at [position], relative to [target].
+  /// `strict`: the target (or something inside it) is in the hit path.
+  /// `related`: the deepest hit render object is the target, inside it, or an
+  /// ancestor of it — i.e. NOT an unrelated widget sitting on top of it.
+  /// Short description of what a hit test at [position] reaches, deepest first
+  /// (render object types), for diagnosing "covered" warnings.
+  String _hitPathDesc(Offset position) {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view == null) return 'no view';
+      final result = HitTestResult();
+      GestureBinding.instance.hitTestInView(result, position, view.viewId);
+      final names = <String>[];
+      for (final e in result.path) {
+        final t = e.target;
+        if (t is RenderObject) names.add('${t.runtimeType}');
+        if (names.length >= 5) break;
+      }
+      return names.isEmpty ? 'nothing' : names.join(' < ');
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  bool _handlesPointer(RenderObject r) =>
+      r is RenderPointerListener || r is RenderMouseRegion || r is RenderSemanticsGestureHandler;
+
+  ({bool strict, bool related}) _hitState(RenderObject target, Offset position) {
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (view == null) return (strict: true, related: true);
+    final result = HitTestResult();
+    GestureBinding.instance.hitTestInView(result, position, view.viewId);
+    RenderObject? deepest;
+    var strict = false;
+    for (final entry in result.path) {
+      final t = entry.target;
+      if (t is! RenderObject) continue;
+      deepest ??= t;
+      for (RenderObject? c = t; c != null; c = c.parent) {
+        if (identical(c, target)) strict = true;
+      }
+    }
+    var related = deepest == null || strict;
+    // A hit that stops at an ancestor is normal only when that ancestor is
+    // something that handles taps (a parent GestureDetector/InkWell). Stopping
+    // at a passive container or the root view means nothing received the tap
+    // at that point (clipped away, off screen, under the keyboard).
+    if (!related && _handlesPointer(deepest)) {
+      for (RenderObject? c = target; c != null; c = c.parent) {
+        if (identical(c, deepest)) related = true;
+      }
+    }
+    return (strict: strict, related: related);
+  }
+
   bool _isTopmostAt(RenderObject target, Offset position) {
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
     if (view == null) return true; // no view to hit-test against — don't block
@@ -428,49 +682,122 @@ class ProbeExecutor {
   }
 
   Future<void> _doubleTap(Map<String, dynamic> sel) async {
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final box = element.renderObject as RenderBox;
-    final center = box.localToGlobal(box.size.center(Offset.zero));
-    final g1 = await _createGesture(center);
+    final cover = await _coverageBefore(box);
+    final g1 = await _createGesture(cover.point);
     await g1.up();
     await Future.delayed(const Duration(milliseconds: 50));
-    final g2 = await _createGesture(center);
+    final g2 = await _createGesture(cover.point);
     await g2.up();
+    await _warnIfCoveredAndUnchanged('double tap', sel, cover);
   }
 
   Future<void> _longPress(Map<String, dynamic> sel) async {
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final box = element.renderObject as RenderBox;
-    final center = box.localToGlobal(box.size.center(Offset.zero));
-    final gesture = await _createGesture(center);
+    final cover = await _coverageBefore(box);
+    final gesture = await _createGesture(cover.point);
     await Future.delayed(const Duration(milliseconds: 500));
     await gesture.up();
+    await _warnIfCoveredAndUnchanged('long press', sel, cover);
+  }
+
+  /// Where a pointer action on [box] will land, and whether something unrelated to the target is on
+  /// top there. An overlay that is still sliding in or out gets a moment to settle first, so a
+  /// transient state is not reported (same rule as `tap`).
+  Future<({Offset point, bool covered, String before})> _coverageBefore(RenderBox box) async {
+    var point = box.localToGlobal(box.size.center(Offset.zero));
+    for (var i = 0; i < 12 && box.attached; i++) {
+      point = box.localToGlobal(box.size.center(Offset.zero));
+      if (_hitState(box, point).related) break;
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    final covered = box.attached && !_hitState(box, point).related;
+    return (point: point, covered: covered, before: covered ? _screenFingerprint() : '');
+  }
+
+  /// `tap`'s covered-target warning for `double tap` and `long press`: reported only when the
+  /// action also changed nothing on screen (the hit test can be wrong about overlays).
+  Future<void> _warnIfCoveredAndUnchanged(
+    String verb,
+    Map<String, dynamic> sel,
+    ({Offset point, bool covered, String before}) cover,
+  ) async {
+    if (!cover.covered) return;
+    for (var i = 0; i < 4; i++) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (_screenFingerprint() != cover.before) return;
+    }
+    _tapWarning = '$verb target ${_selDesc(sel)} is covered by another widget at '
+        '(${cover.point.dx.round()}, ${cover.point.dy.round()}); the $verb lands on whatever is on top '
+        'and the screen did not change (topmost hit: ${_hitPathDesc(cover.point)})'
+        '${_keyboardHint()}'
+        '${_visibleHint()}';
   }
 
   // ---- Text input helpers ----
 
+  /// True for the empty selector a bare `type "x"` / `clear` sends: no target was
+  /// named, so the field that has focus is meant (not "the first text field").
+  bool _isFocusSelector(Map<String, dynamic> sel) {
+    final text = '${sel['text'] ?? ''}';
+    final kind = '${sel['kind'] ?? ''}';
+    return text.isEmpty && (kind.isEmpty || kind == 'text');
+  }
+
   Future<void> _typeText(Map<String, dynamic> sel, String text) async {
+    if (_isFocusSelector(sel)) {
+      final focused = _findFocusedEditableTarget();
+      if (focused == null) {
+        throw ProbeError(ProbeError.widgetNotFound,
+            'type: no text field has focus — tap the field first or use `type "..." into <field>`${_visibleHint()}');
+      }
+      _enterText(focused, text);
+      return;
+    }
     // Find the nearest EditableText in the widget tree near the selector
-    final element = _requireElement(sel);
+    final element = await _resolveActionTarget(sel);
     final editable = _findEditableTarget(element);
     if (editable != null) {
       // PT-04: focus the field the way a real tap would before typing into
       // it — matters when `type` is used without a preceding `tap`, and
       // keeps behaviour consistent with the same fix in _tap.
       editable.focusNode.requestFocus();
-      editable.controller.text = text;
-      editable.controller.selection = TextSelection.collapsed(offset: text.length);
+      _enterText(editable, text);
     } else {
       // Fallback: tap to focus, then try to find any focused text field
       await _tap(sel);
       await Future.delayed(const Duration(milliseconds: 200));
-      final focusedController = _findFocusedTextController();
-      if (focusedController != null) {
-        focusedController.text = text;
-        focusedController.selection = TextSelection.collapsed(offset: text.length);
+      final focused = _findFocusedEditableTarget();
+      if (focused != null) {
+        _enterText(focused, text);
       } else {
         throw ProbeError(ProbeError.widgetNotFound, 'No text field found for: ${_selDesc(sel)}');
       }
+    }
+  }
+
+  /// FP-13: replace a field's text the way the platform keyboard does.
+  ///
+  /// `controller.text = ...` updates the controller (and its listeners) but
+  /// never reaches the TextField's `onChanged`, `inputFormatters`, or a
+  /// `Form`'s auto-validation — so a dialog that validates on `onChanged`
+  /// (e.g. a "value above range" notice) never rebuilt after `type`.
+  /// `EditableTextState.userUpdateTextEditingValue` is the entry point real
+  /// text input uses, so the whole chain runs. Falls back to setting the
+  /// controller value when the state isn't reachable (still notifies
+  /// controller listeners, just not `onChanged`).
+  void _enterText(_EditableTarget target, String text) {
+    final value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    final state = target.state;
+    if (state != null && state.mounted) {
+      state.userUpdateTextEditingValue(value, SelectionChangedCause.keyboard);
+    } else {
+      target.controller.value = value;
     }
   }
 
@@ -490,8 +817,7 @@ class ProbeExecutor {
     void visit(Element e) {
       if (result != null) return;
       if (e.widget is EditableText) {
-        final w = e.widget as EditableText;
-        result = _EditableTarget(w.controller, w.focusNode);
+        result = _editableTargetOf(e);
         return;
       }
       e.visitChildren(visit);
@@ -500,8 +826,7 @@ class ProbeExecutor {
     Element? current = element;
     for (int i = 0; i < 20 && current != null; i++) {
       if (current.widget is EditableText) {
-        final w = current.widget as EditableText;
-        return _EditableTarget(w.controller, w.focusNode);
+        return _editableTargetOf(current);
       }
       // TextField/TextFormField (and design-system wrappers around them)
       // always build an EditableText descendant — descend to find it.
@@ -517,26 +842,39 @@ class ProbeExecutor {
     return result;
   }
 
-  /// Finds any currently focused text controller.
-  TextEditingController? _findFocusedTextController() {
-    TextEditingController? result;
+  _EditableTarget _editableTargetOf(Element e) {
+    final w = e.widget as EditableText;
+    final state = e is StatefulElement && e.state is EditableTextState ? e.state as EditableTextState : null;
+    return _EditableTarget(w.controller, w.focusNode, state);
+  }
+
+  /// Finds any currently focused text field.
+  _EditableTarget? _findFocusedEditableTarget() {
+    _EditableTarget? result;
     _finder.walkTree((e) {
       if (result != null) return;
-      if (e.widget is EditableText) {
-        final editableText = e.widget as EditableText;
-        if (editableText.focusNode.hasFocus) {
-          result = editableText.controller;
-        }
+      if (e.widget is EditableText && (e.widget as EditableText).focusNode.hasFocus) {
+        result = _editableTargetOf(e);
       }
     });
     return result;
   }
 
   Future<void> _clearText(Map<String, dynamic> sel) async {
-    final element = _requireElement(sel);
-    final controller = _findTextController(element);
-    if (controller != null) {
-      controller.clear();
+    if (_isFocusSelector(sel)) {
+      final focused = _findFocusedEditableTarget();
+      if (focused == null) {
+        throw ProbeError(ProbeError.widgetNotFound,
+            'clear: no text field has focus — tap the field first or use `clear <field>`${_visibleHint()}');
+      }
+      _enterText(focused, '');
+      return;
+    }
+    final element = await _resolveActionTarget(sel);
+    final target = _findEditableTarget(element);
+    if (target != null) {
+      // Same path as `type` so onChanged fires for a cleared field too.
+      _enterText(target, '');
     }
   }
 
@@ -602,6 +940,25 @@ class ProbeExecutor {
         throw ProbeError(ProbeError.assertFailed, '"${_selDesc(sel)}" $reason');
       }
     }
+
+    // `matching "<regex>"`: some matched widget's text must match. (The pattern
+    // used to be received and never applied, so the assertion passed regardless.)
+    if (pattern.isNotEmpty) {
+      final RegExp re;
+      try {
+        re = RegExp(pattern);
+      } on FormatException catch (e) {
+        throw ProbeError(ProbeError.assertFailed, 'Invalid regular expression "$pattern": ${e.message}');
+      }
+      final texts = elements.map(_textOf).toList();
+      if (!texts.any(re.hasMatch)) {
+        final shown = texts.take(5).map((t) => '"$t"').join(', ');
+        throw ProbeError(
+          ProbeError.assertFailed,
+          '"${_selDesc(sel)}" found, but none of its texts [$shown] matches /$pattern/',
+        );
+      }
+    }
   }
 
   /// Evaluates a `see`/`don't see` state check ("enabled", "disabled",
@@ -623,6 +980,14 @@ class ProbeExecutor {
         final text = _textOf(element);
         if (!text.contains(checkVal)) return 'contains "$text", not "$checkVal"';
         return null;
+      case 'checked':
+        // This case was missing: `is checked` fell through to the default and
+        // passed for every widget, whatever its value.
+        final checked = _checkedState(element);
+        if (checked == null) {
+          return 'is not a checkable control (Switch, Checkbox, Radio, their ListTile variants, FilterChip or ChoiceChip)';
+        }
+        return checked ? null : 'is not checked';
       case 'focused':
         final focused = WidgetsBinding.instance.focusManager.primaryFocus;
         if (focused == null || !element.renderObject!.attached) {
@@ -680,18 +1045,58 @@ class ProbeExecutor {
         await Future.delayed(Duration(milliseconds: (duration * 1000).toInt()));
 
       case 'appears':
-        await _waitUntilVisible(target, timeoutDur, expect: true);
+        await _waitUntilVisible(target, timeoutDur,
+            expect: true, pattern: params['pattern'] as String? ?? '', loose: params['loose'] == true);
 
       case 'disappears':
-        await _waitUntilVisible(target, timeoutDur, expect: false);
+        await _waitUntilVisible(target, timeoutDur, expect: false, loose: params['loose'] == true);
 
       case 'animations':
         await _waitForAnimations(timeoutDur);
+
+      case 'idle':
+        // FP-13: `wait for idle` — route transitions finished AND the
+        // triple-signal sync (frames, animations, HTTP) settled.
+        await _waitForRouteTransitions(timeout: timeoutDur);
+        await _sync.waitForSettled(timeout: timeoutDur);
 
       case 'page_load':
       case 'network_idle':
       case 'settled':
         await _sync.waitForSettled(timeout: timeoutDur);
+    }
+  }
+
+  /// True while any mounted route is mid push/pop transition. A popped
+  /// dialog or sheet stays in the tree (inactive, animation reversing) until
+  /// its exit animation completes, and its modal barrier keeps absorbing
+  /// pointer events for that whole time.
+  ///
+  /// Routes are discovered through widgets every route body is built from
+  /// (page scaffolds, dialogs, sheets) because Navigator keeps its route list
+  /// private; `probeRouteOf` then resolves each one's own animation.
+  bool _routeTransitionInFlight() {
+    final seen = <ModalRoute<dynamic>>{};
+    var inFlight = false;
+    _finder.walkTree((e) {
+      if (inFlight) return;
+      final w = e.widget;
+      if (w is! Scaffold && w is! Dialog && w is! BottomSheet && w is! CupertinoPageScaffold) return;
+      final route = probeRouteOf(e);
+      if (route == null || !seen.add(route)) return;
+      final status = route.animation?.status;
+      if (status == AnimationStatus.forward || status == AnimationStatus.reverse) {
+        inFlight = true;
+      }
+    });
+    return inFlight;
+  }
+
+  Future<void> _waitForRouteTransitions({Duration timeout = const Duration(seconds: 2)}) async {
+    if (!_routeTransitionInFlight()) return;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline) && _routeTransitionInFlight()) {
+      await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
@@ -705,7 +1110,8 @@ class ProbeExecutor {
     throw ProbeError(ProbeError.timeout, 'Timed out waiting for animations to finish');
   }
 
-  Future<void> _waitUntilVisible(String text, Duration timeout, {required bool expect}) async {
+  Future<void> _waitUntilVisible(String text, Duration timeout,
+      {required bool expect, String pattern = '', bool loose = false}) async {
     // PT-06: WaitStep carries only a raw target string, not a selector kind
     // (unlike Selector/SelectorParam used by tap/type), so an id target must
     // be detected from its '#' prefix here — this previously always built a
@@ -716,10 +1122,21 @@ class ProbeExecutor {
     // the same '#'-prefix check runConditional already uses for `if` steps.
     final sel = text.startsWith('#')
         ? {'kind': 'id', 'text': text}
-        : {'kind': 'text', 'text': text};
+        : {'kind': 'text', 'text': text, if (loose) 'loose': true};
+    RegExp? re;
+    if (pattern.isNotEmpty) {
+      try {
+        re = RegExp(pattern);
+      } on FormatException catch (e) {
+        throw ProbeError(ProbeError.assertFailed, 'Invalid regular expression "$pattern": ${e.message}');
+      }
+    }
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      final found = _finder.findElements(sel).isNotEmpty;
+      final elements = _finder.findElements(sel);
+      // `appears matching "<re>"`: the text must also match the expression
+      // (substring selectors alone cannot say "exactly 0 ml").
+      final found = re == null ? elements.isNotEmpty : elements.any((e) => re!.hasMatch(_textOf(e)));
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
       await _sync.waitForSettled(timeout: const Duration(seconds: 1));
@@ -727,7 +1144,7 @@ class ProbeExecutor {
     final desc = expect ? 'appear' : 'disappear';
     throw ProbeError(
       ProbeError.timeout,
-      'Timed out waiting for "$text" to $desc',
+      'Timed out waiting for "$text" to $desc${pattern.isEmpty ? '' : ' matching /$pattern/'}${_visibleHint()}',
     );
   }
 
@@ -783,7 +1200,7 @@ class ProbeExecutor {
     await gesture.up();
   }
 
-  Future<void> _scroll(String direction, Map<String, dynamic>? sel) async {
+  Future<void> _scroll(String direction, Map<String, dynamic>? sel, {ScrollableState? resolved}) async {
     // PT-15: `scroll`'s job is "reveal more content," unlike `swipe`, which
     // tests a real gesture interaction (swipe-to-dismiss, swipe-to-refresh,
     // etc.) — it doesn't need to go through the gesture arena at all.
@@ -795,7 +1212,7 @@ class ProbeExecutor {
     // past the first screen, while the same verb worked fine on a plain
     // list). Driving the nearest Scrollable's own ScrollPosition directly
     // sidesteps gesture-arena competition entirely.
-    final scrollable = _findScrollable(sel);
+    final scrollable = (resolved != null && resolved.mounted) ? resolved : _findScrollable(sel);
     if (scrollable == null) {
       // No Scrollable found (e.g. a custom scroll implementation that
       // doesn't use the standard widget) — fall back to the old
@@ -830,6 +1247,52 @@ class ProbeExecutor {
     await WidgetsBinding.instance.endOfFrame;
   }
 
+  /// FP-13: `scroll <dir> until "X" appears` — scrollIntoView for lazily
+  /// built lists. Scrolls half a viewport at a time (rows outside the viewport
+  /// aren't built, so the target only exists once enough has been scrolled),
+  /// and once found brings it fully on screen: the finder also matches rows
+  /// in the list's cache extent, which are mounted but still off-screen.
+  /// Stops early when the list can't move any further.
+  Future<void> _scrollUntil(
+    String direction,
+    Map<String, dynamic>? sel,
+    Map<String, dynamic> until,
+  ) async {
+    const maxScrolls = 25;
+    var atEnd = false;
+    // Resolve the scrollable once, from the anchor while it is on screen: the
+    // anchor ("Last 30 Days" heading) scrolls away with the content, and
+    // re-resolving it every step then fails with "widget not found".
+    var scrollable = _findScrollable(sel);
+    for (var i = 0; ; i++) {
+      final found = _finder.findElements(until);
+      if (found.isNotEmpty) {
+        await Scrollable.ensureVisible(
+          found.first,
+          alignment: 0.5,
+          duration: Duration.zero,
+        );
+        await WidgetsBinding.instance.endOfFrame;
+        return;
+      }
+      if (atEnd || i >= maxScrolls) break;
+      if (scrollable != null && !scrollable.mounted) scrollable = null;
+      scrollable ??= _findScrollable(sel);
+      final before = scrollable?.position.pixels;
+      await _scroll(direction, sel, resolved: scrollable);
+      final after = (scrollable != null && scrollable.mounted ? scrollable : _findScrollable(sel))?.position.pixels;
+      // Can't move: check once more (the last scroll may have built rows)
+      // and then give up instead of burning the remaining attempts.
+      if (before != null && before == after) atEnd = true;
+    }
+    throw ProbeError(
+      ProbeError.widgetNotFound,
+      'scroll $direction until ${_selDesc(until)}: not found after scrolling'
+      ' (`scroll down` reveals later content, `scroll up` earlier content)'
+      '${_visibleHint()}',
+    );
+  }
+
   /// Finds the Scrollable most relevant to a scroll verb: if [sel] resolves
   /// to an element, the nearest enclosing Scrollable (walking up), or —
   /// since a selector commonly targets the list widget itself rather than a
@@ -862,16 +1325,38 @@ class ProbeExecutor {
     // with the largest viewport area instead, since that's virtually always
     // the main scrolling content, not an incidental one inside some other
     // widget.
+    //
+    // FP-16: "largest" alone can pick a scrollable the user cannot see — an
+    // IndexedStack (tabs kept alive) lays out every child but only paints and
+    // hit-tests the selected one, so a hidden tab's list can be first in tree
+    // order and the same size as the visible one, and `scroll down` then moves
+    // nothing on screen. Prefer a scrollable that actually receives touches at
+    // its own center; fall back to the largest of all if none does.
+    // Rank: a scrollable that can actually be scrolled by the user (extent > 0 and physics that
+    // accepts user input) beats one that cannot — a PageView with NeverScrollableScrollPhysics is
+    // the biggest scrollable on its screen but never moves, while the page inside it does — then
+    // one that receives touches at its center, then the largest.
     ScrollableState? best;
-    double bestArea = 0;
+    var bestRank = -1;
+    var bestArea = 0.0;
     void visit(Element e) {
-      if (ModalRoute.of(e)?.isCurrent == false) return;
+      if (probeRouteOf(e)?.isCurrent == false) return;
       if (e is StatefulElement && e.state is ScrollableState) {
         final state = e.state as ScrollableState;
         final box = state.context.findRenderObject();
         if (box is RenderBox && box.hasSize) {
           final area = box.size.width * box.size.height;
-          if (area > bestArea) {
+          var rank = 0;
+          try {
+            final pos = state.position;
+            final extent = pos.maxScrollExtent - pos.minScrollExtent;
+            if (extent > 1.0 && pos.physics.shouldAcceptUserOffset(pos)) rank += 2;
+          } catch (_) {
+            // position not ready: treat as scrollable-unknown (rank unchanged)
+          }
+          if (box.attached && _isTopmostAt(box, box.localToGlobal(box.size.center(Offset.zero)))) rank += 1;
+          if (rank > bestRank || (rank == bestRank && area > bestArea)) {
+            bestRank = rank;
             bestArea = area;
             best = state;
           }
@@ -908,7 +1393,31 @@ class ProbeExecutor {
         if (nav != null && nav.canPop()) {
           nav.pop();
         } else {
-          await SystemNavigator.pop();
+          // At the root route the system Back would leave the app (Android),
+          // killing the agent mid-test: every later step then fails with a
+          // lost connection. A test saying "go back" never means that — use
+          // "close the app" for it — so report it instead of exiting.
+          _tapWarning = 'go back: already at the root route, nothing to go back to; '
+              'the app was not closed (use "close the app" to leave it)';
+        }
+      case 'press_enter':
+        // The keyboard's action key (done / go / search / send / next) on the
+        // focused text field — what Maestro's `pressKey: Enter` does.
+        final focus = FocusManager.instance.primaryFocus?.context;
+        EditableTextState? editable;
+        if (focus != null) {
+          if (focus is StatefulElement && focus.state is EditableTextState) {
+            editable = focus.state as EditableTextState;
+          } else {
+            editable = focus.findAncestorStateOfType<EditableTextState>();
+          }
+        }
+        if (editable == null) {
+          _tapWarning = 'press enter: no text field has focus, nothing was submitted';
+        } else {
+          final w = editable.widget;
+          editable.performAction(w.textInputAction ??
+              (w.maxLines == 1 ? TextInputAction.done : TextInputAction.newline));
         }
       case 'close':
         // PT-12: `close keyboard`/`close the app` (parser.VerbClose) both
@@ -944,7 +1453,22 @@ class ProbeExecutor {
     // Primary path: RenderRepaintBoundary.toImage() — works on both Skia and
     // Impeller. OffsetLayer.toImage() returns a GPU-backed texture on Impeller
     // where toByteData(png) returns null, so we can't rely on it for iOS.
-    final pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+    // Right after a route push or a rebuild a RenderRepaintBoundary can still need paint, and
+    // toImage asserts `!debugNeedsPaint` in debug builds. Let the pending frame paint and try
+    // again (bounded) instead of failing the step.
+    Uint8List? pngBytes;
+    for (var attempt = 0;; attempt++) {
+      try {
+        pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+        break;
+      } on AssertionError {
+        // FlutterError is an AssertionError subtype too
+        if (attempt >= 12) rethrow;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      WidgetsBinding.instance.scheduleFrame();
+      await WidgetsBinding.instance.endOfFrame;
+    }
     if (pngBytes == null) {
       throw ProbeError(ProbeError.internalError, 'Screenshot capture failed: no renderable surface');
     }
@@ -972,7 +1496,7 @@ class ProbeExecutor {
       // silently capturing stale content instead of the current screen.
       // Skip anything belonging to a route that isn't current, mirroring
       // ProbeFinder's own route-awareness fix (PT-03).
-      if (ModalRoute.of(element)?.isCurrent == false) return;
+      if (probeRouteOf(element)?.isCurrent == false) return;
       final ro = element.renderObject;
       if (ro is RenderRepaintBoundary) {
         final area = ro.size.width * ro.size.height;
@@ -1047,11 +1571,39 @@ class ProbeExecutor {
   // ---- Mock registration ----
 
   void _registerMock(Map<String, dynamic> params) {
-    final method = (params['method'] as String).toUpperCase();
+    final method = (params['method'] as String? ?? '').toUpperCase();
     final path = params['path'] as String;
-    _mocks['$method:$path'] = {
-      'status': (params['status'] as num?)?.toInt() ?? 200,
-      'body': params['body'] as String? ?? '',
+    final status = (params['status'] as num?)?.toInt() ?? 200;
+    final body = params['body'] as String? ?? '';
+    _mocks['$method:$path'] = {'status': status, 'body': body};
+    ProbeHttpLog.instance.addMock(ProbeMock(
+      method: method,
+      pattern: path,
+      status: status,
+      body: body,
+      headers: (params['headers'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? const {},
+      delayMs: (params['delay_ms'] as num?)?.toInt() ?? 0,
+      fail: params['fail'] == true,
+    ));
+  }
+
+  /// `probe.http_log`: finished exchanges matching {method, pattern} with seq > since.
+  /// {last: true} returns only the newest match, {count_only: true} no entries.
+  Map<String, dynamic> _httpLog(Map<String, dynamic> params) {
+    final log = ProbeHttpLog.instance;
+    var found = log.query(
+      method: params['method'] as String? ?? '',
+      pattern: params['pattern'] as String? ?? '',
+      since: (params['since'] as num?)?.toInt() ?? 0,
+    );
+    final count = found.length;
+    if (params['last'] == true && found.isNotEmpty) found = [found.last];
+    if (params['count_only'] == true) found = const [];
+    return {
+      'epoch': log.epoch,
+      'latest': log.latest,
+      'count': count,
+      'entries': [for (final e in found) e.toJson(bodies: params['no_bodies'] != true)],
     };
   }
 
@@ -1061,30 +1613,142 @@ class ProbeExecutor {
 
   // ---- Internal helpers ----
 
+  /// The target of an action (tap, long press, type, ...). A widget that is built but outside
+  /// the screen (a chip at the far end of a horizontal list, a row below the fold in a lazily
+  /// built list) is scrolled into view first, as a user would: assertions do not see such a
+  /// widget, but the action should not fail on it.
+  Future<Element> _resolveActionTarget(Map<String, dynamic> sel) async {
+    if (_finder.findElements(sel).isEmpty) {
+      final off = _finder.findElementsIncludingOffScreen(sel);
+      if (off.isNotEmpty) {
+        try {
+          await Scrollable.ensureVisible(off.first, duration: Duration.zero, alignment: 0.5);
+          WidgetsBinding.instance.scheduleFrame();
+          await WidgetsBinding.instance.endOfFrame;
+          await _sync.waitForSettled(timeout: const Duration(seconds: 1));
+        } catch (_) {
+          // no scrollable ancestor: fall through to the not-found error
+        }
+      }
+    }
+    return _requireElement(sel);
+  }
+
   Element _requireElement(Map<String, dynamic> sel) {
     final elements = _finder.findElements(sel);
     if (elements.isEmpty) {
       throw ProbeError(
         ProbeError.widgetNotFound,
-        'Widget not found: ${_selDesc(sel)}',
+        'Widget not found: ${_selDesc(sel)}${_visibleHint()}',
       );
     }
     return elements.first;
   }
 
+  /// FP-13: " — visible: texts [...] keys [...]" suffix for failure messages,
+  /// so a failed step says what the screen actually showed instead of only
+  /// what was missing. Empty if the summary itself can't be built.
+  String _visibleHint() {
+    try {
+      final s = _finder.visibleSummary(max: 15);
+      final texts = s['texts']!;
+      final keys = s['keys']!;
+      if (texts.isEmpty && keys.isEmpty) return '';
+      String fmt(List<String> l) => l.map((v) => '"${v.length > 40 ? '${v.substring(0, 40)}…' : v}"').join(', ');
+      return ' — visible texts: [${fmt(texts)}], keys: [${fmt(keys)}]';
+    } catch (_) {
+      return '';
+    }
+  }
+
   String _selDesc(Map<String, dynamic> sel) {
     final kind = sel['kind'] ?? 'text';
-    final text = sel['text'] ?? '';
+    final text = '${sel['text'] ?? ''}';
+    // An id selector's text already carries its leading '#' ("#settings_screen"):
+    // show it once, as written in the test, not as id("#settings_screen").
+    if (kind == 'id') return text.startsWith('#') ? text : '#$text';
     return '$kind("$text")';
   }
 
+  /// The on/off value of the checkable control a selector matched: the element
+  /// itself, a control nested inside it (a SwitchListTile builds a Switch), or the
+  /// control that encloses it (the Text label of a tile). null = not checkable.
+  bool? _checkedState(Element e) {
+    bool? own(Widget w) {
+      if (w is Switch) return w.value;
+      if (w is SwitchListTile) return w.value;
+      if (w is CupertinoSwitch) return w.value;
+      if (w is Checkbox) return w.value ?? false;
+      if (w is CheckboxListTile) return w.value ?? false;
+      if (w is FilterChip) return w.selected;
+      if (w is ChoiceChip) return w.selected;
+      if (w is Radio || w is RadioListTile) {
+        try {
+          final dyn = w as dynamic;
+          return dyn.value == dyn.groupValue;
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    final self = own(e.widget);
+    if (self != null) return self;
+    bool? below;
+    void visit(Element c) {
+      if (below != null) return;
+      final v = own(c.widget);
+      if (v != null) {
+        below = v;
+        return;
+      }
+      c.visitChildren(visit);
+    }
+    e.visitChildren(visit);
+    if (below != null) return below;
+    bool? above;
+    var depth = 0;
+    e.visitAncestorElements((a) {
+      final v = own(a.widget);
+      if (v != null) {
+        above = v;
+        return false;
+      }
+      return ++depth < 40;
+    });
+    return above;
+  }
+
+  /// The disabled state of a widget, or of the control it labels: the element a text
+  /// selector matches is usually the `Text` inside a button, so the nearest enclosing
+  /// control (button, icon button, FAB, text field, switch, checkbox) decides — a
+  /// grey `ElevatedButton(onPressed: null, child: Text("Submit"))` is disabled.
   bool _isDisabled(Element e) {
-    final widget = e.widget;
-    if (widget is ElevatedButton) return widget.onPressed == null;
-    if (widget is TextButton) return widget.onPressed == null;
-    if (widget is OutlinedButton) return widget.onPressed == null;
-    if (widget is GestureDetector) return widget.onTap == null;
-    return false;
+    final own = _controlDisabled(e.widget);
+    if (own != null) return own;
+    bool? found;
+    var depth = 0;
+    e.visitAncestorElements((a) {
+      final d = _controlDisabled(a.widget);
+      if (d != null) {
+        found = d;
+        return false;
+      }
+      return ++depth < 40;
+    });
+    return found ?? (e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null);
+  }
+
+  /// null when [w] is not a control this knows how to read.
+  bool? _controlDisabled(Widget w) {
+    if (w is ButtonStyleButton) return !w.enabled;
+    if (w is IconButton) return w.onPressed == null;
+    if (w is FloatingActionButton) return w.onPressed == null;
+    if (w is TextField) return w.enabled == false;
+    if (w is Switch) return w.onChanged == null;
+    if (w is Checkbox) return w.onChanged == null;
+    return null;
   }
 
   String _textOf(Element e) {
@@ -1161,9 +1825,13 @@ class ProbeExecutor {
 /// The controller and real FocusNode of an EditableText resolved near a
 /// selector — see [ProbeExecutor._findEditableTarget].
 class _EditableTarget {
-  const _EditableTarget(this.controller, this.focusNode);
+  const _EditableTarget(this.controller, this.focusNode, [this.state]);
   final TextEditingController controller;
   final FocusNode focusNode;
+
+  /// The EditableText's state, when reachable — the entry point for
+  /// keyboard-equivalent edits (see [ProbeExecutor._enterText]).
+  final EditableTextState? state;
 }
 
 // ---- Minimal gesture wrapper ----

@@ -95,6 +95,8 @@ type WaitParams struct {
 	Target   string  `json:"target,omitempty"`
 	Duration float64 `json:"duration,omitempty"` // seconds
 	Timeout  float64 `json:"timeout,omitempty"`
+	Pattern  string  `json:"pattern,omitempty"` // appears: the text must also match this regular expression
+	Loose    bool    `json:"loose,omitempty"`   // fold case, accents, apostrophes and whitespace when matching text
 }
 
 // SwipeParams controls a swipe gesture.
@@ -107,6 +109,9 @@ type SwipeParams struct {
 type ScrollParams struct {
 	Direction string        `json:"direction"`
 	Selector  *SelectorParam `json:"selector,omitempty"`
+	// Until, when set, makes the agent keep scrolling until this target is on
+	// screen (FP-13). Agents that predate it ignore the field and scroll once.
+	Until *SelectorParam `json:"until,omitempty"`
 }
 
 // OpenParams opens the app or a named screen.
@@ -122,6 +127,7 @@ type SelectorParam struct {
 	Container string `json:"container,omitempty"`
 	Relation  string `json:"relation,omitempty"` // below | above | left_of | right_of
 	Anchor    string `json:"anchor,omitempty"`   // anchor element text for relational selectors
+	Loose     bool   `json:"loose,omitempty"`    // fold case, accents, apostrophes and whitespace when matching text
 }
 
 // ScreenshotResult is returned by the take_screenshot command.
@@ -132,10 +138,66 @@ type ScreenshotResult struct {
 
 // MockParam registers an HTTP mock.
 type MockParam struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-	Status int    `json:"status"`
-	Body   string `json:"body,omitempty"`
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Status  int               `json:"status"`
+	Body    string            `json:"body,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	DelayMs int               `json:"delay_ms,omitempty"`
+	Fail    bool              `json:"fail,omitempty"` // drop the connection instead of answering
+}
+
+// PerfSnapshot is what the agent measured inside the app during a measuring window.
+type PerfSnapshot struct {
+	DurationMs    int     `json:"durationMs"`
+	Frames        int     `json:"frames"`
+	SlowFrames    int     `json:"slowFrames"`
+	SlowFramePct  float64 `json:"slowFramePct"`
+	FrameP50Ms    float64 `json:"frameP50Ms"`
+	FrameP95Ms    float64 `json:"frameP95Ms"`
+	FrameP99Ms    float64 `json:"frameP99Ms"`
+	FrameMaxMs    float64 `json:"frameMaxMs"`
+	BuildAvgMs    float64 `json:"buildAvgMs"`
+	RasterAvgMs   float64 `json:"rasterAvgMs"`
+	RSSStartBytes int64   `json:"rssStartBytes"`
+	RSSPeakBytes  int64   `json:"rssPeakBytes"`
+	RSSEndBytes   int64   `json:"rssEndBytes"`
+	Measuring     bool    `json:"measuring"`
+}
+
+// HTTPLogParams selects recorded HTTP exchanges (probe.http_log).
+type HTTPLogParams struct {
+	Method    string `json:"method,omitempty"`
+	Pattern   string `json:"pattern,omitempty"` // path with * wildcards, or a full URL
+	Since     int    `json:"since,omitempty"`   // only exchanges with seq > Since
+	Last      bool   `json:"last,omitempty"`    // only the newest match
+	CountOnly bool   `json:"count_only,omitempty"`
+	NoBodies  bool   `json:"no_bodies,omitempty"` // omit request/response bodies (for summaries)
+}
+
+// HTTPEntry is one recorded request/response pair.
+type HTTPEntry struct {
+	Seq             int               `json:"seq"`
+	Method          string            `json:"method"`
+	URL             string            `json:"url"`
+	Status          int               `json:"status"`
+	DurationMs      int               `json:"durationMs"`
+	Mocked          bool              `json:"mocked"`
+	Error           string            `json:"error,omitempty"`
+	RequestHeaders  map[string]string `json:"requestHeaders"`
+	ResponseHeaders map[string]string `json:"responseHeaders"`
+	RequestBody     string            `json:"requestBody"`
+	ResponseBody    string            `json:"responseBody"`
+	RequestBytes    int64             `json:"requestBytes"`
+	ResponseBytes   int64             `json:"responseBytes"`
+}
+
+// HTTPLogResult is the answer of probe.http_log.
+type HTTPLogResult struct {
+	Epoch   string      `json:"epoch"` // changes when the app process restarts (seq starts over)
+	Latest  int         `json:"latest"`
+	Count   int         `json:"count"` // matches, before Last / CountOnly
+	Entries []HTTPEntry `json:"entries"`
 }
 
 // DartParam runs Dart code on the agent.
@@ -172,6 +234,20 @@ type WidgetTreeResult struct {
 	Tree string `json:"tree"`
 }
 
+// CodeConnectionClosed is the client-side error code for pending calls that
+// were failed because the connection dropped. It is deliberately not -32000:
+// the agent uses -32000 for ordinary step timeouts ("Timed out waiting for X"),
+// and the two used to be indistinguishable — so a failed `wait` was treated as
+// a dead connection and burned the whole auto-reconnect budget (FP-13).
+const CodeConnectionClosed = -32099
+
+// VisibleSummaryResult is a short snapshot of the visible text strings and
+// string-valued ValueKeys on screen (FP-13), for failure diagnostics.
+type VisibleSummaryResult struct {
+	Texts []string `json:"texts"`
+	Keys  []string `json:"keys"`
+}
+
 // BoundsResult is a widget's on-screen pixel bounding box (top-left origin).
 // Used to redact a widget's region from a screenshot before it's sent to an
 // AI provider for a "with ai" assertion.
@@ -205,9 +281,15 @@ const (
 	MethodDrag         = "probe.drag"
 	MethodScreenshot   = "probe.screenshot"
 	MethodDumpTree     = "probe.dump_tree"
+	MethodVisibleSummary = "probe.visible_summary"
 	MethodSelectorBounds = "probe.selector_bounds"
 	MethodRunDart      = "probe.run_dart"
 	MethodMock         = "probe.mock"
+	MethodHTTPLog      = "probe.http_log"
+	MethodHTTPClear    = "probe.http_clear"
+	MethodPerfStart    = "probe.perf_start"
+	MethodPerfSnapshot = "probe.perf_snapshot"
+	MethodPerfStop     = "probe.perf_stop"
 	MethodDeviceAction = "probe.device_action"
 	MethodPing           = "probe.ping"
 	MethodSettled        = "probe.settled"   // wait for triple-signal sync

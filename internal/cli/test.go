@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -18,9 +19,12 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/l10n"
+	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 	"github.com/spf13/cobra"
 )
@@ -92,6 +96,19 @@ func init() {
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
+	f.Bool("match-loose", false, "match text selectors loosely: fold case, accents, typographic apostrophes/dashes and whitespace (also defaults.match: loose in probe.yaml)")
+	f.Duration("implicit-wait", 0, "retry tap/type/see steps whose target is not on screen yet for up to this long before failing (Maestro-style implicit waiting); 0 uses probe.yaml defaults.implicit_wait, default off")
+	f.String("locale", "", `run the app in this language (BCP-47, e.g. "de", "pt-BR", "ar"; "system" = device default). Android 13+ and iOS simulators; the device language itself is unchanged`)
+	f.String("locales", "", `run the whole suite once per language (comma-separated, e.g. "de,ja,ar"), each in its own run; -o report files get the tag in their name`)
+	f.Int("retry-failed", 0, "re-run a failing test up to N extra times before reporting it failed (also defaults.retry_failed_tests); a pass on a retry is reported with its attempt count")
+	f.String("perf-baseline", "", "compare every `start measuring` window with this baseline file; a test whose memory/CPU/frames/data got worse than the tolerance fails (create it with --perf-update-baseline)")
+	f.Float64("perf-tolerance", 20, "percent a measured number may exceed its baseline by before it counts as a regression (small absolute changes are ignored)")
+	f.Bool("perf-update-baseline", false, "write this run's measurements of passing tests to the --perf-baseline file (default perf-baseline.json) instead of comparing")
+	f.String("perf-history", "", "append this run's measurements to this JSON-lines file for `probe perf trend` (default <reports>/perf-history.jsonl)")
+	f.Bool("no-perf-history", false, "do not record measurements in the history file")
+	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
+	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
+	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
 	// Device selection
@@ -105,10 +122,12 @@ func init() {
 	// Agent connection
 	f.String("host", "", "ProbeAgent host IP (default: 127.0.0.1; use device IP for WiFi testing)")
 	f.Int("port", 0, "ProbeAgent WebSocket port (default: 48686)")
+	f.Int("agent-port", 0, "alias for --port (same name probe studio uses); set it per run to avoid a stale process holding 48686")
 	f.Duration("dial-timeout", 0, "max time to establish WebSocket connection (default: 30s)")
 	f.String("token", "", "ProbeAgent auth token (skip auto-detection; use with --host for WiFi testing)")
 	f.Duration("token-timeout", 0, "max time to wait for agent auth token on startup (default: 30s)")
 	f.Duration("reconnect-delay", 0, "delay after app restart before reconnecting WebSocket (default: 2s)")
+	f.Int("driver-port", 0, "loopback port of the iOS system-dialog driver, 1024-65535 (default: derived from the simulator UDID; or agent.driver_port in probe.yaml)")
 	f.Duration("launch-timeout", 0, "max time for `restart the app`/`clear app data` to force-stop, relaunch, and reconnect — raise this for apps with an expensive cold-launch path (default: 120s)")
 
 	// Tool paths
@@ -117,6 +136,12 @@ func init() {
 
 	// Destructive operations
 	f.BoolP("yes", "y", false, "auto-confirm destructive operations (clear app data, permissions)")
+
+	// Optional AI triage (advisory, after results are final; never affects the run)
+	f.Bool("ai-triage", false, "after the run, ask the configured ai: model to explain failures (advisory; needs ai: in probe.yaml; never changes results or the exit code)")
+
+	// Permission pre-grant
+	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy; iOS notifications: taps Allow on the system alert, needs Xcode)")
 
 	// App installation
 	f.String("app-path", "", "path to .apk or .app bundle to install before testing")
@@ -144,7 +169,8 @@ func init() {
 	f.String("cloud-secret", "", "cloud provider API secret or access key")
 
 	// x402 pay-per-use
-	f.String("pay", "", `payment method for cloud upload: "x402" for pay-per-use via crypto wallet`)
+	f.String("pay", "", `experimental: payment method for uploads to a cloud endpoint you configure (no hosted service is provided yet)`)
+	_ = f.MarkHidden("pay")
 
 	// Relay mode
 	f.Bool("relay", false, "force enable relay mode for cloud device farm testing")
@@ -154,13 +180,16 @@ func init() {
 	f.String("relay-session-id", "", "existing relay session ID for status polling and cleanup")
 
 	// Animation control
-	f.Bool("disable-animations", false, "disable Flutter animations by setting timeDilation=0 (speeds up tests)")
+	f.Bool("disable-animations", false, "disable Flutter animations by setting a tiny timeDilation (0.001; speeds up tests)")
 
 	// Composite test device aliases
 	f.StringArray("composite-device", nil, compositeDeviceUsage())
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
+	if multi, _ := cmd.Flags().GetString("locales"); strings.TrimSpace(multi) != "" {
+		return runLocaleMatrix(cmd, multi)
+	}
 	// Cancel the run on Ctrl-C / SIGTERM so deferred cleanup (iproxy, ADB
 	// forwards, idevicesyslog) actually runs. A second signal force-exits in
 	// case shutdown stalls; the user shouldn't have to wait for a hung test.
@@ -215,6 +244,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 	adbPath, _ := cmd.Flags().GetString("adb")
 	flutterPath, _ := cmd.Flags().GetString("flutter")
 	autoYes, _ := cmd.Flags().GetBool("yes")
+	noGrantOnClear, _ := cmd.Flags().GetBool("no-grant-on-clear")
+	grantPerms, _ := cmd.Flags().GetStringSlice("grant")
+	for i, g := range grantPerms {
+		grantPerms[i] = strings.ToLower(strings.TrimSpace(g))
+		if !device.ValidPermissionName(grantPerms[i]) {
+			return fmt.Errorf("--grant: unknown permission %q — known: notifications, camera, location, microphone, photos, storage, contacts, phone, calendar, sms, bluetooth", g)
+		}
+	}
 	appPath, _ := cmd.Flags().GetString("app-path")
 	videoFlag, _ := cmd.Flags().GetBool("video")
 	noVideoFlag, _ := cmd.Flags().GetBool("no-video")
@@ -223,10 +260,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 	agentHost, _ := cmd.Flags().GetString("host")
 	agentToken, _ := cmd.Flags().GetString("token")
 	agentPort, _ := cmd.Flags().GetInt("port")
+	if agentPort == 0 {
+		agentPort, _ = cmd.Flags().GetInt("agent-port")
+	}
 	dialTimeout, _ := cmd.Flags().GetDuration("dial-timeout")
 	tokenTimeout, _ := cmd.Flags().GetDuration("token-timeout")
 	reconnectDelay, _ := cmd.Flags().GetDuration("reconnect-delay")
 	launchTimeout, _ := cmd.Flags().GetDuration("launch-timeout")
+	driverPort, _ := cmd.Flags().GetInt("driver-port")
 
 	// Video overrides
 	videoResolution, _ := cmd.Flags().GetString("video-resolution")
@@ -235,6 +276,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Visual regression overrides
 	visualThreshold, _ := cmd.Flags().GetFloat64("visual-threshold")
 	visualPixelDelta, _ := cmd.Flags().GetInt("visual-pixel-delta")
+
+	// Agent warnings (e.g. a tap whose target is covered by another widget) are
+	// successful calls the user should still hear about (FP-19).
+	probelink.SetWarningHandler(func(w string) { statusWarn(statusW, "%s", w) })
+	failOnWarning, _ := cmd.Flags().GetBool("fail-on-warning")
+	probelink.SetStrictWarnings(failOnWarning)
 
 	// Apply CLI overrides to config
 	if agentPort != 0 {
@@ -252,6 +299,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if launchTimeout != 0 {
 		cfg.Agent.LaunchTimeout = launchTimeout
 	}
+	if driverPort != 0 {
+		cfg.Agent.DriverPort = driverPort
+	}
+	if err := sysdialog.ValidatePort(cfg.Agent.DriverPort); err != nil {
+		return err
+	}
 	if videoResolution != "" {
 		cfg.Video.Resolution = videoResolution
 	}
@@ -263,6 +316,16 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if visualPixelDelta != 0 {
 		cfg.Visual.PixelDelta = visualPixelDelta
+	}
+
+	if n, _ := cmd.Flags().GetInt("retry-failed"); n > 0 {
+		cfg.Defaults.RetryFailedTests = n
+	}
+	if ml, _ := cmd.Flags().GetBool("match-loose"); ml || strings.EqualFold(cfg.Defaults.Match, "loose") {
+		runner.SetLooseMatching(true)
+	}
+	if iw, _ := cmd.Flags().GetDuration("implicit-wait"); iw > 0 {
+		cfg.Defaults.ImplicitWait = iw
 	}
 
 	// Per-step timeout: CLI flag > probe.yaml
@@ -287,6 +350,25 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Fail fast, before any device connection, if a test uses "with ai" but
 	// no AI provider is configured. Never a silent no-op or implicit cloud call.
 	if err := validateAIConfig(files, cfg); err != nil {
+		return err
+	}
+
+	// l10n "key": load the ARB catalog and fail before any device work when a key
+	// does not resolve for the languages this run uses.
+	if cfg.L10n.Dir != "" {
+		cat, lerr := l10n.Load(cfg.L10n.Dir)
+		if lerr != nil {
+			return fmt.Errorf("l10n.dir %s: %w", cfg.L10n.Dir, lerr)
+		}
+		runner.SetL10n(cat, cfg.L10n.Default)
+	}
+	runLang, _ := cmd.Flags().GetString("locale")
+	if strings.TrimSpace(runLang) != "" {
+		if t, perr := locale.Parse(runLang); perr == nil && !t.System {
+			runner.SetL10nLanguage(t.BCP47)
+		}
+	}
+	if err := runner.ValidateL10n(files, strings.TrimSpace(runLang)); err != nil {
 		return err
 	}
 
@@ -402,6 +484,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Tags:    tags,
 			Timeout: timeout,
 			Verbose: verbose,
+			Grant:   grantPerms,
 		}
 
 		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
@@ -425,6 +508,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 		}
 		if err := report.Report(results); err != nil {
 			return err
+		}
+
+		if aiTriage, _ := cmd.Flags().GetBool("ai-triage"); aiTriage {
+			maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 		}
 
 		if !runner.AllPassed(results) {
@@ -758,6 +845,28 @@ func runTests(cmd *cobra.Command, args []string) error {
 				statusOK(statusW, msgAppInstalledAndLaunched)
 			}
 
+			// --locale: set the app language and relaunch before the agent connects.
+			if lang, _ := cmd.Flags().GetString("locale"); strings.TrimSpace(lang) != "" {
+				if cfg.Project.App == "" {
+					return fmt.Errorf("--locale: project.app must be set in probe.yaml")
+				}
+				lc := &runner.DeviceContext{
+					Manager: dm, Serial: deviceSerial, Platform: platform, AppID: cfg.Project.App,
+					IsPhysical:   platform == device.PlatformIOS && dm.IsPhysicalIOS(ctx, deviceSerial),
+					RestartDelay: cfg.Device.RestartDelay,
+				}
+				if err := lc.SetLanguage(ctx, lang); err != nil {
+					return fmt.Errorf("--locale: %w", err)
+				}
+				if platform == device.PlatformAndroid {
+					_ = dm.ADB().ClearLogcat(ctx, deviceSerial) // so the relaunch prints a fresh token
+				}
+				if err := lc.RestartApp(ctx); err != nil {
+					return fmt.Errorf("--locale: relaunch: %w", err)
+				}
+				statusOK(statusW, "App language set to %s", lang)
+			}
+
 			host := "127.0.0.1"
 			if agentHost != "" {
 				host = agentHost
@@ -822,6 +931,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 					if tokenErr != nil {
 						return fmt.Errorf("agent token: %w — is the app running with probe_agent?", tokenErr)
 					}
+					// Auto-detected only: an explicit --token must fail fast on a 401 (FP-19).
+					dialOpts.RefreshToken = func(c context.Context) (string, error) {
+						return dm.ReadTokenIOS(c, deviceSerial, 5*time.Second, cfg.Project.App)
+					}
 				}
 				dialOpts.Token = token
 				if isPhysicalIOS {
@@ -860,6 +973,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 					trace("android: ForwardPort failed: %v", err)
 					return fmt.Errorf("port forward: %w", err)
 				}
+				dialOpts.OnConnectRefused = func(c context.Context) {
+					if err := dm.ForwardPort(c, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+						trace("android: re-forward failed: %v", err)
+					}
+				}
 				defer func() {
 					trace("android: removing port forward for host:%d", cfg.Agent.Port)
 					_ = dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port)
@@ -871,6 +989,26 @@ func runTests(cmd *cobra.Command, args []string) error {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 				}
 				dialOpts.Token = token
+				// Right after a cold launch the token read above can still be the
+				// previous app instance's: re-read it on a 401 instead of failing (FP-19).
+				dialOpts.OwnAdbForward = true
+				// A token file in the app cache can outlive its app process (the agent
+				// could not rewrite it): when a re-read returns the token that was
+				// just rejected, fall back to the newest one in logcat.
+				lastToken := token
+				dialOpts.RefreshToken = func(c context.Context) (string, error) {
+					t, err := dm.ReadTokenAndroid(c, deviceSerial, 5*time.Second, cfg.Project.App, trace)
+					if err == nil && t == lastToken {
+						if lt := dm.ReadTokenAndroidLogcat(c, deviceSerial); lt != "" && lt != t {
+							trace("android: token file is stale (rejected), using the newest token from logcat")
+							t = lt
+						}
+					}
+					if err == nil {
+						lastToken = t
+					}
+					return t, err
+				}
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {
 					return fmt.Errorf("connecting to ProbeAgent: %w", err)
@@ -917,6 +1055,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var runMeta runner.RunMetadata
 	if !dryRun && dm != nil { //nolint:nestif
 		meta := runner.RunMetadata{
+			ProbeVersion: Version,
+			Locale:   func() string { l, _ := cmd.Flags().GetString("locale"); return strings.TrimSpace(l) }(),
 			DeviceID: deviceSerial,
 			Platform: string(platform),
 			Provider: "local",
@@ -938,6 +1078,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 				break
 			}
 		}
+		if meta.DeviceName == "" {
+			meta.DeviceName = deviceSerial // never leave a run unassociated with a device
+		}
 		// Android-specific: query OS version and app version via ADB
 		if platform == device.PlatformAndroid {
 			if meta.OSVersion == "" {
@@ -958,6 +1101,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		detectedPlatform := cloud.DetectPlatform(cloudSession.DeviceName)
 		_, osVer := cloud.ParseDeviceString(cloudSession.DeviceName)
 		meta := runner.RunMetadata{
+			ProbeVersion: Version,
 			DeviceID:   deviceSerial,
 			DeviceName: cloudSession.DeviceName,
 			Platform:   detectedPlatform,
@@ -1002,13 +1146,14 @@ func runTests(cmd *cobra.Command, args []string) error {
 			Platform:                platform,
 			AppID:                   cfg.Project.App,
 			Port:                    cfg.Agent.Port,
+			DriverPort:              cfg.Agent.DriverPort,
 			DevicePort:              cfg.Agent.AgentDevicePort(),
 			IsPhysical:              isPhysical,
 			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
 			AgentHost:               agentHost,  // device IP for WiFi mode
 			AllowClearData:          autoYes,
-			Confirm:                 promptUserConfirm,
-			GrantPermissionsOnClear: autoYes || cfg.Defaults.GrantPermissionsOnClear,
+			Confirm:                 confirmFunc(),
+			GrantPermissionsOnClear: (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear,
 			ReconnectDelay:          cfg.Agent.ReconnectDelay,
 			RestartDelay:            cfg.Device.RestartDelay,
 			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,
@@ -1030,13 +1175,32 @@ func runTests(cmd *cobra.Command, args []string) error {
 		videoDir = filepath.Join(filepath.Dir(outFile), "videos")
 	}
 
+	// Performance baseline: compare measurements with it, unless this run writes it.
+	perfBaselinePath, _ := cmd.Flags().GetString("perf-baseline")
+	perfUpdate, _ := cmd.Flags().GetBool("perf-update-baseline")
+	perfTolerance, _ := cmd.Flags().GetFloat64("perf-tolerance")
+	var perfBaseline *perf.Baseline
+	if perfBaselinePath != "" && !perfUpdate {
+		b, berr := perf.LoadBaseline(perfBaselinePath)
+		if berr != nil {
+			return fmt.Errorf("--perf-baseline: %w (create it with --perf-update-baseline)", berr)
+		}
+		perfBaseline = b
+	}
+
+	measureAll, _ := cmd.Flags().GetBool("measure-all")
+
 	// Build and run
 	opts := runner.RunOptions{
+		MeasureAll:    measureAll || cfg.Perf.MeasureAll,
+		PerfBaseline:  perfBaseline,
+		PerfTolerance: perfTolerance,
 		Files:        files,
 		Tags:         tags,
 		Timeout:      timeout,
 		DryRun:       dryRun,
 		Verbose:      verbose,
+		Grant:        grantPerms,
 		VideoEnabled: videoEnabled,
 		VideoDir:     videoDir,
 	}
@@ -1070,7 +1234,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Disable animations if requested (--disable-animations flag or probe.yaml)
 	disableAnimationsFlag, _ := cmd.Flags().GetBool("disable-animations")
 	if (disableAnimationsFlag || cfg.Defaults.DisableAnimations) && client != nil && !dryRun {
-		if err := client.SetTimeDilation(ctx, 0); err != nil {
+		if err := client.SetTimeDilation(ctx, 0.001); err != nil {
 			fmt.Fprintf(statusW, "  ⚠  disable-animations: %v\n", err)
 		}
 	}
@@ -1080,6 +1244,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	perfPostProcess(cmd, statusW, results, reportsBase, perfBaselinePath, perfUpdate, runMeta)
 
 	// Pull screenshots from device to local reports/screenshots/ folder.
 	// In cloud mode (devCtx is nil), screenshots are taken via the ProbeAgent
@@ -1207,6 +1372,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// FP-14: optional, advisory, after everything else is done. Cannot fail.
+	if aiTriage, _ := cmd.Flags().GetBool("ai-triage"); aiTriage {
+		maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
+	}
+
 	if !runner.AllPassed(results) {
 		return errTestFailed
 	}
@@ -1324,6 +1494,16 @@ func validateAIConfig(files []string, cfg *config.Config) error {
 		}
 	}
 	return nil
+}
+
+// confirmFunc returns the interactive confirmation prompt, or nil when stdin is not
+// a terminal (CI, a script, an agent): there is nobody to answer, so the step fails
+// at once with a hint to pass --yes instead of blocking on a prompt.
+func confirmFunc() func(string) bool {
+	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return nil
+	}
+	return promptUserConfirm
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.

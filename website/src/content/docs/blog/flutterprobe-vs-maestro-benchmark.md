@@ -12,7 +12,7 @@ The speed numbers did hold up, twice.
 
 ## Methodology
 
-The target app is [water-sip](https://github.com/AlphaWaveSystems), a real Flutter habit-tracking
+The target app is a real Flutter habit-tracking
 app with authentication, local persistence, and a Riverpod state layer — not a synthetic demo. We
 wrote a 9-flow suite covering the app's core paths (launch, quick-add at three quantities, undo,
 goal completion, settings navigation, unit toggling, history) once in ProbeScript and once as an

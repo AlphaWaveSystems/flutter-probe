@@ -148,15 +148,16 @@ func convertStep(step map[string]interface{}) (string, string) {
 			switch strings.ToLower(k) {
 			case "back":
 				return "go back", ""
-			case "home":
-				return "press the home button", ""
+			case "enter", "return":
+				return "press enter", ""
 			default:
-				return fmt.Sprintf("press key %s", quoteVal(k)), ""
+				// no other key steps exist in ProbeScript
+				return fmt.Sprintf("# TODO: pressKey %s has no ProbeScript equivalent (only `go back` and `press enter` exist)", k), ""
 			}
 		case "hideKeyboard", "closeKeyboard":
 			return "close keyboard", ""
 		case "waitForAnimationToEnd":
-			return "wait for the page to load", ""
+			return "wait for idle", ""
 		case "wait":
 			if m, ok := val.(map[string]interface{}); ok {
 				if ms, ok := m["for"].(int); ok {
@@ -187,10 +188,12 @@ func convertStep(step map[string]interface{}) (string, string) {
 			return strings.Join(lines, "\n"), ""
 		case "setAirplaneMode":
 			enabled, _ := val.(bool)
+			// ProbeScript has no network/airplane-mode step: leave a comment, not a step
+			// that would fail as an unknown recipe call.
 			if enabled {
-				return "toggle wifi off", ""
+				return "# TODO: setAirplaneMode true — no ProbeScript equivalent; run `adb shell cmd connectivity airplane-mode enable` (Android) from the harness", ""
 			}
-			return "toggle wifi on", ""
+			return "# TODO: setAirplaneMode false — no ProbeScript equivalent; run `adb shell cmd connectivity airplane-mode disable` (Android) from the harness", ""
 		case "repeat":
 			if m, ok := val.(map[string]interface{}); ok {
 				times := 1
@@ -232,7 +235,7 @@ func convertStep(step map[string]interface{}) (string, string) {
 			return strings.Join(lines, "\n"), ""
 		case "openLink":
 			link, _ := val.(string)
-			return fmt.Sprintf("open %q", link), ""
+			return fmt.Sprintf("open link %q", link), ""
 		case "setLocation":
 			if m, ok := val.(map[string]interface{}); ok {
 				lat, _ := m["latitude"].(float64)
@@ -267,7 +270,7 @@ func convertStringStep(cmd string) (string, string) {
 	case "hideKeyboard":
 		return "close keyboard", ""
 	case "waitForAnimationToEnd":
-		return "wait for the page to load", ""
+		return "wait for idle", ""
 	default:
 		return "# " + cmd, "unknown string command: " + cmd
 	}
