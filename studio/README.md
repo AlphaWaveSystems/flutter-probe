@@ -156,3 +156,12 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 - Multi-device side-by-side
 - Time-travel widget tree per step
 - AI chat pane (spawns `probe-mcp` and proxies)
+
+## Testing Studio
+
+- `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
+- `make studio-e2e`: the real window, driven through macOS accessibility (needs a display and focus).
+
+## Automation endpoint
+
+With `PROBE_STUDIO_AUTOMATION=1` Studio opens a loopback-only control endpoint (random per-launch token, discovery file `<user config dir>/flutter-probe-studio/automation.json`, mode 0600) that exposes the bound methods (`open_workspace`, `connect`, `run_file`, `run_state`, `results`, `screenshot`, ...) without a window or cursor. Off by default. The `studio_*` tools of `probe-mcp` use it. Automation can only list, read, run and open workspaces inside the folder a person opened in the window (or `PROBE_STUDIO_WORKSPACE`) plus `PROBE_STUDIO_AUTOMATION_ROOTS`; keep the discovery file at 0600. See the [Studio page](https://flutterprobe.dev/tools/studio/#automation-no-window-no-cursor).

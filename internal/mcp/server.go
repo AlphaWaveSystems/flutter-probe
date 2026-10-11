@@ -180,6 +180,10 @@ Supports the full ProbeScript syntax:
                      see system dialog "Share sheet", tap "Copy", dismiss system dialog.
   Devices:         start_device names every simulator it boots (name arg; created when
                      missing); results carry the device name and id.
+  Studio:          studio_* tools drive a running Probe Studio started with
+                     PROBE_STUDIO_AUTOMATION=1: studio_open_workspace -> studio_list_devices ->
+                     studio_connect -> studio_run_file -> poll studio_run_state (current step) ->
+                     studio_results; studio_cancel stops a run; studio_screenshot shows the device.
   Performance:     start measuring "checkout" ... stop measuring records memory + frames (agent
                      0.23+), CPU (Android, iOS simulator) and the HTTP traffic of those steps; then
                      see memory below 300 MB | see memory growth below 20 MB | see cpu below 60
@@ -572,6 +576,9 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return textResp(req.ID, out, err)
 	case "take_screenshot":
 		return s.takeScreenshot(req.ID, args["name"], args["device"])
+	case "studio_open_workspace", "studio_list_devices", "studio_connect", "studio_run_file", "studio_cancel",
+		"studio_run_state", "studio_results", "studio_screenshot":
+		return s.studioTool(req.ID, params.Name, args)
 	case "get_report":
 		return s.getReport(req.ID, args["path"])
 	case "perf_trend":
