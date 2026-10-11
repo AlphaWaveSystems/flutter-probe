@@ -202,6 +202,7 @@ ai:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `measure_all` | bool | `false` | Wrap every test in a measuring window named after the test (same as `--measure-all`) |
+| `frame_budget_ms` | number | `16.7` | Build+raster time above which a frame counts as slow (`8.3` for a 120 Hz display, a looser value for debug builds). Needs agent 0.25+; an older agent keeps 16.7 and the run says so. Windows measured with different budgets are not compared on `slow_frames` |
 
 ### l10n
 

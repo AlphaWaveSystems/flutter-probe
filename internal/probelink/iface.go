@@ -52,3 +52,9 @@ type ProbeClient interface {
 	SetTimeDilation(ctx context.Context, factor float64) error
 	DrainOutput(ctx context.Context) (map[string]string, error)
 }
+
+// PerfBudgetStarter is implemented by clients that can open a measuring window with a slow-frame
+// budget (agent 0.25 and later honour it; older agents ignore it). The CLI falls back to PerfStart.
+type PerfBudgetStarter interface {
+	PerfStartBudget(ctx context.Context, budgetMs float64) error
+}

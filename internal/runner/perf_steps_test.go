@@ -17,6 +17,7 @@ type perfFake struct {
 	httpFake
 	snap    probelink.PerfSnapshot
 	started int
+	budget  float64
 }
 
 // HTTPLog pretends the log was empty when the window opened, so the fixture exchange falls inside it.
@@ -31,6 +32,13 @@ func (f *perfFake) HTTPLog(ctx context.Context, p probelink.HTTPLogParams) (prob
 func (f *perfFake) started0() bool { return f.started > 0 }
 
 func (f *perfFake) PerfStart(context.Context) error { f.started++; return nil }
+
+// PerfStartBudget records the budget; the fake agent reports it back unless noBudget is set (an old agent).
+func (f *perfFake) PerfStartBudget(_ context.Context, ms float64) error {
+	f.started++
+	f.budget = ms
+	return nil
+}
 func (f *perfFake) PerfSnapshot(context.Context) (probelink.PerfSnapshot, error) {
 	return f.snap, nil
 }
@@ -194,5 +202,26 @@ func TestUnnamedWindowsGetALabel(t *testing.T) {
 	got := nameUnnamed([]perf.Metrics{{Name: ""}, {Name: "x"}})
 	if got[0].Name != "measurement" || got[1].Name != "x" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+func TestFrameBudgetIsPassedToTheAgentAndRecorded(t *testing.T) {
+	f := newPerfFake()
+	f.snap.FrameBudgetMs = 8.3
+	e := NewExecutor(f, nil, nil, 2*time.Second, false)
+	e.SetPerfFrameBudget(8.3)
+	if err := e.startMeasuring(context.Background(), "t"); err != nil {
+		t.Fatal(err)
+	}
+	m, err := e.finishMeasuring(context.Background(), true)
+	if err != nil || f.budget != 8.3 || m.FrameBudgetMs != 8.3 {
+		t.Fatalf("budget=%v metrics=%+v err=%v", f.budget, m, err)
+	}
+	// Not configured: the plain start is used and nothing is recorded.
+	f2 := newPerfFake()
+	e2 := NewExecutor(f2, nil, nil, 2*time.Second, false)
+	_ = e2.startMeasuring(context.Background(), "t")
+	if f2.budget != 0 || f2.started != 1 {
+		t.Fatalf("budget=%v started=%d", f2.budget, f2.started)
 	}
 }

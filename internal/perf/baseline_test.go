@@ -140,3 +140,15 @@ func TestParseMetricList(t *testing.T) {
 		t.Fatal("unknown metric must be refused")
 	}
 }
+
+func TestSlowFramesAreNotComparedAcrossDifferentBudgets(t *testing.T) {
+	base := Metrics{SlowFramePct: 1, FrameBudgetMs: 16.7}
+	cur := Metrics{SlowFramePct: 60, FrameBudgetMs: 8.3}
+	if regs := Compare(base, cur, 20); len(regs) != 0 {
+		t.Fatalf("different budgets: %v", regs)
+	}
+	cur.FrameBudgetMs = 16.7
+	if regs := Compare(base, cur, 20); len(regs) != 1 {
+		t.Fatalf("same budget compares: %v", regs)
+	}
+}

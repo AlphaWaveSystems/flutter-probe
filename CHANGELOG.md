@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`perf.frame_budget_ms` in `probe.yaml`** sets the build+raster time above which a frame counts as slow (default 16.7 ms), so `slow_frames` is meaningful on 120 Hz displays and debug builds (#354). Sent as an optional `frameBudgetMs` parameter of `probe.perf_start` (agent 0.25+; older agents keep 16.7 ms and the CLI prints a note); the budget used is reported as `frame_budget_ms`, and `slow_frames` is not compared between windows measured with different budgets. Grammar unchanged.
+
 ### Changed
 - **Canary releases attach `probe-ios-driver.zip`** (a non-blocking `ios-driver` job in `release-canary.yml`, mirroring the stable workflow), so `probe ios-driver install` works against a canary. Applies from the next canary; documented in the install guide and the release pipeline notes.
 

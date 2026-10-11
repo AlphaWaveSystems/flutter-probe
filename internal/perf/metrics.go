@@ -22,12 +22,14 @@ type Metrics struct {
 	MemEndMB    float64 `json:"mem_end_mb"`
 	MemGrowthMB float64 `json:"mem_growth_mb"` // end - start
 
-	Frames       int     `json:"frames"`
-	SlowFramePct float64 `json:"slow_frame_pct"` // frames over 16.7 ms
-	FrameP95Ms   float64 `json:"frame_p95_ms"`
-	FrameMaxMs   float64 `json:"frame_max_ms"`
-	BuildAvgMs   float64 `json:"build_avg_ms"`
-	RasterAvgMs  float64 `json:"raster_avg_ms"`
+	Frames int `json:"frames"`
+	// FrameBudgetMs is the budget a frame was judged "slow" against (absent when the agent did not say).
+	FrameBudgetMs float64 `json:"frame_budget_ms,omitempty"`
+	SlowFramePct  float64 `json:"slow_frame_pct"` // frames over 16.7 ms
+	FrameP95Ms    float64 `json:"frame_p95_ms"`
+	FrameMaxMs    float64 `json:"frame_max_ms"`
+	BuildAvgMs    float64 `json:"build_avg_ms"`
+	RasterAvgMs   float64 `json:"raster_avg_ms"`
 
 	// SpansRestart is true when the app was restarted inside the window: the numbers then come from
 	// different processes and are not compared with a baseline.

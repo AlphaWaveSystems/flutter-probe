@@ -53,6 +53,9 @@ type Config struct {
 // PerfConfig holds performance-measuring defaults.
 type PerfConfig struct {
 	MeasureAll bool `yaml:"measure_all"` // wrap every test in a measuring window named after the test (same as --measure-all)
+	// FrameBudgetMs is the build+raster time above which a frame counts as slow (default 16.7, one
+	// 60 Hz interval; use 8.3 for 120 Hz, or a looser value for debug builds). Needs agent 0.25+.
+	FrameBudgetMs float64 `yaml:"frame_budget_ms"`
 }
 
 // L10nConfig points `l10n "key"` at the app's ARB files.
