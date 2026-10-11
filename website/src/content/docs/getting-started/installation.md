@@ -78,6 +78,8 @@ probe version                 # prints e.g. 0.24.0-next.2
 # https://github.com/AlphaWaveSystems/flutter-probe/releases (pick the vX.Y.Z-next.N entry)
 ```
 
+The iOS system-dialog driver (`probe ios-driver install`) comes from the same pre-release (`probe-ios-driver.zip`). It is built after the CLI binaries, so it can appear a few minutes later; if it is missing, `probe ios-driver install` reports a 404. Canaries do not include Studio, the `.mcpb` extension or Windows binaries; use a stable release for those.
+
 The canary CLI and the agent must come from the same build. The agent is **not** published to pub.dev for a canary, so take it from the tagged source with a git dependency in your app's `pubspec.yaml`:
 
 ```yaml
