@@ -1,5 +1,9 @@
 .dart_tool/
-.flutter-plugin-dependencies
+.flutter-plugins-dependencies
+.flutter-plugins
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
 build/
 android/.gradle/
 android/local.properties
