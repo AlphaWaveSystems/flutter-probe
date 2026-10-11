@@ -115,6 +115,9 @@ checks at the end tell you which one does not.
    - **Studio over USB** (not WiFi): the device picker lists the phone as `physical`, uses an `iproxy` tunnel and reads the token from the
      device log with `idevicesyslog` (`brew install libimobiledevice`); the build still has to be profile with `PROBE_AGENT=true`.
 
+To verify the whole path with Studio in about ten minutes, with the expected result of each step, follow the checklist in the repository
+(`studio/e2e-web/PHYSICAL.md`); its automated half is `scripts/studio-e2e-physical.sh --host <phone-ip> --token <token>`, opt-in and never run in CI.
+
 **Check from the Mac, in this order:**
 
 ```bash
