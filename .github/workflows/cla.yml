@@ -27,7 +27,9 @@ jobs:
         with:
           path-to-signatures: "signatures/cla.json"
           path-to-document: ".github/CLA.md"
-          branch: "main"
+          # Signatures live on their own unprotected branch: the action commits straight to
+          # this branch, and `main` only accepts pull requests through the merge queue.
+          branch: "cla-signatures"
           allowlist: "pbertsch,dependabot[bot],github-actions[bot]"
           remote-organization-name: "AlphaWaveSystems"
           remote-repository-name: "flutter-probe"
