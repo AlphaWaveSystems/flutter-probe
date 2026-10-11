@@ -97,7 +97,7 @@ These are recorded and shown, but **not** gated unless you ask: `memory_growth` 
 
 ### Restarts and unavailable numbers
 
-- A window that contains `restart the app` (or `open the app`, `clear app data`, a language change that relaunches) spans two processes. The measuring window is re-opened on the new process, so memory and frames cover the time since the relaunch; the run prints a warning, the report marks the window `window_spans_restart`, CPU is not reported, the comparison skips it (in compare mode the window is reported as skipped) and `--perf-update-baseline` leaves it out (a baseline never gets zeros or numbers of a half-window). Put the window around the steps after the restart if you want it in a baseline.
+- A window that contains `restart the app` (or any step that relaunches the process, for example `clear app data`) spans two processes; `open the app` is not treated as a restart, it only counts when it actually has to launch the app again. The measuring window is re-opened on the new process, so memory and frames cover the time since the relaunch; the run prints a warning, the report marks the window `window_spans_restart`, CPU is not reported, the comparison skips it (in compare mode the window is reported as skipped) and `--perf-update-baseline` leaves it out (a baseline never gets zeros or numbers of a half-window). Put the window around the steps after the restart if you want it in a baseline.
 - A `start measuring` without a name is reported as `measurement`.
 - CPU is reported only when the sampler read the app at least twice in the same process. Otherwise it is absent (not `0.0`) and skipped by comparisons.
 - `start measuring` while the app is not running fails with "no app is connected ... open the app first".
