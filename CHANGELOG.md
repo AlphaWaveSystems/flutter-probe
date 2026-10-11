@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`--measure-all`** (and `perf: {measure_all: true}` in probe.yaml): a measuring window named after the test around every test body, so an existing suite gets performance baselines with no script edits. Tests that use `start measuring` themselves are left alone.
+
+### Fixed
+- **JSON/HTML report metadata `probe_version` was empty**; it now carries the CLI version.
+
 ## [0.24.0] - 2026-10-10
 
 ### Fixed

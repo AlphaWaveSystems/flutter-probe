@@ -67,6 +67,7 @@ type RunOptions struct {
 	DeviceName   string // human-readable device name
 	Grant        []string // permissions to pre-grant before the first test (--grant)
 
+	MeasureAll    bool           // open a measuring window around every test that does not measure itself
 	PerfBaseline  *perf.Baseline // compare measurements with this baseline (nil = off)
 	PerfTolerance float64        // percent a metric may exceed its baseline by (default 20)
 }
@@ -405,6 +406,17 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 				runErr = fmt.Errorf("before each: %w", err)
 				break
 			}
+		}
+	}
+
+	// --measure-all: a window named after the test, unless the test measures on its own.
+	if runErr == nil && r.opts.MeasureAll && !hasMeasuring(t.Body) {
+		window := t.Name
+		if row >= 0 && t.Examples != nil {
+			window = fmt.Sprintf("%s [row %d]", t.Name, row+1)
+		}
+		if err := exec.startMeasuring(ctx, window); err != nil {
+			fmt.Printf("    \033[33m⚠\033[0m  --measure-all: %v\n", err)
 		}
 	}
 
@@ -821,4 +833,33 @@ func (r *Runner) applyPerfBaseline(res *TestResult) {
 		res.Passed = false
 		res.Error = fmt.Errorf("performance regression (tolerance %.0f%%): %s", tol, strings.Join(problems, "; "))
 	}
+}
+
+// hasMeasuring reports whether a test body opens its own measuring window.
+func hasMeasuring(steps []parser.Step) bool {
+	for _, st := range steps {
+		switch s := st.(type) {
+		case parser.PerfStep:
+			if s.Kind == parser.PerfStart {
+				return true
+			}
+		case parser.TimedStep:
+			if hasMeasuring([]parser.Step{s.Inner}) {
+				return true
+			}
+		case parser.ConditionalStep:
+			if hasMeasuring(s.Then) || hasMeasuring(s.Else) {
+				return true
+			}
+		case parser.LoopStep:
+			if hasMeasuring(s.Body) {
+				return true
+			}
+		case parser.RetryStep:
+			if hasMeasuring(s.Body) {
+				return true
+			}
+		}
+	}
+	return false
 }

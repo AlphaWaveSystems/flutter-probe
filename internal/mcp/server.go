@@ -316,6 +316,7 @@ Key flags for the flags parameter:
                                notifications: a watcher taps Allow when the alert appears)
   --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
+  --measure-all               measure every test (a window per test) with no script edits
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
   --retry-failed N            re-run a failing test up to N extra times
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
