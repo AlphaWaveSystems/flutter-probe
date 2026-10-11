@@ -317,6 +317,7 @@ Key flags for the flags parameter:
   --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
   --measure-all               measure every test (a window per test) with no script edits
+  --upload-report             upload the scrubbed report to the hosted service (Probe Cloud, preview; needs a probe_cloud license); --upload-dry-run prints the payload and sends nothing
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
   --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data on physical devices, memory,cpu,data on emulators/simulators; all = also memory_growth,cpu_peak,frame_max)
   --perf-ignore LIST          metrics to leave out of the comparison; --perf-key-base DIR makes baseline keys relative to DIR

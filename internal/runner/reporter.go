@@ -2,6 +2,7 @@ package runner
 
 import (
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -291,7 +292,24 @@ type jsonReport struct {
 	Results     []jsonResult `json:"results"`
 }
 
+// JSONBytes renders the JSON report (the same document --format json writes) without writing it anywhere.
+func (r *Reporter) JSONBytes(results []TestResult) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(r.buildJSONReport(results)); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 func (r *Reporter) writeJSON(results []TestResult) error {
+	enc := json.NewEncoder(r.out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(r.buildJSONReport(results))
+}
+
+func (r *Reporter) buildJSONReport(results []TestResult) jsonReport {
 	report := jsonReport{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Metadata:    r.metadata,
@@ -335,9 +353,7 @@ func (r *Reporter) writeJSON(results []TestResult) error {
 		}
 		report.Results = append(report.Results, jr)
 	}
-	enc := json.NewEncoder(r.out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(report)
+	return report
 }
 
 // ---- Summary ----
