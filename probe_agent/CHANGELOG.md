@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.25.0 - 2026-10-11
+
 - Added: `probe.perf_start` takes an optional `frameBudgetMs` (default 16.7): frames above it count as slow in that window. The snapshot and the start reply report the budget in use (`frameBudgetMs`); an older agent ignores the parameter and the CLI warns.
 
 ## 0.24.0 - 2026-10-11

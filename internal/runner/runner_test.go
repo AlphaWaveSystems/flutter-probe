@@ -1,8 +1,11 @@
 package runner_test
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -204,3 +207,23 @@ type testErr string
 
 func errStub(msg string) error { return testErr(msg) }
 func (e testErr) Error() string { return string(e) }
+
+// An infrastructure problem (the agent connection dropped) is an <error> in JUnit, but it must still fail the run:
+// `probe test` exits non-zero whenever AllPassed is false.
+func TestInfrastructureErrorsFailTheRunAndAreErrorsInJUnit(t *testing.T) {
+	results := []runner.TestResult{
+		{TestName: "ok", File: "tests/a.probe", Passed: true, Row: -1},
+		{TestName: "agent died", File: "tests/a.probe", Passed: false, Row: -1, Error: fmt.Errorf("probelink: write: use of closed network connection")},
+	}
+	if runner.AllPassed(results) {
+		t.Fatal("an infrastructure error must fail the run (non-zero exit)")
+	}
+	var buf bytes.Buffer
+	if err := runner.NewReporter(runner.FormatJUnit, &buf, false).Report(results); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `<error type="error"`) || !strings.Contains(out, `errors="1"`) || !strings.Contains(out, `failures="0"`) {
+		t.Fatalf("junit = %s", out)
+	}
+}

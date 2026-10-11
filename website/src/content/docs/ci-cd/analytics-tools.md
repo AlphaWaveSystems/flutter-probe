@@ -41,6 +41,13 @@ the file, what three services document about the fields they need, and what has 
   starts a new history in any tool that keys on the name; append new rows at the end.
 - A re-run test (`retry_failed_tests`) has an `attempts` property on its case.
 
+## Migration note (0.25)
+
+Two details of the default output changed in 0.25. Both are still valid JUnit, and `probe test` still exits non-zero for both kinds of problem:
+
+- **Test identities are relative paths with forward slashes.** `classname`, `name` and `file` were the path as you typed it; they are now relative to the working directory (a file outside it keeps only its name). For the usual `probe test tests/` nothing changes; if you passed absolute or `./`-prefixed paths, a tool that keys on `classname` + `name` sees new test identities once.
+- **Infrastructure problems are `<error>`, assertions stay `<failure>`.** An agent connection that dropped, or a `before all`/`before each` hook that failed, used to be a `<failure>`. A consumer must count `failures` **and** `errors` (most do; a consumer that reads only `failures` will report fewer).
+
 ## Retries and flaky tests
 
 By default a test that failed and then passed on a retry is **one passing case** (with the `attempts` property): a CI summary shows a green run.

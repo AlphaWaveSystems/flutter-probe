@@ -25,6 +25,7 @@ These grow in minor releases, never in a way that changes what existing input do
 - **New `probe.yaml` keys, CLI flags and commands**, with defaults that keep the old behaviour.
 - **New protocol methods and new fields** in requests and results. Readers ignore fields they do not know.
 - **New report fields.** Consumers of the JSON report must ignore fields they do not know.
+- **JUnit output details may change in minor releases but stay valid JUnit XML** (for example 0.25 made test identities relative paths and wrote infrastructure problems as `<error>`; the migration note is in [Results in other tools](/ci-cd/analytics-tools/)). Only behaviour that changes the number of test cases is opt-in.
 - **New JUnit attributes and `<properties>`.** JUnit output stays valid JUnit XML; consumers ignore attributes and properties they do not know. Behaviour that changes the number of test cases (such as `--junit-attempts`) is opt-in.
 - **New MCP tools and tool arguments.**
 
