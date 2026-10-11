@@ -88,6 +88,13 @@ func TestHeadlessCallNeedsTheTokenAndALocalCaller(t *testing.T) {
 	if resp, _ := http.DefaultClient.Do(req); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("a foreign Host header must be refused: %d", resp.StatusCode)
 	}
+	for site, want := range map[string]int{"cross-site": http.StatusForbidden, "same-site": http.StatusForbidden, "same-origin": http.StatusOK, "none": http.StatusOK} {
+		req, _ = http.NewRequest(http.MethodGet, s.URL()+"/", nil)
+		req.Header.Set("Sec-Fetch-Site", site)
+		if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != want {
+			t.Errorf("Sec-Fetch-Site %q: want %d, got %v %v", site, want, resp, err)
+		}
+	}
 }
 
 func TestHeadlessCallsAppMethodsLikeWails(t *testing.T) {
