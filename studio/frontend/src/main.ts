@@ -693,6 +693,9 @@ type DeviceInfo = {
   state: string;
   osVersion: string;
   booted: boolean;
+  transport?: string;
+  model?: string;
+  hint?: string;
 };
 
 let lastDeviceList: DeviceInfo[] = [];
@@ -718,9 +721,13 @@ async function refreshDevices() {
     );
     for (const d of sorted) {
       const tag = d.kind === "physical" ? "physical" : d.platform;
+      const model = d.model && !d.name.includes(d.model) ? ` (${d.model})` : "";
+      const via = d.transport === "network" ? "  · WiFi only" : d.transport === "usb" ? "  · USB" : "";
       const label = d.booted
-        ? `${d.name}  ·  ${tag}`
-        : `${d.name}  ·  ${tag}  · shutdown`;
+        ? `${d.name}${model}  ·  ${tag}${via}`
+        : d.kind === "physical"
+          ? `${d.name}${model}  ·  ${tag}${via}`
+          : `${d.name}  ·  ${tag}  · shutdown`;
       const opt = makeOption(d.id, label);
       if (!d.booted) opt.dataset.booted = "false";
       select.appendChild(opt);
@@ -729,9 +736,15 @@ async function refreshDevices() {
       select.value = previous;
     }
     if (devs.length === 0) {
-      toast("No simulators or emulators detected. Start one and click ↻.", "info");
+      toast("No simulators, emulators or phones detected. Start one, or plug in a phone, and click ↻. A phone on WiFi: use the 📡 button.", "info");
     } else if (devs.every((d) => !d.booted)) {
-      toast("All devices are shut down. Boot a simulator/emulator first.", "info");
+      const wifiOnly = devs.some((d) => d.transport === "network");
+      toast(
+        wifiOnly
+          ? "A phone is paired over the network only: use the 📡 button, then Connect manually."
+          : "All devices are shut down. Boot a simulator/emulator first.",
+        "info"
+      );
     }
   } catch (err) {
     if (seq !== refreshSeq) return;
@@ -750,7 +763,18 @@ function selectedDeviceIsBooted(): boolean {
   return Boolean(dev?.booted);
 }
 
+// The line under the toolbar says what the selected physical device needs, so a phone never just fails or is missing.
+function updateDeviceHint() {
+  const select = $("device-picker") as HTMLSelectElement;
+  const el = $("device-hint");
+  const dev = lastDeviceList.find((d) => d.id === select.value);
+  const text = dev?.hint ?? "";
+  el.textContent = text;
+  el.hidden = text === "";
+}
+
 function updateConnectButton() {
+  updateDeviceHint();
   const select = $("device-picker") as HTMLSelectElement;
   const btn = $("btn-connect") as HTMLButtonElement;
   if (connected) {
@@ -765,7 +789,8 @@ function updateConnectButton() {
     btn.title = "Pick a device first";
   } else if (!selectedDeviceIsBooted()) {
     btn.disabled = true;
-    btn.title = "Boot the simulator/emulator first (e.g. via Xcode or Android Studio)";
+    const dev = lastDeviceList.find((d) => d.id === select.value);
+    btn.title = dev?.hint || "Boot the simulator/emulator first (e.g. via Xcode or Android Studio)";
   } else {
     btn.disabled = false;
     btn.title = "Connect to selected device";
