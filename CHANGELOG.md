@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **A wedged iOS XCUITest driver is reported directly** (#357): when the runner log shows "Timed out waiting for AX loaded notification" (xcodebuild exit 65), starting the driver or a later driver call now says the simulator's accessibility service is not responding and how to restart only the test simulator, instead of surfacing as unrelated step timeouts. A driver process that stopped mid-run is reported as stopped.
+
 ### Changed
 - **Canary releases attach `probe-ios-driver.zip`** (a non-blocking `ios-driver` job in `release-canary.yml`, mirroring the stable workflow), so `probe ios-driver install` works against a canary. Applies from the next canary; documented in the install guide and the release pipeline notes.
 

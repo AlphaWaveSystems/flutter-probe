@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -59,6 +60,7 @@ type IOSDriver struct {
 	cmd     *exec.Cmd // non-nil only when this process started the runner
 	logPath string
 	logf    func(string, ...any)
+	dead    atomic.Bool // the runner process this CLI started has exited
 }
 
 // NewIOS connects to (or starts) the iOS runner for the simulator udid.
@@ -152,7 +154,7 @@ func (d *IOSDriver) start(ctx context.Context, opts IOSOptions) error {
 	}
 	d.cmd = cmd
 	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait(); logFile.Close() }()
+	go func() { exited <- cmd.Wait(); d.dead.Store(true); logFile.Close() }()
 
 	timeout := opts.StartTimeout
 	if timeout == 0 {
@@ -164,7 +166,7 @@ func (d *IOSDriver) start(ctx context.Context, opts IOSOptions) error {
 		select {
 		case err := <-exited:
 			d.cmd = nil
-			return fmt.Errorf("the iOS driver exited while starting (%v): %s", err, tailFile(d.logPath, 1500))
+			return fmt.Errorf("the iOS driver exited while starting (%v): %s%s", err, tailFile(d.logPath, 1500), WedgeHint(tailFile(d.logPath, 6000), d.udid))
 		case <-ctx.Done():
 			_ = d.Close()
 			return ctx.Err()
@@ -175,7 +177,21 @@ func (d *IOSDriver) start(ctx context.Context, opts IOSOptions) error {
 		}
 	}
 	_ = d.Close()
-	return fmt.Errorf("the iOS driver did not answer within %s: %s", timeout, tailFile(d.logPath, 1500))
+	return fmt.Errorf("the iOS driver did not answer within %s: %s%s", timeout, tailFile(d.logPath, 1500), WedgeHint(tailFile(d.logPath, 6000), d.udid))
+}
+
+// wedgeMarker is what xcodebuild prints (and exits 65) when the simulator's accessibility service
+// does not come up for the XCUITest runner.
+const wedgeMarker = "Timed out waiting for AX loaded notification"
+
+// WedgeHint explains a wedged driver: when the runner log shows the accessibility timeout it returns
+// a short, actionable sentence (with a leading newline), otherwise "". Without it the failure only
+// shows up later as unrelated step timeouts.
+func WedgeHint(logTail, udid string) string {
+	if !strings.Contains(logTail, wedgeMarker) {
+		return ""
+	}
+	return fmt.Sprintf("\nthe simulator's accessibility service is not responding (%q, xcodebuild exit 65). Restart only the test simulator and rerun: `xcrun simctl shutdown %s && xcrun simctl boot %s`. Running another UI-test tool on the same simulator first can cause this; run the Probe lane before it or restart the simulator between them.", wedgeMarker, udid, udid)
 }
 
 func tailFile(path string, n int) string {
@@ -208,6 +224,9 @@ func (d *IOSDriver) call(ctx context.Context, path string, body map[string]any, 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := d.client.Do(req)
 	if err != nil {
+		if d.dead.Load() {
+			return fmt.Errorf("the iOS driver has stopped (the xcodebuild runner exited), so %s failed: %w%s", path, err, WedgeHint(tailFile(d.logPath, 6000), d.udid))
+		}
 		return fmt.Errorf("iOS driver request %s failed: %w", path, err)
 	}
 	defer resp.Body.Close()
