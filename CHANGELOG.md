@@ -6,18 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Docs
-- **Installation: "Try a canary build"** covers `brew install AlphaWaveSystems/tap/probe@next`, the pre-release binaries and taking the agent from the tagged source (git dependency) because canaries are not published to pub.dev.
-
-### Security
-- **Studio headless mode refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, on top of the existing loopback, Host and Origin checks. Test-only server; non-browser clients are unaffected.
-
-### Added
-- **`--measure-all`** (and `perf: {measure_all: true}` in probe.yaml): a measuring window named after the test around every test body, so an existing suite gets performance baselines with no script edits. Tests that use `start measuring` themselves are left alone.
-
-### Fixed
-- **JSON/HTML report metadata `probe_version` was empty**; it now carries the CLI version.
-
 ## [0.24.0] - 2026-10-10
 
 ### Fixed
@@ -25,12 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe device start --platform ios --name ...` failed on a simulator that was already booted** on Xcode versions that word the error "Unable to boot device in current state: Booted". It now treats that as success, like the older wording. Found by the browser UI suite.
 - **Studio's device picker listed every device twice** when two refreshes overlapped (start-up plus a click on refresh); only the newest refresh fills the list now. Found by the browser UI suite.
 - **Pricing page no longer advertises what does not exist:** the pay-per-use card is now "Pay-per-use for AI agents: Planned" with no features listed, the Team card is labelled planned/not available yet (badge "Planned", "Planned features"), and the waitlist is a plain email link instead of a form with placeholder fields that collected nothing. The experimental `--pay` flag and the `wallet` config key stay but are described as experimental (the flag is hidden from `--help`).
+- **JSON/HTML report metadata `probe_version` was empty**; it now carries the CLI version.
 
 ### Changed
 - **License keys use format FP2** (`FP2.<kid>.<payload>.<signature>`): the Ed25519 signature covers the exact text `FP2.<kid>.<payload>`, so the key id and the format tag are signed. The CLI verifies in a fixed order (shape, key id lookup, signature, claims, expiry), against a built-in trusted key set and a revoked key id list. A key signed with an unknown key id asks to update the CLI, a revoked one says so, `seats` must be at least 1 (0 is rejected), claims need `v: 2`, a `kid` equal to the key's, at least one plan and an expiry after the issue time. The old FP1 format is dropped and reported as an old format. The built-in key set is empty in this change; `PROBE_LICENSE_PUBKEY` (now `kid=publicKey[,kid=publicKey]`) still adds keys for development and tests. A shared test vector is checked in the unit tests.
 
 ### Security
 - Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
+- **Studio headless mode refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, on top of the existing loopback, Host and Origin checks. Test-only server; non-browser clients are unaffected.
 
 ### Added
 - **Compatibility policy for 1.x** (docs): what is frozen (ProbeScript grammar, `probe.yaml`, the agent protocol, report JSON), what is additive-only, what is outside the promise (Studio, experimental features, human-readable output) and the deprecation process.
@@ -43,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe license activate <key>` / `probe license status`:** stores and verifies an offline ed25519-signed license key in `~/.flutterprobe/license.key`. Only hosted features will ever need one; everything that runs locally stays free and works without a key.
 - **Release pipeline:** canary channel (`vX.Y.Z-next.N` tags publish `probe@next` on Homebrew and pre-release Dart packages), a dogfood gate workflow, an automated review-agent check on pull requests, and auto-rollback of a stable release when a `prod-incident` is filed within 24 hours. `scripts/release.sh` accepts canary versions. See `docs/ops/release-pipeline.md`.
 - **Studio E2E suite** (`make studio-e2e`, `studio/e2e/`): drives the real Studio window on macOS through the accessibility tree and screenshots — launch, device picker, connect, run, results, failures, performance lines, recorder, settings, AI-chat and WiFi overlays, error paths — against a new fixture app (`native-test-apps/studio-fixture/`). Optional vision assertions via `STUDIO_E2E_AI_PROVIDER`. Parameterised for dogfooding on any app (`studio/e2e/DOGFOOD.md`); self-hosted macOS workflow `studio-e2e.yml`.
+- **`--measure-all`** (and `perf: {measure_all: true}` in probe.yaml): a measuring window named after the test around every test body, so an existing suite gets performance baselines with no script edits. Tests that use `start measuring` themselves are left alone.
 
 ### Security
 - **Review-agent workflow:** reviews only same-repository branches from owners, members and collaborators, and fails (never skips) for anything else, since a skipped required check counts as passing; the model gets no tools and one prompt (conventions from the trusted base commit plus the diff between random markers, declared untrusted), so it cannot read files or the environment; nothing PR-controlled reaches a shell through `${{ }}`; the verdict counts only as the exact first line of the reply; an approval is bound to the reviewed commit; a branch behind the current tip of its base fails both before the review and again just before it is submitted; credential-shaped strings in the diff fail the check before any model sees it; the CLI version and actions are pinned. New `REVIEW_PROVIDER` variable (`oauth` default, `anthropic`, or `local` as a never-approving pre-screen).
@@ -52,6 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **License keys have exactly one valid spelling:** the verifier now decodes base64url strictly, so a key re-spelled with non-zero trailing bits is rejected instead of verifying as an alias (not a forgery: the signed bytes were unchanged). The tamper test is deterministic; it failed about once in a few hundred runs before.
 - **Studio reads `probe.yaml` from the open workspace** (agent port, timeout, device ids) when connecting; it used to read the process working directory. `PROBE_STUDIO_WORKSPACE=/path` opens a workspace at launch.
 - Studio file-browser rows and result rows carry accessible names (`role=button`, `pass:`/`fail:` labels).
+
+### Docs
+- **Installation: "Try a canary build"** covers `brew install AlphaWaveSystems/tap/probe@next`, the pre-release binaries and taking the agent from the tagged source (git dependency) because canaries are not published to pub.dev.
 
 ## [0.23.0] - 2026-10-10
 
