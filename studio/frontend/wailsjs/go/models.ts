@@ -112,6 +112,53 @@ export namespace main {
 	        this.isDir = source["isDir"];
 	    }
 	}
+	export class RunPlanTest {
+	    name: string;
+	    line: number;
+	    steps: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RunPlanTest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.line = source["line"];
+	        this.steps = source["steps"];
+	    }
+	}
+	export class RunPlan {
+	    tests: RunPlanTest[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RunPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tests = this.convertValues(source["tests"], RunPlanTest);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class RunResult {
 	    name: string;
 	    file: string;
@@ -154,6 +201,79 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class RunStep {
+	    file: string;
+	    test: string;
+	    line: number;
+	    description: string;
+	    status: string;
+	    durationMs: number;
+	    error?: string;
+	    attempt: number;
+	    depth: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RunStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.test = source["test"];
+	        this.line = source["line"];
+	        this.description = source["description"];
+	        this.status = source["status"];
+	        this.durationMs = source["durationMs"];
+	        this.error = source["error"];
+	        this.attempt = source["attempt"];
+	        this.depth = source["depth"];
+	    }
+	}
+	export class RunState {
+	    running: boolean;
+	    file?: string;
+	    plan: RunPlan;
+	    current?: RunStep;
+	    steps: RunStep[];
+	    results: RunResult[];
+	    finished: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RunState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.file = source["file"];
+	        this.plan = this.convertValues(source["plan"], RunPlan);
+	        this.current = this.convertValues(source["current"], RunStep);
+	        this.steps = this.convertValues(source["steps"], RunStep);
+	        this.results = this.convertValues(source["results"], RunResult);
+	        this.finished = source["finished"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;
@@ -188,11 +308,13 @@ export namespace perf {
 	    mem_end_mb: number;
 	    mem_growth_mb: number;
 	    frames: number;
+	    frame_budget_ms?: number;
 	    slow_frame_pct: number;
 	    frame_p95_ms: number;
 	    frame_max_ms: number;
 	    build_avg_ms: number;
 	    raster_avg_ms: number;
+	    window_spans_restart?: boolean;
 	    requests: number;
 	    data_kb: number;
 	    slowest_request_ms: number;
@@ -213,11 +335,13 @@ export namespace perf {
 	        this.mem_end_mb = source["mem_end_mb"];
 	        this.mem_growth_mb = source["mem_growth_mb"];
 	        this.frames = source["frames"];
+	        this.frame_budget_ms = source["frame_budget_ms"];
 	        this.slow_frame_pct = source["slow_frame_pct"];
 	        this.frame_p95_ms = source["frame_p95_ms"];
 	        this.frame_max_ms = source["frame_max_ms"];
 	        this.build_avg_ms = source["build_avg_ms"];
 	        this.raster_avg_ms = source["raster_avg_ms"];
+	        this.window_spans_restart = source["window_spans_restart"];
 	        this.requests = source["requests"];
 	        this.data_kb = source["data_kb"];
 	        this.slowest_request_ms = source["slowest_request_ms"];

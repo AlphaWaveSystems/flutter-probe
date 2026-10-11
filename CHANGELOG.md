@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Studio: manual WiFi entry** (phase 1 of the physical-device plan, `docs/proposals/studio-physical-devices.md`): the WiFi overlay has host, port (default 48686) and token fields with validation (IPv4, IPv6 or hostname; port range; token characters), a **Test connection** step that dials and pings without connecting, and error messages that say what to check (same network, app in the foreground and unlocked, profile build with `PROBE_AGENT=true` and `PROBE_WIFI=true`, port, fresh token). The automation endpoint has `test_wifi` next to `connect_wifi` (port defaults to 48686), and the MCP tool `studio_connect` accepts `host`, `port`, `token` (and `test_only`). Headless browser tests and a native E2E test cover it.
+
 ### Docs
 - **iOS guide: "Physical iPhone over WiFi (CLI and Studio): what must be true"**: build mode and flavor, `PROBE_WIFI`, the port, the token, network reachability, how the Mac finds the phone (mDNS only with a `ProbeAdvertiser`; Studio's WiFi overlay has no manual host/port field, the CLI `--host/--token` path always works), and a three-command check.
 

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -32,9 +33,13 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 	},
 	{
 		Name:        "studio_connect",
-		Description: "Connect Studio to a device (id from studio_list_devices): sets up the port forward, reads the agent token and opens the live connection. Required before studio_run_file.",
-		InputSchema: mcpSchema{Type: "object", Required: []string{"device_id"}, Properties: map[string]mcpProp{
-			"device_id": {Type: "string", Description: "Device serial or simulator UDID"},
+		Description: "Connect Studio to a device: either a device from studio_list_devices (device_id: sets up the port forward, reads the agent token and opens the live connection), or a phone on the network (host, port, token: the same as the manual entry in Studio's WiFi overlay; needs a profile build of the app made with PROBE_AGENT=true and PROBE_WIFI=true, running in the foreground). With test_only=true and host it only checks that the agent is reachable and accepts the token. Required before studio_run_file.",
+		InputSchema: mcpSchema{Type: "object", Properties: map[string]mcpProp{
+			"device_id": {Type: "string", Description: "Device serial or simulator UDID (not with host)"},
+			"host":      {Type: "string", Description: "IPv4, IPv6 or hostname of a phone on the network (WiFi)"},
+			"port":      {Type: "string", Description: "Agent port for host, as a number in text (default 48686)"},
+			"token":     {Type: "string", Description: "Agent token for host: the value after PROBE_TOKEN= in the app's console"},
+			"test_only": {Type: "string", Description: "\"true\" with host: only check reachability and the token, do not connect"},
 		}},
 	},
 	{
@@ -156,7 +161,26 @@ func (s *Server) studioTool(id any, name string, args map[string]string) *mcpRes
 	case "studio_list_devices":
 		method = "list_devices"
 	case "studio_connect":
-		method, params = "connect", map[string]any{"deviceId": args["device_id"]}
+		switch {
+		case args["host"] != "":
+			method = "connect_wifi"
+			if args["test_only"] == "true" {
+				method = "test_wifi"
+			}
+			port := 0 // 0 = the agent default, 48686
+			if p := strings.TrimSpace(args["port"]); p != "" {
+				n, err := strconv.Atoi(p)
+				if err != nil {
+					return textResp(id, "port must be a number", err)
+				}
+				port = n
+			}
+			params = map[string]any{"host": args["host"], "port": port, "token": args["token"]}
+		case args["device_id"] != "":
+			method, params = "connect", map[string]any{"deviceId": args["device_id"]}
+		default:
+			return textResp(id, "studio_connect needs device_id, or host with port and token", fmt.Errorf("missing arguments"))
+		}
 	case "studio_run_file":
 		method, params = "run_file", map[string]any{"path": args["path"]}
 	case "studio_cancel":

@@ -104,9 +104,11 @@ checks at the end tell you which one does not.
    the wired and wireless side). The Mac's own WiFi being off is fine.
 6. **How the Mac finds the phone:**
    - **CLI, always works:** `probe test tests/ --host <phone-ip> --token <token>` (add `--agent-port <n>` if you moved the port).
-   - **Studio's 📡 overlay, only with mDNS:** it browses the Bonjour service `_flutterprobe._tcp` and lists what answers; you pick the
-     device and **paste the token** (the overlay asks for exactly that, from the app's `PROBE_TOKEN=` line) and press Connect. There is
-     **no field for a manual host and port**, so a phone that does not advertise cannot be connected from Studio today. The agent only
+   - **Studio's 📡 overlay, manual entry:** open **Connect manually**, type the phone's IP address or hostname, the port (48686) and the
+     token from the app's `PROBE_TOKEN=` line, press **Test connection**, then **Connect**. This needs no advertiser. See
+     [Studio: Manual WiFi entry](/tools/studio/#manual-wifi-entry).
+   - **Studio's 📡 overlay, discovery:** it browses the Bonjour service `_flutterprobe._tcp` and lists what answers; you pick the
+     device and paste the token. A device only appears when the agent advertises: it only does when the app passes a `ProbeAdvertiser`
      advertises when the app passes a `ProbeAdvertiser` (for example one built on `bonsoir`) to `ProbeAgent.start(advertiser: ...)`,
      which needs the `_flutterprobe._tcp` entry in `NSBonjourServices` and a `NSLocalNetworkUsageDescription` in that build's `Info.plist`
      (see [Studio: WiFi auto-discovery](/tools/studio/#wifi-auto-discovery)). Without an advertiser the app logs `PROBE_MDNS=off`.
@@ -123,12 +125,16 @@ curl -s http://<phone-ip>:48686/probe/status      # {"agent":"flutter_probe","ve
 
 The status endpoint needs no token. If `curl` is refused or times out: the build has no agent or no `PROBE_WIFI=true`, the app is not in the
 foreground, or the network is blocking the Mac from the phone. If `curl` answers but `dns-sd` shows nothing: the app has no
-`ProbeAdvertiser` or mDNS is filtered; use the CLI `--host/--token` path.
+`ProbeAdvertiser` or mDNS is filtered; use Studio's manual entry or the CLI `--host/--token` path.
 
 :::note
-Not verified here: whether iOS asks for the Local Network permission for an app that only listens for incoming connections (the
-Info.plist keys above are what the advertiser path needs), and whether a CoreDevice network tunnel (`devicectl`) can carry the `iproxy`
-path; the WiFi path does not use it.
+Two things that are easy to get wrong, both checked against official sources (2026-10-11):
+- **No Local Network prompt for the listener.** Apple's technical note [TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+  lists "listening for and accepting incoming TCP connections" as *not* needing local network access, so the agent's server needs no
+  permission. Bonjour advertising does (it uses multicast), which is why only a build with an advertiser needs
+  `NSLocalNetworkUsageDescription` and `NSBonjourServices`.
+- **`devicectl` is not a port forwarder.** `iproxy` forwards to a "usbmux device" (USB, or network devices known to `usbmuxd` with `-n`; see `iproxy --help`);
+  it does not use the CoreDevice tunnel that `xcrun devicectl` uses. Use `devicectl` to list, install and launch, and WiFi or `iproxy` to connect.
 :::
 
 ## Connection Flow (Simulator)

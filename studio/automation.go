@@ -37,6 +37,7 @@ type automationBackend interface {
 	ListDevices() ([]DeviceInfo, error)
 	Connect(deviceID string) (ConnectionStatus, error)
 	ConnectWiFi(host string, port int, token string) (ConnectionStatus, error)
+	TestWiFi(host string, port int, token string) (string, error)
 	Disconnect()
 	Status() ConnectionStatus
 	RunFileAsync(path string) error
@@ -291,9 +292,29 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 			Token string `json:"token"`
 		}
 		if err := param(raw, &p); err != nil || p.Host == "" {
-			return nil, fmt.Errorf("connect_wifi needs {\"host\", \"port\", \"token\"}")
+			return nil, fmt.Errorf("connect_wifi needs {\"host\", \"port\" (default 48686), \"token\"}")
+		}
+		if p.Port == 0 {
+			p.Port = defaultAgentPort
 		}
 		return b.ConnectWiFi(p.Host, p.Port, p.Token)
+	case "test_wifi":
+		var p struct {
+			Host  string `json:"host"`
+			Port  int    `json:"port"`
+			Token string `json:"token"`
+		}
+		if err := param(raw, &p); err != nil || p.Host == "" {
+			return nil, fmt.Errorf("test_wifi needs {\"host\", \"port\" (default 48686), \"token\"}")
+		}
+		if p.Port == 0 {
+			p.Port = defaultAgentPort
+		}
+		msg, err := b.TestWiFi(p.Host, p.Port, p.Token)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"message": msg}, nil
 	case "disconnect":
 		b.Disconnect()
 		return map[string]bool{"ok": true}, nil

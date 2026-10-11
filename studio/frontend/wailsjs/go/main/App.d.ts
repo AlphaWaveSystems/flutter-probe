@@ -34,6 +34,10 @@ export function ReadFile(arg1:string):Promise<string>;
 
 export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
 
+export function RunFileAsync(arg1:string):Promise<void>;
+
+export function RunState():Promise<main.RunState>;
+
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
 export function SetAPIKey(arg1:string):Promise<void>;
@@ -51,5 +55,7 @@ export function StopRecording():Promise<string>;
 export function StopWiFiDiscovery():Promise<void>;
 
 export function TakeScreenshot():Promise<string>;
+
+export function TestWiFi(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function WriteFile(arg1:string,arg2:string):Promise<void>;

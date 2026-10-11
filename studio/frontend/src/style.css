@@ -416,6 +416,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 12px;
   margin-top: 6px;
 }
+.wifi-manual { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.wifi-manual summary { cursor: pointer; font-size: 12px; color: var(--fg-strong); }
+.wifi-manual input { width: 100%; box-sizing: border-box; }
+.wifi-manual-msg { white-space: pre-wrap; font-size: 12px; margin-top: 8px; padding: 6px 8px; border-radius: var(--radius-sm); line-height: 1.4; }
+.wifi-manual-msg.ok { color: var(--fg-strong); background: var(--bg-1); border: 1px solid var(--border-strong); }
+.wifi-manual-msg.err { color: #ffb4b4; background: var(--bg-1); border: 1px solid #7a2e2e; }
 .wifi-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .wifi-saved-tag { color: var(--fg-dim); font-size: 10px; margin-left: 8px; padding: 1px 6px; background: var(--bg-1); border-radius: var(--radius-sm); }
 .wifi-device-list .btn-mini.wifi-forget { float: right; opacity: 0.5; padding: 0 6px; font-size: 11px; }

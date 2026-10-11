@@ -29,6 +29,7 @@ import {
   Status,
   StopRecording,
   StopWiFiDiscovery,
+  TestWiFi,
   WriteFile,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
@@ -456,6 +457,9 @@ function openWiFiOverlay() {
   list.appendChild(empty);
   ($("wifi-token-row") as HTMLElement).hidden = true;
   ($("wifi-token-input") as HTMLInputElement).value = "";
+  ($("wifi-manual-token") as HTMLInputElement).value = "";
+  $("wifi-manual-msg").hidden = true;
+  restoreManualWiFi();
   $("wifi-overlay").hidden = false;
   StartWiFiDiscovery().catch((err) => toast(`mDNS browse failed: ${err}`, "error"));
 }
@@ -527,6 +531,71 @@ $("btn-wifi-close").addEventListener("click", closeWiFiOverlay);
 $("wifi-overlay").addEventListener("click", (e) => {
   if ((e.target as HTMLElement).id === "wifi-overlay") closeWiFiOverlay();
 });
+
+// ---- Manual WiFi entry ---------------------------------------------------
+// For a phone that does not advertise itself: host, port and token typed in. The Go side validates and
+// explains what to check; the overlay only shows what it says.
+
+const WIFI_LAST_KEY = "fp.studio.wifi-last"; // host and port only: the token is never stored
+
+function manualWiFiValues(): { host: string; port: number; token: string } {
+  return {
+    host: ($("wifi-manual-host") as HTMLInputElement).value.trim(),
+    port: Number(($("wifi-manual-port") as HTMLInputElement).value) || 0,
+    token: ($("wifi-manual-token") as HTMLInputElement).value.trim(),
+  };
+}
+
+function showManualMsg(text: string, kind: "ok" | "err") {
+  const el = $("wifi-manual-msg");
+  el.textContent = text;
+  el.className = `wifi-manual-msg ${kind}`;
+  el.hidden = false;
+}
+
+function restoreManualWiFi() {
+  try {
+    const last = JSON.parse(localStorage.getItem(WIFI_LAST_KEY) || "null");
+    if (last && typeof last.host === "string") {
+      ($("wifi-manual-host") as HTMLInputElement).value = last.host;
+      ($("wifi-manual-port") as HTMLInputElement).value = String(last.port || 48686);
+    }
+  } catch {
+    /* storage unavailable: the fields stay empty */
+  }
+}
+
+async function manualWiFi(connect: boolean) {
+  const { host, port, token } = manualWiFiValues();
+  const btns = [$("btn-wifi-manual-test"), $("btn-wifi-manual-connect")] as HTMLButtonElement[];
+  btns.forEach((b) => (b.disabled = true));
+  showManualMsg(connect ? "Connecting…" : "Testing…", "ok");
+  try {
+    if (connect) {
+      setStatus("connecting", `Connecting to ${host}…`);
+      await ConnectWiFi(host, port, token);
+      try {
+        localStorage.setItem(WIFI_LAST_KEY, JSON.stringify({ host, port }));
+      } catch {
+        /* storage unavailable */
+      }
+      setStatus("connected", `Connected · ${host}`, `${host}:${port} · WiFi transport`);
+      closeWiFiOverlay();
+      startStream();
+    } else {
+      showManualMsg(await TestWiFi(host, port, token), "ok");
+    }
+  } catch (err) {
+    const detail = enrichError(err);
+    if (connect) setStatus("error", "WiFi connect failed", detail);
+    showManualMsg(detail, "err");
+  } finally {
+    btns.forEach((b) => (b.disabled = false));
+  }
+}
+
+$("btn-wifi-manual-test").addEventListener("click", () => manualWiFi(false));
+$("btn-wifi-manual-connect").addEventListener("click", () => manualWiFi(true));
 
 $("btn-wifi-connect").addEventListener("click", async () => {
   if (!wifiSelected) return;
