@@ -1,6 +1,6 @@
 module github.com/alphawavesystems/flutter-probe/studio
 
-go 1.26
+go 1.26.1
 
 // Always build against the local sibling module rather than the published
 // version on proxy.golang.org. The studio MVP depends on internal/* APIs
