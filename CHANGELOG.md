@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`double tap` and `long press` on a covered target now warn like `tap`** (#265): when something unrelated is on top at the target's point and the screen does not change, the step returns the same "covered by another widget" warning, which `--fail-on-warning` turns into a failure. They used to succeed silently against a target hidden by an overlay.
 - **Pricing page no longer advertises what does not exist:** the pay-per-use card is now "Pay-per-use for AI agents: Planned" with no features listed, the Team card is labelled planned/not available yet (badge "Planned", "Planned features"), and the waitlist is a plain email link instead of a form with placeholder fields that collected nothing. The experimental `--pay` flag and the `wallet` config key stay but are described as experimental (the flag is hidden from `--help`).
 
 ### Changed
@@ -16,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dependency updates for the open Dependabot alerts: website (astro 7.2.8+, sharp, devalue, svgo, js-yaml, smol-toml, ...), VS Code extension (`@vscode/vsce` 4, fast-uri, undici, ...) and Studio (`labstack/echo` 4.15.3, source-map-js). All are build-time or dev-server dependencies; none is part of the CLI or the Dart agent. Ten moderate alerts remain in the docs site's Starlight/expressive-code chain, whose only suggested fix is a downgrade.
 
 ### Added
+- **Compatibility policy for 1.x** (docs): what is frozen (ProbeScript grammar, `probe.yaml`, the agent protocol, report JSON), what is additive-only, what is outside the promise (Studio, experimental features, human-readable output) and the deprecation process.
 - **Studio: live step highlight.** While a file runs, the editor's gutter follows the executing step (▶, then ✓ / ✗ / – stays on the line; a failed line keeps its error on hover), step rows nest under each test in the results timeline with line, duration and attempt (click one to jump to its line), the toolbar shows `step N of M`, and a **Cancel** button stops the run. Backed by a new runner hook, `Runner.OnStep` / `Executor.OnStep`, that emits a `StepEvent` before and after every step (including recipe bodies and composite devices).
 - Website: draft pages for terms of service, privacy policy, refund and cancellation policy and contact (`/terms`, `/privacy`, `/refunds`, `/contact`), linked from the footers and the pricing page. Marked "draft for review" until confirmed.
 - **`probe license activate <key>` / `probe license status`:** stores and verifies an offline ed25519-signed license key in `~/.flutterprobe/license.key`. Only hosted features will ever need one; everything that runs locally stays free and works without a key.
