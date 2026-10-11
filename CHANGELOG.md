@@ -8,11 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **`perf.frame_budget_ms` in `probe.yaml`** sets the build+raster time above which a frame counts as slow (default 16.7 ms), so `slow_frames` is meaningful on 120 Hz displays and debug builds (#354). Sent as an optional `frameBudgetMs` parameter of `probe.perf_start` (agent 0.25+; older agents keep 16.7 ms and the CLI prints a note); the budget used is reported as `frame_budget_ms`, and `slow_frames` is not compared between windows measured with different budgets. Grammar unchanged.
+- **Probe Cloud (preview): opt-in report upload.** `probe test --upload-report` (or `hosted.upload_report` in probe.yaml) sends a scrubbed copy of the JSON report plus a small envelope (Probe version, device class, retry outcomes, GitHub Actions run info) to a hosted service, with a license that has the `probe_cloud` plan. The scrubber drops artifacts, device ids and environment, makes paths relative, redacts credential-shaped strings and caps the size. `--upload-dry-run` prints the exact payload and sends nothing. One attempt with a 5 s timeout; every failure is a warning, never a failed or delayed run. The `hosted:` block is separate from the device-farm `cloud:` block. The default endpoint is a placeholder that is not live. New page: Probe Cloud (preview). In CI, supply the license key with the `PROBE_LICENSE_KEY` environment variable (read at run time, never printed or written). Redirects are never followed and server text is sanitized before it is shown.
 
 ### Changed
 - **Canary releases attach `probe-ios-driver.zip`** (a non-blocking `ios-driver` job in `release-canary.yml`, mirroring the stable workflow), so `probe ios-driver install` works against a canary. Applies from the next canary; documented in the install guide and the release pipeline notes.
 
-## [0.24.0] - 2026-10-10
+## [0.24.0] - 2026-10-11
 
 > **Performance baselines on emulators and simulators:** the frame metrics (`frame_time`, `slow_frames`) vary a lot between runs of the same build there, even with the stable-metrics default. Gate with `--perf-metrics memory,data` (plus `cpu` for windows of 5 s or more) and keep frame metrics for physical devices in profile mode. In compare mode, windows that span an app restart are skipped.
 

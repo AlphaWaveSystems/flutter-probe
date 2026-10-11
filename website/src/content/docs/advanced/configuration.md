@@ -197,6 +197,16 @@ ai:
     - selector: "Email"
 ```
 
+### hosted
+
+Opt-in report upload to the hosted service (Probe Cloud, preview). Unrelated to the device-farm `cloud:` block. See [Probe Cloud (preview)](/tools/probe-cloud-preview/).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `upload_report` | bool | `false` | Upload the scrubbed report after `probe test` (same as `--upload-report`); needs a license with the `probe_cloud` plan |
+| `url` | string | placeholder, not live | Service base URL; https required (http only for localhost) |
+| `timeout` | duration | `5s` | Upload time limit; an upload never fails the run |
+
 ### perf
 
 | Key | Type | Default | Description |
