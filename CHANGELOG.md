@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.24.0] - 2026-10-10
 
+> **Performance baselines on emulators and simulators:** the frame metrics (`frame_time`, `slow_frames`) vary a lot between runs of the same build there, even with the stable-metrics default. Gate with `--perf-metrics memory,data` (plus `cpu` for windows of 5 s or more) and keep frame metrics for physical devices in profile mode. In compare mode, windows that span an app restart are skipped.
+
 ### Fixed
 - **`double tap` and `long press` on a covered target now warn like `tap`** (#265): when something unrelated is on top at the target's point and the screen does not change, the step returns the same "covered by another widget" warning, which `--fail-on-warning` turns into a failure. They used to succeed silently against a target hidden by an overlay.
 - **`probe device start --platform ios --name ...` failed on a simulator that was already booted** on Xcode versions that word the error "Unable to boot device in current state: Booted". It now treats that as success, like the older wording. Found by the browser UI suite.
