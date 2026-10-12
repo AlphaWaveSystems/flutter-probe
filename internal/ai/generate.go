@@ -131,7 +131,7 @@ Hooks:
 
 Data-driven tests:
   test "login with <email>"
-    type <email> into the "Email" field
+    type "<email>" into the "Email" field
     Examples:
       | email            |
       | user@test.com    |

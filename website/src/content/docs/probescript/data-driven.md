@@ -25,10 +25,10 @@ warning on stderr. Screenshots show what is on screen, so keep real secrets out 
 ```
 test "login validation"
   open the app
-  type <email> into "Email"
-  type <password> into "Password"
+  type "<email>" into "Email"
+  type "<password>" into "Password"
   tap "Continue"
-  see <expected>
+  see "<expected>"
 
 with examples:
   email              password     expected
@@ -64,9 +64,9 @@ Tags apply to all rows:
 ```
 test "search results"
   @regression
-  type <query> into "Search"
+  type "<query>" into "Search"
   tap "Go"
-  see <result>
+  see "<result>"
 
 with examples:
   query          result
@@ -84,7 +84,7 @@ use "recipes/auth.probe"
 
 test "role-based access"
   log in as <email> with <password>
-  see <page>
+  see "<page>"
 
 with examples:
   email               password     page

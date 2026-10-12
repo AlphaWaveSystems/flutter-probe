@@ -195,8 +195,8 @@ tap on the 1st "ListItem"       # ordinal
 recipe "sign in" (email, password)
   open the app
   wait until "Sign In" appears
-  type <email> into the "Email" field
-  type <password> into the "Password" field
+  type "<email>" into the "Email" field
+  type "<password>" into the "Password" field
   tap "Sign In"
 
 # tests/login.probe
@@ -233,9 +233,9 @@ after all
 ```
 test "login with <email>"
   open the app
-  type <email> into the "Email" field
+  type "<email>" into the "Email" field
   tap "Continue"
-  see <result>
+  see "<result>"
   Examples:
     | email              | result      |
     | "user@example.com" | "Dashboard" |
@@ -490,7 +490,7 @@ Add to your Flutter app's `pubspec.yaml`:
 ```yaml
 dependencies:
   flutter_probe_annotation: ^0.9.6
-  flutter_probe_agent: ^0.9.6
+  flutter_probe_agent: ^0.24.0
 
 dev_dependencies:
   flutter_probe_gen: ^0.9.6
@@ -690,7 +690,7 @@ dynamically-generated ID — for use later in the same test:
 
 ```
 read "the 6-digit OTP code" with ai into otp
-type <otp> into the "Code" field
+type "<otp>" into the "Code" field
 ```
 
 Same `with ai`-mandatory rule as `assert no visual defects with ai`. If the requested text

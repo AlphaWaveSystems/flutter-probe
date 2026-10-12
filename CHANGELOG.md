@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **`probe init` scaffolded a recipe that its own `probe lint` and `probe test` rejected** (`type <email> into ...`: an unquoted placeholder is a parse error since PT-02, because it would be typed as literal text). The sample recipe now writes `type "<email>" ...`, and a test checks that what `probe init` writes parses. The same unquoted placeholders in the README, the VS Code README, the data-driven guide, the MCP guide and the AI test-generation prompt are corrected, so generated tests no longer start from an invalid example.
+- **The agent install snippets said `flutter_probe_agent: ^0.5.3` (and `^0.9.6`, `^0.16.0`)**: for a 0.x package that constraint means "0.5.x only", so following the install guide fetched an agent far older than the CLI. They now say `^0.24.0`.
+
 ## [0.25.0] - 2026-10-11
 
 ### Added
