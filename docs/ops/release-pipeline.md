@@ -95,6 +95,39 @@ How the agent stays safe, in every mode:
   not trusted and Actions secrets are not exposed to them); they follow their
   own soak workflow.
 
+## Before a release: the release PR checklist
+
+Do this in the release PR (the version bump and the CHANGELOG section), before the canary tag. `scripts/release.sh` only handles
+three of these files and creates a commit and tag on the current branch, so the release PR does the rest by hand.
+
+Version-bearing files (set all to the new `X.Y.Z`):
+
+- `VERSION` (the landing page badge reads it at build time)
+- `probe_agent/pubspec.yaml` and `probe_agent/lib/src/agent_version.dart`
+- `vscode/package.json` and both `version` entries of `vscode/package-lock.json`
+- `docs/wiki/Home.md` ("Current version")
+- `ios-driver/UITests/Driver.swift` (the version the driver reports)
+- `native-test-apps/flutter/pubspec.lock` (run `flutter pub get` there)
+- `CHANGELOG.md` (move Unreleased into `[X.Y.Z] - date`, grouped Added / Changed / Security / Fixed / Docs) and `probe_agent/CHANGELOG.md`
+
+Greps that find what a bump misses (run them with the **previous** version `P`, and fix every hit that is not history or test data):
+
+```bash
+git grep -n "P" -- . ':!CHANGELOG.md' ':!probe_agent/CHANGELOG.md' ':!go.work.sum' ':!docs/research' ':!docs/prd' ':!docs/evidence'
+git grep -n "flutter_probe_agent: *\^0" -- README.md website probe_agent/README.md docs/wiki
+```
+
+- **Install snippets.** The second grep lists every `flutter_probe_agent: ^0.x.y` snippet. For a 0.x package a caret constraint
+  means "this minor only" (`^0.5.3` resolves to 0.5.x), so a stale snippet makes a new user fetch an agent far older than the CLI.
+  Each release sets them to the new minor (for example `^0.25.0`); historic blog posts are left alone.
+- **Canary and tag examples** in `docs/ops/release-pipeline.md`, `.github/workflows/dogfood-gate.yml` and the install guide ("Try a canary
+  build") use the current `X.Y.Z-next.N`.
+- **MCP tool count**: compare the count in the README, the MCP guide and `mcpb/template/manifest.json` with the server's `tools/list`
+  (`printf` an initialize and a `tools/list` request into `probe-mcp`), and update the text when it changed.
+- **Grammar**: if the parser changed, the EBNF page and `internal/parser/grammar_test.go` are updated in the same PR.
+- **Surfaces**: README, `probe_agent/README.md`, the website pages the release touches, `llms.txt`, the MCP guide in `internal/mcp/server.go`, the VS Code
+  README, snippets and completions, the wiki.
+
 ## After a stable tag: verify
 
 - the release is "latest" and carries the CLI and MCP binaries for every platform, the Studio archives, the `.mcpb` extensions **and `probe-ios-driver.zip`** (`gh release view vX.Y.Z --json assets`);

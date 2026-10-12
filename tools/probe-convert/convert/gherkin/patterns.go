@@ -19,15 +19,15 @@ var patterns = []stepPattern{
 	// Type/enter text into field
 	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) "([^"]*)" (?:into|in|on) (?:the )?"([^"]*)"(?: field)?$`), template: `type "$1" into "$2"`},
 	{re: regexp.MustCompile(`(?i)^I (?:fill|set) (?:the )?"([^"]*)"(?: field)? (?:with|to) "([^"]*)"$`), template: `type "$2" into "$1"`},
-	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) "([^"]*)" (?:into|in|on) (?:the )?<([^>]*)>(?: field)?$`), template: `type "$1" into <$2>`},
-	{re: regexp.MustCompile(`(?i)^I (?:fill|set) (?:the )?<([^>]*)>(?: field)? (?:with|to) "([^"]*)"$`), template: `type "$2" into <$1>`},
+	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) "([^"]*)" (?:into|in|on) (?:the )?<([^>]*)>(?: field)?$`), template: `type "$1" into "<$2>"`},
+	{re: regexp.MustCompile(`(?i)^I (?:fill|set) (?:the )?<([^>]*)>(?: field)? (?:with|to) "([^"]*)"$`), template: `type "$2" into "<$1>"`},
 	// Type into variable fields with variable values
-	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) <([^>]*)> (?:into|in|on) (?:the )?"([^"]*)"(?: field)?$`), template: `type <$1> into "$2"`},
-	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) <([^>]*)> (?:into|in|on) (?:the )?<([^>]*)>(?: field)?$`), template: `type <$1> into <$2>`},
+	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) <([^>]*)> (?:into|in|on) (?:the )?"([^"]*)"(?: field)?$`), template: `type "<$1>" into "$2"`},
+	{re: regexp.MustCompile(`(?i)^I (?:type|enter|input) <([^>]*)> (?:into|in|on) (?:the )?<([^>]*)>(?: field)?$`), template: `type "<$1>" into "<$2>"`},
 
 	// Tap/click/press
 	{re: regexp.MustCompile(`(?i)^I (?:tap|click|press) (?:on |the )?"([^"]*)"$`), template: `tap on "$1"`},
-	{re: regexp.MustCompile(`(?i)^I (?:tap|click|press) (?:on |the )?<([^>]*)>$`), template: `tap on <$1>`},
+	{re: regexp.MustCompile(`(?i)^I (?:tap|click|press) (?:on |the )?<([^>]*)>$`), template: `tap on "<$1>"`},
 	{re: regexp.MustCompile(`(?i)^I (?:tap|click|press) (?:on |the )?#(\S+)$`), template: `tap on #$1`},
 
 	// Long press

@@ -9,11 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - **Release process: one dogfood gate instead of two days.** A canary needs one green dogfood gate of about an hour or more on the named devices before a stable tag; the second-day gate and the 48-hour soak requirement are removed. The 24-hour auto-rollback watch after a stable tag stays, and the separate 14-day soak toward 1.0 (#325) is unchanged. Documented in `docs/ops/release-pipeline.md` and the dogfood-gate workflow.
 
+### Docs
+- **Release PR checklist** in `docs/ops/release-pipeline.md`: every version-bearing file, the greps that find what a bump misses (including the `flutter_probe_agent: ^0.x` install snippets, which for a 0.x package pin one minor), canary examples, the MCP tool count, grammar and doc surfaces.
+
 ### Fixed
 - **`probe init` scaffolded a recipe that its own `probe lint` and `probe test` rejected** (`type <email> into ...`: an unquoted placeholder is a parse error since PT-02, because it would be typed as literal text). The sample recipe now writes `type "<email>" ...`, and a test checks that what `probe init` writes parses. The same unquoted placeholders in the README, the VS Code README, the data-driven guide, the MCP guide and the AI test-generation prompt are corrected, so generated tests no longer start from an invalid example.
 - **The agent install snippets said `flutter_probe_agent: ^0.5.3` (and `^0.9.6`, `^0.16.0`)**: for a 0.x package that constraint means "0.5.x only", so following the install guide fetched an agent far older than the CLI. They now say `^0.24.0`.
 - **The report upload sent a retried test's absolute local path** in `envelope.retries[].file` (the report's own `results[].file` was already relative). That leaked the machine's path, and a server refuses a payload whose retry file is absolute, so every upload containing a retried test would have failed. The envelope's retries now go through the same scrubber as the report (relative path, secret patterns on the test name).
 - **The upload scrubber missed Stripe-shaped secrets**: Stripe secret, restricted and webhook-signing key formats, live and test (only the hyphenated `sk-` form was covered), are now redacted, in text, error messages and nested fields.
+- **`probe-convert` wrote unquoted placeholders for Gherkin steps whose outline variable has no quotes** (`I type <email> into "Email"` became `type <email> into "Email"`, `I tap on <button>` became `tap on <button>`): the converted file then failed `probe lint`, because an unquoted placeholder is a parse error. The converter now writes `type "<email>" into "Email"`, `tap on "<button>"` and `into "<field>"`; the catalog example is corrected, and a fixture (`examples/gherkin/unquoted_variables.feature` with its golden file) and a test cover it. Robot Framework, Maestro, Detox and Appium output was already quoted.
 
 ## [0.25.0] - 2026-10-11
 
