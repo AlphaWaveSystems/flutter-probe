@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Canary version to gate (e.g. 0.25.0-next.1)"
+        description: "Canary version to gate (e.g. 0.25.1-next.1)"
         required: true
         type: string
   workflow_call:

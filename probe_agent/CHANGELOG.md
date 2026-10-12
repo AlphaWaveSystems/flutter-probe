@@ -2,7 +2,11 @@
 
 ## [Unreleased]
 
-## 0.25.0 - 2026-10-11
+## 0.25.1 - 2026-10-12
+
+- No agent change (`flutter_probe_agent` is released in step with the CLI); the README install snippet now points at 0.25.
+
+## 0.25.0 - 2026-10-12
 
 - Added: `probe.perf_start` takes an optional `frameBudgetMs` (default 16.7): frames above it count as slow in that window. The snapshot and the start reply report the budget in use (`frameBudgetMs`); an older agent ignores the parameter and the CLI warns.
 
