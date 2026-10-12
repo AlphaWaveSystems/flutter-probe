@@ -1,6 +1,14 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import { readFileSync } from 'node:fs';
+
+// Code blocks in ProbeScript (`probe`, `probescript`) and EBNF (`ebnf`) are highlighted with
+// TextMate grammars that Expressive Code loads through `shiki.langs`. The ProbeScript grammar
+// is the VS Code extension's own file, so the two stay in step; the EBNF grammar is in grammars/.
+const readGrammar = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
+const probescript = { ...readGrammar('../vscode/syntaxes/probe.tmGrammar.json'), name: 'probescript', aliases: ['probe'] };
+const ebnf = readGrammar('./grammars/ebnf.tmLanguage.json');
 
 export default defineConfig({
   site: 'https://flutterprobe.dev',
@@ -12,6 +20,9 @@ export default defineConfig({
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/AlphaWaveSystems/flutter-probe' },
       ],
+      expressiveCode: {
+        shiki: { langs: [probescript, ebnf] },
+      },
       head: [
         { tag: 'meta', attrs: { property: 'og:image', content: 'https://flutterprobe.dev/og-image.png' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
