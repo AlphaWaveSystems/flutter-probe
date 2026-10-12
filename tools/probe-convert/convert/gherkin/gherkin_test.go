@@ -1,6 +1,7 @@
 package gherkin
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -180,5 +181,37 @@ func assertContains(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {
 		t.Errorf("expected output to contain %q\ngot:\n%s", needle, haystack)
+	}
+}
+
+// Outline variables written without quotes in a step (`I type <email> into "Email"`) must come out quoted:
+// ProbeScript rejects an unquoted placeholder (it would be typed as literal text), so the converted file
+// has to name "<email>", not <email>.
+func TestUnquotedOutlineVariablesAreQuoted(t *testing.T) {
+	src := `Feature: Vars
+  Scenario Outline: Fill
+    When I type <email> into "Email"
+    And I enter <password> in the "Password" field
+    And I fill the <field> field with "x"
+    And I type <value> into <target>
+    And I tap on <button>
+    Then I should see "<expected>"
+    Examples:
+      | email | password | field | value | target | button | expected |
+      | a     | b        | c     | d     | e      | f      | g        |
+`
+	result, err := New().Convert([]byte(src), "vars.feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`type "<email>" into "Email"`, `type "<password>" into "Password"`, `type "x" into "<field>"`,
+		`type "<value>" into "<target>"`, `tap on "<button>"`,
+	} {
+		assertContains(t, result.ProbeCode, want)
+	}
+	unquoted := regexp.MustCompile(`(?m)^\s*(type|tap on|see|tap)\s+<[A-Za-z_]+>|\binto\s+<[A-Za-z_]+>`)
+	if m := unquoted.FindString(result.ProbeCode); m != "" {
+		t.Errorf("an unquoted placeholder is left in the output: %q\n%s", m, result.ProbeCode)
 	}
 }
