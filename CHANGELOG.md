@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- **Studio's automation endpoint also refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, matching the documentation and the headless test mode. The MCP server and other non-browser clients are unaffected.
+
 ### Changed
 - **Studio device E2E checks the end of a live run**: test 15 (the native Test12 checks) now asserts that the verdict row heads its steps, the last step passes, no step is left running, and Cancel is hidden after the run. The native copy is removed with it (#331).
 - **Studio native E2E runs a smoke set by default** (`make studio-e2e-native`; `make studio-e2e` is a deprecated alias for one release). The smoke set is launch and the recorder. The other native tests were removed once the browser suite covered them (#331). The suite refuses to start unless `STUDIO_E2E_DISPLAY` names an attached second display, and it no longer falls back to the main display; in CI an unset variable skips the job with exit 0.
