@@ -1,0 +1,15 @@
+# Converted from Gherkin — Feature: Variables written without quotes
+
+
+test "Fill a form with outline variables"
+  open the app
+  type "<email>" into "Email"
+  type "<password>" into "Password"
+  type "x" into "<field>"
+  type "<value>" into "<target>"
+  tap on "<button>"
+  see "<expected>"
+
+with examples:
+  email	password	field	value	target	button	expected
+  "a@example.com"	"secret1"	"Name"	"v1"	"Notes"	"Go"	"Done"

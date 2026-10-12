@@ -57,7 +57,7 @@ TableRow     = "|" { TEXT "|" } NEWLINE .
 				Example: `When I fill "Email" with "user@test.com"`, ProbeTemplate: `type "$2" into "$1"`, ProbeExample: `type "user@test.com" into "Email"`},
 			{ID: "gherkin.step.typeVar", Name: `I type <var> into "Y"`, Category: CatAction, Level: Full,
 				EBNF: `"I" ("type" | "enter") "<" IDENT ">" ("into" | "in") ("the" )? QUOTED ("field" )?`,
-				Example: `When I type <email> into "Email"`, ProbeTemplate: `type <$1> into "$2"`, ProbeExample: `type <email> into "Email"`},
+				Example: `When I type <email> into "Email"`, ProbeTemplate: `type "<$1>" into "$2"`, ProbeExample: `type "<email>" into "Email"`},
 
 			// Actions — tap
 			{ID: "gherkin.step.tap", Name: `I tap on "X"`, Category: CatAction, Level: Full,
