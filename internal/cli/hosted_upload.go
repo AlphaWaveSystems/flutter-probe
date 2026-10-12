@@ -77,7 +77,7 @@ func hostedUpload(cmd *cobra.Command, w io.Writer, cfg *config.Config, results [
 		label = cfg.Hosted.Label
 	}
 	label = hosted.SanitizeLabel(label)
-	env := hosted.Envelope{ProbeVersion: Version, DeviceClass: class, CI: hosted.CIFromEnv(nil), RunLabel: label}
+	env := hosted.Envelope{ProbeVersion: Version, DeviceClass: class, CI: hosted.CIFromEnv(nil, func(msg string) { statusWarn(w, "%s", msg) }), RunLabel: label}
 	for _, r := range results {
 		if r.Attempts > 1 {
 			env.Retries = append(env.Retries, hosted.RetryOutcome{File: r.File, Test: r.TestName, Attempts: min(r.Attempts, 20), Passed: r.Passed})

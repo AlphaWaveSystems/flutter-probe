@@ -28,7 +28,7 @@ func TestCIFromEnv(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := CIFromEnv(envMap(c.env))
+			got := CIFromEnv(envMap(c.env), nil)
 			if (got == nil) != (c.want == nil) || (got != nil && *got != *c.want) {
 				t.Fatalf("got %+v want %+v", got, c.want)
 			}
@@ -305,11 +305,11 @@ func TestLabelsAndJobAreFittedToTheirCharsets(t *testing.T) {
 		t.Error("ValidLabel")
 	}
 	env := map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_JOB": "e2e_tests-1"}
-	if ci := CIFromEnv(envMap(env)); ci.Job != "e2e_tests-1" {
+	if ci := CIFromEnv(envMap(env), nil); ci.Job != "e2e_tests-1" {
 		t.Errorf("job = %q", ci.Job)
 	}
 	env["GITHUB_JOB"] = "bad job!"
-	if ci := CIFromEnv(envMap(env)); ci.Job != "" {
+	if ci := CIFromEnv(envMap(env), nil); ci.Job != "" {
 		t.Errorf("an invalid job id must be omitted, got %q", ci.Job)
 	}
 }
