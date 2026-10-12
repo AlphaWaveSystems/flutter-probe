@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The upload scrubber missed Stripe-shaped secrets**: Stripe secret, restricted and webhook-signing key formats, live and test (only the hyphenated `sk-` form was covered), are now redacted, in text, error messages and nested fields.
 - **`probe-convert` wrote unquoted placeholders for Gherkin steps whose outline variable has no quotes** (`I type <email> into "Email"` became `type <email> into "Email"`, `I tap on <button>` became `tap on <button>`): the converted file then failed `probe lint`, because an unquoted placeholder is a parse error. The converter now writes `type "<email>" into "Email"`, `tap on "<button>"` and `into "<field>"`; the catalog example is corrected, and a fixture (`examples/gherkin/unquoted_variables.feature` with its golden file) and a test cover it. Robot Framework, Maestro, Detox and Appium output was already quoted.
 
+### Security
+- **Dependabot #157: `postcss-selector-parser` 6.1.4 to 7.1.6** (GHSA-rj75-hqrm-r3gf, CVE-2026-104844, medium: quadratic parsing of flat selectors). The docs site's build reached the 6.x parser through `@expressive-code/core` and `postcss-nested` 6.2.0. `@expressive-code/core` 0.44.2, the latest release, still pins `postcss-nested` 6.x, so the website overrides the parser to 7.1.6. The docs build output is byte-identical before and after the change, and `npm audit` reports 0 vulnerabilities for the website tree (10 moderate before, all along that chain). Dependabot lists the package only in `website/package-lock.json`: it is not part of the CLI or the Dart agent.
+
 ## [0.25.0] - 2026-10-11
 
 ### Added
