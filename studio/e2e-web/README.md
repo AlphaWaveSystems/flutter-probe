@@ -45,7 +45,9 @@ Report: `reports/studio-e2e-web/html/index.html` (+ `report.json`, traces and sc
 | 17 | yes | Cancel stops a run |
 | 18 | yes | Connect with the app not running reports an error |
 | 19-21 | no | Manual WiFi entry: a malformed host is explained, an unreachable agent says what to check, the token is not kept |
-| 22 | no | The picker shows physical phones (USB, WiFi only) with what each needs |
+| 22 | no | The picker shows physical phones (USB, WiFi only) with what each needs, and the platform tag of a simulator and an emulator |
+| 23 | no | Manual WiFi entry with an empty host says a host is needed |
+| 24 | no | Record and Save: disabled without a device or an edited file; Save enables once the file is edited |
 | 30-33 | **a physical phone** (opt-in) | Test connection, Connect with screen and widget tree, a probe file runs, a wrong token is refused; never in CI. See [PHYSICAL.md](PHYSICAL.md) |
 
 Not covered here (they need the real window, so they stay in the native suite `make studio-e2e-native`): the native folder picker,

@@ -74,7 +74,7 @@ browser suite already covers the same behaviour for most of them:
 
 | # | Covers | Browser suite |
 |---|---|---|
-| 02 | Device picker lists the named simulator with platform tag | browser 10; the tag is a gap (below) |
+| 02 | Device picker lists the named simulator with platform tag | browser 10 and 22 (the platform tag) |
 | 03 | Connect → live device frame + widget tree in the inspector; disconnect | browser 11 |
 | 04 | Open a file, Run, pass rows and summary | browser 12 |
 | 05 | Failing file → fail row, error row, failed summary | browser 13 |
@@ -85,14 +85,11 @@ browser suite already covers the same behaviour for most of them:
 | 11 | WiFi discovery overlay | browser 06 |
 | 12 | Live steps: progress text, Cancel visible, every step row ends passed, verdict row heads the steps | browser 15 and 17; gaps below |
 | 13 | Failing step keeps a `step fail` row naming its line, with the error | browser 13 and 16 |
-| 14 | Manual WiFi entry explains an empty host | browser 19 covers a malformed host; a gap below |
+| 14 | Manual WiFi entry explains an empty host | browser 19 (malformed host) and 23 (empty host) |
 
-Gaps that browser mode does not cover yet, to close before the native copies are removed:
+Still not covered by browser mode, to port before the native copies are removed (the empty host, the platform tag and the Record and Save states are covered by browser tests 22-24):
 
 1. After a passing run, the last step row is `step pass`, no step is left running, and Cancel is hidden again (12).
-2. Manual WiFi entry with an empty host explains that a host is needed (14).
-3. The device option shows its platform tag (02).
-4. The toolbar shows Record and Save (01).
 
 Each test launches its own Studio, closes it, and relaunches the fixture app
 (self-contained; explicit cleanup).
