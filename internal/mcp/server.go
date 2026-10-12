@@ -229,7 +229,7 @@ Supports the full ProbeScript syntax:
                      mis-centered elements). read "<query>" with ai into <var> — extract
                      a specific piece of text (e.g. an OTP code) into a variable for
                      later steps, e.g. read "the 6-digit OTP code" with ai into otp then
-                     type <otp> into the "Code" field. "with ai" is mandatory for both
+                     type "<otp>" into the "Code" field. "with ai" is mandatory for both
                      assert no visual defects and read ... into (no non-AI form); only
                      plain see can be used with or without it. All three require
                      ai.provider configured in probe.yaml: openai | anthropic (bring

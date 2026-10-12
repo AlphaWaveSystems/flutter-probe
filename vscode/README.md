@@ -358,8 +358,8 @@ repeat 3 times
 
 # Data-driven
 test "login with credentials"
-  type <email> into "Email"
-  type <password> into "Password"
+  type "<email>" into "Email"
+  type "<password>" into "Password"
   with examples:
     | email              | password  |
     | user@example.com   | pass123   |
