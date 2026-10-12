@@ -39,7 +39,7 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,}\b`),
 	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`),
 	regexp.MustCompile(`(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}`), // Stripe secret and restricted keys
-	regexp.MustCompile("whsec" + `_[A-Za-z0-9]{10,}`),                   // Stripe webhook signing secrets
+	regexp.MustCompile("whsec" + `_[A-Za-z0-9]{10,}`),              // Stripe webhook signing secrets
 	regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`),
 	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`),
 	regexp.MustCompile(`\bFP2\.[A-Za-z0-9._-]{10,}`),
