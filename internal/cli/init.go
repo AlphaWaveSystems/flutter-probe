@@ -41,12 +41,7 @@ var initCmd = &cobra.Command{
 		// Write a sample .probe file
 		sample := filepath.Join(dir, "tests", "example.probe")
 		if _, err := os.Stat(sample); err != nil {
-			content := `test "the app launches successfully"
-  open the app
-  wait until "Welcome" appears
-  see "Welcome"
-`
-			if err := os.WriteFile(sample, []byte(content), 0644); err != nil {
+			if err := os.WriteFile(sample, []byte(sampleTestFile), 0644); err != nil {
 				return fmt.Errorf("writing sample test: %w", err)
 			}
 			statusOK(os.Stdout, "Created tests/example.probe")
@@ -55,16 +50,7 @@ var initCmd = &cobra.Command{
 		// Write a sample recipe
 		recipe := filepath.Join(dir, "tests", "recipes", "login.probe")
 		if _, err := os.Stat(recipe); err != nil {
-			content := `recipe "log in as" (email, password)
-  open the app
-  wait until "Sign In" appears
-  tap on "Sign In"
-  type <email> into the "Email" field
-  type <password> into the "Password" field
-  tap "Continue"
-  see "Dashboard"
-`
-			if err := os.WriteFile(recipe, []byte(content), 0644); err != nil {
+			if err := os.WriteFile(recipe, []byte(sampleRecipeFile), 0644); err != nil {
 				return fmt.Errorf("writing sample recipe: %w", err)
 			}
 			statusOK(os.Stdout, "Created tests/recipes/login.probe")
@@ -75,3 +61,21 @@ var initCmd = &cobra.Command{
 		return nil
 	},
 }
+
+// The files `probe init` writes. They must pass `probe lint`: placeholders are quoted, because an unquoted
+// <name> is rejected (it would be typed as literal text).
+const sampleTestFile = `test "the app launches successfully"
+  open the app
+  wait until "Welcome" appears
+  see "Welcome"
+`
+
+const sampleRecipeFile = `recipe "log in as" (email, password)
+  open the app
+  wait until "Sign In" appears
+  tap on "Sign In"
+  type "<email>" into the "Email" field
+  type "<password>" into the "Password" field
+  tap "Continue"
+  see "Dashboard"
+`

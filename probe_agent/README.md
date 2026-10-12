@@ -48,7 +48,7 @@ probe version
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.5.3
+  flutter_probe_agent: ^0.24.0
 ```
 
 Initialize in your `main.dart`:
