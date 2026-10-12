@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "website/**"
+      - "vscode/syntaxes/**"   # the ProbeScript code blocks on the site use the VS Code grammar
       - "VERSION"   # the landing page shows the version read from this file at build time
   workflow_dispatch:
 
