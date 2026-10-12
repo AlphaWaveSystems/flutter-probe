@@ -60,6 +60,17 @@ func repoRoot() string {
 }
 
 func TestMain(m *testing.M) {
+	// Refuse before anything is created or launched: the suite runs only on a
+	// second display that STUDIO_E2E_DISPLAY names (display.go).
+	if _, _, _, err := suiteDisplay(); err != nil {
+		fmt.Fprintln(os.Stderr, "studio-e2e: refusing to run:", err)
+		os.Exit(2)
+	}
+	if set := os.Getenv("STUDIO_E2E_SET"); set != "" && set != "smoke" && set != "full" {
+		fmt.Fprintf(os.Stderr, "studio-e2e: refusing to run: STUDIO_E2E_SET=%q is not smoke or full\n", set)
+		os.Exit(2)
+	}
+	fmt.Fprintf(os.Stderr, "studio-e2e: set %s\n", suiteSet())
 	root := repoRoot()
 	fixture := filepath.Join(root, "native-test-apps", "studio-fixture")
 	cfg = suiteConfig{
@@ -112,10 +123,38 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// smokeTests is the default native set (STUDIO_E2E_SET=smoke, the default): the
+// launch and the recorder, the two checks that need the real window. Every other
+// native test is to be ported to browser mode (#331 phase 2) and runs only with
+// STUDIO_E2E_SET=full. Browser mode does not cover these gaps yet: after a
+// passing run, the last step row and the hidden Cancel button (Test12); an empty
+// host in manual WiFi entry (Test14); the device platform tag (Test02); Record
+// and Save in the toolbar (Test01).
+var smokeTests = map[string]bool{
+	"Test01_LaunchShowsWorkspace":        true,
+	"Test07_RecordFlowWritesProbeScript": true,
+}
+
+// inSuite reports whether the named test runs in the selected set.
+func inSuite(name string) bool {
+	return smokeTests[name] || suiteSet() == "full"
+}
+
+// suiteSet is the selected native set: smoke unless STUDIO_E2E_SET=full.
+func suiteSet() string {
+	if os.Getenv("STUDIO_E2E_SET") == "full" {
+		return "full"
+	}
+	return "smoke"
+}
+
 // run wraps a test: fresh Studio per test (self-contained), screenshot on
 // failure, result recorded for the report, explicit cleanup.
 func run(t *testing.T, body func(t *testing.T, s *Studio)) {
 	t.Helper()
+	if !inSuite(t.Name()) {
+		t.Skip("to be ported to browser mode (#331 phase 2): run with STUDIO_E2E_SET=full")
+	}
 	start := time.Now()
 	res := Result{Name: t.Name(), Device: sim.Name, DeviceID: sim.UDID}
 	s, err := Launch(ctx, LaunchOptions{

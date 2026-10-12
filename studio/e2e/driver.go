@@ -121,7 +121,8 @@ func Launch(ctx context.Context, opts LaunchOptions) (*Studio, error) {
 		return nil, fmt.Errorf("studio window did not appear: %w", err)
 	}
 	// With a second display attached the suite works there, off the screen
-	// you are using (STUDIO_E2E_DISPLAY overrides). The window is read back
+	// you are using. STUDIO_E2E_DISPLAY names it; there is no default. The window
+	// is read back
 	// so a run never silently lands on the wrong screen.
 	if err := moveWindowToDisplay(name, ""); err != nil {
 		s.Close()
