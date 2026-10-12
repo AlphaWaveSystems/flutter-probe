@@ -350,3 +350,88 @@ func TestPreflightNamesWhatWouldBeRefused(t *testing.T) {
 		})
 	}
 }
+
+func TestStripeShapedSecretsAreRedacted(t *testing.T) {
+	// Built from parts so this file itself holds no key-shaped literal.
+	live := "sk" + "_live_" + "51HabcdEFGHijklMNOP"
+	secrets := []string{
+		live, "sk" + "_test_" + "4eC39HqLyjWDarjtT1zdp7dc", "rk" + "_live_" + "51HabcdEFGHijklMNOP", "rk" + "_test_" + "51HabcdEFGHijklMNOP",
+		"whsec" + "_" + "t2ZBuQwlq8kLm9nPqRsTuVwX",
+	}
+	sc := &Scrubber{Cwd: "/work", Home: "/home/x"}
+	for _, k := range secrets {
+		for name, in := range map[string]string{
+			"bare":         "key " + k + " here",
+			"in an error":  "request failed: Authorization: " + k + " was rejected",
+			"in a url":     "https://api.example/pay?api=" + k,
+			"after a name": "STRIPE_KEY=" + k,
+			"glued by _":   "my_" + k,
+		} {
+			got := sc.scrubString(in)
+			if strings.Contains(got, k[:12]) || !strings.Contains(got, "[redacted]") {
+				t.Errorf("%s (%s): %q", name, k[:8], got)
+			}
+		}
+	}
+	// Nested JSON: a secret inside an error, a test name and a nested object is redacted wherever it is.
+	report := `{"results":[{"name":"pays with ` + live + `","file":"a.probe","error":"HTTP 401 for ` + live + `","extra":{"deep":["x ` + live + ` y"]}}]}`
+	out, st, err := sc.Scrub([]byte(report))
+	if err != nil || strings.Contains(string(out), "51Habcd") || st.Redactions < 3 {
+		t.Fatalf("out=%s stats=%+v err=%v", out, st, err)
+	}
+	// Harmless look-alikes stay.
+	for _, ok := range []string{"task_live_view", "the risk_test_suite", "sk_live"} {
+		if got := sc.scrubString(ok); got != ok {
+			t.Errorf("%q changed to %q", ok, got)
+		}
+	}
+}
+
+func TestRetriesInTheEnvelopeAreRelativeAndScrubbed(t *testing.T) {
+	o := baseOpts(`{"results":[{"name":"t","file":"/work/tests/a.probe","passed":true}]}`)
+	o.Envelope.Retries = []RetryOutcome{
+		{File: "/work/tests/a.probe", Test: "checkout [row 2]", Attempts: 2, Passed: true},
+		{File: "/Users/jane/other/b.probe", Test: "uses sk" + "_live_" + "51HabcdEFGHijklMNOP", Attempts: 3, Passed: false},
+		{File: "tests/c.probe", Test: "already relative", Attempts: 2, Passed: true},
+	}
+	body, _, err := BuildPayload(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p Payload
+	if err := json.Unmarshal(body, &p); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"tests/a.probe", "b.probe", "tests/c.probe"}
+	for i, r := range p.Envelope.Retries {
+		if r.File != want[i] {
+			t.Errorf("retries[%d].file = %q, want %q", i, r.File, want[i])
+		}
+	}
+	if strings.Contains(string(body), "51Habcd") {
+		t.Errorf("a secret in a retried test's name must be redacted:\n%s", body)
+	}
+	// Walk every string of the payload: none may start with "/" or hold a home directory.
+	var walk func(v any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for _, y := range x {
+				walk(y)
+			}
+		case []any:
+			for _, y := range x {
+				walk(y)
+			}
+		case string:
+			if strings.HasPrefix(x, "/") || strings.Contains(x, "/Users/") || strings.Contains(x, "/home/") {
+				t.Errorf("a local path in the payload: %q", x)
+			}
+		}
+	}
+	var any_ any
+	if err := json.Unmarshal(body, &any_); err != nil {
+		t.Fatal(err)
+	}
+	walk(any_)
+}

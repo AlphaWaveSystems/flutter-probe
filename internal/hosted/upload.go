@@ -141,8 +141,19 @@ func BuildPayload(o Options) ([]byte, Stats, error) {
 	if err != nil {
 		return nil, st, err
 	}
+	// The envelope is scrubbed like the report: a retried test's file is a relative path, never a local one,
+	// and its name goes through the same secret patterns.
+	env := o.Envelope
+	if len(env.Retries) > 0 {
+		env.Retries = make([]RetryOutcome, len(o.Envelope.Retries))
+		for i, r := range o.Envelope.Retries {
+			r.File = sc.relativePath(sc.scrubString(r.File))
+			r.Test = sc.scrubString(r.Test)
+			env.Retries[i] = r
+		}
+	}
 	encode := func(rep []byte) ([]byte, error) {
-		return json.MarshalIndent(Payload{Schema: SchemaVersion, Envelope: o.Envelope, Report: rep}, "", "  ")
+		return json.MarshalIndent(Payload{Schema: SchemaVersion, Envelope: env, Report: rep}, "", "  ")
 	}
 	body, err := encode(report)
 	if err != nil {
