@@ -3,21 +3,21 @@
 End-to-end tests for FlutterProbe Studio that drive the **real desktop app**
 the way a person does — no test hooks compiled into Studio.
 
-This is the native suite. It needs macOS, a second display and an unlocked
-session with Accessibility and Screen Recording permission. The browser suite
-covers the UI without a window; see [Modes](#modes).
+This is the native smoke set: the two checks that need the real window. It needs
+macOS, a second display and an unlocked session with Accessibility and Screen
+Recording permission. Every other UI check runs in the headless browser suite
+(`studio/e2e-web`); see [Modes](#modes).
 
 - **Launch**: the built `.app` binary, with `PROBE_STUDIO_WORKSPACE` pointing at a workspace.
-- **Find**: the macOS accessibility tree (`System Events`) — buttons by label, texts by content, the device picker as a pop-up, result rows by their `pass:`/`fail:` accessible name.
+- **Find**: the macOS accessibility tree (`System Events`) — buttons by label, texts by content, the device picker as a pop-up.
 - **Act**: clicks at element centres, keystrokes, pop-up selection.
-- **Assert**: accessibility tree first; window screenshots on every test; an optional vision provider (`STUDIO_E2E_AI_PROVIDER=openai|anthropic|local`, same backends as `probe.yaml` `ai:`) judges a screenshot where structure is not enough.
+- **Assert**: accessibility tree first; window screenshots on every test. The optional vision provider in `vision.go` (`STUDIO_E2E_AI_PROVIDER`) is not used by any test now: its only user was the live-screen check, which the browser suite covers.
 - **Device**: a named iOS simulator (`StudioE2E-iPhone17` by default), created and booted by the suite; the fixture app under `native-test-apps/studio-fixture/` is installed and relaunched before every test.
 
 ## Run
 
 ```bash
-STUDIO_E2E_DISPLAY=2 make studio-e2e-native                      # the smoke set; builds Studio + fixture, writes reports/studio-e2e/
-STUDIO_E2E_DISPLAY=2 STUDIO_E2E_SET=full make studio-e2e-native  # also the tests still to be ported
+STUDIO_E2E_DISPLAY=2 make studio-e2e-native        # builds Studio + fixture, runs the smoke set, writes reports/studio-e2e/
 SKIP_BUILD=1 STUDIO_E2E_DISPLAY=2 scripts/studio-e2e.sh -run Test07   # reuse builds, one test
 ```
 
@@ -60,36 +60,33 @@ not implemented yet. It is tracked in #389.
 
 ## Tests
 
-### Smoke set (run by default)
+The smoke set is the whole native suite:
 
 | # | Covers |
 |---|---|
 | 01 | Launch, workspace file list, toolbar, initial status |
 | 07 | Recorder: three taps on the device pane → saved `.probe` with a tap step |
 
-### To be ported (run with `STUDIO_E2E_SET=full`)
+### Removed native tests (covered by the browser suite)
 
-Each of these is ported to browser mode in #331 phase 2 and removed then. The
-browser suite already covers the same behaviour for most of them:
+These native tests were removed once their browser ports were merged (#331,
+phase 2). The browser test numbers are in `studio/e2e-web/README.md`; the
+device tests need a booted named simulator (`STUDIO_E2E_UDID`).
 
-| # | Covers | Browser suite |
-|---|---|---|
-| 02 | Device picker lists the named simulator with platform tag | browser 10 and 22 (the platform tag) |
-| 03 | Connect → live device frame + widget tree in the inspector; disconnect | browser 11 |
-| 04 | Open a file, Run, pass rows and summary | browser 12 |
-| 05 | Failing file → fail row, error row, failed summary | browser 13 |
-| 06 | Performance lines under a result (`start measuring`) | browser 14 |
-| 08 | Workspace settings overlay (probe.yaml form) | browser 04 |
-| 09 | AI chat pane toggle and API-key overlay | browser 05 |
-| 10 | Connect with the app not running → error state | browser 18 |
-| 11 | WiFi discovery overlay | browser 06 |
-| 12 | Live steps: progress text, Cancel visible, every step row ends passed, verdict row heads the steps | browser 15 and 17; gaps below |
-| 13 | Failing step keeps a `step fail` row naming its line, with the error | browser 13 and 16 |
-| 14 | Manual WiFi entry explains an empty host | browser 19 (malformed host) and 23 (empty host) |
-
-Still not covered by browser mode, to port before the native copies are removed (the empty host, the platform tag and the Record and Save states are covered by browser tests 22-24):
-
-1. After a passing run, the last step row is `step pass`, no step is left running, and Cancel is hidden again (12).
+| Removed native test | Covered by |
+|---|---|
+| 02 Device picker lists the named simulator with its platform tag | device 10; ui 22 (the platform tag) |
+| 03 Connect → live device frame and widget tree; disconnect | device 11 |
+| 04 Open a file, Run, pass rows and summary | device 12 |
+| 05 Failing file → fail row, error row, failed summary | device 13 |
+| 06 Performance lines under a result | device 14 |
+| 08 Workspace settings overlay (probe.yaml form) | ui 04 |
+| 09 AI chat pane toggle and API-key overlay | ui 05 |
+| 10 Connect with the app not running → error state | device 18 |
+| 11 WiFi discovery overlay | ui 06 |
+| 12 Live steps, verdict row heads its steps, last step passes, Cancel hidden after the run | device 15, 17 |
+| 13 Failing step keeps a `step fail` row naming its line, with the error | device 13, 16 |
+| 14 Manual WiFi entry explains an empty host | ui 19 (malformed host) and 23 (empty host) |
 
 Each test launches its own Studio, closes it, and relaunches the fixture app
 (self-contained; explicit cleanup).

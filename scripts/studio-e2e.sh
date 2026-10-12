@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Builds Studio and the fixture app, then runs the Studio native E2E suite (macOS).
-# The default set is the smoke set; STUDIO_E2E_SET=full also runs the tests still
-# to be ported to browser mode (#331).
+# The native suite is the smoke set: the launch and the recorder (#331).
 # Usage: scripts/studio-e2e.sh [go test args...]
 #   SKIP_BUILD=1       reuse existing Studio + fixture builds
 #   STUDIO_E2E_*       see studio/e2e/studio_test.go (workspace, files, device)
@@ -9,7 +8,6 @@
 #   STUDIO_E2E_DISPLAY=n  REQUIRED: the second display (2 or more) the Studio and Simulator
 #                         windows open on. Unset, the script refuses; it never runs on the main
 #                         display. In CI (CI set) an unset value skips the run with exit 0.
-#   STUDIO_E2E_SET=smoke|full  which native tests run (default smoke; see studio/e2e/README.md)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -56,10 +54,6 @@ fi
 if (( 10#$STUDIO_E2E_DISPLAY > attached )); then
   refuse "STUDIO_E2E_DISPLAY=$STUDIO_E2E_DISPLAY but only $attached display(s) attached."
 fi
-case "${STUDIO_E2E_SET:-smoke}" in
-  smoke|full) ;;
-  *) refuse "STUDIO_E2E_SET=$STUDIO_E2E_SET is not smoke or full." ;;
-esac
 
 if [[ -z "${SKIP_BUILD:-}" ]]; then
   echo "== building Studio"
@@ -73,6 +67,6 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
 fi
 
 mkdir -p reports/studio-e2e
-echo "== running suite (set: ${STUDIO_E2E_SET:-smoke}, display: ${STUDIO_E2E_DISPLAY})"
+echo "== running suite (display: ${STUDIO_E2E_DISPLAY})"
 (cd studio && go test -tags studio_e2e ./e2e/ -count=1 -v -timeout 45m "$@") 2>&1 | tee reports/studio-e2e/go-test.log
 echo "report: reports/studio-e2e/report.html"

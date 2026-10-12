@@ -1,19 +1,19 @@
 //go:build studio_e2e
 
 // Studio E2E suite — drives the real FlutterProbe Studio app on macOS
-// through the accessibility tree and screenshots. Run with:
+// through the accessibility tree and screenshots. This is the smoke set: the
+// launch and the recorder, the two checks that need the real window. Every
+// other UI check runs in the headless browser suite (studio/e2e-web) or in the
+// device tests on a named simulator. Run with:
 //
-//	make studio-e2e            (from the repo root; builds everything first)
+//	make studio-e2e-native     (from the repo root; builds everything first)
 //	go test -tags studio_e2e ./studio/e2e/ -run . -v -count=1   (prebuilt)
 //
-// Environment (all have defaults for the bundled fixture app):
+// Environment (all have defaults for the bundled fixture app, except the display):
 //
+//	STUDIO_E2E_DISPLAY    REQUIRED: the second display the windows open on (2 or more); see display.go
 //	STUDIO_E2E_APP        path to .../Contents/MacOS/flutter-probe-studio
 //	STUDIO_E2E_WORKSPACE  workspace folder Studio opens (must hold probe.yaml)
-//	STUDIO_E2E_TEST_FILE  .probe file (relative to the workspace) to run
-//	STUDIO_E2E_FAIL_FILE  .probe file whose first test is expected to fail ("" to skip)
-//	STUDIO_E2E_PERF_FILE  .probe file with a `start measuring` test ("" to skip)
-//	STUDIO_E2E_PASS_NAME  a test name expected in the pass list of TEST_FILE
 //	STUDIO_E2E_APP_BUNDLE path to the fixture .app built for the simulator ("" = already installed)
 //	STUDIO_E2E_BUNDLE_ID  bundle id of the app under test
 //	STUDIO_E2E_SIM_NAME   named simulator to use/create (default StudioE2E-iPhone17)
@@ -36,14 +36,13 @@ import (
 var (
 	studio   *Studio
 	sim      *Simulator
-	vision   *Vision
 	recorder *Recorder
 	cfg      suiteConfig
 	ctx      = context.Background()
 )
 
 type suiteConfig struct {
-	App, Workspace, TestFile, FailFile, PerfFile, PassName string
+	App, Workspace                                         string
 	AppBundle, BundleID, SimName, SimType, SimRuntime, Out string
 }
 
@@ -66,20 +65,11 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "studio-e2e: refusing to run:", err)
 		os.Exit(2)
 	}
-	if set := os.Getenv("STUDIO_E2E_SET"); set != "" && set != "smoke" && set != "full" {
-		fmt.Fprintf(os.Stderr, "studio-e2e: refusing to run: STUDIO_E2E_SET=%q is not smoke or full\n", set)
-		os.Exit(2)
-	}
-	fmt.Fprintf(os.Stderr, "studio-e2e: set %s\n", suiteSet())
 	root := repoRoot()
 	fixture := filepath.Join(root, "native-test-apps", "studio-fixture")
 	cfg = suiteConfig{
 		App:        envOr("STUDIO_E2E_APP", filepath.Join(root, "studio", "build", "bin", "flutter-probe-studio.app", "Contents", "MacOS", "flutter-probe-studio")),
 		Workspace:  envOr("STUDIO_E2E_WORKSPACE", fixture),
-		TestFile:   envOr("STUDIO_E2E_TEST_FILE", "probe-tests/counter.probe"),
-		FailFile:   envOr("STUDIO_E2E_FAIL_FILE", "probe-tests/failing.probe"),
-		PerfFile:   envOr("STUDIO_E2E_PERF_FILE", "probe-tests/list.probe"),
-		PassName:   envOr("STUDIO_E2E_PASS_NAME", "counter increments and resets"),
 		AppBundle:  envOr("STUDIO_E2E_APP_BUNDLE", filepath.Join(fixture, "build", "ios", "iphonesimulator", "Runner.app")),
 		BundleID:   envOr("STUDIO_E2E_BUNDLE_ID", "com.alphawavesystems.studioFixture"),
 		SimName:    envOr("STUDIO_E2E_SIM_NAME", "StudioE2E-iPhone17"),
@@ -90,9 +80,6 @@ func TestMain(m *testing.M) {
 	recorder = &Recorder{OutDir: cfg.Out}
 
 	var err error
-	if vision, err = NewVisionFromEnv(); err != nil {
-		fmt.Fprintln(os.Stderr, "vision disabled:", err)
-	}
 	sim, err = EnsureSimulator(ctx, cfg.SimName, cfg.SimType, cfg.SimRuntime)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "simulator:", err)
@@ -123,38 +110,10 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// smokeTests is the default native set (STUDIO_E2E_SET=smoke, the default): the
-// launch and the recorder, the two checks that need the real window. Every other
-// native test is to be ported to browser mode (#331 phase 2) and runs only with
-// STUDIO_E2E_SET=full. Browser mode does not cover these gaps yet: after a
-// passing run, the last step row and the hidden Cancel button (Test12); an empty
-// host in manual WiFi entry (Test14); the device platform tag (Test02); Record
-// and Save in the toolbar (Test01).
-var smokeTests = map[string]bool{
-	"Test01_LaunchShowsWorkspace":        true,
-	"Test07_RecordFlowWritesProbeScript": true,
-}
-
-// inSuite reports whether the named test runs in the selected set.
-func inSuite(name string) bool {
-	return smokeTests[name] || suiteSet() == "full"
-}
-
-// suiteSet is the selected native set: smoke unless STUDIO_E2E_SET=full.
-func suiteSet() string {
-	if os.Getenv("STUDIO_E2E_SET") == "full" {
-		return "full"
-	}
-	return "smoke"
-}
-
 // run wraps a test: fresh Studio per test (self-contained), screenshot on
 // failure, result recorded for the report, explicit cleanup.
 func run(t *testing.T, body func(t *testing.T, s *Studio)) {
 	t.Helper()
-	if !inSuite(t.Name()) {
-		t.Skip("to be ported to browser mode (#331 phase 2): run with STUDIO_E2E_SET=full")
-	}
 	start := time.Now()
 	res := Result{Name: t.Name(), Device: sim.Name, DeviceID: sim.UDID}
 	s, err := Launch(ctx, LaunchOptions{
@@ -216,18 +175,6 @@ func connect(t *testing.T, s *Studio) {
 	}), "status shows connected device")
 }
 
-// openFile clicks a path in the file browser, descending into folders.
-func openFile(t *testing.T, s *Studio, rel string) {
-	t.Helper()
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	for _, p := range parts {
-		must(t, s.WaitFor(ctx, 10*time.Second, func(els []Element) bool { return FindButton(els, p) != nil }), "file row "+p)
-		must(t, s.ClickButton(p), "open "+p)
-		time.Sleep(400 * time.Millisecond)
-	}
-	must(t, s.WaitForText(ctx, strings.ToUpper(filepath.Base(rel)), 10*time.Second), "editor shows file name")
-}
-
 func Test01_LaunchShowsWorkspace(t *testing.T) {
 	run(t, func(t *testing.T, s *Studio) {
 		must(t, s.WaitForText(ctx, "disconnected", 10*time.Second), "initial status")
@@ -238,82 +185,6 @@ func Test01_LaunchShowsWorkspace(t *testing.T) {
 				t.Errorf("toolbar button %q missing", want)
 			}
 		}
-	})
-}
-
-func Test02_DevicePickerListsNamedSimulator(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		must(t, s.RefreshDevices(), "refresh devices")
-		picked, err := s.SelectPopup(1, sim.Name)
-		must(t, err, "select device")
-		if !strings.Contains(picked, "ios") {
-			t.Errorf("device label %q should carry the platform tag", picked)
-		}
-	})
-}
-
-func Test03_ConnectShowsLiveScreenAndTree(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		connect(t, s)
-		must(t, s.WaitFor(ctx, 20*time.Second, func(els []Element) bool {
-			return FindText(els, "Connect to load the widget tree.") == nil
-		}), "inspector loads widget tree")
-		shot := filepath.Join(cfg.Out, "screenshots", t.Name()+"-connected.png")
-		must(t, s.Screenshot(shot), "screenshot")
-		if vision != nil {
-			must(t, vision.Assert(ctx, shot, "The device pane in the middle shows a live phone screen of a mobile app, not a placeholder icon."), "vision: live screen")
-		}
-		must(t, s.ClickButton("Disconnect"), "disconnect")
-		must(t, s.WaitForText(ctx, "disconnected", 10*time.Second), "status back to disconnected")
-	})
-}
-
-func Test04_RunFilePassesAndListsResults(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		connect(t, s)
-		openFile(t, s, cfg.TestFile)
-		must(t, s.ClickButton("Run"), "click run")
-		must(t, s.WaitFor(ctx, 120*time.Second, func(els []Element) bool {
-			for _, e := range els {
-				if strings.Contains(e.Label(), "pass: "+cfg.PassName) {
-					return true
-				}
-			}
-			return false
-		}), "result row for "+cfg.PassName)
-		must(t, s.WaitForTextFold(ctx, "passed", 60*time.Second), "summary shows passed count")
-	})
-}
-
-func Test05_RunFailingFileShowsErrorRow(t *testing.T) {
-	if cfg.FailFile == "" {
-		t.Skip("STUDIO_E2E_FAIL_FILE unset")
-	}
-	run(t, func(t *testing.T, s *Studio) {
-		connect(t, s)
-		openFile(t, s, cfg.FailFile)
-		must(t, s.ClickButton("Run"), "click run")
-		must(t, s.WaitFor(ctx, 120*time.Second, func(els []Element) bool {
-			for _, e := range els {
-				if strings.HasPrefix(e.Label(), "fail: ") {
-					return true
-				}
-			}
-			return false
-		}), "a fail row")
-		must(t, s.WaitForTextFold(ctx, "failed", 30*time.Second), "summary shows failed count")
-	})
-}
-
-func Test06_PerfLinesAppearUnderResult(t *testing.T) {
-	if cfg.PerfFile == "" {
-		t.Skip("STUDIO_E2E_PERF_FILE unset")
-	}
-	run(t, func(t *testing.T, s *Studio) {
-		connect(t, s)
-		openFile(t, s, cfg.PerfFile)
-		must(t, s.ClickButton("Run"), "click run")
-		must(t, s.WaitForText(ctx, "⏱", 180*time.Second), "a performance line under a result")
 	})
 }
 
@@ -350,132 +221,5 @@ func Test07_RecordFlowWritesProbeScript(t *testing.T) {
 		if n := strings.Count(text, "tap #counter_button"); n != 3 {
 			t.Errorf("recorded script should hold 3 taps on #counter_button, got %d:\n%s", n, text)
 		}
-	})
-}
-
-func Test08_SettingsOverlayReadsAndSavesProbeYAML(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		must(t, s.ClickButton("⚙"), "open settings")
-		must(t, s.WaitFor(ctx, 10*time.Second, func(els []Element) bool { return FindField(els, "") != nil }), "settings form")
-		shot := filepath.Join(cfg.Out, "screenshots", t.Name()+"-settings.png")
-		must(t, s.Screenshot(shot), "screenshot")
-		must(t, s.ClickButton("✕"), "close settings")
-	})
-}
-
-func Test09_AIChatPaneTogglesAndAsksForKey(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		must(t, s.ClickButton("✦"), "toggle chat")
-		must(t, s.WaitFor(ctx, 10*time.Second, func(els []Element) bool { return FindButton(els, "🔑") != nil }), "chat pane shows key button")
-		must(t, s.ClickButton("🔑"), "open key dialog")
-		must(t, s.WaitForText(ctx, "key", 10*time.Second), "api key overlay")
-		must(t, s.ClickButton("✕"), "close overlay")
-		must(t, s.ClickButton("✦"), "toggle chat off")
-	})
-}
-
-func Test10_ConnectWithoutAgentReportsError(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		sim.Terminate(ctx, cfg.BundleID)
-		time.Sleep(time.Second)
-		must(t, s.RefreshDevices(), "refresh devices")
-		_, err := s.SelectPopup(1, sim.Name)
-		must(t, err, "select device")
-		must(t, s.ClickButton("Connect"), "click connect")
-		// The status text shows "connection failed" for ~2.5s and the toast
-		// "Connect failed: …" for 8s; poll fast enough to catch either.
-		must(t, s.WaitFor(ctx, 60*time.Second, func(els []Element) bool {
-			return FindText(els, "connection failed") != nil || FindText(els, "Connect failed") != nil
-		}), "error state surfaced")
-		els, _ := s.Elements()
-		if FindButton(els, "Disconnect") != nil {
-			t.Fatalf("connected although the app is not running")
-		}
-	})
-}
-
-// Test12: while a file runs, each step gets a row under its test; the last
-// step of the passing fixture test ends as "step pass" and the toolbar
-// progress reaches the final step count.
-func Test12_LiveStepsReachLastStep(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		connect(t, s)
-		openFile(t, s, cfg.TestFile)
-		must(t, s.ClickButton("Run"), "click run")
-		// The fixture test finishes in well under a second, so the transient
-		// "step N of M" text and the Cancel button are not asserted here; the
-		// end state is: every step row has a verdict and Cancel is hidden again.
-		// The last step of counter.probe is `see "Taps: 0"`; it must end as a passed step row.
-		must(t, s.WaitFor(ctx, 120*time.Second, func(els []Element) bool {
-			for _, e := range els {
-				l := e.Label()
-				if strings.HasPrefix(l, "step pass: ") && strings.Contains(l, `see "Taps: 0"`) {
-					return true
-				}
-			}
-			return false
-		}), "last step row passed")
-		must(t, s.WaitFor(ctx, 60*time.Second, func(els []Element) bool {
-			for _, e := range els {
-				if strings.Contains(e.Label(), "pass: "+cfg.PassName) {
-					return true
-				}
-			}
-			return false
-		}), "test verdict row")
-		// No step was left running, and the Cancel button is hidden again.
-		must(t, s.WaitFor(ctx, 15*time.Second, func(els []Element) bool { return FindButton(els, "Cancel") == nil }), "cancel hidden after run")
-		els, err := s.Elements()
-		must(t, err, "elements")
-		for _, e := range els {
-			if strings.HasPrefix(e.Label(), "step running: ") {
-				t.Fatalf("step still marked running after the run: %q", e.Label())
-			}
-		}
-	})
-}
-
-// Test13: a failing step keeps a "step fail" row that names its line and
-// carries the error.
-func Test13_FailingStepRowNamesLine(t *testing.T) {
-	if cfg.FailFile == "" {
-		t.Skip("STUDIO_E2E_FAIL_FILE unset")
-	}
-	run(t, func(t *testing.T, s *Studio) {
-		connect(t, s)
-		openFile(t, s, cfg.FailFile)
-		must(t, s.ClickButton("Run"), "click run")
-		must(t, s.WaitFor(ctx, 120*time.Second, func(els []Element) bool {
-			for _, e := range els {
-				l := e.Label()
-				if strings.HasPrefix(l, "step fail: ") && strings.Contains(l, "(line ") {
-					return true
-				}
-			}
-			return false
-		}), "a failed step row with its line")
-		must(t, s.WaitForText(ctx, "This text does not exist", 30*time.Second), "step error text shown")
-	})
-}
-
-func Test11_WiFiDiscoveryOverlayOpensAndCloses(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		must(t, s.ClickButton("📡"), "open wifi overlay")
-		must(t, s.WaitForText(ctx, "WiFi", 10*time.Second), "wifi overlay title")
-		must(t, s.ClickButton("✕"), "close wifi overlay")
-	})
-}
-
-func Test14_ManualWiFiEntryExplainsAnEmptyHost(t *testing.T) {
-	run(t, func(t *testing.T, s *Studio) {
-		must(t, s.ClickButton("📡"), "open wifi overlay")
-		must(t, s.WaitForText(ctx, "Connect manually", 10*time.Second), "manual entry section")
-		must(t, s.ClickText("Connect manually"), "expand the manual entry")
-		must(t, s.WaitForText(ctx, "PROBE_WIFI=true", 10*time.Second), "the manual entry says what the build needs")
-		must(t, s.ClickButton("Test connection"), "test with empty fields")
-		must(t, s.WaitForText(ctx, "IP address or hostname", 10*time.Second), "the empty host is explained")
-		shot := filepath.Join(cfg.Out, "screenshots", t.Name()+"-manual-wifi.png")
-		must(t, s.Screenshot(shot), "screenshot")
-		must(t, s.ClickButton("✕"), "close wifi overlay")
 	})
 }
