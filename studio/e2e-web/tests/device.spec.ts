@@ -54,6 +54,7 @@ test.describe("Studio with a device", () => {
   });
 
   test("15 live steps: every step row ends passed and the progress shows step N of M", async ({ page }) => {
+    console.log(`device: ${simName}`);
     await openStudio(page);
     await connect(page);
     await openPath(page, "probe-tests/counter.probe");
@@ -63,6 +64,13 @@ test.describe("Studio with a device", () => {
     await expect(steps.first()).toBeVisible();
     expect(await page.locator("#results-list li.step.fail").count()).toBe(0);
     expect(await steps.count()).toBeGreaterThanOrEqual(7);
+    // End of the run (native Test12): the verdict row heads its steps, the last step is the passing
+    // `see "Taps: 0"`, no step is left running, and Cancel is hidden again.
+    await expect(page.locator("#results-list > li").first()).toHaveAttribute("aria-label", /^pass: counter increments and resets/);
+    await expect(steps.last()).toHaveClass(/\bpass\b/);
+    await expect(steps.last()).toContainText("Taps: 0");
+    await expect(page.locator("#results-list li.step.running")).toHaveCount(0);
+    await expect(page.locator("#btn-cancel")).toBeHidden({ timeout: 30_000 });
   });
 
   test("16 a failing step keeps a fail row naming its line", async ({ page }) => {

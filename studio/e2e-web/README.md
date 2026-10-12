@@ -40,7 +40,7 @@ Report: `reports/studio-e2e-web/html/index.html` (+ `report.json`, traces and sc
 | 12 | yes | Passing file: pass rows and summary |
 | 13 | yes | Failing file: fail row, error row, summary |
 | 14 | yes | Performance lines under a result |
-| 15 | yes | Live steps: every step row passed, step rows listed |
+| 15 | yes | Live steps: every step row passed; after the run the verdict heads its steps, the last step passes, no step is left running, and Cancel is hidden again |
 | 16 | yes | Failing step row names its line |
 | 17 | yes | Cancel stops a run |
 | 18 | yes | Connect with the app not running reports an error |
