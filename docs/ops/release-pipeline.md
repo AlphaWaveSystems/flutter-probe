@@ -38,7 +38,10 @@ passed.
    - an internal dogfood app then runs its own full E2E suite against the same
      canary. The app registers itself on the runner as `~/dogfood/gate.sh`; the
      repository never names it.
-   - Both must pass. Two green gates on consecutive days are the 48-hour soak.
+   - Both must pass. **One green gate of about an hour or more on the named
+     devices** is required before a stable tag; there is no second-day gate.
+     The 24-hour auto-rollback watch after the stable tag (stage 5) stays. The
+     separate 14-day soak toward 1.0 (issue #325) is unrelated and unchanged.
    - Without a self-hosted runner (`vars.DOGFOOD_RUNNER_READY` unset) the
      workflow opens a `dogfood: gate request` issue instead; the gate is then
      run locally and reported with the `dogfood/passed` or `dogfood/failed`
@@ -134,10 +137,10 @@ git grep -n "flutter_probe_agent: *\^0" -- README.md website probe_agent/README.
 
 ## Rules
 
-- A hotfix for a `prod-incident` may skip the soak, never the fixture suite.
+- A hotfix for a `prod-incident` may use a shorter dogfood run than the one-hour gate, never skip the fixture suite.
 - A canary never moves a consuming app's version lockfile; only a green stable
   does.
-- The soak cannot be shortened by automation.
+- The length of the dogfood gate (about an hour on the named devices) cannot be shortened by automation.
 
 ## Required repository settings
 

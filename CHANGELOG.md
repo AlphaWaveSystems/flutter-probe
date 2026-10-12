@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Release process: one dogfood gate instead of two days.** A canary needs one green dogfood gate of about an hour or more on the named devices before a stable tag; the second-day gate and the 48-hour soak requirement are removed. The 24-hour auto-rollback watch after a stable tag stays, and the separate 14-day soak toward 1.0 (#325) is unchanged. Documented in `docs/ops/release-pipeline.md` and the dogfood-gate workflow.
+
 ### Docs
 - **Release PR checklist** in `docs/ops/release-pipeline.md`: every version-bearing file, the greps that find what a bump misses (including the `flutter_probe_agent: ^0.x` install snippets, which for a 0.x package pin one minor), canary examples, the MCP tool count, grammar and doc surfaces.
 

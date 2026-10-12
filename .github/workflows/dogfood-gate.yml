@@ -1,8 +1,10 @@
 name: Dogfood gate
 
 # Runs a canary against the fixture apps and then against an internal dogfood
-# app before it may be promoted to stable. Two consecutive green gates on two
-# days are the 48-hour soak. See docs/ops/release-pipeline.md.
+# app before it may be promoted to stable. One green gate of about an hour or
+# more on the named devices is required before a stable tag; the 24-hour
+# auto-rollback watch after the tag stays. The separate 14-day soak toward 1.0
+# (issue #325) is unrelated. See docs/ops/release-pipeline.md.
 #
 # Stage 2 (fixture suite) needs a self-hosted macOS runner labelled
 # `dogfood-mac` with Xcode, an iOS simulator and an Android emulator. Until one
@@ -88,7 +90,7 @@ jobs:
         run: |
           title="dogfood: gate request for ${VERSION}"
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --search "$title in:title" --state open --json number --jq '.[0].number')
-          body="No self-hosted dogfood runner is registered. Run the fixture suite and the internal dogfood gate against \`${VERSION}\` locally, then add the label \`dogfood/passed\` or \`dogfood/failed\` with the failing test names. Two passes on consecutive days complete the soak."
+          body="No self-hosted dogfood runner is registered. Run the fixture suite and the internal dogfood gate against \`${VERSION}\` locally, then add the label \`dogfood/passed\` or \`dogfood/failed\` with the failing test names. One pass of about an hour or more on the named devices is enough to promote it."
           if [ -z "$existing" ]; then
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label "dogfood/pending"
           else
