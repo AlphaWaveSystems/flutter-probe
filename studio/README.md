@@ -15,7 +15,7 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > - Keyboard shortcuts, toast notifications, dark theme
 >
 > Stability is "beta" — expect rough edges, especially around physical
-> devices (not yet supported) and parallel multi-device authoring.
+> devices (supported; the USB, manual WiFi and Android paths are not yet verified on a real phone) and parallel multi-device authoring.
 
 ## E2E tests
 
