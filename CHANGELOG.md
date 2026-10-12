@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Release process: one dogfood gate instead of two days.** A canary needs one green dogfood gate of about an hour or more on the named devices before a stable tag; the second-day gate and the 48-hour soak requirement are removed. The 24-hour auto-rollback watch after a stable tag stays, and the separate 14-day soak toward 1.0 (#325) is unchanged. Documented in `docs/ops/release-pipeline.md` and the dogfood-gate workflow.
 
 ### Security
+- **Studio's automation endpoint also refuses `Sec-Fetch-Site: cross-site` and `same-site` requests**, matching the documentation and the headless test mode. The MCP server and other non-browser clients are unaffected.
 - **Dependabot #157: `postcss-selector-parser` 6.1.4 to 7.1.6** (GHSA-rj75-hqrm-r3gf, CVE-2026-104844, medium: quadratic parsing of flat selectors). The docs site's build reached the 6.x parser through `@expressive-code/core` and `postcss-nested` 6.2.0. `@expressive-code/core` 0.44.2, the latest release, still pins `postcss-nested` 6.x, so the website overrides the parser to 7.1.6. The docs build output is byte-identical before and after the change, and `npm audit` reports 0 vulnerabilities for the website tree (10 moderate before, all along that chain). Dependabot lists the package only in `website/package-lock.json`: it is not part of the CLI or the Dart agent.
 
 ### Fixed
