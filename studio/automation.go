@@ -142,6 +142,12 @@ func (s *automationServer) authorize(r *http.Request) (int, string) {
 	if r.Header.Get("Origin") != "" {
 		return http.StatusForbidden, "browser requests are not allowed"
 	}
+	// A browser labels every request with Sec-Fetch-Site; a request that is not from this page's own
+	// origin (cross-site, or same-site such as another local port) is never an automation client.
+	// Non-browser clients (the MCP server, curl) do not send it.
+	if f := r.Header.Get("Sec-Fetch-Site"); f == "cross-site" || f == "same-site" {
+		return http.StatusForbidden, "browser requests are not allowed"
+	}
 	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 		return http.StatusUnauthorized, "missing or wrong token"

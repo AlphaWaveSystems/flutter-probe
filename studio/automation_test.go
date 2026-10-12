@@ -132,6 +132,20 @@ func TestRejectsMissingWrongTokenBrowsersAndForeignHosts(t *testing.T) {
 	if code, _ := rpc(t, s, "not-the-token", "status", nil, nil); code != http.StatusUnauthorized {
 		t.Errorf("wrong token: %d", code)
 	}
+	for _, site := range []string{"cross-site", "same-site"} {
+		if code, _ := rpc(t, s, s.token, "status", nil, func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", site) }); code != http.StatusForbidden {
+			t.Errorf("Sec-Fetch-Site %s must be refused: %d", site, code)
+		}
+	}
+	for _, site := range []string{"none", "same-origin", ""} {
+		if code, _ := rpc(t, s, s.token, "status", nil, func(r *http.Request) {
+			if site != "" {
+				r.Header.Set("Sec-Fetch-Site", site)
+			}
+		}); code != http.StatusOK {
+			t.Errorf("Sec-Fetch-Site %q is not a cross-site request and must work: %d", site, code)
+		}
+	}
 	if code, _ := rpc(t, s, s.token, "status", nil, func(r *http.Request) { r.Header.Set("Origin", "https://evil.example") }); code != http.StatusForbidden {
 		t.Errorf("a request from a web page must be refused: %d", code)
 	}
