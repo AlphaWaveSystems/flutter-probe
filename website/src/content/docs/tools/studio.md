@@ -219,7 +219,7 @@ Use `bonsoir` 6.0.2 for now: its 7.1.x Android plugin (`bonsoir_android` 7.1.3) 
 Android SDK platform 36 that was installed when this was checked (2026-10-11) (7.1.x was not tried further). On iOS, bonsoir needs a deployment target
 of at least 13.0 ([its installation notes](https://github.com/Skyost/Bonsoir/blob/main/docs/content/docs.md)).
 
-Run with `--dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true`. On iOS, add `_flutterprobe._tcp` to
+Run with `--dart-define=PROBE_AGENT=true --dart-define=PROBE_WIFI=true`. On iOS 14+, add `_flutterprobe._tcp` to
 `NSBonjourServices` and a `NSLocalNetworkUsageDescription` in that build's `Info.plist`. It only advertises in
 WiFi mode (agent bound to `0.0.0.0`). Without an advertiser, WiFi testing still works with
 `probe test --host <ip> --token <token>`; the agent logs `PROBE_MDNS=off`.
