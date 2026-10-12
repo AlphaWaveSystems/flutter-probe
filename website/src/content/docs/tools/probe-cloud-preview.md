@@ -55,9 +55,12 @@ prints the exact payload, after scrubbing, and sends nothing. It needs no licens
   durations, error messages, performance numbers, run metadata). The report format is unchanged.
 - A small envelope next to it: the Probe version, the device class (`emulator`, `simulator`, `physical`, `cloud`), the retry
   outcome of tests that were re-run (`retry_failed_tests`), and, when running in GitHub Actions, the repository, branch, commit
-  SHA, pull request number, run id and run attempt. These come from the standard GitHub Actions variables
-  (`GITHUB_REPOSITORY`, `GITHUB_REF_NAME`, `GITHUB_HEAD_REF`, `GITHUB_SHA`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`); no other
-  environment variable is read.
+  SHA, pull request number, run id and run attempt, with two optional branch fields: `ci.base_branch`, the branch a pull
+  request targets (pull requests only), and `ci.default_branch`, the repository's default branch (when the event payload
+  names it). These come from the standard GitHub Actions variables
+  (`GITHUB_REPOSITORY`, `GITHUB_REF_NAME`, `GITHUB_HEAD_REF`, `GITHUB_BASE_REF`, `GITHUB_SHA`, `GITHUB_RUN_ID`,
+  `GITHUB_RUN_ATTEMPT`) and from the event payload file that `GITHUB_EVENT_PATH` names, which is read for the default branch
+  only. No other environment variable is read.
 
 ### Needed for a real upload
 
@@ -65,7 +68,7 @@ The hosted service identifies a run by its CI facts, so a real upload (not a dry
 variables set, and a report that names its platform (a connected device). Outside CI, or when the platform or commit hash is
 missing, the CLI prints a clear warning saying why nothing was uploaded; `--upload-dry-run` still prints the payload and notes
 that a real upload would be refused. Pull requests use the source branch (`GITHUB_HEAD_REF`, not `N/merge`) as the branch and
-send the target branch (`GITHUB_BASE_REF`) as `base_branch`; the job id (`GITHUB_JOB`, the job_id of the current job) is sent as
+send the target branch (`GITHUB_BASE_REF`) as `base_branch` (only for the `pull_request` and `pull_request_target` events); the job id (`GITHUB_JOB`, the job_id of the current job) is sent as
 `job`. At most 5,000 results are accepted.
 
 ### Several uploads in one job

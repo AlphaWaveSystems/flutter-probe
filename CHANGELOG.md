@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - **A "Why FlutterProbe" page** comparing FlutterProbe with Maestro, Patrol and the Appium Flutter driver. Every statement about another tool is taken from that tool's own documentation and linked; costs of choosing FlutterProbe and when each tool fits are listed.
 - **Probe Cloud design-partner offer and a Probe Cloud preview page** on the docs site: pricing now has a design-partners section (free beta for the first 10 teams, 50% off for life when paid plans launch, apply by email or a public GitHub issue), and `/probe-cloud/` states what the preview does today (`--upload-report`, `--upload-dry-run`, the scrubber and its caps) and what is only planned.
+- **Upload envelope: `ci.default_branch`, and `ci.base_branch` is documented.** A hosted report upload (`--upload-report`, or `--upload-dry-run` to preview it) gains an optional `ci.default_branch`, the repository's default branch, read from the GitHub event payload when it names one. `ci.base_branch`, the branch a pull request targets, is sent only for the `pull_request` and `pull_request_target` events. Both fields are optional: a missing or unreadable event file only adds a warning.
 
 ## [0.25.1] - 2026-10-12
 
