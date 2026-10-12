@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -306,5 +307,66 @@ func TestTwoUploadsOfOneJobDifferOnlyByTheirLabel(t *testing.T) {
 	// Matrix values with spaces and brackets are folded into the allowed character set, never rejected.
 	if got := label("ios 18 [iPhone 17]"); got != "ios-18--iPhone-17-" {
 		t.Fatalf("sanitized label = %q", got)
+	}
+}
+
+// A retried test must not carry its absolute local path into the envelope (it leaked the machine's path and a server
+// refuses a payload whose retry file is absolute): walk every string of the dry-run payload.
+func TestDryRunPayloadOfARetriedTestHasNoLocalPaths(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for k, v := range map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "push", "GITHUB_REPOSITORY": "o/r", "GITHUB_REF_NAME": "main",
+		"GITHUB_SHA": "0123456789abcdef0123456789abcdef01234567", "GITHUB_RUN_ID": "5", "GITHUB_RUN_ATTEMPT": "1"} {
+		t.Setenv(k, v)
+	}
+	cwd, _ := os.Getwd()
+	c := uploadCmd(false, true)
+	var cmdOut, status bytes.Buffer
+	c.SetOut(&cmdOut)
+	results := []runner.TestResult{
+		{TestName: "pay", File: filepath.Join(cwd, "tests", "pay.probe"), Passed: true, Row: -1, Attempts: 2, Duration: time.Second},
+		{TestName: "other", File: "/Users/jane/elsewhere/other.probe", Passed: false, Row: -1, Attempts: 3, Error: fmt.Errorf("boom"), Duration: time.Second},
+	}
+	hostedUpload(c, &status, &config.Config{}, results, runner.RunMetadata{Platform: "android"}, "emulator")
+	out := cmdOut.String()
+	i := strings.Index(out, "\n{")
+	if i < 0 {
+		t.Fatalf("no payload: %q", out)
+	}
+	payload := []byte(out[i+1:])
+	var doc any
+	if err := json.Unmarshal(payload, &doc); err != nil {
+		t.Fatal(err)
+	}
+	var walk func(v any, path string)
+	walk = func(v any, path string) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, y := range x {
+				walk(y, path+"."+k)
+			}
+		case []any:
+			for i, y := range x {
+				walk(y, fmt.Sprintf("%s[%d]", path, i))
+			}
+		case string:
+			if strings.HasPrefix(x, "/") || strings.Contains(x, "/Users/") || strings.Contains(x, cwd) {
+				t.Errorf("%s holds a local path: %q", path, x)
+			}
+		}
+	}
+	walk(doc, "$")
+	if errs := validateContract(payload); len(errs) != 0 {
+		t.Errorf("the payload breaks the contract: %v", errs)
+	}
+	var p struct {
+		Envelope struct {
+			Retries []struct {
+				File string `json:"file"`
+			} `json:"retries"`
+		} `json:"envelope"`
+	}
+	_ = json.Unmarshal(payload, &p)
+	if len(p.Envelope.Retries) != 2 || p.Envelope.Retries[0].File != "tests/pay.probe" || p.Envelope.Retries[1].File != "other.probe" {
+		t.Errorf("retries = %+v", p.Envelope.Retries)
 	}
 }
