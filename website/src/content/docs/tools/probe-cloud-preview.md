@@ -88,7 +88,7 @@ the documentation does not say so in as many words, which is why the matrix valu
 - Device ids (UDIDs, serial numbers).
 - Environment variables.
 - Absolute paths and home directories: paths are made relative to the working directory or shortened to `~`.
-- Anything that looks like a credential (private keys, cloud and API keys, tokens, bearer headers, `password=` style values, Probe
+- Anything that looks like a credential (private keys, cloud, API and payment-provider keys, tokens, bearer headers, `password=` style values, Probe
   license keys) is replaced with `[redacted]`. This is a safety net, not a guarantee: check `--upload-dry-run` for your own
   data, and keep secrets out of test names and error messages.
 - Reports over 1 MB: long error messages are shortened first, and if the report is still too large nothing is sent.

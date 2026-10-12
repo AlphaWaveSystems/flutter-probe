@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **The report upload sent a retried test's absolute local path** in `envelope.retries[].file` (the report's own `results[].file` was already relative). That leaked the machine's path, and a server refuses a payload whose retry file is absolute, so every upload containing a retried test would have failed. The envelope's retries now go through the same scrubber as the report (relative path, secret patterns on the test name).
+- **The upload scrubber missed Stripe-shaped secrets**: Stripe secret, restricted and webhook-signing key formats, live and test (only the hyphenated `sk-` form was covered), are now redacted, in text, error messages and nested fields.
+
 ## [0.25.0] - 2026-10-11
 
 ### Added
