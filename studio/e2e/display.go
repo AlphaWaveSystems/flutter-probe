@@ -41,33 +41,36 @@ func displays() ([]Display, error) {
 	return ds, nil
 }
 
-// targetDisplay resolves the display the suite's windows open on.
-// STUDIO_E2E_DISPLAY=n picks display n (1 = main). Unset, the suite uses
-// display 2 whenever a second display is attached and the main display
-// otherwise. A requested display that does not exist falls back to main with a
-// warning.
-func targetDisplay() (Display, int) {
+// resolveDisplay picks the display named by requested (the STUDIO_E2E_DISPLAY
+// value) out of the attached displays, main first. It refuses instead of
+// falling back: the suite must never run on the screen a person works on, so
+// the request has to name an attached display of 2 or more. Every refusal says
+// how many displays are attached.
+func resolveDisplay(requested string, ds []Display) (Display, int, error) {
+	attached := len(ds)
+	if requested == "" {
+		return Display{}, 0, fmt.Errorf("STUDIO_E2E_DISPLAY is not set: name the second display (2 or more); %d display(s) attached", attached)
+	}
+	n, err := strconv.Atoi(requested)
+	if err != nil || n < 2 {
+		return Display{}, 0, fmt.Errorf("STUDIO_E2E_DISPLAY=%q must be a display number of 2 or more (1 is the main display); %d display(s) attached", requested, attached)
+	}
+	if n > attached {
+		return Display{}, 0, fmt.Errorf("STUDIO_E2E_DISPLAY=%d but only %d display(s) attached", n, attached)
+	}
+	return ds[n-1], n, nil
+}
+
+// suiteDisplay lists the attached displays and resolves the one the suite's
+// windows open on (see resolveDisplay). It also returns the main display,
+// because window positions are converted against it.
+func suiteDisplay() (mainScreen, target Display, n int, err error) {
 	ds, err := displays()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "display:", err, "- using main")
-		return Display{}, 1
+		return Display{}, Display{}, 0, fmt.Errorf("list displays: %w", err)
 	}
-	n := 1
-	if v := os.Getenv("STUDIO_E2E_DISPLAY"); v != "" {
-		k, err := strconv.Atoi(v)
-		if err != nil || k < 1 {
-			fmt.Fprintf(os.Stderr, "display: invalid STUDIO_E2E_DISPLAY=%q - using main\n", v)
-		} else {
-			n = k
-		}
-	} else if len(ds) >= 2 {
-		n = 2
-	}
-	if n > len(ds) {
-		fmt.Fprintf(os.Stderr, "display: STUDIO_E2E_DISPLAY=%d but only %d display(s) attached - using main\n", n, len(ds))
-		n = 1
-	}
-	return ds[n-1], n
+	target, n, err = resolveDisplay(os.Getenv("STUDIO_E2E_DISPLAY"), ds)
+	return ds[0], target, n, err
 }
 
 // topLeft converts a point offset from the display's top-left corner into
@@ -92,18 +95,14 @@ func clickArg(x, y int) string {
 
 // moveWindowToDisplay places the window of process whose name starts with
 // namePrefix (empty = window 1) on the chosen display with a small inset, then
-// reads its position back and fails if it did not land there. A no-op on the
-// main display.
+// reads its position back and fails if it did not land there. It never moves a
+// window to the main display: the display rule refuses that before this runs.
 func moveWindowToDisplay(process, namePrefix string) error {
-	ds, err := displays()
+	mainScreen, d, n, err := suiteDisplay()
 	if err != nil {
 		return err
 	}
-	d, n := targetDisplay()
-	if n == 1 {
-		return nil
-	}
-	x, y := d.topLeft(ds[0], 40, 60)
+	x, y := d.topLeft(mainScreen, 40, 60)
 	sel := "window 1"
 	if namePrefix != "" {
 		sel = fmt.Sprintf(`(first window whose name starts with %q)`, namePrefix)
@@ -121,7 +120,7 @@ end tell`, process, sel, x, y, sel)
 	if _, err := fmt.Sscanf(strings.TrimSpace(string(out)), "%d,%d", &px, &py); err != nil {
 		return fmt.Errorf("read back %s window position %q: %w", process, out, err)
 	}
-	if !d.contains(ds[0], px, py) {
+	if !d.contains(mainScreen, px, py) {
 		return fmt.Errorf("%s window is at (%d,%d), not on display %d", process, px, py, n)
 	}
 	fmt.Fprintf(os.Stderr, "display: %s window at (%d,%d) on display %d\n", process, px, py, n)

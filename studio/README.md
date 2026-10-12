@@ -19,7 +19,7 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 
 ## E2E tests
 
-`make studio-e2e` drives the real Studio window on macOS through the
+`make studio-e2e-native` drives the real Studio window on macOS through the
 accessibility tree and screenshots against a bundled fixture app
 (`native-test-apps/studio-fixture/`). See [`e2e/README.md`](e2e/README.md),
 and [`e2e/DOGFOOD.md`](e2e/DOGFOOD.md) to run the same suite against your own app.
@@ -160,7 +160,7 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 ## Testing Studio
 
 - `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
-- `make studio-e2e`: the real window, driven through macOS accessibility (needs a display and focus).
+- `make studio-e2e-native`: the real window, driven through macOS accessibility (smoke set; needs a second display named by `STUDIO_E2E_DISPLAY`, and focus). `make studio-e2e` is a deprecated alias for one release.
 
 ## Automation endpoint
 

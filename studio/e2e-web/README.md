@@ -48,5 +48,5 @@ Report: `reports/studio-e2e-web/html/index.html` (+ `report.json`, traces and sc
 | 22 | no | The picker shows physical phones (USB, WiFi only) with what each needs |
 | 30-33 | **a physical phone** (opt-in) | Test connection, Connect with screen and widget tree, a probe file runs, a wrong token is refused; never in CI. See [PHYSICAL.md](PHYSICAL.md) |
 
-Not covered here (they need the real window, so they stay in the native suite `make studio-e2e`): the native folder picker,
+Not covered here (they need the real window, so they stay in the native suite `make studio-e2e-native`): the native folder picker,
 window chrome and keyboard focus, the recorder (it records taps made on the simulator itself).

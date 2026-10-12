@@ -1,4 +1,4 @@
-.PHONY: studio-e2e studio-e2e-web build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
+.PHONY: studio-e2e studio-e2e-native studio-e2e-web build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
 
 BINARY  = probe
 OUT_DIR = bin
@@ -56,8 +56,13 @@ clean:
 ios-driver:
 	scripts/build-ios-driver.sh bin
 
-## Run the Studio E2E suite (macOS; drives the real Studio window)
+## Run the Studio native smoke set (macOS; drives the real Studio window on the second display that STUDIO_E2E_DISPLAY names)
+studio-e2e-native:
+	scripts/studio-e2e.sh
+
+## Deprecated alias of studio-e2e-native (removed in the next release)
 studio-e2e:
+	@echo "make studio-e2e is deprecated: use make studio-e2e-native (same suite and STUDIO_E2E_DISPLAY rule)"
 	scripts/studio-e2e.sh
 
 studio-e2e-web:

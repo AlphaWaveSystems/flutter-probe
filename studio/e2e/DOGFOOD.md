@@ -36,7 +36,7 @@ listen on the same one.
 ## 3. Run
 
 ```bash
-STUDIO_E2E_LOCAL=studio/e2e/dogfood.local.yaml SKIP_BUILD=1 scripts/studio-e2e.sh
+STUDIO_E2E_DISPLAY=2 STUDIO_E2E_LOCAL=studio/e2e/dogfood.local.yaml SKIP_BUILD=1 scripts/studio-e2e.sh
 ```
 
 `SKIP_BUILD=1` reuses the Studio build; drop it to rebuild Studio too (the
