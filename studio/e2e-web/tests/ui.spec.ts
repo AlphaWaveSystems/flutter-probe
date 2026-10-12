@@ -122,6 +122,7 @@ test.describe("Studio UI (no device needed)", () => {
         body: JSON.stringify({
           result: [
             { id: "SIM-1", name: "Test Sim", platform: "ios", kind: "simulator", state: "booted", osVersion: "iOS 18", booted: true },
+            { id: "EMU-1", name: "Test Emulator", platform: "android", kind: "emulator", state: "online", osVersion: "Android 15", booted: true },
             { id: "U-USB", name: "Wired Phone", platform: "ios", kind: "physical", state: "online", osVersion: "iOS 18", booted: true, transport: "usb", model: "iPhone 15", hint: "Attached by USB (needs iproxy): the app must be running in the foreground with the agent." },
             { id: "U-NET", name: "Wireless Phone", platform: "ios", kind: "physical", state: "paired", osVersion: "iOS 18", booted: false, transport: "network", model: "iPhone 14", hint: "Paired over the network, not attached by USB: use the WiFi button, then Connect manually." },
           ],
@@ -133,6 +134,9 @@ test.describe("Studio UI (no device needed)", () => {
     const picker = page.locator("#device-picker");
     await expect(picker.locator("option", { hasText: "Wireless Phone (iPhone 14)" })).toHaveText(/physical.*WiFi only/);
     await expect(picker.locator("option", { hasText: "Wired Phone (iPhone 15)" })).toHaveText(/physical.*USB/);
+    // The plain platform tag of a simulator and of an emulator (native Test02 checked the simulator's tag).
+    await expect(picker.locator("option", { hasText: "Test Sim" })).toHaveText(/·\s+ios$/);
+    await expect(picker.locator("option", { hasText: "Test Emulator" })).toHaveText(/·\s+android$/);
     // A refresh that started before the choice resets it when it finishes: let the in-flight ones end, then choose.
     await page.waitForTimeout(500);
     const choose = (id: string) =>
@@ -150,6 +154,34 @@ test.describe("Studio UI (no device needed)", () => {
     await expect(page.locator("#btn-connect")).toBeEnabled();
     await choose("SIM-1");
     await expect(page.locator("#device-hint")).toBeHidden();
+  });
+
+  test("23 manual WiFi entry with an empty host says a host is needed", async ({ page }) => {
+    await openStudio(page);
+    await page.click("#btn-wifi");
+    await page.locator("#wifi-manual summary").click();
+    await page.click("#btn-wifi-manual-test");
+    const msg = page.locator("#wifi-manual-msg");
+    await expect(msg).toBeVisible();
+    await expect(msg).toContainText("IP address or hostname");
+    await expect(msg).toHaveClass(/err/);
+    await expect(page.locator("#status-text")).toHaveText("disconnected");
+  });
+
+  test("24 Record and Save: disabled without a device or an edited file; Save enables once the file is edited", async ({ page }) => {
+    await openStudio(page);
+    await expect(page.locator("#btn-record")).toBeDisabled();
+    await expect(page.locator("#btn-save")).toBeDisabled();
+    await openPath(page, "probe-tests/counter.probe");
+    await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+    await expect(page.locator("#btn-save")).toBeDisabled();
+    await expect(page.locator("#editor-dirty")).toBeEmpty();
+    await page.locator("#editor .view-lines").click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" ");
+    await expect(page.locator("#editor-dirty")).toHaveText("● unsaved");
+    await expect(page.locator("#btn-save")).toBeEnabled();
+    await expect(page.locator("#btn-record")).toBeDisabled();
   });
 
   test("07 the help overlay opens with ? and closes with Escape", async ({ page }) => {
