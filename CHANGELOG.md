@@ -7,8 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
-- **Studio device E2E checks the end of a live run**: test 15 (the native Test12 checks) now asserts that the verdict row heads its steps, the last step passes, no step is left running, and Cancel is hidden after the run. The native copy stays until this is merged (#331).
-- **Studio native E2E runs a smoke set by default** (`make studio-e2e-native`; `make studio-e2e` is a deprecated alias for one release). The smoke set is launch and the recorder. The other native tests stay available with `STUDIO_E2E_SET=full` until the browser suite covers them (#331). The suite refuses to start unless `STUDIO_E2E_DISPLAY` names an attached second display, and it no longer falls back to the main display; in CI an unset variable skips the job with exit 0.
+- **Studio device E2E checks the end of a live run**: test 15 (the native Test12 checks) now asserts that the verdict row heads its steps, the last step passes, no step is left running, and Cancel is hidden after the run. The native copy is removed with it (#331).
+- **Studio native E2E runs a smoke set by default** (`make studio-e2e-native`; `make studio-e2e` is a deprecated alias for one release). The smoke set is launch and the recorder. The other native tests were removed once the browser suite covered them (#331). The suite refuses to start unless `STUDIO_E2E_DISPLAY` names an attached second display, and it no longer falls back to the main display; in CI an unset variable skips the job with exit 0.
 - **Release process: one dogfood gate instead of two days.** A canary needs one green dogfood gate of about an hour or more on the named devices before a stable tag; the second-day gate and the 48-hour soak requirement are removed. The 24-hour auto-rollback watch after a stable tag stays, and the separate 14-day soak toward 1.0 (#325) is unchanged. Documented in `docs/ops/release-pipeline.md` and the dogfood-gate workflow.
 
 ### Docs
