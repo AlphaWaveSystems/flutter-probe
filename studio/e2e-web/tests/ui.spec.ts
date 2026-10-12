@@ -184,6 +184,46 @@ test.describe("Studio UI (no device needed)", () => {
     await expect(page.locator("#btn-record")).toBeDisabled();
   });
 
+  test("25 a device picked while the list is refreshing stays selected", async ({ page }) => {
+    // The next ListDevices call is held until the test releases it, so the pick happens while that refresh is in flight.
+    let holdNext = false;
+    let held = false;
+    let heldDone = false;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/__headless/call", async (route) => {
+      const body = JSON.parse(route.request().postData() || "{}");
+      if (body.method !== "ListDevices") return route.continue();
+      const hold = holdNext;
+      holdNext = false;
+      if (hold) {
+        held = true;
+        await gate;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: [
+            { id: "SIM-1", name: "Test Sim", platform: "ios", kind: "simulator", state: "booted", osVersion: "iOS 18", booted: true },
+            { id: "EMU-1", name: "Test Emulator", platform: "android", kind: "emulator", state: "online", osVersion: "Android 15", booted: true },
+          ],
+        }),
+      });
+      if (hold) heldDone = true;
+    });
+    await openStudio(page);
+    const picker = page.locator("#device-picker");
+    await expect(picker.locator("option", { hasText: "Test Sim" })).toHaveCount(1, { timeout: 30_000 });
+    holdNext = true;
+    await page.click("#btn-refresh");
+    await expect.poll(() => held).toBe(true);
+    await picker.selectOption("SIM-1");
+    release();
+    await expect.poll(() => heldDone).toBe(true);
+    await page.waitForTimeout(300); // the refresh has the answer; let it rebuild the list
+    await expect(picker).toHaveValue("SIM-1");
+  });
+
   test("07 the help overlay opens with ? and closes with Escape", async ({ page }) => {
     await openStudio(page);
     await page.locator("body").press("?");
