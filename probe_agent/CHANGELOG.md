@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.25.2 - 2026-10-13
+
+- No agent change (`flutter_probe_agent` is released in step with the CLI).
+
 ## 0.25.1 - 2026-10-12
 
 - No agent change (`flutter_probe_agent` is released in step with the CLI); the README install snippet now points at 0.25.
