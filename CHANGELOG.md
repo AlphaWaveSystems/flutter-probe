@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **A Probe Cloud design-partner guide** (`/tools/design-partner-guide/`): what a partner installs, how to inspect an upload with `--upload-dry-run` before the hosted service is live, what a GitHub Actions upload needs, and how to send feedback.
+
 ## [0.25.2] - 2026-10-13
 
 ### Added

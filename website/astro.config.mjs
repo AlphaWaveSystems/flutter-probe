@@ -68,6 +68,7 @@ export default defineConfig({
             { label: 'On-Device Agent', slug: 'tools/agent' },
             { label: 'System Dialogs', slug: 'tools/system-dialogs' },
             { label: 'Probe Cloud (preview)', slug: 'tools/probe-cloud-preview' },
+            { label: 'Design-partner guide', slug: 'tools/design-partner-guide' },
             { label: 'Using Probe from AI Agents', slug: 'tools/ai-agents' },
             { label: 'AI & Local Models', slug: 'tools/ai' },
             { label: 'Plugins', slug: 'tools/plugins' },
