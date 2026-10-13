@@ -39,7 +39,7 @@ An open-source framework that separates test authoring from the app codebase. Te
 A YAML-based mobile testing framework from mobile.dev. Maestro drives apps through the OS accessibility/semantics tree on Android and iOS — it has no access to the Flutter widget tree itself.
 
 - **Pros:** YAML syntax is approachable, good Android support, native (non-Flutter) UI automation on both Android and iOS via XCUITest/UiAutomator, Maestro Cloud for CI.
-- **Cons:** Not Flutter-specific (drives the accessibility tree, not the widget tree — see our [head-to-head benchmark](/blog/flutterprobe-vs-maestro-benchmark/) for what that costs in practice), slower execution due to accessibility-layer round-trips, limited assertion types, no visual-regression support built-in, no physical iOS device support (Simulator only), Maestro Cloud pricing runs roughly $250/device/month, and its AI-assertion feature is a Maestro Cloud-only vendor-hosted proxy with no local-model or bring-your-own-key option — every screenshot it evaluates leaves your infrastructure.
+- **Cons:** Not Flutter-specific (drives the accessibility tree, not the widget tree — see our [head-to-head benchmark](/blog/flutterprobe-vs-maestro-benchmark/) for what that costs in practice), slower execution due to accessibility-layer round-trips, limited assertion types, no visual-regression support built-in, its iOS documentation describes running on Xcode simulators and does not describe local physical iOS devices ([Maestro iOS docs](https://docs.maestro.dev/get-started/supported-platform/ios); hosted iOS devices are part of Maestro Cloud), Maestro Cloud is listed at $250 per device per month ([Maestro pricing](https://maestro.dev/pricing), read 2026-10-12), and its AI-assertion feature is a Maestro Cloud-only vendor-hosted proxy with no local-model or bring-your-own-key option — every screenshot it evaluates leaves your infrastructure.
 
 ### Detox (via Flutter bindings)
 
@@ -80,7 +80,7 @@ For a solo developer with a handful of smoke tests, `integration_test` is suffic
 
 ### CI/CD integration
 
-Every framework can be wired into CI, but the effort varies. FlutterProbe generates HTML and JUnit reports natively and has a ready-made [GitHub Actions workflow](/ci-cd/github-actions/). Maestro's built-in reporting requires Maestro Cloud, priced per device at roughly $250/device/month. The others require you to build reporting yourself.
+Every framework can be wired into CI, but the effort varies. FlutterProbe generates HTML and JUnit reports natively and has a ready-made [GitHub Actions workflow](/ci-cd/github-actions/). Maestro lists rich test reporting under Maestro Cloud, priced at $250 per device per month ([Maestro pricing](https://maestro.dev/pricing), read 2026-10-12); its free local plan includes the CLI and Studio. The others require you to build reporting yourself.
 
 ### Migration cost
 
