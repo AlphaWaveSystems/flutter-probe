@@ -33,12 +33,12 @@ Two uploads from one job need different `--upload-label` values. An upload never
 
 ## What we ask of you
 
-- Use it on a real project and tell us what is missing, confusing or wrong. Short notes are fine.
+- Use it on a real project and tell us what is missing, confusing or wrong. Short notes are fine. A feedback call is optional: written notes are enough.
 - Keep secrets out of test names and error messages. The upload scrubs known secret patterns, but local output is not scrubbed.
 
 ## How to send feedback
 
 - **Bugs and feature requests:** open an issue on [GitHub](https://github.com/AlphaWaveSystems/flutter-probe/issues). Issues are public, so leave out private details.
-- **Anything private, or questions about access:** email [support@alphawavesystems.com](mailto:support@alphawavesystems.com).
+- **Anything private, or questions about access:** email [support@alphawavesystems.com](mailto:support@alphawavesystems.com). We aim to reply within a few working days.
 
 See the [terms](/terms/), [privacy policy](/privacy/) and [refund policy](/refunds/) drafts.
