@@ -6,8 +6,9 @@
 
 A high-performance E2E testing framework for Flutter mobile apps. Write tests in plain English, execute through direct in-app widget-tree access — no UI automation layer, no WebDriver overhead. In a replicated benchmark against Maestro on one app, the median suite time was about 2x faster with 0 flaky runs of 20 ([details](https://flutterprobe.dev/blog/flutterprobe-vs-maestro-benchmark/)).
 
-[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/github/v/tag/AlphaWaveSystems/flutter-probe?label=version&color=green)](CHANGELOG.md)
+[![CLI license: BSL 1.1](https://img.shields.io/badge/CLI-BSL%201.1-blue.svg)](LICENSE)
+[![Agent license: MIT](https://img.shields.io/badge/agent-MIT-blue.svg)](probe_agent/LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/AlphaWaveSystems/flutter-probe?label=release&color=green)](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/AlphaWaveSystems/flutter-probe)](https://github.com/AlphaWaveSystems/flutter-probe/stargazers)
 [![CLI downloads](https://img.shields.io/github/downloads/AlphaWaveSystems/flutter-probe/total?label=CLI%20downloads)](https://github.com/AlphaWaveSystems/flutter-probe/releases)
 [![pub.dev downloads](https://img.shields.io/pub/dm/flutter_probe_agent?label=pub.dev%20downloads%2Fmo)](https://pub.dev/packages/flutter_probe_agent)
@@ -38,6 +39,7 @@ The CLI is free to use (BSL 1.1) and the Dart agent is MIT. Probe Cloud, a hoste
 
 ## Table of Contents
 
+- [Get started](#get-started)
 - [How It Works](#how-it-works)
 - [Installation](#installation)
 - [ProbeScript Language](#probescript-language)
