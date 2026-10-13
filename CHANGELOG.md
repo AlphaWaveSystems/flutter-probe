@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Probe Cloud design-partner offer and a Probe Cloud preview page** on the docs site: pricing now has a design-partners section (free beta for the first 10 teams, 50% off for life when paid plans launch, apply by email or a public GitHub issue), and `/probe-cloud/` states what the preview does today (`--upload-report`, `--upload-dry-run`, the scrubber and its caps) and what is only planned.
+
 ## [0.25.1] - 2026-10-12
 
 ### Changed
