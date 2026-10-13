@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`probe doctor` checks that a first run can work** and says how to fix what is missing. It looks at `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb` for Android, `xcrun` for iOS) and the devices they can see. It changes nothing, and it exits non-zero only when `probe.yaml` or the `tests/` folder is missing; warnings alone do not fail it.
+
+### Changed
+- **`probe test` says what to do when no device is usable.** The message names `probe doctor`, and a failed device listing shows its error instead of only "no connected devices found".
+
 ## [0.25.1] - 2026-10-12
 
 ### Changed

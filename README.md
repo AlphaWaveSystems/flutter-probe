@@ -541,6 +541,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | Command | Description |
 |---|---|
 | `probe init` | Scaffold `probe.yaml` and `tests/` in your project |
+| `probe doctor` | Check that this project and machine are ready for `probe test`, and say how to fix what is missing |
 | `probe test [path]` | Run tests (file, directory, or glob) |
 | `probe test --tag smoke` | Run tests by tag |
 | `probe test --format json -o results.json` | Output JSON results |

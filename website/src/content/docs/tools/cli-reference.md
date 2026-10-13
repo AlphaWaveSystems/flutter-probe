@@ -8,6 +8,7 @@ description: Complete reference for all probe CLI commands and flags.
 | Command | Description |
 |---------|-------------|
 | `probe init` | Scaffold `probe.yaml` and `tests/` directory |
+| `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
