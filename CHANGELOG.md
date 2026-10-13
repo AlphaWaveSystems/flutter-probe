@@ -8,7 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **Install and quick-start docs follow the order a new user needs**: `probe init` and `probe lint` now come before the first run (they were at the end of the install page, after commands that used the files they create), the first run uses the generated `tests/example.probe`, the quick start opens with a four-command path, notes that the screen texts are examples, and the install page says the app must be running with the agent flag before `probe test` connects. The Studio install snippet no longer names a stale version.
-
 - **The pricing and Probe Cloud pages state that the hosted endpoint is not live yet**: `--upload-report` is the ready client side and cannot reach a service today; `--upload-dry-run` works now. Design partners get access when the service goes live.
 
 ### Added
