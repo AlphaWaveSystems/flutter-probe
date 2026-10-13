@@ -292,10 +292,6 @@ type fakeClock struct{ t time.Time }
 
 func (c *fakeClock) now() time.Time { return c.t }
 
-func recordSleeps(into *[]time.Duration) func(context.Context, time.Duration) error {
-	return func(_ context.Context, d time.Duration) error { *into = append(*into, d); return nil }
-}
-
 // sleepOn records each wait and moves the fake clock by it.
 func (c *fakeClock) sleepOn(into *[]time.Duration) func(context.Context, time.Duration) error {
 	return func(_ context.Context, d time.Duration) error { *into = append(*into, d); c.t = c.t.Add(d); return nil }
