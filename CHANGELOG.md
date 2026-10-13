@@ -6,21 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **README and pricing clarity**: the version badge shows the latest release (the tag badge could show a canary tag), the license badges say which part is BSL (CLI) and which is MIT (agent), the table of contents lists "Get started", and the pricing header says what is free and that Probe Cloud is a preview that is not live yet.
+- **The unmeasured "sub-50ms" claim is removed everywhere.** "Sub-50ms command round-trips" (and the "<0.5% flake", "<100ms cold start" and "under 90 seconds" goals, and the "~100-200ms" and "10-40ms" figures for other tools and for the WebSocket) were never measured. The README, docs index, comparison and blog pages, architecture page, social image, `probe --help` text and the agent README now describe direct in-app control and cite the one measurement we have: the replicated benchmark against Maestro (about 2x faster median suite time, 0 flaky runs of 20). The `flutter_probe_agent` pubspec description changed too; pub.dev shows it from the next release.
+- **A Probe Cloud design-partner guide** (`/tools/design-partner-guide/`): what a partner installs, how to inspect an upload with `--upload-dry-run` before the hosted service is live, what a GitHub Actions upload needs, and how to send feedback.
+- **The sample dashboard pages at `/demo/` are refreshed** from their source (static pages with no form or sign-out button).
+
 ### Changed
 - **Shorter path to the Probe Cloud offer and to a first test on the site**: the landing page has Tutorials and Pricing in its header and footer and a design-partners band (free beta for the first 10 teams, with a link to the sample dashboard), the pricing Team card's button now applies as a design partner, the waitlist is a one-click prefilled email, and the install page opens with a four-command fast path.
-
-### Docs
-- **The unmeasured "sub-50ms" claim is removed everywhere.** "Sub-50ms command round-trips" (and the "<0.5% flake", "<100ms cold start" and "under 90 seconds" goals, and the "~100-200ms" and "10-40ms" figures for other tools and for the WebSocket) were never measured. The README, docs index, comparison and blog pages, architecture page, social image, `probe --help` text and the agent README now describe direct in-app control and cite the one measurement we have: the replicated benchmark against Maestro (about 2x faster median suite time, 0 flaky runs of 20). The `flutter_probe_agent` pubspec description changed too; pub.dev shows it from the next release.
-
-### Changed
 - **The site no longer calls the whole project open source.** The CLI is source-available under BSL 1.1 and the Dart agent is MIT, so the landing page, its meta tags, the social image, the contact, privacy and terms pages and one comparison page now say "free to use, source-available CLI (BSL 1.1), MIT agent", and the landing page and pricing state what the BSL's use grant allows (any purpose, including production, except offering a competing hosted testing service).
 - **The landing page's performance numbers are the measured ones.** "<50ms command round-trip", "<0.5% flake rate" and "<100ms CLI cold start" were design targets, not measurements, and are gone from the landing page; it now shows the replicated Maestro benchmark (about 2x faster median suite time, 0 flaky FlutterProbe runs of 20, with a link to the data).
 - **The pricing page labels the planned Team price** ("Planned price, not final. Free for design partners.").
 - **The landing page's install command is Homebrew** (`brew install AlphaWaveSystems/tap/probe`) instead of cloning the repository and running `make build`, the install step no longer shows a Linux-only download, and the page links to the first tutorial.
-
-### Docs
-- **A Probe Cloud design-partner guide** (`/tools/design-partner-guide/`): what a partner installs, how to inspect an upload with `--upload-dry-run` before the hosted service is live, what a GitHub Actions upload needs, and how to send feedback.
-- **The sample dashboard pages at `/demo/` are refreshed** from their source (static pages with no form or sign-out button).
 
 ## [0.25.2] - 2026-10-13
 
