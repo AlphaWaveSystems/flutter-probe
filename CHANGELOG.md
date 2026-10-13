@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **The pricing and Probe Cloud pages state that the hosted endpoint is not live yet**: `--upload-report` is the ready client side and cannot reach a service today; `--upload-dry-run` works now. Design partners get access when the service goes live.
+
 ### Added
 - **A "Why FlutterProbe" page** comparing FlutterProbe with Maestro, Patrol and the Appium Flutter driver. Every statement about another tool is taken from that tool's own documentation and linked; costs of choosing FlutterProbe and when each tool fits are listed.
 - **Probe Cloud design-partner offer and a Probe Cloud preview page** on the docs site: pricing now has a design-partners section (free beta for the first 10 teams, 50% off for life when paid plans launch, apply by email or a public GitHub issue), and `/probe-cloud/` states what the preview does today (`--upload-report`, `--upload-dry-run`, the scrubber and its caps) and what is only planned.
