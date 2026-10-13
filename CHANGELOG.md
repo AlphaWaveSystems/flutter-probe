@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **The sample dashboard pages at `/demo/` are refreshed** from their source (static pages with no form or sign-out button).
+
 ### Added
 - **A sample Probe Cloud dashboard at `/demo/`** on the docs site (7, 30 and 90 day views of a made-up fixture app; static pages, no script), linked from the pricing design-partner section and the Probe Cloud page with the note that the data is made up and the hosted service is not live yet.
 
