@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Three tutorials** on the docs site (write a Flutter login test, run end-to-end tests in GitHub Actions, find and fix flaky tests), a "Get started" block in the README, and a 60-second demo script (`docs/demo/60-second-demo.md`).
+
 ### Fixed
+- **The recipes page and one MCP example showed unquoted placeholders** (`type <email> into ...`), which `probe lint` rejects since PT-02. They now write `type "<email>" into ...`.
 - **Two Maestro claims on the Flutter testing frameworks comparison are now sourced and worded to what Maestro documents**: the iOS docs describe simulators and do not describe local physical iOS devices (it was stated as "no physical iOS device support"), and the Cloud price is quoted from Maestro's pricing page with the date read. The CI paragraph no longer says built-in reporting requires Maestro Cloud.
 
 ### Changed

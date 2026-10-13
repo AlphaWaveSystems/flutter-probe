@@ -23,6 +23,19 @@ test "user can log in"
   see "Dashboard"
 ```
 
+## Get started
+
+```bash
+brew tap AlphaWaveSystems/tap && brew install probe     # or a release binary, see Installation
+# add flutter_probe_agent to your app, run it with --dart-define=PROBE_AGENT=true
+probe init && probe lint tests                          # scaffold and check the sample
+probe test tests/example.probe --device <id> -v         # <id> from: probe device list
+```
+
+New here? Follow a tutorial: [write a login test](https://flutterprobe.dev/tutorials/flutter-login-test/), [run it in GitHub Actions](https://flutterprobe.dev/tutorials/flutter-e2e-github-actions/), [find and fix flaky tests](https://flutterprobe.dev/tutorials/triage-flaky-flutter-tests/). Comparing tools? See [Why FlutterProbe](https://flutterprobe.dev/comparisons/why-flutterprobe/).
+
+The CLI is free to use (BSL 1.1) and the Dart agent is MIT. Probe Cloud, a hosted report service, is a design-partner preview and is not live yet: see [pricing](https://flutterprobe.dev/pricing/#design-partners).
+
 ## Table of Contents
 
 - [How It Works](#how-it-works)
