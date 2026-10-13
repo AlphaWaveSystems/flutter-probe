@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The landing page's install command is Homebrew** (`brew install AlphaWaveSystems/tap/probe`) instead of cloning the repository and running `make build`, the install step no longer shows a Linux-only download, and the page links to the first tutorial.
 
 ### Docs
+- **A Probe Cloud design-partner guide** (`/tools/design-partner-guide/`): what a partner installs, how to inspect an upload with `--upload-dry-run` before the hosted service is live, what a GitHub Actions upload needs, and how to send feedback.
 - **The sample dashboard pages at `/demo/` are refreshed** from their source (static pages with no form or sign-out button).
 
 ## [0.25.2] - 2026-10-13
