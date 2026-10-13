@@ -4,11 +4,12 @@ import Legal from '../layouts/Legal.astro';
 <Legal title="Probe Cloud (preview)" description="Probe Cloud is a hosted report service for FlutterProbe, in preview. What exists today, what is planned, and how to become a design partner.">
   <h1>Probe Cloud (preview)</h1>
   <p>Probe Cloud is a hosted place to keep your FlutterProbe test reports. It is a preview, not generally available, and plan details are not final. The CLI, agent and local tools remain free.</p>
+  <p><strong>The hosted service is not live yet.</strong> The upload client in the CLI is ready, but there is no live endpoint to receive uploads, so <code>--upload-report</code> cannot reach a service today. Design partners get access when it goes live.</p>
 
   <h2>What exists today</h2>
   <ul>
-    <li><code>probe test --upload-report</code> sends a run report to a Probe Cloud endpoint, with CI details (provider, branch, commit) and an optional <code>--upload-label</code>.</li>
-    <li><code>--upload-dry-run</code> prints exactly what would be sent, so you can inspect it before anything leaves your machine.</li>
+    <li><code>probe test --upload-report</code> is the client side: it sends a run report to a Probe Cloud endpoint, with CI details (provider, branch, commit) and an optional <code>--upload-label</code>. It needs a live endpoint to work end to end.</li>
+    <li><code>--upload-dry-run</code> works today and needs no service: it prints exactly what would be sent, so you can inspect it before anything leaves your machine.</li>
     <li>The payload is scrubbed before sending: paths are made relative, secret-looking values are redacted, and screenshots and device identifiers are left out. Uploads are capped at 1 MiB and 5,000 results.</li>
     <li>JUnit and JSON reports for any CI system, with no account needed.</li>
   </ul>
