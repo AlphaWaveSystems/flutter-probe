@@ -5,9 +5,20 @@ description: Write your first ProbeScript test, run it, and see results.
 
 This guide walks you through writing and running your first FlutterProbe test. It assumes you have already [installed](/getting-started/installation/) the CLI and integrated the Dart agent.
 
+The fastest path, if the CLI and agent are installed and your app is running with `--dart-define=PROBE_AGENT=true`:
+
+```bash
+probe init                                   # creates probe.yaml and tests/example.probe
+probe lint tests                             # checks the files parse
+probe device list                            # find your device id
+probe test tests/example.probe --device <id> -v
+```
+
+Open `probe.yaml` first and set `project.app` to your app's id. The sample test opens the app and waits for the text "Welcome", so change that line to text that appears on your first screen or the run will time out. The rest of this page writes a real test.
+
 ## 1. Write a Test
 
-Create a file `tests/smoke/login.probe`:
+Create a file `tests/smoke/login.probe`. The screen texts ("Sign In", "Email", "Dashboard") are examples: use the visible text or widget keys from your own app.
 
 ```
 test "user can log in"
