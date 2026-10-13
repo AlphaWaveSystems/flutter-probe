@@ -364,7 +364,7 @@ For composite multi-device tests use the composite_devices parameter.`,
 	},
 	{
 		Name:        "lint",
-		Description: "Validate .probe files for syntax errors without running them against a device.",
+		Description: "Validate .probe files; warns on count and zero-state text checks, never fails.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
