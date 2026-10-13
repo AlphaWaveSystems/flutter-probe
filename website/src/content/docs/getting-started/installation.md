@@ -3,6 +3,17 @@ title: Installation
 description: Install the probe CLI and integrate the Dart agent into your Flutter app.
 ---
 
+**In a hurry?** On macOS or Linux with Flutter installed:
+
+```bash
+brew tap AlphaWaveSystems/tap && brew install probe     # 1. the CLI
+# 2. add flutter_probe_agent to your app (Step 2 below) and run it with --dart-define=PROBE_AGENT=true
+probe init && probe lint tests                          # 3. scaffold and check the sample
+probe test tests/example.probe --device <id> -v         # 4. <id> from: probe device list
+```
+
+The steps below explain each part, and the [login test tutorial](/tutorials/flutter-login-test/) writes a real test.
+
 ## Step 1: Install the CLI
 
 ### Option A — Homebrew (macOS + Linux, recommended)
