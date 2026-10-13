@@ -50,11 +50,11 @@ The Go CLI handles device management, test orchestration, reporting, and cloud-f
 | Where tests live | Inside app project | Separate `.probe` files |
 | Test runner | Flutter test runner | Go CLI (`probe run`) |
 | Device communication | In-process | WebSocket + JSON-RPC |
-| Command round-trip | In-process (nanoseconds) | Sub-50ms over WebSocket |
+| Command round-trip | In-process | Over WebSocket |
 | App compilation | Tests compile with app | Agent compiles with app; tests do not |
 | CLI dependency | Flutter CLI | FlutterProbe CLI + Flutter CLI |
 
-Patrol's in-process model means zero network overhead per command. FlutterProbe's WebSocket round-trip adds roughly 10-40ms per command, but the total test duration is usually dominated by animations and network calls, not command overhead. In practice, both frameworks produce comparable end-to-end run times.
+Patrol's in-process model means zero network overhead per command. FlutterProbe's WebSocket round-trip adds time to every command. We have not measured it, and the total test duration is usually dominated by animations and network calls.
 
 ## Syntax and Readability
 

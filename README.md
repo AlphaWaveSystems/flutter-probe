@@ -4,7 +4,7 @@
   <img src="docs/hero.png" alt="FlutterProbe — write E2E tests in plain English, run against the live widget tree" width="100%">
 </p>
 
-A high-performance E2E testing framework for Flutter mobile apps. Write tests in plain English, execute with sub-50ms command round-trips via direct widget-tree access — no UI automation layer, no WebDriver overhead.
+A high-performance E2E testing framework for Flutter mobile apps. Write tests in plain English, execute through direct in-app widget-tree access — no UI automation layer, no WebDriver overhead. In a replicated benchmark against Maestro on one app, the median suite time was about 2x faster with 0 flaky runs of 20 ([details](https://flutterprobe.dev/blog/flutterprobe-vs-maestro-benchmark/)).
 
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/github/v/tag/AlphaWaveSystems/flutter-probe?label=version&color=green)](CHANGELOG.md)

@@ -95,7 +95,7 @@ flutter run --dart-define=PROBE_AGENT=true
 probe test tests/login.probe --device <your-device> -v
 ```
 
-Tests execute with sub-50ms command round-trips via direct widget-tree access — no UI automation layer, no WebDriver, no accessibility bridge.
+Tests execute through direct in-app widget-tree access — no UI automation layer, no WebDriver, no accessibility bridge.
 
 ## Physical Device Testing
 
