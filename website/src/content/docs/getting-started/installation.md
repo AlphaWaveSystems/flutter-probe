@@ -52,17 +52,17 @@ probe version
 
 ```bash
 # macOS — extract the .app bundle and move to Applications
-unzip flutter-probe-studio-0.6.0-darwin-arm64.zip
+unzip flutter-probe-studio-<version>-darwin-arm64.zip
 mv flutter-probe-studio.app /Applications/
 
 # Linux — single binary
-tar xzf flutter-probe-studio-0.6.0-linux-amd64.tar.gz
+tar xzf flutter-probe-studio-<version>-linux-amd64.tar.gz
 mv flutter-probe-studio /usr/local/bin/
 
 # Windows — unzip and double-click the .exe
 ```
 
-Studio is **Beta Preview** in v0.6.0 — production-ready for editor + lint workflows but expect rough edges around physical device support and parallel multi-device authoring.
+Studio is **Beta Preview** — production-ready for editor + lint workflows but expect rough edges around physical device support and parallel multi-device authoring.
 
 ## Try a canary build
 
@@ -121,14 +121,30 @@ Future<void> main() async {
 
 The `bool.fromEnvironment` check ensures the agent is only active when built with `--dart-define=PROBE_AGENT=true`. It adds zero overhead to your production app.
 
-## Step 3: Build and Run
+## Step 3: Initialize Your Project
+
+From your Flutter project directory:
+
+```bash
+probe init
+```
+
+This creates `probe.yaml` (set `project.app` to your app's bundle id or package name), `tests/example.probe` and a sample recipe under `tests/recipes/`. Check that they parse before you run anything:
+
+```bash
+probe lint tests
+```
+
+## Step 4: Build and Run
+
+The app must be running on the device with the agent enabled (`--dart-define=PROBE_AGENT=true`) before `probe test` connects. If `probe test` cannot connect, it tells you what it was waiting for; the usual causes are the app not running, a build without the flag, or another process holding the agent port.
 
 **iOS Simulator:**
 
 ```bash
 flutter run --dart-define=PROBE_AGENT=true
 # In another terminal:
-probe test tests/login.probe --device <your-device> -v
+probe test tests/example.probe --device <your-device> -v
 ```
 
 **Android Emulator:**
@@ -137,7 +153,7 @@ probe test tests/login.probe --device <your-device> -v
 flutter build apk --debug --dart-define=PROBE_AGENT=true
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
 adb shell am start -n com.example.myapp/.MainActivity
-probe test tests/login.probe --device emulator-5554 -v
+probe test tests/example.probe --device emulator-5554 -v
 ```
 
 **Physical iOS (WiFi mode — recommended):**
@@ -149,18 +165,6 @@ xcrun devicectl device process launch --device <UDID> <bundle-id>
 # Find PROBE_TOKEN in app console, then:
 probe test tests/ --host <device-ip> --token <probe-token> -v
 ```
-
-## Initialize Your Project
-
-From your Flutter project directory:
-
-```bash
-probe init
-```
-
-This creates:
-- `probe.yaml` — project configuration
-- `tests/` — directory for `.probe` test files with samples
 
 ## Prerequisites
 

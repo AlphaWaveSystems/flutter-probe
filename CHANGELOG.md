@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Install and quick-start docs follow the order a new user needs**: `probe init` and `probe lint` now come before the first run (they were at the end of the install page, after commands that used the files they create), the first run uses the generated `tests/example.probe`, the quick start opens with a four-command path, notes that the screen texts are examples, and the install page says the app must be running with the agent flag before `probe test` connects. The Studio install snippet no longer names a stale version.
+
 ### Added
 - **A "Why FlutterProbe" page** comparing FlutterProbe with Maestro, Patrol and the Appium Flutter driver. Every statement about another tool is taken from that tool's own documentation and linked; costs of choosing FlutterProbe and when each tool fits are listed.
 - **Probe Cloud design-partner offer and a Probe Cloud preview page** on the docs site: pricing now has a design-partners section (free beta for the first 10 teams, 50% off for life when paid plans launch, apply by email or a public GitHub issue), and `/probe-cloud/` states what the preview does today (`--upload-report`, `--upload-dry-run`, the scrubber and its caps) and what is only planned.
