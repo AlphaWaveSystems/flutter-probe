@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Three tutorials** on the docs site (write a Flutter login test, run end-to-end tests in GitHub Actions, find and fix flaky tests), a "Get started" block in the README, and a 60-second demo script (`docs/demo/60-second-demo.md`).
+
+### Fixed
+- **The recipes page and one MCP example showed unquoted placeholders** (`type <email> into ...`), which `probe lint` rejects since PT-02. They now write `type "<email>" into ...`.
+
 ### Changed
 - **The pricing and Probe Cloud pages state that the hosted endpoint is not live yet**: `--upload-report` is the ready client side and cannot reach a service today; `--upload-dry-run` works now. Design partners get access when the service goes live.
 
