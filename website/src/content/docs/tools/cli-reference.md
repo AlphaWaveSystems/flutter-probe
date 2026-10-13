@@ -9,7 +9,7 @@ description: Complete reference for all probe CLI commands and flags.
 |---------|-------------|
 | `probe init` | Scaffold `probe.yaml` and `tests/` directory |
 | `probe test [path]` | Run `.probe` test files |
-| `probe lint [path]` | Validate `.probe` files for syntax errors |
+| `probe lint [path]` | Validate `.probe` files for syntax errors; warns, never fails, on count and zero-state text checks that a substring match passes by accident |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
 | `probe device start` | Start an emulator/simulator. `--name` names the iOS simulator it boots (created when missing); Android emulators run under their AVD name |
@@ -125,6 +125,8 @@ Validate `.probe` files without executing them.
 probe lint tests/
 probe lint tests/smoke/login.probe
 ```
+
+Lint also warns, and never fails, on a `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. Any `matching` pattern on the step silences the warning. Warnings do not change the exit status.
 
 ## probe record
 

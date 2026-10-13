@@ -105,6 +105,10 @@ A quoted text selector (`see "0 ml"`, `tap "Save"`, `wait until "Done" appears`)
 `see "0 ml" matching "^0 ml$"` (some matched widget's text must match the regular expression), or select by key
 (`see #counter_text`). Before 0.16.8 the `matching` pattern was accepted but never applied.
 
+For zero-state and count checks ("0 ml", "3 items", "No items") prefer the anchored form, because a substring match also
+passes on longer text such as "10 ml". `probe lint` warns, without failing, about a `see` or `wait until ... appears` on
+such a text that has no `matching` pattern. Any `matching` pattern on the step silences the warning.
+
 ## Wait Commands
 
 ```

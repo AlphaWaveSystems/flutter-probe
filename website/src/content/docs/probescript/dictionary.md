@@ -43,7 +43,7 @@ Commands that verify the state of the UI.
 
 | Command | Syntax | Description |
 |---|---|---|
-| `see` | `see "Text"` | Assert that text is visible on screen |
+| `see` | `see "Text"` | Assert that text is visible on screen. A text selector matches substrings; use `see matching` for an exact count or zero-state check |
 | `don't see` | `don't see "Text"` | Assert that text is NOT visible (`dont see` is accepted too) |
 | `see native` | `see native "..."` | Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as "not found" on other platforms |
 | `don't see native` | `don't see native "..."` | Assert a native UI element matching the query is NOT present |
@@ -54,7 +54,7 @@ Commands that verify the state of the UI.
 | `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
 | `see any of` | `see any of "Create Your Account", "Confirm Your Details"` | Assert that any one of the texts is on screen; `don't see any of "A", "B"` asserts none is |
-| `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so use an anchored pattern for exact text: `see "0 ml" matching "^0 ml$"` |
+| `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: `see "0 ml" matching "^0 ml$"`. `probe lint` warns, without failing, about such a check that has no pattern |
 
 State suffixes compose: `see "Field" is enabled contains "y" matching "z"` checks all three at once.
 

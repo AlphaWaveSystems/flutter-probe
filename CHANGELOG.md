@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The pricing and Probe Cloud pages state that the hosted endpoint is not live yet**: `--upload-report` is the ready client side and cannot reach a service today; `--upload-dry-run` works now. Design partners get access when the service goes live.
 
 ### Added
+- **`probe lint` warns about count and zero-state text checks** (warning only; the exit status is unchanged). A `see` or `wait until ... appears` on text such as "0 items", "3 items" or "No items", with no `matching` pattern, also passes on longer text that contains it ("10 items"). The warning suggests the anchored form, `matching "^0 items$"`; any `matching` pattern on the step silences it. The text-matching docs, the dictionary and the MCP `lint` description say the same.
 - **A "Why FlutterProbe" page** comparing FlutterProbe with Maestro, Patrol and the Appium Flutter driver. Every statement about another tool is taken from that tool's own documentation and linked; costs of choosing FlutterProbe and when each tool fits are listed.
 - **Probe Cloud design-partner offer and a Probe Cloud preview page** on the docs site: pricing now has a design-partners section (free beta for the first 10 teams, 50% off for life when paid plans launch, apply by email or a public GitHub issue), and `/probe-cloud/` states what the preview does today (`--upload-report`, `--upload-dry-run`, the scrubber and its caps) and what is only planned.
 
