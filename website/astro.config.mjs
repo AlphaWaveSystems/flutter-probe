@@ -96,6 +96,14 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Tutorials',
+          items: [
+            { label: 'Write a Flutter login test', slug: 'tutorials/flutter-login-test' },
+            { label: 'Run E2E tests in GitHub Actions', slug: 'tutorials/flutter-e2e-github-actions' },
+            { label: 'Find and fix flaky tests', slug: 'tutorials/triage-flaky-flutter-tests' },
+          ],
+        },
+        {
           label: 'Comparisons',
           items: [
             { label: 'Why FlutterProbe', slug: 'comparisons/why-flutterprobe' },
