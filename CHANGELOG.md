@@ -6,25 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
-- **A sample Probe Cloud dashboard at `/demo/`** on the docs site (7, 30 and 90 day views of a made-up fixture app; static pages, no script), linked from the pricing design-partner section and the Probe Cloud page with the note that the data is made up and the hosted service is not live yet.
-
-### Added
-- **Three tutorials** on the docs site (write a Flutter login test, run end-to-end tests in GitHub Actions, find and fix flaky tests), a "Get started" block in the README, and a 60-second demo script (`docs/demo/60-second-demo.md`).
-
-### Fixed
-- **The recipes page and one MCP example showed unquoted placeholders** (`type <email> into ...`), which `probe lint` rejects since PT-02. They now write `type "<email>" into ...`.
-- **Two Maestro claims on the Flutter testing frameworks comparison are now sourced and worded to what Maestro documents**: the iOS docs describe simulators and do not describe local physical iOS devices (it was stated as "no physical iOS device support"), and the Cloud price is quoted from Maestro's pricing page with the date read. The CI paragraph no longer says built-in reporting requires Maestro Cloud.
-
-### Changed
-- **Install and quick-start docs follow the order a new user needs**: `probe init` and `probe lint` now come before the first run (they were at the end of the install page, after commands that used the files they create), the first run uses the generated `tests/example.probe`, the quick start opens with a four-command path, notes that the screen texts are examples, and the install page says the app must be running with the agent flag before `probe test` connects. The Studio install snippet no longer names a stale version.
-- **The pricing and Probe Cloud pages state that the hosted endpoint is not live yet**: `--upload-report` is the ready client side and cannot reach a service today; `--upload-dry-run` works now. Design partners get access when the service goes live.
+## [0.25.2] - 2026-10-13
 
 ### Added
 - **Report upload (Probe Cloud preview): `ci.head_sha`, the job's identity token and retries.** `ci.head_sha` is the commit under test (the push commit, or `pull_request.head.sha` from the event payload on a pull request); like `ci.base_branch` and `ci.default_branch` it is optional and a missing or garbled event file never fails the upload. When the job has `permissions: id-token: write`, the CLI requests the GitHub Actions identity token for the audience in `hosted.audience` / `PROBE_CLOUD_AUDIENCE` (default `probe-cloud`) and sends it as `X-Probe-Attestation` (at most 4,096 characters) to the configured endpoint only; it is never printed or logged, is redacted like the license key, and `--upload-dry-run` shows only `attestation: present|absent`. A busy service (HTTP 429 or 503) is retried with backoff for up to `hosted.retry_window` (default 5 minutes) and then gives a warning; the run is never failed. The endpoint can be set with `PROBE_CLOUD_URL`, and a successful upload prints one line naming the endpoint host. The hosted service is still not live. All additive: the report JSON and its `schema` value do not change.
-- **A "Why FlutterProbe" page** comparing FlutterProbe with Maestro, Patrol and the Appium Flutter driver. Every statement about another tool is taken from that tool's own documentation and linked; costs of choosing FlutterProbe and when each tool fits are listed.
-- **Probe Cloud design-partner offer and a Probe Cloud preview page** on the docs site: pricing now has a design-partners section (free beta for the first 10 teams, 50% off for life when paid plans launch, apply by email or a public GitHub issue), and `/probe-cloud/` states what the preview does today (`--upload-report`, `--upload-dry-run`, the scrubber and its caps) and what is only planned.
 - **Upload envelope: `ci.default_branch`, and `ci.base_branch` is documented.** A hosted report upload (`--upload-report`, or `--upload-dry-run` to preview it) gains an optional `ci.default_branch`, the repository's default branch, read from the GitHub event payload when it names one. `ci.base_branch`, the branch a pull request targets, is sent only for the `pull_request` and `pull_request_target` events. Both fields are optional: a missing or unreadable event file only adds a warning.
+
+### Docs
+- **Docs site**: tutorials (login test, GitHub Actions, flaky tests), a "Why FlutterProbe" comparison with sourced claims, the Probe Cloud design-partner offer and preview page (the hosted service is not live yet), a sample dashboard at `/demo/`, install and quick-start in first-run order, and recipe examples with quoted placeholders that `probe lint` accepts.
 
 ## [0.25.1] - 2026-10-12
 
