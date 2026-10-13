@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+- **The unmeasured "sub-50ms" claim is removed everywhere.** "Sub-50ms command round-trips" (and the "<0.5% flake", "<100ms cold start" and "under 90 seconds" goals, and the "~100-200ms" and "10-40ms" figures for other tools and for the WebSocket) were never measured. The README, docs index, comparison and blog pages, architecture page, social image, `probe --help` text and the agent README now describe direct in-app control and cite the one measurement we have: the replicated benchmark against Maestro (about 2x faster median suite time, 0 flaky runs of 20). The `flutter_probe_agent` pubspec description changed too; pub.dev shows it from the next release.
+
 ### Changed
 - **The site no longer calls the whole project open source.** The CLI is source-available under BSL 1.1 and the Dart agent is MIT, so the landing page, its meta tags, the social image, the contact, privacy and terms pages and one comparison page now say "free to use, source-available CLI (BSL 1.1), MIT agent", and the landing page and pricing state what the BSL's use grant allows (any purpose, including production, except offering a competing hosted testing service).
 - **The landing page's performance numbers are the measured ones.** "<50ms command round-trip", "<0.5% flake rate" and "<100ms CLI cold start" were design targets, not measurements, and are gone from the landing page; it now shows the replicated Maestro benchmark (about 2x faster median suite time, 0 flaky FlutterProbe runs of 20, with a link to the data).

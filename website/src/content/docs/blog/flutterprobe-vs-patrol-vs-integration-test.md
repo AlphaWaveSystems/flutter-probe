@@ -43,7 +43,7 @@ The critical difference is rebuild time. `integration_test` and Patrol recompile
 | Patrol | 5m 31s | 5m 24s | 18s |
 | FlutterProbe | 2m 47s | 2m 44s | 7s |
 
-FlutterProbe's speed advantage comes from two factors: no recompilation between test files, and sub-50ms per-command latency versus 100-200ms for `pumpAndSettle`-based tools. The gap widens with more scenarios because the compilation overhead in `integration_test` and Patrol is paid per test file.
+FlutterProbe's speed advantage comes from no recompilation between test files and from direct in-app control instead of waiting for `pumpAndSettle`. The gap widens with more scenarios because the compilation overhead in `integration_test` and Patrol is paid per test file.
 
 Patrol is slower than `integration_test` because the native automation layer adds overhead for every native interaction, and the communication between the Dart test and the native runner introduces latency.
 
@@ -97,7 +97,7 @@ Flakiness is highly dependent on test implementation quality. These numbers refl
 
 - **Build-once architecture.** Eliminates recompilation overhead, which compounds significantly in CI pipelines with large test suites.
 - **ProbeScript readability.** Non-developers can read, write, and review tests. This changes team dynamics around test ownership.
-- **Performance.** Sub-50ms command latency and no recompilation make FlutterProbe measurably faster for suites above 10 scenarios.
+- **Performance.** No recompilation between test files and direct in-app control. We have measured this against Maestro (about 2x faster median suite time, [benchmark](/blog/flutterprobe-vs-maestro-benchmark/)), not against Patrol or `integration_test`.
 - **CI/CD tooling.** Built-in sharding, JUnit/HTML reporting, and [five cloud device farm integrations](/comparisons/flutter-test-automation/) reduce CI pipeline setup work.
 - **Self-healing selectors.** Minor UI changes (reordering widgets, changing container types) do not break tests. This materially reduces maintenance effort.
 - **Visual regression.** Built-in screenshot comparison catches unintended UI changes that functional tests miss. See [visual regression docs](/advanced/visual-regression/).

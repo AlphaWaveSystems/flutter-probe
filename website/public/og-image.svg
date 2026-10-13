@@ -40,8 +40,8 @@
   <text x="110" y="563" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="16" fill="#3bea7e">see "Dashboard"</text>
 
   <!-- Stats on right side -->
-  <text x="700" y="455" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="800" fill="#3bf0e4">&lt;50ms</text>
-  <text x="700" y="485" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#7889a8">command round-trip</text>
+  <text x="700" y="455" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="800" fill="#3bf0e4">~2x</text>
+  <text x="700" y="485" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#7889a8">median suite time vs Maestro</text>
 
   <text x="700" y="540" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="800" fill="#3bea7e">0%</text>
   <text x="700" y="570" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#7889a8">WebDriver overhead</text>
