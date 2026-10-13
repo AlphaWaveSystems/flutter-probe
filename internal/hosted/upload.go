@@ -3,24 +3,55 @@ package hosted
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// DefaultTimeout bounds one upload; there are no retries, so a slow or dead endpoint costs a few seconds at most.
-const DefaultTimeout = 5 * time.Second
+const (
+	// DefaultTimeout bounds one upload attempt, so a slow or dead endpoint costs a few seconds per try.
+	DefaultTimeout = 5 * time.Second
+	// DefaultRetryWindow is how long a busy service (HTTP 429 or 503) is retried before the upload gives up.
+	// Giving up is a warning, never a failed run.
+	DefaultRetryWindow = 5 * time.Minute
 
-// HTTPTransport posts the payload to <BaseURL>/v1/reports with the license key as a bearer token.
-// The contract is a preview and may change.
+	retryFirstDelay = 2 * time.Second
+	retryMaxDelay   = 30 * time.Second
+	retryAfterCap   = 60 * time.Second
+)
+
+// HTTPTransport posts the payload to <BaseURL>/v1/reports with the license key as a bearer token and,
+// when Attestation is set, the identity token in the X-Probe-Attestation header. The token is sent only to
+// BaseURL and a redirect is never followed. The contract is a preview and may change.
 type HTTPTransport struct {
-	BaseURL string
-	Client  *http.Client
+	BaseURL     string
+	Client      *http.Client
+	Attestation string
+	// Note, when set, receives a warning about a stored report (for example a rejected identity token).
+	Note func(string)
+}
+
+// StatusError is a non-2xx answer from the hosted service. Upload retries the busy ones (429, 503).
+type StatusError struct {
+	Code       int
+	Message    string
+	RetryAfter time.Duration
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("the hosted service answered HTTP %d: %s", e.Code, e.Message)
+}
+
+// Retryable reports whether the answer means "try again later".
+func (e *StatusError) Retryable() bool {
+	return e.Code == http.StatusTooManyRequests || e.Code == http.StatusServiceUnavailable
 }
 
 // ValidateBaseURL refuses a URL that would send the key in clear text: https is required except for
@@ -57,23 +88,38 @@ func (t HTTPTransport) Send(ctx context.Context, licenseKey string, body []byte)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+licenseKey)
+	if t.Attestation != "" && validAttestation(t.Attestation) {
+		req.Header.Set(AttestationHeader, t.Attestation)
+	}
 	resp, err := noRedirects(t.Client).Do(req)
 	if err != nil {
-		return fmt.Errorf("upload failed: %s", Sanitize(err.Error(), licenseKey))
+		return fmt.Errorf("upload failed: %s", Sanitize(err.Error(), licenseKey, t.Attestation))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 == 3 {
-		return fmt.Errorf("the hosted service answered with a redirect (HTTP %d); redirects are never followed so the license key cannot be forwarded", resp.StatusCode)
+		return fmt.Errorf("the hosted service answered with a redirect (HTTP %d); redirects are never followed so the license key and identity token cannot be forwarded", resp.StatusCode)
 	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode/100 != 2 {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		snippet := []rune(Sanitize(string(raw), licenseKey))
+		snippet := []rune(Sanitize(string(raw), licenseKey, t.Attestation))
 		if len(snippet) > 200 {
 			snippet = append(snippet[:200], '…')
 		}
-		return fmt.Errorf("the hosted service answered HTTP %d: %s", resp.StatusCode, string(snippet))
+		return &StatusError{Code: resp.StatusCode, Message: string(snippet), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}
+	}
+	if note := attestationNote(raw); note != "" && t.Note != nil {
+		t.Note(note)
 	}
 	return nil
+}
+
+// parseRetryAfter reads a Retry-After header in seconds; anything else is 0 (use the backoff).
+func parseRetryAfter(v string) time.Duration {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return time.Duration(n) * time.Second
 }
 
 // noRedirects returns a copy of c (or a new client) that never follows a redirect: Go would forward the
@@ -89,6 +135,7 @@ func noRedirects(c *http.Client) *http.Client {
 
 var (
 	licenseLike = regexp.MustCompile(`FP2\.[A-Za-z0-9._-]*`)
+	tokenLike   = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*){0,2}`)
 	ansiCSI     = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]")
 	ansiOSC     = regexp.MustCompile("\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?")
 )
@@ -96,10 +143,13 @@ var (
 // Sanitize makes text from a remote server safe to print in a terminal: ANSI escape sequences, control
 // characters and invalid UTF-8 are removed (newlines become spaces), the license key is redacted if
 // the server echoes it, and the result is trimmed.
-func Sanitize(s, licenseKey string) string {
-	if licenseKey != "" {
-		s = strings.ReplaceAll(s, licenseKey, "[redacted]")
+func Sanitize(s string, secrets ...string) string {
+	for _, secret := range secrets {
+		if secret != "" {
+			s = strings.ReplaceAll(s, secret, "[redacted]")
+		}
 	}
+	s = tokenLike.ReplaceAllString(s, "[redacted]")   // an identity token (JWT), whole or cut off
 	s = licenseLike.ReplaceAllString(s, "[redacted]") // a key, whole or cut off, in any case
 	s = strings.ToValidUTF8(s, "")
 	s = ansiOSC.ReplaceAllString(s, "")
@@ -129,6 +179,19 @@ type Options struct {
 	Out        io.Writer // dry-run output and the notes
 	Transport  Transport // default HTTPTransport{BaseURL}
 	Scrubber   *Scrubber // default NewScrubber()
+
+	// Attestation is the job's identity token, sent as a header to BaseURL only. It is never printed.
+	Attestation string
+	// DryAttestation makes a dry run say "attestation: present" without a token being requested.
+	DryAttestation bool
+	// RetryWindow is how long a busy service (429, 503) is retried; 0 uses DefaultRetryWindow, negative disables retries.
+	RetryWindow time.Duration
+	// Warn receives progress and warnings that are not the final error (a retry, a rejected token).
+	Warn func(string)
+	// Sleep waits between retries; tests replace it. Default: a timer that honours ctx.
+	Sleep func(context.Context, time.Duration) error
+	// Now is the clock the retry window is measured on; tests replace it. Default time.Now.
+	Now func() time.Time
 }
 
 // BuildPayload scrubs the report and wraps it with the envelope, within MaxPayloadBytes.
@@ -191,6 +254,11 @@ func Upload(ctx context.Context, o Options) error {
 			fmt.Fprintf(o.Out, "note: a real upload would be refused before sending: %s\n", strings.Join(problems, "; "))
 		}
 		if o.Out != nil {
+			state := "absent"
+			if o.Attestation != "" || o.DryAttestation {
+				state = "present"
+			}
+			fmt.Fprintf(o.Out, "attestation: %s\n", state)
 			fmt.Fprintf(o.Out, "dry run: nothing is sent. The request would be POST %s/v1/reports with the license key as a bearer token and this body:\n%s\n", baseOrDefault(o.BaseURL), body)
 		}
 		return nil
@@ -202,13 +270,59 @@ func Upload(ctx context.Context, o Options) error {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	tr := o.Transport
 	if tr == nil {
-		tr = HTTPTransport{BaseURL: baseOrDefault(o.BaseURL), Client: noRedirects(&http.Client{Timeout: timeout})}
+		tr = HTTPTransport{BaseURL: baseOrDefault(o.BaseURL), Client: noRedirects(&http.Client{Timeout: timeout}), Attestation: o.Attestation, Note: o.Warn}
 	}
-	return tr.Send(cctx, o.LicenseKey, body)
+	window := o.RetryWindow
+	if window == 0 {
+		window = DefaultRetryWindow
+	}
+	sleep := o.Sleep
+	if sleep == nil {
+		sleep = sleepCtx
+	}
+	now := o.Now
+	if now == nil {
+		now = time.Now
+	}
+	started := now()
+	delay := retryFirstDelay
+	for attempt := 1; ; attempt++ {
+		cctx, cancel := context.WithTimeout(ctx, timeout)
+		err := tr.Send(cctx, o.LicenseKey, body)
+		cancel()
+		var se *StatusError
+		if err == nil || !errors.As(err, &se) || !se.Retryable() || window < 0 {
+			return err
+		}
+		wait := delay
+		if se.RetryAfter > 0 {
+			wait = min(se.RetryAfter, retryAfterCap)
+		}
+		if now().Sub(started)+wait > window {
+			return fmt.Errorf("%w (still busy after %s of retries; nothing was stored)", err, window.Round(time.Second))
+		}
+		if attempt == 1 || attempt%4 == 0 {
+			warnf(o.Warn, "the hosted service is busy (HTTP %d), retrying (attempt %d, waiting %s, giving up after %s)", se.Code, attempt+1, wait.Round(time.Second), window.Round(time.Second))
+		}
+		if serr := sleep(ctx, wait); serr != nil {
+			return fmt.Errorf("%w (retries stopped: %v)", err, serr)
+		}
+		delay = min(delay*2, retryMaxDelay)
+	}
+}
+
+// sleepCtx waits for d or until ctx is done.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 func baseOrDefault(s string) string {

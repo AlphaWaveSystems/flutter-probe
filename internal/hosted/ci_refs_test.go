@@ -114,3 +114,44 @@ func TestRefFieldsReachTheDryRunPayloadUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// head_sha: the commit on a push, pull_request.head.sha from the payload on a pull request event, nothing otherwise.
+func TestHeadSHA(t *testing.T) {
+	merge, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	pr := func(sha string) string {
+		return `{"pull_request":{"head":{"sha":"` + sha + `"}},"repository":{"default_branch":"main"}}`
+	}
+	cases := []struct {
+		name, event, payload, want string
+	}{
+		{"push is its commit", "push", `{}`, merge},
+		{"pull_request uses the head, not the merge commit", "pull_request", pr(head), head},
+		{"pull_request_target uses the head", "pull_request_target", pr(head), head},
+		{"upper-case hex is lower-cased", "pull_request", pr(strings.ToUpper(head)), head},
+		{"a payload without a head sha omits it", "pull_request", `{"pull_request":{}}`, ""},
+		{"a short sha is omitted", "pull_request", pr("abc123"), ""},
+		{"a garbled payload omits it", "pull_request", `{not json`, ""},
+		{"schedule has none", "schedule", pr(head), ""},
+		{"workflow_dispatch has none", "workflow_dispatch", pr(head), ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ci := CIFromEnv(envMap(map[string]string{
+				"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "a/b", "GITHUB_REF_NAME": "main", "GITHUB_SHA": merge,
+				"GITHUB_RUN_ID": "1", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_EVENT_NAME": c.event, "GITHUB_EVENT_PATH": refEvent(t, c.payload),
+			}), nil)
+			if ci.HeadSHA != c.want {
+				t.Errorf("head_sha = %q, want %q", ci.HeadSHA, c.want)
+			}
+			raw, _ := json.Marshal(ci)
+			if has := strings.Contains(string(raw), `"head_sha"`); has != (c.want != "") {
+				t.Errorf("head_sha in the JSON = %v: %s", has, raw)
+			}
+		})
+	}
+	// A missing event file never fails the call.
+	ci := CIFromEnv(envMap(map[string]string{"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "pull_request", "GITHUB_SHA": merge}), nil)
+	if ci == nil || ci.HeadSHA != "" {
+		t.Errorf("ci = %+v", ci)
+	}
+}

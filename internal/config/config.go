@@ -56,8 +56,10 @@ type Config struct {
 // --upload-report is given) and a license with the probe_cloud plan is activated.
 type HostedConfig struct {
 	UploadReport bool          `yaml:"upload_report"` // upload the scrubbed run report after `probe test` (same as --upload-report)
-	URL          string        `yaml:"url"`           // service base URL; the default is a placeholder that is not live yet
+	URL          string        `yaml:"url"`           // service base URL; the default is a placeholder that is not live yet (PROBE_CLOUD_URL overrides)
 	Timeout      time.Duration `yaml:"timeout"`       // upload time limit (default 5s); an upload never fails the run
+	Audience     string        `yaml:"audience"`     // audience requested for the GitHub Actions identity token (default "probe-cloud"; PROBE_CLOUD_AUDIENCE overrides)
+	RetryWindow  time.Duration `yaml:"retry_window"` // how long a busy service (HTTP 429 or 503) is retried (default 5m); a negative value turns retries off
 	Label        string        `yaml:"label"`         // optional run label (a suite, shard or matrix leg; sanitized to [0-9A-Za-z._:/-], 64 chars). Two uploads of one CI job must differ in it
 }
 

@@ -41,6 +41,7 @@ type CIInfo struct {
 	DefaultBranch string `json:"default_branch,omitempty"` // the repository's default branch, from the event payload at GITHUB_EVENT_PATH; omitted if the payload does not name one
 	Job           string `json:"job,omitempty"`            // GITHUB_JOB, the job id (1 to 100 of [0-9A-Za-z_-]); omitted if it does not fit
 	CommitSHA     string `json:"commit_sha,omitempty"`
+	HeadSHA       string `json:"head_sha,omitempty"` // push: the commit; pull request: pull_request.head.sha from the event payload (not the merge commit); omitted if unknown or not 40 lower-case hex
 	PullRequest   int    `json:"pull_request,omitempty"`
 	RunID         string `json:"run_id,omitempty"`
 	RunAttempt    string `json:"run_attempt,omitempty"`
@@ -113,6 +114,14 @@ func CIFromEnv(getenv func(string) string, warn func(string)) *CIInfo {
 		}
 	}
 	ci.DefaultBranch = defaultBranchFromEvent(getenv("GITHUB_EVENT_PATH"), warn)
+	switch getenv("GITHUB_EVENT_NAME") {
+	case "push":
+		if sha40.MatchString(ci.CommitSHA) {
+			ci.HeadSHA = ci.CommitSHA
+		}
+	case "pull_request", "pull_request_target":
+		ci.HeadSHA = headSHAFromEvent(getenv("GITHUB_EVENT_PATH"))
+	}
 	return ci
 }
 
@@ -160,6 +169,33 @@ func defaultBranchFromEvent(path string, warn func(string)) string {
 		return ""
 	}
 	return name
+}
+
+// headSHAFromEvent reads pull_request.head.sha from the event payload at path. Anything that is not 40 lower-case
+// hex characters, and any unreadable file, gives "": the field is optional and never fails the caller (the file
+// problem itself is already reported once by defaultBranchFromEvent).
+func headSHAFromEvent(path string) string {
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var ev struct {
+		PullRequest struct {
+			Head struct {
+				SHA string `json:"sha"`
+			} `json:"head"`
+		} `json:"pull_request"`
+	}
+	if json.Unmarshal(raw, &ev) != nil {
+		return ""
+	}
+	if sha := strings.ToLower(ev.PullRequest.Head.SHA); sha40.MatchString(sha) {
+		return sha
+	}
+	return ""
 }
 
 // warnf passes a warning to warn when there is one. A nil warn drops it.
