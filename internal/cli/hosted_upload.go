@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -77,7 +79,7 @@ func hostedUpload(cmd *cobra.Command, w io.Writer, cfg *config.Config, results [
 		label = cfg.Hosted.Label
 	}
 	label = hosted.SanitizeLabel(label)
-	env := hosted.Envelope{ProbeVersion: Version, DeviceClass: class, CI: hosted.CIFromEnv(nil), RunLabel: label}
+	env := hosted.Envelope{ProbeVersion: Version, DeviceClass: class, CI: hosted.CIFromEnv(nil, func(msg string) { statusWarn(w, "%s", msg) }), RunLabel: label}
 	for _, r := range results {
 		if r.Attempts > 1 {
 			env.Retries = append(env.Retries, hosted.RetryOutcome{File: r.File, Test: r.TestName, Attempts: min(r.Attempts, 20), Passed: r.Passed})
@@ -87,13 +89,40 @@ func hostedUpload(cmd *cobra.Command, w io.Writer, cfg *config.Config, results [
 	if dry {
 		out = cmd.OutOrStdout()
 	}
-	err = hosted.Upload(context.Background(), hosted.Options{
-		Report: raw, Envelope: env, LicenseKey: key, BaseURL: cfg.Hosted.URL, Timeout: cfg.Hosted.Timeout, DryRun: dry, Out: out,
-	})
+	baseURL := cfg.Hosted.URL
+	if v := strings.TrimSpace(os.Getenv("PROBE_CLOUD_URL")); v != "" {
+		baseURL = v
+	}
+	audience := cfg.Hosted.Audience
+	if v := strings.TrimSpace(os.Getenv("PROBE_CLOUD_AUDIENCE")); v != "" {
+		audience = v
+	}
+	warn := func(msg string) { statusWarn(w, "%s", msg) }
+	opts := hosted.Options{
+		Report: raw, Envelope: env, LicenseKey: key, BaseURL: baseURL, Timeout: cfg.Hosted.Timeout, DryRun: dry, Out: out,
+		RetryWindow: cfg.Hosted.RetryWindow, Warn: warn,
+	}
+	if dry {
+		opts.DryAttestation = hosted.AttestationAvailable(os.Getenv)
+	} else {
+		opts.Attestation = hosted.RequestAttestation(context.Background(), os.Getenv, nil, audience, warn)
+	}
+	err = hosted.Upload(context.Background(), opts)
 	switch {
 	case err != nil:
 		statusWarn(w, "report upload failed (the run is unaffected): %v", err)
 	case !dry:
-		statusOK(w, "Report uploaded (scrubbed: relative paths, no artifacts)")
+		host := baseURL
+		if strings.TrimSpace(host) == "" {
+			host = hosted.DefaultBaseURL
+		}
+		if u, perr := url.Parse(host); perr == nil && u.Host != "" {
+			host = u.Host
+		}
+		tokenNote := "without an identity token"
+		if opts.Attestation != "" {
+			tokenNote = "with an identity token"
+		}
+		statusOK(w, "Report uploaded to %s %s (scrubbed: relative paths, no artifacts)", host, tokenNote)
 	}
 }
