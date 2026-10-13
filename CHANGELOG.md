@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **The landing page's install command is Homebrew** (`brew install AlphaWaveSystems/tap/probe`) instead of cloning the repository and running `make build`, the install step no longer shows a Linux-only download, and the page links to the first tutorial.
+
 ### Docs
 - **The sample dashboard pages at `/demo/` are refreshed** from their source (static pages with no form or sign-out button).
 

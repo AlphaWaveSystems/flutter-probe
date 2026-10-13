@@ -549,7 +549,7 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
   <section>
     <div class="sec-h"><h2>Zero to tests in 4 steps</h2></div>
     <div class="steps-row">
-      <div class="st"><div class="n">01</div><h3>Install</h3><p>Single binary. No runtime deps.</p><code>curl -Lo probe ...releases/latest/download/probe-linux-amd64</code></div>
+      <div class="st"><div class="n">01</div><h3>Install</h3><p>Single binary. No runtime deps.</p><code>brew install AlphaWaveSystems/tap/probe</code></div>
       <div class="st"><div class="n">02</div><h3>Init</h3><p>Scaffolds config and test directory.</p><code>probe init</code></div>
       <div class="st"><div class="n">03</div><h3>Write</h3><p>Plain English in a .probe file.</p><code>tests/login.probe</code></div>
       <div class="st"><div class="n">04</div><h3>Run</h3><p>Against any connected device.</p><code>probe test tests/ -v</code></div>
@@ -592,11 +592,12 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
     <div class="install">
       <div class="sec-h"><h2>Try it now</h2></div>
       <div class="install-box">
-        <span><span class="dollar">$</span> make build</span>
-        <button onclick="navigator.clipboard.writeText('git clone https://github.com/AlphaWaveSystems/flutter-probe.git && cd flutter-probe && make build');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+        <span><span class="dollar">$</span> brew install AlphaWaveSystems/tap/probe</span>
+        <button onclick="navigator.clipboard.writeText('brew tap AlphaWaveSystems/tap && brew install probe');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
       </div>
       <div class="cta">
         <a href="/getting-started/installation/" class="btn-p">Read the docs</a>
+        <a href="/tutorials/flutter-login-test/" class="btn-s">Write your first test</a>
         <a href="https://github.com/AlphaWaveSystems/flutter-probe" class="btn-s">Star on GitHub</a>
       </div>
     </div>
