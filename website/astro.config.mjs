@@ -98,6 +98,7 @@ export default defineConfig({
         {
           label: 'Comparisons',
           items: [
+            { label: 'Why FlutterProbe', slug: 'comparisons/why-flutterprobe' },
             { label: 'Flutter E2E Testing Guide', slug: 'comparisons/flutter-e2e-testing' },
             { label: 'Flutter Testing Frameworks', slug: 'comparisons/flutter-testing-framework' },
             { label: 'integration_test Alternative', slug: 'comparisons/integration-test-alternative' },
