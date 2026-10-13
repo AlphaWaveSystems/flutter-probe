@@ -224,6 +224,15 @@ func realDoctorEnv(cmd *cobra.Command) doctorEnv {
 // errDoctorFailed means a required check failed. The report has already said what to fix.
 var errDoctorFailed = errors.New("required doctor check failed")
 
+// noDeviceError is what `probe test` returns when it needs a device and none is usable. A listing that failed points at
+// the platform tools; an empty one points at starting a device. Both point at probe doctor, which checks them.
+func noDeviceError(listErr error) error {
+	if listErr != nil {
+		return fmt.Errorf("no connected devices found: listing them failed: %w. Run 'probe doctor' to check the platform tools", listErr)
+	}
+	return errors.New("no connected devices found: start an emulator or simulator, then run 'probe doctor' to check what is missing")
+}
+
 func runDoctor(cmd *cobra.Command, _ []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

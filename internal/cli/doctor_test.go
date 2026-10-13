@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
@@ -152,5 +153,18 @@ func TestPrintDoctorReportSilencesCobraOnlyForRequiredFailures(t *testing.T) {
 	}
 	if warning.SilenceErrors {
 		t.Error("SilenceErrors set without a required failure")
+	}
+}
+
+// The message `probe test` gives when no device is usable names the next step, and keeps the underlying error when
+// the listing itself failed.
+func TestNoDeviceErrorNamesTheNextStep(t *testing.T) {
+	empty := noDeviceError(nil).Error()
+	if !strings.Contains(empty, "no connected devices found") || !strings.Contains(empty, "probe doctor") {
+		t.Errorf("empty listing: %q", empty)
+	}
+	failed := noDeviceError(errors.New("adb: server not running")).Error()
+	if !strings.Contains(failed, "adb: server not running") || !strings.Contains(failed, "probe doctor") {
+		t.Errorf("failed listing: %q", failed)
 	}
 }
