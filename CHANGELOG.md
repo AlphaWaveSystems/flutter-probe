@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- **The site no longer calls the whole project open source.** The CLI is source-available under BSL 1.1 and the Dart agent is MIT, so the landing page, its meta tags, the social image, the contact, privacy and terms pages and one comparison page now say "free to use, source-available CLI (BSL 1.1), MIT agent", and the landing page and pricing state what the BSL's use grant allows (any purpose, including production, except offering a competing hosted testing service).
+- **The landing page's performance numbers are the measured ones.** "<50ms command round-trip", "<0.5% flake rate" and "<100ms CLI cold start" were design targets, not measurements, and are gone from the landing page; it now shows the replicated Maestro benchmark (about 2x faster median suite time, 0 flaky FlutterProbe runs of 20, with a link to the data).
+- **The pricing page labels the planned Team price** ("Planned price, not final. Free for design partners.").
 - **The landing page's install command is Homebrew** (`brew install AlphaWaveSystems/tap/probe`) instead of cloning the repository and running `make build`, the install step no longer shows a Linux-only download, and the page links to the first tutorial.
 
 ### Docs

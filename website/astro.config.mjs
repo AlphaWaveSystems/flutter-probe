@@ -16,7 +16,7 @@ export default defineConfig({
     sitemap(),
     starlight({
       title: 'FlutterProbe',
-      description: 'Open-source Flutter E2E testing framework — write tests in plain English, execute via direct widget-tree access with sub-50ms round-trips.',
+      description: 'Flutter E2E testing framework — write tests in plain English, execute via direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent.',
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/AlphaWaveSystems/flutter-probe' },
       ],

@@ -13,18 +13,18 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FlutterProbe — Flutter E2E Tests in Plain English</title>
-  <meta name="description" content="Open-source Flutter E2E testing framework. Write tests in plain English, execute via direct widget-tree access with sub-50ms round-trips. Alternative to integration_test and Patrol." />
+  <meta name="description" content="Flutter E2E testing framework. Write tests in plain English and run them through direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent. Alternative to integration_test and Patrol." />
   <meta name="keywords" content="flutter, e2e testing, flutter testing framework, integration_test alternative, patrol alternative, mobile testing, flutter ui testing, test automation, ProbeScript" />
   <link rel="canonical" href="https://flutterprobe.dev/" />
   <meta property="og:title" content="FlutterProbe — Flutter E2E Testing Framework" />
-  <meta property="og:description" content="Write Flutter E2E tests in plain English. Sub-50ms execution via direct widget-tree access. Open-source alternative to integration_test and Patrol." />
+  <meta property="og:description" content="Write Flutter E2E tests in plain English. Direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent. Alternative to integration_test and Patrol." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://flutterprobe.dev/" />
   <meta property="og:image" content="https://flutterprobe.dev/og-image.png" />
   <meta property="og:site_name" content="FlutterProbe" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="FlutterProbe — Flutter E2E Testing Framework" />
-  <meta name="twitter:description" content="Write Flutter E2E tests in plain English. Sub-50ms execution, no WebDriver overhead." />
+  <meta name="twitter:description" content="Write Flutter E2E tests in plain English. Direct widget-tree access, no WebDriver layer." />
   <meta name="twitter:image" content="https://flutterprobe.dev/og-image.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <script type="application/ld+json">
@@ -34,7 +34,7 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
     "name": "FlutterProbe",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Android, iOS",
-    "description": "Open-source Flutter E2E testing framework. Write tests in plain English using ProbeScript, execute via direct widget-tree access with sub-50ms command round-trips.",
+    "description": "Flutter E2E testing framework. Write tests in plain English using ProbeScript, execute via direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent.",
     "url": "https://flutterprobe.dev/",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "author": { "@type": "Organization", "name": "Alpha Wave Systems", "url": "https://alphawavesystems.com" }
@@ -445,7 +445,7 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
   </nav>
   <!-- Hero -->
   <div class="hero">
-    <div class="badge"><span></span> v{version} &middot; BSL 1.1 open source</div>
+    <div class="badge"><span></span> v{version} &middot; free to use &middot; source-available CLI (BSL 1.1), MIT agent</div>
     <h1>Flutter E2E tests in<br/><span class="g">plain English</span></h1>
     <p class="sub">Write tests your whole team can read. Execute with direct widget-tree access &mdash; no accessibility layer, no WebDriver overhead.</p>
     <div class="hero-code">
@@ -465,9 +465,9 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
   </div>
   <!-- Metrics -->
   <div class="metrics">
-    <div class="metric"><div class="num t">&lt;50ms</div><div class="lbl">Command round-trip</div></div>
-    <div class="metric"><div class="num g">&lt;0.5%</div><div class="lbl">Flake rate</div></div>
-    <div class="metric"><div class="num p">&lt;100ms</div><div class="lbl">CLI cold start</div></div>
+    <div class="metric"><div class="num t">~2x</div><div class="lbl"><a href="/blog/flutterprobe-vs-maestro-benchmark/">Faster median suite time than Maestro</a> (one app, 20 runs)</div></div>
+    <div class="metric"><div class="num g">0 of 20</div><div class="lbl">Flaky FlutterProbe runs in that benchmark</div></div>
+    <div class="metric"><div class="num p">3</div><div class="lbl">Device kinds: emulators, simulators, physical</div></div>
     <div class="metric"><div class="num a">7</div><div class="lbl">Migration formats</div></div>
   </div>
   <div class="divider"></div>
@@ -498,9 +498,9 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
     <div class="sec-h"><h2>Everything you need</h2><p>No plugins to install. No extra packages. Batteries included.</p></div>
     <div class="features">
       <div class="feat"><h3><span class="ic ic-t">N</span> Natural language</h3><p>ProbeScript reads like English. No locators, no async/await. QA, product, and engineering can all read the tests.</p></div>
-      <div class="feat"><h3><span class="ic ic-g">&#9889;</span> Sub-50ms execution</h3><p>Direct widget-tree access via the Dart agent. No XPath, no accessibility bridge. Command round-trips under 50 milliseconds.</p></div>
-      <div class="feat"><h3><span class="ic ic-p">&#8635;</span> Watch mode</h3><p>Re-runs on file save with hot-reload awareness. Iteration cycles under 2 seconds. No recompilation needed.</p></div>
-      <div class="feat"><h3><span class="ic ic-a">&#8853;</span> Cross-platform</h3><p>Same tests on Android emulators, iOS simulators, and physical devices. Stable WiFi testing with zero connection drops. Permissions, lifecycle, and platform quirks handled automatically.</p></div>
+      <div class="feat"><h3><span class="ic ic-g">&#9889;</span> Direct widget-tree access</h3><p>The Dart agent in your app reads the live widget tree. No XPath, no accessibility bridge, and widget keys work as selectors.</p></div>
+      <div class="feat"><h3><span class="ic ic-p">&#8635;</span> Watch mode</h3><p>Re-runs on file save with hot-reload awareness. No recompilation of the test between runs.</p></div>
+      <div class="feat"><h3><span class="ic ic-a">&#8853;</span> Cross-platform</h3><p>Same tests on Android emulators, iOS simulators, and physical devices. WiFi mode for physical iOS devices. Permissions, lifecycle, and platform quirks handled automatically.</p></div>
       <div class="feat"><h3><span class="ic ic-c">&#9673;</span> Test recording</h3><p>Record taps, swipes, and text input on a real device. FlutterProbe writes the .probe file as you interact.</p></div>
       <div class="feat"><h3><span class="ic ic-t">&#9651;</span> Visual regression</h3><p>Screenshot baselines with configurable pixel thresholds — full screen or cropped to a single widget. Catch unintended UI changes before they ship.</p></div>
       <div class="feat"><h3><span class="ic ic-g">&#11041;</span> HTTP mocking</h3><p>Mock API responses directly in test files. No external packages, no separate mock server.</p></div>
@@ -595,6 +595,7 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
         <span><span class="dollar">$</span> brew install AlphaWaveSystems/tap/probe</span>
         <button onclick="navigator.clipboard.writeText('brew tap AlphaWaveSystems/tap && brew install probe');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
       </div>
+      <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0 0">Free to use for any purpose, including production, except offering a competing hosted testing service (the CLI is under BSL 1.1; the Dart agent is MIT).</p>
       <div class="cta">
         <a href="/getting-started/installation/" class="btn-p">Read the docs</a>
         <a href="/tutorials/flutter-login-test/" class="btn-s">Write your first test</a>
