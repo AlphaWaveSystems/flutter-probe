@@ -12,7 +12,7 @@ Four tools come up most often for Flutter end-to-end tests: Maestro, Patrol, the
 | Test language | YAML flows | Dart | JavaScript, Python, Ruby and others | ProbeScript (plain English) |
 | How it sees the app | The accessibility (semantics) tree | Inside the Flutter test process, plus a native automation layer | The Flutter driver extension | An agent in your app, driven over WebSocket |
 | Changes to your app | None (tests the built APK or IPA) | Tests are Dart files in the Flutter project | `flutter_driver` and `enableFlutterDriverExtension` in a debug or profile build | `probe_agent` package, enabled with a build flag |
-| Flutter widget keys | Not visible to it (per its docs) | not checked for this page | not checked for this page | Yes |
+| Flutter widget keys | Not visible to it (per its docs) | see its docs | see its docs | Yes |
 
 Sources: [Maestro Flutter docs](https://docs.maestro.dev/get-started/supported-platform/flutter), [Patrol](https://patrol.leancode.co/), [Appium Flutter driver](https://github.com/appium/appium-flutter-driver). The FlutterProbe column describes this project; see the [architecture](/advanced/architecture/) page.
 
