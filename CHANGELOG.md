@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **A sample Probe Cloud dashboard at `/demo/`** on the docs site (7, 30 and 90 day views of a made-up fixture app; static pages, no script), linked from the pricing design-partner section and the Probe Cloud page with the note that the data is made up and the hosted service is not live yet.
+
+### Added
 - **Three tutorials** on the docs site (write a Flutter login test, run end-to-end tests in GitHub Actions, find and fix flaky tests), a "Get started" block in the README, and a 60-second demo script (`docs/demo/60-second-demo.md`).
 
 ### Fixed
