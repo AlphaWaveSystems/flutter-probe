@@ -129,7 +129,7 @@ From your Flutter project directory:
 probe init
 ```
 
-This creates `probe.yaml` (set `project.app` to your app's bundle id or package name), `tests/example.probe` and a sample recipe under `tests/recipes/`. Check that they parse before you run anything:
+This creates `probe.yaml` (set `project.app` to your app's bundle id or package name), `tests/example.probe` and a sample recipe under `tests/recipes/`. The sample test only opens the app, so it passes once `project.app` is right and the app starts with the agent enabled. Check that the files parse before you run anything:
 
 ```bash
 probe lint tests

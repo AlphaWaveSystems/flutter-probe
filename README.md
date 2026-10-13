@@ -156,8 +156,9 @@ void main() async {
 
 ```bash
 cd your-flutter-app
-probe init          # creates probe.yaml and tests/ scaffold
-probe test tests/   # run all tests
+probe init          # creates probe.yaml and a sample test that opens the app
+# set project.app in probe.yaml to your app's id, then:
+probe test tests/   # the sample passes when the app starts with the agent enabled
 ```
 
 ## ProbeScript Language

@@ -7,7 +7,7 @@ description: Complete reference for all probe CLI commands and flags.
 
 | Command | Description |
 |---------|-------------|
-| `probe init` | Scaffold `probe.yaml` and `tests/` directory |
+| `probe init` | Scaffold `probe.yaml` and `tests/`, with a sample test that only opens the app. Set `project.app` in `probe.yaml` first |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |

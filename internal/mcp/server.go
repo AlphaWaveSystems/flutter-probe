@@ -434,7 +434,7 @@ For composite multi-device tests use the composite_devices parameter.`,
 	// ---- Project management ----
 	{
 		Name:        "init_project",
-		Description: "Initialize a new FlutterProbe project in the current working directory. Creates probe.yaml with sensible defaults and a tests/ directory scaffold. Run once when setting up a new Flutter app for testing.",
+		Description: "Initialize a new FlutterProbe project in the current working directory. Creates probe.yaml with sensible defaults (set project.app to the app's id) and tests/ with a sample test that only opens the app. Run once when setting up a new Flutter app for testing.",
 		InputSchema: mcpSchema{Type: "object"},
 	},
 	{

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`probe init` wrote a sample test that waited for "Welcome"**, which most apps do not show, so the first `probe test` of a new project timed out. The sample now only opens the app, so it passes on any app that starts with the agent enabled once `project.app` in `probe.yaml` is set. A test checks that the sample parses, lints clean and checks no text. The init output, the README and the install and quick-start guides now describe the same first run.
 - **Two Maestro claims on the Flutter testing frameworks comparison are now sourced and worded to what Maestro documents**: the iOS docs describe simulators and do not describe local physical iOS devices (it was stated as "no physical iOS device support"), and the Cloud price is quoted from Maestro's pricing page with the date read. The CI paragraph no longer says built-in reporting requires Maestro Cloud.
 
 ### Changed
