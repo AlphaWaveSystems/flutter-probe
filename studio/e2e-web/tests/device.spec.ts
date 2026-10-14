@@ -141,16 +141,24 @@ test.describe("Studio with the shared device view", () => {
     await expect(page.locator("#inspector-content")).toContainText("Scaffold", { timeout: 30_000 });
 
     const box = (await canvas.boundingBox())!;
-    const at = (fx: number, fy: number) => [box.x + box.width * fx, box.y + box.height * fy] as const;
+    // The screen is letterboxed in the canvas: map a point in the phone's logical pixels (402x874 on this simulator)
+    // to page coordinates.
+    const [sw, sh] = [402, 874];
+    const scale = Math.min(box.width / sw, box.height / sh);
+    const offX = (box.width - sw * scale) / 2;
+    const offY = (box.height - sh * scale) / 2;
+    const at = (lx: number, ly: number) => [box.x + offX + lx * scale, box.y + offY + ly * scale] as const;
 
     // Alt+click selects the element under the pointer: the selector is shown and the inspector is searched for it.
-    await canvas.click({ modifiers: ["Alt"], position: { x: box.width * 0.5, y: box.height * 0.5 } });
+    await canvas.click({ modifiers: ["Alt"], position: { x: offX + sw * scale * 0.5, y: offY + sh * scale * 0.5 } });
     await expect(page.locator("#toast-container")).toContainText("Selected #counter_button", { timeout: 15_000 });
     await expect(page.locator("#inspector-search")).toHaveValue("counter_button");
+    // The selector chip covers the bottom of the screen: dismiss it before using the navigation bar.
+    await page.locator("#device-view button", { hasText: "Clear" }).click();
 
     // A plain click is a tap in the app: the "List" tab of the fixture's navigation bar opens the list screen.
     await expect(page.locator("#inspector-content")).not.toContainText("ListView");
-    await page.mouse.click(...at(0.835, 0.96));
+    await page.mouse.click(...at(335, 835));
     await expect(page.locator("#inspector-content")).toContainText("ListView", { timeout: 15_000 });
 
     await page.click("#btn-connect");

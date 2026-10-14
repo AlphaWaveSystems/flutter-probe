@@ -43,6 +43,9 @@ type App struct {
 	// it (tests, automation without a window) emit does nothing.
 	runtimeUp atomic.Bool
 	hub       *eventHub // set in headless mode (PROBE_STUDIO_HEADLESS=1)
+	// viewOrigins are page origins the device view hub accepts besides the built-in ones: in headless mode Studio's
+	// own page origin, which differs from the Wails origin.
+	viewOrigins []string
 
 	mu        sync.Mutex
 	conn      *connection // nil when disconnected

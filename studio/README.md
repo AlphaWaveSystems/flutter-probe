@@ -130,6 +130,8 @@ studio/
   on-device agent (about 13 to 14 frames per second on an idle fixture app on an Apple M5 Max,
   see the Studio docs page for the method; Flutter layer only, no system UI). It does not
   forward clicks: the agent has no coordinate tap, so the pane cannot tap or type
+- Optional shared device view (`PROBE_STUDIO_DEVICE_VIEW=1`): the pane draws a loopback hub's frames with the shared
+  component and relays tap, swipe, typing, hover and Alt+click selection to the app; off by default
 - Recorder: records taps made on the device itself into ProbeScript lines
 - Lint markers (live, on every edit)
 - "Run all" button → results timeline driven by in-process runner

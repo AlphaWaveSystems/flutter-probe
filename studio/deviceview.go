@@ -70,6 +70,9 @@ func (a *App) GetDeviceView() (DeviceViewInfo, error) {
 		hub, err := deviceview.New(deviceview.Options{
 			Agent:  deviceview.NewProbeAgent(sharedClient{conn.client}),
 			Device: deviceview.DeviceInfo{ID: conn.deviceID, Platform: string(conn.platform), Name: conn.deviceName},
+			// Input is on: the pane lets the user tap, swipe and type in the app. ExtraOrigins is only set in headless mode.
+			ViewOnly:     false,
+			ExtraOrigins: a.viewOrigins,
 		})
 		if err != nil {
 			return DeviceViewInfo{}, fmt.Errorf("device view: %w", err)

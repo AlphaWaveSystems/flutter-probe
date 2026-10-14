@@ -61,11 +61,19 @@ export function initDeviceStream(): void {
 }
 
 /** Alt+click in the view: show the selector, copy it, and search the inspector for the element. */
+// Text read from the device is untrusted: it never goes into the clipboard or a search box with control characters.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
+
 function onSelect(node: DeviceNode): void {
   const selector = selectorFor(node);
+  if (CONTROL_CHARS.test(selector)) {
+    toast("That element's text contains control characters, so no selector was copied.", "error", 4000);
+    return;
+  }
+  const needle = node.key ?? node.text ?? node.label ?? node.type;
   const search = document.getElementById("inspector-search") as HTMLInputElement | null;
-  if (search) {
-    search.value = node.key ?? node.text ?? node.label ?? node.type;
+  if (search && !CONTROL_CHARS.test(needle)) {
+    search.value = needle;
     search.dispatchEvent(new Event("input"));
   }
   navigator.clipboard?.writeText(selector).catch(() => {
@@ -102,7 +110,9 @@ async function mountSharedView(): Promise<boolean> {
     token: info.token,
     onSelect,
     onStatus: (s) => {
-      if (fpsLabel) fpsLabel.textContent = s.state === "connected" ? "device view" : s.state;
+      // "taken": another window took the view over. The component offers its own Reconnect button; Studio never
+      // reconnects by itself.
+      if (fpsLabel) fpsLabel.textContent = s.state === "connected" ? "device view" : s.state === "taken" ? "taken over" : s.state;
     },
   });
   void pollTree();
