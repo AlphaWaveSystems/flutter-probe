@@ -55,6 +55,10 @@ and the widget tree need an agent version that implements the RPCs listed under
   arrives within 3 seconds while a client is attached is refused with HTTP 429
   and a `Retry-After` header, so two windows cannot take the view from each
   other in a loop.
+  A browser WebSocket does not expose the status of a refused handshake, so
+  the bundled client cannot read the 429; it treats a connection that fails
+  before opening, within 4 seconds of its own takeover, as this refusal and
+  says so in its status text while it keeps retrying.
 * At most 32 connections that have not completed the WebSocket upgrade are held
   at once; further connections are closed immediately. Idle ones are dropped
   after a few seconds.
