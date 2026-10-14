@@ -122,6 +122,7 @@ Start Studio with `PROBE_STUDIO_DEVICE_VIEW=1` and the device pane uses the same
 
 - **tap, swipe and type** in the app by clicking, dragging and typing in the pane (the agent must support the input calls; an older agent gives a read-only view);
 - **hover** to outline the widget under the pointer, and **Alt+click** to select it: the selector (`#key`, else the text) is shown, copied to the clipboard and put in the inspector's search box;
+- press **+ tap** (device pane header) to write a `tap` step for the selected element at the editor cursor: on a blank line it fills the line, otherwise it goes on a new line below with the same indentation. The selector is built by the same escaping rule as the clipboard copy, so text on the device screen cannot add a second statement;
 - see frames at a lower cost: the pane asks the agent for the frame size it needs, and the agent captures at that size.
 
 The inspector text refreshes every 1.5 seconds in this mode (it is no longer bundled with each frame). If another window takes the view over (a second connection replaces the first), the pane shows "taken over" and a Reconnect button; it never reconnects by itself. Without the variable nothing changes: the old loop runs and no hub is started. The protocol is in `docs/studio-device-protocol.md`; this mode is a preview until it has run on a physical phone.
