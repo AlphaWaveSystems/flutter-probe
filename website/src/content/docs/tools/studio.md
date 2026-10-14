@@ -124,7 +124,7 @@ Start Studio with `PROBE_STUDIO_DEVICE_VIEW=1` and the device pane uses the same
 - **hover** to outline the widget under the pointer, and **Alt+click** to select it: the selector (`#key`, else the text) is shown, copied to the clipboard and put in the inspector's search box;
 - see frames at a lower cost: the pane asks the agent for the frame size it needs, and the agent captures at that size.
 
-The inspector text refreshes every 1.5 seconds in this mode (it is no longer bundled with each frame). If another window takes the view over (a second connection replaces the first), the pane shows "taken over" and a Reconnect button; it never reconnects by itself. Without the variable nothing changes: the old loop runs and no hub is started. The protocol is in `docs/studio-device-protocol.md`; this mode is a preview until it has run on a physical phone.
+The pane header says what the device supports: "view only" when the agent has no input calls (an older `flutter_probe_agent`; taps, swipes and typing are off) and "no element select" when it cannot hit-test (hover and Alt+click are off); hover the label for the reason. The inspector text refreshes every 1.5 seconds in this mode (it is no longer bundled with each frame). If another window takes the view over (a second connection replaces the first), the pane shows "taken over" and a Reconnect button; it never reconnects by itself. Without the variable nothing changes: the old loop runs and no hub is started. The protocol is in `docs/studio-device-protocol.md`; this mode is a preview until it has run on a physical phone.
 
 ## Build from source
 
