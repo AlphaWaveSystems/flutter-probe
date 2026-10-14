@@ -146,3 +146,7 @@ stream; the server reports an `error` status asking for a `probe_agent` update.
 If the connection to the agent drops, the server sends `reconnecting` status
 messages, re-reads the token and reconnects with a growing delay, then sends
 `connected` and resumes the stream.
+
+## Limits of the token
+
+The token is the only barrier: whoever holds it can read the screen and, unless the hub runs with `--view-only`, tap, swipe and type. A second connection with the token replaces the first (the first is closed with code 4001 and its client stops reconnecting until the user chooses to), and the hub refuses another takeover for 3 seconds, which does not stop a token holder from taking the session over repeatedly. If the "taken over by another window" notice appears and you did not open another window, stop the hub: a restart creates a new token. A connection that has not completed the upgrade for 5 seconds is closed; at most 32 such connections are kept, and a new one evicts the oldest.

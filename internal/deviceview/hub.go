@@ -63,7 +63,8 @@ type Options struct {
 const DefaultTakeoverCooldown = 3 * time.Second
 
 // MaxPendingConns caps the connections that have not upgraded to a WebSocket
-// yet. Excess connections are closed immediately.
+// yet. A new connection beyond the cap evicts the OLDEST pending one, so a
+// process that opens idle connections cannot keep the owner out.
 const MaxPendingConns = 32
 
 // Stats are cumulative counters.
@@ -113,7 +114,7 @@ type Hub struct {
 	backoff  time.Duration // used by the frame loop only
 
 	lastTakeover time.Time
-	pending      map[net.Conn]struct{} // connections before the upgrade
+	pending      map[net.Conn]time.Time // connections before the upgrade, with their start time
 }
 
 // New binds the loopback listener. Call Run to serve and Close if Run is not
@@ -163,7 +164,7 @@ func New(opts Options) (*Hub, error) {
 		jpegOK:  true,
 		agent:   opts.Agent,
 		backoff: opts.ReconnectMin,
-		pending: map[net.Conn]struct{}{},
+		pending: map[net.Conn]time.Time{},
 	}
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.serveHTTP),
@@ -181,14 +182,21 @@ func New(opts Options) (*Hub, error) {
 func (h *Hub) connState(c net.Conn, st http.ConnState) {
 	switch st {
 	case http.StateNew:
+		var evict net.Conn
 		h.mu.Lock()
-		over := len(h.pending) >= MaxPendingConns
-		if !over {
-			h.pending[c] = struct{}{}
+		if len(h.pending) >= MaxPendingConns {
+			var oldest time.Time
+			for pc, since := range h.pending {
+				if evict == nil || since.Before(oldest) {
+					evict, oldest = pc, since
+				}
+			}
+			delete(h.pending, evict)
 		}
+		h.pending[c] = time.Now()
 		h.mu.Unlock()
-		if over {
-			_ = c.Close()
+		if evict != nil {
+			_ = evict.Close()
 		}
 	case http.StateHijacked, http.StateClosed:
 		h.mu.Lock()
