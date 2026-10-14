@@ -93,6 +93,14 @@ func (a *probeAgent) TypeText(ctx context.Context, text string) error {
 	return err
 }
 
+// ProbeTypeText sends a non-string text, which the agent rejects as invalid
+// params before it looks at the focused field. A valid (even empty) string
+// must never be used here: an insert replaces the selected text.
+func (a *probeAgent) ProbeTypeText(ctx context.Context) error {
+	_, err := a.c.Call(ctx, methodTypeText, map[string]any{"text": 1})
+	return err
+}
+
 func (a *probeAgent) HitTest(ctx context.Context, x, y float64) (*Node, error) {
 	raw, err := a.c.Call(ctx, methodHitTest, map[string]any{"x": x, "y": y})
 	if err != nil {

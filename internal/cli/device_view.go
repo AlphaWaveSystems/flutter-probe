@@ -24,14 +24,14 @@ var deviceViewCmd = &cobra.Command{
 	Short: "Serve a live, interactive view of a device on a loopback WebSocket",
 	Long: `Connects to the ProbeAgent on a device and serves its screen on a
 loopback-only WebSocket (ws://127.0.0.1:<port>/device/v1) for Studio and the
-VS Code extension. Pointer and keyboard input is relayed to the app.
+VS Code extension. Pointer and keyboard input is relayed to the app unless --view-only is set.
 
 On start one JSON line is written to stdout:
 
   {"url":"ws://127.0.0.1:PORT/device/v1","token":"...","device":"<id>"}
 
 Connect with ws://127.0.0.1:PORT/device/v1?token=<token>. The token is random
-per run and is printed only here. The command writes no files and runs until
+per run and is printed only here (with --json=false only when --print-token is set). The command writes no files and runs until
 interrupted. See docs/studio-device-protocol.md.`,
 	Example: `  probe device view --device emulator-5554
   probe device view --device <udid> --port 48800`,
@@ -43,6 +43,9 @@ func init() {
 	deviceViewCmd.Flags().String("device", "", "device id (default: the only connected device)")
 	deviceViewCmd.Flags().Int("port", 0, "loopback port to listen on (default: a free port)")
 	deviceViewCmd.Flags().Bool("json", true, "print the startup line as JSON on stdout")
+	deviceViewCmd.Flags().Bool("print-token", false, "with --json=false, print the full URL including the token on stderr")
+	deviceViewCmd.Flags().Bool("view-only", false, "disable all input: the view is read-only")
+	deviceViewCmd.Flags().Bool("exit-on-stdin-close", false, "exit when stdin reaches EOF (for launchers that own this process)")
 	deviceCmd.AddCommand(deviceViewCmd)
 }
 
@@ -50,6 +53,9 @@ func runDeviceView(cmd *cobra.Command, _ []string) error {
 	devID, _ := cmd.Flags().GetString("device")
 	port, _ := cmd.Flags().GetInt("port")
 	asJSON, _ := cmd.Flags().GetBool("json")
+	printToken, _ := cmd.Flags().GetBool("print-token")
+	viewOnly, _ := cmd.Flags().GetBool("view-only")
+	exitOnStdinClose, _ := cmd.Flags().GetBool("exit-on-stdin-close")
 	if port < 0 || port > 65535 {
 		return fmt.Errorf("invalid --port %d", port)
 	}
@@ -60,6 +66,12 @@ func runDeviceView(cmd *cobra.Command, _ []string) error {
 
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if exitOnStdinClose {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		defer cancel()
+		go cancelOnEOF(cmd.InOrStdin(), cancel)
+	}
 	stderr := cmd.ErrOrStderr()
 
 	dm := device.NewManager()
@@ -81,13 +93,23 @@ func runDeviceView(cmd *cobra.Command, _ []string) error {
 		Dial:   conn.connect,
 		Device: deviceview.DeviceInfo{ID: dev.ID, Platform: string(dev.Platform), Name: dev.Name},
 		Port:   port,
-	}, asJSON, cmd.OutOrStdout(), stderr)
+
+		ViewOnly:         viewOnly,
+		TakeoverCooldown: deviceview.DefaultTakeoverCooldown,
+	}, asJSON, printToken, cmd.OutOrStdout(), stderr)
+}
+
+// cancelOnEOF reads r until it ends or fails, then calls cancel. It lets a
+// launcher stop the hub by closing the pipe, including when it crashes.
+func cancelOnEOF(r io.Reader, cancel context.CancelFunc) {
+	_, _ = io.Copy(io.Discard, r)
+	cancel()
 }
 
 // serveDeviceView binds the hub, prints the startup lines and serves until ctx
 // ends. The token appears only in the startup output: on stdout as JSON, or on
-// stderr when --json=false. It is never logged.
-func serveDeviceView(ctx context.Context, opts deviceview.Options, asJSON bool, stdout, stderr io.Writer) error {
+// stderr when --json=false together with printToken. It is never logged.
+func serveDeviceView(ctx context.Context, opts deviceview.Options, asJSON, printToken bool, stdout, stderr io.Writer) error {
 	hub, err := deviceview.New(opts)
 	if err != nil {
 		if opts.Agent != nil {
@@ -104,9 +126,12 @@ func serveDeviceView(ctx context.Context, opts deviceview.Options, asJSON bool, 
 		fmt.Fprintf(stdout, "%s\n", line)
 		fmt.Fprintf(stderr, "  Device view for %s is listening on %s (token printed on stdout). Press Ctrl+C to stop.\n",
 			opts.Device.Name, hub.URL())
-	} else {
+	} else if printToken {
 		fmt.Fprintf(stderr, "  Device view for %s is listening on %s?token=%s . Press Ctrl+C to stop.\n",
 			opts.Device.Name, hub.URL(), hub.Token())
+	} else {
+		fmt.Fprintf(stderr, "  Device view for %s is listening on %s (token not printed; use --print-token). Press Ctrl+C to stop.\n",
+			opts.Device.Name, hub.URL())
 	}
 	return hub.Run(ctx)
 }

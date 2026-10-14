@@ -354,8 +354,8 @@ func TestInputMessagesReachAgentAndAreAcked(t *testing.T) {
 	if len(f.swipes) != 2 || f.swipes[0] != [4]float64{10, 20, 30, 40} || f.swipeMs[0] != 250 || f.swipeMs[1] != 300 {
 		t.Fatalf("swipes = %+v ms=%v", f.swipes, f.swipeMs)
 	}
-	// the capability probe types the empty string once
-	if len(f.texts) != 2 || f.texts[0] != "" || f.texts[1] != "hello é" {
+	// the capability probe never types
+	if len(f.texts) != 1 || f.texts[0] != "hello é" {
 		t.Fatalf("texts = %q", f.texts)
 	}
 }
@@ -408,7 +408,7 @@ func TestInvalidInputIsRejectedWithoutCallingAgent(t *testing.T) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.taps)+len(f.longs)+len(f.swipes) != 0 || len(f.texts) != 1 { // 1 = capability probe
+	if len(f.taps)+len(f.longs)+len(f.swipes) != 0 || len(f.texts) != 0 {
 		t.Fatalf("agent received invalid input: %+v %+v %+v %q", f.taps, f.longs, f.swipes, f.texts)
 	}
 }
