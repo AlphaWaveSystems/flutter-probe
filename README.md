@@ -541,6 +541,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | Command | Description |
 |---|---|
 | `probe init` | Scaffold `probe.yaml` and `tests/` in your project |
+| `probe validate` | Check `probe.yaml` and the `probe_version` pin without connecting to a device; exits non-zero when a check fails |
 | `probe test [path]` | Run tests (file, directory, or glob) |
 | `probe test --tag smoke` | Run tests by tag |
 | `probe test --format json -o results.json` | Output JSON results |

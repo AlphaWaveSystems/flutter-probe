@@ -191,3 +191,30 @@ func TestVersionMismatchWarning_IgnoresPrereleaseAndBuildSuffixes(t *testing.T) 
 		t.Errorf("0.15.0-fp13 vs 0.14.0 must warn with both versions, got %q", w)
 	}
 }
+
+func TestCheckHandshakeVersion_ReturnsTheAgentVersion(t *testing.T) {
+	var discard string
+	srv := pingServer(t, false, "0.25.1", &discard)
+	defer srv.Close()
+	c := &HTTPClient{baseURL: srv.URL + "/probe/rpc", token: "t", httpClient: srv.Client()}
+
+	agent, warning, err := CheckHandshakeVersion(context.Background(), c, "0.25.1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agent != "0.25.1" || warning != "" {
+		t.Errorf("CheckHandshakeVersion = (%q, %q), want (0.25.1, no warning)", agent, warning)
+	}
+}
+
+func TestCheckHandshakeVersion_AgentPredatingTheFieldReportsNoVersion(t *testing.T) {
+	var discard string
+	srv := pingServer(t, true, "", &discard)
+	defer srv.Close()
+	c := &HTTPClient{baseURL: srv.URL + "/probe/rpc", token: "t", httpClient: srv.Client()}
+
+	agent, _, err := CheckHandshakeVersion(context.Background(), c, "0.25.1")
+	if err != nil || agent != "" {
+		t.Errorf("CheckHandshakeVersion = (%q, %v), want an empty agent version and no error", agent, err)
+	}
+}

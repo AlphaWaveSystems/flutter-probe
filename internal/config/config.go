@@ -44,6 +44,10 @@ type Config struct {
 	Hosted    HostedConfig     `yaml:"hosted"`
 	Env       map[string]string `yaml:"environment"`
 
+	// ProbeVersion pins the FlutterProbe CLI release the project is tested with: an exact release ("0.25.1") or a
+	// release line ("0.25.x"). Empty means no pin. probe test refuses to start when the running CLI does not meet it.
+	ProbeVersion string `yaml:"probe_version"`
+
 	// CLIVersion is the running probe binary's version (internal/cli.Version).
 	// Not a probe.yaml field — populated programmatically by the cli package
 	// after loading, so runner/probelink code can include it in the connect
@@ -285,6 +289,12 @@ func LoadFile(path string) (*Config, error) {
 
 	if p := cfg.Agent.DriverPort; p != 0 && (p < 1024 || p > 65535) {
 		return nil, fmt.Errorf("invalid agent.driver_port %d: use a value between 1024 and 65535", p)
+	}
+
+	if cfg.ProbeVersion != "" {
+		if _, err := ParseProbeVersion(cfg.ProbeVersion); err != nil {
+			return nil, fmt.Errorf("invalid probe_version in %s: %w", path, err)
+		}
 	}
 
 	return &cfg, nil

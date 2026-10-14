@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -196,6 +197,23 @@ func init() {
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
+	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
+	pinCfg, err := loadConfig(cmd)
+	if err != nil {
+		return err
+	}
+	if err := checkProbeVersion(pinCfg, Version); err != nil {
+		return err
+	}
+	// The run line names the agent that answered the handshake, so it is printed once, after the first success.
+	var runAgentVersion string
+	var announced sync.Once
+	announceRun := func(agentVersion string) {
+		announced.Do(func() {
+			runAgentVersion = agentVersion
+			fmt.Fprintln(os.Stderr, probeLine(Version, agentVersion))
+		})
+	}
 	if multi, _ := cmd.Flags().GetString("locales"); strings.TrimSpace(multi) != "" {
 		return runLocaleMatrix(cmd, multi)
 	}
@@ -702,10 +720,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 
-				warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+				agentVersion, warning, err := probelink.CheckHandshakeVersion(ctx, client, cfg.CLIVersion)
 				if err != nil {
 					return fmt.Errorf("relay agent handshake failed: %w", err)
 				}
+				announceRun(agentVersion)
 				if warning != "" {
 					statusWarn(statusW, "%s", warning)
 				}
@@ -762,10 +781,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				defer client.Close()
 
-				warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+				agentVersion, warning, err := probelink.CheckHandshakeVersion(ctx, client, cfg.CLIVersion)
 				if err != nil {
 					return fmt.Errorf("cloud agent handshake failed: %w", err)
 				}
+				announceRun(agentVersion)
 				if warning != "" {
 					statusWarn(statusW, "%s", warning)
 				}
@@ -1027,12 +1047,13 @@ func runTests(cmd *cobra.Command, args []string) error {
 			}
 
 			trace("handshake: comparing CLI v%s against agent", cfg.CLIVersion)
-			warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
+			agentVersion, warning, err := probelink.CheckHandshakeVersion(ctx, client, cfg.CLIVersion)
 			if err != nil {
 				trace("handshake: rejected: %v", err)
 				return fmt.Errorf("agent handshake failed: %w", err)
 			}
 			trace("handshake: accepted")
+			announceRun(agentVersion)
 			if warning != "" {
 				statusWarn(statusW, "%s", warning)
 			}
@@ -1175,6 +1196,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// The device class (emulator, simulator, physical, cloud) is only known now; add it to the report metadata.
 	if runMeta.Platform != "" || runMeta.DeviceName != "" {
 		runMeta.DeviceClass = deviceClass(devCtx, platform, cloudSession != nil)
+		runMeta.AgentVersion = runAgentVersion
 		report.SetMetadata(runMeta)
 	}
 

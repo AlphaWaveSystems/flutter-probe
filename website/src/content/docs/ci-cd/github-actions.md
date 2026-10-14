@@ -3,6 +3,25 @@ title: GitHub Actions
 description: CI/CD workflow examples for running FlutterProbe tests in GitHub Actions.
 ---
 
+## Pinning the CLI version
+
+Set `probe_version` in `probe.yaml` to the release the tests were written for, and install a CLI that meets it in the job. `probe test` checks the installed CLI before it touches a device, so a runner on another release stops at once and says which version it needs.
+
+```yaml
+# probe.yaml
+probe_version: 0.25.x   # any 0.25 patch release; write 0.25.1 to pin one exact release
+```
+
+```yaml
+# workflow step
+- name: Install FlutterProbe
+  run: brew install probe   # the latest stable release; confirm with probe version
+- name: Run tests
+  run: probe test
+```
+
+`brew install probe` always installs the latest stable release. For an exact pin, install that release from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases) instead. Keep `probe_version` in step with the CLI the job installs: a mismatch fails the job before any test runs.
+
 ## iOS Simulator Workflow
 
 ```yaml

@@ -8,6 +8,7 @@ description: Complete reference for all probe CLI commands and flags.
 | Command | Description |
 |---------|-------------|
 | `probe init` | Scaffold `probe.yaml` and `tests/` directory |
+| `probe validate` | Check `probe.yaml` and the `probe_version` pin without connecting to a device. Exits non-zero when a check fails; `--format json` prints the report. Run it in CI before `probe test` |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
