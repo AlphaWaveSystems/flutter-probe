@@ -80,6 +80,22 @@ export namespace main {
 	        this.hint = source["hint"];
 	    }
 	}
+	export class DeviceViewInfo {
+	    enabled: boolean;
+	    url?: string;
+	    token?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceViewInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.url = source["url"];
+	        this.token = source["token"];
+	    }
+	}
 	export class Diagnostic {
 	    severity: number;
 	    message: string;

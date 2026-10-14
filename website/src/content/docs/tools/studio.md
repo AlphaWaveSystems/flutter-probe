@@ -116,6 +116,16 @@ Measured on one machine (Apple M5 Max, idle fixture app on a static screen, 150 
 
 A physical phone (USB or WiFi) uses the same agent request, so expect similar or lower rates depending on the tunnel or network; it has not been measured. A busier screen means larger frames and a lower rate. Faster, video-based views are a possible future change, not something Studio does today.
 
+## Shared device view (preview, off by default)
+
+Start Studio with `PROBE_STUDIO_DEVICE_VIEW=1` and the device pane uses the same interactive view as `probe device view` and the VS Code extension instead of the screenshot loop above. Studio starts a loopback-only hub for the connected device (a random token for this connection, never written to disk) and the pane draws its frames on a canvas. With it you can:
+
+- **tap, swipe and type** in the app by clicking, dragging and typing in the pane (the agent must support the input calls; an older agent gives a read-only view);
+- **hover** to outline the widget under the pointer, and **Alt+click** to select it: the selector (`#key`, else the text) is shown, copied to the clipboard and put in the inspector's search box;
+- see frames at a lower cost: the pane asks the agent for the frame size it needs, and the agent captures at that size.
+
+The inspector text refreshes every 1.5 seconds in this mode (it is no longer bundled with each frame). If another window takes the view over (a second connection replaces the first), the pane shows "taken over" and a Reconnect button; it never reconnects by itself. Without the variable nothing changes: the old loop runs and no hub is started. The protocol is in `docs/studio-device-protocol.md`; this mode is a preview until it has run on a physical phone.
+
 ## Build from source
 
 ```bash

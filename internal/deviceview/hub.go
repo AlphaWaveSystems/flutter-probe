@@ -49,6 +49,11 @@ type Options struct {
 	ReconnectMin time.Duration
 	ReconnectMax time.Duration
 
+	// ExtraOrigins are page origins allowed in addition to the built-in list (loopback pages on the hub's own
+	// port, Wails, VS Code webviews). Studio's browser test mode serves its page from its own loopback port and
+	// passes that origin here. Each must be an exact origin such as "http://127.0.0.1:34890".
+	ExtraOrigins []string
+
 	// ViewOnly disables all input: caps.input is false in the hello and
 	// input messages are refused with an ack error "view-only".
 	ViewOnly bool
@@ -396,6 +401,11 @@ func (h *Hub) originAllowed(origin string) bool {
 	switch origin {
 	case "http://127.0.0.1:" + p, "http://localhost:" + p, "wails://wails", "http://wails.localhost":
 		return true
+	}
+	for _, o := range h.opts.ExtraOrigins {
+		if o != "" && origin == o {
+			return true
+		}
 	}
 	if rest, ok := strings.CutPrefix(origin, "vscode-webview://"); ok {
 		return rest != "" && !strings.ContainsAny(rest, "/?# ")

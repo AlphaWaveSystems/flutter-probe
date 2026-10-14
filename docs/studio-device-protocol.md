@@ -49,11 +49,16 @@ and the widget tree need an agent version that implements the RPCs listed under
   header (not sent by browsers on cross-origin WebSocket connections) still need
   the token. The `vscode-webview://<id>` origin accepts any non-empty host part,
   so the token remains the only barrier against another VS Code webview.
+* An embedding program (Studio) can add exact page origins with `Options.ExtraOrigins`; Studio does so only in its browser test mode, for the test page's own loopback origin.
 * Only one client is served at a time. A new connection replaces the current one,
   which is closed with code `4001`. After such a takeover, a connection that
   arrives within 3 seconds while a client is attached is refused with HTTP 429
   and a `Retry-After` header, so two windows cannot take the view from each
   other in a loop.
+  A browser WebSocket does not expose the status of a refused handshake, so
+  the bundled client cannot read the 429; it treats a connection that fails
+  before opening, within 4 seconds of its own takeover, as this refusal and
+  says so in its status text while it keeps retrying.
 * At most 32 connections that have not completed the WebSocket upgrade are held
   at once; further connections are closed immediately. Idle ones are dropped
   after a few seconds.

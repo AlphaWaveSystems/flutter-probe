@@ -112,3 +112,57 @@ test.describe("Studio with a device", () => {
     expect(path.basename(workspace).length).toBeGreaterThan(0);
   });
 });
+
+// The shared device view: Studio started with PROBE_STUDIO_DEVICE_VIEW=1 (the config passes STUDIO_E2E_DEVICE_VIEW=1
+// through). The pane then draws frames from the loopback hub and relays pointer input to the app.
+test.describe("Studio with the shared device view", () => {
+  test.skip(!udid || !workspace || process.env.STUDIO_E2E_DEVICE_VIEW !== "1", "needs a device and STUDIO_E2E_DEVICE_VIEW=1");
+
+  test.afterEach(async ({ page }) => {
+    await disconnect(page);
+  });
+
+  test("36 the pane shows the hub's frames, a click taps the app, Alt+click selects an element", async ({ page }) => {
+    await openStudio(page);
+    await connect(page);
+    const canvas = page.locator("#device-view canvas");
+    await expect(canvas).toBeVisible({ timeout: 30_000 });
+    // The old frame loop is not running: its image element never appears.
+    await expect(page.locator("#device-view img")).toHaveCount(0);
+    // Painted, not blank: some pixel is not fully transparent.
+    await expect
+      .poll(async () => canvas.evaluate((c: HTMLCanvasElement) => {
+        const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+        for (let i = 3; i < d.length; i += 4 * 97) if (d[i] !== 0) return true;
+        return false;
+      }), { timeout: 30_000 })
+      .toBe(true);
+    // The inspector text keeps updating while the hub draws (it lists widget types, not their text).
+    await expect(page.locator("#inspector-content")).toContainText("Scaffold", { timeout: 30_000 });
+
+    const box = (await canvas.boundingBox())!;
+    // The screen is letterboxed in the canvas: map a point in the phone's logical pixels (402x874 on this simulator)
+    // to page coordinates.
+    const [sw, sh] = [402, 874];
+    const scale = Math.min(box.width / sw, box.height / sh);
+    const offX = (box.width - sw * scale) / 2;
+    const offY = (box.height - sh * scale) / 2;
+    const at = (lx: number, ly: number) => [box.x + offX + lx * scale, box.y + offY + ly * scale] as const;
+
+    // Alt+click selects the element under the pointer: the selector is shown and the inspector is searched for it.
+    await canvas.click({ modifiers: ["Alt"], position: { x: offX + sw * scale * 0.5, y: offY + sh * scale * 0.5 } });
+    await expect(page.locator("#toast-container")).toContainText("Selected #counter_button", { timeout: 15_000 });
+    await expect(page.locator("#inspector-search")).toHaveValue("counter_button");
+    // The selector chip covers the bottom of the screen: dismiss it before using the navigation bar.
+    await page.locator("#device-view button", { hasText: "Clear" }).click();
+
+    // A plain click is a tap in the app: the "List" tab of the fixture's navigation bar opens the list screen.
+    await expect(page.locator("#inspector-content")).not.toContainText("ListView");
+    await page.mouse.click(...at(335, 835));
+    await expect(page.locator("#inspector-content")).toContainText("ListView", { timeout: 15_000 });
+
+    await page.click("#btn-connect");
+    await expect(page.locator("#status-text")).toHaveText("disconnected");
+    await expect(canvas).toHaveCount(0);
+  });
+});
