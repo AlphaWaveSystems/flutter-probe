@@ -14,7 +14,7 @@ import { clampViewConfig, statusBarText } from '../deviceView/viewConfig';
 const LAST_DEVICE_KEY = 'flutterprobe.deviceView.lastDevice';
 
 const nodeSpawn: SpawnFn = (command, args, cwd) =>
-  cp.spawn(command, args, { cwd, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  cp.spawn(command, args, { cwd, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] });
 
 interface Session {
   panel: vscode.WebviewPanel;
@@ -123,7 +123,7 @@ async function openDeviceView(context: vscode.ExtensionContext, deviceArg?: stri
   panel.webview.html = '<!DOCTYPE html><html><body>Starting device view...</body></html>';
 
   const command = getProbeCommand();
-  const args = ['device', 'view', '--device', deviceId, '--json'];
+  const args = ['device', 'view', '--device', deviceId, '--json', '--exit-on-stdin-close'];
   output?.appendLine(`$ ${command} ${args.join(' ')}`);
 
   let info: HubInfo;
