@@ -780,7 +780,7 @@ Tap, swipe, and type in your app — FlutterProbe writes the `.probe` file as yo
 
 ## CI/CD Integration
 
-No need to clone this repo in your own CI pipelines. Download the pre-built binary directly from GitHub Releases:
+No need to clone this repo in your own CI pipelines. Download the pre-built binary directly from GitHub Releases. Ready-made sources: a GitHub Action (`actions/probe-test`), a Bitrise Step (`bitrise-step`, used with a `git::` reference), and a [Codemagic recipe](https://flutterprobe.dev/ci-cd/codemagic/); none has run on its CI yet.
 
 ```yaml
 # .github/workflows/e2e.yml
@@ -945,6 +945,8 @@ internal/
 probe_agent/            Dart package (runs on-device)
 tools/probe-convert/    Multi-format test converter
 vscode/                 VS Code extension
+actions/probe-test/     GitHub Action source (copy to its own repo to publish)
+bitrise-step/           Bitrise Step source (use via a git:: reference)
 website/                Documentation site (Starlight/Astro)
 tests/                  E2E test suites and health checks
 ```

@@ -38,6 +38,9 @@ Key facts for an AI agent:
 - [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/): keys, loose matching, alternatives, system dialogs in any language.
 - [Configuration (probe.yaml)](https://flutterprobe.dev/advanced/configuration/)
 
+## CI integrations
+- GitHub Action source (actions/probe-test), Bitrise Step source (bitrise-step) and a Codemagic recipe (https://flutterprobe.dev/ci-cd/codemagic/) install the released CLI and run `probe test`; written from the vendors' documentation, not yet run on those services.
+
 ## Source
 - https://github.com/AlphaWaveSystems/flutter-probe
 - Agent package: https://pub.dev/packages/flutter_probe_agent

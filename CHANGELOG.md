@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **CI integrations, as sources to copy**: `actions/probe-test` (a composite GitHub Action that installs the CLI from a release, runs `probe test` on a device the job provides, attaches the JUnit report, and can pass `--upload-report`), `bitrise-step` (a Bitrise Step used with a `git::` reference), and a Codemagic recipe page (`/ci-cd/codemagic/`, iOS simulator). Both directories are MIT-licensed and self-contained: copy one to its own repository to publish it. They were written from each vendor's documentation and tested locally (asset mapping, argument assembly) but have not run on those services.
+
 ### Docs
+- **The GitHub Actions page and the tutorial install the released CLI** instead of building it from source, enable KVM for the Android emulator action (which its documentation requires on Linux runners), and use the current `actions/checkout` major version.
 - **README and pricing clarity**: the version badge shows the latest release (the tag badge could show a canary tag), the license badges say which part is BSL (CLI) and which is MIT (agent), the table of contents lists "Get started", and the pricing header says what is free and that Probe Cloud is a preview that is not live yet.
 - **The unmeasured "sub-50ms" claim is removed everywhere.** "Sub-50ms command round-trips" (and the "<0.5% flake", "<100ms cold start" and "under 90 seconds" goals, and the "~100-200ms" and "10-40ms" figures for other tools and for the WebSocket) were never measured. The README, docs index, comparison and blog pages, architecture page, social image, `probe --help` text and the agent README now describe direct in-app control and cite the one measurement we have: the replicated benchmark against Maestro (about 2x faster median suite time, 0 flaky runs of 20). The `flutter_probe_agent` pubspec description changed too; pub.dev shows it from the next release.
 - **A Probe Cloud design-partner guide** (`/tools/design-partner-guide/`): what a partner installs, how to inspect an upload with `--upload-dry-run` before the hosted service is live, what a GitHub Actions upload needs, and how to send feedback.

@@ -1,0 +1,52 @@
+# Flutter app on an Android emulator (Linux runner). Replace com.example.myapp with your app id.
+# <owner>/<repo> is where this action is published.
+name: E2E (Android)
+on: [pull_request]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write          # only needed for --upload-report
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build the app with the agent
+        run: |
+          flutter pub get
+          flutter build apk --debug --dart-define=PROBE_AGENT=true
+
+      # Installs the CLI only: the tests must run while the emulator is up, inside the next step.
+      - uses: <owner>/<repo>@v1
+        with:
+          version: '0.25.2'
+          run-tests: 'false'
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the tests on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          script: |
+            adb install -r build/app/outputs/flutter-apk/app-debug.apk
+            adb shell am start -n com.example.myapp/.MainActivity
+            probe test tests/ --device emulator-5554 --format junit -o reports/junit.xml -y
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-junit
+          path: reports/junit.xml
+          if-no-files-found: ignore
