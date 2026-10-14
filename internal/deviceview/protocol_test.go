@@ -170,3 +170,12 @@ func FuzzParseIncoming(f *testing.F) {
 		_, _ = m.applyTo(defaultConfig())
 	})
 }
+
+func TestEncodeFrameRefusesHugeImage(t *testing.T) {
+	if encodeFrame(frameHeader{Seq: 1, Fmt: "png"}, make([]byte, maxImageBytes+1)) != nil {
+		t.Fatal("an image over the bound must not be encoded")
+	}
+	if encodeFrame(frameHeader{Seq: 1, Fmt: "png"}, make([]byte, 1024)) == nil {
+		t.Fatal("a normal image must be encoded")
+	}
+}

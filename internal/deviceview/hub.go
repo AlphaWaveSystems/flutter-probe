@@ -907,6 +907,10 @@ func (h *Hub) step(ctx context.Context) time.Duration {
 	frame := encodeFrame(frameHeader{
 		Seq: h.seq.Add(1), TS: time.Now().UnixMilli(), W: shot.Width, H: shot.Height, Fmt: format,
 	}, shot.Data)
+	if frame == nil {
+		h.setState("error", "the agent returned an image that is too large")
+		return time.Second
+	}
 	h.mu.Lock()
 	c := h.client
 	h.mu.Unlock()

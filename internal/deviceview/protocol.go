@@ -115,9 +115,17 @@ type frameHeader struct {
 	Fmt string `json:"fmt"`
 }
 
+// maxImageBytes bounds one frame image. A real frame is tens of KiB; the bound
+// keeps the size arithmetic below far from overflow whatever the agent sends.
+const maxImageBytes = 32 << 20
+
 // encodeFrame builds the binary frame message: 0x01, big-endian uint32 header
-// length, JSON header, image bytes.
+// length, JSON header, image bytes. It returns nil for an image over
+// maxImageBytes.
 func encodeFrame(h frameHeader, img []byte) []byte {
+	if len(img) > maxImageBytes {
+		return nil
+	}
 	hdr, _ := json.Marshal(h)
 	out := make([]byte, 0, 5+len(hdr)+len(img))
 	out = append(out, frameMarker)
