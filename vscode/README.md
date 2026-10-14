@@ -391,3 +391,7 @@ run dart:
 ## License
 
 BSL 1.1 — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release.
+
+## Device View (preview)
+
+`FlutterProbe: Open Device View` opens a connected simulator, emulator or phone in an editor tab (Flutter layer only). Alt+click an element to get its selector and insert a `tap` step into the open `.probe` file. It starts `probe device view` locally and does not work in remote windows yet.

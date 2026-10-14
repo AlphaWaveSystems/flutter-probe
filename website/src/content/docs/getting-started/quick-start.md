@@ -14,7 +14,7 @@ probe device list                            # find your device id
 probe test tests/example.probe --device <id> -v
 ```
 
-Open `probe.yaml` first and set `project.app` to your app's id. The sample test opens the app and waits for the text "Welcome", so change that line to text that appears on your first screen or the run will time out. The rest of this page writes a real test.
+Open `probe.yaml` first and set `project.app` to your app's id. The sample test only opens the app, so it passes when the app starts with the agent enabled. Then add checks for your own screens. The rest of this page writes a real test.
 
 ## 1. Write a Test
 

@@ -34,7 +34,8 @@
   "activationEvents": [
     "onLanguage:probescript",
     "workspaceContains:**/*.probe",
-    "workspaceContains:probe.yaml"
+    "workspaceContains:probe.yaml",
+    "onCommand:flutterprobe.openDeviceView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -129,6 +130,15 @@
         "icon": "$(inspect)"
       },
       {
+        "command": "flutterprobe.openDeviceView",
+        "title": "FlutterProbe: Open Device View",
+        "icon": "$(device-mobile)"
+      },
+      {
+        "command": "flutterprobe.insertTapStep",
+        "title": "FlutterProbe: Insert Tap Step from Device View"
+      },
+      {
         "command": "flutterprobe.init",
         "title": "FlutterProbe: Init Project"
       },
@@ -199,7 +209,21 @@
       ]
     },
     "menus": {
+      "commandPalette": [
+        {
+          "command": "flutterprobe.openDeviceView"
+        },
+        {
+          "command": "flutterprobe.insertTapStep",
+          "when": "editorLangId == probescript"
+        }
+      ],
       "editor/title": [
+        {
+          "when": "resourceExtname == .probe",
+          "command": "flutterprobe.openDeviceView",
+          "group": "navigation"
+        },
         {
           "when": "resourceExtname == .probe",
           "command": "flutterprobe.runFile",
@@ -446,6 +470,20 @@
           "default": "",
           "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers)"
         },
+        "flutterprobe.deviceView.fps": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Frames per second requested for the device view"
+        },
+        "flutterprobe.deviceView.quality": {
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "JPEG quality (1-100) of the device view stream"
+        },
         "flutterprobe.relayToken": {
           "type": "string",
           "default": "",
@@ -468,7 +506,9 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run copy-device-view && npm run compile",
+    "copy-device-view": "node scripts/copy-device-view.js",
+    "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "tsc --noEmit -p ./",

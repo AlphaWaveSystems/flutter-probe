@@ -137,6 +137,13 @@ class ProbeMethods {
   // Native-prompt signal API (v0.9.9)
   static const signal = 'probe.signal';
 
+  // Device view (live view + remote input): coordinates are logical pixels
+  static const tapAt = 'probe.tap_at';
+  static const longPressAt = 'probe.long_press_at';
+  static const swipeAt = 'probe.swipe_at';
+  static const typeTextFocused = 'probe.type_text';
+  static const hitTest = 'probe.hit_test';
+
   // Notification methods (agent → CLI)
   static const notifyRecordedEvent = 'probe.recorded_event';
   static const notifyExecDart = 'probe.exec_dart';
