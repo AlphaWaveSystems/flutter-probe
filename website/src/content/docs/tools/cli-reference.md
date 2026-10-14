@@ -7,12 +7,13 @@ description: Complete reference for all probe CLI commands and flags.
 
 | Command | Description |
 |---------|-------------|
-| `probe init` | Scaffold `probe.yaml` and `tests/` directory |
+| `probe init` | Scaffold `probe.yaml` and `tests/`, with a sample test that only opens the app. Set `project.app` in `probe.yaml` first |
 | `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing. `--format json` prints the report |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files for syntax errors |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
+| `probe device view` | Interactive device view over a local WebSocket (preview) |
 | `probe device start` | Start an emulator/simulator. `--name` names the iOS simulator it boots (created when missing); Android emulators run under their AVD name |
 | `probe record` | Record user interactions as ProbeScript |
 | `probe report` | Generate HTML report from test results |
@@ -154,7 +155,10 @@ probe device list
 probe device start --platform android
 probe device start --platform ios
 probe device start --platform ios --name probe-checkout   # boot (or create) a simulator called probe-checkout
+probe device view --device <id>                            # interactive device view over a local WebSocket (preview)
 ```
+
+`probe device view` starts a hub on `127.0.0.1` with a one-time token and prints one JSON line with `url`, `token` and `device`. It shows the Flutter layer from the on-device agent (not the status bar or system dialogs), accepts tap, long press, swipe and typed text, and writes no files. The protocol is described in [`docs/studio-device-protocol.md`](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/docs/studio-device-protocol.md). The VS Code command "FlutterProbe: Open Device View" uses it.
 
 ### Named devices
 

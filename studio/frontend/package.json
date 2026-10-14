@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck:device-view": "tsc -p tsconfig.device-view.json",
+    "test:device-view": "node --test device-view-tests/",
+    "build:device-view": "vite build --config vite.device-view.config.ts",
+    "demo:device-view": "node device-view-demo/mock-server.mjs"
   },
   "dependencies": {
     "monaco-editor": "^0.50.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "typescript": "^5.5.0",
     "vite": "^8.0.16"
   }
