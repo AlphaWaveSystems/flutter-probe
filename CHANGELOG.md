@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- **`studio/README.md` has a manual checklist for the native Studio window and the VS Code device view** (what the browser tests cannot cover).
 - **The Studio E2E workflow runs only when started by hand** (`gh workflow run "Studio E2E"`), no longer on version tags. With no self-hosted runner registered, every tag run queued for 24 hours and was cancelled; and a public repository should not hand a self-hosted runner to anything but a deliberate dispatch.
 
 ### Added

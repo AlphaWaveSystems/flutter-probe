@@ -164,6 +164,25 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 - `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
 - `make studio-e2e-native`: the real window, driven through macOS accessibility (smoke set; needs a second display named by `STUDIO_E2E_DISPLAY`, and focus). `make studio-e2e` is a deprecated alias for one release.
 
+## Manual check of the native window (device view)
+
+Automated tests cover the browser mode; these checks need a person at an unlocked screen with the real window. Use one simulator or emulator at a time, with a Probe-enabled app running and its agent port and token known.
+
+1. Build and start Studio with `PROBE_STUDIO_DEVICE_VIEW=1 wails dev` (or the built app started the same way) and connect a device from the picker.
+2. The pane shows the device screen within a few seconds; the fps label reads about 10 or more and does not climb into dropped frames.
+3. Click a button in the pane: the app reacts. Drag across the pane: the app scrolls or swipes. Click a text field and type: the text appears in the app.
+4. Hover over widgets: an outline follows the pointer. Alt+click one: a selector chip appears, it is on the clipboard, and the inspector search box holds it.
+5. Rotate the device or change its size: the pane keeps the right proportions and clicks still land on the same widget.
+6. Open a second window on the same device (for example `probe device view`): the first pane shows "taken over" with a Reconnect button and does not reconnect by itself. Close the second window and press Reconnect: the view returns.
+7. Disconnect in Studio: the pane clears and no device view process or port stays behind (`lsof -iTCP -sTCP:LISTEN` shows no leftover loopback listener of Studio).
+8. Start Studio without the variable and connect: the old screenshot pane works as before.
+
+VS Code panel (extension from this repository, one device connected):
+
+1. Run "FlutterProbe: Open Device View": the panel shows the screen; tap, swipe and typing work as in steps 3 and 4.
+2. Open the same device in Studio's device pane: the VS Code panel shows "taken over"; after Reconnect it returns, or says another window just took over if you reconnect within a few seconds.
+3. With the cursor in a `.probe` file, Alt+click a widget and run "FlutterProbe: Insert Tap Step from Device View": a `tap` step with a quoted selector is inserted at the cursor. Close the panel: the `probe device view` process exits.
+
 ## Automation endpoint
 
 With `PROBE_STUDIO_AUTOMATION=1` Studio opens a loopback-only control endpoint (random per-launch token, discovery file `<user config dir>/flutter-probe-studio/automation.json`, mode 0600) that exposes the bound methods (`open_workspace`, `connect`, `run_file`, `run_state`, `results`, `screenshot`, ...) without a window or cursor. Off by default. The `studio_*` tools of `probe-mcp` use it. Automation can only list, read, run and open workspaces inside the folder a person opened in the window (or `PROBE_STUDIO_WORKSPACE`) plus `PROBE_STUDIO_AUTOMATION_ROOTS`; keep the discovery file at 0600. See the [Studio page](https://flutterprobe.dev/tools/studio/#automation-no-window-no-cursor).
