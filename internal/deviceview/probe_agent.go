@@ -43,7 +43,8 @@ func (a *probeAgent) Screenshot(ctx context.Context, o ShotOptions) (Shot, error
 		return Shot{}, err
 	}
 	var r struct {
-		Image         string  `json:"image"`
+		Image         string  `json:"image"` // reserved: an agent that answers in "image"
+		Data          string  `json:"data"`  // what probe_agent answers today (base64 PNG), as for probe test
 		Format        string  `json:"format"`
 		Width         int     `json:"width"`
 		Height        int     `json:"height"`
@@ -54,10 +55,14 @@ func (a *probeAgent) Screenshot(ctx context.Context, o ShotOptions) (Shot, error
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return Shot{}, fmt.Errorf("screenshot reply: %w", err)
 	}
-	if r.Image == "" {
+	encoded := r.Image
+	if encoded == "" {
+		encoded = r.Data
+	}
+	if encoded == "" {
 		return Shot{}, ErrNoInlineScreenshot
 	}
-	data, err := base64.StdEncoding.DecodeString(r.Image)
+	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return Shot{}, fmt.Errorf("screenshot reply: %w", err)
 	}
