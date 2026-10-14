@@ -7,6 +7,7 @@ import { registerReportCommands } from './commands/report';
 import { registerStudioCommands } from './commands/studio';
 import { registerInitCommands } from './commands/init';
 import { registerConvertCommands } from './commands/convert';
+import { registerDeviceViewCommands, disposeDeviceView } from './commands/deviceView';
 import { SessionManagerProvider } from './providers/sessionManager';
 import { TestExplorerProvider } from './providers/testExplorer';
 import { ProbeCodeLensProvider } from './providers/codelens';
@@ -29,6 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
   registerStudioCommands(context);
   registerInitCommands(context);
   registerConvertCommands(context);
+  registerDeviceViewCommands(context);
 
   // Session Manager sidebar
   const sessionManager = new SessionManagerProvider(context);
@@ -97,4 +99,5 @@ function runTestVerbose(filePath: string, testName: string): void {
 
 export function deactivate(): void {
   disposeAllTerminals();
+  disposeDeviceView();
 }

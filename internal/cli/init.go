@@ -57,17 +57,25 @@ var initCmd = &cobra.Command{
 		}
 
 		fmt.Println()
-		fmt.Println("  FlutterProbe is ready. Run \033[1mprobe test\033[0m to start.")
+		fmt.Println("  FlutterProbe is ready. Next:")
+		fmt.Println("    1. Set project.app in probe.yaml to your app's id.")
+		fmt.Println("    2. Run \033[1mprobe test\033[0m. The sample test opens the app, so it passes when the app starts with the agent enabled.")
+		fmt.Println("    3. Add checks for your own screens to tests/example.probe.")
 		return nil
 	},
 }
 
 // The files `probe init` writes. They must pass `probe lint`: placeholders are quoted, because an unquoted
 // <name> is rejected (it would be typed as literal text).
+//
+// The sample test only opens the app, so it passes on any app that starts with the agent enabled and the first
+// `probe test` shows whether the setup works. A text check would fail on most apps, because it depends on wording
+// the app may not have. The commented lines show the form for the first real check.
 const sampleTestFile = `test "the app launches successfully"
   open the app
-  wait until "Welcome" appears
-  see "Welcome"
+  # Once the app is up, check one thing on its first screen. Uncomment these and use your own text:
+  # wait until "Your text" appears
+  # see "Your text"
 `
 
 const sampleRecipeFile = `recipe "log in as" (email, password)

@@ -171,8 +171,9 @@ void main() async {
 
 ```bash
 cd your-flutter-app
-probe init          # creates probe.yaml and tests/ scaffold
-probe test tests/   # run all tests
+probe init          # creates probe.yaml and a sample test that opens the app
+# set project.app in probe.yaml to your app's id, then:
+probe test tests/   # the sample passes when the app starts with the agent enabled
 ```
 
 ## ProbeScript Language
@@ -563,6 +564,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe record` | Record interactions → generate ProbeScript |
 | `probe report --input results.json` | Generate HTML report |
 | `probe device list` | List connected devices and simulators |
+| `probe device view --device <id>` | Interactive device view over a local WebSocket (preview; used by the VS Code device view) |
 | `probe studio` | Open interactive widget tree inspector |
 | `probe generate --prompt "test login flow"` | AI-generate a test from a description (cloud or local model) |
 | `probe system-dialog tap\|type\|see\|wait\|dismiss\|list\|sign-in-sandbox` | Drive OS system dialogs (permission alerts, StoreKit sign-in sheet) on a simulator/emulator |
