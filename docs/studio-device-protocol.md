@@ -49,6 +49,7 @@ and the widget tree need an agent version that implements the RPCs listed under
   header (not sent by browsers on cross-origin WebSocket connections) still need
   the token. The `vscode-webview://<id>` origin accepts any non-empty host part,
   so the token remains the only barrier against another VS Code webview.
+* An embedding program (Studio) can add exact page origins with `Options.ExtraOrigins`; Studio does so only in its browser test mode, for the test page's own loopback origin.
 * Only one client is served at a time. A new connection replaces the current one,
   which is closed with code `4001`. After such a takeover, a connection that
   arrives within 3 seconds while a client is attached is refused with HTTP 429

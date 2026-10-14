@@ -102,6 +102,7 @@ func startHeadless(a *App, assets fs.FS) (*headlessServer, error) {
 	bridge := `<script src="/__headless/bridge.js"></script>`
 	s.index = []byte(strings.Replace(string(indexHTML), "<head>", "<head>\n    "+bridge, 1))
 	a.hub = s.hub
+	a.viewOrigins = []string{"http://" + ln.Addr().String()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/__headless/bridge.js", s.handleBridge)
 	mux.HandleFunc("/__headless/call", s.handleCall)

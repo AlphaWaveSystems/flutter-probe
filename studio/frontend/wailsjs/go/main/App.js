@@ -30,6 +30,10 @@ export function GetAPIKey() {
   return window['go']['main']['App']['GetAPIKey']();
 }
 
+export function GetDeviceView() {
+  return window['go']['main']['App']['GetDeviceView']();
+}
+
 export function GetWidgetTree() {
   return window['go']['main']['App']['GetWidgetTree']();
 }

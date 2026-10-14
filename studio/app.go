@@ -43,6 +43,9 @@ type App struct {
 	// it (tests, automation without a window) emit does nothing.
 	runtimeUp atomic.Bool
 	hub       *eventHub // set in headless mode (PROBE_STUDIO_HEADLESS=1)
+	// viewOrigins are page origins the device view hub accepts besides the built-in ones: in headless mode Studio's
+	// own page origin, which differs from the Wails origin.
+	viewOrigins []string
 
 	mu        sync.Mutex
 	conn      *connection // nil when disconnected
@@ -79,6 +82,7 @@ type connection struct {
 	platform     device.Platform
 	streamCancel context.CancelFunc
 	streamDone   chan struct{} // closed when the streaming loop exits
+	view         *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
 }
 
 // NewApp creates a new App.
@@ -532,7 +536,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		stopConnection(prev)
 	}
 
-	go a.streamLoop(streamCtx, streamDone, client)
+	a.startFrameSource(streamCtx, streamDone, client)
 
 	a.emit("connection:changed", a.Status())
 	return a.Status(), nil
@@ -693,7 +697,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 	}
 
 	// Kick off the streaming loop. It exits on streamCancel().
-	go a.streamLoop(streamCtx, streamDone, client)
+	a.startFrameSource(streamCtx, streamDone, client)
 
 	a.emit("connection:changed", a.Status())
 	return a.Status(), nil
@@ -718,6 +722,7 @@ func (a *App) Disconnect() {
 // streaming goroutine first (so it doesn't try to use a closed client),
 // wait for it to exit, then close the client and run device cleanup.
 func stopConnection(conn *connection) {
+	conn.view.stop()
 	if conn.streamCancel != nil {
 		conn.streamCancel()
 	}
@@ -784,6 +789,16 @@ func (a *App) GetWidgetTree() (string, error) {
 	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
 	defer cancel()
 	return client.DumpWidgetTree(ctx)
+}
+
+// startFrameSource starts the old per-connection capture loop, unless the shared device view is on: then the
+// frontend gets its frames from the hub, and the loop would only capture the same screen twice.
+func (a *App) startFrameSource(ctx context.Context, done chan struct{}, client probelink.ProbeClient) {
+	if deviceViewEnabled() {
+		close(done)
+		return
+	}
+	go a.streamLoop(ctx, done, client)
 }
 
 // streamLoop is the per-connection device streaming goroutine. It captures a

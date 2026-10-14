@@ -36,6 +36,7 @@ export default defineConfig({
       PROBE_STUDIO_HEADLESS: "1",
       PROBE_STUDIO_HEADLESS_PORT: port,
       PROBE_STUDIO_WORKSPACE: process.env.STUDIO_WORKSPACE ?? "",
+      PROBE_STUDIO_DEVICE_VIEW: process.env.STUDIO_E2E_DEVICE_VIEW ?? "", // "1" runs Studio with the shared device view
     },
     stdout: "pipe",
     stderr: "pipe",
