@@ -131,7 +131,7 @@ studio/
   see the Studio docs page for the method; Flutter layer only, no system UI). It does not
   forward clicks: the agent has no coordinate tap, so the pane cannot tap or type
 - Optional shared device view (`PROBE_STUDIO_DEVICE_VIEW=1`): the pane draws a loopback hub's frames with the shared
-  component and relays tap, swipe, typing, hover and Alt+click selection to the app, and "+ tap" writes a tap step for the selected element at the editor cursor; off by default
+  component and relays tap, swipe, typing, hover and Alt+click selection to the app, "+ tap" writes a tap step for the selected element at the editor cursor, and the header says when the device is view-only; off by default
 - Recorder: records taps made on the device itself into ProbeScript lines
 - Lint markers (live, on every edit)
 - "Run all" button → results timeline driven by in-process runner

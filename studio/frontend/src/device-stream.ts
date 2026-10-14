@@ -10,6 +10,7 @@
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { GetDeviceView, GetWidgetTree } from "../wailsjs/go/main/App";
 import { mountDeviceView, selectorFor } from "./device-view";
+import { capsNote } from "./device-view/capsNote";
 import type { DeviceViewHandle, DeviceNode } from "./device-view";
 import { toast } from "./toast";
 
@@ -63,6 +64,14 @@ export function initDeviceStream(): void {
 /** Alt+click in the view: show the selector, copy it, and search the inspector for the element. */
 // Text read from the device is untrusted: it never goes into the clipboard or a search box with control characters.
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
+
+let capsText = { label: "", title: "" };
+function setViewLabel(base: string): void {
+  if (!fpsLabel) return;
+  const note = base === "device view" && capsText.label ? ` · ${capsText.label}` : "";
+  fpsLabel.textContent = base + note;
+  fpsLabel.title = base === "device view" ? capsText.title : "";
+}
 
 // The editor lives in main.ts: it registers a callback that receives each safe selector (or null when a selection is
 // refused or the connection ends) and enables its "+ tap" button accordingly.
@@ -118,10 +127,15 @@ async function mountSharedView(): Promise<boolean> {
     url: info.url,
     token: info.token,
     onSelect,
+    onHello: (h) => {
+      // The hub's capabilities for this device: say what is off so a read-only view is not mistaken for a broken one.
+      capsText = capsNote(h.caps);
+      setViewLabel("device view");
+    },
     onStatus: (s) => {
       // "taken": another window took the view over. The component offers its own Reconnect button; Studio never
       // reconnects by itself.
-      if (fpsLabel) fpsLabel.textContent = s.state === "connected" ? "device view" : s.state === "taken" ? "taken over" : s.state;
+      setViewLabel(s.state === "connected" ? "device view" : s.state === "taken" ? "taken over" : s.state);
     },
   });
   void pollTree();
@@ -130,6 +144,7 @@ async function mountSharedView(): Promise<boolean> {
 }
 
 function unmountSharedView(): void {
+  capsText = { label: "", title: "" };
   selectionHandler?.(null);
   if (treeTimer !== null) {
     window.clearInterval(treeTimer);
