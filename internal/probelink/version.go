@@ -84,14 +84,21 @@ func MajorVersionIncompatible(clientVersion, agentVersion string) bool {
 // fails (same failure mode Ping had) and when the CLI/agent major versions
 // are outright incompatible.
 func CheckHandshake(ctx context.Context, client ProbeClient, clientVersion string) (warning string, err error) {
+	_, warning, err = CheckHandshakeVersion(ctx, client, clientVersion)
+	return warning, err
+}
+
+// CheckHandshakeVersion is CheckHandshake that also returns the agent's reported version, or "" for an agent that
+// predates the field. The caller prints the run line from it, so it is returned whenever the handshake succeeds.
+func CheckHandshakeVersion(ctx context.Context, client ProbeClient, clientVersion string) (agentVersion, warning string, err error) {
 	res, err := client.Handshake(ctx, clientVersion)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if MajorVersionIncompatible(clientVersion, res.AgentVersion) {
-		return "", fmt.Errorf(
+		return "", "", fmt.Errorf(
 			"incompatible versions: CLI v%s and agent v%s have different major versions — upgrade/downgrade one side to match",
 			clientVersion, res.AgentVersion)
 	}
-	return VersionMismatchWarning(clientVersion, res.AgentVersion), nil
+	return res.AgentVersion, VersionMismatchWarning(clientVersion, res.AgentVersion), nil
 }

@@ -352,7 +352,7 @@ For composite multi-device tests use the composite_devices parameter.`,
 		},
 	},
 	{
-		Name: "migrate_maestro",
+		Name:        "migrate_maestro",
 		Description: `Convert Maestro YAML flows to ProbeScript .probe files. Walks directories recursively (feature-subdirectory suites are the real-world norm) and mirrors the source layout in the output directory. Supports Maestro 2.x syntax (setPermissions, retry, assertScreenshot, extendedWaitUntil, scrollUntilVisible, eraseText, ...); constructs with no ProbeScript equivalent (e.g. relativePoint coordinate taps) become clearly-flagged TODO comments plus a warning rather than silently corrupted output.`,
 		InputSchema: mcpSchema{
 			Type:     "object",
@@ -395,7 +395,7 @@ For composite multi-device tests use the composite_devices parameter.`,
 		},
 	},
 	{
-		Name: "perf_trend",
+		Name:        "perf_trend",
 		Description: `Show how a measured performance number changed over past runs (from reports/perf-history.jsonl, written by probe test whenever a test uses start measuring ... stop measuring). Returns one line per measurement with a sparkline, the latest value and the change since the first run. Metrics: memory, memory_growth, cpu, cpu_peak, slow_frames, frame_time, frame_max, data.`,
 		InputSchema: mcpSchema{
 			Type: "object",
@@ -439,17 +439,27 @@ For composite multi-device tests use the composite_devices parameter.`,
 		InputSchema: mcpSchema{Type: "object"},
 	},
 	{
-		Name:        "doctor",
-			Description: "Check that this project and this machine are ready for probe test: probe.yaml, the tests folder, the Flutter SDK, the platform tools (adb for Android, xcrun for iOS) and the visible devices. Returns a JSON report (schema probe.doctor/1) with ok and one check per line, each with a status (ok, warn or fail) and a fix for any line that is not ok. It changes nothing and lists devices read-only. Use it when a first run fails, or before probe test.",
-			InputSchema: mcpSchema{
-				Type: "object",
-				Properties: map[string]mcpProp{
-					"config": {Type: "string", Description: "Path to probe.yaml (default: probe.yaml in the working directory)"},
-				},
+		Name:        "validate_project",
+		Description: "Check probe.yaml and the probe_version pin without connecting to a device or running tests. Returns a JSON report (schema probe.validate/1) with the checks config, pin and tests. Each check has a status (ok, warn or fail) and a fix for any line that is not ok. Use it before probe test, in CI, or when a run was refused because the installed CLI does not meet probe_version. A failed check is a normal result: read the report and fix what it names.",
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"config": {Type: "string", Description: "Path to probe.yaml (default: probe.yaml in the working directory)"},
 			},
 		},
-		{
-			Name:        "generate_report",
+	},
+	{
+		Name:        "doctor",
+		Description: "Check that this project and this machine are ready for probe test: probe.yaml, the tests folder, the Flutter SDK, the platform tools (adb for Android, xcrun for iOS) and the visible devices. Returns a JSON report (schema probe.doctor/1) with ok and one check per line, each with a status (ok, warn or fail) and a fix for any line that is not ok. It changes nothing and lists devices read-only. Use it when a first run fails, or before probe test.",
+		InputSchema: mcpSchema{
+			Type: "object",
+			Properties: map[string]mcpProp{
+				"config": {Type: "string", Description: "Path to probe.yaml (default: probe.yaml in the working directory)"},
+			},
+		},
+	},
+	{
+		Name:        "generate_report",
 		Description: "Generate a standalone HTML test report from a JSON results file. Pass --open in flags to open it in the browser immediately.",
 		InputSchema: mcpSchema{
 			Type: "object",
@@ -627,6 +637,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.initProject(req.ID)
 	case "doctor":
 		return s.doctorProject(req.ID, args["config"])
+	case "validate_project":
+		return s.validateProject(req.ID, args["config"])
 	case "generate_report":
 		return s.generateReport(req.ID, args["input"], args["output"], args["flags"])
 	case "triage_failure":
@@ -850,7 +862,19 @@ func (s *Server) takeScreenshot(id any, name, deviceID string) *mcpResponse {
 // doctorProject runs probe doctor and returns its JSON report. A required check that fails still prints the report, and
 // the report is the result, so it is not an MCP error. Only a run that printed no report is an error.
 func (s *Server) doctorProject(id any, cfgPath string) *mcpResponse {
-	args := []string{"doctor", "--format", "json"}
+	return s.runJSONReport(id, cfgPath, "doctor")
+}
+
+// validateProject runs probe validate and returns its JSON report. A failed check still prints the report, and the report
+// is the result, so it is not an MCP error. Only a run that printed no report is an error.
+func (s *Server) validateProject(id any, cfgPath string) *mcpResponse {
+	return s.runJSONReport(id, cfgPath, "validate")
+}
+
+// runJSONReport runs a probe subcommand that prints a JSON report for --format json. A report printed with a failing exit
+// status is the result; only a run that printed no report is an error.
+func (s *Server) runJSONReport(id any, cfgPath, subcommand string) *mcpResponse {
+	args := []string{subcommand, "--format", "json"}
 	if cfgPath != "" {
 		args = append(args, "--config", cfgPath)
 	}

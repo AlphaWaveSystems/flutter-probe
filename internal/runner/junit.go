@@ -245,6 +245,7 @@ func (r *Reporter) junitSuiteProps() *junitProps {
 	}
 	if m := r.metadata; m != nil {
 		add("probe_version", m.ProbeVersion)
+		add("agent_version", m.AgentVersion)
 		add("platform", m.Platform)
 		add("os_version", m.OSVersion)
 		add("app_id", m.AppID)

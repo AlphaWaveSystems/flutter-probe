@@ -32,6 +32,7 @@ type RunMetadata struct {
 	AppID        string `json:"app_id"`         // bundle ID / package name
 	AppVersion   string `json:"app_version"`    // e.g. "1.2.16"
 	ProbeVersion string `json:"probe_version"`  // FlutterProbe CLI version
+	AgentVersion string `json:"agent_version,omitempty"`
 	ConfigFile   string `json:"config_file"`    // which probe.yaml was used
 	Locale       string `json:"locale,omitempty"` // --locale: app language the run used ("" = device default)
 	DeviceClass  string `json:"device_class,omitempty"` // emulator | simulator | physical | cloud | unknown
