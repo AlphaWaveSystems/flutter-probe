@@ -17,7 +17,10 @@ probe device view --device <id> --port 48800
 |------|---------|---------|
 | `--device` | the only ready device | Device id. Several ready devices without `--device` is an error. |
 | `--port` | `0` (free port) | Loopback port to listen on. |
-| `--json` | `true` | Print the startup line as JSON on stdout. With `--json=false` the URL with the token is printed on stderr instead. |
+| `--json` | `true` | Print the startup line as JSON on stdout. With `--json=false` the URL is printed on stderr without the token. |
+| `--print-token` | `false` | With `--json=false`, print the full URL including the token on stderr. |
+| `--view-only` | `false` | Disable all input. `caps.input` is `false` in the `hello` and input messages get a failed `ack` with `err` `view-only`. |
+| `--exit-on-stdin-close` | `false` | Exit cleanly when stdin reaches EOF. A launcher that owns the process (the VS Code extension, Studio) sets it so the server cannot outlive its parent. |
 
 The command connects to the agent the same way `probe test` does (adb forward or
 iproxy, token read from the device), prints one line on stdout and runs until
@@ -44,13 +47,24 @@ and the widget tree need an agent version that implements the RPCs listed under
   `http://wails.localhost`. Anything else gets HTTP 403. This stops a web page
   from reaching the server through DNS rebinding. Requests without an `Origin`
   header (not sent by browsers on cross-origin WebSocket connections) still need
-  the token.
+  the token. The `vscode-webview://<id>` origin accepts any non-empty host part,
+  so the token remains the only barrier against another VS Code webview.
 * Only one client is served at a time. A new connection replaces the current one,
-  which is closed with code `4001`.
+  which is closed with code `4001`. After such a takeover, a connection that
+  arrives within 3 seconds while a client is attached is refused with HTTP 429
+  and a `Retry-After` header, so two windows cannot take the view from each
+  other in a loop.
+* At most 32 connections that have not completed the WebSocket upgrade are held
+  at once; further connections are closed immediately. Idle ones are dropped
+  after a few seconds.
+* Input is enabled by default and `caps.input` in the `hello` states whether it
+  is. Use `--view-only` when the holder of the token should only watch.
 * Client messages are limited to 4 KiB and 50 per second.
 
 Treat the token like a password for the device: anyone holding it can see the
-screen and tap in the app while the command runs.
+screen and tap in the app while the command runs. The `tree` messages carry the
+`text` of text widgets that are not obscured, which is the same data as the
+screenshot; obscured (password) fields have `text` set to `null`.
 
 ## Server to client
 
@@ -117,7 +131,12 @@ The server uses these agent RPCs; coordinates are logical pixels.
 | `probe.dump_tree` with `{"bounds":true}` | Widget bounds for the overlay. |
 
 On connect the server checks which of these exist using calls without side
-effects (an empty text entry, a hit test at the origin, a bounds dump). A
+effects: `probe.type_text` with a non-string `text`, which the agent must reject
+as invalid params before touching any field (any answer other than "method not
+found" means the method exists), a hit test at the origin and a bounds dump.
+The server never calls `tap_at`, `swipe_at`, `long_press_at` or `type_text` with
+valid parameters except for input a client sent. With `--view-only` the text RPC
+is not probed at all. A
 "method not found" answer switches the matching feature off in `caps`: without
 the input RPCs the view is read-only and input messages are answered with a
 failed `ack`. An agent that ignores the `format` option is detected from the

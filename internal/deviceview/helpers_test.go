@@ -33,10 +33,11 @@ type fakeAgent struct {
 	hit                      *Node
 	tapErr                   error
 
-	shots     atomic.Int64
-	treeCalls atomic.Int64
-	failShots atomic.Int64 // while > 0, Screenshot fails with a transport error
-	closed    atomic.Bool
+	shots      atomic.Int64
+	treeCalls  atomic.Int64
+	failShots  atomic.Int64 // while > 0, Screenshot fails with a transport error
+	closed     atomic.Bool
+	typeProbes atomic.Int64
 
 	taps, longs []point
 	longMs      []int
@@ -115,6 +116,16 @@ func (f *fakeAgent) TypeText(_ context.Context, s string) error {
 	return nil
 }
 
+// ProbeTypeText records the probe. Like the real agent it rejects the
+// invalid parameters before touching any field.
+func (f *fakeAgent) ProbeTypeText(context.Context) error {
+	f.typeProbes.Add(1)
+	if f.noInput {
+		return errMNF
+	}
+	return &probelink.RPCError{Code: -32602, Message: "text must be a string"}
+}
+
 func (f *fakeAgent) HitTest(_ context.Context, x, y float64) (*Node, error) {
 	if f.noHit {
 		return nil, errMNF
@@ -168,6 +179,9 @@ func (l *logSink) logf(format string, args ...any) {
 func startHub(t *testing.T, opts Options) *harness {
 	t.Helper()
 	logs := &logSink{}
+	if opts.TakeoverCooldown == 0 {
+		opts.TakeoverCooldown = -1 // most tests replace clients quickly
+	}
 	opts.Logf = logs.logf
 	if opts.Device.ID == "" {
 		opts.Device = DeviceInfo{ID: "emulator-5554", Platform: "android", Name: "Test Device"}

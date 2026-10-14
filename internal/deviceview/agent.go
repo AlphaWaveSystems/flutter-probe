@@ -91,6 +91,12 @@ type Agent interface {
 	LongPressAt(ctx context.Context, x, y float64, durationMs int) error
 	SwipeAt(ctx context.Context, x1, y1, x2, y2 float64, durationMs int) error
 	TypeText(ctx context.Context, text string) error
+	// ProbeTypeText checks whether the agent implements the text RPC without
+	// being able to change anything: it sends parameters the agent must
+	// reject before it touches any field. Any reply other than
+	// method-not-found (including invalid params) means the method exists.
+	// It must never send a valid text.
+	ProbeTypeText(ctx context.Context) error
 	HitTest(ctx context.Context, x, y float64) (*Node, error)
 	DumpTreeBounds(ctx context.Context) ([]Node, error)
 	Close() error

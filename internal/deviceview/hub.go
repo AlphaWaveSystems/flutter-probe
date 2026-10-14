@@ -48,7 +48,23 @@ type Options struct {
 	CallTimeout  time.Duration // per agent call
 	ReconnectMin time.Duration
 	ReconnectMax time.Duration
+
+	// ViewOnly disables all input: caps.input is false in the hello and
+	// input messages are refused with an ack error "view-only".
+	ViewOnly bool
+	// TakeoverCooldown is the time after a takeover (a new connection that
+	// replaced the current client) during which another connection is refused
+	// with HTTP 429. Zero selects DefaultTakeoverCooldown; a negative value
+	// disables the cool-down.
+	TakeoverCooldown time.Duration
 }
+
+// DefaultTakeoverCooldown is the default Options.TakeoverCooldown.
+const DefaultTakeoverCooldown = 3 * time.Second
+
+// MaxPendingConns caps the connections that have not upgraded to a WebSocket
+// yet. Excess connections are closed immediately.
+const MaxPendingConns = 32
 
 // Stats are cumulative counters.
 type Stats struct {
@@ -95,6 +111,9 @@ type Hub struct {
 	agent    Agent
 	detected bool
 	backoff  time.Duration // used by the frame loop only
+
+	lastTakeover time.Time
+	pending      map[net.Conn]struct{} // connections before the upgrade
 }
 
 // New binds the loopback listener. Call Run to serve and Close if Run is not
@@ -117,6 +136,9 @@ func New(opts Options) (*Hub, error) {
 	}
 	if opts.ReconnectMax < opts.ReconnectMin {
 		opts.ReconnectMax = 5 * time.Second
+	}
+	if opts.TakeoverCooldown == 0 {
+		opts.TakeoverCooldown = DefaultTakeoverCooldown
 	}
 	token := opts.Token
 	if token == "" {
@@ -141,14 +163,44 @@ func New(opts Options) (*Hub, error) {
 		jpegOK:  true,
 		agent:   opts.Agent,
 		backoff: opts.ReconnectMin,
+		pending: map[net.Conn]struct{}{},
 	}
 	h.srv = &http.Server{
 		Handler:           http.HandlerFunc(h.serveHTTP),
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       5 * time.Second,
 		MaxHeaderBytes:    8 << 10,
+		ConnState:         h.connState,
 		ErrorLog:          log.New(io.Discard, "", 0), // request lines can contain the token
 	}
 	return h, nil
+}
+
+// connState limits the connections that have not upgraded yet. A connection
+// leaves the set when it is hijacked by the WebSocket upgrade or closed.
+func (h *Hub) connState(c net.Conn, st http.ConnState) {
+	switch st {
+	case http.StateNew:
+		h.mu.Lock()
+		over := len(h.pending) >= MaxPendingConns
+		if !over {
+			h.pending[c] = struct{}{}
+		}
+		h.mu.Unlock()
+		if over {
+			_ = c.Close()
+		}
+	case http.StateHijacked, http.StateClosed:
+		h.mu.Lock()
+		delete(h.pending, c)
+		h.mu.Unlock()
+	}
+}
+
+func (h *Hub) pendingConns() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.pending)
 }
 
 // URL is the WebSocket URL without the token.
@@ -282,6 +334,18 @@ func (h *Hub) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	// Takeover cool-down: while a client is attached, a connection that
+	// arrives soon after the last takeover is refused so two windows cannot
+	// replace each other in a loop.
+	if cd := h.opts.TakeoverCooldown; cd > 0 && h.client != nil && !h.lastTakeover.IsZero() {
+		if left := cd - time.Since(h.lastTakeover); left > 0 {
+			h.mu.Unlock()
+			secs := int((left + time.Second - 1) / time.Second)
+			w.Header().Set("Retry-After", strconv.Itoa(secs))
+			http.Error(w, "another client took over a moment ago; retry later", http.StatusTooManyRequests)
+			return
+		}
+	}
 	h.wg.Add(1)
 	parent := h.runCtx
 	h.mu.Unlock()
@@ -348,6 +412,9 @@ func (h *Hub) attach(c *client) {
 	h.client = c
 	h.paused = false
 	h.cfg = defaultConfig()
+	if old != nil {
+		h.lastTakeover = time.Now()
+	}
 	h.mu.Unlock()
 	if old != nil {
 		old.closeWith(4001, "replaced by a newer connection")
@@ -522,6 +589,9 @@ func (h *Hub) queueInput(c *client, m inMsg) {
 			err = fmt.Errorf("text is longer than %d characters", MaxTextRunes)
 		}
 	}
+	if err == nil && h.opts.ViewOnly {
+		err = errors.New("view-only")
+	}
 	if err == nil {
 		if caps, _ := h.inputCaps(); !caps.Input {
 			err = errors.New("input is not supported by this agent; update probe_agent")
@@ -639,7 +709,7 @@ func (h *Hub) getAgent() Agent {
 }
 
 // detect probes the optional RPCs once per agent connection. Probes are
-// side-effect free: an empty text entry, a hit test at the origin and a
+// side-effect free: a text RPC call with invalid parameters, a hit test at the origin and a
 // bounds dump. An answer from the agent (even an error) means the method
 // exists; only method-not-found disables a feature.
 func (h *Hub) detect(ctx context.Context, ag Agent) error {
@@ -657,8 +727,12 @@ func (h *Hub) detect(ctx context.Context, ag Agent) error {
 		}
 	}
 	var err error
-	if caps.Input, err = probe(ag.TypeText(cctx, "")); err != nil {
-		return err
+	// Never call a mutating method here: ProbeTypeText sends invalid
+	// parameters, and a view-only hub does not look for input at all.
+	if !h.opts.ViewOnly {
+		if caps.Input, err = probe(ag.ProbeTypeText(cctx)); err != nil {
+			return err
+		}
 	}
 	_, herr := ag.HitTest(cctx, 0, 0)
 	if caps.Hit, err = probe(herr); err != nil {
