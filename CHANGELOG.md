@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **The Studio E2E workflow runs only when started by hand** (`gh workflow run "Studio E2E"`), no longer on version tags. With no self-hosted runner registered, every tag run queued for 24 hours and was cancelled; and a public repository should not hand a self-hosted runner to anything but a deliberate dispatch.
+
 ### Added
 - **Two read-only MCP tools, `studio_widget_tree` and `studio_ui_state`** (33 tools in all): the widget tree of the connected device as plain text, and the connection and run state Studio shows, in one call. Both go through the Studio automation endpoint, so no second connection to the agent is made. Every doc surface and the extension manifest list them.
 - **The Studio UI shows fps, average and slowest capture time** over the last second (it showed the last frame's time only).

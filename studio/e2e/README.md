@@ -110,7 +110,9 @@ Each test launches its own Studio, closes it, and relaunches the fixture app
   permission (System Settings → Privacy & Security) — `osascript` drives the UI
   and `screencapture` takes the window shots.
 - A self-hosted macOS runner for CI (`.github/workflows/studio-e2e.yml`); hosted
-  runners cannot grant those permissions.
+  runners cannot grant those permissions. The workflow is manual only (no tag or
+  pull-request trigger, so outside code never reaches the runner): start it with
+  `gh workflow run "Studio E2E" --ref <branch>` once the runner is online.
 
 ## Dogfooding on your own app
 
