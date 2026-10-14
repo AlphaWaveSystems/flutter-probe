@@ -1,18 +1,15 @@
 /**
- * Pure logic for turning a selector chip into a ProbeScript `tap` step.
+ * Pure logic for turning a selected element into a ProbeScript `tap` step.
+ * The webview sends the element's fields; the selector is built here, once,
+ * with escaping, so device-screen text cannot add statements to the line.
  */
+import { buildSelector, SelectorFields } from './selector';
 
-export function normalizeSelector(selector: string): string | undefined {
-  const s = selector.trim();
-  if (!s || s.length > 200 || /[\u0000-\u001f]/.test(s)) { return undefined; }
-  if (s.startsWith('#') || (s.length >= 2 && s.startsWith('"') && s.endsWith('"'))) { return s; }
-  // Label or widget type chip: quote it so it parses as a text selector.
-  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
+export type StepResult = { ok: true; step: string; selector: string } | { ok: false; error: string };
 
-export function buildTapStep(selector: string): string | undefined {
-  const sel = normalizeSelector(selector);
-  return sel ? `tap ${sel}` : undefined;
+export function buildTapStep(fields: SelectorFields): StepResult {
+  const r = buildSelector(fields);
+  return r.ok ? { ok: true, step: `tap ${r.selector}`, selector: r.selector } : r;
 }
 
 export interface InsertPlan {
@@ -25,12 +22,12 @@ export interface InsertPlan {
  * in place (keeping its indentation); otherwise the step goes on a new line
  * below, with the current line's indentation.
  */
-export function planInsert(lineText: string, selector: string): InsertPlan | undefined {
-  const step = buildTapStep(selector);
-  if (!step) { return undefined; }
+export function planInsert(lineText: string, fields: SelectorFields): InsertPlan | undefined {
+  const r = buildTapStep(fields);
+  if (!r.ok) { return undefined; }
   const indent = /^[ \t]*/.exec(lineText)?.[0] ?? '';
   if (lineText.trim() === '') {
-    return { text: `${lineText.length ? '' : indent}${step}` };
+    return { text: `${lineText.length ? '' : indent}${r.step}` };
   }
-  return { text: `\n${indent}${step}` };
+  return { text: `\n${indent}${r.step}` };
 }

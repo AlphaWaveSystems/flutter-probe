@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +45,7 @@ func (s *stubAgent) SwipeAt(context.Context, float64, float64, float64, float64,
 	return nil
 }
 func (s *stubAgent) TypeText(context.Context, string) error { return nil }
+func (s *stubAgent) ProbeTypeText(context.Context) error    { return nil }
 func (s *stubAgent) HitTest(context.Context, float64, float64) (*deviceview.Node, error) {
 	return nil, nil
 }
@@ -66,7 +68,8 @@ func TestDeviceViewCommandRegistered(t *testing.T) {
 }
 
 func TestServeDeviceViewStartupLines(t *testing.T) {
-	for _, asJSON := range []bool{true, false} {
+	for _, mode := range []string{"json", "plain", "print-token"} {
+		asJSON, printToken := mode == "json", mode == "print-token"
 		var out, errOut syncBuf
 		ctx, cancel := context.WithCancel(context.Background())
 		agent := &stubAgent{}
@@ -75,7 +78,7 @@ func TestServeDeviceViewStartupLines(t *testing.T) {
 			done <- serveDeviceView(ctx, deviceview.Options{
 				Agent:  agent,
 				Device: deviceview.DeviceInfo{ID: "dev-1", Platform: "android", Name: "Test"},
-			}, asJSON, &out, &errOut)
+			}, asJSON, printToken, &out, &errOut)
 		}()
 
 		var line struct{ URL, Token, Device string }
@@ -113,8 +116,12 @@ func TestServeDeviceViewStartupLines(t *testing.T) {
 			if out.Len() != 0 {
 				t.Errorf("stdout must be empty with --json=false, got %q", out.String())
 			}
-			if !strings.Contains(errOut.String(), "?token=") {
-				t.Errorf("stderr must carry the connection URL, got %q", errOut.String())
+			hasToken := strings.Contains(errOut.String(), "?token=")
+			if printToken != hasToken {
+				t.Errorf("mode %s: token in stderr = %v, want %v: %q", mode, hasToken, printToken, errOut.String())
+			}
+			if !strings.Contains(errOut.String(), "ws://127.0.0.1:") {
+				t.Errorf("stderr must carry the URL, got %q", errOut.String())
 			}
 		}
 	}
@@ -125,7 +132,7 @@ func TestServeDeviceViewEndToEnd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- serveDeviceView(ctx, deviceview.Options{Agent: &stubAgent{}}, true, &out, &errOut)
+		done <- serveDeviceView(ctx, deviceview.Options{Agent: &stubAgent{}}, true, false, &out, &errOut)
 	}()
 	defer func() { cancel(); <-done }()
 
@@ -146,5 +153,25 @@ func TestServeDeviceViewEndToEnd(t *testing.T) {
 	_, data, err := conn.ReadMessage()
 	if err != nil || !strings.Contains(string(data), `"t":"hello"`) {
 		t.Fatalf("first message = %s (%v)", data, err)
+	}
+}
+
+func TestCancelOnEOFStopsWhenStdinCloses(t *testing.T) {
+	pr, pw := io.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go cancelOnEOF(pr, cancel)
+
+	_, _ = pw.Write([]byte("ignored input"))
+	select {
+	case <-ctx.Done():
+		t.Fatal("cancelled before stdin closed")
+	case <-time.After(100 * time.Millisecond):
+	}
+	_ = pw.Close()
+	select {
+	case <-ctx.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("not cancelled after stdin EOF")
 	}
 }

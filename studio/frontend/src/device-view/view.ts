@@ -47,6 +47,8 @@ export interface DeviceViewOptions {
 export interface DeviceViewHandle {
   destroy(): void;
   setConfig(c: Config): void;
+  /** Reconnect after the stream was taken over by another window. */
+  reconnect(): void;
   send(msg: ClientMessage): void;
 }
 
@@ -55,6 +57,10 @@ const SWIPE_MIN_MS = 100;
 const SWIPE_MAX_MS = 2000;
 const LONG_PRESS_MAX_MS = 5000;
 const TEXT_BATCH_MS = 50;
+/** Hub limit for the `text` field of one message, in characters. */
+const MAX_PASTE_CHARS = 1000;
+const PASTE_CUT_MESSAGE = "Pasted text was cut at 1000 characters";
+const NOTICE_MS = 4000;
 const PENDING_HIT_LIMIT = 32;
 
 interface Gesture {
@@ -144,7 +150,19 @@ export function mountDeviceView(container: HTMLElement, opts: DeviceViewOptions)
   closeBtn.setAttribute("aria-label", "Clear selection");
   chip.append(chipText, copyBtn, closeBtn);
 
-  root.append(canvas, statusEl, chip);
+  const reconnectBtn = doc.createElement("button");
+  reconnectBtn.type = "button";
+  reconnectBtn.textContent = "Reconnect";
+  reconnectBtn.setAttribute("aria-label", "Reconnect to the device view");
+  Object.assign(reconnectBtn.style, {
+    position: "absolute",
+    left: "8px",
+    top: "40px",
+    display: "none",
+    font: "12px system-ui, sans-serif",
+  } satisfies Partial<CSSStyleDeclaration>);
+
+  root.append(canvas, statusEl, reconnectBtn, chip);
   container.appendChild(root);
 
   const ctx = canvas.getContext("2d");
@@ -171,8 +189,24 @@ export function mountDeviceView(container: HTMLElement, opts: DeviceViewOptions)
   const slot = new LatestSlot<DecodedFrame>();
   const hoverGate = new RateGate(HOVER_INTERVAL_MS, () => performance.now());
 
+  let noticeTimer: unknown = null;
+  function showNotice(msg: string): void {
+    statusEl.textContent = msg;
+    statusEl.style.display = "block";
+    if (noticeTimer !== null) win.clearTimeout(noticeTimer as number);
+    noticeTimer = win.setTimeout(() => {
+      noticeTimer = null;
+      if (!destroyed) setStatusText(lastStatus);
+    }, NOTICE_MS);
+  }
+
   function setStatusText(s: Status): void {
     lastStatus = s;
+    if (noticeTimer !== null) {
+      win.clearTimeout(noticeTimer as number);
+      noticeTimer = null;
+    }
+    reconnectBtn.style.display = s.state === "taken" ? "block" : "none";
     // Only the state word is shown; the hub's free-text message is shown for errors.
     statusEl.textContent = s.state === "connected" ? "" : s.msg || s.state;
     statusEl.style.display = statusEl.textContent === "" ? "none" : "block";
@@ -517,8 +551,17 @@ export function mountDeviceView(container: HTMLElement, opts: DeviceViewOptions)
   function onPaste(ev: ClipboardEvent): void {
     if (!caps.input) return;
     const text = ev.clipboardData?.getData("text/plain");
-    if (text) {
-      ev.preventDefault();
+    if (!text) return;
+    ev.preventDefault();
+    // The hub caps one text message at 1000 characters and 50 messages per
+    // second, so a longer paste is cut here instead of being dropped by the
+    // send budget: one message, the first 1000 code points.
+    const chars = Array.from(text);
+    batcher.flush();
+    if (chars.length > MAX_PASTE_CHARS) {
+      conn.send({ t: "text", s: chars.slice(0, MAX_PASTE_CHARS).join("") });
+      showNotice(PASTE_CUT_MESSAGE);
+    } else {
       batcher.push(text);
     }
   }
@@ -579,6 +622,10 @@ export function mountDeviceView(container: HTMLElement, opts: DeviceViewOptions)
   canvas.addEventListener("paste", onPaste);
   canvas.addEventListener("focus", onFocus);
   canvas.addEventListener("blur", onBlur);
+  function onReconnect(): void {
+    conn.reconnect();
+  }
+  reconnectBtn.addEventListener("click", onReconnect);
   copyBtn.addEventListener("click", onCopy);
   closeBtn.addEventListener("click", onClear);
   doc.addEventListener("visibilitychange", onVisibility);
@@ -604,6 +651,8 @@ export function mountDeviceView(container: HTMLElement, opts: DeviceViewOptions)
       canvas.removeEventListener("paste", onPaste);
       canvas.removeEventListener("focus", onFocus);
       canvas.removeEventListener("blur", onBlur);
+      reconnectBtn.removeEventListener("click", onReconnect);
+      if (noticeTimer !== null) win.clearTimeout(noticeTimer as number);
       copyBtn.removeEventListener("click", onCopy);
       closeBtn.removeEventListener("click", onClear);
       doc.removeEventListener("visibilitychange", onVisibility);
@@ -618,6 +667,9 @@ export function mountDeviceView(container: HTMLElement, opts: DeviceViewOptions)
     },
     setConfig(c: Config): void {
       conn.setConfig(c);
+    },
+    reconnect(): void {
+      conn.reconnect();
     },
     send(msg: ClientMessage): void {
       conn.send(msg);

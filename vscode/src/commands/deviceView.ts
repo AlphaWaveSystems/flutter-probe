@@ -8,12 +8,13 @@ import { buildWebviewHtml } from '../deviceView/html';
 import { HubProcess, HubStartError, SpawnFn } from '../deviceView/hubProcess';
 import { HubInfo } from '../deviceView/hubLine';
 import { planInsert, buildTapStep } from '../deviceView/insertStep';
+import type { SelectorFields } from '../deviceView/selector';
 import { clampViewConfig, statusBarText } from '../deviceView/viewConfig';
 
 const LAST_DEVICE_KEY = 'flutterprobe.deviceView.lastDevice';
 
 const nodeSpawn: SpawnFn = (command, args, cwd) =>
-  cp.spawn(command, args, { cwd, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  cp.spawn(command, args, { cwd, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] });
 
 interface Session {
   panel: vscode.WebviewPanel;
@@ -25,7 +26,7 @@ interface Session {
 let current: Session | undefined;
 let output: vscode.OutputChannel | undefined;
 let statusItem: vscode.StatusBarItem | undefined;
-let lastSelector: string | undefined;
+let lastFields: SelectorFields | undefined;
 
 export function registerDeviceViewCommands(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel('FlutterProbe Device View');
@@ -122,7 +123,7 @@ async function openDeviceView(context: vscode.ExtensionContext, deviceArg?: stri
   panel.webview.html = '<!DOCTYPE html><html><body>Starting device view...</body></html>';
 
   const command = getProbeCommand();
-  const args = ['device', 'view', '--device', deviceId, '--json'];
+  const args = ['device', 'view', '--device', deviceId, '--json', '--exit-on-stdin-close'];
   output?.appendLine(`$ ${command} ${args.join(' ')}`);
 
   let info: HubInfo;
@@ -179,7 +180,7 @@ async function openDeviceView(context: vscode.ExtensionContext, deviceArg?: stri
 
 function handleWebviewMessage(msg: unknown, deviceId: string, sendInit: () => void): void {
   if (typeof msg !== 'object' || msg === null) { return; }
-  const m = msg as { type?: unknown; selector?: unknown; state?: unknown };
+  const m = msg as { type?: unknown; node?: unknown; state?: unknown };
   switch (m.type) {
     case 'ready':
       sendInit();
@@ -187,20 +188,43 @@ function handleWebviewMessage(msg: unknown, deviceId: string, sendInit: () => vo
     case 'status':
       if (typeof m.state === 'string') { setStatus(m.state, deviceId); }
       break;
-    case 'select':
-      if (typeof m.selector === 'string' && buildTapStep(m.selector)) {
-        lastSelector = m.selector;
-        void offerInsert(m.selector);
-      }
+    case 'taken':
+      void offerReconnect(sendInit);
       break;
+    case 'select': {
+      // The webview sends the element's fields only; the step is built here.
+      const fields = toSelectorFields(m.node);
+      const r = buildTapStep(fields);
+      if (!r.ok) {
+        lastFields = undefined;
+        vscode.window.showWarningMessage(r.error);
+        break;
+      }
+      lastFields = fields;
+      void offerInsert(r.selector, r.step);
+      break;
+    }
   }
 }
 
-async function offerInsert(selector: string): Promise<void> {
-  const step = buildTapStep(selector);
-  if (!step) { return; }
+function toSelectorFields(node: unknown): SelectorFields {
+  const n = (typeof node === 'object' && node !== null ? node : {}) as Record<string, unknown>;
+  const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  return { key: str(n.key), text: str(n.text), label: str(n.label), type: str(n.type) };
+}
+
+async function offerReconnect(sendInit: () => void): Promise<void> {
+  const choice = await vscode.window.showWarningMessage(
+    'The device view was taken over by another window that uses the same hub. It will not reconnect on its own.',
+    'Reconnect',
+  );
+  if (choice === 'Reconnect') { sendInit(); }
+}
+
+async function offerInsert(selector: string, step: string): Promise<void> {
+  const shown = selector.length > 60 ? `${selector.slice(0, 57)}...` : selector;
   const choice = await vscode.window.showInformationMessage(
-    `Selected ${selector}`, 'Insert tap step', 'Copy',
+    `Selected ${shown}`, 'Insert tap step', 'Copy',
   );
   if (choice === 'Insert tap step') {
     await insertLastSelector();
@@ -210,7 +234,7 @@ async function offerInsert(selector: string): Promise<void> {
 }
 
 async function insertLastSelector(): Promise<void> {
-  if (!lastSelector) {
+  if (!lastFields) {
     vscode.window.showInformationMessage('Alt+click an element in the device view first.');
     return;
   }
@@ -218,14 +242,15 @@ async function insertLastSelector(): Promise<void> {
     e.document.languageId === 'probescript' || e.document.fileName.endsWith('.probe');
   const active = vscode.window.activeTextEditor;
   const editor = active && isProbe(active) ? active : vscode.window.visibleTextEditors.find(isProbe);
-  const step = buildTapStep(lastSelector);
+  const built = buildTapStep(lastFields);
+  const step = built.ok ? built.step : undefined;
   if (!editor) {
     if (step) { await vscode.env.clipboard.writeText(step); }
     vscode.window.showInformationMessage('No .probe editor is open; the tap step was copied to the clipboard.');
     return;
   }
   const line = editor.document.lineAt(editor.selection.active.line);
-  const plan = planInsert(line.text, lastSelector);
+  const plan = planInsert(line.text, lastFields);
   if (!plan) { return; }
   await editor.edit(b => b.insert(line.range.end, plan.text));
 }
