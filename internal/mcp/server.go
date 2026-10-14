@@ -439,7 +439,17 @@ For composite multi-device tests use the composite_devices parameter.`,
 		InputSchema: mcpSchema{Type: "object"},
 	},
 	{
-		Name:        "generate_report",
+		Name:        "doctor",
+			Description: "Check that this project and this machine are ready for probe test: probe.yaml, the tests folder, the Flutter SDK, the platform tools (adb for Android, xcrun for iOS) and the visible devices. Returns a JSON report (schema probe.doctor/1) with ok and one check per line, each with a status (ok, warn or fail) and a fix for any line that is not ok. It changes nothing and lists devices read-only. Use it when a first run fails, or before probe test.",
+			InputSchema: mcpSchema{
+				Type: "object",
+				Properties: map[string]mcpProp{
+					"config": {Type: "string", Description: "Path to probe.yaml (default: probe.yaml in the working directory)"},
+				},
+			},
+		},
+		{
+			Name:        "generate_report",
 		Description: "Generate a standalone HTML test report from a JSON results file. Pass --open in flags to open it in the browser immediately.",
 		InputSchema: mcpSchema{
 			Type: "object",
@@ -615,6 +625,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.generateTest(req.ID, args["prompt"], args["output"])
 	case "init_project":
 		return s.initProject(req.ID)
+	case "doctor":
+		return s.doctorProject(req.ID, args["config"])
 	case "generate_report":
 		return s.generateReport(req.ID, args["input"], args["output"], args["flags"])
 	case "triage_failure":
@@ -833,6 +845,22 @@ func (s *Server) takeScreenshot(id any, name, deviceID string) *mcpResponse {
 			},
 		},
 	}
+}
+
+// doctorProject runs probe doctor and returns its JSON report. A required check that fails still prints the report, and
+// the report is the result, so it is not an MCP error. Only a run that printed no report is an error.
+func (s *Server) doctorProject(id any, cfgPath string) *mcpResponse {
+	args := []string{"doctor", "--format", "json"}
+	if cfgPath != "" {
+		args = append(args, "--config", cfgPath)
+	}
+	cmd := exec.Command(probeBin(), args...)
+	cmd.Env = os.Environ()
+	out, err := cmd.CombinedOutput()
+	if _, exited := err.(*exec.ExitError); exited && strings.HasPrefix(strings.TrimSpace(string(out)), "{") {
+		return textResp(id, string(out), nil)
+	}
+	return textResp(id, string(out), err)
 }
 
 func (s *Server) initProject(id any) *mcpResponse {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -29,6 +30,7 @@ It changes nothing. It exits non-zero only when a required check fails: probe.ya
 }
 
 func init() {
+	doctorCmd.Flags().String("format", "text", "output format: text or json")
 	rootCmd.AddCommand(doctorCmd)
 }
 
@@ -237,7 +239,50 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	return printDoctorReport(cmd, runDoctorChecks(ctx, realDoctorEnv(cmd), cfgPath))
+	format, _ := cmd.Flags().GetString("format")
+	if format != "text" && format != "json" {
+		return fmt.Errorf("unknown --format %q: use text or json", format)
+	}
+	checks := runDoctorChecks(ctx, realDoctorEnv(cmd), cfgPath)
+	if format == "json" {
+		return printDoctorJSON(cmd, checks)
+	}
+	return printDoctorReport(cmd, checks)
+}
+
+// doctorReport is the JSON form of the doctor report. schema versions the shape for tools that read it.
+type doctorReport struct {
+	Schema string            `json:"schema"`
+	OK     bool              `json:"ok"`
+	Checks []doctorJSONCheck `json:"checks"`
+}
+
+// doctorJSONCheck is one check in the JSON report. fix says what to do about a check that is not ok.
+type doctorJSONCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+	Fix    string `json:"fix,omitempty"`
+}
+
+// printDoctorJSON writes the report as JSON. It returns errDoctorFailed when a required check failed, with the same exit
+// status and silenced cobra error as the text report.
+func printDoctorJSON(cmd *cobra.Command, checks []doctorCheck) error {
+	report := doctorReport{Schema: "probe.doctor/1", OK: doctorFailures(checks) == 0}
+	for _, c := range checks {
+		report.Checks = append(report.Checks, doctorJSONCheck{Name: c.name, Status: c.status, Detail: c.detail, Fix: c.hint})
+	}
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(report); err != nil {
+		return err
+	}
+	if !report.OK {
+		cmd.SilenceErrors = true
+		return errDoctorFailed
+	}
+	return nil
 }
 
 // printDoctorReport prints one line per check and returns errDoctorFailed when a required check failed. cmd's

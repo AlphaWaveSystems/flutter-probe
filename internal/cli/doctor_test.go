@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -158,6 +160,35 @@ func TestPrintDoctorReportSilencesCobraOnlyForRequiredFailures(t *testing.T) {
 
 // The message `probe test` gives when no device is usable names the next step, and keeps the underlying error when
 // the listing itself failed.
+// The JSON report carries the schema and the checks. ok is false only when a required check failed, and a failed required
+// check gives the same exit status as the text report.
+func TestPrintDoctorJSONIsOKOnlyWithoutRequiredFailures(t *testing.T) {
+	failing := &cobra.Command{Use: "doctor"}
+	var out bytes.Buffer
+	failing.SetOut(&out)
+	err := printDoctorJSON(failing, []doctorCheck{{name: "config", status: "fail", detail: "probe.yaml not found", hint: "run probe init"}})
+	if !errors.Is(err, errDoctorFailed) || !failing.SilenceErrors {
+		t.Errorf("err = %v, SilenceErrors = %v; want errDoctorFailed and a silenced cobra error", err, failing.SilenceErrors)
+	}
+	var got doctorReport
+	if jerr := json.Unmarshal(out.Bytes(), &got); jerr != nil {
+		t.Fatalf("report is not JSON: %v: %q", jerr, out.String())
+	}
+	if got.Schema != "probe.doctor/1" || got.OK || len(got.Checks) != 1 || got.Checks[0].Fix != "run probe init" {
+		t.Errorf("report = %+v", got)
+	}
+
+	warning := &cobra.Command{Use: "doctor"}
+	out.Reset()
+	warning.SetOut(&out)
+	if err := printDoctorJSON(warning, []doctorCheck{{name: "devices", status: "warn", detail: "no device"}}); err != nil {
+		t.Errorf("a warning alone must not fail the command: %v", err)
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil || !got.OK {
+		t.Errorf("warning-only report: ok = %v, err = %v", got.OK, err)
+	}
+}
+
 func TestNoDeviceErrorNamesTheNextStep(t *testing.T) {
 	empty := noDeviceError(nil).Error()
 	if !strings.Contains(empty, "no connected devices found") || !strings.Contains(empty, "probe doctor") {

@@ -54,6 +54,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | Tool | Description |
 |---|---|
 | `init_project` | Initialize a new FlutterProbe project (creates `probe.yaml` and `tests/` scaffold) |
+| `doctor` | Check that the project and this machine are ready for `probe test`. Returns a JSON report (`probe.doctor/1`): each check is ok, warn or fail, with a fix for any problem. Changes nothing |
 
 The full workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` → `generate_report` — a complete AI-driven test authoring loop, including device bring-up and HTML reporting.
 
@@ -145,7 +146,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 33 tools are immediately available in any new Claude conversation.
+4. Done — all 34 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 
