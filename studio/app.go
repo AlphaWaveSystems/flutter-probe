@@ -767,13 +767,9 @@ func (a *App) TakeScreenshot() (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
 	defer cancel()
-	path, err := client.Screenshot(ctx, "studio")
+	data, err := probelink.ScreenshotBytes(ctx, client, "studio", os.ReadFile)
 	if err != nil {
 		return "", err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("reading screenshot %s: %w", path, err)
 	}
 	return base64.StdEncoding.EncodeToString(data), nil
 }
@@ -802,7 +798,6 @@ func (a *App) GetWidgetTree() (string, error) {
 // same probelink client (each RPC has a unique ID).
 func (a *App) streamLoop(ctx context.Context, done chan struct{}, client probelink.ProbeClient) {
 	defer close(done)
-	const errorBackoff = 500 * time.Millisecond
 
 	for {
 		if ctx.Err() != nil {
@@ -819,7 +814,7 @@ func (a *App) streamLoop(ctx context.Context, done chan struct{}, client probeli
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(errorBackoff):
+			case <-time.After(streamErrorBackoff):
 				continue
 			}
 		}
@@ -833,19 +828,27 @@ func (a *App) streamLoop(ctx context.Context, done chan struct{}, client probeli
 // captureFrame issues parallel screenshot + widget-tree RPCs and bundles
 // them into a single FrameEvent. Both RPCs share a 5s timeout so a stuck
 // device can't block the stream indefinitely.
+// streamErrorBackoff is how long the live view waits after a failed capture before it tries again. A variable so
+// tests do not wait half a second per failure.
+var streamErrorBackoff = 500 * time.Millisecond
+
+// captureFrame fetches one screenshot and one widget tree in parallel. The screenshot comes back inline and is
+// never written to the host's disk: the loop runs several times a second, and the file path used by `probe test`
+// (reports/screenshots) would grow without bound.
 func captureFrame(ctx context.Context, client probelink.ProbeClient) (FrameEvent, error) {
 	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	var (
-		shotPath, tree   string
+		shot             []byte
+		tree             string
 		shotErr, treeErr error
 		wg               sync.WaitGroup
 	)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		shotPath, shotErr = client.Screenshot(rpcCtx, "studio")
+		shot, shotErr = probelink.ScreenshotBytes(rpcCtx, client, "studio", os.ReadFile)
 	}()
 	go func() {
 		defer wg.Done()
@@ -856,12 +859,8 @@ func captureFrame(ctx context.Context, client probelink.ProbeClient) (FrameEvent
 	if shotErr != nil {
 		return FrameEvent{}, fmt.Errorf("screenshot: %w", shotErr)
 	}
-	data, err := os.ReadFile(shotPath)
-	if err != nil {
-		return FrameEvent{}, fmt.Errorf("read screenshot: %w", err)
-	}
 	frame := FrameEvent{
-		Screenshot:  base64.StdEncoding.EncodeToString(data),
+		Screenshot:  base64.StdEncoding.EncodeToString(shot),
 		TimestampMs: time.Now().UnixMilli(),
 	}
 	if treeErr == nil {

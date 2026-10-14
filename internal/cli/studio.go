@@ -115,8 +115,31 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	defer client.Close()
 
 	// Set up HTTP server for Studio UI with CORS protection
-	mux := http.NewServeMux()
 	studioOrigin := fmt.Sprintf("http://127.0.0.1:%d", port)
+	handler := newStudioHandler(ctx, client, studioOrigin)
+
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	fmt.Printf("\n  \033[32m✓\033[0m  FlutterProbe Studio running at \033[1mhttp://%s\033[0m\n", addr)
+	fmt.Println("  Press Ctrl+C to stop.")
+
+	return http.ListenAndServe(addr, handler)
+}
+
+// writeStudioJSON answers with a JSON body and a status code.
+func writeStudioJSON(w http.ResponseWriter, status int, body map[string]interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(body) //nolint:errcheck
+}
+
+// newStudioHandler builds the HTTP handler of `probe studio`: the embedded page, the read-only calls (widget tree,
+// screenshot) and the one action that works (tap by text). Requests from another origin are refused.
+//
+// Two calls the page can make are NOT implemented and say so with HTTP 501, instead of pretending to succeed:
+// running a ProbeScript step (/api/exec) and tapping at a screen coordinate (/api/tap with x and y but no text),
+// because the agent has no coordinate tap.
+func newStudioHandler(ctx context.Context, client probelink.ProbeClient, studioOrigin string) http.Handler {
+	mux := http.NewServeMux()
 
 	// Serve the Studio HTML UI
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -137,16 +160,12 @@ func runStudio(cmd *cobra.Command, args []string) error {
 		json.NewEncoder(w).Encode(map[string]string{"tree": tree}) //nolint:errcheck
 	})
 
-	// API: take screenshot
+	// API: take screenshot. The page asks for one every few seconds, so the image is returned inline and nothing
+	// is written under reports/screenshots.
 	mux.HandleFunc("/api/screenshot", func(w http.ResponseWriter, r *http.Request) {
 		apiCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		path, err := client.Screenshot(apiCtx, "studio")
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		data, err := os.ReadFile(path)
+		data, err := probelink.ScreenshotBytes(apiCtx, client, "studio", os.ReadFile)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -155,26 +174,20 @@ func runStudio(cmd *cobra.Command, args []string) error {
 		w.Write(data) //nolint:errcheck
 	})
 
-	// API: execute a probe step
+	// API: execute a probe step. Not implemented: it used to answer ok without running anything.
 	mux.HandleFunc("/api/exec", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
-		var body struct {
-			Step string `json:"step"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-		// Parse and execute one step
-		result := map[string]interface{}{"ok": true}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result) //nolint:errcheck
+		writeStudioJSON(w, http.StatusNotImplemented, map[string]interface{}{
+			"ok":    false,
+			"error": "running a step from this page is not implemented; put the step in a .probe file and run it with `probe test`",
+		})
 	})
 
-	// API: tap by coordinate
+	// API: tap. Only a tap by visible text works. A tap at a screen coordinate is not implemented (the agent has no
+	// coordinate tap); it used to ignore x and y and report ok or an empty-selector error.
 	mux.HandleFunc("/api/tap", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
@@ -189,6 +202,17 @@ func runStudio(cmd *cobra.Command, args []string) error {
 			http.Error(w, err.Error(), 400)
 			return
 		}
+		if body.Text == "" {
+			if body.X != 0 || body.Y != 0 {
+				writeStudioJSON(w, http.StatusNotImplemented, map[string]interface{}{
+					"ok":    false,
+					"error": "tapping at a screen coordinate is not implemented: the agent can tap a widget by its text or key, not a point; select the widget in the tree instead",
+				})
+				return
+			}
+			writeStudioJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "send the text of the widget to tap"})
+			return
+		}
 		apiCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		sel := probelink.SelectorParam{Kind: "text", Text: body.Text}
@@ -197,16 +221,11 @@ func runStudio(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			result["error"] = err.Error()
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result) //nolint:errcheck
+		writeStudioJSON(w, http.StatusOK, result)
 	})
 
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	fmt.Printf("\n  \033[32m✓\033[0m  FlutterProbe Studio running at \033[1mhttp://%s\033[0m\n", addr)
-	fmt.Println("  Press Ctrl+C to stop.")
-
 	// Wrap mux with CORS protection — only allow requests from the Studio's own origin
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" && origin != studioOrigin {
 			http.Error(w, "forbidden", http.StatusForbidden)
@@ -217,8 +236,6 @@ func runStudio(cmd *cobra.Command, args []string) error {
 		}
 		mux.ServeHTTP(w, r)
 	})
-
-	return http.ListenAndServe(addr, handler)
 }
 
 // studioHTML is the embedded Studio web UI.

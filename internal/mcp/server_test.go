@@ -85,7 +85,7 @@ func TestToolsList(t *testing.T) {
 		"init_project", "record",
 		// Probe Studio automation
 		"studio_open_workspace", "studio_list_devices", "studio_connect", "studio_run_file", "studio_cancel",
-		"studio_run_state", "studio_results", "studio_screenshot",
+		"studio_run_state", "studio_results", "studio_screenshot", "studio_widget_tree", "studio_ui_state",
 	}
 	if len(got) != len(want) {
 		t.Errorf("tool count = %d, want %d (got names: %v)", len(got), len(want), keys(got))

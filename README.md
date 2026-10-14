@@ -615,7 +615,7 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
-| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot` (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
+| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree`, `studio_ui_state` (read-only: the inspector's tree, and the connection and run state) (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
 | Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `record` |
 
@@ -640,7 +640,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 31 tools appear in Claude.
+4. Done — all 33 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 

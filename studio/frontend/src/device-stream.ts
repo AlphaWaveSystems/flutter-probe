@@ -53,6 +53,7 @@ export function startStream(): void {
   // disconnected stragglers don't leak into a fresh session.
   connected = true;
   framesInWindow = 0;
+  frameMsInWindow = [];
   windowStartMs = performance.now();
   if (fpsLabel) fpsLabel.textContent = "…";
 }
@@ -93,14 +94,23 @@ function updateInspector(tree: string): void {
   inspectorEl.textContent = tree;
 }
 
+// Shows frames per second and the capture time per frame (average and slowest) over the last second. frameMs is
+// measured by the backend around one screenshot + widget-tree pair; it does not include the time the page needs to
+// decode and paint the image.
+let frameMsInWindow: number[] = [];
+
 function tickFps(frameMs: number): void {
   framesInWindow++;
+  frameMsInWindow.push(frameMs);
   const now = performance.now();
   if (now - windowStartMs >= FPS_WINDOW_MS) {
     if (fpsLabel) {
-      fpsLabel.textContent = `${framesInWindow} fps · ${frameMs}ms/frame`;
+      const avg = Math.round(frameMsInWindow.reduce((a, b) => a + b, 0) / frameMsInWindow.length);
+      const max = Math.max(...frameMsInWindow);
+      fpsLabel.textContent = `${framesInWindow} fps · ${avg}ms avg · ${max}ms max`;
     }
     framesInWindow = 0;
+    frameMsInWindow = [];
     windowStartMs = now;
   }
 }
