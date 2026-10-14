@@ -1,0 +1,77 @@
+title: "FlutterProbe tests"
+summary: Install the FlutterProbe CLI and run .probe tests on a device the build provides, with a JUnit report.
+description: |-
+  Installs the [FlutterProbe](https://flutterprobe.dev) CLI from its GitHub release and runs your `.probe` tests
+  on a device that your own workflow provides (for example an iOS simulator on a macOS stack), writing a JUnit
+  report. It runs only on your build machine and needs no secret of ours.
+
+  Build the app with `--dart-define=PROBE_AGENT=true` and start it on the device before this Step.
+website: https://flutterprobe.dev
+source_code_url: https://github.com/AlphaWaveSystems/flutter-probe
+support_url: https://github.com/AlphaWaveSystems/flutter-probe/issues
+host_os_tags:
+  - osx-10.10
+  - ubuntu-16.04
+project_type_tags:
+  - flutter
+type_tags:
+  - test
+is_requires_admin_user: false
+is_always_run: false
+is_skippable: false
+run_if: ""
+deps:
+  brew:
+  - name: curl
+  apt_get:
+  - name: curl
+inputs:
+  - probe_version: "latest"
+    opts:
+      title: "CLI version"
+      summary: A version like 0.25.2, or latest. Pin one in CI.
+      is_required: true
+      is_expand: true
+  - tests: "tests/"
+    opts:
+      title: "Tests"
+      summary: Test files or folders, separated by spaces.
+      is_required: true
+      is_expand: true
+  - device: ""
+    opts:
+      title: "Device id"
+      summary: An emulator serial or a simulator UDID. Leave empty if only one device is connected.
+      is_required: false
+      is_expand: true
+  - junit_path: "$BITRISE_DEPLOY_DIR/probe-junit.xml"
+    opts:
+      title: "JUnit report path"
+      summary: Where the JUnit report is written. It lands in the deploy directory, so it is attached to the build.
+      is_required: false
+      is_expand: true
+  - timeout: ""
+    opts:
+      title: "Per-step timeout"
+      summary: Like 60s. Empty uses probe.yaml or the default.
+      is_required: false
+      is_expand: true
+  - upload_report: "no"
+    opts:
+      title: "Upload the report to Probe Cloud (preview)"
+      summary: The hosted service is not live yet. Needs PROBE_LICENSE_KEY as a secret.
+      is_required: true
+      value_options:
+      - "no"
+      - "yes"
+  - extra_args: ""
+    opts:
+      title: "Extra arguments"
+      summary: More arguments for `probe test`.
+      is_required: false
+      is_expand: true
+outputs:
+  - PROBE_EXIT_CODE:
+    opts:
+      title: "probe test exit code"
+      summary: The exit code of `probe test`.

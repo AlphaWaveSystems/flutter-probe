@@ -79,6 +79,7 @@ export default defineConfig({
           label: 'CI/CD',
           items: [
             { label: 'GitHub Actions', slug: 'ci-cd/github-actions' },
+            { label: 'Codemagic', slug: 'ci-cd/codemagic' },
             { label: 'Reports', slug: 'ci-cd/reports' },
             { label: 'Results in other tools', slug: 'ci-cd/analytics-tools' },
           ],
