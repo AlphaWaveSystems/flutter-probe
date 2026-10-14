@@ -28,7 +28,7 @@
 
   <!-- Main tagline -->
   <text x="80" y="330" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="600" fill="#d8e0f0">Write E2E tests in plain English.</text>
-  <text x="80" y="380" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="600" fill="#d8e0f0">Execute with sub-50ms round-trips.</text>
+  <text x="80" y="380" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="600" fill="#d8e0f0">Execute via direct widget-tree access.</text>
 
   <!-- Code snippet preview -->
   <rect x="80" y="420" width="500" height="160" rx="12" fill="#121826" stroke="#1e2940" stroke-width="2"/>
@@ -40,8 +40,8 @@
   <text x="110" y="563" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="16" fill="#3bea7e">see "Dashboard"</text>
 
   <!-- Stats on right side -->
-  <text x="700" y="455" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="800" fill="#3bf0e4">&lt;50ms</text>
-  <text x="700" y="485" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#7889a8">command round-trip</text>
+  <text x="700" y="455" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="800" fill="#3bf0e4">~2x</text>
+  <text x="700" y="485" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#7889a8">median suite time vs Maestro</text>
 
   <text x="700" y="540" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="800" fill="#3bea7e">0%</text>
   <text x="700" y="570" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#7889a8">WebDriver overhead</text>
@@ -54,5 +54,5 @@
 
   <!-- Footer -->
   <text x="80" y="610" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#7889a8">github.com/AlphaWaveSystems/flutter-probe</text>
-  <text x="1120" y="610" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#7889a8" text-anchor="end">Open Source</text>
+  <text x="1120" y="610" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#7889a8" text-anchor="end">Free to use · BSL 1.1 CLI · MIT agent</text>
 </svg>

@@ -132,9 +132,10 @@ All 22 method names are defined as constants in both Go (`internal/probelink/pro
 
 ## Performance
 
-| Metric | Target |
-|--------|--------|
-| Command round-trip | < 50ms |
-| CLI cold start | < 100ms |
-| 50-test suite | < 90 seconds |
-| Flake rate | < 0.5% |
+These are design goals, not measured results. The only published measurement is the [benchmark against Maestro](/blog/flutterprobe-vs-maestro-benchmark/).
+
+| Metric | Goal |
+|--------|------|
+| Command round-trip | low tens of milliseconds, not measured |
+| CLI cold start | fast, not measured |
+| Flake rate | as low as possible; 0 of 20 in the Maestro benchmark |

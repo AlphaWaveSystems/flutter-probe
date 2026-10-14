@@ -29,9 +29,9 @@ An open-source extension of `integration_test` from LeanCode. Patrol wraps the s
 
 ### FlutterProbe
 
-An open-source framework that separates test authoring from the app codebase. Tests are written in [ProbeScript](/probescript/syntax/), a plain-English language stored in `.probe` files. A Go CLI orchestrates a Dart agent inside the app over WebSocket.
+A framework (source-available CLI under BSL 1.1, MIT agent) that separates test authoring from the app codebase. Tests are written in [ProbeScript](/probescript/syntax/), a plain-English language stored in `.probe` files. A Go CLI orchestrates a Dart agent inside the app over WebSocket.
 
-- **Pros:** Human-readable tests, sub-50ms command round-trips, direct widget-tree access with no WebDriver layer, [self-healing selectors](/advanced/self-healing/), [visual regression](/advanced/visual-regression/), [AI-powered assertions](/advanced/configuration/#ai) that run against a local model (no cloud call required) with pre-screenshot redaction, five cloud farms supported out of the box, parallel execution (`--parallel`, `--shard`), [migration from seven formats](/tools/probe-convert/), native (non-Flutter) UI automation on Android via `tap native`/`see native`/`type native`.
+- **Pros:** Human-readable tests, direct widget-tree access with no WebDriver layer, [self-healing selectors](/advanced/self-healing/), [visual regression](/advanced/visual-regression/), [AI-powered assertions](/advanced/configuration/#ai) that run against a local model (no cloud call required) with pre-screenshot redaction, five cloud farms supported out of the box, parallel execution (`--parallel`, `--shard`), [migration from seven formats](/tools/probe-convert/), native (non-Flutter) UI automation on Android via `tap native`/`see native`/`type native`.
 - **Cons:** Separate CLI to install, ProbeScript is a new language to learn (though deliberately minimal), programmatic logic requires [hooks](/probescript/hooks/) or [recipes](/probescript/recipes/), native UI automation is Android-only today (iOS is a published, scoped proposal, not yet shipped).
 
 ### Maestro
@@ -39,7 +39,7 @@ An open-source framework that separates test authoring from the app codebase. Te
 A YAML-based mobile testing framework from mobile.dev. Maestro drives apps through the OS accessibility/semantics tree on Android and iOS — it has no access to the Flutter widget tree itself.
 
 - **Pros:** YAML syntax is approachable, good Android support, native (non-Flutter) UI automation on both Android and iOS via XCUITest/UiAutomator, Maestro Cloud for CI.
-- **Cons:** Not Flutter-specific (drives the accessibility tree, not the widget tree — see our [head-to-head benchmark](/blog/flutterprobe-vs-maestro-benchmark/) for what that costs in practice), slower execution due to accessibility-layer round-trips, limited assertion types, no visual-regression support built-in, no physical iOS device support (Simulator only), Maestro Cloud pricing runs roughly $250/device/month, and its AI-assertion feature is a Maestro Cloud-only vendor-hosted proxy with no local-model or bring-your-own-key option — every screenshot it evaluates leaves your infrastructure.
+- **Cons:** Not Flutter-specific (drives the accessibility tree, not the widget tree — see our [head-to-head benchmark](/blog/flutterprobe-vs-maestro-benchmark/) for what that costs in practice), slower execution due to accessibility-layer round-trips, limited assertion types, no visual-regression support built-in, its iOS documentation describes running on Xcode simulators and does not describe local physical iOS devices ([Maestro iOS docs](https://docs.maestro.dev/get-started/supported-platform/ios); hosted iOS devices are part of Maestro Cloud), Maestro Cloud is listed at $250 per device per month ([Maestro pricing](https://maestro.dev/pricing), read 2026-10-12), and its AI-assertion feature is a Maestro Cloud-only vendor-hosted proxy with no local-model or bring-your-own-key option — every screenshot it evaluates leaves your infrastructure.
 
 ### Detox (via Flutter bindings)
 
@@ -59,7 +59,7 @@ Detox is a JavaScript-based E2E framework from Wix, originally built for React N
 | Visual regression | No | No | Yes | No | No |
 | Self-healing selectors | No | No | Yes | No | No |
 | Built-in CI reports | No | No | HTML + JUnit | Cloud only | No |
-| Cloud farm support | Manual | Limited | 5 farms | Maestro Cloud | Manual |
+| Cloud farm support | Manual | Limited | 5 providers implemented, [not verified live](/tools/cloud-farms/) | Maestro Cloud (Maestro flows only) | Manual |
 | Parallel execution | No | No | Yes | Yes | Limited |
 | Migration tooling | N/A | N/A | 7 formats | N/A | N/A |
 | HTTP mocking | Manual | Manual | Built-in | No | Manual |
@@ -80,7 +80,7 @@ For a solo developer with a handful of smoke tests, `integration_test` is suffic
 
 ### CI/CD integration
 
-Every framework can be wired into CI, but the effort varies. FlutterProbe generates HTML and JUnit reports natively and has a ready-made [GitHub Actions workflow](/ci-cd/github-actions/). Maestro's built-in reporting requires Maestro Cloud, priced per device at roughly $250/device/month. The others require you to build reporting yourself.
+Every framework can be wired into CI, but the effort varies. FlutterProbe generates HTML and JUnit reports natively and has a ready-made [GitHub Actions workflow](/ci-cd/github-actions/). Maestro lists rich test reporting under Maestro Cloud, priced at $250 per device per month ([Maestro pricing](https://maestro.dev/pricing), read 2026-10-12); its free local plan includes the CLI and Studio. The others require you to build reporting yourself.
 
 ### Migration cost
 

@@ -63,7 +63,7 @@ Most mobile E2E testing tools work through platform-level UI automation framewor
 
 FlutterProbe's Dart agent runs inside the Flutter process and has direct access to the widget tree. When the Go CLI sends a "tap 'Submit' button" command, the agent traverses the widget tree, finds the matching element, and executes the gesture directly. No platform bridge, no accessibility layer translation.
 
-This is why per-command latency is under 50ms. It is also why FlutterProbe can implement features like self-healing selectors — the agent has full visibility into widget types, keys, labels, and tree structure, so it can find elements even when the tree changes slightly between app versions.
+This is why commands are resolved directly in the app. It is also why FlutterProbe can implement features like self-healing selectors — the agent has full visibility into widget types, keys, labels, and tree structure, so it can find elements even when the tree changes slightly between app versions.
 
 ## Architecture Decisions and Trade-offs
 

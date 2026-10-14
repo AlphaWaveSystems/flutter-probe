@@ -228,6 +228,15 @@ class ProbeExecutor {
         // where the file is on a remote device and can't be pulled via ADB).
         final fileBytes = await File(path).readAsBytes();
         final b64 = base64Encode(fileBytes);
+        // `inline: true` (Studio's live view asks for a frame several times a second): the image travels in the
+        // answer only, so delete the temporary copy instead of letting thousands of PNGs pile up on the device.
+        if (req.params['inline'] == true) {
+          try {
+            await File(path).delete();
+          } catch (_) {
+            // best effort: the system temp directory is cleaned by the OS anyway
+          }
+        }
         return {'path': path, 'data': b64};
 
       case ProbeMethods.dumpTree:

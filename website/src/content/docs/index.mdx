@@ -1,9 +1,9 @@
 ---
 title: FlutterProbe Documentation
-description: High-performance local E2E testing for Flutter mobile apps with natural language syntax and sub-50ms execution.
+description: High-performance local E2E testing for Flutter mobile apps with natural language syntax and direct widget-tree access.
 template: splash
 hero:
-  tagline: Write Flutter E2E tests in plain English. Execute with sub-50ms command round-trips via direct widget-tree access.
+  tagline: Write Flutter E2E tests in plain English. Execute through direct widget-tree access.
   actions:
     - text: Get Started
       link: /getting-started/installation/
@@ -18,7 +18,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## What is FlutterProbe?
 
-FlutterProbe is a high-performance local E2E testing framework for Flutter mobile apps. It uses a natural language test syntax called **ProbeScript** with sub-50ms command execution via direct widget-tree access.
+FlutterProbe is a high-performance local E2E testing framework for Flutter mobile apps. It uses a natural language test syntax called **ProbeScript** with direct widget-tree access.
 
 ```
 test "user can log in"
@@ -36,8 +36,8 @@ test "user can log in"
   <Card title="Natural Language Tests" icon="pencil">
     Write tests in ProbeScript — a readable, indent-based syntax that anyone on your team can understand.
   </Card>
-  <Card title="Sub-50ms Execution" icon="rocket">
-    Direct widget-tree access via an in-app Dart agent delivers command round-trips under 50 milliseconds.
+  <Card title="Direct In-App Control" icon="rocket">
+    Direct widget-tree access via an in-app Dart agent. In a replicated benchmark against Maestro, the median suite time was about 2x faster.
   </Card>
   <Card title="Cross-Platform" icon="laptop">
     Run the same tests on Android emulators and iOS simulators with platform-specific handling built in.

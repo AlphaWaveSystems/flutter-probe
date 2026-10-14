@@ -12,8 +12,8 @@ timers.
 | Canary | `vX.Y.Z-next.N` | `release-canary.yml` | `brew install AlphaWaveSystems/tap/probe@next`; agent from the tagged source (git dependency, `path: probe_agent`); a pub.dev pre-release is published only when the pubspec version carries `-next.N`. User guide: website `getting-started/installation` |
 | Stable | `vX.Y.Z` | `release.yml` + `publish-pub-dev.yml` | `brew install probe`; pub.dev stable |
 
-`scripts/release.sh 0.25.1-next.1` bumps the version files, commits and tags a
-canary; `scripts/release.sh 0.25.1` tags the stable release once the gate has
+`scripts/release.sh 0.25.2-next.1` bumps the version files, commits and tags a
+canary; `scripts/release.sh 0.25.2` tags the stable release once the gate has
 passed.
 
 ## Stages
