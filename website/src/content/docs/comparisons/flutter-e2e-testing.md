@@ -96,7 +96,7 @@ test "user can log in"
 |---|---|---|---|
 | Language | Dart | Dart | ProbeScript (plain English) |
 | Native dialog support | No | Yes | Yes (permissions, GPS, clipboard) |
-| Cloud farm support | Manual setup | Limited | 5 farms built-in |
+| Cloud farm support | Manual setup | Limited | 5 providers implemented, [not yet verified on a live account](/tools/cloud-farms/) |
 | CI reporting | DIY | DIY | Built-in HTML/JUnit reports |
 | Visual regression | No | No | Yes |
 | Self-healing selectors | No | No | Yes |
