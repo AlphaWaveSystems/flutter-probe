@@ -11,7 +11,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe validate` | Check `probe.yaml` and the `probe_version` pin without connecting to a device. Exits non-zero when a check fails; `--format json` prints the report. Run it in CI before `probe test` |
 | `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing. `--format json` prints the report |
 | `probe test [path]` | Run `.probe` test files |
-| `probe lint [path]` | Validate `.probe` files for syntax errors |
+| `probe lint [path]` | Validate `.probe` files for syntax errors; warns, never fails, on count and zero-state text checks that a substring match passes by accident |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
 | `probe device view` | Interactive device view over a local WebSocket (preview) |
@@ -128,6 +128,8 @@ Validate `.probe` files without executing them.
 probe lint tests/
 probe lint tests/smoke/login.probe
 ```
+
+Lint also warns, and never fails, on a `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged. Warnings do not change the exit status.
 
 ## probe record
 

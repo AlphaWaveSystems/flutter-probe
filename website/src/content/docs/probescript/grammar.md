@@ -605,6 +605,7 @@ state-check   = "enabled" | "disabled" | "checked" | "focused" | "contains" , te
 - At most **one** `state-check` is allowed, optionally followed by one `matching` pattern (a regular expression).
 - `with ai` is only valid on `see`; `don't see ... with ai` is a parse error. Quote the sentence as the selector text.
 - `with ai` is written in lower case and needs an `ai:` block in `probe.yaml`.
+- A text selector matches substrings. For an exact count or zero-state check, anchor the pattern: `see "0 ml" matching "^0 ml$"`. `probe lint` warns, without failing, about a count or zero-state check that has no anchored `matching` pattern.
 
 ```probe
 test "assertions"
@@ -617,6 +618,7 @@ test "assertions"
   see "Price" contains "$9.99"
   see "Email" matching ".*@.*"
   see "Price" contains "$" matching "[0-9]+"
+  see "0 ml" matching "^0 ml$"
   see exactly 3 "Item"
   see any of "Create Your Account", "Confirm Your Details"
   don't see any of "Error", "Failed"
