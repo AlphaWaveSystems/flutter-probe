@@ -149,10 +149,16 @@ test.describe("Studio with the shared device view", () => {
     const offY = (box.height - sh * scale) / 2;
     const at = (lx: number, ly: number) => [box.x + offX + lx * scale, box.y + offY + ly * scale] as const;
 
+    // "+ tap" needs a selection first.
+    await expect(page.locator("#btn-insert-tap")).toBeDisabled();
     // Alt+click selects the element under the pointer: the selector is shown and the inspector is searched for it.
     await canvas.click({ modifiers: ["Alt"], position: { x: offX + sw * scale * 0.5, y: offY + sh * scale * 0.5 } });
     await expect(page.locator("#toast-container")).toContainText("Selected #counter_button", { timeout: 15_000 });
     await expect(page.locator("#inspector-search")).toHaveValue("counter_button");
+    // "+ tap" writes a tap step for the selection at the editor cursor.
+    await expect(page.locator("#btn-insert-tap")).toBeEnabled();
+    await page.locator("#btn-insert-tap").click();
+    await expect(page.locator("#editor .view-lines")).toContainText("tap #counter_button");
     // The selector chip covers the bottom of the screen: dismiss it before using the navigation bar.
     await page.locator("#device-view button", { hasText: "Clear" }).click();
 

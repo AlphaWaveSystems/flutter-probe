@@ -73,12 +73,21 @@ function setViewLabel(base: string): void {
   fpsLabel.title = base === "device view" ? capsText.title : "";
 }
 
+// The editor lives in main.ts: it registers a callback that receives each safe selector (or null when a selection is
+// refused or the connection ends) and enables its "+ tap" button accordingly.
+let selectionHandler: ((selector: string | null) => void) | null = null;
+export function onElementSelected(fn: (selector: string | null) => void): void {
+  selectionHandler = fn;
+}
+
 function onSelect(node: DeviceNode): void {
   const selector = selectorFor(node);
   if (CONTROL_CHARS.test(selector)) {
+    selectionHandler?.(null);
     toast("That element's text contains control characters, so no selector was copied.", "error", 4000);
     return;
   }
+  selectionHandler?.(selector);
   const needle = node.key ?? node.text ?? node.label ?? node.type;
   const search = document.getElementById("inspector-search") as HTMLInputElement | null;
   if (search && !CONTROL_CHARS.test(needle)) {
@@ -136,6 +145,7 @@ async function mountSharedView(): Promise<boolean> {
 
 function unmountSharedView(): void {
   capsText = { label: "", title: "" };
+  selectionHandler?.(null);
   if (treeTimer !== null) {
     window.clearInterval(treeTimer);
     treeTimer = null;

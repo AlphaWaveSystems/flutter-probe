@@ -1,7 +1,8 @@
 import "./style.css";
 import * as monaco from "monaco-editor";
 import { PROBESCRIPT_LANGUAGE_ID, registerProbeScript } from "./probescript";
-import { initDeviceStream, startStream, stopStream } from "./device-stream";
+import { initDeviceStream, onElementSelected, startStream, stopStream } from "./device-stream";
+import { planTapInsert } from "./device-view/insertStep";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { toast } from "./toast";
 
@@ -1034,6 +1035,26 @@ EventsOn("recorder:line", (line: string) => {
     },
   ]);
   editor.revealLine(m.getLineCount());
+});
+
+// "+ tap": add a `tap` step for the element last selected in the device pane (Alt+click) at the editor cursor.
+let selectedSelector: string | null = null;
+const insertTapBtn = $("btn-insert-tap") as HTMLButtonElement;
+onElementSelected((selector) => {
+  selectedSelector = selector;
+  insertTapBtn.disabled = selector === null;
+});
+insertTapBtn.addEventListener("click", () => {
+  if (selectedSelector === null) return;
+  const pos = editor.getPosition() ?? { lineNumber: model.getLineCount(), column: 1 };
+  const plan = planTapInsert(model.getLineContent(pos.lineNumber), selectedSelector);
+  if (!plan) {
+    toast("That element cannot be written as a tap step.", "error", 3000);
+    return;
+  }
+  const col = plan.column + 1;
+  editor.executeEdits("device-view", [{ range: new monaco.Range(pos.lineNumber, col, pos.lineNumber, col), text: plan.text }]);
+  editor.focus();
 });
 
 $("btn-record").addEventListener("click", async () => {
