@@ -8,6 +8,19 @@
 // rather than rpc1+rpc2.
 
 import { EventsOn } from "../wailsjs/runtime/runtime";
+import { GetDeviceView, GetWidgetTree } from "../wailsjs/go/main/App";
+import { mountDeviceView, selectorFor } from "./device-view";
+import type { DeviceViewHandle, DeviceNode } from "./device-view";
+import { toast } from "./toast";
+
+// Two frame sources. By default the backend's streamLoop pushes `device:frame` events (above). When Studio runs with
+// PROBE_STUDIO_DEVICE_VIEW=1, GetDeviceView returns the address of a loopback hub and the pane mounts the shared
+// device view component instead: frames, pointer input and hover/select all come over that WebSocket, and the
+// inspector text is refreshed on a timer.
+const TREE_POLL_MS = 1500;
+let viewHandle: DeviceViewHandle | null = null;
+let viewHost: HTMLElement | null = null;
+let treeTimer: number | null = null;
 
 type FrameEvent = {
   screenshot: string;   // base64 PNG, no data: prefix
@@ -47,6 +60,77 @@ export function initDeviceStream(): void {
   });
 }
 
+/** Alt+click in the view: show the selector, copy it, and search the inspector for the element. */
+// Text read from the device is untrusted: it never goes into the clipboard or a search box with control characters.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
+
+function onSelect(node: DeviceNode): void {
+  const selector = selectorFor(node);
+  if (CONTROL_CHARS.test(selector)) {
+    toast("That element's text contains control characters, so no selector was copied.", "error", 4000);
+    return;
+  }
+  const needle = node.key ?? node.text ?? node.label ?? node.type;
+  const search = document.getElementById("inspector-search") as HTMLInputElement | null;
+  if (search && !CONTROL_CHARS.test(needle)) {
+    search.value = needle;
+    search.dispatchEvent(new Event("input"));
+  }
+  navigator.clipboard?.writeText(selector).catch(() => {
+    /* clipboard unavailable: the toast still shows the selector */
+  });
+  toast(`Selected ${selector}`, "info", 2500);
+}
+
+async function pollTree(): Promise<void> {
+  try {
+    updateInspector(await GetWidgetTree());
+  } catch {
+    /* keep the last tree */
+  }
+}
+
+async function mountSharedView(): Promise<boolean> {
+  if (viewHandle) return true; // already mounted for this connection
+  let info;
+  try {
+    info = await GetDeviceView();
+  } catch (err) {
+    console.warn("device view unavailable:", err);
+    return false;
+  }
+  if (!info?.enabled || !info.url || !info.token || !viewEl || !connected) return false;
+  placeholderEl?.remove();
+  viewHost = document.createElement("div");
+  viewHost.style.width = "100%";
+  viewHost.style.height = "100%";
+  viewEl.appendChild(viewHost);
+  viewHandle = mountDeviceView(viewHost, {
+    url: info.url,
+    token: info.token,
+    onSelect,
+    onStatus: (s) => {
+      // "taken": another window took the view over. The component offers its own Reconnect button; Studio never
+      // reconnects by itself.
+      if (fpsLabel) fpsLabel.textContent = s.state === "connected" ? "device view" : s.state === "taken" ? "taken over" : s.state;
+    },
+  });
+  void pollTree();
+  treeTimer = window.setInterval(() => void pollTree(), TREE_POLL_MS);
+  return true;
+}
+
+function unmountSharedView(): void {
+  if (treeTimer !== null) {
+    window.clearInterval(treeTimer);
+    treeTimer = null;
+  }
+  viewHandle?.destroy();
+  viewHandle = null;
+  viewHost?.remove();
+  viewHost = null;
+}
+
 export function startStream(): void {
   // The backend's streamLoop is already running because Connect started it.
   // We just flip the local "accept frames" flag and reset FPS counters so
@@ -56,10 +140,13 @@ export function startStream(): void {
   frameMsInWindow = [];
   windowStartMs = performance.now();
   if (fpsLabel) fpsLabel.textContent = "…";
+  // When the shared device view is on this replaces the event-driven frames; otherwise it returns false at once.
+  void mountSharedView();
 }
 
 export function stopStream(): void {
   connected = false;
+  unmountSharedView();
   if (imgEl) {
     imgEl.remove();
     imgEl = null;

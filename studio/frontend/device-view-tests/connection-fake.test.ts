@@ -94,6 +94,33 @@ describe("DeviceConnection close handling", () => {
     conn.destroy();
   });
 
+  it("a connection that fails right after a takeover says another window took over (the hub's 429 is not readable)", () => {
+    const clock = { t: 0 };
+    const { conn, statuses } = setup(clock);
+    conn.start();
+    FakeWS.all[0]!.hello();
+    FakeWS.all[0]!.closeWith(4001);
+    clock.t = 1000;
+    conn.reconnect();
+    FakeWS.all[1]!.closeWith(1006); // refused before it opened
+    assert.equal(statuses.at(-1)!.state, "reconnecting");
+    assert.match(statuses.at(-1)!.msg, /another window just took over/);
+    conn.destroy();
+  });
+
+  it("the same failure long after a takeover, or after the socket opened, keeps the generic message", () => {
+    const clock = { t: 0 };
+    const { conn, statuses } = setup(clock);
+    conn.start();
+    FakeWS.all[0]!.hello();
+    FakeWS.all[0]!.closeWith(4001);
+    clock.t = 60_000;
+    conn.reconnect();
+    FakeWS.all[1]!.closeWith(1006);
+    assert.equal(statuses.at(-1)!.msg, "reconnecting");
+    conn.destroy();
+  });
+
   it("other close codes still retry with backoff", () => {
     const { conn, timers, statuses } = setup({ t: 0 });
     conn.start();

@@ -4,10 +4,14 @@ name: Studio E2E
 # self-hosted macOS runner with Accessibility + Screen Recording granted to
 # the runner process. Hosted macOS runners cannot grant those permissions.
 
+# Manual only: never on tags or pull requests. A public repository must not let
+# outside code reach a self-hosted runner, and with no runner registered a tag
+# run just sits queued until GitHub cancels it after 24 hours. Start it with
+#   gh workflow run "Studio E2E" --ref <branch>
+# once a runner with the studio-e2e label is online. Dispatch needs write access.
+
 on:
   workflow_dispatch:
-  push:
-    tags: ['v*']
 
 jobs:
   studio-e2e:
