@@ -60,8 +60,10 @@ type Config struct {
 // --upload-report is given) and a license with the probe_cloud plan is activated.
 type HostedConfig struct {
 	UploadReport bool          `yaml:"upload_report"` // upload the scrubbed run report after `probe test` (same as --upload-report)
-	URL          string        `yaml:"url"`           // service base URL; the default is a placeholder that is not live yet
+	URL          string        `yaml:"url"`           // service base URL; the default is a placeholder that is not live yet (PROBE_CLOUD_URL overrides)
 	Timeout      time.Duration `yaml:"timeout"`       // upload time limit (default 5s); an upload never fails the run
+	Audience     string        `yaml:"audience"`     // audience requested for the GitHub Actions identity token (default "probe-cloud"; PROBE_CLOUD_AUDIENCE overrides)
+	RetryWindow  time.Duration `yaml:"retry_window"` // how long a busy service (HTTP 429 or 503) is retried (default 5m); a negative value turns retries off
 	Label        string        `yaml:"label"`         // optional run label (a suite, shard or matrix leg; sanitized to [0-9A-Za-z._:/-], 64 chars). Two uploads of one CI job must differ in it
 }
 
@@ -83,7 +85,7 @@ type L10nConfig struct {
 type CloudConfig struct {
 	URL         string            `yaml:"url"`         // cloud API base URL (must be configured by the user)
 	Token       string            `yaml:"token"`       // API key for cloud authentication (supports ${ENV_VAR} syntax)
-	Provider    string            `yaml:"provider"`    // cloud device farm provider: browserstack, aws, firebase, saucelabs, lambdatest
+	Provider    string            `yaml:"provider"`    // cloud device farm provider: browserstack, aws, saucelabs, lambdatest, firebase (deprecated by its vendor); none verified on a live account
 	Credentials map[string]string `yaml:"credentials"` // provider-specific credentials (e.g. username, access_key)
 	App         string            `yaml:"app"`         // path to .apk/.ipa to upload to the cloud provider
 	Devices     []string          `yaml:"devices"`     // target device names for cloud testing

@@ -13,7 +13,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **Workspace folder picker** — point Studio at any project root with a `tests/` folder. Choice persists across launches.
 - **Device picker** that lists booted simulators, online emulators, and physical iOS/Android devices side by side, with a `physical` tag and a clear hint when nothing is connectable.
 - **Physical device support** — the same `internal/device` code the `probe` CLI uses: `iproxy` tunneling for physical iOS over USB, `adb forward` for physical Android (same path as emulators), and mDNS auto-discovery (`_flutterprobe._tcp`) for WiFi-connected devices. See [Physical devices](#physical-devices) below.
-- **Live device pane** — the connected simulator, emulator, or physical device's screen mirrored at the device's native pace via repeated `take_screenshot` RPCs. Frame metadata (`N fps · Mms/frame`) shown in the title.
+- **Live device pane** — the connected simulator, emulator, or physical device's Flutter screen, shown read-only from repeated screenshot requests to the on-device agent (no video stream; system UI and native views are not included). The title shows `N fps · M ms avg · K ms max`.
 - **Live widget tree inspector** — every device frame is bundled with a `dump_widget_tree` snapshot, so the inspector pane updates per frame. No refresh button.
 - **In-process test execution** — Studio's Go backend imports `internal/runner` directly. No subprocess shell-out, no JSON wire format. Results stream into the timeline as `run:result` events fire.
 - **Live step highlight** — while a file runs, the editor gutter follows the executing step (▶ while running, then ✓ / ✗ / – stays on the line; a failed line shows its error on hover). Step rows nest under each test in the results timeline with line number, duration and attempt; click one to jump to its line. The toolbar shows `step N of M` and a **Cancel** button stops the run.
@@ -30,7 +30,7 @@ Start Studio with `PROBE_STUDIO_AUTOMATION=1` and scripts or AI agents can drive
 
 A workspace matters because Studio reads its `probe.yaml` (agent port, timeouts, device ids, and the AI and cloud endpoints) and runs its `.probe` files. Nothing in `probe.yaml` names a host command and Studio does not use the `tools:` paths, but a test file can make the host call a URL (`call GET ...`), copy a host file to the device (`add media`) or write screenshots and logs, which is why the folders are confined.
 
-The MCP server exposes the same through `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results` and `studio_screenshot`, so an AI client can open a workspace, connect, run a `.probe` file and read step-by-step progress.
+The MCP server exposes the same through `studio_open_workspace`, `studio_list_devices`, `studio_connect`, `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree` and `studio_ui_state` (the last two are read-only), so an AI client can open a workspace, connect, run a `.probe` file and read step-by-step progress.
 
 ## Testing Studio
 
@@ -101,17 +101,20 @@ Selecting a physical device shows what it needs in a line under the toolbar, ins
 4. **Pick the device** in the toolbar dropdown (or use the 📡 WiFi button for a WiFi-connected physical device) and click **Connect**. The device pane should fill with a live mirror; the inspector pane gets a green pulsing **LIVE** badge.
 5. **Open a `.probe` file** from the Workspace pane (or write one inline) and click **Run**. Per-test results stream into the Results pane below.
 
-## Frame rate expectations
+## What the live view is, and its frame rate
 
-The live device pane is bottlenecked by the underlying screenshot API:
+The device pane is a **read-only** view. Studio asks the on-device agent for a screenshot and for the widget tree, over the same connection a test run uses, in a loop with no fixed delay: the next request goes out as soon as the previous answer arrives. There is no click-to-tap and no typing into the pane (the agent has no coordinate tap); use the widget tree and the recorder to build steps.
 
-| Source | Frames per second (approx) |
-|---|---|
-| iOS simulator (`simctl io screenshot`) | 4–6 FPS |
-| Android emulator (`adb exec-out screencap`) | 6–10 FPS |
-| Physical device (USB or WiFi) | Same `take_screenshot` RPC, over an `iproxy` tunnel (iOS USB) or a direct WebSocket (WiFi) — expect roughly emulator-class FPS or a little lower, depending on tunnel/network latency; not separately benchmarked yet |
+Because the image comes from the app's own renderer (`RenderRepaintBoundary.toImage`), the pane shows **only the Flutter layer**: the status bar, system dialogs, keyboards drawn by the OS and native views are not in it. The frames are PNG, sent as text, and the agent waits for the app to settle before capturing, so a screen with a running animation can capture slower than an idle one. The toolbar shows the frames per second and, per frame, the average and slowest capture time over the last second (`frameMs`, measured on the host around one screenshot and widget-tree pair; it does not include decoding and painting the image in the window).
 
-Each frame is a parallel screenshot + widget-tree pair, so frame time is `max(screenshot, tree)`, not `screenshot + tree`. Higher framerate (30–60 FPS via H.264 video stream) is on the roadmap for a follow-up release.
+Measured on one machine (Apple M5 Max, idle fixture app on a static screen, 150 frames each, the host also running other work, so treat the numbers as a rough guide):
+
+| Device | Frames per second | Capture time per frame (median / 95th percentile) | PNG size |
+|---|---|---|---|
+| iOS simulator `ProbeBaseline-iPhone17` (iOS 26.5) | 14.1 | 68 ms / 86 ms | 52 KiB |
+| Android emulator `ProbeRepro-API35` (Android 15) | 13.4 | 72 ms / 84 ms | 44 KiB |
+
+A physical phone (USB or WiFi) uses the same agent request, so expect similar or lower rates depending on the tunnel or network; it has not been measured. A busier screen means larger frames and a lower rate. Faster, video-based views are a possible future change, not something Studio does today.
 
 ## Build from source
 

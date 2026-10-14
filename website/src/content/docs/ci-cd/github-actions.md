@@ -22,6 +22,10 @@ probe_version: 0.25.x   # any 0.25 patch release; write 0.25.1 to pin one exact 
 
 `brew install probe` always installs the latest stable release. For an exact pin, install that release from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases) instead. Keep `probe_version` in step with the CLI the job installs: a mismatch fails the job before any test runs.
 
+## Using the ready-made action
+
+The `actions/probe-test` directory in the repository is a ready-made composite action that installs the CLI from a release, runs `probe test` and attaches the JUnit report; copy it to its own repository to use or publish it (see its README). The workflows below show the same steps written out. The CLI is installed from a release asset (pin the version); the releases publish no checksum file, but GitHub records a SHA-256 digest for every asset, which the `actions/probe-test` action checks (the workflows below skip the check for brevity; add it before relying on them). These workflows were adapted from the project's own and have not been re-run on hosted runners as written: check the action versions against their documentation. The macOS asset below is for Apple Silicon runners; use `probe-darwin-amd64` on Intel.
+>
 ## iOS Simulator Workflow
 
 ```yaml
@@ -32,18 +36,17 @@ jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.4'
 
-      - name: Build probe CLI
-        run: make build
+      - name: Install the probe CLI
+        run: |
+          sudo curl --fail --silent --show-error --location -o /usr/local/probe \
+            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.25.2/probe-darwin-arm64
+          sudo chmod +x /usr/local/bin/probe
 
       - name: Boot iOS simulator
         run: |
@@ -61,7 +64,7 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          bin/probe test tests/ \
+          probe test tests/ \
             --device $DEVICE_UDID \
             --timeout 60s -v -y \
             --video \
@@ -69,7 +72,7 @@ jobs:
 
       - name: Generate HTML report
         if: always()
-        run: bin/probe report --input reports/results.json -o reports/report.html
+        run: probe report --input reports/results.json -o reports/report.html
 
       - name: Upload artifacts
         if: always()
@@ -85,14 +88,19 @@ jobs:
   android-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
+      - name: Install the probe CLI
+        run: |
+          sudo curl --fail --silent --show-error --location -o /usr/local/probe \
+            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.25.2/probe-linux-amd64
+          sudo chmod +x /usr/local/bin/probe
 
-      - name: Build probe CLI
-        run: make build
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: Start Android emulator and run tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -102,12 +110,12 @@ jobs:
             adb install -r your-app-debug.apk
             adb shell am start -n com.example.yourapp/.MainActivity
             sleep 10
-            bin/probe test tests/ \
+            probe test tests/ \
               --device emulator-5554 \
               --timeout 60s -v -y \
               --video \
               --format json -o reports/results.json
-            bin/probe report --input reports/results.json -o reports/report.html
+            probe report --input reports/results.json -o reports/report.html
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -124,7 +132,7 @@ Produce JUnit XML for GitHub's test summary UI:
       - name: Run tests (JUnit)
         if: always()
         run: |
-          bin/probe test tests/ \
+          probe test tests/ \
             --device $DEVICE_UDID \
             --timeout 60s -y \
             --format junit -o reports/results.xml
@@ -149,13 +157,13 @@ jobs:
     runs-on: macos-latest
     steps:
       # ... (iOS workflow above)
-      - run: bin/probe test tests/ --config probe.ios.yaml --device $IOS_UDID -v -y
+      - run: probe test tests/ --config probe.ios.yaml --device $IOS_UDID -v -y
 
   android-tests:
     runs-on: ubuntu-latest
     steps:
       # ... (Android workflow above)
-      - run: bin/probe test tests/ --config probe.android.yaml --device emulator-5554 -v -y
+      - run: probe test tests/ --config probe.android.yaml --device emulator-5554 -v -y
 ```
 
 ## Test Sharding
@@ -171,7 +179,7 @@ jobs:
         shard: [1/3, 2/3, 3/3]
     steps:
       # ... setup steps
-      - run: bin/probe test tests/ --shard ${{ matrix.shard }} --device $DEVICE_UDID -v -y
+      - run: probe test tests/ --shard ${{ matrix.shard }} --device $DEVICE_UDID -v -y
 ```
 
 ## Docker (Self-Hosted)

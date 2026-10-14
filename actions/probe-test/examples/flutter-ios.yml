@@ -1,0 +1,36 @@
+# Flutter app on an iOS simulator (macOS runner). Replace the bundle id for your project. <owner>/<repo> is where this action is published.
+name: E2E (iOS)
+on: [pull_request]
+
+jobs:
+  e2e:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+      id-token: write          # only needed with upload-report: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Boot a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c "import sys,json; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for v in d.values() for x in v if 'iPhone' in x['name']))")
+          xcrun simctl boot "$udid"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Build and install the app with the agent
+        run: |
+          flutter pub get
+          flutter build ios --debug --simulator --dart-define=PROBE_AGENT=true
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" build/ios/iphonesimulator/Runner.app
+          xcrun simctl launch "${{ steps.sim.outputs.udid }}" com.example.myapp
+
+      - uses: <owner>/<repo>@v1      # where this action is published
+        with:
+          version: '0.25.2'
+          device: ${{ steps.sim.outputs.udid }}
+          tests: tests/

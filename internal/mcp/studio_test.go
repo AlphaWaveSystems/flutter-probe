@@ -146,3 +146,38 @@ func TestStudioConnectOverWiFiAndItsTestOnlyMode(t *testing.T) {
 		t.Errorf("an omitted port is sent as 0 (Studio applies its default): %v", q)
 	}
 }
+
+func TestStudioReadToolsReturnTheTreeAndTheState(t *testing.T) {
+	calls := fakeStudio(t, map[string]any{
+		"widget_tree": "Scaffold\n  AppBar\n    Text(\"Home\")",
+		"ui_state":    map[string]any{"status": map[string]any{"connected": true, "deviceId": "dev-1"}, "run": map[string]any{"running": false}},
+	})
+	tree := textOf(callTool(t, "studio_widget_tree", nil))
+	if tree != "Scaffold\n  AppBar\n    Text(\"Home\")" {
+		t.Errorf("the tree must come back as plain text, not a quoted JSON string: %q", tree)
+	}
+	state := textOf(callTool(t, "studio_ui_state", nil))
+	if !strings.Contains(state, `"connected":true`) || !strings.Contains(state, `"run"`) {
+		t.Errorf("ui_state: %s", state)
+	}
+	if len(*calls) != 2 || (*calls)[0]["method"] != "widget_tree" || (*calls)[1]["method"] != "ui_state" {
+		t.Errorf("calls = %v", *calls)
+	}
+}
+
+func TestStudioWidgetTreeSaysWhenThereIsNone(t *testing.T) {
+	fakeStudio(t, map[string]any{"widget_tree": ""})
+	res := callTool(t, "studio_widget_tree", nil)
+	if res["isError"] != true || !strings.Contains(textOf(res), "no widget tree") {
+		t.Errorf("an empty tree must be reported, not returned as success: %v", res)
+	}
+}
+
+func TestStudioReadToolsPassStudioErrorsThrough(t *testing.T) {
+	fakeStudio(t, map[string]any{}) // every method unknown
+	for _, name := range []string{"studio_widget_tree", "studio_ui_state"} {
+		if res := callTool(t, name, nil); res["isError"] != true {
+			t.Errorf("%s must surface Studio's error: %v", name, res)
+		}
+	}
+}

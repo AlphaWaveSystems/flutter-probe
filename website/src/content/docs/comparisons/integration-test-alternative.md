@@ -112,7 +112,7 @@ Switching does not require rewriting everything at once. Here is a practical app
 | Visual regression | No | Yes |
 | Self-healing selectors | No | Yes |
 | Parallel execution | No | `--parallel`, `--shard` |
-| Cloud farm support | Manual | 5 farms built-in |
+| Cloud farm support | Manual | 5 providers implemented, [not yet verified on a live account](/tools/cloud-farms/) |
 | Test recording | No | [Yes](/tools/recording/) |
 | HTTP mocking | Manual setup | Built-in |
 

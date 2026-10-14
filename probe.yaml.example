@@ -31,7 +31,9 @@ device:
 #   token: ${PROBE_CLOUD_TOKEN}
 
 # Cloud device farm provider (optional — bring your own account)
-# Supported: browserstack | saucelabs | lambdatest | aws | firebase
+# Supported: browserstack | saucelabs | lambdatest | aws | firebase (deprecated by Google, shuts down 2027-09-30)
+# All are implemented but not verified on a live account, and cloud runs need a relay service:
+# https://flutterprobe.dev/tools/cloud-farms/
 #
 # cloud:
 #   provider: saucelabs

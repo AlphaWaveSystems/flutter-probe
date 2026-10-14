@@ -74,6 +74,8 @@
     {"name": "studio_cancel", "description": "Cancel the run Studio is executing."},
     {"name": "studio_run_state", "description": "The state of the current or last run in Studio: running, the plan (tests and step counts), the step being executed now (line, description), the finished steps with the..."},
     {"name": "studio_results", "description": "The test results of the current or last run in Studio (name, passed, error, duration, performance measurements), plus whether the run is still going."},
-    {"name": "studio_screenshot", "description": "A screenshot of the device Studio is connected to (what Studio shows in its device view)."}
+    {"name": "studio_screenshot", "description": "A screenshot of the device Studio is connected to (what Studio shows in its device view)."},
+    {"name": "studio_widget_tree", "description": "The widget tree of the app on the device Studio is connected to, as text (read-only)."},
+    {"name": "studio_ui_state", "description": "The connection and run state Studio shows right now, in one read-only call."}
   ]
 }

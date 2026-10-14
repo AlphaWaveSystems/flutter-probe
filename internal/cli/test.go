@@ -172,7 +172,7 @@ func init() {
 	f.String("cloud-url", "", "cloud API base URL (must be set via this flag or cloud.url in probe.yaml)")
 
 	// Cloud device farm providers
-	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, firebase, saucelabs, lambdatest)")
+	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, saucelabs, lambdatest, firebase [deprecated by its vendor]); all are implemented but not yet verified on a live account, and every one needs a relay service (see https://flutterprobe.dev/tools/cloud-farms/)")
 	f.String("cloud-app", "", "path to app binary (.apk/.ipa) to upload to cloud provider")
 	f.String("cloud-device", "", "target device name on the cloud provider")
 	f.String("cloud-key", "", "cloud provider API key or username")
@@ -580,6 +580,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("cloud provider: %w", err)
 			}
 			cloudProviderImpl = provider
+			if notice := cloud.DeprecationNotice(cloudProvider); notice != "" {
+				statusWarn(statusW, "%s", notice)
+			}
 
 			// Validate required cloud flags
 			if cloudApp == "" {
