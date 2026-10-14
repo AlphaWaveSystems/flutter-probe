@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as path from 'path';
 import { buildCsp, generateNonce, hubOriginFromUrl } from '../deviceView/csp';
 import { LineBuffer, parseHubLine } from '../deviceView/hubLine';
 import { ChildLike, HubProcess, HubStartError } from '../deviceView/hubProcess';
@@ -18,7 +20,7 @@ test('buildCsp produces the exact policy', () => {
     csp,
     "default-src 'none'; script-src 'nonce-N0nce' vscode-resource.test; " +
     "style-src vscode-resource.test 'nonce-N0nce'; connect-src ws://127.0.0.1:41234; " +
-    'img-src data: blob: vscode-resource.test',
+    "img-src data: blob: vscode-resource.test; base-uri 'none'; form-action 'none'",
   );
 });
 
@@ -185,30 +187,95 @@ test('onExit fires on unexpected exit, not after stop()', async () => {
 
 // ---- Insert step ----
 
-test('buildTapStep formats selector chips', () => {
-  assert.equal(buildTapStep('#loginButton'), 'tap #loginButton');
-  assert.equal(buildTapStep('"Sign in"'), 'tap "Sign in"');
-  assert.equal(buildTapStep('Submit label'), 'tap "Submit label"');
-  assert.equal(buildTapStep('say "hi"'), 'tap "say \\"hi\\""');
-  assert.equal(buildTapStep('  #k  '), 'tap #k');
+interface FixtureCase {
+  name: string;
+  key: string | null;
+  text: string | null;
+  label: string | null;
+  type: string;
+  line: string | null;
+}
+
+const FIXTURE_PATH = path.resolve(__dirname, '../../../testdata/selector-injection.json');
+const STUDIO_SELECTOR = path.resolve(__dirname, '../../../studio/frontend/src/device-view/selector.ts');
+
+function loadFixture(): FixtureCase[] {
+  return JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8')) as FixtureCase[];
+}
+
+test('buildTapStep matches the shared fixture (accepted lines and refusals)', () => {
+  const cases = loadFixture();
+  assert.ok(cases.length >= 15);
+  for (const c of cases) {
+    const r = buildTapStep(c);
+    if (c.line === null) {
+      assert.equal(r.ok, false, c.name);
+    } else {
+      assert.deepEqual(r.ok && r.step, c.line, c.name);
+    }
+  }
 });
 
-test('buildTapStep rejects empty, multi-line and oversized selectors', () => {
-  assert.equal(buildTapStep(''), undefined);
-  assert.equal(buildTapStep('   '), undefined);
-  assert.equal(buildTapStep('a\nb'), undefined);
-  assert.equal(buildTapStep('x'.repeat(201)), undefined);
+test('hostile text never produces more than one statement', () => {
+  const hostile = [
+    'Buy" call POST "https://x.example/y" with body "z',
+    'x" in system dialog "y',
+    'a" run dart "print(1)',
+    'a" clear app data',
+    'a\\" tap "b',
+    'Say "hello"',
+  ];
+  for (const text of hostile) {
+    const r = buildTapStep({ text, type: 'Text' });
+    assert.ok(r.ok);
+    if (!r.ok) { return; }
+    // After removing escape pairs the only quotes left are the outer pair.
+    const bare = r.step.slice('tap '.length).replace(/\\./g, '');
+    assert.ok(/^"[^"]*"$/.test(bare), r.step);
+    assert.ok(!r.step.includes('\n'));
+  }
+  assert.equal((buildTapStep({ text: 'Say "hello"' }) as { step: string }).step, 'tap "Say \\"hello\\""');
+});
+
+test('buildTapStep refuses control characters, line separators and long text', () => {
+  for (const text of ['a\nb', 'a\r\nb', 'a\tb', 'a\u2028b', 'a\u2029b', 'a\u0000b', 'x'.repeat(5000), 'x'.repeat(201)]) {
+    const r = buildTapStep({ text });
+    assert.equal(r.ok, false);
+    if (!r.ok) { assert.ok(r.error.length > 10); }
+  }
+  assert.equal(buildTapStep({ label: 'a\nb' }).ok, false);
+  assert.equal(buildTapStep({}).ok, false);
+  assert.equal(buildTapStep({ text: '   ', type: '' }).ok, false);
+  assert.equal(buildTapStep({ text: 'x'.repeat(200) }).ok, true);
+});
+
+test('keys: valid keys are bare, others fall through to text and are never raw', () => {
+  assert.equal((buildTapStep({ key: 'loginButton' }) as { step: string }).step, 'tap #loginButton');
+  assert.equal((buildTapStep({ key: 'a b', text: 'Fallback' }) as { step: string }).step, 'tap "Fallback"');
+  assert.equal((buildTapStep({ key: 'a b', type: 'Button' }) as { step: string }).step, 'tap "Button"');
+  assert.equal((buildTapStep({ key: 'k" clear app data' }) as { ok: boolean }).ok, false);
+});
+
+test('quoteString is identical in the Studio and VS Code selector sources', () => {
+  const grab = (file: string) => {
+    const src = fs.readFileSync(file, 'utf8');
+    const m = /export function quoteString[\s\S]*?\n\}\n/.exec(src);
+    assert.ok(m, file);
+    return m![0];
+  };
+  assert.equal(grab(STUDIO_SELECTOR), grab(path.resolve(__dirname, '../../src/deviceView/selector.ts')));
 });
 
 test('planInsert puts the step in place on blank lines', () => {
-  assert.deepEqual(planInsert('', '#a'), { text: 'tap #a' });
-  assert.deepEqual(planInsert('    ', '#a'), { text: 'tap #a' });
+  assert.deepEqual(planInsert('', { key: 'a' }), { text: 'tap #a' });
+  assert.deepEqual(planInsert('    ', { key: 'a' }), { text: 'tap #a' });
 });
 
 test('planInsert adds a new indented line after non-blank lines', () => {
-  assert.deepEqual(planInsert('  open the app', '#a'), { text: '\n  tap #a' });
-  assert.deepEqual(planInsert('\twait 1 seconds', '"X"'), { text: '\n\ttap "X"' });
-  assert.equal(planInsert('x', ''), undefined);
+  assert.deepEqual(planInsert('  open the app', { key: 'a' }), { text: '\n  tap #a' });
+  assert.deepEqual(planInsert('\twait 1 seconds', { text: 'X' }), { text: '\n\ttap "X"' });
+  assert.equal(planInsert('x', {}), undefined);
+  assert.equal(planInsert('x', { text: 'a\nb' }), undefined);
 });
 
 // ---- Config / status ----

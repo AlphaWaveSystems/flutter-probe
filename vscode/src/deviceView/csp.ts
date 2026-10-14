@@ -26,5 +26,7 @@ export function buildCsp(nonce: string, cspSource: string, hubOrigin: string): s
     `style-src ${cspSource} 'nonce-${nonce}'`,
     `connect-src ${hubOrigin}`,
     `img-src data: blob: ${cspSource}`,
+    `base-uri 'none'`,
+    `form-action 'none'`,
   ].join('; ');
 }

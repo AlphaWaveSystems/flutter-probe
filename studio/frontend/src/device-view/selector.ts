@@ -1,4 +1,6 @@
-// Selector chip rule: `#key`, else `"text"`, else label, else type name.
+// The VS Code extension mirrors this file in vscode/src/deviceView/selector.ts.
+// Selector chip rule: `#key`, else `"text"`, else label, else the quoted type
+// name (a bare word after `tap` would parse as a second statement).
 // String escaping follows the ProbeScript lexer: backslash, double quote,
 // newline and tab are escaped with a backslash.
 
@@ -24,5 +26,5 @@ export function selectorFor(node: Pick<DeviceNode, "key" | "text" | "label" | "t
   if (usable(node.key) && KEY_RE.test(node.key)) return `#${node.key}`;
   if (usable(node.text)) return quoteString(node.text.trim());
   if (usable(node.label)) return quoteString(node.label.trim());
-  return node.type;
+  return quoteString(node.type);
 }

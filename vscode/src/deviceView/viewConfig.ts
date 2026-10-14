@@ -14,6 +14,7 @@ const ICONS: Record<string, string> = {
   reconnecting: '$(sync~spin)',
   error: '$(error)',
   paused: '$(debug-pause)',
+  taken: '$(debug-disconnect)',
   starting: '$(sync~spin)',
   stopped: '$(circle-slash)',
 };

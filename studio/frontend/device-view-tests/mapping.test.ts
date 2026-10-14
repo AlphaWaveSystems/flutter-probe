@@ -160,12 +160,12 @@ describe("selectorFor", () => {
   it("falls back to a quoted text, then quoted label, then the type", () => {
     assert.equal(selectorFor({ ...base, text: "Log in" }), '"Log in"');
     assert.equal(selectorFor({ ...base, label: "Close dialog" }), '"Close dialog"');
-    assert.equal(selectorFor(base), "Container");
+    assert.equal(selectorFor(base), '"Container"');
   });
   it("skips keys the lexer cannot read as #id and empty strings", () => {
     assert.equal(selectorFor({ ...base, key: "a-b c", text: "Go" }), '"Go"');
     assert.equal(selectorFor({ ...base, key: "", text: "  ", label: "L" }), '"L"');
-    assert.equal(selectorFor({ ...base, key: "[<'x'>]" }), "Container");
+    assert.equal(selectorFor({ ...base, key: "[<'x'>]" }), '"Container"');
   });
   it("escapes quotes, backslashes, newlines and tabs", () => {
     assert.equal(selectorFor({ ...base, text: 'Say "hi"' }), '"Say \\"hi\\""');
