@@ -54,7 +54,7 @@ Commands that verify the state of the UI.
 | `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
 | `see any of` | `see any of "Create Your Account", "Confirm Your Details"` | Assert that any one of the texts is on screen; `don't see any of "A", "B"` asserts none is |
-| `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: `see "0 ml" matching "^0 ml$"`. `probe lint` warns, without failing, about such a check that has no pattern |
+| `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: `see "0 ml" matching "^0 ml$"`. `probe lint` warns, without failing, about such a check that has no anchored pattern |
 
 State suffixes compose: `see "Field" is enabled contains "y" matching "z"` checks all three at once.
 

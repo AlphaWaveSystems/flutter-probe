@@ -107,21 +107,21 @@ var (
 	zeroStateText   = regexp.MustCompile(`(?i)^(no|none|nothing|empty|zero)( [a-z]+){0,2}$`)
 )
 
-// substringCountWarnings flags a `see` or `wait until ... appears` on a count or zero-state text with no matching
-// pattern. A substring match passes "0 items" on "10 items", so the check should be anchored. A negated check is not
-// flagged, because its substring match fails loudly rather than passing by accident, and a step with any matching
-// pattern has already chosen how its text is compared.
+// substringCountWarnings flags a `see` or `wait until ... appears` on a count or zero-state text unless its pattern is
+// anchored at both ends. A substring match passes "0 items" on "10 items", so the check should be anchored. A negated
+// check is not flagged, because its substring match fails loudly rather than passing by accident. A pattern anchored at
+// both ends already compares the whole text; any other pattern is still a substring match, so it is flagged.
 func substringCountWarnings(owner string, steps []parser.Step) []string {
 	var warns []string
 	for _, s := range steps {
 		switch st := s.(type) {
 		case parser.AssertStep:
-			if st.Negated || st.Native || st.WithAI || st.Pattern != "" || len(st.Any) > 0 || st.Sel.Kind != parser.SelectorText {
+			if st.Negated || st.Native || st.WithAI || anchoredPattern(st.Pattern) || len(st.Any) > 0 || st.Sel.Kind != parser.SelectorText {
 				continue
 			}
 			warns = appendSubstringCountWarning(warns, owner, st.Line, st.Sel.Text)
 		case parser.WaitStep:
-			if st.Kind == parser.WaitAppears && st.Pattern == "" {
+			if st.Kind == parser.WaitAppears && !anchoredPattern(st.Pattern) {
 				warns = appendSubstringCountWarning(warns, owner, st.Line, st.Target)
 			}
 		case parser.ConditionalStep:
@@ -136,6 +136,11 @@ func substringCountWarnings(owner string, steps []parser.Step) []string {
 		}
 	}
 	return warns
+}
+
+// anchoredPattern reports whether a matching pattern is anchored at both ends, so it compares the whole text.
+func anchoredPattern(pattern string) bool {
+	return strings.HasPrefix(pattern, "^") && strings.HasSuffix(pattern, "$")
 }
 
 func appendSubstringCountWarning(warns []string, owner string, line int, text string) []string {

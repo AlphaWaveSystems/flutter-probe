@@ -107,7 +107,7 @@ A quoted text selector (`see "0 ml"`, `tap "Save"`, `wait until "Done" appears`)
 
 For zero-state and count checks ("0 ml", "3 items", "No items") prefer the anchored form, because a substring match also
 passes on longer text such as "10 ml". `probe lint` warns, without failing, about a `see` or `wait until ... appears` on
-such a text that has no `matching` pattern. Any `matching` pattern on the step silences the warning.
+such a text that has no `matching` pattern. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged.
 
 ## Wait Commands
 

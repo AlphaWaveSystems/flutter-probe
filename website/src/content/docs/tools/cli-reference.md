@@ -126,7 +126,7 @@ probe lint tests/
 probe lint tests/smoke/login.probe
 ```
 
-Lint also warns, and never fails, on a `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. Any `matching` pattern on the step silences the warning. Warnings do not change the exit status.
+Lint also warns, and never fails, on a `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged. Warnings do not change the exit status.
 
 ## probe record
 
