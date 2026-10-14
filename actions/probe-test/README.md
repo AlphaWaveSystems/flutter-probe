@@ -31,13 +31,20 @@ The job must already have a device: an iOS simulator on a macOS runner, or an An
 | `timeout` | empty | Per-step timeout, like `60s`. |
 | `upload-report` | `false` | Send the scrubbed report to Probe Cloud (preview). |
 | `upload-artifact` | `true` | Attach the JUnit report to the run. |
+| `artifact-name` | `probe-junit` | Artifact name; set a different one per matrix leg. |
+| `skip-verify` | `false` | `true` skips the SHA-256 check (off by default). |
+| `github-token` | the workflow token | Reads the release digest from the GitHub API. |
 | `extra-args` | empty | More `probe test` arguments. |
 
 Outputs: `exit-code`, `junit-path`. The action uploads the report and then fails the job if `probe test` failed.
 
 ## Runners
 
-Linux x64, macOS (Intel and Apple Silicon) and Windows x64 are mapped to the release assets `probe-linux-amd64`, `probe-darwin-amd64`, `probe-darwin-arm64` and `probe-windows-amd64.exe`. Other combinations (for example Linux ARM64) stop with a message, because no release asset exists for them. The releases publish no checksum file, so pin `version` and review release changes before upgrading.
+Linux x64, macOS (Intel and Apple Silicon) and Windows x64 are mapped to the release assets `probe-linux-amd64`, `probe-darwin-amd64`, `probe-darwin-arm64` and `probe-windows-amd64.exe`. Other combinations (for example Linux ARM64) stop with a message, because no release asset exists for them.
+
+## Verification
+
+The release publishes no checksum file, but GitHub records a SHA-256 digest for every release asset (the `digest` field of the [Releases API](https://docs.github.com/en/rest/releases/assets)). The install step downloads the asset, compares its SHA-256 with that digest, and installs nothing if they differ or if the release has no digest. `skip-verify: 'true'` turns the check off; it is off by default, and you should not use it in CI you rely on. Pin `version` too, so a new release is a change you review. The action pins `actions/upload-artifact` by commit SHA; keep it current with Dependabot.
 
 ## Optional: Probe Cloud upload (preview)
 
@@ -60,7 +67,7 @@ An upload never fails the run. Details: [Probe Cloud preview](https://flutterpro
 ## Test the scripts locally
 
 ```bash
-bash scripts/test-install.sh     # checks the asset mapping without downloading
+bash scripts/test-install.sh     # asset mapping, and the checksum path with a good, a tampered and an unpublished download (no network)
 ```
 
 ## License

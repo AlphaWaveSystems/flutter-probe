@@ -44,13 +44,14 @@ workflows:
 | `junit_path` | `$BITRISE_DEPLOY_DIR/probe-junit.xml` | Where the JUnit report is written. |
 | `timeout` | empty | Per-step timeout, like `60s`. |
 | `upload_report` | `no` | `yes` sends the scrubbed report to Probe Cloud (preview; the hosted service is **not live yet**; needs `PROBE_LICENSE_KEY` as a secret). |
+| `skip_verify` | `no` | `yes` skips the SHA-256 check of the download (keep `no` in CI you rely on). |
 | `extra_args` | empty | More `probe test` arguments. |
 
 Output: `PROBE_EXIT_CODE`. The Step fails when `probe test` fails.
 
 ## Stacks
 
-macOS (Apple Silicon and Intel) and Linux x64 map to the release assets `probe-darwin-arm64`, `probe-darwin-amd64` and `probe-linux-amd64`; other combinations stop with a message. The releases publish no checksum file, so pin `probe_version`.
+macOS (Apple Silicon and Intel) and Linux x64 map to the release assets `probe-darwin-arm64`, `probe-darwin-amd64` and `probe-linux-amd64`; other combinations stop with a message. The releases publish no checksum file, but GitHub records a SHA-256 digest for every release asset (the `digest` field of the [Releases API](https://docs.github.com/en/rest/releases/assets)). The Step compares the download with it and installs nothing on a mismatch or when no digest is published. Pin `probe_version` too.
 
 ## License
 
