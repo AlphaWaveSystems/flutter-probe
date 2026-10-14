@@ -1,4 +1,6 @@
 src/**
+scripts/**
+out/test/**
 node_modules/**
 tsconfig.json
 .gitignore

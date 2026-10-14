@@ -44,6 +44,9 @@ Key facts for an AI agent:
 ## Cloud device farms
 - Five providers are implemented (BrowserStack, AWS Device Farm, Sauce Labs, LambdaTest, Firebase Test Lab) but none is verified on a live account; they need a relay service; Firebase Test Lab is deprecated by Google (shuts down 2027-09-30); Maestro Cloud runs Maestro flows only and is not a provider. https://flutterprobe.dev/tools/cloud-farms/
 
+## Device view (preview)
+- `probe device view --device <id>` serves an interactive view of the Flutter layer over a local WebSocket (token, loopback only); the VS Code command "FlutterProbe: Open Device View" uses it. https://flutterprobe.dev/tools/cli-reference/
+
 ## Source
 - https://github.com/AlphaWaveSystems/flutter-probe
 - Agent package: https://pub.dev/packages/flutter_probe_agent

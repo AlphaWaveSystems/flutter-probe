@@ -13,6 +13,7 @@ import 'package:flutter/widgets.dart';
 
 import 'agent_version.dart';
 import 'biometric.dart' as biometric;
+import 'device_view.dart';
 import 'finder.dart';
 import 'http_capture.dart';
 import 'perf.dart';
@@ -223,11 +224,16 @@ class ProbeExecutor {
         // could land mid-route-transition (the push/pop AnimationController
         // still ticking) instead of waiting for the new route to settle.
         await _sync.waitForSettled();
-        final path = await _screenshot(name);
+        final scale = ((req.params['scale'] as num?)?.toDouble() ?? 1.0).clamp(0.1, 1.0).toDouble();
+        final path = await _screenshot(name, scale: scale);
         // Include base64-encoded PNG data so CLI can save locally (essential for cloud mode
         // where the file is on a remote device and can't be pulled via ADB).
         final fileBytes = await File(path).readAsBytes();
-        final b64 = base64Encode(fileBytes);
+        // Device view: optional scale (png only, see probeScaledPng). The image always travels in `data`.
+        // A capture made at a smaller pixel ratio is already the requested size and is much cheaper than capturing
+        // full size and shrinking afterwards (decode, resize, encode); only the fallback capture path still shrinks here.
+        final shot = await probeScaledPng(fileBytes, _lastShotScaled ? 1.0 : scale);
+        final b64 = base64Encode(shot.bytes);
         // `inline: true` (Studio's live view asks for a frame several times a second): the image travels in the
         // answer only, so delete the temporary copy instead of letting thousands of PNGs pile up on the device.
         if (req.params['inline'] == true) {
@@ -237,11 +243,64 @@ class ProbeExecutor {
             // best effort: the system temp directory is cleaned by the OS anyway
           }
         }
-        return {'path': path, 'data': b64};
+        final metrics = probeViewMetrics();
+        return {
+          'path': path,
+          'data': b64,
+          'format': 'png',
+          'width': shot.width,
+          'height': shot.height,
+          'logicalWidth': metrics.logicalWidth,
+          'logicalHeight': metrics.logicalHeight,
+          'dpr': metrics.dpr,
+        };
 
       case ProbeMethods.dumpTree:
+        if (req.params['bounds'] == true) {
+          return {'nodes': [for (final n in collectProbeNodes()) n.toJson()]};
+        }
         final tree = _dumpWidgetTree();
         return {'tree': tree};
+
+      // ---- Device view: pointer input at logical coordinates, hit testing ----
+      case ProbeMethods.tapAt:
+        await ProbePointerInput.tap(ProbePointerInput.point(req.params, 'x', 'y'));
+        await _settleBriefly();
+        return {'ok': true};
+
+      case ProbeMethods.longPressAt:
+        final lpMs = ((req.params['durationMs'] as num?)?.toInt() ?? 600).clamp(1, 10000);
+        await ProbePointerInput.longPress(ProbePointerInput.point(req.params, 'x', 'y'), durationMs: lpMs);
+        await _settleBriefly();
+        return {'ok': true};
+
+      case ProbeMethods.swipeAt:
+        final swMs = ((req.params['durationMs'] as num?)?.toInt() ?? 300).clamp(1, 10000);
+        await ProbePointerInput.swipe(
+          ProbePointerInput.point(req.params, 'x1', 'y1'),
+          ProbePointerInput.point(req.params, 'x2', 'y2'),
+          durationMs: swMs,
+        );
+        await _settleBriefly();
+        _lastScrollAt = DateTime.now();
+        return {'ok': true};
+
+      case ProbeMethods.typeTextFocused:
+        final typed = req.params['text'];
+        if (typed is! String) {
+          throw ProbeError(ProbeError.invalidParams, 'expected string "text"');
+        }
+        final target = _findFocusedEditableTarget();
+        if (target == null) {
+          throw ProbeError(ProbeError.widgetNotFound, 'type_text: no text field has focus');
+        }
+        _insertText(target, typed);
+        await _settleBriefly();
+        return {'ok': true};
+
+      case ProbeMethods.hitTest:
+        final hit = probeHitTest(ProbePointerInput.point(req.params, 'x', 'y'));
+        return {'node': hit?.toJson()};
 
       case ProbeMethods.visibleSummary:
         return _finder.visibleSummary();
@@ -808,6 +867,36 @@ class ProbeExecutor {
       state.userUpdateTextEditingValue(value, SelectionChangedCause.keyboard);
     } else {
       target.controller.value = value;
+    }
+  }
+
+  /// Inserts [text] at the cursor (replacing a selection) the way keyboard
+  /// input does, unlike [_enterText] callers that replace the whole value.
+  void _insertText(_EditableTarget target, String text) {
+    final value = target.controller.value;
+    final sel = value.selection;
+    final start = sel.isValid ? sel.start : value.text.length;
+    final end = sel.isValid ? sel.end : value.text.length;
+    final next = value.text.replaceRange(start, end, text);
+    final state = target.state;
+    final newValue = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    if (state != null && state.mounted) {
+      state.userUpdateTextEditingValue(newValue, SelectionChangedCause.keyboard);
+    } else {
+      target.controller.value = newValue;
+    }
+  }
+
+  /// Lets the frame an injected input caused run; a screen that animates
+  /// forever must not stall a live-view interaction, so this never throws.
+  Future<void> _settleBriefly() async {
+    try {
+      await _sync.waitForSettled(timeout: const Duration(seconds: 2));
+    } on TimeoutException {
+      // keep going: the input was delivered
     }
   }
 
@@ -1456,7 +1545,11 @@ class ProbeExecutor {
 
   // ---- Screenshot ----
 
-  Future<String> _screenshot(String name) async {
+  /// True when the last [_screenshot] captured at the requested scale itself (see [_captureViaRepaintBoundary]).
+  bool _lastShotScaled = false;
+
+  Future<String> _screenshot(String name, {double scale = 1.0}) async {
+    _lastShotScaled = false;
     // Wait for the latest frame to be fully rendered before capturing.
     await WidgetsBinding.instance.endOfFrame;
 
@@ -1469,7 +1562,7 @@ class ProbeExecutor {
     Uint8List? pngBytes;
     for (var attempt = 0;; attempt++) {
       try {
-        pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+        pngBytes = await _captureViaRepaintBoundary(scale) ?? await _captureViaLayer();
         break;
       } on AssertionError {
         // FlutterError is an AssertionError subtype too
@@ -1493,7 +1586,7 @@ class ProbeExecutor {
 
   /// Finds the largest [RenderRepaintBoundary] in the widget tree and captures
   /// it. Impeller explicitly supports this path, unlike [OffsetLayer.toImage].
-  Future<Uint8List?> _captureViaRepaintBoundary() async {
+  Future<Uint8List?> _captureViaRepaintBoundary([double scale = 1.0]) async {
     RenderRepaintBoundary? best;
     double bestArea = 0;
 
@@ -1525,9 +1618,11 @@ class ProbeExecutor {
     final pixelRatio = views.isNotEmpty
         ? views.first.flutterView.devicePixelRatio
         : ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
-    final image = await best!.toImage(pixelRatio: pixelRatio);
+    final image = await best!.toImage(pixelRatio: pixelRatio * scale);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    return bytes?.buffer.asUint8List();
+    final out = bytes?.buffer.asUint8List();
+    if (out != null) _lastShotScaled = true;
+    return out;
   }
 
   /// Fallback capture using the root [OffsetLayer]. Works on Skia; may return

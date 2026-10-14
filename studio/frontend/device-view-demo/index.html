@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Device view demo</title>
+  <style>
+    body { margin: 0; font: 14px system-ui, sans-serif; background: #202124; color: #eee; }
+    main { display: flex; gap: 16px; padding: 16px; height: calc(100vh - 32px); box-sizing: border-box; }
+    #view { flex: 0 0 360px; height: 100%; max-width: 50vw; }
+    aside { flex: 1; min-width: 0; }
+    pre { background: #111; padding: 8px; overflow: auto; max-height: 60vh; }
+    label, button { margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="view"></div>
+    <aside>
+      <h1>Device view demo</h1>
+      <p>
+        Start the mock hub with <code>npm run demo:device-view</code>, build the bundle with
+        <code>npm run build:device-view</code>, serve this folder tree over HTTP
+        (for example <code>python3 -m http.server</code> in <code>studio/frontend</code>) and open
+        <code>/device-view-demo/index.html</code>. Defaults match the mock hub: port 8765, token
+        <code>demo</code>. Override with <code>?url=ws://127.0.0.1:PORT/device/v1&amp;token=...</code>.
+      </p>
+      <p>Click = tap, drag = swipe, hold 500 ms = long press, Alt+click = select, type with the screen focused.</p>
+      <p>
+        <button id="slow" type="button">Config: 2 fps</button>
+        <button id="fast" type="button">Config: 15 fps</button>
+      </p>
+      <h2>Events</h2>
+      <pre id="log" aria-live="polite"></pre>
+    </aside>
+  </main>
+  <script type="module" src="./demo.js"></script>
+</body>
+</html>
