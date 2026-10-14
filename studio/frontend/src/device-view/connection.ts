@@ -42,6 +42,12 @@ export type WebSocketCtor = new (url: string) => WebSocketLike;
 const WS_OPEN = 1;
 /** Close code the hub uses when another client with the same token took over. */
 export const CLOSE_REPLACED = 4001;
+/**
+ * The hub refuses a connection that arrives within its takeover cool-down (3 s) with HTTP 429. A browser WebSocket does
+ * not expose the status of a refused handshake, so the page cannot read the 429: a connection that fails before it ever
+ * opens, soon after this page was taken over, is treated as that refusal. A little longer than the hub's 3 s.
+ */
+const COOLDOWN_GUESS_MS = 4000;
 /** A hello this soon after the previous one does not reset the backoff (flapping guard). */
 const STABLE_MS = 5000;
 /** After this many consecutive failed attempts the state is reported as "error" (still retrying). */
@@ -75,6 +81,7 @@ export class DeviceConnection {
   private sentAt: number[] = [];
   private everConnected = false;
   private taken = false;
+  private takenAt = -Infinity;
   private lastHelloAt = -Infinity;
   private readonly baseUrl: string;
   private readonly token: string;
@@ -129,8 +136,10 @@ export class DeviceConnection {
     }
     ws.binaryType = "arraybuffer";
     this.ws = ws;
+    let opened = false;
     ws.onopen = () => {
       if (this.ws !== ws) return;
+      opened = true;
       // Resend session state; the hub starts a fresh session per connection.
       if (Object.keys(this.config).length > 0) this.sendRaw({ t: "config", ...this.config });
       if (this.paused) this.sendRaw({ t: "pause" });
@@ -150,10 +159,12 @@ export class DeviceConnection {
       if (code === CLOSE_REPLACED) {
         // Another window took the stream. Do not fight over it.
         this.taken = true;
+        this.takenAt = this.now();
         this.h.onStatus({ state: "taken", msg: "taken over by another window" });
         return;
       }
-      this.scheduleRetry();
+      const justTaken = !opened && this.now() - this.takenAt < COOLDOWN_GUESS_MS;
+      this.scheduleRetry(justTaken ? "another window just took over this device, retrying" : undefined);
     };
   }
 
@@ -206,14 +217,14 @@ export class DeviceConnection {
     }
   }
 
-  private scheduleRetry(): void {
+  private scheduleRetry(msg?: string): void {
     if (this.destroyed || this.retryHandle !== null) return;
     const delay = backoffDelay(this.attempt);
     this.attempt++;
     const failed = this.attempt >= ERROR_AFTER_ATTEMPTS;
     this.h.onStatus({
       state: failed ? "error" : "reconnecting",
-      msg: failed ? "device view unreachable, retrying" : "reconnecting",
+      msg: msg ?? (failed ? "device view unreachable, retrying" : "reconnecting"),
     });
     this.retryHandle = this.timers.setTimeout(() => {
       this.retryHandle = null;
