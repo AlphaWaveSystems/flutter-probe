@@ -9,6 +9,7 @@ The fastest path, if the CLI and agent are installed and your app is running wit
 
 ```bash
 probe init                                   # creates probe.yaml and tests/example.probe
+probe doctor                                 # checks the project and this machine, and says how to fix what is missing
 probe lint tests                             # checks the files parse
 probe device list                            # find your device id
 probe test tests/example.probe --device <id> -v

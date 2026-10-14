@@ -146,6 +146,8 @@ This creates `probe.yaml` (set `project.app` to your app's bundle id or package 
 probe lint tests
 ```
 
+`probe doctor` checks the project and this machine, and says how to fix anything missing. It changes nothing.
+
 ## Step 4: Build and Run
 
 The app must be running on the device with the agent enabled (`--dart-define=PROBE_AGENT=true`) before `probe test` connects. If `probe test` cannot connect, it tells you what it was waiting for; the usual causes are the app not running, a build without the flag, or another process holding the agent port.
