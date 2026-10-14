@@ -40,6 +40,10 @@ export interface WebSocketLike {
 export type WebSocketCtor = new (url: string) => WebSocketLike;
 
 const WS_OPEN = 1;
+/** Close code the hub uses when another client with the same token took over. */
+export const CLOSE_REPLACED = 4001;
+/** A hello this soon after the previous one does not reset the backoff (flapping guard). */
+const STABLE_MS = 5000;
 /** After this many consecutive failed attempts the state is reported as "error" (still retrying). */
 const ERROR_AFTER_ATTEMPTS = 5;
 
@@ -70,6 +74,8 @@ export class DeviceConnection {
   private config: Config = {};
   private sentAt: number[] = [];
   private everConnected = false;
+  private taken = false;
+  private lastHelloAt = -Infinity;
   private readonly baseUrl: string;
   private readonly token: string;
   private readonly h: ConnectionHandlers;
@@ -136,10 +142,17 @@ export class DeviceConnection {
     ws.onerror = () => {
       // Details are intentionally not surfaced (they may include the URL).
     };
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (this.ws !== ws) return;
       this.ws = null;
       if (this.destroyed) return;
+      const code = (ev as { code?: unknown } | null)?.code;
+      if (code === CLOSE_REPLACED) {
+        // Another window took the stream. Do not fight over it.
+        this.taken = true;
+        this.h.onStatus({ state: "taken", msg: "taken over by another window" });
+        return;
+      }
       this.scheduleRetry();
     };
   }
@@ -150,7 +163,12 @@ export class DeviceConnection {
       if (!m) return;
       switch (m.t) {
         case "hello":
-          this.attempt = 0;
+          {
+            const t = this.now();
+            if (t - this.lastHelloAt >= STABLE_MS) this.attempt = 0;
+            this.lastHelloAt = t;
+          }
+          this.taken = false;
           this.everConnected = true;
           this.h.onHello(m);
           this.h.onStatus(
@@ -203,9 +221,17 @@ export class DeviceConnection {
     }, delay);
   }
 
+  /** Reconnect after the stream was taken by another window (or retry at once). */
+  reconnect(): void {
+    if (this.destroyed) return;
+    this.taken = false;
+    this.attempt = 0;
+    this.retryNow();
+  }
+
   /** Immediately retry (used when the page becomes visible again). */
   retryNow(): void {
-    if (this.destroyed || this.ws !== null) return;
+    if (this.destroyed || this.ws !== null || this.taken) return;
     if (this.retryHandle !== null) {
       this.timers.clearTimeout(this.retryHandle);
       this.retryHandle = null;
@@ -286,6 +312,7 @@ function normalizeState(s: string): Status["state"] {
     case "reconnecting":
     case "error":
     case "paused":
+    case "taken":
       return s;
     default:
       return "connected";

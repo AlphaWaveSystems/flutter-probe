@@ -14,13 +14,6 @@
     return ns && typeof ns.mountDeviceView === 'function' ? ns.mountDeviceView : null;
   }
 
-  function selectorFor(node) {
-    if (!node) { return ''; }
-    if (node.key) { return '#' + node.key; }
-    if (node.text) { return '"' + node.text + '"'; }
-    return node.label || node.type || '';
-  }
-
   function mount(msg) {
     var mountDeviceView = mountFn();
     if (!mountDeviceView) {
@@ -33,11 +26,17 @@
       url: msg.url,
       token: msg.token,
       onSelect: function (node) {
-        var s = selectorFor(node);
-        if (s) { vscode.postMessage({ type: 'select', selector: s }); }
+        // Only the element fields cross to the extension, which builds the step.
+        if (!node) { return; }
+        vscode.postMessage({
+          type: 'select',
+          node: { key: node.key, text: node.text, label: node.label, type: node.type },
+        });
       },
       onStatus: function (s) {
-        vscode.postMessage({ type: 'status', state: s && s.state ? String(s.state) : 'error' });
+        var state = s && s.state ? String(s.state) : 'error';
+        vscode.postMessage({ type: 'status', state: state });
+        if (state === 'taken') { vscode.postMessage({ type: 'taken' }); }
       },
     });
     if (msg.config) { view.setConfig(msg.config); }

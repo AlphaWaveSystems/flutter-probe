@@ -155,6 +155,11 @@ describe("chunkText", () => {
     }
   });
 
+  it("keeps every chunk at or under 1000 characters", () => {
+    const chunks = chunkText("a".repeat(2500));
+    assert.deepEqual(chunks.map((c) => c.length), [1000, 1000, 500]);
+  });
+
   it("returns nothing for empty text", () => {
     assert.deepEqual(chunkText(""), []);
   });
@@ -163,7 +168,10 @@ describe("chunkText", () => {
 describe("isSafeWsUrl", () => {
   it("allows ws and wss without credentials only", () => {
     assert.equal(isSafeWsUrl("ws://127.0.0.1:1234/device/v1"), true);
-    assert.equal(isSafeWsUrl("wss://example.test/x"), true);
+    assert.equal(isSafeWsUrl("ws://localhost:8080/x"), true);
+    for (const bad of ["wss://example.test/x", "wss://127.0.0.1:1234/x", "ws://example.test:80/x", "ws://127.0.0.1/x", "ws://127.0.0.1:0/x", "ws://127.0.0.1:99999/x", "ws://127.0.0.2:1234/x", "ws://[::1]:1234/x", "ws://127.0.0.1.evil.test:1234/x", "ws://localhost.evil.test:1234/x", "ws://evil.0.0.1:1234/x"]) {
+      assert.equal(isSafeWsUrl(bad), false, bad);
+    }
     assert.equal(isSafeWsUrl("http://127.0.0.1/x"), false);
     assert.equal(isSafeWsUrl("javascript:alert(1)"), false);
     assert.equal(isSafeWsUrl("ws://user:pw@127.0.0.1/x"), false);

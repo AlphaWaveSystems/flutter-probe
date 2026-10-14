@@ -57,6 +57,7 @@ export type StatusState =
   | "reconnecting"
   | "error"
   | "paused"
+  | "taken"
   | "closed";
 
 export interface Status {
@@ -277,32 +278,46 @@ export function encodeClientMessage(msg: ClientMessage): string | null {
 }
 
 /**
- * Split text into chunks whose `text` message fits the hub size limit. Splits
+ * Split text into chunks whose `text` message fits the hub size (4 KiB) and 1000 character limits. Splits
  * on code point boundaries so surrogate pairs stay intact.
  */
-export function chunkText(s: string, maxBytes = 1024): string[] {
+export function chunkText(s: string, maxBytes = 1024, maxChars = 1000): string[] {
   const out: string[] = [];
   let cur = "";
   let curBytes = 0;
+  let curChars = 0;
   for (const ch of s) {
     const b = textEncoder.encode(ch).byteLength;
-    if (curBytes + b > maxBytes && cur !== "") {
+    if ((curBytes + b > maxBytes || curChars + 1 > maxChars) && cur !== "") {
       out.push(cur);
       cur = "";
       curBytes = 0;
+      curChars = 0;
     }
     cur += ch;
     curBytes += b;
+    curChars++;
   }
   if (cur !== "") out.push(cur);
   return out;
 }
 
-/** True when `url` is a ws: or wss: URL without credentials. */
+/**
+ * True when `url` is a ws: URL for this machine only: host 127.0.0.1 or
+ * localhost, an explicit numeric port, no credentials. wss: is rejected.
+ */
 export function isSafeWsUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return (u.protocol === "ws:" || u.protocol === "wss:") && u.username === "" && u.password === "";
+    return (
+      u.protocol === "ws:" &&
+      u.username === "" &&
+      u.password === "" &&
+      (u.hostname === "127.0.0.1" || u.hostname === "localhost") &&
+      /^[0-9]+$/.test(u.port) &&
+      Number(u.port) >= 1 &&
+      Number(u.port) <= 65535
+    );
   } catch {
     return false;
   }
