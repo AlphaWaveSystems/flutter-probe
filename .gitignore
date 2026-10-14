@@ -15,6 +15,7 @@ studio/e2e-web/node_modules/
 studio/e2e-web/test-results/
 reports/studio-e2e-web/
 studio/frontend/dist/
+studio/frontend/dist-device-view/
 studio/frontend/.vite/
 
 # Sensitive/private documents
