@@ -52,7 +52,9 @@ Run tests on real devices in the cloud — bring your own account:
 | **Sauce Labs** | Real Device Cloud via Appium | Username + Access Key |
 | **LambdaTest** | Real devices via Appium | Username + Access Key |
 | **AWS Device Farm** | Managed device sessions | Access Key ID + Secret |
-| **Firebase Test Lab** | Batch test execution | Service Account JSON |
+| **Firebase Test Lab** (deprecated by Google, shuts down 2027-09-30) | Batch test execution | Service Account JSON |
+
+All providers are implemented but not yet verified on a live account, and cloud runs need a relay service. See [Cloud device farms](https://flutterprobe.dev/tools/cloud-farms/).
 
 Configure via VS Code settings or the Run Profile panel. Cloud credentials can also be set in `probe.yaml` under the `cloud:` section.
 

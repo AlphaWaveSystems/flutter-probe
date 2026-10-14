@@ -4,10 +4,11 @@
   <img src="docs/hero.png" alt="FlutterProbe — write E2E tests in plain English, run against the live widget tree" width="100%">
 </p>
 
-A high-performance E2E testing framework for Flutter mobile apps. Write tests in plain English, execute with sub-50ms command round-trips via direct widget-tree access — no UI automation layer, no WebDriver overhead.
+A high-performance E2E testing framework for Flutter mobile apps. Write tests in plain English, execute through direct in-app widget-tree access — no UI automation layer, no WebDriver overhead. In a replicated benchmark against Maestro on one app, the median suite time was about 2x faster with 0 flaky runs of 20 ([details](https://flutterprobe.dev/blog/flutterprobe-vs-maestro-benchmark/)).
 
-[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/github/v/tag/AlphaWaveSystems/flutter-probe?label=version&color=green)](CHANGELOG.md)
+[![CLI license: BSL 1.1](https://img.shields.io/badge/CLI-BSL%201.1-blue.svg)](LICENSE)
+[![Agent license: MIT](https://img.shields.io/badge/agent-MIT-blue.svg)](probe_agent/LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/AlphaWaveSystems/flutter-probe?label=release&color=green)](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/AlphaWaveSystems/flutter-probe)](https://github.com/AlphaWaveSystems/flutter-probe/stargazers)
 [![CLI downloads](https://img.shields.io/github/downloads/AlphaWaveSystems/flutter-probe/total?label=CLI%20downloads)](https://github.com/AlphaWaveSystems/flutter-probe/releases)
 [![pub.dev downloads](https://img.shields.io/pub/dm/flutter_probe_agent?label=pub.dev%20downloads%2Fmo)](https://pub.dev/packages/flutter_probe_agent)
@@ -23,8 +24,22 @@ test "user can log in"
   see "Dashboard"
 ```
 
+## Get started
+
+```bash
+brew tap AlphaWaveSystems/tap && brew install probe     # or a release binary, see Installation
+# add flutter_probe_agent to your app, run it with --dart-define=PROBE_AGENT=true
+probe init && probe lint tests                          # scaffold and check the sample
+probe test tests/example.probe --device <id> -v         # <id> from: probe device list
+```
+
+New here? Follow a tutorial: [write a login test](https://flutterprobe.dev/tutorials/flutter-login-test/), [run it in GitHub Actions](https://flutterprobe.dev/tutorials/flutter-e2e-github-actions/), [find and fix flaky tests](https://flutterprobe.dev/tutorials/triage-flaky-flutter-tests/). Comparing tools? See [Why FlutterProbe](https://flutterprobe.dev/comparisons/why-flutterprobe/).
+
+The CLI is free to use (BSL 1.1) and the Dart agent is MIT. Probe Cloud, a hosted report service, is a design-partner preview and is not live yet: see [pricing](https://flutterprobe.dev/pricing/#design-partners).
+
 ## Table of Contents
 
+- [Get started](#get-started)
 - [How It Works](#how-it-works)
 - [Installation](#installation)
 - [ProbeScript Language](#probescript-language)
@@ -601,7 +616,7 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
-| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot` (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
+| Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree`, `studio_ui_state` (read-only: the inspector's tree, and the connection and run state) (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
 | Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `record` |
 
@@ -626,7 +641,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 31 tools appear in Claude.
+4. Done — all 33 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 
@@ -766,7 +781,7 @@ Tap, swipe, and type in your app — FlutterProbe writes the `.probe` file as yo
 
 ## CI/CD Integration
 
-No need to clone this repo in your own CI pipelines. Download the pre-built binary directly from GitHub Releases:
+No need to clone this repo in your own CI pipelines. Download the pre-built binary directly from GitHub Releases. Ready-made sources: a GitHub Action (`actions/probe-test`), a Bitrise Step (`bitrise-step`, used with a `git::` reference), and a [Codemagic recipe](https://flutterprobe.dev/ci-cd/codemagic/); none has run on its CI yet.
 
 ```yaml
 # .github/workflows/e2e.yml
@@ -821,13 +836,15 @@ probe report --input reports/results.json -o reports/report.html --open
 
 Run tests on real devices without managing your own device lab. Bring your own account:
 
-| Provider | Flag value |
-|---|---|
-| BrowserStack App Automate | `browserstack` |
-| Sauce Labs Real Device Cloud | `saucelabs` |
-| LambdaTest Real Devices | `lambdatest` |
-| AWS Device Farm | `aws` |
-| Firebase Test Lab | `firebase` |
+| Provider | Flag value | Support level |
+|---|---|---|
+| BrowserStack App Automate | `browserstack` | Implemented, not verified on a live account |
+| Sauce Labs Real Device Cloud | `saucelabs` | Implemented, not verified on a live account |
+| LambdaTest (TestMu AI) Real Devices | `lambdatest` | Implemented, not verified on a live account |
+| AWS Device Farm | `aws` | Implemented, not verified on a live account |
+| Firebase Test Lab | `firebase` | Implemented, not verified; **deprecated by Google, shutting down September 30, 2027** |
+
+Cloud runs need a relay service that implements the relay API (it is not part of this repository, and the hosted Probe Cloud service is not live yet), because no farm lets the CLI connect into a rented device. Local devices are the tested path. Details, what was checked against each vendor's documentation and the Firebase migration note: [Cloud device farms](https://flutterprobe.dev/tools/cloud-farms/). Maestro Cloud runs Maestro flows only and is not a FlutterProbe provider.
 
 ```bash
 probe test tests/ \
@@ -931,6 +948,8 @@ internal/
 probe_agent/            Dart package (runs on-device)
 tools/probe-convert/    Multi-format test converter
 vscode/                 VS Code extension
+actions/probe-test/     GitHub Action source (copy to its own repo to publish)
+bitrise-step/           Bitrise Step source (use via a git:: reference)
 website/                Documentation site (Starlight/Astro)
 tests/                  E2E test suites and health checks
 ```
@@ -1011,7 +1030,7 @@ steps:
 
 ### Which cloud device farms are supported?
 
-BrowserStack, Sauce Labs, AWS Device Farm, LambdaTest (interactive via WebSocket relay), and Firebase Test Lab (batch mode only). All relay-compatible providers support `--parallel` for concurrent multi-device execution.
+BrowserStack, Sauce Labs, AWS Device Farm and LambdaTest are implemented (through a WebSocket relay), and Firebase Test Lab is implemented but deprecated by Google. None has been verified on a live account yet, and a relay service is required: see [Cloud device farms](https://flutterprobe.dev/tools/cloud-farms/).
 
 ### How do I debug a failing test?
 

@@ -14,8 +14,8 @@ recipe "log in as" (email, password)
   open the app
   wait until "Sign In" appears
   tap "Sign In"
-  type <email> into "Email"
-  type <password> into "Password"
+  type "<email>" into "Email"
+  type "<password>" into "Password"
   tap "Continue"
   see "Dashboard"
 ```
@@ -86,9 +86,9 @@ Arguments are matched by position using connecting words like "and", "with", or 
 ```
 recipe "create account with" (name, email, password)
   tap "Sign Up"
-  type <name> into "Name"
-  type <email> into "Email"
-  type <password> into "Password"
+  type "<name>" into "Name"
+  type "<email>" into "Email"
+  type "<password>" into "Password"
   tap "Create Account"
 ```
 

@@ -1,0 +1,110 @@
+name: 'FlutterProbe tests'
+description: 'Install the FlutterProbe CLI and run .probe tests on a device that your job provides, with a JUnit report.'
+author: 'Alpha Wave Systems'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'CLI version to install, like 0.25.2, or "latest". Pin a version in CI.'
+    required: false
+    default: 'latest'
+  run-tests:
+    description: 'Set to false to only install the CLI, for jobs where the tests must run inside another step (for example an Android emulator step).'
+    required: false
+    default: 'true'
+  tests:
+    description: 'Test files or folders, separated by spaces.'
+    required: false
+    default: 'tests/'
+  device:
+    description: 'Device id (an emulator serial like emulator-5554, or a simulator UDID). Leave empty if only one device is connected.'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Folder that holds probe.yaml and the tests.'
+    required: false
+    default: '.'
+  junit-path:
+    description: 'Where the JUnit report is written, relative to working-directory. Empty turns the report off.'
+    required: false
+    default: 'reports/junit.xml'
+  timeout:
+    description: 'Per-step timeout, like 60s. Empty uses probe.yaml or the default.'
+    required: false
+    default: ''
+  upload-report:
+    description: 'Send the scrubbed run report to Probe Cloud (preview; the hosted service is not live yet). Needs PROBE_LICENSE_KEY in env and "permissions: id-token: write" on the job.'
+    required: false
+    default: 'false'
+  upload-artifact:
+    description: 'Attach the JUnit report to the workflow run.'
+    required: false
+    default: 'true'
+  artifact-name:
+    description: 'Name of the attached artifact. Artifact names must be unique within a run, so set a different one per matrix leg.'
+    required: false
+    default: 'probe-junit'
+  skip-verify:
+    description: 'Set to true to skip the SHA-256 check of the downloaded CLI. Off by default; do not use it in CI you rely on.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token used to read the release digest from the GitHub API (raises the rate limit). The default is the workflow token.'
+    required: false
+    default: ${{ github.token }}
+  extra-args:
+    description: 'More arguments for `probe test`, for example "--retry-failed 1 --shard 1/3".'
+    required: false
+    default: ''
+
+outputs:
+  exit-code:
+    description: 'The exit code of `probe test`.'
+    value: ${{ steps.run.outputs.exit-code }}
+  junit-path:
+    description: 'The JUnit report path, relative to working-directory.'
+    value: ${{ steps.run.outputs.junit-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install the FlutterProbe CLI
+      shell: bash
+      env:
+        PROBE_VERSION: ${{ inputs.version }}
+        PROBE_OS: ${{ runner.os }}
+        PROBE_ARCH: ${{ runner.arch }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        PROBE_SKIP_VERIFY: ${{ inputs.skip-verify == 'true' && '1' || '' }}
+      run: bash "${{ github.action_path }}/scripts/install.sh"
+
+    - name: Run probe test
+      id: run
+      if: ${{ inputs.run-tests == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PROBE_TESTS: ${{ inputs.tests }}
+        PROBE_DEVICE: ${{ inputs.device }}
+        PROBE_JUNIT: ${{ inputs.junit-path }}
+        PROBE_TIMEOUT: ${{ inputs.timeout }}
+        PROBE_UPLOAD: ${{ inputs.upload-report }}
+        PROBE_EXTRA_ARGS: ${{ inputs.extra-args }}
+      run: bash "${{ github.action_path }}/scripts/run.sh"
+
+    - name: Attach the JUnit report
+      if: ${{ always() && inputs.run-tests == 'true' && inputs.upload-artifact == 'true' && inputs.junit-path != '' }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
+        if-no-files-found: ignore
+
+    - name: Fail if the tests failed
+      if: ${{ steps.run.outputs.exit-code != '' && steps.run.outputs.exit-code != '0' }}
+      shell: bash
+      run: |
+        echo "probe test exited with code ${{ steps.run.outputs.exit-code }}" >&2
+        exit 1

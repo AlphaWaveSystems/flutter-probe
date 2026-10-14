@@ -84,7 +84,7 @@ FlutterProbe is purpose-built for the E2E layer of Flutter testing. It takes a d
 This architecture has specific consequences:
 
 - **No recompilation between tests.** The app binary is built once. Each test scenario runs against the already-running app, which means faster iteration during development and faster CI runs.
-- **Sub-50ms command execution.** Because FlutterProbe accesses the widget tree directly through its Dart agent rather than going through a platform-level UI automation layer, individual actions like taps and assertions resolve quickly.
+- **Fast command execution.** Because FlutterProbe accesses the widget tree directly through its Dart agent rather than going through a platform-level UI automation layer, individual actions like taps and assertions resolve quickly.
 - **ProbeScript syntax.** Tests are written in `.probe` files using a structured, plain-English syntax rather than Dart. This makes tests readable by QA engineers and product managers who do not write Dart.
 
 A FlutterProbe test for a login flow looks like this:

@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 	Use:   "probe",
 	Short: "FlutterProbe — high-performance Flutter E2E testing",
 	Long: `FlutterProbe runs .probe test files against Flutter apps via direct
-widget-tree access. Sub-50ms command execution. No flake.
+widget-tree access.
 
 Examples:
   probe init                       # scaffold probe.yaml in your Flutter project

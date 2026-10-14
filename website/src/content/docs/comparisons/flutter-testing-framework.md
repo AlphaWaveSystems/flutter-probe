@@ -29,9 +29,9 @@ An open-source extension of `integration_test` from LeanCode. Patrol wraps the s
 
 ### FlutterProbe
 
-An open-source framework that separates test authoring from the app codebase. Tests are written in [ProbeScript](/probescript/syntax/), a plain-English language stored in `.probe` files. A Go CLI orchestrates a Dart agent inside the app over WebSocket.
+A framework (source-available CLI under BSL 1.1, MIT agent) that separates test authoring from the app codebase. Tests are written in [ProbeScript](/probescript/syntax/), a plain-English language stored in `.probe` files. A Go CLI orchestrates a Dart agent inside the app over WebSocket.
 
-- **Pros:** Human-readable tests, sub-50ms command round-trips, direct widget-tree access with no WebDriver layer, [self-healing selectors](/advanced/self-healing/), [visual regression](/advanced/visual-regression/), [AI-powered assertions](/advanced/configuration/#ai) that run against a local model (no cloud call required) with pre-screenshot redaction, five cloud farms supported out of the box, parallel execution (`--parallel`, `--shard`), [migration from seven formats](/tools/probe-convert/), native (non-Flutter) UI automation on Android via `tap native`/`see native`/`type native`.
+- **Pros:** Human-readable tests, direct widget-tree access with no WebDriver layer, [self-healing selectors](/advanced/self-healing/), [visual regression](/advanced/visual-regression/), [AI-powered assertions](/advanced/configuration/#ai) that run against a local model (no cloud call required) with pre-screenshot redaction, five cloud farms supported out of the box, parallel execution (`--parallel`, `--shard`), [migration from seven formats](/tools/probe-convert/), native (non-Flutter) UI automation on Android via `tap native`/`see native`/`type native`.
 - **Cons:** Separate CLI to install, ProbeScript is a new language to learn (though deliberately minimal), programmatic logic requires [hooks](/probescript/hooks/) or [recipes](/probescript/recipes/), native UI automation is Android-only today (iOS is a published, scoped proposal, not yet shipped).
 
 ### Maestro
@@ -59,7 +59,7 @@ Detox is a JavaScript-based E2E framework from Wix, originally built for React N
 | Visual regression | No | No | Yes | No | No |
 | Self-healing selectors | No | No | Yes | No | No |
 | Built-in CI reports | No | No | HTML + JUnit | Cloud only | No |
-| Cloud farm support | Manual | Limited | 5 farms | Maestro Cloud | Manual |
+| Cloud farm support | Manual | Limited | 5 providers implemented, [not verified live](/tools/cloud-farms/) | Maestro Cloud (Maestro flows only) | Manual |
 | Parallel execution | No | No | Yes | Yes | Limited |
 | Migration tooling | N/A | N/A | 7 formats | N/A | N/A |
 | HTTP mocking | Manual | Manual | Built-in | No | Manual |
