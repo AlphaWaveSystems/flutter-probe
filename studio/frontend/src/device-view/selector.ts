@@ -7,7 +7,7 @@
 import type { DeviceNode } from "./protocol.ts";
 
 /** Keys the ProbeScript lexer accepts after `#`: letters, digits, underscore. */
-const KEY_RE = /^[\p{L}\p{N}_]+$/u;
+const KEY_RE = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
 export function quoteString(s: string): string {
   const body = s

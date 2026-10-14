@@ -127,9 +127,9 @@ func encodeFrame(h frameHeader, img []byte) []byte {
 		return nil
 	}
 	hdr, _ := json.Marshal(h)
-	out := make([]byte, 0, 5+len(hdr)+len(img))
-	out = append(out, frameMarker)
-	out = binary.BigEndian.AppendUint32(out, uint32(len(hdr)))
+	// Built by appending, with no size arithmetic on lengths that come from the agent.
+	out := []byte{frameMarker, 0, 0, 0, 0}
+	binary.BigEndian.PutUint32(out[1:], uint32(len(hdr)))
 	out = append(out, hdr...)
 	out = append(out, img...)
 	return out

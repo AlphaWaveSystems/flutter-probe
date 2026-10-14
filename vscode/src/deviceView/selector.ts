@@ -16,7 +16,7 @@ export interface SelectorFields {
 }
 
 /** Keys the ProbeScript lexer accepts after `#`: letters, digits, underscore. */
-const KEY_RE = /^[\p{L}\p{N}_]+$/u;
+const KEY_RE = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
 /** Longest text or label accepted for an inserted step. */
 export const MAX_SELECTOR_TEXT = 200;

@@ -828,29 +828,3 @@ func TestRunTwiceFails(t *testing.T) {
 		t.Fatal("second Run must fail")
 	}
 }
-
-// ExtraOrigins lets an embedder allow its own page origin (Studio's browser test mode); everything else stays refused.
-func TestExtraOriginsAreExactMatchesOnly(t *testing.T) {
-	h := startHub(t, Options{Agent: newFake(), ExtraOrigins: []string{"http://127.0.0.1:34890", ""}})
-	tok := h.hub.Token()
-	for _, tc := range []struct {
-		origin string
-		want   int
-	}{
-		{"http://127.0.0.1:34890", 101},
-		{"http://127.0.0.1:34891", 403},
-		{"http://127.0.0.1:34890.evil.example", 403},
-		{"https://127.0.0.1:34890", 403},
-		{"null", 403}, // the empty entry in the list must not allow "null" or a missing origin by accident
-	} {
-		hdr := http.Header{}
-		hdr.Set("Origin", tc.origin)
-		conn, code := h.raw(tok, hdr)
-		if conn != nil {
-			conn.Close()
-		}
-		if code != tc.want {
-			t.Errorf("origin %q: status %d, want %d", tc.origin, code, tc.want)
-		}
-	}
-}

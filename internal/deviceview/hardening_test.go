@@ -154,3 +154,26 @@ func TestPendingConnectionCap(t *testing.T) {
 		t.Fatalf("pending = %d after upgrade", n)
 	}
 }
+
+// A process without the token that fills the pending set with idle connections
+// must not keep the owner out: a new connection evicts the oldest pending one.
+func TestOwnerConnectsWhilePendingSetIsFull(t *testing.T) {
+	h := startHub(t, Options{Agent: newFake()})
+	addr := "127.0.0.1:" + strconv.Itoa(h.hub.Port())
+	var idle []net.Conn
+	for i := 0; i < MaxPendingConns; i++ {
+		c, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		idle = append(idle, c)
+	}
+	t.Cleanup(func() {
+		for _, c := range idle {
+			c.Close()
+		}
+	})
+	eventually(t, 3*time.Second, "pending set full", func() bool { return h.hub.pendingConns() == MaxPendingConns })
+	owner := h.connect()
+	owner.hello()
+}

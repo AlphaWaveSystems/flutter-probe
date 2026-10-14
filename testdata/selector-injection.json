@@ -150,5 +150,53 @@
     "label": null,
     "type": "A\" clear app data",
     "line": "tap \"A\\\" clear app data\""
+  },
+  {
+    "name": "key with a superscript digit falls back",
+    "key": "a²b",
+    "text": "Fallback",
+    "label": null,
+    "type": "Text",
+    "line": "tap \"Fallback\""
+  },
+  {
+    "name": "key with a circled digit falls back",
+    "key": "a①b",
+    "text": "Fallback",
+    "label": null,
+    "type": "Text",
+    "line": "tap \"Fallback\""
+  },
+  {
+    "name": "key with a roman numeral falls back",
+    "key": "Ⅻa",
+    "text": "Fallback",
+    "label": null,
+    "type": "Text",
+    "line": "tap \"Fallback\""
+  },
+  {
+    "name": "key starting with a digit falls back",
+    "key": "0abc",
+    "text": "Fallback",
+    "label": null,
+    "type": "Text",
+    "line": "tap \"Fallback\""
+  },
+  {
+    "name": "key starting with an underscore is a key",
+    "key": "_ok",
+    "text": null,
+    "label": null,
+    "type": "Text",
+    "line": "tap #_ok"
+  },
+  {
+    "name": "key with a non latin letter and a digit",
+    "key": "ключ13",
+    "text": null,
+    "label": null,
+    "type": "Text",
+    "line": "tap #ключ13"
   }
 ]
