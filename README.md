@@ -172,6 +172,7 @@ void main() async {
 ```bash
 cd your-flutter-app
 probe init          # creates probe.yaml and a sample test that opens the app
+probe doctor        # checks the project and this machine, and says how to fix what is missing
 # set project.app in probe.yaml to your app's id, then:
 probe test tests/   # the sample passes when the app starts with the agent enabled
 ```
