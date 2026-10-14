@@ -18,7 +18,7 @@ This comparison is based on the state of each tool as of early 2026.
 | **Device requirement** | Yes | Yes | Yes |
 | **Recompilation per test** | Yes | Yes | No |
 | **Native OS interaction** | No | Yes | Yes |
-| **Cloud device farms** | Firebase Test Lab | Firebase Test Lab | 5 providers |
+| **Cloud device farms** | Firebase Test Lab (deprecated by Google) | Firebase Test Lab (deprecated by Google) | 5 providers implemented, [not yet verified live](/tools/cloud-farms/) |
 | **CI/CD parallel execution** | Manual sharding | Manual sharding | Built-in --shard |
 | **Self-healing selectors** | No | No | Yes |
 | **Visual regression** | No | No | Yes |

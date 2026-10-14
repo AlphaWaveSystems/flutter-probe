@@ -97,7 +97,7 @@ Four shards typically reduce a 12-minute suite to roughly 3 minutes of wall-cloc
 
 Running E2E tests on a local emulator in CI is fine for basic verification, but it does not cover device-specific bugs. Different Android manufacturers, OS versions, and screen sizes all introduce variation.
 
-FlutterProbe integrates with five cloud device farm providers, allowing you to run your test suite against real physical devices:
+FlutterProbe has code for five cloud device farm providers. They are implemented but not yet verified on a live account, they need a relay service, and Firebase Test Lab is deprecated by Google (see [Cloud device farms](/tools/cloud-farms/)):
 
 - AWS Device Farm
 - Firebase Test Lab

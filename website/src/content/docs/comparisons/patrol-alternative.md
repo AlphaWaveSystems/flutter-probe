@@ -78,7 +78,7 @@ This trade-off is deliberate. ProbeScript optimizes for readability by non-devel
 | GPS / location mocking | Manual | `set location lat, lng`, plus route simulation with `travel to ... over N seconds` |
 | Clipboard control | Manual | `set clipboard "text"` |
 | Parallel execution | No | `--parallel`, `--shard` |
-| Cloud farm support | Limited | 5 farms (BrowserStack, Firebase Test Lab, AWS Device Farm, Sauce Labs, LambdaTest) |
+| Cloud farm support | Limited | 5 providers implemented, not yet verified on a live account ([details](/tools/cloud-farms/)): BrowserStack, AWS Device Farm, Sauce Labs, LambdaTest, Firebase Test Lab (deprecated by Google) |
 | CI reporting | Manual | HTML + JUnit built-in |
 | Migration tooling | No | [7 formats](/tools/probe-convert/) (Maestro, Gherkin, Detox, Appium, Robot, integration_test, Patrol) |
 | VS Code extension | No | [Yes](/tools/vscode/) (syntax highlighting, CodeLens, test explorer) |

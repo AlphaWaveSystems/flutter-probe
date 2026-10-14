@@ -106,6 +106,16 @@ func DetectPlatform(device string) string {
 	return "Android"
 }
 
+// deprecationNotices maps a provider name to the notice shown when it is used. A provider listed
+// here still works, but its vendor has announced a shutdown.
+var deprecationNotices = map[string]string{
+	"firebase": "Firebase Test Lab is deprecated and will be fully shut down on September 30, 2027 (https://firebase.google.com/docs/test-lab, read 2026-10-14); " +
+		"Google points to the Developer Device Platform on Google Cloud. FlutterProbe has no provider for it yet, so plan a migration: https://flutterprobe.dev/tools/cloud-farms/#firebase-test-lab-deprecated",
+}
+
+// DeprecationNotice returns the notice for a deprecated provider, or "" when the provider is not deprecated.
+func DeprecationNotice(name string) string { return deprecationNotices[name] }
+
 // validProviders lists all supported provider names for validation and help text.
 var validProviders = []string{"browserstack", "aws", "firebase", "saucelabs", "lambdatest"}
 

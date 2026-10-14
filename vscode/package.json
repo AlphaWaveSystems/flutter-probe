@@ -417,7 +417,7 @@
             "Sauce Labs Real Device Cloud",
             "LambdaTest Real Devices",
             "AWS Device Farm",
-            "Firebase Test Lab"
+            "Firebase Test Lab (deprecated by Google)"
           ],
           "description": "Cloud device farm provider for remote testing"
         },
