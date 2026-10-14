@@ -224,12 +224,15 @@ class ProbeExecutor {
         // could land mid-route-transition (the push/pop AnimationController
         // still ticking) instead of waiting for the new route to settle.
         await _sync.waitForSettled();
-        final path = await _screenshot(name);
+        final scale = ((req.params['scale'] as num?)?.toDouble() ?? 1.0).clamp(0.1, 1.0).toDouble();
+        final path = await _screenshot(name, scale: scale);
         // Include base64-encoded PNG data so CLI can save locally (essential for cloud mode
         // where the file is on a remote device and can't be pulled via ADB).
         final fileBytes = await File(path).readAsBytes();
         // Device view: optional scale (png only, see probeScaledPng). The image always travels in `data`.
-        final shot = await probeScaledPng(fileBytes, (req.params['scale'] as num?)?.toDouble() ?? 1.0);
+        // A capture made at a smaller pixel ratio is already the requested size and is much cheaper than capturing
+        // full size and shrinking afterwards (decode, resize, encode); only the fallback capture path still shrinks here.
+        final shot = await probeScaledPng(fileBytes, _lastShotScaled ? 1.0 : scale);
         final b64 = base64Encode(shot.bytes);
         // `inline: true` (Studio's live view asks for a frame several times a second): the image travels in the
         // answer only, so delete the temporary copy instead of letting thousands of PNGs pile up on the device.
@@ -1542,7 +1545,11 @@ class ProbeExecutor {
 
   // ---- Screenshot ----
 
-  Future<String> _screenshot(String name) async {
+  /// True when the last [_screenshot] captured at the requested scale itself (see [_captureViaRepaintBoundary]).
+  bool _lastShotScaled = false;
+
+  Future<String> _screenshot(String name, {double scale = 1.0}) async {
+    _lastShotScaled = false;
     // Wait for the latest frame to be fully rendered before capturing.
     await WidgetsBinding.instance.endOfFrame;
 
@@ -1555,7 +1562,7 @@ class ProbeExecutor {
     Uint8List? pngBytes;
     for (var attempt = 0;; attempt++) {
       try {
-        pngBytes = await _captureViaRepaintBoundary() ?? await _captureViaLayer();
+        pngBytes = await _captureViaRepaintBoundary(scale) ?? await _captureViaLayer();
         break;
       } on AssertionError {
         // FlutterError is an AssertionError subtype too
@@ -1579,7 +1586,7 @@ class ProbeExecutor {
 
   /// Finds the largest [RenderRepaintBoundary] in the widget tree and captures
   /// it. Impeller explicitly supports this path, unlike [OffsetLayer.toImage].
-  Future<Uint8List?> _captureViaRepaintBoundary() async {
+  Future<Uint8List?> _captureViaRepaintBoundary([double scale = 1.0]) async {
     RenderRepaintBoundary? best;
     double bestArea = 0;
 
@@ -1611,9 +1618,11 @@ class ProbeExecutor {
     final pixelRatio = views.isNotEmpty
         ? views.first.flutterView.devicePixelRatio
         : ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
-    final image = await best!.toImage(pixelRatio: pixelRatio);
+    final image = await best!.toImage(pixelRatio: pixelRatio * scale);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    return bytes?.buffer.asUint8List();
+    final out = bytes?.buffer.asUint8List();
+    if (out != null) _lastShotScaled = true;
+    return out;
   }
 
   /// Fallback capture using the root [OffsetLayer]. Works on Skia; may return
