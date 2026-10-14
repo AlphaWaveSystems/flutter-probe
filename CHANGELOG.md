@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **The Studio E2E workflow runs only when started by hand** (`gh workflow run "Studio E2E"`), no longer on version tags. With no self-hosted runner registered, every tag run queued for 24 hours and was cancelled; and a public repository should not hand a self-hosted runner to anything but a deliberate dispatch.
+
 ### Added
 - **Studio can show the shared device view** (preview, off by default; set `PROBE_STUDIO_DEVICE_VIEW=1`). Studio starts a loopback hub for the connected device in process (`internal/deviceview`) and the device pane draws it with the shared component: tap, swipe, typing, hover outline and Alt+click selection (the selector goes to the clipboard and the inspector search; text with control characters is refused). The old capture loop stays the default and is not started when the view is on. In Studio's browser test mode the hub also accepts the test page's own origin (`deviceview.Options.ExtraOrigins`, exact matches only). Browser test 36 covers it; tests 10 and 11 still pass with the flag off.
 - **`probe device view`: an interactive device view over a local WebSocket** (preview, Flutter layer only, from the on-device agent). The command starts a hub on `127.0.0.1` with a one-time token, prints one JSON line (`url`, `token`, `device`) and streams frames to one client at a time; the client can tap, long press, swipe, type and ask which widget is under a point (`docs/studio-device-protocol.md`). The hub checks the token and the `Host` and `Origin` headers, limits message size and rate, keeps only the latest frame per client and writes no files. An agent without the new methods keeps working as a view-only mirror.
