@@ -3,8 +3,29 @@ title: GitHub Actions
 description: CI/CD workflow examples for running FlutterProbe tests in GitHub Actions.
 ---
 
-The `actions/probe-test` directory in the repository is a ready-made composite action that installs the CLI from a release, runs `probe test` and attaches the JUnit report; copy it to its own repository to use or publish it (see its README). The workflows below show the same steps written out. The CLI is installed from a release asset (pin the version); the releases publish no checksum file, but GitHub records a SHA-256 digest for every asset, which the `actions/probe-test` action checks (the workflows below skip the check for brevity; add it before relying on them). These workflows were adapted from the project's own and have not been re-run on hosted runners as written: check the action versions against their documentation. The macOS asset below is for Apple Silicon runners; use `probe-darwin-amd64` on Intel.
+## Pinning the CLI version
 
+Set `probe_version` in `probe.yaml` to the release the tests were written for, and install a CLI that meets it in the job. `probe test` checks the installed CLI before it touches a device, so a runner on another release stops at once and says which version it needs.
+
+```yaml
+# probe.yaml
+probe_version: 0.25.x   # any 0.25 patch release; write 0.25.1 to pin one exact release
+```
+
+```yaml
+# workflow step
+- name: Install FlutterProbe
+  run: brew install probe   # the latest stable release; confirm with probe version
+- name: Run tests
+  run: probe test
+```
+
+`brew install probe` always installs the latest stable release. For an exact pin, install that release from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases) instead. Keep `probe_version` in step with the CLI the job installs: a mismatch fails the job before any test runs.
+
+## Using the ready-made action
+
+The `actions/probe-test` directory in the repository is a ready-made composite action that installs the CLI from a release, runs `probe test` and attaches the JUnit report; copy it to its own repository to use or publish it (see its README). The workflows below show the same steps written out. The CLI is installed from a release asset (pin the version); the releases publish no checksum file, but GitHub records a SHA-256 digest for every asset, which the `actions/probe-test` action checks (the workflows below skip the check for brevity; add it before relying on them). These workflows were adapted from the project's own and have not been re-run on hosted runners as written: check the action versions against their documentation. The macOS asset below is for Apple Silicon runners; use `probe-darwin-amd64` on Intel.
+>
 ## iOS Simulator Workflow
 
 ```yaml
