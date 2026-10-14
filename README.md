@@ -835,13 +835,15 @@ probe report --input reports/results.json -o reports/report.html --open
 
 Run tests on real devices without managing your own device lab. Bring your own account:
 
-| Provider | Flag value |
-|---|---|
-| BrowserStack App Automate | `browserstack` |
-| Sauce Labs Real Device Cloud | `saucelabs` |
-| LambdaTest Real Devices | `lambdatest` |
-| AWS Device Farm | `aws` |
-| Firebase Test Lab | `firebase` |
+| Provider | Flag value | Support level |
+|---|---|---|
+| BrowserStack App Automate | `browserstack` | Implemented, not verified on a live account |
+| Sauce Labs Real Device Cloud | `saucelabs` | Implemented, not verified on a live account |
+| LambdaTest (TestMu AI) Real Devices | `lambdatest` | Implemented, not verified on a live account |
+| AWS Device Farm | `aws` | Implemented, not verified on a live account |
+| Firebase Test Lab | `firebase` | Implemented, not verified; **deprecated by Google, shutting down September 30, 2027** |
+
+Cloud runs need a relay service that implements the relay API (it is not part of this repository, and the hosted Probe Cloud service is not live yet), because no farm lets the CLI connect into a rented device. Local devices are the tested path. Details, what was checked against each vendor's documentation and the Firebase migration note: [Cloud device farms](https://flutterprobe.dev/tools/cloud-farms/). Maestro Cloud runs Maestro flows only and is not a FlutterProbe provider.
 
 ```bash
 probe test tests/ \
@@ -1027,7 +1029,7 @@ steps:
 
 ### Which cloud device farms are supported?
 
-BrowserStack, Sauce Labs, AWS Device Farm, LambdaTest (interactive via WebSocket relay), and Firebase Test Lab (batch mode only). All relay-compatible providers support `--parallel` for concurrent multi-device execution.
+BrowserStack, Sauce Labs, AWS Device Farm and LambdaTest are implemented (through a WebSocket relay), and Firebase Test Lab is implemented but deprecated by Google. None has been verified on a live account yet, and a relay service is required: see [Cloud device farms](https://flutterprobe.dev/tools/cloud-farms/).
 
 ### How do I debug a failing test?
 

@@ -41,6 +41,9 @@ Key facts for an AI agent:
 ## CI integrations
 - GitHub Action source (actions/probe-test), Bitrise Step source (bitrise-step) and a Codemagic recipe (https://flutterprobe.dev/ci-cd/codemagic/) install the released CLI and run `probe test`; written from the vendors' documentation, not yet run on those services.
 
+## Cloud device farms
+- Five providers are implemented (BrowserStack, AWS Device Farm, Sauce Labs, LambdaTest, Firebase Test Lab) but none is verified on a live account; they need a relay service; Firebase Test Lab is deprecated by Google (shuts down 2027-09-30); Maestro Cloud runs Maestro flows only and is not a provider. https://flutterprobe.dev/tools/cloud-farms/
+
 ## Source
 - https://github.com/AlphaWaveSystems/flutter-probe
 - Agent package: https://pub.dev/packages/flutter_probe_agent

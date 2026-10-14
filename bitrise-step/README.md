@@ -8,7 +8,7 @@ This directory is self-contained: copy it to the root of its own public reposito
 
 ## Use it without the Step Library
 
-Bitrise can run a Step straight from a git repository (the `git::` source, documented under "Adding Steps to a Workflow"), so no Step Library submission is needed:
+This Step is used straight from its git repository, through Bitrise's `git::` source (documented under "Adding Steps to a Workflow"). It is not published in the Bitrise Step Library:
 
 ```yaml
 workflows:

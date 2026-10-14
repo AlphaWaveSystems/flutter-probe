@@ -59,7 +59,7 @@ Detox is a JavaScript-based E2E framework from Wix, originally built for React N
 | Visual regression | No | No | Yes | No | No |
 | Self-healing selectors | No | No | Yes | No | No |
 | Built-in CI reports | No | No | HTML + JUnit | Cloud only | No |
-| Cloud farm support | Manual | Limited | 5 farms | Maestro Cloud | Manual |
+| Cloud farm support | Manual | Limited | 5 providers implemented, [not verified live](/tools/cloud-farms/) | Maestro Cloud (Maestro flows only) | Manual |
 | Parallel execution | No | No | Yes | Yes | Limited |
 | Migration tooling | N/A | N/A | 7 formats | N/A | N/A |
 | HTTP mocking | Manual | Manual | Built-in | No | Manual |

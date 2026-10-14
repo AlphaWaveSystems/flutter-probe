@@ -98,7 +98,7 @@ Flakiness is highly dependent on test implementation quality. These numbers refl
 - **Build-once architecture.** Eliminates recompilation overhead, which compounds significantly in CI pipelines with large test suites.
 - **ProbeScript readability.** Non-developers can read, write, and review tests. This changes team dynamics around test ownership.
 - **Performance.** No recompilation between test files and direct in-app control. We have measured this against Maestro (about 2x faster median suite time, [benchmark](/blog/flutterprobe-vs-maestro-benchmark/)), not against Patrol or `integration_test`.
-- **CI/CD tooling.** Built-in sharding, JUnit/HTML reporting, and [five cloud device farm integrations](/comparisons/flutter-test-automation/) reduce CI pipeline setup work.
+- **CI/CD tooling.** Built-in sharding, JUnit/HTML reporting, and [five cloud device farm providers](/tools/cloud-farms/) (implemented, not yet verified on a live account) are available.
 - **Self-healing selectors.** Minor UI changes (reordering widgets, changing container types) do not break tests. This materially reduces maintenance effort.
 - **Visual regression.** Built-in screenshot comparison catches unintended UI changes that functional tests miss. See [visual regression docs](/advanced/visual-regression/).
 
