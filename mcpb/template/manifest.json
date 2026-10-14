@@ -66,6 +66,7 @@
     {"name": "perf_trend", "description": "Show how a measured performance number changed over past runs (from reports/perf-history.jsonl, written by probe test whenever a test uses start measuring ..."},
     {"name": "perf_compare", "description": "Compare two performance baseline files (written by probe test --perf-baseline FILE --perf-update-baseline) and list every measurement that got worse by more than the t..."},
     {"name": "init_project", "description": "Initialize a new FlutterProbe project in the current working directory."},
+    {"name": "validate_project", "description": "Check probe.yaml and the probe_version pin without connecting to a device; returns a JSON report."},
     {"name": "record", "description": "Record user interactions with the running Flutter app and generate a .probe test file."},
     {"name": "studio_open_workspace", "description": "Open a folder as the workspace of a running Probe Studio (the one started with PROBE_STUDIO_AUTOMATION=1) and list it."},
     {"name": "studio_list_devices", "description": "List the simulators/emulators Studio can connect to (booted/online ones), as Studio's device picker shows them."},

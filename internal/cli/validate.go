@@ -93,6 +93,7 @@ func runValidate(cmd *cobra.Command, _ []string) error {
 	w := cmd.OutOrStdout()
 	if format == "json" {
 		enc := json.NewEncoder(w)
+		enc.SetEscapeHTML(false)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(report); err != nil {
 			return err
