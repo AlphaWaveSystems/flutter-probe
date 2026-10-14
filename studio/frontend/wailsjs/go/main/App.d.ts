@@ -16,6 +16,8 @@ export function Disconnect():Promise<void>;
 
 export function GetAPIKey():Promise<string>;
 
+export function GetDeviceView():Promise<main.DeviceViewInfo>;
+
 export function GetWidgetTree():Promise<string>;
 
 export function InitialWorkspace():Promise<string>;
