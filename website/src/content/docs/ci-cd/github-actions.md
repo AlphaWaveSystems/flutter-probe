@@ -3,7 +3,7 @@ title: GitHub Actions
 description: CI/CD workflow examples for running FlutterProbe tests in GitHub Actions.
 ---
 
-The `actions/probe-test` directory in the repository is a ready-made composite action that installs the CLI from a release, runs `probe test` and attaches the JUnit report; copy it to its own repository to use or publish it (see its README). The workflows below show the same steps written out. The CLI is installed from a release asset (pin the version); the releases publish no checksum file. These workflows were adapted from the project's own and have not been re-run on hosted runners as written: check the action versions against their documentation. The macOS asset below is for Apple Silicon runners; use `probe-darwin-amd64` on Intel.
+The `actions/probe-test` directory in the repository is a ready-made composite action that installs the CLI from a release, runs `probe test` and attaches the JUnit report; copy it to its own repository to use or publish it (see its README). The workflows below show the same steps written out. The CLI is installed from a release asset (pin the version); the releases publish no checksum file, but GitHub records a SHA-256 digest for every asset, which the `actions/probe-test` action checks (the workflows below skip the check for brevity; add it before relying on them). These workflows were adapted from the project's own and have not been re-run on hosted runners as written: check the action versions against their documentation. The macOS asset below is for Apple Silicon runners; use `probe-darwin-amd64` on Intel.
 
 ## iOS Simulator Workflow
 

@@ -64,6 +64,14 @@ inputs:
       value_options:
       - "no"
       - "yes"
+  - skip_verify: "no"
+    opts:
+      title: "Skip the SHA-256 check"
+      summary: "yes installs the CLI without checking it against the digest GitHub publishes for the release asset. Keep it no in CI you rely on."
+      is_required: true
+      value_options:
+      - "no"
+      - "yes"
   - extra_args: ""
     opts:
       title: "Extra arguments"

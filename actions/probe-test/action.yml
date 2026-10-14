@@ -42,6 +42,18 @@ inputs:
     description: 'Attach the JUnit report to the workflow run.'
     required: false
     default: 'true'
+  artifact-name:
+    description: 'Name of the attached artifact. Artifact names must be unique within a run, so set a different one per matrix leg.'
+    required: false
+    default: 'probe-junit'
+  skip-verify:
+    description: 'Set to true to skip the SHA-256 check of the downloaded CLI. Off by default; do not use it in CI you rely on.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token used to read the release digest from the GitHub API (raises the rate limit). The default is the workflow token.'
+    required: false
+    default: ${{ github.token }}
   extra-args:
     description: 'More arguments for `probe test`, for example "--retry-failed 1 --shard 1/3".'
     required: false
@@ -64,6 +76,8 @@ runs:
         PROBE_VERSION: ${{ inputs.version }}
         PROBE_OS: ${{ runner.os }}
         PROBE_ARCH: ${{ runner.arch }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        PROBE_SKIP_VERIFY: ${{ inputs.skip-verify == 'true' && '1' || '' }}
       run: bash "${{ github.action_path }}/scripts/install.sh"
 
     - name: Run probe test
@@ -82,9 +96,9 @@ runs:
 
     - name: Attach the JUnit report
       if: ${{ always() && inputs.run-tests == 'true' && inputs.upload-artifact == 'true' && inputs.junit-path != '' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
-        name: probe-junit
+        name: ${{ inputs.artifact-name }}
         path: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
         if-no-files-found: ignore
 

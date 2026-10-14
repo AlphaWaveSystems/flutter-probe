@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- **The GitHub Action and the Bitrise Step verify the downloaded CLI.** The install scripts compare the download with the SHA-256 digest that GitHub records for the release asset (the `digest` field of the Releases API; the releases publish no checksum file), install nothing on a mismatch or when no digest is published, and have an off-by-default escape hatch (`skip-verify` / `skip_verify`). The Action pins `actions/upload-artifact` by commit SHA (v7.0.2), takes a `github-token` for the API call, and has an `artifact-name` input so matrix legs do not clash. Tested offline with a good, a tampered and an unpublished download (`actions/probe-test/scripts/test-install.sh`, `bitrise-step/test-step.sh`). The Codemagic recipe checks the digest too.
+
 ### Added
 - **CI integrations, as sources to copy**: `actions/probe-test` (a composite GitHub Action that installs the CLI from a release, runs `probe test` on a device the job provides, attaches the JUnit report, and can pass `--upload-report`), `bitrise-step` (a Bitrise Step used with a `git::` reference), and a Codemagic recipe page (`/ci-cd/codemagic/`, iOS simulator). Both directories are MIT-licensed and self-contained: copy one to its own repository to publish it. They were written from each vendor's documentation and tested locally (asset mapping, argument assembly) but have not run on those services.
 

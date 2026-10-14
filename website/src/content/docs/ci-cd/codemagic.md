@@ -21,10 +21,15 @@ workflows:
     scripts:
       - name: Install the FlutterProbe CLI
         script: |
+          set -euo pipefail
           mkdir -p "$HOME/probe-bin"
           curl --fail --silent --show-error --location \
             --output "$HOME/probe-bin/probe" \
             "https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v${PROBE_VERSION}/probe-darwin-arm64"
+          # GitHub records a SHA-256 digest for each release asset; stop if the download differs
+          WANT=$(curl --fail --silent "https://api.github.com/repos/AlphaWaveSystems/flutter-probe/releases/tags/v${PROBE_VERSION}" \
+            | python3 -c "import sys,json; print(next(a['digest'] for a in json.load(sys.stdin)['assets'] if a['name']=='probe-darwin-arm64').split(':',1)[1])")
+          echo "$WANT  $HOME/probe-bin/probe" | shasum -a 256 -c -
           chmod +x "$HOME/probe-bin/probe"
           echo "PATH=$HOME/probe-bin:$PATH" >> $CM_ENV
           "$HOME/probe-bin/probe" version
@@ -54,6 +59,6 @@ workflows:
 - **The Apple Silicon machine** is why the recipe downloads `probe-darwin-arm64`. On an Intel machine use `probe-darwin-amd64`.
 - **Android emulators.** Codemagic's testing page states that Apple's virtualization does not support the nested virtualization Android emulators need, and recommends third-party integrations for Android emulator testing in macOS workflows. This recipe therefore covers the iOS simulator only. A physical iOS or Android device is not available on a Codemagic build machine.
 - **Probe Cloud (preview).** `--upload-report` is optional and the hosted service is not live yet. See [Probe Cloud (preview)](/tools/probe-cloud-preview/). An upload never fails the build.
-- **No checksum.** The releases publish no checksum file, so pin `PROBE_VERSION` and review release notes before upgrading.
+- **Verification.** The releases publish no checksum file, but GitHub records a SHA-256 digest for every release asset (the `digest` field of the [Releases API](https://docs.github.com/en/rest/releases/assets)); the script compares the download with it and stops on a difference. Pin `PROBE_VERSION` and review release notes before upgrading.
 
 See also [GitHub Actions](/ci-cd/github-actions/) and the [cloud device farm status](/tools/cloud-farms/).
