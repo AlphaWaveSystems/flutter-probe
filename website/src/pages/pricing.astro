@@ -144,6 +144,21 @@
     .waitlist h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
     .waitlist p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem; }
 
+
+    .partners {
+      max-width: 1060px;
+      margin: 0 auto 4rem;
+      padding: 2rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-accent);
+      border-radius: 16px;
+    }
+    .partners h2 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+    .partners p { color: var(--text-muted); margin-bottom: 1rem; }
+    .partners ul { margin: 0 0 1.25rem 1.25rem; color: var(--text); }
+    .partners li { margin-bottom: 0.35rem; }
+    .partners .btn { display: inline-block; }
+
     footer {
       border-top: 1px solid var(--border);
       max-width: 1200px;
@@ -165,6 +180,7 @@
     <a href="/" class="nav-logo">FlutterProbe</a>
     <div class="nav-links">
       <a href="/getting-started/installation/">Docs</a>
+      <a href="/tutorials/flutter-login-test/">Tutorials</a>
       <a href="/pricing/">Pricing</a>
       <a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>
     </div>
@@ -172,15 +188,29 @@
 
   <div class="page-header">
     <h1>Simple, Transparent Pricing</h1>
-    <p>Start free. Scale when you need to.</p>
+    <p>The CLI and the agent are free to use. Probe Cloud, hosted test reports, is a design-partner preview and is not live yet.</p>
   </div>
+
+  <!-- Design partners -->
+  <section class="partners" id="design-partners">
+    <h2>Probe Cloud design partners</h2>
+    <p>Probe Cloud, our hosted reporting service, is a preview and the hosted service is not live yet. Design partners get access when it goes live. We are looking for the first 10 Flutter teams to try it and tell us what is missing.</p>
+    <ul>
+      <li><strong>Free during the beta</strong> for the first 10 teams.</li>
+      <li><strong>50% off for life</strong> on any paid plan, applied when paid plans launch.</li>
+      <li>In exchange: honest feedback, and a short call or written notes after you have used it on a real project.</li>
+    </ul>
+    <p>The beta may change or end, and plan details are not final. The CLI, agent and local tools stay free. See <a href="/probe-cloud/">what the preview does today</a>, or <a href="/demo/">see a sample dashboard</a> (made-up data from a fixture app; the hosted service is not live yet).</p>
+    <a class="btn btn-primary" href="mailto:support@alphawavesystems.com?subject=Probe%20Cloud%20design%20partner&body=Team%20and%20app%3A%0ACI%20system%3A%0AWhat%20you%20want%20to%20see%20in%20test%20reports%3A">Apply by email</a>
+    <p style="margin-top:1rem;font-size:0.85rem">Prefer GitHub? <a href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?title=Probe%20Cloud%20design%20partner">Open an issue</a> (public). We use your details only to contact you about the program. See the <a href="/terms/">terms</a> and <a href="/privacy/">privacy policy</a>.</p>
+  </section>
 
   <div class="pricing-grid">
     <!-- Free -->
     <div class="plan">
       <div class="plan-name">Free</div>
       <div class="plan-price">$0 <span>forever</span></div>
-      <p class="plan-desc">For individual developers and open-source projects.</p>
+      <p class="plan-desc">For individual developers and open-source projects. Free to use for any purpose, including production, except offering a competing hosted testing service (BSL 1.1 for the CLI, MIT for the agent).</p>
       <ul class="plan-features">
         <li>Full CLI and Dart agent</li>
         <li>Unlimited local test runs</li>
@@ -198,6 +228,7 @@
     <div class="plan featured">
       <div class="plan-name">Team</div>
       <div class="plan-price">$49 <span>/ month</span></div>
+      <p class="plan-desc" style="margin-bottom:0.5rem"><strong>Planned price, not final. Free for design partners.</strong></p>
       <p class="plan-desc">For teams that need shared infrastructure and reporting. <strong>Not available yet</strong>: the features below are planned, and the price may change before launch.</p>
       <p class="plan-desc" style="margin-bottom:0.75rem"><strong>Planned features</strong></p>
       <ul class="plan-features">
@@ -210,7 +241,7 @@
         <li>Historical trend analytics</li>
         <li>Priority support</li>
       </ul>
-      <a href="#waitlist" class="btn btn-primary">Join Waitlist</a>
+      <a href="#design-partners" class="btn btn-primary">Apply as a design partner</a>
     </div>
 
     <!-- Pay-per-use (planned) -->
@@ -227,7 +258,8 @@
   <div class="waitlist" id="waitlist">
     <h2>Join the Waitlist</h2>
     <p>The Team and Pay-per-use plans are planned and not available yet.</p>
-    <p><a href="mailto:support@alphawavesystems.com?subject=Waitlist">Email support@alphawavesystems.com</a> with the subject "Waitlist" to join. We use your address only to tell you when a plan opens.</p>
+    <p><a class="btn btn-secondary" href="mailto:support@alphawavesystems.com?subject=Waitlist&body=Which%20plan%20are%20you%20interested%20in%3F%20(Team%20or%20Pay-per-use)%0A">Join the waitlist by email</a></p>
+    <p>One click opens your email app with the subject filled in. We use your address only to tell you when a plan opens.</p>
     <p style="margin-top:1rem;font-size:0.85rem;color:var(--text-muted)">Cancel any time. See the <a href="/terms/">terms</a>, <a href="/privacy/">privacy policy</a> and <a href="/refunds/">refund policy</a>.</p>
   </div>
 

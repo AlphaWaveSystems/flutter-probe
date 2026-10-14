@@ -41,7 +41,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | Tool | Description |
 |---|---|
 | `get_report` | Read the most recently modified JSON test run report |
-| `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or `host`/`port`/`token` of a phone on the network), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot` | Drive a running Probe Studio (started with `PROBE_STUDIO_AUTOMATION=1`) without a window: open a workspace, connect to a device, run a `.probe` file and read step-by-step progress |
+| `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or `host`/`port`/`token` of a phone on the network), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree`, `studio_ui_state` | Drive a running Probe Studio (started with `PROBE_STUDIO_AUTOMATION=1`) without a window: open a workspace, connect to a device, run a `.probe` file and read step-by-step progress |
 | `perf_trend` | Show how a measured performance number (memory, CPU, frames, data) changed over past runs |
 | `perf_compare` | Compare two performance baseline files and list what got worse |
 | `generate_report` | Generate a standalone HTML report from a JSON results file |
@@ -145,7 +145,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 31 tools are immediately available in any new Claude conversation.
+4. Done — all 33 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 
@@ -310,7 +310,7 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 
 For a generic "does this screen look right" smoke check instead of a specific claim, use `assert no visual defects with ai` — same `ai:` config requirement, but no assertion text to write; it flags cut-off, overlapping, or mis-centered elements on its own. Unlike `see ... with ai`, there's no non-AI form of this command.
 
-To pull a specific piece of text off the screen into a variable — an OTP code, a dynamically-generated ID — for use in a later step, use `read "<query>" with ai into <var>`, e.g. `read "the 6-digit OTP code" with ai into otp` followed by `type <otp> into the "Code" field`. Same `ai:` requirement and mandatory `with ai` as `assert no visual defects`; fails with a clear error rather than storing an empty value if the requested text isn't visible.
+To pull a specific piece of text off the screen into a variable — an OTP code, a dynamically-generated ID — for use in a later step, use `read "<query>" with ai into <var>`, e.g. `read "the 6-digit OTP code" with ai into otp` followed by `type "<otp>" into the "Code" field`. Same `ai:` requirement and mandatory `with ai` as `assert no visual defects`; fails with a clear error rather than storing an empty value if the requested text isn't visible.
 
 ### GPS route simulation
 

@@ -1,0 +1,25 @@
+---
+import Legal from '../layouts/Legal.astro';
+---
+<Legal title="Probe Cloud (preview)" description="Probe Cloud is a hosted report service for FlutterProbe, in preview. What exists today, what is planned, and how to become a design partner.">
+  <h1>Probe Cloud (preview)</h1>
+  <p>Probe Cloud is a hosted place to keep your FlutterProbe test reports. It is a preview, not generally available, and plan details are not final. The CLI, agent and local tools remain free.</p>
+  <p><strong>The hosted service is not live yet.</strong> The upload client in the CLI is ready, but there is no live endpoint to receive uploads, so <code>--upload-report</code> cannot reach a service today. Design partners get access when it goes live.</p>
+
+  <h2>What exists today</h2>
+  <ul>
+    <li><code>probe test --upload-report</code> is the client side: it sends a run report to a Probe Cloud endpoint, with CI details (provider, branch, commit) and an optional <code>--upload-label</code>. It needs a live endpoint to work end to end.</li>
+    <li><code>--upload-dry-run</code> works today and needs no service: it prints exactly what would be sent, so you can inspect it before anything leaves your machine.</li>
+    <li>The payload is scrubbed before sending: paths are made relative, secret-looking values are redacted, and screenshots and device identifiers are left out. Uploads are capped at 1 MiB and 5,000 results.</li>
+    <li>JUnit and JSON reports for any CI system, with no account needed.</li>
+  </ul>
+
+  <p><a href="/demo/">See a sample dashboard</a>. It shows made-up data from a fixture app, and the hosted service is not live yet.</p>
+
+  <h2>What is planned</h2>
+  <p>A dashboard for run history and trends, shared report links for your team, and notifications. These are planned, not built, and may change.</p>
+
+  <h2>Design partners</h2>
+  <p>We are looking for the first 10 Flutter teams. During the beta it is free, and when paid plans launch you get 50% off for life. In return we ask for honest feedback after you use it on a real project. The beta may change or end.</p>
+  <p><a href="mailto:support@alphawavesystems.com?subject=Probe%20Cloud%20design%20partner">Apply by email</a>, or <a href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?title=Probe%20Cloud%20design%20partner">open a public GitHub issue</a>. See <a href="/pricing/#design-partners">pricing</a>, the <a href="/terms/">terms</a> and the <a href="/privacy/">privacy policy</a>.</p>
+</Legal>

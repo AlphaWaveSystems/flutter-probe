@@ -16,7 +16,7 @@ export default defineConfig({
     sitemap(),
     starlight({
       title: 'FlutterProbe',
-      description: 'Open-source Flutter E2E testing framework — write tests in plain English, execute via direct widget-tree access with sub-50ms round-trips.',
+      description: 'Flutter E2E testing framework — write tests in plain English, execute via direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent.',
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/AlphaWaveSystems/flutter-probe' },
       ],
@@ -68,6 +68,8 @@ export default defineConfig({
             { label: 'On-Device Agent', slug: 'tools/agent' },
             { label: 'System Dialogs', slug: 'tools/system-dialogs' },
             { label: 'Probe Cloud (preview)', slug: 'tools/probe-cloud-preview' },
+            { label: 'Design-partner guide', slug: 'tools/design-partner-guide' },
+            { label: 'Cloud device farms', slug: 'tools/cloud-farms' },
             { label: 'Using Probe from AI Agents', slug: 'tools/ai-agents' },
             { label: 'AI & Local Models', slug: 'tools/ai' },
             { label: 'Plugins', slug: 'tools/plugins' },
@@ -77,6 +79,7 @@ export default defineConfig({
           label: 'CI/CD',
           items: [
             { label: 'GitHub Actions', slug: 'ci-cd/github-actions' },
+            { label: 'Codemagic', slug: 'ci-cd/codemagic' },
             { label: 'Reports', slug: 'ci-cd/reports' },
             { label: 'Results in other tools', slug: 'ci-cd/analytics-tools' },
           ],
@@ -96,8 +99,17 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Tutorials',
+          items: [
+            { label: 'Write a Flutter login test', slug: 'tutorials/flutter-login-test' },
+            { label: 'Run E2E tests in GitHub Actions', slug: 'tutorials/flutter-e2e-github-actions' },
+            { label: 'Find and fix flaky tests', slug: 'tutorials/triage-flaky-flutter-tests' },
+          ],
+        },
+        {
           label: 'Comparisons',
           items: [
+            { label: 'Why FlutterProbe', slug: 'comparisons/why-flutterprobe' },
             { label: 'Flutter E2E Testing Guide', slug: 'comparisons/flutter-e2e-testing' },
             { label: 'Flutter Testing Frameworks', slug: 'comparisons/flutter-testing-framework' },
             { label: 'integration_test Alternative', slug: 'comparisons/integration-test-alternative' },

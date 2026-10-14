@@ -18,8 +18,7 @@ This comparison is based on the state of each tool as of early 2026.
 | **Device requirement** | Yes | Yes | Yes |
 | **Recompilation per test** | Yes | Yes | No |
 | **Native OS interaction** | No | Yes | Yes |
-| **Command latency** | ~100-200ms | ~100-200ms | <50ms |
-| **Cloud device farms** | Firebase Test Lab | Firebase Test Lab | 5 providers |
+| **Cloud device farms** | Firebase Test Lab (deprecated by Google) | Firebase Test Lab (deprecated by Google) | 5 providers implemented, [not yet verified live](/tools/cloud-farms/) |
 | **CI/CD parallel execution** | Manual sharding | Manual sharding | Built-in --shard |
 | **Self-healing selectors** | No | No | Yes |
 | **Visual regression** | No | No | Yes |
@@ -47,7 +46,7 @@ The trade-off is complexity. Patrol tests still require recompilation, and the n
 
 FlutterProbe takes a different approach entirely. The test runner is a Go CLI that communicates with a lightweight Dart agent embedded in the app via WebSocket JSON-RPC 2.0. Tests are written in `.probe` files using ProbeScript, not Dart.
 
-Because the test runner is external to the app, the app binary is built once and reused across all test scenarios. There is no recompilation between tests. The Dart agent provides direct widget-tree access, so command execution is fast — under 50ms per action. Native OS interactions are handled through the agent's platform channel integration rather than a separate native test runner.
+Because the test runner is external to the app, the app binary is built once and reused across all test scenarios. There is no recompilation between tests. The Dart agent provides direct widget-tree access, so commands are resolved directly in the app. Native OS interactions are handled through the agent's platform channel integration rather than a separate native test runner.
 
 ## Syntax Comparison
 
@@ -117,7 +116,7 @@ Performance differences stem directly from architecture.
 
 **Build time.** `integration_test` and Patrol require compiling the app for each test file (or group of tests in a single file). FlutterProbe builds the app once. For a suite of 30 test scenarios across 10 test files, this can save 5-15 minutes of CI time.
 
-**Command latency.** FlutterProbe's direct widget-tree access via the Dart agent yields sub-50ms command execution. `integration_test` and Patrol use `pumpAndSettle`, which waits for animations and frame rendering. In practice, `pumpAndSettle` adds 100-200ms per action, sometimes more if animations are long-running.
+**Command latency.** FlutterProbe's direct widget-tree access via the Dart agent resolves commands directly in the app. `integration_test` and Patrol use `pumpAndSettle`, which waits for animations and frame rendering. We have not measured per-command latency for any of the three.
 
 **Suite execution time.** For a 30-scenario suite, typical wall-clock times in CI:
 
@@ -127,7 +126,7 @@ Performance differences stem directly from architecture.
 | Patrol | 30-40 min | 10-14 min |
 | FlutterProbe | 10-15 min | 3-5 min |
 
-FlutterProbe's advantage grows with suite size because the one-time build cost is amortized and per-command latency compounds across hundreds of actions.
+FlutterProbe's advantage grows with suite size because the one-time build cost is amortized and per-command overhead compounds across hundreds of actions.
 
 ## CI/CD Integration
 

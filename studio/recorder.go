@@ -14,7 +14,15 @@ func eventToProbeScriptLine(params map[string]interface{}) string {
 		return fmt.Sprintf("  tap %s", selectorFromRecordedParams(params))
 	case "type":
 		text, _ := params["text"].(string)
-		sel := selectorFromRecordedParams(params)
+		// The typed text is the value, never the selector: without this, an event that names no target would
+		// have produced `type "hi" into the "hi" field` (selectorFromRecordedParams falls back to params["text"]).
+		target := make(map[string]interface{}, len(params))
+		for k, v := range params {
+			if k != "text" {
+				target[k] = v
+			}
+		}
+		sel := selectorFromRecordedParams(target)
 		if sel != "the element" {
 			return fmt.Sprintf("  type %q into the %s field", text, sel)
 		}

@@ -126,11 +126,11 @@ studio/
 ## v0.7.0 MVP scope
 
 - Editor pane with Monaco + ProbeScript syntax highlighting
-- Device pane with ~10 FPS screenshot stream (via existing
-  `take_screenshot` RPC — works on iOS sim, Android emu, physical iOS
-  over USB or WiFi, physical Android over USB or WiFi)
-- Tap forwarding (click in pane → coord translation → existing `tap_at`
-  RPC)
+- Device pane: a read-only view fed by repeated screenshot + widget-tree requests to the
+  on-device agent (about 13 to 14 frames per second on an idle fixture app on an Apple M5 Max,
+  see the Studio docs page for the method; Flutter layer only, no system UI). It does not
+  forward clicks: the agent has no coordinate tap, so the pane cannot tap or type
+- Recorder: records taps made on the device itself into ProbeScript lines
 - Lint markers (live, on every edit)
 - "Run all" button → results timeline driven by in-process runner
 
@@ -151,8 +151,8 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 
 ## Deferred to v0.7.x
 
-- Native scrcpy embed (Android, 60 FPS)
-- `simctl io recordVideo` H.264 stream (iOS sim, 60 FPS)
+- A video-based device view and input injection (candidates: scrcpy on Android, `simctl io` on the iOS
+  simulator); not started
 - Multi-device side-by-side
 - Time-travel widget tree per step
 - AI chat pane (spawns `probe-mcp` and proxies)

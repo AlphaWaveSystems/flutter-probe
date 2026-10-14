@@ -293,9 +293,14 @@ func (p *awsDeviceFarm) StartSession(ctx context.Context, appID string, device s
 	}
 
 	payload := map[string]interface{}{
-		"projectArn":         p.projectARN,
-		"deviceArn":          deviceARN,
-		"remoteDebugEnabled": true,
+		"projectArn": p.projectARN,
+		"deviceArn":  deviceARN,
+	}
+	// appArn installs the uploaded app on the device (CreateRemoteAccessSession API reference,
+	// https://docs.aws.amazon.com/devicefarm/latest/APIReference/API_CreateRemoteAccessSession.html, read 2026-10-14).
+	// Without it the session starts with no app, so the agent never connects. The upload ARN starts with arn:aws:devicefarm.
+	if strings.HasPrefix(appID, "arn:aws:devicefarm") {
+		payload["appArn"] = appID
 	}
 
 	data, _ := json.Marshal(payload)

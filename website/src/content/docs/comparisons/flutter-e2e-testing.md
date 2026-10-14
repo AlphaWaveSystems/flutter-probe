@@ -73,7 +73,7 @@ patrolTest('user grants location permission', ($) async {
 
 ### 3. FlutterProbe
 
-FlutterProbe takes a different approach. Tests are written in [ProbeScript](/probescript/syntax/), a plain-English language stored in `.probe` files. A Go CLI parses the scripts and sends commands to a lightweight Dart agent embedded in the app, communicating over WebSocket with sub-50ms round-trips.
+FlutterProbe takes a different approach. Tests are written in [ProbeScript](/probescript/syntax/), a plain-English language stored in `.probe` files. A Go CLI parses the scripts and sends commands to a lightweight Dart agent embedded in the app, communicating over WebSocket.
 
 ```
 test "user can log in"
@@ -96,7 +96,7 @@ test "user can log in"
 |---|---|---|---|
 | Language | Dart | Dart | ProbeScript (plain English) |
 | Native dialog support | No | Yes | Yes (permissions, GPS, clipboard) |
-| Cloud farm support | Manual setup | Limited | 5 farms built-in |
+| Cloud farm support | Manual setup | Limited | 5 providers implemented, [not yet verified on a live account](/tools/cloud-farms/) |
 | CI reporting | DIY | DIY | Built-in HTML/JUnit reports |
 | Visual regression | No | No | Yes |
 | Self-healing selectors | No | No | Yes |

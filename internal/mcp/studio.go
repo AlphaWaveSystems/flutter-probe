@@ -69,6 +69,16 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 		Description: "A screenshot of the device Studio is connected to (what Studio shows in its device view).",
 		InputSchema: mcpSchema{Type: "object"},
 	},
+	{
+		Name:        "studio_widget_tree",
+		Description: "The widget tree of the app on the device Studio is connected to, as text (what Studio's inspector shows). Read-only; fails if Studio is not connected to a device. Like get_widget_tree, but through the open Studio session, so no second connection to the agent is made.",
+		InputSchema: mcpSchema{Type: "object"},
+	},
+	{
+		Name:        "studio_ui_state",
+		Description: "What Studio shows right now, in one read-only call: the connection (connected or not, which device, platform, agent version) and the state of the current or last run (running, finished, the plan and the results so far). Use it to decide whether to call studio_connect or studio_run_file next.",
+		InputSchema: mcpSchema{Type: "object"},
+	},
 }
 
 type studioDiscovery struct {
@@ -191,6 +201,10 @@ func (s *Server) studioTool(id any, name string, args map[string]string) *mcpRes
 		method = "results"
 	case "studio_screenshot":
 		method = "screenshot"
+	case "studio_widget_tree":
+		method = "widget_tree"
+	case "studio_ui_state":
+		method = "ui_state"
 	default:
 		return errResp(id, -32601, "unknown tool: "+name)
 	}
@@ -208,7 +222,16 @@ func (s *Server) studioTool(id any, name string, args map[string]string) *mcpRes
 			{"type": "image", "data": b64, "mimeType": "image/png"},
 		}}}
 	}
-	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{"content": []map[string]any{{"type": "text", "text": string(res)}}}}
+	text := string(res)
+	if name == "studio_widget_tree" {
+		// Studio answers the tree as one JSON string: hand the client the tree itself, not a quoted, escaped copy.
+		var tree string
+		if json.Unmarshal(res, &tree) != nil || tree == "" {
+			return textResp(id, "Studio returned no widget tree", fmt.Errorf("empty"))
+		}
+		text = tree
+	}
+	return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{"content": []map[string]any{{"type": "text", "text": text}}}}
 }
 
 func init() { tools = append(tools, studioTools...) }
