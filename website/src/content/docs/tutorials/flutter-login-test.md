@@ -22,7 +22,7 @@ In a test, `#email` selects the widget with `ValueKey('email')`.
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.25.0
+  flutter_probe_agent: ^0.26.0
 ```
 
 ```dart

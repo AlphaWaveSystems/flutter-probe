@@ -29,7 +29,7 @@ inputs:
   - probe_version: "latest"
     opts:
       title: "CLI version"
-      summary: A version like 0.25.2, or latest. Pin one in CI.
+      summary: A version like 0.26.0, or latest. Pin one in CI.
       is_required: true
       is_expand: true
   - tests: "tests/"
