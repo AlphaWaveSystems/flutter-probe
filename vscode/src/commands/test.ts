@@ -12,6 +12,7 @@ export function registerTestCommands(context: vscode.ExtensionContext): void {
   );
 }
 
+// probe test has no per-test filter in this version, so this runs the file that holds the cursor.
 async function runTestAtCursor(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== 'probescript') {
@@ -19,25 +20,7 @@ async function runTestAtCursor(): Promise<void> {
     return;
   }
 
-  const filePath = editor.document.uri.fsPath;
-  const line = editor.selection.active.line;
-
-  // Walk backwards to find the enclosing test definition
-  let testName: string | undefined;
-  for (let i = line; i >= 0; i--) {
-    const text = editor.document.lineAt(i).text;
-    const match = text.match(/^test\s+"([^"]+)"/);
-    if (match) {
-      testName = match[1];
-      break;
-    }
-  }
-
-  const args = buildTestArgs(filePath);
-  if (testName) {
-    args.push('--name', testName);
-  }
-
+  const args = buildTestArgs(editor.document.uri.fsPath);
   runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
 }
 

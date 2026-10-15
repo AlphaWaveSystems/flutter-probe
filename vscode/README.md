@@ -300,7 +300,7 @@ All commands are available via the command palette (`Cmd+Shift+P`):
 
 | Command | Description |
 |---|---|
-| FlutterProbe: Run Test at Cursor | Run the test under cursor |
+| FlutterProbe: Run Test File at Cursor | Run the file that contains the cursor (the CLI has no per-test filter yet) |
 | FlutterProbe: Run File | Run all tests in current file |
 | FlutterProbe: Run by Tag | Run tests matching a tag |
 | FlutterProbe: Run with Options... | Interactive run configuration |
