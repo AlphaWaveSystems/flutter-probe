@@ -159,9 +159,24 @@ probe device start --platform android
 probe device start --platform ios
 probe device start --platform ios --name probe-checkout   # boot (or create) a simulator called probe-checkout
 probe device view --device <id>                            # interactive device view over a local WebSocket (preview)
+probe device set appearance dark --device <id>             # dark mode, font scale, app language, orientation, deep link
 ```
 
 `probe device view` starts a hub on `127.0.0.1` with a one-time token and prints one JSON line with `url`, `token` and `device`. It shows the Flutter layer from the on-device agent (not the status bar or system dialogs), accepts tap, long press, swipe and typed text, and writes no files. The protocol is described in [`docs/studio-device-protocol.md`](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/docs/studio-device-protocol.md). The VS Code command "FlutterProbe: Open Device View" uses it.
+
+### Device settings: `probe device set`
+
+`probe device set <setting> <value> --device <id>` changes an OS setting of one named emulator or simulator, so a test can be tried in dark mode, with a large font or in another language without opening the system settings. `--device` is required (a serial, a UDID or a unique device name); `booted` is not accepted, so a change never lands on whichever device is running. Values are checked before anything runs.
+
+| Setting | Android (`adb`) | iOS simulator (`simctl`) |
+|---|---|---|
+| `appearance <light\|dark\|auto>` | `cmd uimode night` (`auto` is Android only) | `simctl ui appearance` |
+| `font_scale <value>` | a factor from 0.5 to 3.0, such as `1.3` (`settings put system font_scale`) | a content size category, such as `accessibility-large` (`simctl ui content_size`) |
+| `locale <tag> --app <id>` | `cmd locale set-app-locales` (Android 13 or later; the app under test) | relaunches the app with `-AppleLanguages` and `-AppleLocale` (the app restarts) |
+| `orientation <name>` | `portrait`, `landscape`, `reverse-portrait`, `reverse-landscape` (turns auto-rotate off) | not available: `simctl` has no rotate command |
+| `open_url <link> [--app <id>]` | `am start -a VIEW`, restricted to `--app` when given | `simctl openurl` |
+
+Physical iOS devices are refused (these settings use `simctl`). The settings persist on the device until you change them back, so set `appearance light`, `font_scale 1.0` or `medium`, and `orientation portrait` when you are done. The same operations are the `set_device_setting` MCP tool.
 
 ### Named devices
 

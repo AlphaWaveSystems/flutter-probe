@@ -9,7 +9,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 
 ## What the MCP server exposes
 
-### Device lifecycle (5 tools)
+### Device lifecycle (6 tools)
 
 | Tool | Description |
 |---|---|
@@ -18,6 +18,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `list_avds` | List Android Virtual Device names available to launch |
 | `start_device` | Boot an Android emulator (by AVD name) or iOS simulator (by UDID or `name`, created when missing); blocks until online. Devices are always named so results are tied to a device |
 | `shutdown_device` | Shut down an iOS simulator (`udid`) or Android emulator (`serial`) |
+| `set_device_setting` | Change an OS setting of one named device: `appearance` (dark mode), `font_scale`, `locale` (needs `app`), `orientation` (Android) or `open_url` (a deep link). `device` is required and never `booted`; values are checked before anything runs |
 
 ### Authoring & execution (9 tools)
 
@@ -147,7 +148,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 35 tools are immediately available in any new Claude conversation.
+4. Done — all 36 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **Studio's ProbeScript editor offers completions, hover help and snippets** for every command in the ProbeScript dictionary and every reserved word in the grammar. Both come from the docs through a generator (`studio/frontend/scripts/gen-probescript-dictionary.mjs`), so the editor and the documentation do not drift apart. `npm run check:probescript` fails when the generated module is out of date.
+- **`probe device set` and the `set_device_setting` MCP tool change an OS setting of one named emulator or simulator**: appearance (dark mode), font scale, app language, orientation (Android) and opening a deep link, through `adb` and `simctl`. The device must be named (a serial, UDID or unique name, never `booted`), every value is checked before a command runs, and physical iOS devices are refused. Checked against an Android 15 emulator and an iOS simulator. The MCP server now has 36 tools.
 
 ## [0.26.0] - 2026-10-14
 
