@@ -150,7 +150,7 @@ wails build
 
 - No multi-device side-by-side view.
 - No per-step replay / time-travel debugging — see the Results pane for pass/fail, but stack inspection requires re-running.
-- The AI chat pane talks to the Anthropic API only, with your own key stored in the OS keychain. It is not exposed through the automation endpoint or the MCP server; use the standalone `probe-mcp` binary with Claude Desktop or Cursor for MCP-driven work.
+- The AI chat pane talks to the Anthropic API only, with your own key stored in the OS keychain. When you send a message, the pane also sends the open file, the failures of the last run and, when a device is connected, its widget tree. Each is cut to a size limit and marked when it is cut. Nothing is sent until you send a message. The chat is not exposed through the automation endpoint or the MCP server; use the standalone `probe-mcp` binary with Claude Desktop or Cursor for MCP-driven work.
 
 ## Configuration
 
