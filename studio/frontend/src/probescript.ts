@@ -6,6 +6,8 @@
 // Monarch over TextMate JSON, so this file owns the Studio version.
 
 import * as monaco from "monaco-editor";
+import { COMMANDS, KEYWORDS } from "./probescript/dictionary.generated";
+import { completionSpecs, hoverMarkdown } from "./probescript/dictionary";
 
 export const PROBESCRIPT_LANGUAGE_ID = "probescript";
 
@@ -93,6 +95,46 @@ export function registerProbeScript(): void {
         [/\\./, "string.escape"],
         [/"/, { token: "string.quote", bracket: "@close", next: "@pop" }],
       ],
+    },
+  });
+
+  // Completions, hover text and snippets come from the generated dictionary (scripts/gen-probescript-dictionary.mjs).
+  const specs = completionSpecs(COMMANDS, KEYWORDS);
+  monaco.languages.registerCompletionItemProvider(PROBESCRIPT_LANGUAGE_ID, {
+    provideCompletionItems(model, position) {
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+      return {
+        suggestions: specs.map(spec => ({
+          label: spec.label,
+          kind: spec.kind === "command"
+            ? monaco.languages.CompletionItemKind.Snippet
+            : monaco.languages.CompletionItemKind.Keyword,
+          detail: spec.detail,
+          documentation: { value: spec.documentation },
+          insertText: spec.insertText,
+          insertTextRules: spec.insertAsSnippet
+            ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+            : undefined,
+          range,
+        })),
+      };
+    },
+  });
+  monaco.languages.registerHoverProvider(PROBESCRIPT_LANGUAGE_ID, {
+    provideHover(model, position) {
+      const word = model.getWordAtPosition(position);
+      if (!word) {
+        return null;
+      }
+      const markdown = hoverMarkdown(word.word, COMMANDS, KEYWORDS);
+      if (markdown === undefined) {
+        return null;
+      }
+      return {
+        range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+        contents: [{ value: markdown }],
+      };
     },
   });
 }
