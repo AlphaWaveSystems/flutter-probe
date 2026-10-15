@@ -101,6 +101,10 @@ Sidebar tree view of all tests and recipes in your workspace:
 - Click to navigate to source
 - Refresh button to rescan
 
+### Testing view
+
+Tests also appear in VS Code's built-in **Testing** view, with a run button next to each test and in the editor gutter. A run executes the test's file with `probe test --yes --format json` and takes each test's pass or fail from the CLI's report. The CLI has no per-test filter in this version, so a run executes the whole file, and only the tests you selected are reported. Output streams to the run's output panel. The run uses the `flutterprobe.defaultDevice` setting when it is set.
+
 ## Getting Started
 
 ### Prerequisites
