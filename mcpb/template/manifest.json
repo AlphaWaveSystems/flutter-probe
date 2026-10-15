@@ -49,6 +49,7 @@
     {"name": "list_avds", "description": "List Android Virtual Device (AVD) names available on the host."},
     {"name": "start_device", "description": "Boot an Android emulator (by AVD name) or iOS simulator (by UDID)."},
     {"name": "shutdown_device", "description": "Shut down an iOS simulator (provide udid) or an Android emulator (provide serial)."},
+    {"name": "set_device_setting", "description": "Change dark mode, font scale, app language, orientation or open a deep link on one named emulator or simulator."},
     {"name": "get_widget_tree", "description": "Dump the live widget tree from the running Flutter app."},
     {"name": "take_screenshot", "description": "Capture the current screen of the running Flutter app and return the image."},
     {"name": "read_test", "description": "Read the contents of a .probe test file."},
