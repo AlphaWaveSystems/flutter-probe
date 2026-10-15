@@ -36,6 +36,8 @@ type HTTPTransport struct {
 	Attestation string
 	// Note, when set, receives a warning about a stored report (for example a rejected identity token).
 	Note func(string)
+	// Reply, when set, receives the body of a successful answer (a local upload's receipt).
+	Reply func([]byte)
 }
 
 // StatusError is a non-2xx answer from the hosted service. Upload retries the busy ones (429, 503).
@@ -106,6 +108,9 @@ func (t HTTPTransport) Send(ctx context.Context, licenseKey string, body []byte)
 			snippet = append(snippet[:200], '…')
 		}
 		return &StatusError{Code: resp.StatusCode, Message: string(snippet), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}
+	}
+	if t.Reply != nil {
+		t.Reply(raw)
 	}
 	if note := attestationNote(raw); note != "" && t.Note != nil {
 		t.Note(note)
@@ -181,6 +186,7 @@ type Options struct {
 	Scrubber   *Scrubber // default NewScrubber()
 
 	// Attestation is the job's identity token, sent as a header to BaseURL only. It is never printed.
+	// A local upload never sends it.
 	Attestation string
 	// DryAttestation makes a dry run say "attestation: present" without a token being requested.
 	DryAttestation bool
@@ -192,10 +198,27 @@ type Options struct {
 	Sleep func(context.Context, time.Duration) error
 	// Now is the clock the retry window is measured on; tests replace it. Default time.Now.
 	Now func() time.Time
+	// Receipt, when set, receives the server's answer to a local upload: the run key, and whether the server already had
+	// the same upload.
+	Receipt *Receipt
+}
+
+// Receipt is the server's answer to an accepted local upload.
+type Receipt struct {
+	RunKey    string `json:"run_key"`
+	Duplicate bool   `json:"duplicate"`
+	Results   int    `json:"results"`
+	Stored    bool   `json:"stored"`
+	Source    string `json:"source"`
 }
 
 // BuildPayload scrubs the report and wraps it with the envelope, within MaxPayloadBytes.
 func BuildPayload(o Options) ([]byte, Stats, error) {
+	return buildPayload(o, MaxPayloadBytes)
+}
+
+// buildPayload is BuildPayload with the body limit made explicit: a local upload has a smaller one.
+func buildPayload(o Options, limit int) ([]byte, Stats, error) {
 	sc := o.Scrubber
 	if sc == nil {
 		sc = NewScrubber()
@@ -222,27 +245,39 @@ func BuildPayload(o Options) ([]byte, Stats, error) {
 	if err != nil {
 		return nil, st, err
 	}
-	if len(body) > MaxPayloadBytes {
+	if len(body) > limit {
 		if short, serr := ShortenErrors(report, 300); serr == nil {
 			if b2, e2 := encode(short); e2 == nil {
 				body = b2
 			}
 		}
 	}
-	if len(body) > MaxPayloadBytes {
-		return nil, st, fmt.Errorf("the report is %d KB, over the %d KB upload limit: nothing was sent", len(body)/1024, MaxPayloadBytes/1024)
+	if len(body) > limit {
+		return nil, st, fmt.Errorf("the report is %d KB, over the %d KB upload limit: nothing was sent", len(body)/1024, limit/1024)
 	}
 	return body, st, nil
 }
 
-// Upload builds the payload and either prints it (DryRun) or sends it once with a short timeout.
+// Upload builds the payload and either prints it (DryRun) or sends it once with a short timeout, retrying a busy
+// service within the retry window. A local upload (an envelope with a local block) is checked against the local rules,
+// carries no CI facts, retry outcomes or identity token, and reports the server's answer through Options.Receipt.
 // The returned error is meant to be shown as a warning; it never has to fail a run.
 func Upload(ctx context.Context, o Options) error {
-	problems := Preflight(o.Envelope, o.Report)
+	local := o.Envelope.Local != nil
+	var problems []string
+	limit := MaxPayloadBytes
+	if local {
+		o.Envelope.CI, o.Envelope.Retries = nil, nil
+		o.Attestation, o.DryAttestation = "", false
+		problems = PreflightLocal(o.Envelope, o.Report)
+		limit = MaxLocalPayloadBytes
+	} else {
+		problems = Preflight(o.Envelope, o.Report)
+	}
 	if len(problems) > 0 && !o.DryRun {
 		return fmt.Errorf("nothing was uploaded: %s", strings.Join(problems, "; "))
 	}
-	body, st, err := BuildPayload(o)
+	body, st, err := buildPayload(o, limit)
 	if err != nil {
 		return err
 	}
@@ -253,12 +288,14 @@ func Upload(ctx context.Context, o Options) error {
 		if o.Out != nil && len(problems) > 0 {
 			fmt.Fprintf(o.Out, "note: a real upload would be refused before sending: %s\n", strings.Join(problems, "; "))
 		}
-		if o.Out != nil {
+		if o.Out != nil && !local {
 			state := "absent"
 			if o.Attestation != "" || o.DryAttestation {
 				state = "present"
 			}
 			fmt.Fprintf(o.Out, "attestation: %s\n", state)
+		}
+		if o.Out != nil {
 			fmt.Fprintf(o.Out, "dry run: nothing is sent. The request would be POST %s/v1/reports with the license key as a bearer token and this body:\n%s\n", baseOrDefault(o.BaseURL), body)
 		}
 		return nil
@@ -270,9 +307,14 @@ func Upload(ctx context.Context, o Options) error {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
+	var reply []byte
 	tr := o.Transport
 	if tr == nil {
-		tr = HTTPTransport{BaseURL: baseOrDefault(o.BaseURL), Client: noRedirects(&http.Client{Timeout: timeout}), Attestation: o.Attestation, Note: o.Warn}
+		h := HTTPTransport{BaseURL: baseOrDefault(o.BaseURL), Client: noRedirects(&http.Client{Timeout: timeout}), Attestation: o.Attestation, Note: o.Warn}
+		if local {
+			h.Reply = func(b []byte) { reply = b }
+		}
+		tr = h
 	}
 	window := o.RetryWindow
 	if window == 0 {
@@ -286,11 +328,30 @@ func Upload(ctx context.Context, o Options) error {
 	if now == nil {
 		now = time.Now
 	}
+	if err := sendWithRetries(ctx, tr, o.LicenseKey, body, timeout, window, sleep, now, o.Warn); err != nil {
+		if local {
+			return localFailure(err)
+		}
+		return err
+	}
+	if local && o.Receipt != nil {
+		var r Receipt
+		if json.Unmarshal(reply, &r) == nil {
+			*o.Receipt = r
+		}
+	}
+	return nil
+}
+
+// sendWithRetries sends body once, and again while the service is busy (429, 503) and the retry window allows. The body
+// is the same on every try: a local upload's sequence number is reserved once, before the first try.
+func sendWithRetries(ctx context.Context, tr Transport, licenseKey string, body []byte, timeout, window time.Duration,
+	sleep func(context.Context, time.Duration) error, now func() time.Time, warn func(string)) error {
 	started := now()
 	delay := retryFirstDelay
 	for attempt := 1; ; attempt++ {
 		cctx, cancel := context.WithTimeout(ctx, timeout)
-		err := tr.Send(cctx, o.LicenseKey, body)
+		err := tr.Send(cctx, licenseKey, body)
 		cancel()
 		var se *StatusError
 		if err == nil || !errors.As(err, &se) || !se.Retryable() || window < 0 {
@@ -304,13 +365,55 @@ func Upload(ctx context.Context, o Options) error {
 			return fmt.Errorf("%w (still busy after %s of retries; nothing was stored)", err, window.Round(time.Second))
 		}
 		if attempt == 1 || attempt%4 == 0 {
-			warnf(o.Warn, "the hosted service is busy (HTTP %d), retrying (attempt %d, waiting %s, giving up after %s)", se.Code, attempt+1, wait.Round(time.Second), window.Round(time.Second))
+			warnf(warn, "the hosted service is busy (HTTP %d), retrying (attempt %d, waiting %s, giving up after %s)", se.Code, attempt+1, wait.Round(time.Second), window.Round(time.Second))
 		}
 		if serr := sleep(ctx, wait); serr != nil {
 			return fmt.Errorf("%w (retries stopped: %v)", err, serr)
 		}
 		delay = min(delay*2, retryMaxDelay)
 	}
+}
+
+// refusalCodes are the error codes the service answers local uploads with. Longer codes come first, so that bad_local
+// is matched only when no more specific bad_local_* code is in the answer.
+var refusalCodes = []string{
+	"local_repo_not_allowed", "local_not_enabled", "no_entitlement", "too_many_results",
+	"bad_local_repository", "bad_local_branch", "bad_local_commit", "bad_local_signer", "bad_local_seq", "bad_local_tree",
+	"bad_local", "ci_and_local", "ci_required",
+}
+
+// refusalCode finds the first known error code in a service answer, or "" when there is none.
+func refusalCode(message string) string {
+	for _, c := range refusalCodes {
+		if strings.Contains(message, c) {
+			return c
+		}
+	}
+	return ""
+}
+
+// localFailure says in plain words why the service refused a local upload. The reasons the contract names get a
+// sentence; anything else keeps the service's own text.
+func localFailure(err error) error {
+	var se *StatusError
+	if !errors.As(err, &se) {
+		return err
+	}
+	switch code := refusalCode(se.Message); {
+	case se.Code == http.StatusForbidden && code == "local_not_enabled":
+		return errors.New("local uploads are not enabled for this team; ask the team owner")
+	case se.Code == http.StatusForbidden && code == "local_repo_not_allowed":
+		return errors.New("this repository is not registered or allowed for local uploads by your team; ask the team owner")
+	case se.Code == http.StatusConflict:
+		return errors.New("the service already has a different report under this sequence number; this is a client bug, so the upload is not retried")
+	case se.Code == http.StatusRequestEntityTooLarge:
+		return fmt.Errorf("the report is over the local upload limit of %d KB; nothing was stored", MaxLocalPayloadBytes/1024)
+	case code == "too_many_results":
+		return fmt.Errorf("the report has more than %d results, the local upload limit; nothing was stored", MaxLocalResults)
+	case strings.HasPrefix(code, "bad_local"):
+		return fmt.Errorf("the service refused a local field (%s); this is a client bug, so the upload is not retried", code)
+	}
+	return err
 }
 
 // sleepCtx waits for d or until ctx is done.

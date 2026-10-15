@@ -227,6 +227,8 @@ Opt-in report upload to the hosted service (Probe Cloud, preview). Unrelated to 
 | `label` | string | empty | Label for this upload (suite, shard or matrix leg); needed when one CI job uploads more than once |
 | `timeout` | duration | `5s` | Upload time limit; an upload never fails the run |
 
+`--upload-local` has no key here. A local run is a choice for one run, and `upload_report` never sends one. See the local runs section of [Probe Cloud (preview)](/tools/probe-cloud-preview/).
+
 ### perf
 
 | Key | Type | Default | Description |
