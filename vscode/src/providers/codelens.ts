@@ -28,9 +28,9 @@ export class ProbeCodeLensProvider implements vscode.CodeLensProvider {
 
         // Run button
         lenses.push(new vscode.CodeLens(range, {
-          title: '▶ Run',
+          title: '▶ Run file',
           command: 'flutterprobe.runTest',
-          tooltip: 'Run this test',
+          tooltip: 'Run the file that contains this test',
         }));
 
         // Per-session run buttons
@@ -38,8 +38,8 @@ export class ProbeCodeLensProvider implements vscode.CodeLensProvider {
           lenses.push(new vscode.CodeLens(range, {
             title: `▶ ${session.name}`,
             command: 'flutterprobe.runTestOnDevice',
-            arguments: [document.uri.fsPath, testMatch[1], session],
-            tooltip: `Run on ${session.name}`,
+            arguments: [document.uri.fsPath, session],
+            tooltip: `Run the file on ${session.name}`,
           }));
         }
 
@@ -47,8 +47,8 @@ export class ProbeCodeLensProvider implements vscode.CodeLensProvider {
         lenses.push(new vscode.CodeLens(range, {
           title: 'Debug',
           command: 'flutterprobe.runTestVerbose',
-          arguments: [document.uri.fsPath, testMatch[1]],
-          tooltip: 'Run with verbose output',
+          arguments: [document.uri.fsPath],
+          tooltip: 'Run the file with verbose output',
         }));
 
         continue;

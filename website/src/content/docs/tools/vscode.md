@@ -37,7 +37,7 @@ Access via the Command Palette (`Cmd+Shift+P`):
 
 | Command | Description |
 |---------|-------------|
-| FlutterProbe: Run Test | Run the test at cursor |
+| FlutterProbe: Run Test File at Cursor | Run the file that contains the cursor (the CLI has no per-test filter yet) |
 | FlutterProbe: Run File | Run all tests in current file |
 | FlutterProbe: Lint File | Validate current file syntax |
 | FlutterProbe: Start Recording | Start recording interactions |
