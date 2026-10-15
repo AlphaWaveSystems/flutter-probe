@@ -68,7 +68,7 @@
     "commands": [
       {
         "command": "flutterprobe.runTest",
-        "title": "FlutterProbe: Run Test at Cursor",
+        "title": "FlutterProbe: Run Test File at Cursor",
         "icon": "$(play)"
       },
       {
