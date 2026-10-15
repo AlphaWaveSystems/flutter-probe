@@ -125,7 +125,7 @@ studio/
 
 ## v0.7.0 MVP scope
 
-- Editor pane with Monaco + ProbeScript syntax highlighting
+- Editor pane with Monaco + ProbeScript syntax highlighting, completions, hover help and snippets (generated from the ProbeScript docs by `npm run gen:probescript`; `npm run check:probescript` checks the generated module is current)
 - Device pane: a read-only view fed by repeated screenshot + widget-tree requests to the
   on-device agent (about 13 to 14 frames per second on an idle fixture app on an Apple M5 Max,
   see the Studio docs page for the method; Flutter layer only, no system UI). It does not

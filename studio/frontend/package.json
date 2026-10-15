@@ -10,7 +10,10 @@
     "typecheck:device-view": "tsc -p tsconfig.device-view.json",
     "test:device-view": "node --test device-view-tests/",
     "build:device-view": "vite build --config vite.device-view.config.ts",
-    "demo:device-view": "node device-view-demo/mock-server.mjs"
+    "demo:device-view": "node device-view-demo/mock-server.mjs",
+    "gen:probescript": "node scripts/gen-probescript-dictionary.mjs",
+    "check:probescript": "node scripts/gen-probescript-dictionary.mjs --check",
+    "test:probescript": "node --test probescript-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.50.0"

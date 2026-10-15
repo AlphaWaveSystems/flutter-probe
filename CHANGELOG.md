@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Studio's ProbeScript editor offers completions, hover help and snippets** for every command in the ProbeScript dictionary and every reserved word in the grammar. Both come from the docs through a generator (`studio/frontend/scripts/gen-probescript-dictionary.mjs`), so the editor and the documentation do not drift apart. `npm run check:probescript` fails when the generated module is out of date.
+
 ## [0.26.0] - 2026-10-14
 
 ### Added
