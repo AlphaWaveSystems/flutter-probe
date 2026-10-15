@@ -1,6 +1,6 @@
 // Package hosted is the opt-in client of the hosted report service (Probe Cloud, preview): it
 // builds a payload from the run's JSON report plus a small envelope, scrubs it, and sends it.
-// Nothing leaves the machine unless the user asked for it (--upload-report or hosted.upload_report),
+// Nothing leaves the machine unless the user asked for it (--upload-report, hosted.upload_report or --upload-local),
 // a license with the probe_cloud plan is present, and the scrubber has run. Failures are warnings:
 // an upload never fails or noticeably slows a test run.
 package hosted
@@ -30,6 +30,7 @@ type Envelope struct {
 	CI           *CIInfo        `json:"ci,omitempty"`
 	RunLabel     string         `json:"run_label,omitempty"` // optional free label for a suite, shard or matrix leg; part of the server's run key, so two uploads of one CI job must differ in it
 	Retries      []RetryOutcome `json:"retries,omitempty"`
+	Local        *LocalInfo     `json:"local,omitempty"` // a local run (--upload-local): git facts instead of CI facts; never set together with CI
 }
 
 // CIInfo is read from the GitHub Actions default environment variables.
@@ -270,6 +271,13 @@ func Preflight(env Envelope, report []byte) []string {
 	if !ValidLabel(env.RunLabel) {
 		problems = append(problems, "the run label must be 1 to 64 characters of letters, digits, '.', '_', ':', '/' or '-'")
 	}
+	return append(problems, reportProblems(report, MaxResults)...)
+}
+
+// reportProblems checks what the server needs from the report itself: valid JSON, a platform (android or ios), and at
+// most maxResults results.
+func reportProblems(report []byte, maxResults int) []string {
+	var problems []string
 	var rep struct {
 		Metadata struct {
 			Platform string `json:"platform"`
@@ -277,14 +285,13 @@ func Preflight(env Envelope, report []byte) []string {
 		Results []json.RawMessage `json:"results"`
 	}
 	if err := json.Unmarshal(report, &rep); err != nil {
-		problems = append(problems, "the report is not valid JSON")
-		return problems
+		return append(problems, "the report is not valid JSON")
 	}
 	if p := rep.Metadata.Platform; p != "android" && p != "ios" {
 		problems = append(problems, "the report has no platform (android or ios) in its metadata, which happens when no device was connected")
 	}
-	if len(rep.Results) > MaxResults {
-		problems = append(problems, fmt.Sprintf("the report has %d results; at most %d can be uploaded", len(rep.Results), MaxResults))
+	if len(rep.Results) > maxResults {
+		problems = append(problems, fmt.Sprintf("the report has %d results; at most %d can be uploaded", len(rep.Results), maxResults))
 	}
 	return problems
 }

@@ -334,6 +334,7 @@ Key flags for the flags parameter:
   --format junit              JUnit XML (add --junit-attempts to list every attempt of a re-run test, --junit-suffix/--junit-label to tell devices apart)
   --measure-all               measure every test (a window per test) with no script edits
   --upload-report             upload the scrubbed report to the hosted service (Probe Cloud, preview; needs a probe_cloud license); --upload-dry-run prints the payload and sends nothing
+  --upload-local              upload this run as a local run (Probe Cloud, preview; unverified, never counts toward a pull request's verdict; needs a probe_cloud license and a team that enabled local uploads); never implied by --upload-report
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
   --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data on physical devices, memory,cpu,data on emulators/simulators; all = also memory_growth,cpu_peak,frame_max)
   --perf-ignore LIST          metrics to leave out of the comparison; --perf-key-base DIR makes baseline keys relative to DIR

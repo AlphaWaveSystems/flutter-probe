@@ -111,12 +111,21 @@ To let Probe Cloud tell which workflow made an upload, the CLI can send the job'
 An upload attempt has a short timeout (5 seconds by default). If the service answers that it is busy (HTTP 429 or 503), the CLI waits and tries again, backing off from 2 seconds up to 30 seconds (or the service's `Retry-After`, at most 60 seconds), for up to 5 minutes (`hosted.retry_window`; a negative value turns retries off). If it is still busy it gives up with a warning; the run's result and exit status are never changed. Other errors are not retried. When the service stores a report but did not accept its identity token, the CLI prints a warning with the short reason code. A successful upload prints one line naming the endpoint host and whether a token was sent. Redirects are never followed, so the key cannot be forwarded to another address; a redirect is reported as an error. Text that comes back from the server is stripped of control characters and escape sequences before it is printed. A failure, a slow endpoint or a missing
 key prints a warning and never changes the exit status of the run or delays it noticeably.
 
+## Local runs (preview)
+
+A run on a local simulator, emulator or device has no CI facts, so it is sent as a local run with `--upload-local`. This is a choice for each run: `--upload-report` never does it, and `hosted.upload_report` does not apply to it. It needs the same license as a CI upload, and a team that has enabled local uploads. The repository must also be registered or allowed for local uploads, or the service refuses the upload.
+
+In place of the CI facts, the envelope carries the repository as `owner/name` (GitHub remotes only; credentials, the host and a `.git` suffix are dropped), the branch (`HEAD` when detached), the commit, a dirty flag, and a tree hash of the state that was tested. For a clean tree the tree hash is `HEAD^{tree}`. For a dirty tree it is the tree of the tracked and untracked, non-ignored files, built in a temporary index so that your own index is not changed. A random signer identifies the installation. It is created once and kept in `~/.flutterprobe/local-upload`, and it is not derived from your machine, repository or name. A sequence number is saved before anything is sent, so each upload is unique for its signer. A retry resends the same bytes with the same sequence number.
+
+Local evidence is unverified. The service shows it beside the CI result, and it never counts toward a pull request's verdict. Local uploads are limited more strictly than CI uploads: 256 KB and 2,000 results per upload, and 20 uploads per minute per license key. There is no signing yet. The hosted service is not live, so a real local upload gives a warning today. `--upload-dry-run` shows the exact payload and reserves no sequence number.
+
 ## Reference
 
 | Setting | Meaning |
 |---|---|
 | `--upload-report` / `hosted.upload_report` | Upload the scrubbed report after the run |
 | `--upload-dry-run` | Print the payload, send nothing |
+| `--upload-local` | Send this run as a local run (unverified evidence; see Local runs (preview) above) |
 | `hosted.url` | Service base URL (https required; plain http only for localhost). The built-in default is a placeholder host that is not live |
 | `--upload-label` / `hosted.label` | Label for this upload (suite, shard or matrix leg); needed when one job uploads more than once |
 | `hosted.timeout` | Time limit of one upload attempt, default `5s` |

@@ -116,6 +116,7 @@ func init() {
 	f.Bool("upload-report", false, "upload the scrubbed JSON report to the hosted service (Probe Cloud, preview) after the run; needs a license with the probe_cloud plan (also hosted.upload_report in probe.yaml). Never fails the run")
 	f.String("upload-label", "", "label for this upload (also hosted.label): a suite, shard or matrix leg such as shard-2-of-4; two uploads of one CI job must differ in it")
 	f.Bool("upload-dry-run", false, "print the exact payload --upload-report would send (after scrubbing) and send nothing; needs no license")
+	f.Bool("upload-local", false, "upload this run as a local run (Probe Cloud, preview): git facts instead of CI facts; unverified evidence, shown beside the CI result, that never counts toward a pull request's verdict. Opt-in: needs a probe_cloud license and a team that enabled local uploads. Never implied by --upload-report, and hosted.upload_report does not apply to it")
 	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
@@ -243,6 +244,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Load config (respects --config flag for platform-specific configs)
 	cfg, err := loadConfig(cmd)
 	if err != nil {
+		return err
+	}
+
+	// A local run and a CI upload are different uploads: refuse the two together before any test runs.
+	if err := uploadFlagsError(cmd); err != nil {
 		return err
 	}
 
