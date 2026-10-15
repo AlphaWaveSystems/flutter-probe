@@ -14,18 +14,21 @@ import (
 
 // WorkspaceSettings is the JSON shape the Studio settings form binds to.
 // It exposes a deliberately small subset of probe.yaml — the four knobs
-// most users actually touch. Other probe.yaml fields are preserved on
-// save (loaded as raw map, only the managed keys are overwritten), so a
-// power user with complex config doesn't lose anything by using the UI.
+// most users actually touch, and the two switches that let the AI chat send
+// the last run and the screen. Other probe.yaml fields are preserved on save
+// (loaded as raw map, only the managed keys are overwritten), so a power user
+// with complex config doesn't lose anything by using the UI.
 type WorkspaceSettings struct {
-	AgentPort         int    `json:"agentPort"`         // probe.yaml: agent.port
-	DefaultsTimeout   string `json:"defaultsTimeout"`   // probe.yaml: defaults.timeout (Go duration string, e.g. "30s")
-	IOSDeviceID       string `json:"iosDeviceId"`       // probe.yaml: device.ios_device_id
-	AndroidDeviceID   string `json:"androidDeviceId"`   // probe.yaml: device.android_device_id
+	AgentPort           int    `json:"agentPort"`           // probe.yaml: agent.port
+	DefaultsTimeout     string `json:"defaultsTimeout"`     // probe.yaml: defaults.timeout (Go duration string, e.g. "30s")
+	IOSDeviceID         string `json:"iosDeviceId"`         // probe.yaml: device.ios_device_id
+	AndroidDeviceID     string `json:"androidDeviceId"`     // probe.yaml: device.android_device_id
+	AIContextRunResults bool   `json:"aiContextRunResults"` // probe.yaml: studio.ai_context.run_results (off unless set)
+	AIContextWidgetTree bool   `json:"aiContextWidgetTree"` // probe.yaml: studio.ai_context.widget_tree (off unless set)
 }
 
 // LoadWorkspaceSettings reads probe.yaml from the workspace and returns
-// the four managed fields. Missing file → all zeros, so the UI form
+// the managed fields. Missing file → all zeros, so the UI form
 // shows the user "this workspace has no probe.yaml yet" via empty state.
 func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error) {
 	if workspace == "" {
@@ -35,15 +38,21 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 	if err != nil {
 		return WorkspaceSettings{}, fmt.Errorf("loading probe.yaml: %w", err)
 	}
+	ai, err := readAIContext(workspace)
+	if err != nil {
+		return WorkspaceSettings{}, err
+	}
 	return WorkspaceSettings{
-		AgentPort:       cfg.Agent.Port,
-		DefaultsTimeout: cfg.Defaults.Timeout.String(),
-		IOSDeviceID:     cfg.Device.IOSDeviceID,
-		AndroidDeviceID: cfg.Device.AndroidDeviceID,
+		AgentPort:           cfg.Agent.Port,
+		DefaultsTimeout:     cfg.Defaults.Timeout.String(),
+		IOSDeviceID:         cfg.Device.IOSDeviceID,
+		AndroidDeviceID:     cfg.Device.AndroidDeviceID,
+		AIContextRunResults: ai.RunResults,
+		AIContextWidgetTree: ai.WidgetTree,
 	}, nil
 }
 
-// SaveWorkspaceSettings writes the four managed fields back to probe.yaml.
+// SaveWorkspaceSettings writes the managed fields back to probe.yaml.
 // Reads the existing file as a raw map so other keys (recipes_folder,
 // cloud, plugins, etc.) survive untouched. Creates the file if missing.
 func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error {
@@ -81,6 +90,9 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 	mergeKey(raw, "defaults", "timeout", s.DefaultsTimeout)
 	mergeKey(raw, "device", "ios_device_id", s.IOSDeviceID)
 	mergeKey(raw, "device", "android_device_id", s.AndroidDeviceID)
+	if err := setAIContextFlags(raw, s); err != nil {
+		return err
+	}
 
 	out, err := yaml.Marshal(raw)
 	if err != nil {
@@ -90,6 +102,85 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 		return fmt.Errorf("writing probe.yaml: %w", err)
 	}
 	return nil
+}
+
+// aiContextSettings are the two switches that decide what the AI chat may send beyond the open file: the failures of the
+// last run, and the connected device's widget tree. Both are off unless probe.yaml turns them on. A missing probe.yaml,
+// a missing key and an unreadable file all mean off.
+type aiContextSettings struct {
+	RunResults bool
+	WidgetTree bool
+}
+
+// readAIContext reads the two switches from probe.yaml's studio.ai_context section.
+func readAIContext(workspace string) (aiContextSettings, error) {
+	data, err := os.ReadFile(filepath.Join(workspace, "probe.yaml"))
+	if os.IsNotExist(err) {
+		return aiContextSettings{}, nil
+	}
+	if err != nil {
+		return aiContextSettings{}, fmt.Errorf("reading probe.yaml: %w", err)
+	}
+	var doc struct {
+		Studio struct {
+			AIContext struct {
+				RunResults bool `yaml:"run_results"`
+				WidgetTree bool `yaml:"widget_tree"`
+			} `yaml:"ai_context"`
+		} `yaml:"studio"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return aiContextSettings{}, fmt.Errorf("parsing probe.yaml: %w", err)
+	}
+	return aiContextSettings{
+		RunResults: doc.Studio.AIContext.RunResults,
+		WidgetTree: doc.Studio.AIContext.WidgetTree,
+	}, nil
+}
+
+// setAIContextFlags writes the two switches under studio.ai_context. A switch that is off is removed, as mergeKey does for
+// the other managed keys, and maps left empty are removed with it. A studio or ai_context key that is not a map is refused
+// rather than overwritten, because that would discard the user's own value.
+func setAIContextFlags(raw map[string]any, s WorkspaceSettings) error {
+	studio, err := mapAt(raw, "studio")
+	if err != nil {
+		return err
+	}
+	ai, err := mapAt(studio, "ai_context")
+	if err != nil {
+		return err
+	}
+	setSwitch(ai, "run_results", s.AIContextRunResults)
+	setSwitch(ai, "widget_tree", s.AIContextWidgetTree)
+	if len(ai) == 0 {
+		delete(studio, "ai_context")
+	}
+	if len(studio) == 0 {
+		delete(raw, "studio")
+	}
+	return nil
+}
+
+// mapAt returns the map stored under key, creating it when the key is absent. A value that is not a map is an error.
+func mapAt(m map[string]any, key string) (map[string]any, error) {
+	v, ok := m[key]
+	if !ok {
+		created := map[string]any{}
+		m[key] = created
+		return created, nil
+	}
+	if inner, isMap := v.(map[string]any); isMap {
+		return inner, nil
+	}
+	return nil, fmt.Errorf("probe.yaml has a %q key that is not a map; fix it by hand before using the AI context settings", key)
+}
+
+func setSwitch(m map[string]any, key string, on bool) {
+	if on {
+		m[key] = true
+		return
+	}
+	delete(m, key)
 }
 
 // mergeKey writes value at raw[parent][key]. If value is the zero value

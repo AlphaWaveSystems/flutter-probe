@@ -27,6 +27,10 @@ const (
 var (
 	chatEndpoint = chatAPIURL
 	apiKeyLookup = keychainGet
+	// contextSwitches reads the two AI-context switches for the open workspace, and fetchTree reads the connected device's
+	// widget tree. Tests replace both.
+	contextSwitches = workspaceSwitches
+	fetchTree       = func(a *App) (string, error) { return a.GetWidgetTree() }
 )
 
 var errNoAPIKey = fmt.Errorf("no API key stored — add your Anthropic key in the AI panel")
@@ -106,14 +110,35 @@ func chatContext(fileContent, lastRun, tree string) string {
 	return b.String()
 }
 
-// widgetTreeForChat is the connected device's widget tree, or "" when no device is connected or the tree cannot be read.
-// A chat turn never fails for want of it.
-func (a *App) widgetTreeForChat() string {
-	tree, err := a.GetWidgetTree()
-	if err != nil {
-		return ""
+// workspaceSwitches reads the AI-context switches from the open workspace's probe.yaml. Without a workspace, or when the
+// file cannot be read, both are off, so the chat sends only the open file.
+func workspaceSwitches(a *App) aiContextSettings {
+	a.mu.Lock()
+	ws := a.workspace
+	a.mu.Unlock()
+	if ws == "" {
+		return aiContextSettings{}
 	}
-	return tree
+	s, err := readAIContext(ws)
+	if err != nil {
+		return aiContextSettings{}
+	}
+	return s
+}
+
+// contextPieces returns the last run's failures and the device's widget tree for a chat turn, each only when its switch is
+// on. A switch that is off is not read: with both off the device is not asked for its tree. Both pieces are redacted before
+// they are returned, and a tree that cannot be read is simply left out.
+func (a *App) contextPieces(sw aiContextSettings, st RunState) (lastRun, tree string) {
+	if sw.RunResults {
+		lastRun = redactCredentials(summarizeRun(st))
+	}
+	if sw.WidgetTree {
+		if t, err := fetchTree(a); err == nil {
+			tree = redactTree(t)
+		}
+	}
+	return lastRun, tree
 }
 
 // Chat sends a multi-turn conversation to the Claude API and returns the assistant reply together with token usage for
@@ -127,7 +152,8 @@ func (a *App) Chat(messages []ChatMessage, fileContent string) (ChatResponse, er
 	if apiKey == "" {
 		return ChatResponse{}, errNoAPIKey
 	}
-	system := chatBasePrompt + chatContext(fileContent, summarizeRun(a.track.snapshot()), a.widgetTreeForChat())
+	lastRun, tree := a.contextPieces(contextSwitches(a), a.track.snapshot())
+	system := chatBasePrompt + chatContext(fileContent, lastRun, tree)
 	msgs := make([]claudeMessage, len(messages))
 	for i, m := range messages {
 		msgs[i] = claudeMessage{Role: m.Role, Content: m.Content}
@@ -246,13 +272,18 @@ func (a *App) SuggestSelectorFix(fileContent string) (SelectorFix, error) {
 	if apiKey == "" {
 		return SelectorFix{}, errNoAPIKey
 	}
+	sw := contextSwitches(a)
+	if !sw.RunResults {
+		return SelectorFix{}, fmt.Errorf("suggesting a selector fix needs the last run: turn on 'Include run results and the screen in AI chat context' in the workspace settings")
+	}
 	st := a.track.snapshot()
 	step, ok := lastFailedStep(st)
 	if !ok {
 		return SelectorFix{}, fmt.Errorf("the last run has no failed step: run the test first")
 	}
-	prompt := fmt.Sprintf("The step below failed.\n\nTest %q, line %d: %s\nError: %s", step.Test, step.Line, step.Description, step.Error)
-	system := selectorFixPrompt + chatContext(fileContent, summarizeRun(st), a.widgetTreeForChat())
+	prompt := fmt.Sprintf("The step below failed.\n\nTest %q, line %d: %s\nError: %s", step.Test, step.Line, step.Description, redactCredentials(step.Error))
+	lastRun, tree := a.contextPieces(sw, st)
+	system := selectorFixPrompt + chatContext(fileContent, lastRun, tree)
 	resp, err := callClaude(apiKey, system, []claudeMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		return SelectorFix{}, err

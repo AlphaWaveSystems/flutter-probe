@@ -39,10 +39,15 @@ func newFakeProvider(t *testing.T, status int, reply string) *fakeProvider {
 // useProvider points the chat at the fake provider and gives it the key ("" for none). It restores both after the test.
 func useProvider(t *testing.T, f *fakeProvider, key string) {
 	t.Helper()
-	prevEndpoint, prevLookup := chatEndpoint, apiKeyLookup
-	t.Cleanup(func() { chatEndpoint, apiKeyLookup = prevEndpoint, prevLookup })
+	prevEndpoint, prevLookup, prevSwitches, prevTree := chatEndpoint, apiKeyLookup, contextSwitches, fetchTree
+	t.Cleanup(func() {
+		chatEndpoint, apiKeyLookup, contextSwitches, fetchTree = prevEndpoint, prevLookup, prevSwitches, prevTree
+	})
 	chatEndpoint = f.srv.URL
 	apiKeyLookup = func() (string, error) { return key, nil }
+	// These tests predate the workspace switches and expect the last run in the prompt. The switches themselves are tested
+	// against real probe.yaml files in ai_settings_test.go.
+	contextSwitches = func(*App) aiContextSettings { return aiContextSettings{RunResults: true} }
 }
 
 // sentRequest is the part of the request body the tests read back.

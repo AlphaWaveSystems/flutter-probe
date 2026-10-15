@@ -227,6 +227,17 @@ Opt-in report upload to the hosted service (Probe Cloud, preview). Unrelated to 
 | `label` | string | empty | Label for this upload (suite, shard or matrix leg); needed when one CI job uploads more than once |
 | `timeout` | duration | `5s` | Upload time limit; an upload never fails the run |
 
+### studio
+
+Settings for Probe Studio. The CLI ignores this section.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ai_context.run_results` | bool | `false` | Let the Studio AI chat send the failures of the last run to the AI provider with each message |
+| `ai_context.widget_tree` | bool | `false` | Let the Studio AI chat send the connected device's widget tree; obscured fields and credential-looking text are redacted first |
+
+Both are off unless set. While either is on, Studio shows a line above the chat input saying what is sent. See [Studio](/tools/studio/).
+
 ### perf
 
 | Key | Type | Default | Description |

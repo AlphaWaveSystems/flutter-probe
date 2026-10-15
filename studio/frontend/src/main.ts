@@ -167,6 +167,9 @@ editor.onDidChangeModelContent(() => {
 
 let currentPath: string | null = null;
 let currentDir = "tests";
+// The workspace root: the folder given to SetWorkspace. The Go side reads its probe.yaml for the chat settings, so the
+// settings overlay and the chat line read the same file. currentDir moves when the file pane is browsed; this does not.
+let workspaceRoot = "";
 let dirty = false;
 
 function setDirty(d: boolean) {
@@ -250,6 +253,7 @@ async function pickWorkspace() {
     if (!path) return;
     localStorage.setItem(WORKSPACE_KEY, path);
     await SetWorkspace(path);
+    workspaceRoot = path;
     refreshFiles(path);
     toast(`Workspace: ${path}`, "success", 1800);
   } catch (err) {
@@ -348,7 +352,7 @@ async function openSettingsOverlay() {
   const form = $("settings-form") as HTMLFormElement;
   overlay.hidden = false;
 
-  if (!currentDir || currentDir === "tests" || currentDir === ".") {
+  if (!workspaceRoot) {
     noWorkspace.hidden = false;
     form.hidden = true;
     return;
@@ -357,11 +361,13 @@ async function openSettingsOverlay() {
   form.hidden = false;
 
   try {
-    const s = await LoadWorkspaceSettings(currentDir);
+    const s = await LoadWorkspaceSettings(workspaceRoot);
     ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
     ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
     ($("settings-ios") as HTMLInputElement).value = s.iosDeviceId ?? "";
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
+    ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
+    ($("settings-ai-widget-tree") as HTMLInputElement).checked = s.aiContextWidgetTree === true;
   } catch (err) {
     toast(`Cannot load settings: ${err}`, "error");
   }
@@ -378,7 +384,7 @@ $("settings-overlay").addEventListener("click", (e) => {
 });
 
 $("btn-settings-save").addEventListener("click", async () => {
-  if (!currentDir) return;
+  if (!workspaceRoot) return;
   const portRaw = ($("settings-port") as HTMLInputElement).value.trim();
   const port = portRaw === "" ? 0 : Number(portRaw);
   if (Number.isNaN(port)) {
@@ -390,10 +396,13 @@ $("btn-settings-save").addEventListener("click", async () => {
     defaultsTimeout: ($("settings-timeout") as HTMLInputElement).value.trim(),
     iosDeviceId: ($("settings-ios") as HTMLInputElement).value.trim(),
     androidDeviceId: ($("settings-android") as HTMLInputElement).value.trim(),
+    aiContextRunResults: ($("settings-ai-run-results") as HTMLInputElement).checked,
+    aiContextWidgetTree: ($("settings-ai-widget-tree") as HTMLInputElement).checked,
   });
   try {
-    await SaveWorkspaceSettings(currentDir, settings);
-    toast(`Saved probe.yaml in ${currentDir}`, "success", 2200);
+    await SaveWorkspaceSettings(workspaceRoot, settings);
+    void updateChatContextNote();
+    toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
     closeSettingsOverlay();
   } catch (err) {
     toast(`Save failed: ${err}`, "error");
@@ -1114,6 +1123,7 @@ initDeviceSettings();
   if (ws) {
     localStorage.setItem(WORKSPACE_KEY, ws);
     await SetWorkspace(ws);
+    workspaceRoot = ws;
     refreshFiles(ws);
   } else {
     refreshFiles();
@@ -1150,6 +1160,7 @@ function showChatPane(visible: boolean) {
   chatVisible = visible;
   $("chat-pane").hidden = !visible;
   $("btn-ai-toggle").classList.toggle("btn-active", visible);
+  if (visible) void updateChatContextNote();
 }
 
 function updateCostDisplay() {
@@ -1176,6 +1187,32 @@ function appendChatMessage(role: "user" | "assistant" | "system", text: string) 
   container.scrollTop = container.scrollHeight;
 }
 
+// contextNoteText is the line shown above the chat input while the workspace switches send more than the open file.
+function contextNoteText(runResults: boolean, widgetTree: boolean): string {
+  if (runResults && widgetTree) return "Sending the last run and the screen to the AI provider";
+  if (runResults) return "Sending the last run to the AI provider";
+  if (widgetTree) return "Sending the screen to the AI provider";
+  return "";
+}
+
+// updateChatContextNote shows that line when the workspace settings send the last run or the screen. It reads the same
+// probe.yaml switches the Go side reads, so the line shows exactly when those parts go to the provider. If the settings
+// cannot be read, the line stays hidden and the Go side sends nothing beyond the open file.
+async function updateChatContextNote(): Promise<void> {
+  const note = $("chat-context-note");
+  let text = "";
+  if (workspaceRoot) {
+    try {
+      const s = await LoadWorkspaceSettings(workspaceRoot);
+      text = contextNoteText(s.aiContextRunResults === true, s.aiContextWidgetTree === true);
+    } catch {
+      text = "";
+    }
+  }
+  note.textContent = text;
+  note.hidden = text === "";
+}
+
 async function sendChat() {
   const input = $("chat-input") as HTMLTextAreaElement;
   const text = input.value.trim();
@@ -1188,6 +1225,7 @@ async function sendChat() {
   chatHistory.push({ role: "user", content: text });
   appendChatMessage("user", text);
 
+  await updateChatContextNote();
   const fileContent = model.getValue();
 
   try {
