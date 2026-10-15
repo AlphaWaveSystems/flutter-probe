@@ -27,7 +27,7 @@ workflows:
     - git::https://github.com/<owner>/<repo>.git@main:
         title: FlutterProbe tests
         inputs:
-        - probe_version: "0.25.2"
+        - probe_version: "0.26.0"
         - tests: tests/
         - device: "$SIMULATOR_UDID"
 ```
@@ -38,7 +38,7 @@ workflows:
 
 | Input | Default | Meaning |
 |---|---|---|
-| `probe_version` | `latest` | CLI version, like `0.25.2`. Pin one in CI. |
+| `probe_version` | `latest` | CLI version, like `0.26.0`. Pin one in CI. |
 | `tests` | `tests/` | Files or folders, separated by spaces. |
 | `device` | empty | Device id; empty if one device is connected. |
 | `junit_path` | `$BITRISE_DEPLOY_DIR/probe-junit.xml` | Where the JUnit report is written. |

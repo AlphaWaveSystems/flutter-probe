@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: 'CLI version to install, like 0.25.2, or "latest". Pin a version in CI.'
+    description: 'CLI version to install, like 0.26.0, or "latest". Pin a version in CI.'
     required: false
     default: 'latest'
   run-tests:
