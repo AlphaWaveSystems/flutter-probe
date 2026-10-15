@@ -553,3 +553,12 @@ kbd {
 }
 
 .btn-active { background: var(--brand-strong); border-color: var(--brand-strong); color: white; }
+
+/* Device settings panel (device pane header "Settings"). */
+.device-settings { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2); font-size: 12px; max-height: 45%; overflow: auto; flex-shrink: 0; }
+.device-settings[hidden] { display: none; }
+.ds-head { font-weight: 600; margin-bottom: 6px; }
+.ds-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.ds-label { width: 96px; color: var(--fg-dim); flex-shrink: 0; }
+.ds-input { flex: 1; min-width: 0; background: var(--bg-1); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 12px; }
+.ds-note { color: var(--fg-muted); font-size: 11px; margin: 2px 0 4px 102px; }

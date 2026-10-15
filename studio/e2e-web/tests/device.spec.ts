@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { app, connect, disconnect, openPath, openStudio, simName, udid, workspace } from "./helpers";
 
@@ -8,6 +9,28 @@ test.describe("Studio with a device", () => {
 
   test.afterEach(async ({ page }) => {
     await disconnect(page);
+  });
+
+  test("37 the settings panel changes the simulator's appearance and font size", async ({ page }) => {
+    const sim = (what: string) => execFileSync("xcrun", ["simctl", "ui", udid, what], { encoding: "utf8" }).trim();
+    try {
+      await openStudio(page);
+      await connect(page);
+      await page.click("#btn-device-settings");
+      await expect(page.locator("#device-settings")).toContainText(simName);
+      // iOS has no orientation control; appearance, font size, language and link are offered.
+      await expect(page.locator("#ds-apply-orientation")).toHaveCount(0);
+      await page.selectOption("#ds-appearance", "dark");
+      await page.click("#ds-apply-appearance");
+      await expect.poll(() => sim("appearance"), { timeout: 15_000 }).toBe("dark");
+      await page.selectOption("#ds-font_scale", "accessibility-large");
+      await page.click("#ds-apply-font_scale");
+      await expect.poll(() => sim("content_size"), { timeout: 15_000 }).toBe("accessibility-large");
+    } finally {
+      // Put the simulator back whatever happened.
+      execFileSync("xcrun", ["simctl", "ui", udid, "appearance", "light"]);
+      execFileSync("xcrun", ["simctl", "ui", udid, "content_size", "medium"]);
+    }
   });
 
   test("10 the device picker lists the named simulator", async ({ page }) => {

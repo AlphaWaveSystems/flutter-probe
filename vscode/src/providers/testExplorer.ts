@@ -269,8 +269,8 @@ export class TestExplorerProvider implements vscode.TreeDataProvider<TestTreeIte
   }
 
   private runTest(test: TestDefinition): void {
+    // probe test has no per-test filter in this version: this runs the file that holds the test.
     const args = buildTestArgs(test.file, { autoConfirm: true });
-    args.push('--name', test.name);
     runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
   }
 

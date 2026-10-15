@@ -80,20 +80,19 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(deviceStatusItem);
 }
 
-function runTestOnDevice(filePath: string, testName: string, session: Session): void {
+// probe test has no per-test filter in this version: these run the file that holds the test.
+function runTestOnDevice(filePath: string, session: Session): void {
   const args = buildTestArgs(filePath, {
     device: session.device.serial,
     port: session.port,
     config: session.config,
     autoConfirm: true,
   });
-  args.push('--name', testName);
   runInTerminal(`Probe: ${session.name}`, getProbeCommand(), args, getWorkspaceRoot());
 }
 
-function runTestVerbose(filePath: string, testName: string): void {
+function runTestVerbose(filePath: string): void {
   const args = buildTestArgs(filePath, { verbose: true });
-  args.push('--name', testName);
   runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
 }
 
