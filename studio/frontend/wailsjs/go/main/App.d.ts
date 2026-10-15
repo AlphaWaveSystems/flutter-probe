@@ -60,6 +60,8 @@ export function StopRecording():Promise<string>;
 
 export function StopWiFiDiscovery():Promise<void>;
 
+export function SuggestSelectorFix(arg1:string):Promise<main.SelectorFix>;
+
 export function TakeScreenshot():Promise<string>;
 
 export function TestWiFi(arg1:string,arg2:number,arg3:string):Promise<string>;

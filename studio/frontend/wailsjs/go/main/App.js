@@ -118,6 +118,10 @@ export function StopWiFiDiscovery() {
   return window['go']['main']['App']['StopWiFiDiscovery']();
 }
 
+export function SuggestSelectorFix(arg1) {
+  return window['go']['main']['App']['SuggestSelectorFix'](arg1);
+}
+
 export function TakeScreenshot() {
   return window['go']['main']['App']['TakeScreenshot']();
 }
