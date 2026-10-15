@@ -29,7 +29,7 @@ tests. Annotations:
 # pubspec.yaml
 dependencies:
   flutter_probe_annotation: ^0.9.6
-  flutter_probe_agent: ^0.25.0
+  flutter_probe_agent: ^0.26.0
 
 dev_dependencies:
   flutter_probe_gen: ^0.9.6
