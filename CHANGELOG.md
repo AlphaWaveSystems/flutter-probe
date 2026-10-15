@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Studio: a Settings panel in the device pane header** changes dark mode, font size, app language, orientation (Android) and opens a deep link on the connected emulator or simulator, through the same code as `probe device set`. It acts only on the connected device and says why it is unavailable for WiFi connections and physical iPhones. Browser tests 26, 27 and 37 cover it (37 on a named simulator, reading each setting back).
 - **`probe device set` and the `set_device_setting` MCP tool change an OS setting of one named emulator or simulator**: appearance (dark mode), font scale, app language, orientation (Android) and opening a deep link, through `adb` and `simctl`. The device must be named (a serial, UDID or unique name, never `booted`), every value is checked before a command runs, and physical iOS devices are refused. Checked against an Android 15 emulator and an iOS simulator. The MCP server now has 36 tools.
 
 ## [0.26.0] - 2026-10-14

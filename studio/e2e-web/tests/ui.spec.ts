@@ -244,4 +244,21 @@ test.describe("Studio UI (no device needed)", () => {
     await app(page, "SetWorkspace", workspace);
     expect(await app<{ connected: boolean }>(page, "Status")).toMatchObject({ connected: false });
   });
+
+  test("26 the device settings panel opens and says to connect a device first", async ({ page }) => {
+    await openStudio(page);
+    await expect(page.locator("#device-settings")).toBeHidden();
+    await page.click("#btn-device-settings");
+    await expect(page.locator("#device-settings")).toBeVisible();
+    await expect(page.locator("#device-settings")).toContainText("Connect a simulator or emulator first");
+    await expect(page.locator("#ds-apply-appearance")).toHaveCount(0);
+    await page.click("#btn-device-settings");
+    await expect(page.locator("#device-settings")).toBeHidden();
+  });
+
+  test("27 ApplyDeviceSetting without a connection is refused", async ({ page }) => {
+    await openStudio(page);
+    await page.waitForFunction(() => (window as any).__headlessEventsReady);
+    await expect(app(page, "ApplyDeviceSetting", "appearance", "dark", "")).rejects.toThrow();
+  });
 });
