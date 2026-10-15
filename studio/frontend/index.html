@@ -117,6 +117,7 @@
         </span>
       </div>
       <div id="chat-messages" class="chat-messages"></div>
+      <div id="chat-context-note" class="chat-context-note" hidden></div>
       <div class="chat-input-row">
         <textarea
           id="chat-input"
@@ -161,6 +162,12 @@
             <span>Preferred Android serial</span>
             <input id="settings-android" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
           </label>
+          <fieldset class="settings-ai">
+            <legend>AI chat context</legend>
+            <label class="settings-check"><input id="settings-ai-run-results" type="checkbox" /> Include the last run's failures</label>
+            <label class="settings-check"><input id="settings-ai-widget-tree" type="checkbox" /> Include the screen (widget tree)</label>
+            <p class="dim">Off by default. When on, the chat sends the chosen parts to the AI provider with every message you send.</p>
+          </fieldset>
           <div class="settings-actions">
             <button type="button" id="btn-settings-save" class="btn btn-primary">Save</button>
           </div>

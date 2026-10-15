@@ -158,7 +158,7 @@ wails build
 
 - No multi-device side-by-side view.
 - No per-step replay / time-travel debugging — see the Results pane for pass/fail, but stack inspection requires re-running.
-- The AI chat pane talks to the Anthropic API only, with your own key stored in the OS keychain. It is not exposed through the automation endpoint or the MCP server; use the standalone `probe-mcp` binary with Claude Desktop or Cursor for MCP-driven work.
+- The AI chat pane talks to the Anthropic API only, with your own key stored in the OS keychain. Each message sends the open file. The failures of the last run and the connected device's widget tree are sent only when you turn them on, under **AI chat context** in Workspace settings, or in `probe.yaml` under `studio.ai_context` (`run_results` and `widget_tree`). **Both default to off**: until you change them, the chat sends only the open file. When either is on, a line above the chat input says what is sent. Before the widget tree is sent, obscured fields and credential-looking text (API keys such as `sk-…`, GitHub tokens such as `ghp_…`, `Bearer` values, and long hex or base64 runs) are redacted. Each part is cut to a size limit and marked when it is cut. The chat is not exposed through the automation endpoint or the MCP server; use the standalone `probe-mcp` binary with Claude Desktop or Cursor for MCP-driven work.
 
 ## Configuration
 

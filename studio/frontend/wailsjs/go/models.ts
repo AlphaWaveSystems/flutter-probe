@@ -366,6 +366,8 @@ export namespace main {
 	    defaultsTimeout: string;
 	    iosDeviceId: string;
 	    androidDeviceId: string;
+	    aiContextRunResults: boolean;
+	    aiContextWidgetTree: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorkspaceSettings(source);
@@ -377,6 +379,8 @@ export namespace main {
 	        this.defaultsTimeout = source["defaultsTimeout"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
+        this.aiContextRunResults = source["aiContextRunResults"];
+        this.aiContextWidgetTree = source["aiContextWidgetTree"];
 	    }
 	}
 
