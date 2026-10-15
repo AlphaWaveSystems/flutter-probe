@@ -28,6 +28,7 @@ When the service is live, an upload from a workflow needs:
 - a license key with the Probe Cloud plan, from your CI secret store as `PROBE_LICENSE_KEY` (we send it to you when your access starts);
 - `permissions: { id-token: write, contents: read }` on the job, so the CLI can send the job's identity token;
 - `--upload-report` on `probe test` (or `hosted.upload_report: true` in `probe.yaml`).
+- `--upload-local` on `probe test`, for one run on a local simulator, emulator or device. It is unverified evidence, and it needs a team that has enabled local uploads. See [Probe Cloud (preview)](/tools/probe-cloud-preview/).
 
 Two uploads from one job need different `--upload-label` values. An upload never fails your run: any problem is a warning.
 
