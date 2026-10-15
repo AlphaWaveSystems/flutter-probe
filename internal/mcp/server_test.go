@@ -75,7 +75,7 @@ func TestToolsList(t *testing.T) {
 
 	want := []string{
 		// device lifecycle
-		"list_devices", "list_simulators", "list_avds", "start_device", "shutdown_device",
+		"list_devices", "list_simulators", "list_avds", "start_device", "shutdown_device", "set_device_setting",
 		// authoring & execution
 		"get_widget_tree", "read_test", "write_test", "run_script", "run_tests",
 		"list_files", "lint", "migrate_maestro", "take_screenshot",

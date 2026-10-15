@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **VS Code: tests in the native Testing view.** Each `test "<name>"` block in a `.probe` file appears in VS Code's Testing view, with a run button next to it and in the editor gutter. A run executes the file with `probe test --yes --format json` and reports each selected test's pass or fail from the CLI's report. The CLI has no per-test filter yet, so a run executes the whole file. The Tests sidebar is unchanged.
+- **`probe device set` and the `set_device_setting` MCP tool change an OS setting of one named emulator or simulator**: appearance (dark mode), font scale, app language, orientation (Android) and opening a deep link, through `adb` and `simctl`. The device must be named (a serial, UDID or unique name, never `booted`), every value is checked before a command runs, and physical iOS devices are refused. Checked against an Android 15 emulator and an iOS simulator. The MCP server now has 36 tools.
 
 ## [0.26.0] - 2026-10-14
 
