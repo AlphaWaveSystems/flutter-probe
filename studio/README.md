@@ -158,7 +158,10 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
   simulator); not started
 - Multi-device side-by-side
 - Time-travel widget tree per step
-- AI chat pane (spawns `probe-mcp` and proxies)
+
+## AI chat
+
+The ✦ pane (⌘⇧A) chats with Claude through the Anthropic API, using your own key from the OS keychain. Each message sends the open file. The last run's failures and the device's widget tree are sent only when you turn them on under AI chat context (`studio.ai_context` in `probe.yaml`; both are off by default). After a failed run, **Suggest fix** in the Results pane asks for one replacement line; nothing is written to the file. Details: https://flutterprobe.dev/tools/studio/
 
 ## Testing Studio
 
