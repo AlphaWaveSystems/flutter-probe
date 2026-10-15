@@ -136,6 +136,20 @@ var tools = []mcpTool{
 			},
 		},
 	},
+	{
+		Name:        "set_device_setting",
+		Description: "Change an OS setting of one named emulator or simulator: appearance (dark mode), font_scale, locale (app language, needs app), orientation (Android only) or open_url (a deep link). The device must be named (serial, UDID or unique name; never \"booted\"). Values are checked before anything runs. iOS simulators and Android emulators only; use list_devices to find the device.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"device", "setting", "value"},
+			Properties: map[string]mcpProp{
+				"device":  {Type: "string", Description: "Serial, UDID or unique name of the device"},
+				"setting": {Type: "string", Description: "appearance | font_scale | locale | orientation | open_url"},
+				"value":   {Type: "string", Description: "appearance: light|dark (Android also auto); font_scale: Android factor like 1.3, iOS category like accessibility-large; locale: tag like de-DE; orientation: portrait|landscape|reverse-portrait|reverse-landscape; open_url: a link such as myapp://item/1"},
+				"app":     {Type: "string", Description: "Application id (Android) or bundle id (iOS); required for locale, optional for open_url on Android"},
+			},
+		},
+	},
 	// ---- Widget tree & file I/O ----
 	{
 		Name:        "get_widget_tree",
@@ -583,6 +597,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.startDevice(req.ID, params.Arguments)
 	case "shutdown_device":
 		return s.shutdownDevice(req.ID, args["udid"], args["serial"])
+	case "set_device_setting":
+		return s.runProbeArgs(req.ID, setDeviceSettingArgs(args)...)
 	case "get_widget_tree":
 		return s.getWidgetTree(req.ID, args["device"])
 	case "read_test":
@@ -776,6 +792,16 @@ func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
 }
 
 // runProbeArgs runs the probe binary with exactly these arguments and returns its output.
+// setDeviceSettingArgs builds the `probe device set` command line. "--" ends flag parsing, so a value that starts with
+// "-" is data and never a flag.
+func setDeviceSettingArgs(args map[string]string) []string {
+	cmdArgs := []string{"device", "set", "--device", args["device"]}
+	if args["app"] != "" {
+		cmdArgs = append(cmdArgs, "--app", args["app"])
+	}
+	return append(cmdArgs, "--", args["setting"], args["value"])
+}
+
 func (s *Server) runProbeArgs(id any, args ...string) *mcpResponse {
 	cmd := exec.Command(probeBin(), args...)
 	cmd.Env = os.Environ()

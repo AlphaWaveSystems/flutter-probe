@@ -125,13 +125,14 @@ studio/
 
 ## v0.7.0 MVP scope
 
-- Editor pane with Monaco + ProbeScript syntax highlighting
+- Editor pane with Monaco + ProbeScript syntax highlighting, completions, hover help and snippets (generated from the ProbeScript docs by `npm run gen:probescript`; `npm run check:probescript` checks the generated module is current)
 - Device pane: a read-only view fed by repeated screenshot + widget-tree requests to the
   on-device agent (about 13 to 14 frames per second on an idle fixture app on an Apple M5 Max,
   see the Studio docs page for the method; Flutter layer only, no system UI). It does not
   forward clicks: the agent has no coordinate tap, so the pane cannot tap or type
 - Optional shared device view (`PROBE_STUDIO_DEVICE_VIEW=1`): the pane draws a loopback hub's frames with the shared
   component and relays tap, swipe, typing, hover and Alt+click selection to the app, "+ tap" writes a tap step for the selected element at the editor cursor, and the header says when the device is view-only; off by default
+- Device settings panel ("Settings" in the device pane header): dark mode, font size, app language, orientation (Android) and deep links for the connected emulator or simulator, through `internal/devsettings`
 - Recorder: records taps made on the device itself into ProbeScript lines
 - Lint markers (live, on every edit)
 - "Run all" button → results timeline driven by in-process runner

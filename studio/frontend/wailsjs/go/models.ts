@@ -1,3 +1,28 @@
+export namespace devsettings {
+	
+	export class Capability {
+	    setting: string;
+	    label: string;
+	    choices?: string[];
+	    needsApp?: boolean;
+	    note?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Capability(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.setting = source["setting"];
+	        this.label = source["label"];
+	        this.choices = source["choices"];
+	        this.needsApp = source["needsApp"];
+	        this.note = source["note"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class ChatMessage {
@@ -79,6 +104,46 @@ export namespace main {
 	        this.model = source["model"];
 	        this.hint = source["hint"];
 	    }
+	}
+	export class DeviceSettingsInfo {
+	    available: boolean;
+	    reason?: string;
+	    deviceName?: string;
+	    platform?: string;
+	    app?: string;
+	    capabilities?: devsettings.Capability[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceSettingsInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.reason = source["reason"];
+	        this.deviceName = source["deviceName"];
+	        this.platform = source["platform"];
+	        this.app = source["app"];
+	        this.capabilities = this.convertValues(source["capabilities"], devsettings.Capability);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class DeviceViewInfo {
 	    enabled: boolean;

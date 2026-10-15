@@ -613,11 +613,11 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 31 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 36 tools:
 
 | Category | Tools |
 |---|---|
-| Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device` |
+| Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device`, `set_device_setting` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
 | Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
 | Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree`, `studio_ui_state` (read-only: the inspector's tree, and the connection and run state) (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
@@ -645,7 +645,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 35 tools appear in Claude.
+4. Done — all 36 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 
@@ -880,7 +880,7 @@ Install from source (`vscode/`) for:
 - CodeLens **Run** buttons above every `test` block
 - Run by tag, run with options, auto-lint on save
 - Session Manager — configure and run across multiple devices simultaneously
-- Test Explorer sidebar
+- Test Explorer sidebar and the VS Code Testing view
 - Integrated recording and Studio launcher
 
 ## Configuration (`probe.yaml`)
