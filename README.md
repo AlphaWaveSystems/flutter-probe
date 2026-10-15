@@ -880,7 +880,7 @@ Install from source (`vscode/`) for:
 - CodeLens **Run** buttons above every `test` block
 - Run by tag, run with options, auto-lint on save
 - Session Manager — configure and run across multiple devices simultaneously
-- Test Explorer sidebar
+- Test Explorer sidebar and the VS Code Testing view
 - Integrated recording and Studio launcher
 
 ## Configuration (`probe.yaml`)

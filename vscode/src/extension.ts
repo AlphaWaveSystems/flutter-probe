@@ -10,6 +10,7 @@ import { registerConvertCommands } from './commands/convert';
 import { registerDeviceViewCommands, disposeDeviceView } from './commands/deviceView';
 import { SessionManagerProvider } from './providers/sessionManager';
 import { TestExplorerProvider } from './providers/testExplorer';
+import { registerTestingController } from './testing/testController';
 import { ProbeCodeLensProvider } from './providers/codelens';
 import { DiagnosticsProvider } from './providers/diagnostics';
 import { ProbeCompletionProvider } from './providers/completions';
@@ -39,6 +40,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // Test Explorer sidebar
   const testExplorer = new TestExplorerProvider(context);
   vscode.window.registerTreeDataProvider('flutterprobe.tests', testExplorer);
+
+  // Native Testing view (VS Code Testing API), over the same discovery of .probe tests
+  registerTestingController(context);
 
   // CodeLens
   const codeLensProvider = new ProbeCodeLensProvider(sessionManager);

@@ -31,6 +31,10 @@ Quick-insert common patterns:
 | `repeat` | Loop block |
 | `examples` | Data-driven examples block |
 
+### Testing view
+
+Tests in `.probe` files appear in VS Code's Testing view, with a run button next to each test and in the editor gutter. A run executes the file with `probe test --yes --format json` and reports each selected test's pass or fail from the CLI's report. The CLI has no per-test filter in this version, so a run executes the whole file. The Tests sidebar is unchanged.
+
 ### Commands
 
 Access via the Command Palette (`Cmd+Shift+P`):
