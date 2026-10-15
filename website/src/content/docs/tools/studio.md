@@ -127,6 +127,14 @@ Start Studio with `PROBE_STUDIO_DEVICE_VIEW=1` and the device pane uses the same
 
 The pane header says what the device supports: "view only" when the agent has no input calls (an older `flutter_probe_agent`; taps, swipes and typing are off) and "no element select" when it cannot hit-test (hover and Alt+click are off); hover the label for the reason. The inspector text refreshes every 1.5 seconds in this mode (it is no longer bundled with each frame). If another window takes the view over (a second connection replaces the first), the pane shows "taken over" and a Reconnect button; it never reconnects by itself. Without the variable nothing changes: the old loop runs and no hub is started. The protocol is in `docs/studio-device-protocol.md`; this mode is a preview until it has run on a physical phone.
 
+## Device settings
+
+The **Settings** button in the device pane header opens a panel that changes OS-level settings of the connected emulator or simulator, so you can see a screen in dark mode, with a large font or in another language without leaving Studio:
+
+- **Appearance** (light, dark; auto on Android), **font size** (an iOS content size category, or an Android factor such as 1.3), **app language** (needs the app id, which defaults to `project.app` in `probe.yaml`; the app restarts on iOS), **orientation** (Android only; iOS simulators have no command-line rotate) and **open link** (a deep link, delivered to the app when it claims the scheme).
+- It always acts on the device Studio is connected to; there is no way to name another one. WiFi connections and physical iPhones are not supported (the panel says why), because the changes go through `adb` and `simctl`.
+- Settings stay on the device until you change them back. The same operations are available from the command line (`probe device set`) and to AI clients (`set_device_setting`).
+
 ## Build from source
 
 ```bash

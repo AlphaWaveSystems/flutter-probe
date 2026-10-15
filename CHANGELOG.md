@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **VS Code: tests in the native Testing view.** Each `test "<name>"` block in a `.probe` file appears in VS Code's Testing view, with a run button next to it and in the editor gutter. A run executes the file with `probe test --yes --format json` and reports each selected test's pass or fail from the CLI's report. The CLI has no per-test filter yet, so a run executes the whole file. The Tests sidebar is unchanged.
+- **Studio: a Settings panel in the device pane header** changes dark mode, font size, app language, orientation (Android) and opens a deep link on the connected emulator or simulator, through the same code as `probe device set`. It acts only on the connected device and says why it is unavailable for WiFi connections and physical iPhones. Browser tests 26, 27 and 37 cover it (37 on a named simulator, reading each setting back).
 - **`probe device set` and the `set_device_setting` MCP tool change an OS setting of one named emulator or simulator**: appearance (dark mode), font scale, app language, orientation (Android) and opening a deep link, through `adb` and `simctl`. The device must be named (a serial, UDID or unique name, never `booted`), every value is checked before a command runs, and physical iOS devices are refused. Checked against an Android 15 emulator and an iOS simulator. The MCP server now has 36 tools.
+
+### Fixed
+- **VS Code: the Run Test commands no longer pass `--name` to `probe test`.** This version of the CLI defines no such flag, so those runs failed with an unknown-flag error. "FlutterProbe: Run Test File at Cursor", the CodeLens buttons and the Tests view now run the file that contains the test, and their titles and tooltips say so. Until the CLI has a per-test filter, the extension runs whole files.
 
 ## [0.26.0] - 2026-10-14
 
