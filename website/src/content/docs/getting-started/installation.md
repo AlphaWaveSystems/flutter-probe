@@ -83,7 +83,7 @@ Before a stable release, pre-release builds named `vX.Y.Z-next.N` are published 
 # CLI via Homebrew (cannot be installed next to the stable "probe" formula)
 brew uninstall probe          # only if the stable formula is installed
 brew install AlphaWaveSystems/tap/probe@next
-probe version                 # prints e.g. 0.25.2-next.1
+probe version                 # prints e.g. 0.26.0-next.1
 
 # or download the binary from the pre-release page
 # https://github.com/AlphaWaveSystems/flutter-probe/releases (pick the vX.Y.Z-next.N entry)
@@ -98,7 +98,7 @@ dev_dependencies:
   flutter_probe_agent:
     git:
       url: https://github.com/AlphaWaveSystems/flutter-probe.git
-      ref: v0.25.2-next.1      # the canary tag
+      ref: v0.26.0-next.1      # the canary tag
       path: probe_agent
 ```
 
@@ -110,7 +110,7 @@ Add `flutter_probe_agent` to your Flutter app's `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.25.0
+  flutter_probe_agent: ^0.26.0
 ```
 
 Initialize in your `main.dart`:

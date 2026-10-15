@@ -24,7 +24,7 @@ jobs:
       # Installs the CLI only: the tests must run while the emulator is up, inside the next step.
       - uses: <owner>/<repo>@v1
         with:
-          version: '0.25.2'
+          version: '0.26.0'
           run-tests: 'false'
 
       - name: Enable KVM

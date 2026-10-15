@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.26.0 - 2026-10-14
+
 - Added: device view methods, all additive and for debug or profile builds only: `probe.tap_at`, `probe.long_press_at`, `probe.swipe_at` (pointer events at logical coordinates), `probe.type_text` (inserts into the focused field), `probe.hit_test` (the widget at a point), `probe.dump_tree` with `bounds: true` (nodes with logical-pixel bounds), and `scale` on `probe.screenshot` (the reply also carries `width`, `height`, `logicalWidth`, `logicalHeight` and `dpr`). An older CLI never sends them.
 - Added: `probe.screenshot` accepts `inline: true`. The image is returned in the answer only and the agent deletes its temporary copy, so a client that asks for frames several times a second (Studio's live view) no longer leaves thousands of PNGs in the device's temp directory. Without the flag the answer is unchanged, and an older agent ignores the flag.
 

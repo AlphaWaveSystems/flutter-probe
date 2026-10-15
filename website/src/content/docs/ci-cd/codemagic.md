@@ -16,7 +16,7 @@ workflows:
     environment:
       flutter: stable
       vars:
-        PROBE_VERSION: "0.25.2"            # pin a CLI version
+        PROBE_VERSION: "0.26.0"            # pin a CLI version
         APP_ID: com.example.myapp          # your bundle id
     scripts:
       - name: Install the FlutterProbe CLI
