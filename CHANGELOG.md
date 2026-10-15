@@ -6,10 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **VS Code: tests in the native Testing view.** Each `test "<name>"` block in a `.probe` file appears in VS Code's Testing view, with a run button next to it and in the editor gutter. A run executes the file with `probe test --yes --format json` and reports each selected test's pass or fail from the CLI's report. The CLI has no per-test filter yet, so a run executes the whole file. The Tests sidebar is unchanged.
+
 ## [0.26.0] - 2026-10-14
 
 ### Added
-- **VS Code: tests in the native Testing view.** Each `test "<name>"` block in a `.probe` file appears in VS Code's Testing view, with a run button next to it and in the editor gutter. A run executes the file with `probe test --yes --format json` and reports each selected test's pass or fail from the CLI's report. The CLI has no per-test filter yet, so a run executes the whole file. The Tests sidebar is unchanged.
 - **Studio's device pane header says what the device view can do**: "view only" when the agent has no input calls (older `flutter_probe_agent`) and "no element select" when it cannot hit-test, with the reason in the tooltip. Before, a read-only view looked like a broken one.
 - **Studio: "+ tap" in the device pane header writes a `tap` step for the element selected with Alt+click at the editor cursor** (shared device view, preview). The step uses the same escaped selector as the clipboard copy; a selection with control characters is refused. Browser test 36 covers it.
 - **`probe lint` warns about count and zero-state text checks** (warning only; the exit status is unchanged). A `see` or `wait until ... appears` on text such as "0 items", "3 items" or "No items", with no `matching` pattern, also passes on longer text that contains it ("10 items"). The warning suggests the anchored form, `matching "^0 items$"`; a `matching` pattern anchored at both ends (`^...$`) silences it, and any other pattern is still flagged. The text-matching docs and the CLI reference say the same.
