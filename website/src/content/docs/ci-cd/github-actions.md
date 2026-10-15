@@ -45,7 +45,7 @@ jobs:
       - name: Install the probe CLI
         run: |
           sudo curl --fail --silent --show-error --location -o /usr/local/probe \
-            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.25.2/probe-darwin-arm64
+            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.26.0/probe-darwin-arm64
           sudo chmod +x /usr/local/bin/probe
 
       - name: Boot iOS simulator
@@ -93,7 +93,7 @@ jobs:
       - name: Install the probe CLI
         run: |
           sudo curl --fail --silent --show-error --location -o /usr/local/probe \
-            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.25.2/probe-linux-amd64
+            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.26.0/probe-linux-amd64
           sudo chmod +x /usr/local/bin/probe
 
       - name: Enable KVM

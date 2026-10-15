@@ -11,7 +11,7 @@ This directory is self-contained: copy it to the root of a new public repository
 ```yaml
 - uses: <owner>/<repo>@v1
   with:
-    version: '0.25.2'            # pin a version in CI
+    version: '0.26.0'            # pin a version in CI
     device: ${{ steps.sim.outputs.udid }}
     tests: tests/
 ```
@@ -22,7 +22,7 @@ The job must already have a device: an iOS simulator on a macOS runner, or an An
 
 | Input | Default | Meaning |
 |---|---|---|
-| `version` | `latest` | CLI version, like `0.25.2`. Pin one in CI. |
+| `version` | `latest` | CLI version, like `0.26.0`. Pin one in CI. |
 | `run-tests` | `true` | `false` only installs the CLI. |
 | `tests` | `tests/` | Files or folders, separated by spaces. |
 | `device` | empty | Device id; empty if one device is connected. |

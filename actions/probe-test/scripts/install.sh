@@ -2,7 +2,7 @@
 # Installs the FlutterProbe CLI from a GitHub release onto the PATH of the current job, after checking the download
 # against the SHA-256 digest that GitHub publishes for the release asset (the "digest" field of the Releases API).
 #
-# Inputs (environment): PROBE_VERSION (a version like 0.25.2, or "latest"), PROBE_OS (Linux, macOS or Windows),
+# Inputs (environment): PROBE_VERSION (a version like 0.26.0, or "latest"), PROBE_OS (Linux, macOS or Windows),
 # PROBE_ARCH (X64 or ARM64; the values of runner.os and runner.arch), PROBE_INSTALL_DIR (default: $RUNNER_TEMP/probe-bin),
 # GITHUB_TOKEN (optional; raises the API rate limit).
 # PROBE_SKIP_VERIFY=1 skips the check (off by default; do not use it in CI you rely on).
