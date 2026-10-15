@@ -98,6 +98,7 @@ function resetForRun(path: string): void {
   firstStepOfTest = null;
   if (!listEl) return;
   while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+  setSuggestFixVisible(false);
   const li = document.createElement("li");
   li.classList.add("running");
   const dot = document.createElement("span");
@@ -254,12 +255,19 @@ function finishRun(_results: RunResult[]): void {
   }
   openSteps = new Map();
   updateSummary();
+  // A failed test or step is what the Suggest fix button works from.
+  setSuggestFixVisible(listEl.querySelector("li.fail") !== null);
   if (listEl.children.length === 0) {
     const empty = document.createElement("li");
     empty.classList.add("empty");
     empty.textContent = "Run completed with no test results.";
     listEl.appendChild(empty);
   }
+}
+
+function setSuggestFixVisible(visible: boolean): void {
+  const btn = document.getElementById("btn-suggest-fix");
+  if (btn) btn.hidden = !visible;
 }
 
 function updateSummary(): void {

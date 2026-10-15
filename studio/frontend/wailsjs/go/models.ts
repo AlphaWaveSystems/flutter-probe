@@ -361,6 +361,26 @@ export namespace main {
 		}
 	}
 	
+	export class SelectorFix {
+	    suggestion: string;
+	    rationale: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    costUSD: number;
+
+	    static createFrom(source: any = {}) {
+	        return new SelectorFix(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.suggestion = source["suggestion"];
+	        this.rationale = source["rationale"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.costUSD = source["costUSD"];
+	    }
+	}
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;

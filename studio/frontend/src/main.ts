@@ -5,6 +5,7 @@ import { initDeviceStream, onElementSelected, startStream, stopStream } from "./
 import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { initResults, type RunPlan, type RunStep } from "./results";
+import { initSelectorFix } from "./selector-fix";
 import { toast } from "./toast";
 
 import {
@@ -903,6 +904,7 @@ if (inspectorSearch) {
 // ---- Run ----------------------------------------------------------------
 
 initResults();
+initSelectorFix(() => model.getValue());
 
 $("btn-run").addEventListener("click", async () => {
   if (!currentPath || !connected) return;

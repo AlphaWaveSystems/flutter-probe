@@ -315,6 +315,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #results-list li.step .dot { width: 6px; height: 6px; }
 #results-list li.step-err { color: var(--fail); padding-left: 44px; white-space: pre-wrap; }
 
+/* Suggested selector fix: shown under the results, never applied to the file. */
+#results-list li.fix { display: block; padding: 8px 12px; border-top: 1px solid var(--border, rgba(255,255,255,0.08)); }
+#results-list li.fix .fix-head { display: flex; align-items: center; gap: 8px; color: var(--fg-muted); font-size: 11px; }
+#results-list li.fix .fix-head .fix-title { flex: 1; }
+#results-list li.fix .fix-line { display: block; margin: 6px 0; color: var(--fg-strong); white-space: pre-wrap; user-select: text; }
+#results-list li.fix .fix-why { display: block; color: var(--fg-muted); white-space: pre-wrap; font-family: inherit; }
+
 /* Toolbar run progress + cancel */
 #btn-cancel[hidden], #run-progress[hidden] { display: none !important; }
 .run-progress { color: var(--fg-muted); font-size: 12px; font-family: ui-monospace, SF Mono, Menlo, monospace; padding: 0 6px; }
