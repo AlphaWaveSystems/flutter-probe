@@ -377,7 +377,7 @@ func sendWithRetries(ctx context.Context, tr Transport, licenseKey string, body 
 // refusalCodes are the error codes the service answers local uploads with. Longer codes come first, so that bad_local
 // is matched only when no more specific bad_local_* code is in the answer.
 var refusalCodes = []string{
-	"local_repo_not_allowed", "local_not_enabled", "no_entitlement", "too_many_results",
+	"local_repo_not_allowed", "local_not_enabled", "too_many_local_repos", "no_entitlement", "too_many_results", "rate_limited",
 	"bad_local_repository", "bad_local_branch", "bad_local_commit", "bad_local_signer", "bad_local_seq", "bad_local_tree",
 	"bad_local", "ci_and_local", "ci_required",
 }
@@ -404,12 +404,17 @@ func localFailure(err error) error {
 		return errors.New("local uploads are not enabled for this team; ask the team owner")
 	case se.Code == http.StatusForbidden && code == "local_repo_not_allowed":
 		return errors.New("this repository is not registered or allowed for local uploads by your team; ask the team owner")
+	case code == "too_many_local_repos":
+		return errors.New("your team has too many repositories registered for local uploads; ask the team owner to remove one")
+	case se.Code == http.StatusTooManyRequests && code == "rate_limited":
+		return errors.New("local uploads are limited to 20 a minute per license key; still limited after the retry window, so nothing was stored")
 	case se.Code == http.StatusConflict:
 		return errors.New("the service already has a different report under this sequence number; this is a client bug, so the upload is not retried")
+	case code == "too_many_results":
+		// The service answers this with 413, like an oversize body, so the code is matched before the status.
+		return fmt.Errorf("the report has more than %d results, the local upload limit; nothing was stored", MaxLocalResults)
 	case se.Code == http.StatusRequestEntityTooLarge:
 		return fmt.Errorf("the report is over the local upload limit of %d KB; nothing was stored", MaxLocalPayloadBytes/1024)
-	case code == "too_many_results":
-		return fmt.Errorf("the report has more than %d results, the local upload limit; nothing was stored", MaxLocalResults)
 	case strings.HasPrefix(code, "bad_local"):
 		return fmt.Errorf("the service refused a local field (%s); this is a client bug, so the upload is not retried", code)
 	}

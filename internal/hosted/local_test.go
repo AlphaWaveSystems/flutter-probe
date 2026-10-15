@@ -396,7 +396,9 @@ func TestUploadLocalFailuresInPlainWords(t *testing.T) {
 		{name: "repository not allowed", reply: answer(403, `{"error":"local_repo_not_allowed"}`), want: "not registered or allowed for local uploads"},
 		{name: "sequence conflict", reply: answer(409, `{"error":"conflict"}`), want: "different report under this sequence number"},
 		{name: "too large", reply: answer(413, `{"error":"payload_too_large"}`), want: "over the local upload limit of 256 KB"},
-		{name: "too many results", reply: answer(422, `{"error":"too_many_results"}`), want: "more than 2000 results"},
+		{name: "too many results", reply: answer(413, `{"error":"too_many_results"}`), want: "more than 2000 results"},
+		{name: "too many local repositories", reply: answer(422, `{"error":"too_many_local_repos"}`), want: "too many repositories registered for local uploads"},
+		{name: "rate limited", reply: answer(429, `{"error":"rate_limited"}`), want: "limited to 20 a minute per license key"},
 		{name: "client bug", reply: answer(422, `{"error":"bad_local_seq"}`), want: "bad_local_seq"},
 		{name: "unauthorised keeps the server text", reply: answer(401, `{"error":"unauthorised"}`), want: "HTTP 401"},
 	}
