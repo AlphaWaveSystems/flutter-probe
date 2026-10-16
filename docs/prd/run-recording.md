@@ -125,6 +125,11 @@ Edge cases:
 - **Buffer overflow.** The agent keeps 300 exchanges. A gap in `seq` larger than what the recorder
   saw means some exchanges were lost. The manifest and timeline record the gap as `truncated`, with
   its size.
+- **In-flight requests.** The agent returns only finished exchanges. A request still running when
+  its step ends is not lost, and it does not stall the cursor. The cursor stops at the first
+  unfinished `seq`, and a later read returns the exchange. Advancing the cursor to the highest
+  `seq` seen would skip such a request for good, so the cursor never does that. An exchange that
+  finishes after its step ended is marked as such, so the viewer can say so.
 - **Interaction target.** Each step's element is resolved with `SelectorBounds` before the action
   runs, so the timeline can show where a tap landed.
 
