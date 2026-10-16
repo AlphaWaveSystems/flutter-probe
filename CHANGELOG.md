@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Studio: a Settings panel in the device pane header** changes dark mode, font size, app language, orientation (Android) and opens a deep link on the connected emulator or simulator, through the same code as `probe device set`. It acts only on the connected device and says why it is unavailable for WiFi connections and physical iPhones. Browser tests 26, 27 and 37 cover it (37 on a named simulator, reading each setting back).
 - **`probe device set` and the `set_device_setting` MCP tool change an OS setting of one named emulator or simulator**: appearance (dark mode), font scale, app language, orientation (Android) and opening a deep link, through `adb` and `simctl`. The device must be named (a serial, UDID or unique name, never `booted`), every value is checked before a command runs, and physical iOS devices are refused. Checked against an Android 15 emulator and an iOS simulator. The MCP server now has 36 tools.
 
+### Docs
+- **Run recording is designed, not built.** `docs/prd/run-recording.md` proposes a recording of each test run, step by step, with the HTTP traffic each step caused, the screenshots and widget trees, and the element it acted on. It covers a viewer, a replayable test, native capture through a device proxy, and credential redaction. Nothing in the product changes yet.
+
 ### Fixed
 - **VS Code: the Run Test commands no longer pass `--name` to `probe test`.** This version of the CLI defines no such flag, so those runs failed with an unknown-flag error. "FlutterProbe: Run Test File at Cursor", the CodeLens buttons and the Tests view now run the file that contains the test, and their titles and tooltips say so. Until the CLI has a per-test filter, the extension runs whole files.
 
