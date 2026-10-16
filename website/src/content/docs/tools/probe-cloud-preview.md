@@ -125,6 +125,8 @@ Local evidence is unverified. The service shows it beside the CI result, and it 
 |---|---|
 | `--upload-report` / `hosted.upload_report` | Upload the scrubbed report after the run |
 | `--upload-dry-run` | Print the payload, send nothing |
+| `--record` | Record test steps on this machine only; recordings are never uploaded (see [Local step recordings](/tools/cli-reference/#local-step-recordings)) |
+| `--record-dir DIR` | Base directory for local recordings; defaults to `reports_folder/recordings` |
 | `--upload-local` | Send this run as a local run (unverified evidence; see Local runs (preview) above) |
 | `hosted.url` | Service base URL (https required; plain http only for localhost). The built-in default is a placeholder host that is not live |
 | `--upload-label` / `hosted.label` | Label for this upload (suite, shard or matrix leg); needed when one job uploads more than once |
