@@ -70,21 +70,29 @@ func (c CompositeTestResult) ToTestResult() TestResult {
 
 // CompositeRunner executes composite tests across multiple devices.
 type CompositeRunner struct {
-	devices []CompositeDevice
-	cfg     *config.Config
-	recipes map[string]parser.RecipeDef
-	opts    RunOptions
-	onStep  func(StepEvent) // optional per-step observer, set by Runner.OnStep
+	recorders []StepRecorder
+	devices   []CompositeDevice
+	cfg       *config.Config
+	recipes   map[string]parser.RecipeDef
+	opts      RunOptions
+	onStep    func(StepEvent) // optional per-step observer, set by Runner.OnStep
 }
 
 // NewCompositeRunner creates a CompositeRunner with the given devices.
 func NewCompositeRunner(cfg *config.Config, devices []CompositeDevice, opts RunOptions) *CompositeRunner {
-	return &CompositeRunner{
+	cr := &CompositeRunner{
 		devices: devices,
 		cfg:     cfg,
 		recipes: make(map[string]parser.RecipeDef),
 		opts:    opts,
 	}
+	if opts.NewRecorder != nil {
+		cr.recorders = make([]StepRecorder, len(devices))
+		for i, d := range devices {
+			cr.recorders[i] = opts.NewRecorder(d.DeviceName)
+		}
+	}
+	return cr
 }
 
 // RegisterRecipe adds a shared recipe available to all devices.
@@ -159,14 +167,19 @@ func (cr *CompositeRunner) RunCompositeTest(ctx context.Context, test parser.Com
 	}
 	resultCh := make(chan gorResult, n)
 
-	for _, dev := range cr.devices {
+	for i, dev := range cr.devices {
 		steps := deviceSteps[dev.Alias]
+		var recorder StepRecorder
+		if cr.recorders != nil {
+			recorder = cr.recorders[i]
+		}
 		go func(d CompositeDevice, steps []parser.Step) {
 			exec := NewExecutor(d.Client, d.DeviceCtx, nil, cr.opts.Timeout, cr.opts.Verbose)
 			exec.SetReconnectPolicy(cr.cfg.Agent.ReconnectAttempts, cr.cfg.Agent.ReconnectBackoff)
 			exec.SetLaunchTimeout(cr.cfg.Agent.LaunchTimeout)
 			exec.SetAI(cr.cfg.AI)
 			exec.OnStep(cr.onStep)
+			exec.recorder = recorder
 			exec.SetStepContext(file, test.Name, 1)
 			for _, rec := range cr.recipes {
 				exec.RegisterRecipe(rec)
