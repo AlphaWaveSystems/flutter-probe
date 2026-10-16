@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' file:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>FlutterProbe recording</title>
+<style>
+:root { color-scheme: light dark; --bg:#f5f7fb; --panel:#fff; --text:#172238; --muted:#536078; --border:#ccd3df; --accent:#285bd4; --good:#17643b; --bad:#aa2435; --warn:#805500; }
+@media(prefers-color-scheme:dark) { :root { --bg:#111723; --panel:#1b2433; --text:#edf2fa; --muted:#acb9cd; --border:#3a4960; --accent:#91b3ff; --good:#8cdbac; --bad:#ffa0ad; --warn:#f4d184; } }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
+h1,h2,h3 { line-height:1.25; }
+h1 { margin-top:0; } h2 { margin-top:0; }
+.layout { display:grid; grid-template-columns:minmax(230px,30%) minmax(0,1fr); gap:16px; }
+nav,main { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; min-width:0; }
+ol { list-style:none; padding:0; margin:0; }
+li + li { margin-top:8px; }
+button { width:100%; text-align:left; font:inherit; color:inherit; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; cursor:pointer; overflow-wrap:anywhere; }
+button[aria-current=true],button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.badge { display:inline-block; border:1px solid currentColor; border-radius:20px; padding:0 8px; font-size:13px; margin-right:8px; color:var(--muted); }
+.good { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+.muted,small { color:var(--muted); } small { display:block; }
+p,pre,summary { overflow-wrap:anywhere; }
+pre { white-space:pre-wrap; background:var(--bg); padding:12px; border-radius:8px; max-height:420px; overflow:auto; }
+.shots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+figure { margin:0; } img { display:block; max-width:100%; max-height:560px; object-fit:contain; margin-top:8px; }
+article { border-top:1px solid var(--border); padding-top:12px; margin-top:12px; }
+@media(max-width:680px) { .layout,.shots { grid-template-columns:1fr; } nav { max-height:300px; overflow:auto; } }
+</style>
+</head>
+<body>
+<header><h1>FlutterProbe recording</h1><p id="overview" class="muted"></p><details><summary>Manifest</summary><pre id="manifest"></pre></details></header>
+<div class="layout"><nav aria-label="Recording steps"><h2>Steps</h2><ol id="steps"></ol></nav><main id="detail" aria-live="polite"><p>Select a step to inspect its recording.</p></main></div>
+<script>
+'use strict';
+const MANIFEST = /*__MANIFEST__*/null;
+const TIMELINE = /*__TIMELINE__*/null;
+const display = value => typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? '';
+function element(tag, value, parent, className) {
+  const node = document.createElement(tag);
+  if (value !== undefined) node.textContent = display(value);
+  if (className) node.className = className;
+  if (parent) parent.append(node);
+  return node;
+}
+const steps = Array.isArray(TIMELINE?.steps) ? TIMELINE.steps : [];
+document.getElementById('manifest').textContent = display(MANIFEST);
+document.getElementById('overview').textContent = `${steps.length} recorded steps · Offline viewer`;
+const list = document.getElementById('steps');
+const detail = document.getElementById('detail');
+function screenshot(parent, title, value) {
+  const figure = element('figure', undefined, parent);
+  element('figcaption', title, figure);
+  // Only a local PNG basename is allowed; bundle values cannot select remote resources.
+  const name = typeof value === 'string' ? value.replace(/^screenshots\//, '') : '';
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_. -]*\.png$/i.test(name)) {
+    element('p', 'Screenshot unavailable.', figure, 'muted');
+    return;
+  }
+  const img = element('img', undefined, figure);
+  img.alt = title;
+  img.addEventListener('error', () => { img.remove(); element('p', 'Screenshot file unavailable.', figure, 'muted'); });
+  img.src = 'screenshots/' + encodeURIComponent(name);
+}
+function body(parent, title, value) {
+  element('h4', title, parent);
+  if (value === undefined || value === null) element('p', 'Body not inlined. Inspect the exchange JSON in the bundle.', parent, 'muted');
+  else element('pre', value, parent);
+}
+function select(step, button) {
+  for (const item of list.querySelectorAll('button')) item.removeAttribute('aria-current');
+  button.setAttribute('aria-current', 'true');
+  detail.replaceChildren();
+  element('h2', step.description ?? 'Untitled step', detail);
+  element('p', `${step.file ?? '?'}:${step.line ?? '?'} · ${step.status ?? 'unknown'} · ${step.duration_ms ?? '?'} ms`, detail, 'muted');
+  if (step.error) element('pre', step.error, detail, 'bad');
+  const shots = element('div', undefined, detail, 'shots');
+  screenshot(shots, 'Before', step.screenshot_before);
+  screenshot(shots, 'After', step.screenshot_after);
+  element('h3', 'Widget tree', detail);
+  const tree = step.tree;
+  if (tree && typeof tree === 'object' && (tree.content !== undefined || tree.text !== undefined)) element('pre', tree.content ?? tree.text, detail);
+  else element('p', tree ? `Tree not inlined. Inspect ${display(tree)} in the bundle tree directory.` : 'No widget tree recorded.', detail, 'muted');
+  if (step.interaction != null) { element('h3', 'Interaction', detail); element('pre', step.interaction, detail); }
+  element('h3', 'HTTP exchanges', detail);
+  const exchanges = Array.isArray(step.exchanges) ? step.exchanges : [];
+  if (!exchanges.length) element('p', 'No exchanges recorded.', detail, 'muted');
+  for (const exchange of exchanges) {
+    const article = element('article', undefined, detail);
+    if (!exchange || typeof exchange !== 'object') {
+      element('p', `Exchange ${display(exchange)} is not inlined. Inspect its JSON in the bundle http directory.`, article, 'muted');
+      continue;
+    }
+    element('h4', `${exchange.method ?? '?'} ${exchange.url ?? '(URL not inlined)'}`, article);
+    element('p', `Status: ${exchange.status ?? '?'} · ${exchange.duration_ms ?? '?'} ms`, article);
+    if (exchange.source != null) element('p', exchange.source, article, 'muted');
+    for (const [title, value] of [['Request headers', exchange.request_headers], ['Response headers', exchange.response_headers]]) {
+      if (value != null) { const block = element('details', undefined, article); element('summary', title, block); element('pre', value, block); }
+    }
+    body(article, 'Request body', exchange.request_body);
+    body(article, 'Response body', exchange.response_body);
+  }
+}
+steps.forEach((value, index) => {
+  const step = value && typeof value === 'object' ? value : {};
+  const item = element('li', undefined, list);
+  const button = element('button', undefined, item);
+  button.type = 'button';
+  const status = String(step.status ?? 'unknown');
+  const color = /^(passed|pass|success|ok)$/i.test(status) ? 'good' : /^(failed|fail|error)$/i.test(status) ? 'bad' : 'warn';
+  element('span', status, button, 'badge ' + color);
+  element('span', `${step.index ?? index + 1}. ${step.description ?? 'Untitled step'}`, button);
+  element('small', `${step.file ?? '?'}:${step.line ?? '?'}`, button);
+  button.addEventListener('click', () => select(step, button));
+  if (index === 0) select(step, button);
+});
+if (!steps.length) element('p', 'No steps recorded.', list, 'muted');
+</script>
+</body>
+</html>
