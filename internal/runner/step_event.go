@@ -29,6 +29,7 @@ type StepEvent struct {
 	Error       error         // set on StepFailed and StepSkipped
 	Attempt     int           // test attempt this step belongs to (1 unless the test was retried)
 	Depth       int           // 0 for top-level test steps
+	At          time.Time     // wall-clock time this event was emitted
 }
 
 // OnStep registers a callback fired before and after every step this
@@ -62,6 +63,7 @@ func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status
 		Error:       err,
 		Attempt:     e.stepAttempt,
 		Depth:       e.depth,
+		At:          time.Now(),
 	})
 }
 
