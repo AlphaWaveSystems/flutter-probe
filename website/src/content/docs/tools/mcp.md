@@ -80,6 +80,7 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--disable-animations` | Set a tiny `timeDilation` (0.001) so animations end within a frame |
 | `-y` | Auto-approve destructive operations (CI mode) |
 | `--video` | Record device screen during the run |
+| `--record` | Write a step-by-step recording of each test attempt under `reports_folder/recordings/`: steps, screenshots, widget trees, the app's Dart HTTP calls (credentials redacted) and an offline viewer. Local only; never uploaded. `--record-dir DIR` changes the folder |
 | `--stream` | Emit one ndjson line per test as it completes (requires `--format json`) |
 
 > **Tip for agents:** pass `-v` in `flags` when a test is failing and you need to understand which step is slow or stuck. The `⏱` progress ticks and `⚠` timeout warnings appear in `run_tests` output and tell you exactly where time is being spent before the failure.

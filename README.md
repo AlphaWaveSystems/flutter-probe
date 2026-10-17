@@ -588,6 +588,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `--format terminal\|json\|junit` | `terminal` | Output format |
 | `-o <path>` | — | Output file for JSON/JUnit results |
 | `--video` | off | Record video during run |
+| `--record` | off | Write a step-by-step recording of each test attempt under `reports_folder/recordings` (steps, screenshots, widget trees, the app's Dart HTTP calls with credentials redacted, and an offline viewer). Local only; never uploaded |
 | `-v` | off | Verbose step output — prints `→ step` before each step runs, overwrites with `✓/✗ step (Xs)` on completion; slow steps (>5s) also emit `⏱` progress ticks and a `⚠` warning at 80% of the timeout |
 | `-y` | off | Auto-confirm destructive operations |
 | `--tag <tag>` | — | Run only tests with this tag |
@@ -782,6 +783,8 @@ probe record --device emulator-5554 --output tests/recorded.probe
 ```
 
 Tap, swipe, and type in your app — FlutterProbe writes the `.probe` file as you go.
+
+`probe test --record` is a different command. For each test attempt it writes a bundle with every step, before and after screenshots, the widget tree after each step, and the app's Dart HTTP calls (credentials redacted), plus an offline HTML viewer. See the [CLI reference](https://flutterprobe.dev/tools/cli-reference/#local-step-recordings).
 
 ## CI/CD Integration
 
