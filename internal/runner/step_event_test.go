@@ -3,12 +3,34 @@ package runner
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
 func textSel(s string) *parser.Selector {
 	return &parser.Selector{Kind: parser.SelectorText, Text: s}
+}
+
+func TestOnStep_EmissionTime(t *testing.T) {
+	e := &Executor{}
+	var got []StepEvent
+	e.OnStep(func(ev StepEvent) { got = append(got, ev) })
+
+	e.emitStep(nil, "tap", StepStarted, 0, nil)
+	e.emitStep(nil, "tap", StepPassed, time.Millisecond, nil)
+
+	if len(got) != 2 {
+		t.Fatalf("want 2 events, got %d: %+v", len(got), got)
+	}
+	for i, ev := range got {
+		if ev.At.IsZero() {
+			t.Fatalf("event %d has no emission time", i)
+		}
+	}
+	if got[1].At.Before(got[0].At) {
+		t.Fatalf("emission times out of order: started=%v passed=%v", got[0].At, got[1].At)
+	}
 }
 
 // A step emits started then passed, carrying its source line and attribution.
