@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"io"
 	"os"
 	"os/exec"
@@ -116,6 +116,8 @@ func init() {
 	f.Bool("upload-report", false, "upload the scrubbed JSON report to the hosted service (Probe Cloud, preview) after the run; needs a license with the probe_cloud plan (also hosted.upload_report in probe.yaml). Never fails the run")
 	f.String("upload-label", "", "label for this upload (also hosted.label): a suite, shard or matrix leg such as shard-2-of-4; two uploads of one CI job must differ in it")
 	f.Bool("upload-dry-run", false, "print the exact payload --upload-report would send (after scrubbing) and send nothing; needs no license")
+	f.Bool("record", false, "record each test step by step (screenshots, widget trees and HTTP exchanges through the app client); recordings stay on this machine and are never uploaded")
+	f.String("record-dir", "", "recording base directory (default: recordings under reports_folder, usually reports/recordings)")
 	f.Bool("upload-local", false, "upload this run as a local run (Probe Cloud, preview): git facts instead of CI facts; unverified evidence, shown beside the CI result, that never counts toward a pull request's verdict. Opt-in: needs a probe_cloud license and a team that enabled local uploads. Never implied by --upload-report, and hosted.upload_report does not apply to it")
 	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
@@ -270,6 +272,18 @@ func runTests(cmd *cobra.Command, args []string) error {
 	statusW := os.Stdout
 	if outFile == "" && (format == "json" || format == "junit") {
 		statusW = os.Stderr
+	}
+	reportsBase := cfg.Reports // from probe.yaml reports_folder (default: "reports")
+	var recording *runRecording
+	var newRecorder func(string) runner.StepRecorder
+	if enabled, _ := cmd.Flags().GetBool("record"); enabled {
+		base, _ := cmd.Flags().GetString("record-dir")
+		if base == "" {
+			base = filepath.Join(reportsBase, "recordings")
+		}
+		recording = newRunRecording(base)
+		newRecorder = recording.NewDevice
+		defer recording.printFinish(statusW)
 	}
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
@@ -513,11 +527,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 		}
 
 		opts := runner.RunOptions{
-			Files:   files,
-			Tags:    tags,
-			Timeout: timeout,
-			Verbose: verbose,
-			Grant:   grantPerms,
+			NewRecorder: newRecorder,
+			Files:       files,
+			Tags:        tags,
+			Timeout:     timeout,
+			Verbose:     verbose,
+			Grant:       grantPerms,
 		}
 
 		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
@@ -559,7 +574,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var client probelink.ProbeClient
 	var dm *device.Manager
 	var platform device.Platform
-	var cloudSession *cloud.Session       // non-nil when using a cloud provider
+	var cloudSession *cloud.Session           // non-nil when using a cloud provider
 	var cloudProviderImpl cloud.CloudProvider // saved for artifact collection
 	var sessionStopped bool                   // prevents double-stop in defer
 	if !dryRun {
@@ -1097,11 +1112,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if !dryRun && dm != nil { //nolint:nestif
 		meta := runner.RunMetadata{
 			ProbeVersion: Version,
-			Locale:   func() string { l, _ := cmd.Flags().GetString("locale"); return strings.TrimSpace(l) }(),
-			DeviceID: deviceSerial,
-			Platform: string(platform),
-			Provider: "local",
-			AppID:    cfg.Project.App,
+			Locale:       func() string { l, _ := cmd.Flags().GetString("locale"); return strings.TrimSpace(l) }(),
+			DeviceID:     deviceSerial,
+			Platform:     string(platform),
+			Provider:     "local",
+			AppID:        cfg.Project.App,
 		}
 		// Resolve config file path
 		cfgPath, _ := cmd.Flags().GetString("config")
@@ -1143,12 +1158,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 		_, osVer := cloud.ParseDeviceString(cloudSession.DeviceName)
 		meta := runner.RunMetadata{
 			ProbeVersion: Version,
-			DeviceID:   deviceSerial,
-			DeviceName: cloudSession.DeviceName,
-			Platform:   detectedPlatform,
-			OSVersion:  osVer,
-			Provider:   cloudSession.Provider,
-			AppID:      cfg.Project.App,
+			DeviceID:     deviceSerial,
+			DeviceName:   cloudSession.DeviceName,
+			Platform:     detectedPlatform,
+			OSVersion:    osVer,
+			Provider:     cloudSession.Provider,
+			AppID:        cfg.Project.App,
 		}
 		cfgPath, _ := cmd.Flags().GetString("config")
 		if cfgPath != "" {
@@ -1217,7 +1232,6 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if noVideoFlag {
 		videoEnabled = false
 	}
-	reportsBase := cfg.Reports // from probe.yaml reports_folder (default: "reports")
 	videoDir := filepath.Join(reportsBase, "videos")
 	if outFile != "" {
 		videoDir = filepath.Join(filepath.Dir(outFile), "videos")
@@ -1245,21 +1259,32 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Build and run
 	opts := runner.RunOptions{
+		NewRecorder:   newRecorder,
 		MeasureAll:    measureAll || cfg.Perf.MeasureAll,
 		PerfBaseline:  perfBaseline,
 		PerfTolerance: perfTolerance,
 		PerfGate:      perfGate,
 		PerfKeyBase:   perfKeyBase,
-		Files:        files,
-		Tags:         tags,
-		Timeout:      timeout,
-		DryRun:       dryRun,
-		Verbose:      verbose,
-		Grant:        grantPerms,
-		VideoEnabled: videoEnabled,
-		VideoDir:     videoDir,
+		Files:         files,
+		Tags:          tags,
+		Timeout:       timeout,
+		DryRun:        dryRun,
+		Verbose:       verbose,
+		Grant:         grantPerms,
+		VideoEnabled:  videoEnabled,
+		VideoDir:      videoDir,
 	}
 
+	if recording != nil {
+		opts.NewRecorder = func(string) runner.StepRecorder {
+			// Local runs do not fill RunMetadata.DeviceName, so fall back to the serial the user passed.
+			name := runMeta.DeviceName
+			if name == "" {
+				name = deviceSerial
+			}
+			return recording.NewDevice(name)
+		}
+	}
 	r := runner.New(cfg, client, devCtx, opts)
 
 	// Set up composite runner if --composite-device flags or probe.yaml composite.devices are present.
@@ -1271,6 +1296,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite tests will be skipped\n")
 		} else if cr != nil {
 			defer compositeCleanup()
+			if recording != nil {
+				cr = runner.NewCompositeRunner(cfg, cr.Devices(), runner.RunOptions{Timeout: durationFromTimeout(timeout), Verbose: verbose, NewRecorder: newRecorder})
+			}
 			r.SetCompositeRunner(cr)
 		}
 	}

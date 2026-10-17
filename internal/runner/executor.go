@@ -64,6 +64,7 @@ type Executor struct {
 	http                 httpState          // recorded backend traffic bookkeeping (`wait for response`, mocks)
 	launchTimeout        time.Duration      // bounds restart/clear-data force-stop+relaunch+reconnect (default 120s, from agent.launch_timeout)
 
+	recorder    StepRecorder
 	onStep      func(StepEvent) // optional per-step observer (Studio live highlight)
 	stepFile    string          // attribution for StepEvents
 	stepTest    string

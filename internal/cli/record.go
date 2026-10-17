@@ -4,15 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/record"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/spf13/cobra"
 )
 
@@ -318,4 +323,87 @@ func waitForInterrupt() <-chan struct{} {
 		close(ch)
 	}()
 	return ch
+}
+
+type stepRecording struct{ recorder *record.Recorder }
+
+var _ runner.StepRecorder = (*stepRecording)(nil)
+
+func recordingEvent(ev runner.StepEvent) record.Event {
+	result := record.Event{File: ev.File, TestName: ev.TestName, Line: ev.Line, Description: ev.Description, Status: string(ev.Status), Duration: ev.Duration, Attempt: ev.Attempt, Depth: ev.Depth, At: ev.At}
+	if ev.Error != nil {
+		result.Error = ev.Error.Error()
+	}
+	return result
+}
+
+func (r *stepRecording) BeginStep(client probelink.ProbeClient, ev runner.StepEvent) error {
+	return r.recorder.BeginStep(client, recordingEvent(ev))
+}
+func (r *stepRecording) EndStep(client probelink.ProbeClient, ev runner.StepEvent) error {
+	return r.recorder.EndStep(client, recordingEvent(ev))
+}
+
+type deviceRecording struct {
+	dir      string
+	recorder *record.Recorder
+}
+type runRecording struct {
+	base, runID string
+	mu          sync.Mutex
+	recorders   []deviceRecording
+}
+
+func newRunRecording(base string) *runRecording {
+	return &runRecording{base: base, runID: time.Now().UTC().Format("20060102-150405")}
+}
+
+func (r *runRecording) NewDevice(device string) runner.StepRecorder {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	dir := filepath.Join(r.base, r.runID, deviceSlug(device))
+	recorder := record.NewRecorder(record.Options{Dir: dir, RunID: r.runID, Device: device, Screenshots: "every_step", CLIVersion: Version})
+	r.recorders = append(r.recorders, deviceRecording{dir, recorder})
+	return &stepRecording{recorder: recorder}
+}
+
+// Finish returns written device directories and advisory warnings, never a run error.
+func (r *runRecording) Finish() (dirs, warnings []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	seen := make(map[string]bool)
+	for _, entry := range r.recorders {
+		// Close records its write errors in Warnings as well.
+		_ = entry.recorder.Close()
+		warnings = append(warnings, entry.recorder.Warnings()...)
+		if info, err := os.Stat(entry.dir); err == nil && info.IsDir() && !seen[entry.dir] {
+			dirs = append(dirs, entry.dir)
+			seen[entry.dir] = true
+		}
+	}
+	r.recorders = nil
+	return dirs, warnings
+}
+
+func (r *runRecording) printFinish(w io.Writer) {
+	dirs, warnings := r.Finish()
+	for _, dir := range dirs {
+		fmt.Fprintf(w, "Recording written to %s\n", dir)
+	}
+	for _, warning := range warnings {
+		fmt.Fprintf(w, "Recording warning: %s\n", warning)
+	}
+	if len(dirs) > 0 {
+		fmt.Fprintln(w, "Recordings can contain screens and request or response bodies. They stay on this machine; keep them out of version control.")
+	}
+}
+
+var deviceSlugSeparators = regexp.MustCompile(`[^a-z0-9]+`)
+
+func deviceSlug(device string) string {
+	slug := strings.Trim(deviceSlugSeparators.ReplaceAllString(strings.ToLower(device), "-"), "-")
+	if slug == "" {
+		return "device"
+	}
+	return slug
 }

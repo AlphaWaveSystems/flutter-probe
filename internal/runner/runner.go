@@ -59,6 +59,7 @@ type Runner struct {
 	missingUses     []string                     // `use` targets that do not exist, for error messages
 	visual          *visual.Comparator  // nil if visual regression is not configured
 	onResult        func(TestResult)    // optional per-result callback for streaming
+	recorder        StepRecorder
 	onStep          func(StepEvent)     // optional per-step callback (live highlight)
 	compositeRunner *CompositeRunner    // nil if composite tests are not configured
 	curFile         string              // attribution for StepEvents from newExecutor
@@ -68,6 +69,7 @@ type Runner struct {
 
 // RunOptions configures a test run.
 type RunOptions struct {
+	NewRecorder func(device string) StepRecorder // nil = no recording; called once per device
 	Files        []string // .probe files to run
 	Tags         []string // filter by tag
 	Watch        bool     // re-run on file change
@@ -92,13 +94,17 @@ func New(cfg *config.Config, client probelink.ProbeClient, deviceCtx *DeviceCont
 	if opts.Timeout == 0 {
 		opts.Timeout = cfg.Defaults.Timeout
 	}
-	return &Runner{
+	r := &Runner{
 		cfg:       cfg,
 		client:    client,
 		deviceCtx: deviceCtx,
 		opts:      opts,
 		recipes:   make(map[string]parser.RecipeDef),
 	}
+	if opts.NewRecorder != nil {
+		r.recorder = opts.NewRecorder(opts.DeviceName)
+	}
+	return r
 }
 
 // SetVisual configures visual regression comparison for this runner.
@@ -132,6 +138,7 @@ func (r *Runner) newExecutor() *Executor {
 	exec.SetAI(r.cfg.AI)
 	exec.useNote = r.missingUsesNote()
 	exec.OnStep(r.onStep)
+	exec.recorder = r.recorder
 	exec.SetStepContext(r.curFile, r.curTest, r.curAttempt)
 	return exec
 }

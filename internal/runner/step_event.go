@@ -1,6 +1,10 @@
 package runner
 
-import "time"
+import (
+	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+)
 
 // StepStatus is the lifecycle state carried by a StepEvent.
 type StepStatus string
@@ -32,6 +36,12 @@ type StepEvent struct {
 	At          time.Time     // wall-clock time this event was emitted
 }
 
+// StepRecorder observes each step's start and end on the executing goroutine. Unlike OnStep it may block, because a recorder reads the device while the step is paused. The executor drops its errors: recording must never change a test's verdict.
+type StepRecorder interface {
+	BeginStep(client probelink.ProbeClient, ev StepEvent) error
+	EndStep(client probelink.ProbeClient, ev StepEvent) error
+}
+
 // OnStep registers a callback fired before and after every step this
 // executor runs. The callback runs on the executing goroutine and must not
 // block.
@@ -46,14 +56,14 @@ func (e *Executor) SetStepContext(file, testName string, attempt int) {
 }
 
 func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status StepStatus, d time.Duration, err error) {
-	if e.onStep == nil {
+	if e.onStep == nil && e.recorder == nil {
 		return
 	}
 	line := 0
 	if step != nil {
 		line = step.GetLine()
 	}
-	e.onStep(StepEvent{
+	ev := StepEvent{
 		File:        e.stepFile,
 		TestName:    e.stepTest,
 		Line:        line,
@@ -64,7 +74,17 @@ func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status
 		Attempt:     e.stepAttempt,
 		Depth:       e.depth,
 		At:          time.Now(),
-	})
+	}
+	if e.onStep != nil {
+		e.onStep(ev)
+	}
+	if e.recorder != nil {
+		if status == StepStarted {
+			_ = e.recorder.BeginStep(e.client, ev)
+		} else {
+			_ = e.recorder.EndStep(e.client, ev)
+		}
+	}
 }
 
 // OnStep registers a callback that receives StepEvents from every executor

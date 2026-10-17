@@ -62,6 +62,8 @@ probe test [path] [flags]
 | `--upload-report` | `false` | Upload the scrubbed JSON report to the hosted service (Probe Cloud, preview; needs a `probe_cloud` license; also `hosted.upload_report`). Warnings only, never fails the run. See [Probe Cloud (preview)](/tools/probe-cloud-preview/) |
 | `--upload-label NAME` | — | Label for this upload (also `hosted.label`): a suite, shard or matrix leg such as `shard-2-of-4`; two uploads of one CI job must differ in it |
 | `--upload-dry-run` | `false` | Print the exact payload `--upload-report` would send and send nothing (no license needed) |
+| `--record` | `false` | Record each test step locally; recordings are never uploaded |
+| `--record-dir DIR` | `reports_folder/recordings` | Recording base directory; used with `--record` (usually `reports/recordings`) |
 | `--upload-local` | `false` | Send this run as a local run (Probe Cloud, preview; needs a `probe_cloud` license and a team that enabled local uploads). Git facts instead of CI facts; unverified evidence that never counts toward a pull request's verdict. Never implied by `--upload-report`, and `hosted.upload_report` does not apply to it. See [Probe Cloud (preview)](/tools/probe-cloud-preview/) |
 | `--measure-all` | `false` | Measure every test: open a performance window named after the test around its body (also `perf.measure_all` in probe.yaml). Tests that use `start measuring` themselves are left alone. See [Performance testing](/advanced/performance/) |
 | `--perf-baseline FILE` | — | Compare every `start measuring` window with this baseline; a test whose numbers got worse than the tolerance fails. See [Performance testing](/advanced/performance/) |
@@ -120,6 +122,22 @@ probe test tests/ --host 192.168.1.100 --token abc123... --device <UDID>
 probe test tests/ --parallel
 probe test tests/ --devices emulator-5554,<iOS-UDID>
 ```
+
+### Local step recordings
+
+`probe test --record` writes a separate bundle for each test attempt beneath
+`<reports_folder>/recordings/<UTC run timestamp>/<device>/`. Use `--record-dir DIR`
+to choose another base directory. Each bundle includes a manifest, a step timeline
+with source file and line, screenshots before and after each step, a widget tree
+after each step, the app's `dart:io` HTTP exchanges with credential redaction, and
+an offline HTML viewer. Capture failures produce warnings and do not change test
+results or exit codes.
+
+Native SDK and WebView traffic, the element each step acted on, and screenshot
+redaction rules are not yet recorded. Widget trees are not captured before steps.
+Screenshots are not redacted. Recordings can contain screens and request or
+response bodies; keep them out of version control. Recording sends nothing to a
+hosted service, including when report upload is enabled.
 
 ## probe lint
 

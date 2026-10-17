@@ -85,6 +85,8 @@ reports/
 
 All artifact paths are **relative** to the report file. The entire folder can be uploaded to CI artifact storage, S3, or shared without breaking references.
 
+`--record` adds a `recordings/` folder beside these files, with one bundle per test attempt and an offline HTML viewer in each. Recordings can contain screens and request bodies (credentials are redacted), so leave `recordings/` out when you share or upload this folder. `--upload-report` never sends them. See [Local step recordings](/tools/cli-reference/#local-step-recordings).
+
 ## Viewing HTML Reports
 
 The HTML report uses relative paths for embedded media. To view with full video/screenshot support:
