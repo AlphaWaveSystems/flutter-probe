@@ -130,8 +130,16 @@ Edge cases:
   unfinished `seq`, and a later read returns the exchange. Advancing the cursor to the highest
   `seq` seen would skip such a request for good, so the cursor never does that. An exchange that
   finishes after its step ended is marked as such, so the viewer can say so.
-- **Interaction target.** Each step's element is resolved with `SelectorBounds` before the action
-  runs, so the timeline can show where a tap landed.
+- **Interaction target.** For a step whose verb acts on an element (tap, double tap, long press,
+  type, clear, toggle, and swipe or scroll with a selector), the recorder resolves the element once,
+  from `BeginStep`, with `SelectorBounds`. It uses the selector the step resolved (variables
+  substituted, credentials redacted). The timeline records the verb, the selector text, the
+  element's bounds in logical pixels, and the tap point at the centre of those bounds. If the
+  element is not on screen when the step starts, the timeline records the selector and says so; the
+  step still runs as it would without recording. Text typed into a field is never recorded. Steps
+  that act on no element (waits, navigation, screenshots, drag) record no target in this version.
+  The lookup runs only when recording is on, has a two-second timeout, and its errors are warnings.
+  They never change a step's result.
 
 Overhead is measured in PR 1 and published with it. Per-step screenshots are the expensive part.
 
