@@ -82,6 +82,42 @@ func scan(t *testing.T, repo string, args ...string) (string, int) {
 	return out.String(), code
 }
 
+// runGit runs git in dir and fails the test if git fails.
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+// TestDisclosureScanIgnoresDeletedNames checks that deleting a file whose name
+// matches is not a match, because the guard is about what a change adds. Adding
+// the same file still fails.
+func TestDisclosureScanIgnoresDeletedNames(t *testing.T) {
+	dir := t.TempDir()
+	runGit(t, dir, "init", "-q", ".")
+	runGit(t, dir, "config", "user.email", "test@example.invalid")
+	runGit(t, dir, "config", "user.name", "test")
+	writeFile(t, filepath.Join(dir, "base.txt"), "base\n")
+	runGit(t, dir, "add", "-A")
+	runGit(t, dir, "commit", "-q", "-m", "base")
+	writeFile(t, filepath.Join(dir, "docs", "evidence", syntheticTerm+"-folder", "readme.txt"), "x\n")
+	runGit(t, dir, "add", "-A")
+	runGit(t, dir, "commit", "-q", "-m", "add")
+	runGit(t, dir, "rm", "-q", "--", "docs/evidence/"+syntheticTerm+"-folder/readme.txt")
+	runGit(t, dir, "commit", "-q", "-m", "delete")
+	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")
+
+	if out, code := scan(t, dir, "HEAD~1...HEAD", pats); code != 0 || !strings.Contains(out, "disclosure scan: clean") {
+		t.Errorf("deleting a matching file: exit status %d, want clean:\n%s", code, out)
+	}
+	if out, code := scan(t, dir, "HEAD~2...HEAD~1", pats); code != 1 || !strings.Contains(out, "changed file #1 has a matching name") {
+		t.Errorf("adding a matching file: exit status %d, want a name match:\n%s", code, out)
+	}
+}
+
 func TestDisclosureScanReportsPositionsOnly(t *testing.T) {
 	repo := newScanRepo(t)
 	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")

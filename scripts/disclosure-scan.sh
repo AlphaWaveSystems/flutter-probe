@@ -7,7 +7,8 @@
 # patterns-file: one extended regex per line; blank lines and lines starting
 # with '#' are ignored. Matching is case-insensitive.
 #
-# What is scanned: lines added in the range, the names of changed files, the
+# What is scanned: lines added in the range, the names of files the range adds or
+# modifies (a deleted file is not matched), the
 # commit messages in the range, any --extra text files (for example a pull
 # request title and body), and, for each --tree PATH, the names and text of every
 # file tracked under PATH at the end of the range. The tree check catches a match
@@ -15,7 +16,7 @@
 #
 # Output never contains the matched text, a file path or a pattern, only a rule
 # number and a position, because CI logs of a public repository are public.
-# Changed files are numbered in `git diff --name-only <range>` order and tree
+# Changed files are numbered in `git diff --name-only --diff-filter=d <range>` order and tree
 # files in sorted `git ls-tree -r --name-only <end> -- <PATH>` order, so the same
 # listing with `nl` finds the file. Exit status 1 if anything matched, 2 on a
 # usage error or a failed search.
@@ -47,8 +48,9 @@ if [ "${#trees[@]}" -gt 0 ]; then
   git -C "$repo" ls-tree -r --name-only "$end" -- "${trees[@]}" | LC_ALL=C sort -u > "$tmp/tree-list.txt"
 fi
 
-# Changed file names, numbered in this order.
-git -C "$repo" diff --name-only --no-ext-diff "$range" > "$tmp/paths.txt"
+# Names of added or modified files, numbered in this order. Deleted files are skipped:
+# removing a file adds no text.
+git -C "$repo" diff --name-only --diff-filter=d --no-ext-diff "$range" > "$tmp/paths.txt"
 # Added lines as changed-file-number:line:text (-U0 hunks, so only additions advance the counter).
 git -C "$repo" diff -U0 --no-color --no-ext-diff "$range" | awk -v names="$tmp/paths.txt" '
   BEGIN { n = 0; while ((getline p < names) > 0) idx[p] = ++n }
