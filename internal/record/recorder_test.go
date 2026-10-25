@@ -23,6 +23,14 @@ type recorderClient struct {
 	since              []int
 	screenshotErr      error
 	screenshots, trees int
+	bounds             probelink.BoundsResult
+	boundsErr          error
+	lookups            int
+}
+
+func (c *recorderClient) SelectorBounds(context.Context, probelink.SelectorParam) (probelink.BoundsResult, error) {
+	c.lookups++
+	return c.bounds, c.boundsErr
 }
 
 func (c *recorderClient) HTTPLog(_ context.Context, p probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
@@ -79,6 +87,79 @@ func recordStep(t *testing.T, r *Recorder, c Client, ev Event, status string) {
 	ev.Error = "Bearer abcdefghijklmnop"
 	if err := r.EndStep(c, ev); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRecorderManifestCarriesPlatformAndOSVersion(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "test.probe")
+	if err := os.WriteFile(file, []byte("test recording"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := NewRecorder(Options{Dir: filepath.Join(root, "recordings"), RunID: "run", Device: "device", Screenshots: "never", CLIVersion: "version", Platform: "ios", OSVersion: "iOS 18.6"})
+	ev := Event{File: file, TestName: "My Test!", Attempt: 1, Line: 1, Description: "first", Status: "started", At: time.Now()}
+	recordStep(t, r, &recorderClient{}, ev, "passed")
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "recordings", "my-test-attempt-1", "manifest.json")
+	if m := readRecorderJSON[Manifest](t, path); m.Platform != "ios" || m.OSVersion != "iOS 18.6" {
+		t.Fatal(m)
+	}
+	// The JSON keys are part of the bundle format, so check them by name as well.
+	if raw := readRecorderJSON[map[string]any](t, path); raw["platform"] != "ios" || raw["os_version"] != "iOS 18.6" {
+		t.Fatal(raw)
+	}
+}
+
+// A step that acts on an element records its selector, and its bounds and tap point when the element is on screen.
+func TestRecorderInteractionRecordsTheElement(t *testing.T) {
+	r, ev, root := recorderSetup(t, "never")
+	ev.Target = &Target{Verb: "tap", Text: "Sign in", Lookup: probelink.SelectorParam{Kind: "text", Text: "Sign in"}}
+	c := &recorderClient{bounds: probelink.BoundsResult{X: 10, Y: 20, Width: 100, Height: 40}}
+	recordStep(t, r, c, ev, "passed")
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if c.lookups != 1 {
+		t.Fatalf("lookups=%d, want 1", c.lookups)
+	}
+	in := readRecorderJSON[Timeline](t, filepath.Join(root, "my-test-attempt-1", "timeline.json")).Steps[0].Interaction
+	if in == nil || in.Kind != "tap" || in.Selector != "Sign in" || in.Target == nil || *in.Target != (Rect{Left: 10, Top: 20, Width: 100, Height: 40}) || in.TapX != 60 || in.TapY != 40 {
+		t.Fatalf("interaction = %+v", in)
+	}
+}
+
+// With no element on screen the selector is still recorded, the step is recorded, and the failed lookup is an advisory
+// warning. A credential-shaped selector is redacted, and without a client no lookup is attempted.
+func TestRecorderInteractionWithoutAnElement(t *testing.T) {
+	r, ev, root := recorderSetup(t, "never")
+	ev.Target = &Target{Verb: "type", Text: "Bearer abcdefghijklmnop", Lookup: probelink.SelectorParam{Kind: "text", Text: "Bearer abcdefghijklmnop"}}
+	recordStep(t, r, &recorderClient{boundsErr: errors.New("no element")}, ev, "failed")
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	steps := readRecorderJSON[Timeline](t, filepath.Join(root, "my-test-attempt-1", "timeline.json")).Steps
+	if len(steps) != 1 {
+		t.Fatalf("steps=%d, want 1", len(steps))
+	}
+	in := steps[0].Interaction
+	if in == nil || in.Target != nil || strings.Contains(in.Selector, "abcdefghijklmnop") {
+		t.Fatalf("interaction = %+v", in)
+	}
+	if !strings.Contains(strings.Join(r.Warnings(), "\n"), "element lookup") {
+		t.Fatalf("warnings = %v", r.Warnings())
+	}
+
+	r2, ev2, root2 := recorderSetup(t, "never")
+	ev2.Target = &Target{Verb: "tap", Text: "Sign in", Lookup: probelink.SelectorParam{Kind: "text", Text: "Sign in"}}
+	recordStep(t, r2, nil, ev2, "passed")
+	if err := r2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	in2 := readRecorderJSON[Timeline](t, filepath.Join(root2, "my-test-attempt-1", "timeline.json")).Steps[0].Interaction
+	if in2 == nil || in2.Selector != "Sign in" || in2.Target != nil {
+		t.Fatalf("no-client interaction = %+v", in2)
 	}
 }
 

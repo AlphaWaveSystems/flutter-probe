@@ -52,10 +52,11 @@ type Rect struct {
 }
 
 type Interaction struct {
-	Kind   string  `json:"kind"`
-	Target *Rect   `json:"target,omitempty"`
-	TapX   float64 `json:"tap_x,omitempty"`
-	TapY   float64 `json:"tap_y,omitempty"`
+	Kind     string  `json:"kind"`
+	Selector string  `json:"selector,omitempty"`
+	Target   *Rect   `json:"target,omitempty"`
+	TapX     float64 `json:"tap_x,omitempty"`
+	TapY     float64 `json:"tap_y,omitempty"`
 }
 
 type Step struct {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/record"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
@@ -52,6 +54,74 @@ func TestRecordingDeviceSlug(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRecordingNewDeviceInfoWritesPlatformAndOSVersion(t *testing.T) {
+	r := newRunRecording(t.TempDir())
+	rec := r.NewDeviceInfo("Pixel 7", "android", "Android 14")
+	ev := runner.StepEvent{File: "missing.probe", TestName: "test", Line: 1, Description: "step", Status: runner.StepStarted, At: time.Now()}
+	// A nil client simulates capture failures; the manifest is still written before the first capture.
+	_ = rec.BeginStep(nil, ev)
+	dirs, _ := r.Finish()
+	if len(dirs) != 1 {
+		t.Fatalf("dirs=%v", dirs)
+	}
+	matches, err := filepath.Glob(filepath.Join(dirs[0], "*", "manifest.json"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("manifest files=%v err=%v", matches, err)
+	}
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m record.Manifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Platform != "android" || m.OSVersion != "Android 14" {
+		t.Fatalf("platform=%q os_version=%q", m.Platform, m.OSVersion)
+	}
+}
+
+// The element a step acts on reaches the recorder, and a step without one carries no target.
+func TestRecordingEventCarriesTheTarget(t *testing.T) {
+	ev := runner.StepEvent{File: "test.probe", Target: &runner.StepTarget{Verb: "tap", Text: `"Sign in"`}}
+	got := recordingEvent(ev).Target
+	if got == nil || got.Verb != "tap" || got.Text != `"Sign in"` {
+		t.Fatalf("target = %+v", got)
+	}
+	ev.Target = nil
+	if recordingEvent(ev).Target != nil {
+		t.Fatal("a step without a target got one")
+	}
+}
+
+// A composite run's recorder takes the platform and OS version of its device from the composite device list.
+func TestRecordingCompositeRecorderWritesPlatformAndOSVersion(t *testing.T) {
+	r := newRunRecording(t.TempDir())
+	rec := r.compositeRecorder()(runner.CompositeDevice{DeviceName: "Pixel 7", Platform: device.PlatformAndroid, OSVersion: "Android 14"})
+	ev := runner.StepEvent{File: "missing.probe", TestName: "test", Line: 1, Description: "step", Status: runner.StepStarted, At: time.Now()}
+	// A nil client simulates capture failures; the manifest is still written before the first capture.
+	_ = rec.BeginStep(nil, ev)
+	dirs, _ := r.Finish()
+	if len(dirs) != 1 {
+		t.Fatalf("dirs=%v", dirs)
+	}
+	matches, err := filepath.Glob(filepath.Join(dirs[0], "*", "manifest.json"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("manifest files=%v err=%v", matches, err)
+	}
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m record.Manifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Platform != "android" || m.OSVersion != "Android 14" {
+		t.Fatalf("platform=%q os_version=%q", m.Platform, m.OSVersion)
 	}
 }
 

@@ -40,6 +40,45 @@ updates:
       prefix: "chore(deps):"
     open-pull-requests-limit: 10
 
+  # Go modules -- Studio desktop app
+  - package-ecosystem: "gomod"
+    directory: "/studio/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps):"
+    open-pull-requests-limit: 5
+
+  # npm -- Studio frontend (Vite, Monaco)
+  - package-ecosystem: "npm"
+    directory: "/studio/frontend/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps):"
+    open-pull-requests-limit: 5
+
+  # npm -- VS Code extension (dev tooling and packaging)
+  - package-ecosystem: "npm"
+    directory: "/vscode/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps):"
+    open-pull-requests-limit: 5
+
   # GitHub Actions -- CI/CD workflows
   - package-ecosystem: "github-actions"
     directory: "/"

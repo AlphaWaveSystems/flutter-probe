@@ -21,7 +21,7 @@ re-attempts the write on every tick, not just once at startup. Full `flutter tes
 
 Attempted the original PT-27 repro methodology (`adb shell run-as <app> cat cache/probe/token`
 polled every 2s while navigating to a screen that instantiates an `ImagePicker`) against
-nect-flutter's Create Post form on an Android emulator, using a temporary
+private app A's Create Post form on an Android emulator, using a temporary
 `dependency_overrides: flutter_probe_agent: {path: ...}` build.
 
 Successfully reproduced the exact navigation path from PT-27's original report (feed → FAB →
@@ -39,4 +39,4 @@ single call already wasn't creating the directory on this build before any of to
 It's very likely the same underlying environment issue behind the `unexpected EOF` WS-dial
 failures hit during R-4's real-device attempt, and worth folding into the R-2/PT-25 investigation
 rather than chasing separately here. The `dependency_overrides` used for this attempt were fully
-reverted — nect-flutter's repo is back to its original state.
+reverted — private app A's repo is back to its original state.

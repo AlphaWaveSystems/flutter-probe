@@ -199,6 +199,21 @@ func init() {
 	f.StringArray("composite-device", nil, compositeDeviceUsage())
 }
 
+// resolveDeviceAppID returns the application ID a single-device run uses on the device. Flutter's camelCase bundle ID
+// has a snake_case Android form (see runner.ResolveAppID), and the converted form is used only when it is the installed
+// one. The ID as written is kept when it is installed, and when neither form is, so a run that works today keeps its ID.
+// iOS keeps the bundle ID as written, and installed is not asked about it.
+func resolveDeviceAppID(written string, platform device.Platform, installed func(id string) bool) string {
+	converted := runner.ResolveAppID(written, platform)
+	if converted == written || installed(written) {
+		return written
+	}
+	if installed(converted) {
+		return converted
+	}
+	return written
+}
+
 func runTests(cmd *cobra.Command, args []string) error {
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
@@ -868,6 +883,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 			}
 
+			// Use the application ID this device has installed (see resolveDeviceAppID).
+			cfg.Project.App = resolveDeviceAppID(cfg.Project.App, platform, func(id string) bool {
+				installed, err := dm.ADB().PackageInstalled(ctx, deviceSerial, id)
+				return err == nil && installed
+			})
+
 			// Install app if --app-path provided
 			if appPath != "" {
 				// Validate file exists
@@ -1282,7 +1303,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				name = deviceSerial
 			}
-			return recording.NewDevice(name)
+			return recording.NewDeviceInfo(name, runMeta.Platform, runMeta.OSVersion)
 		}
 	}
 	r := runner.New(cfg, client, devCtx, opts)
@@ -1297,7 +1318,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		} else if cr != nil {
 			defer compositeCleanup()
 			if recording != nil {
-				cr = runner.NewCompositeRunner(cfg, cr.Devices(), runner.RunOptions{Timeout: durationFromTimeout(timeout), Verbose: verbose, NewRecorder: newRecorder})
+				cr = runner.NewCompositeRunner(cfg, cr.Devices(), runner.RunOptions{Timeout: durationFromTimeout(timeout), Verbose: verbose, NewRecorder: newRecorder, NewCompositeRecorder: recording.compositeRecorder()})
 			}
 			r.SetCompositeRunner(cr)
 		}

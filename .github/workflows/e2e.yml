@@ -69,6 +69,7 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Set up Java
@@ -120,10 +121,10 @@ jobs:
       # ── Build and install test app ──
       - name: Configure local-path dependency overrides
         run: |
-          # nightowl_sdk is a local-only dev tool (session-recording
+          # A private, local-only SDK (session-recording
           # instrumentation) with no CI-accessible distribution — generate a
           # minimal stub matching its real public API so mobile/lib/main.dart's
-          # NightOwlBinding.ensureInitialized(...) call still compiles and
+          # the app's SDK binding call still compiles and
           # runs (as a no-op, no session capture) in CI.
           mkdir -p nightowl_stub/lib
           cat > nightowl_stub/pubspec.yaml << 'EOF'
@@ -138,7 +139,7 @@ jobs:
           cat > nightowl_stub/lib/nightowl.dart << 'EOF'
           import 'package:flutter/widgets.dart';
 
-          /// CI stub for nightowl_sdk's config API — field names/types
+          /// CI stub for the private SDK's config API — field names/types
           /// mirror the real NightOwlConfig closely enough to satisfy real
           /// call sites without pulling in the actual (local-only) package.
           class NightOwlConfig {
@@ -171,7 +172,7 @@ jobs:
             final Map<String, dynamic> deviceMetadata;
           }
 
-          /// CI stub for NightOwlBinding — just initializes the normal
+          /// CI stub for the private SDK binding — just initializes the normal
           /// Flutter widgets binding so runApp() still works. Nothing is
           /// captured or sent anywhere in CI.
           class NightOwlBinding {
@@ -265,6 +266,7 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Set up Flutter
@@ -295,10 +297,10 @@ jobs:
       # ── Build and install test app ──
       - name: Configure local-path dependency overrides
         run: |
-          # nightowl_sdk is a local-only dev tool (session-recording
+          # A private, local-only SDK (session-recording
           # instrumentation) with no CI-accessible distribution — generate a
           # minimal stub matching its real public API so mobile/lib/main.dart's
-          # NightOwlBinding.ensureInitialized(...) call still compiles and
+          # the app's SDK binding call still compiles and
           # runs (as a no-op, no session capture) in CI.
           mkdir -p nightowl_stub/lib
           cat > nightowl_stub/pubspec.yaml << 'EOF'
@@ -313,7 +315,7 @@ jobs:
           cat > nightowl_stub/lib/nightowl.dart << 'EOF'
           import 'package:flutter/widgets.dart';
 
-          /// CI stub for nightowl_sdk's config API — field names/types
+          /// CI stub for the private SDK's config API — field names/types
           /// mirror the real NightOwlConfig closely enough to satisfy real
           /// call sites without pulling in the actual (local-only) package.
           class NightOwlConfig {
@@ -346,7 +348,7 @@ jobs:
             final Map<String, dynamic> deviceMetadata;
           }
 
-          /// CI stub for NightOwlBinding — just initializes the normal
+          /// CI stub for the private SDK binding — just initializes the normal
           /// Flutter widgets binding so runApp() still works. Nothing is
           /// captured or sent anywhere in CI.
           class NightOwlBinding {

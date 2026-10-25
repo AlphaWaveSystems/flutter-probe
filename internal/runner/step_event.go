@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
@@ -34,6 +36,17 @@ type StepEvent struct {
 	Attempt     int           // test attempt this step belongs to (1 unless the test was retried)
 	Depth       int           // 0 for top-level test steps
 	At          time.Time     // wall-clock time this event was emitted
+	// Target is the element an action step acts on. It is set on StepStarted, and only when a recorder is attached.
+	Target *StepTarget
+}
+
+// StepTarget is the element an action step acts on. Text is the selector as the step resolved it, before any
+// redaction. Lookup is the selector a recorder sends to find the element's bounds. A type step's typed text is never
+// part of a target.
+type StepTarget struct {
+	Verb   string
+	Text   string
+	Lookup probelink.SelectorParam
 }
 
 // StepRecorder observes each step's start and end on the executing goroutine. Unlike OnStep it may block, because a recorder reads the device while the step is paused. The executor drops its errors: recording must never change a test's verdict.
@@ -75,6 +88,11 @@ func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status
 		Depth:       e.depth,
 		At:          time.Now(),
 	}
+	if status == StepStarted && e.recorder != nil {
+		if a, ok := step.(parser.ActionStep); ok {
+			ev.Target = e.stepTarget(a)
+		}
+	}
 	if e.onStep != nil {
 		e.onStep(ev)
 	}
@@ -85,6 +103,39 @@ func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status
 			_ = e.recorder.EndStep(e.client, ev)
 		}
 	}
+}
+
+// stepTarget describes the element an action step acts on, or returns nil for the verbs that act on no element. It
+// resolves the selector with the executor's variables but calls no device.
+func (e *Executor) stepTarget(a parser.ActionStep) *StepTarget {
+	if a.Sel == nil {
+		return nil
+	}
+	switch a.Verb {
+	case parser.VerbTap, parser.VerbDoubleTap, parser.VerbLongPress, parser.VerbType, parser.VerbClear,
+		parser.VerbToggle, parser.VerbSwipe, parser.VerbScroll:
+	default:
+		return nil
+	}
+	sel := e.resolveSelector(*a.Sel)
+	return &StepTarget{Verb: string(a.Verb), Text: selectorText(sel), Lookup: toSelectorParam(sel)}
+}
+
+// selectorText writes a resolved selector the way a ProbeScript step does, for the timeline.
+func selectorText(s parser.Selector) string {
+	switch s.Kind {
+	case parser.SelectorID:
+		return "#" + s.Text
+	case parser.SelectorType:
+		return fmt.Sprintf("type %q", s.Text)
+	case parser.SelectorOrdinal:
+		return fmt.Sprintf("%q (match %d)", s.Text, s.Ordinal)
+	case parser.SelectorPositional:
+		return fmt.Sprintf("%q in %q", s.Text, s.Container)
+	case parser.SelectorRelational:
+		return fmt.Sprintf("%q %s %q", s.Text, s.Relation, s.Anchor)
+	}
+	return fmt.Sprintf("%q", s.Text)
 }
 
 // OnStep registers a callback that receives StepEvents from every executor

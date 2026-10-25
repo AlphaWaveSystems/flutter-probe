@@ -251,6 +251,26 @@ func (a *ADB) GetAppVersion(ctx context.Context, serial, appID string) (string, 
 	return "", fmt.Errorf("adb: versionName not found for %s", appID)
 }
 
+// PackageInstalled reports whether pkg is installed on the device. `pm list packages` filters by substring, so the
+// output is matched by exact name.
+func (a *ADB) PackageInstalled(ctx context.Context, serial, pkg string) (bool, error) {
+	out, err := a.Shell(ctx, serial, "pm", "list", "packages", pkg)
+	if err != nil {
+		return false, err
+	}
+	return listsPackage(string(out), pkg), nil
+}
+
+// listsPackage reports whether the output of `pm list packages` names pkg exactly.
+func listsPackage(out, pkg string) bool {
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == "package:"+pkg {
+			return true
+		}
+	}
+	return false
+}
+
 // Bin returns the path to the adb binary.
 func (a *ADB) Bin() string {
 	return a.bin

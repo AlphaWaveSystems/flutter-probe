@@ -22,7 +22,7 @@ panicking on a nil `deviceCtx`.
 
 Full `go test ./...` passes with no regressions.
 
-## Real-device evidence (water-sip)
+## Real-device evidence (private app B)
 
 `e4_add_media_evidence.probe`, 1 test, run identically against both platforms. The test itself
 only proves the command executes without error — the actual seeding is verified independently,
@@ -56,15 +56,15 @@ unindexed in a directory.
 
 Independently verified afterward (not through probe) by launching the built-in Photos app
 (`com.apple.mobileslideshow`) and screenshotting it: the seeded file appears as the newest photo
-in the Library (7 photos total, last one is the seeded file — visibly the same "Open in WaterSip"
+in the Library (7 photos total, last one is the seeded file — visibly the same "Open in app B"
 dialog screenshot used as test input, converted to JPEG). See
 `e4_ios_photos_app_verification.png`.
 
 ## Known limitation (not part of this feature, flagging for Phase 2)
 
 `add media` only seeds the file into the OS media store — it does not, and currently *cannot*,
-drive the app's own native image-picker UI to actually select that photo. Both water-sip
-(no `image_picker` usage found) and nect-flutter (`image_picker` used in several screens) present
+drive the app's own native image-picker UI to actually select that photo. Both private app B
+(no `image_picker` usage found) and private app A (`image_picker` used in several screens) present
 a native, OS-level picker sheet when an in-app "choose photo" button is tapped, and probe has no
 way to interact with that native UI yet — driving it is exactly the gap Phase 2's N-1
 (`tap native` / `see native` via `uiautomator`, Android) and N-2 (iOS native bridging proposal)

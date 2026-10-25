@@ -19,13 +19,13 @@ correctly captured as a scope selector here), `TestParser_CompareShot_ElementSco
 
 Full `go test ./...` passes with no regressions.
 
-## Real-device evidence (water-sip, Android emulator)
+## Real-device evidence (private app B, Android emulator)
 
-`e2_visual_regression_evidence.probe`, 2 tests. Required rebuilding water-sip with a current
+`e2_visual_regression_evidence.probe`, 2 tests. Required rebuilding private app B with a current
 `flutter_probe_agent` (the installed build predated the `probe.selector_bounds` RPC this feature
 calls — already used in production for AI-redaction, just not present in this app's pinned
 version) and the `--dart-define=PROBE_AGENT=true` flag main.dart requires — both reverted after,
-water-sip's repo is unmodified.
+private app B's repo is unmodified.
 
 ```
 ✓  element-scoped baseline established and matches an unchanged widget (5.262s)

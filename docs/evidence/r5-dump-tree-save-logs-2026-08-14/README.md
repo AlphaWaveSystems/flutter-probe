@@ -23,7 +23,7 @@ call.
 
 **Post-fix**: all 3 pass. Full `go test ./...` passes with no regressions.
 
-## Real-device evidence (water-sip, Android emulator)
+## Real-device evidence (private app B, Android emulator)
 
 **Pre-fix** (found while gathering V-1/PT-03 evidence, see `docs/evidence/v1-scroll-pt03-2026-08-14/`):
 ```

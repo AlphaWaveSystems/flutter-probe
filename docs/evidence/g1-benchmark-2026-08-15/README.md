@@ -1,7 +1,7 @@
 # G-1 evidence — the public benchmark, re-run with current data + reversed-order replication
 
 Two full `scripts/bench/run-comparison.sh` runs (N=10 per tool each — 40 total end-to-end test
-suite executions), against water-sip's 9-flow suite (`tests/smoke.probe` vs
+suite executions), against private app B's 9-flow suite (`tests/smoke.probe` vs
 `.maestro/flows/smoke/`), same emulator (`emulator-5554`), same current probe build (`main` as of
 this write-up — includes every Phase 1/2 feature shipped this session: E-1 through N-2). The
 second run's whole purpose is B-3's own stated next step: replicate its device-connectivity
@@ -12,9 +12,9 @@ be the one dying regardless of which tool was running."
 ## Run 1 — probe-first (matches B-3's original order)
 
 ```
-scripts/bench/run-comparison.sh --probe-bin <current probe> --probe-config water-sip/probe.yaml \
-  --probe-target water-sip/tests/smoke.probe --maestro-target water-sip/.maestro/flows/smoke \
-  --maestro-app-id com.alphawavesystems.watersip --device emulator-5554 --runs 10 \
+scripts/bench/run-comparison.sh --probe-bin <current probe> --probe-config app-b/probe.yaml \
+  --probe-target app-b/tests/smoke.probe --maestro-target app-b/.maestro/flows/smoke \
+  --maestro-app-id <app-b-bundle-id> --device emulator-5554 --runs 10 \
   --order probe-first --android-adb-port 48686
 ```
 
@@ -35,9 +35,9 @@ Raw data: `probe-first/probe/*.wallclock_ms` + `*.json`, `probe-first/maestro/*.
 ## Run 2 — maestro-first (the reversed-order replication)
 
 ```
-scripts/bench/run-comparison.sh --probe-bin <current probe> --probe-config water-sip/probe.yaml \
-  --probe-target water-sip/tests/smoke.probe --maestro-target water-sip/.maestro/flows/smoke \
-  --maestro-app-id com.alphawavesystems.watersip --device emulator-5554 --runs 10 \
+scripts/bench/run-comparison.sh --probe-bin <current probe> --probe-config app-b/probe.yaml \
+  --probe-target app-b/tests/smoke.probe --maestro-target app-b/.maestro/flows/smoke \
+  --maestro-app-id <app-b-bundle-id> --device emulator-5554 --runs 10 \
   --order maestro-first --android-adb-port 48686
 ```
 

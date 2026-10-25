@@ -145,12 +145,20 @@ func connectCompositeDevice(
 	// Detect platform from connected device list.
 	platform := device.Platform(cfg.Defaults.Platform)
 	deviceName := spec
+	osVersion := ""
 	devList, _ := dm.List(ctx)
 	for _, d := range devList {
 		if d.ID == spec {
 			platform = d.Platform
 			deviceName = d.Name
+			osVersion = d.OSVersion
 			break
+		}
+	}
+	// Android reports its OS version through a property, as the single-device path does.
+	if platform == device.PlatformAndroid && osVersion == "" {
+		if v, err := dm.ADB().GetProp(ctx, spec, "ro.build.version.release"); err == nil && v != "" {
+			osVersion = "Android " + v
 		}
 	}
 
@@ -252,6 +260,8 @@ func connectCompositeDevice(
 		DeviceCtx:  devCtx,
 		DeviceID:   spec,
 		DeviceName: deviceName,
+		Platform:   platform,
+		OSVersion:  osVersion,
 	}
 	fmt.Printf("  \033[32m✓\033[0m  [%s] Connected to %s (%s)\n", alias, deviceName, spec)
 	return dev, client, nil

@@ -9,7 +9,7 @@
 :root { color-scheme: light dark; --bg:#f5f7fb; --panel:#fff; --text:#172238; --muted:#536078; --border:#ccd3df; --accent:#285bd4; --good:#17643b; --bad:#aa2435; --warn:#805500; }
 @media(prefers-color-scheme:dark) { :root { --bg:#111723; --panel:#1b2433; --text:#edf2fa; --muted:#acb9cd; --border:#3a4960; --accent:#91b3ff; --good:#8cdbac; --bad:#ffa0ad; --warn:#f4d184; } }
 * { box-sizing:border-box; }
-body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
+body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; overflow-wrap:anywhere; }
 h1,h2,h3 { line-height:1.25; }
 h1 { margin-top:0; } h2 { margin-top:0; }
 .layout { display:grid; grid-template-columns:minmax(230px,30%) minmax(0,1fr); gap:16px; }
@@ -26,7 +26,7 @@ pre { white-space:pre-wrap; background:var(--bg); padding:12px; border-radius:8p
 .shots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 figure { margin:0; } img { display:block; max-width:100%; max-height:560px; object-fit:contain; margin-top:8px; }
 article { border-top:1px solid var(--border); padding-top:12px; margin-top:12px; }
-@media(max-width:680px) { .layout,.shots { grid-template-columns:1fr; } nav { max-height:300px; overflow:auto; } }
+@media(max-width:680px) { .layout,.shots { grid-template-columns:minmax(0,1fr); } nav { max-height:300px; overflow:auto; } }
 </style>
 </head>
 <body>
@@ -68,6 +68,18 @@ function body(parent, title, value) {
   if (value === undefined || value === null) element('p', 'Body not inlined. Inspect the exchange JSON in the bundle.', parent, 'muted');
   else element('pre', value, parent);
 }
+// The element a step acted on: what it was, where it was when the step started, and where the tap landed.
+function renderInteraction(item, parent) {
+  element('h3', 'Element', parent);
+  element('p', `${item.kind ?? 'action'} ${item.selector ?? '(selector not recorded)'}`, parent);
+  const target = item.target;
+  if (target && typeof target === 'object') {
+    element('p', `Bounds: left ${target.left}, top ${target.top}, ${target.width} × ${target.height} (logical pixels)`, parent, 'muted');
+    element('p', `Tap point: ${item.tap_x}, ${item.tap_y}`, parent, 'muted');
+  } else {
+    element('p', 'Not on screen when the step started.', parent, 'muted');
+  }
+}
 function select(step, button) {
   for (const item of list.querySelectorAll('button')) item.removeAttribute('aria-current');
   button.setAttribute('aria-current', 'true');
@@ -82,7 +94,7 @@ function select(step, button) {
   const tree = step.tree;
   if (tree && typeof tree === 'object' && (tree.content !== undefined || tree.text !== undefined)) element('pre', tree.content ?? tree.text, detail);
   else element('p', tree ? `Tree not inlined. Inspect ${display(tree)} in the bundle tree directory.` : 'No widget tree recorded.', detail, 'muted');
-  if (step.interaction != null) { element('h3', 'Interaction', detail); element('pre', step.interaction, detail); }
+  if (step.interaction != null) renderInteraction(step.interaction, detail);
   element('h3', 'HTTP exchanges', detail);
   const exchanges = Array.isArray(step.exchanges) ? step.exchanges : [];
   if (!exchanges.length) element('p', 'No exchanges recorded.', detail, 'muted');

@@ -133,8 +133,12 @@ after each step, the app's `dart:io` HTTP exchanges with credential redaction, a
 an offline HTML viewer. Capture failures produce warnings and do not change test
 results or exit codes.
 
-Native SDK and WebView traffic, the element each step acted on, and screenshot
-redaction rules are not yet recorded. Widget trees are not captured before steps.
+A step that taps, double taps, long presses, types, clears, toggles, or swipes or
+scrolls with a selector also records that element: its selector, and its bounds and tap point when the element is
+on screen as the step starts. Text typed into a field is never recorded.
+
+Native SDK and WebView traffic and screenshot redaction rules are not yet recorded.
+Widget trees are not captured before steps.
 Screenshots are not redacted. Recordings can contain screens and request or
 response bodies; keep them out of version control. Recording sends nothing to a
 hosted service, including when report upload is enabled.
