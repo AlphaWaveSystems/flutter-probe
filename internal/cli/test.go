@@ -1297,7 +1297,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		} else if cr != nil {
 			defer compositeCleanup()
 			if recording != nil {
-				cr = runner.NewCompositeRunner(cfg, cr.Devices(), runner.RunOptions{Timeout: durationFromTimeout(timeout), Verbose: verbose, NewRecorder: newRecorder})
+				cr = runner.NewCompositeRunner(cfg, cr.Devices(), runner.RunOptions{Timeout: durationFromTimeout(timeout), Verbose: verbose, NewRecorder: newRecorder, NewCompositeRecorder: recording.compositeRecorder()})
 			}
 			r.SetCompositeRunner(cr)
 		}

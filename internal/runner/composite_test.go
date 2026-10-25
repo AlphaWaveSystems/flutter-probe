@@ -9,9 +9,23 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
+
+// NewCompositeRecorder gets the whole device, so a recorder can take its platform and OS version.
+func TestComposite_NewCompositeRecorderGetsDeviceInfo(t *testing.T) {
+	devices := []runner.CompositeDevice{{Alias: "phone", DeviceName: "Pixel 7", Platform: device.PlatformAndroid, OSVersion: "Android 14"}}
+	var seen []runner.CompositeDevice
+	runner.NewCompositeRunner(&config.Config{}, devices, runner.RunOptions{NewCompositeRecorder: func(d runner.CompositeDevice) runner.StepRecorder {
+		seen = append(seen, d)
+		return nil
+	}})
+	if len(seen) != 1 || seen[0].Platform != device.PlatformAndroid || seen[0].OSVersion != "Android 14" {
+		t.Fatalf("recorder saw %+v", seen)
+	}
+}
 
 // ---- Parser-level composite structure tests ----
 

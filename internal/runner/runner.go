@@ -70,6 +70,11 @@ type Runner struct {
 // RunOptions configures a test run.
 type RunOptions struct {
 	NewRecorder func(device string) StepRecorder // nil = no recording; called once per device
+
+	// NewCompositeRecorder, when set, builds a composite run's recorders from the whole device, so each recorder can take
+	// the device's platform and OS version. It takes precedence over NewRecorder for composite runs.
+	NewCompositeRecorder func(d CompositeDevice) StepRecorder
+
 	Files        []string // .probe files to run
 	Tags         []string // filter by tag
 	Watch        bool     // re-run on file change
