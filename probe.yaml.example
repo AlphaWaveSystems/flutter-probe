@@ -4,7 +4,7 @@
 
 project:
   name: "My App"
-  app: com.example.myapp        # Bundle ID (Android) or Bundle Identifier (iOS)
+  app: com.example.myapp        # Bundle Identifier (iOS) or application ID (Android); on Android a camelCase value may match its snake_case form
 
 defaults:
   platform: android              # android | ios
