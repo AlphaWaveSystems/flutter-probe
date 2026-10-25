@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`probe device set` and the `set_device_setting` MCP tool change an OS setting of one named emulator or simulator**: appearance (dark mode), font scale, app language, orientation (Android) and opening a deep link, through `adb` and `simctl`. The device must be named (a serial, UDID or unique name, never `booted`), every value is checked before a command runs, and physical iOS devices are refused. Checked against an Android 15 emulator and an iOS simulator. The MCP server now has 36 tools.
 
 ### Docs
+- **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
 - **Run recording groundwork, internal only.** The CLI's new `internal/record` package can write a recording bundle, follow the agent's HTTP log without skipping requests still in flight, redact credentials from headers, URLs and bodies, and render a bundle as an offline viewer. Step events now carry their wall-clock time. The CLI now exposes this through `probe test --record`; the design is in `docs/prd/run-recording.md`.
 
 ### Fixed

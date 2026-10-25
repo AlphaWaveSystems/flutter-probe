@@ -1,9 +1,9 @@
 # B-1 — smoke-flow ↔ Maestro-flow mapping
 
-## nect-flutter (`tests/smoke/*.probe` ↔ `.maestro/flows/**`)
+## private app A (`tests/smoke/*.probe` ↔ `.maestro/flows/**`)
 
 Static analysis — read both suites in full, cross-referenced by behavior, not filename. Live
-execution against nect-flutter's own Android build wasn't possible in this environment (see
+execution against private app A's own Android build wasn't possible in this environment (see
 R-2/R-3/R-4's evidence — an unrelated connectivity issue on that specific build); the mapping
 below is verified by reading both suites' actual step-by-step content, not assumed from names.
 
@@ -22,19 +22,19 @@ below is verified by reading both suites' actual step-by-step content, not assum
 
 **Net result: 7/9 full parity, 2 partial/gap** (browse-feed scroll, filter-categories exhaustiveness)
 — both on the Maestro side being narrower, not the probe side. Given the scope of closing these
-(writing/extending real Maestro YAML against a live nect-flutter build, blocked in this
+(writing/extending real Maestro YAML against a live private app A build, blocked in this
 environment) they're logged as follow-on work rather than attempted blind.
 
-## water-sip (`tests/smoke.probe` ↔ new `.maestro/flows/smoke/*.yaml`)
+## private app B (`tests/smoke.probe` ↔ new `.maestro/flows/smoke/*.yaml`)
 
-water-sip had zero prior Maestro coverage. Wrote and **live-verified** (Android emulator) a new
+private app B had zero prior Maestro coverage. Wrote and **live-verified** (Android emulator) a new
 9-flow suite matching every test in `tests/smoke.probe` 1:1. PR open:
-https://github.com/AlphaWaveSystems/water-sip/pull/51 (awaiting review — CI has an unrelated
+a pull request in the private app B repository (awaiting review — CI has an unrelated
 `claude-review` bot failure, likely a missing secret in that repo, not something to force through
 on the user's own app without established precedent for it).
 
 **Result: 8/9 flows pass reliably.** The 9th (`undo-last-entry`) is a genuine, documented finding:
-water-sip's "Undo" snackbar auto-dismisses in a window narrow enough that Maestro's out-of-process
+private app B's "Undo" snackbar auto-dismisses in a window narrow enough that Maestro's out-of-process
 accessibility polling can miss it entirely — confirmed via Maestro's own captured hierarchy
 snapshot at the failure moment (add succeeded, no "Undo" node anywhere in the tree). FlutterProbe's
 in-process element-tree access catches this reliably (see `docs/evidence/r1-tap-var-resolve-2026-08-14/`).
@@ -42,7 +42,7 @@ in-process element-tree access catches this reliably (see `docs/evidence/r1-tap-
 
 ### A second finding, worth carrying into G-1/G-2
 
-Several of water-sip's UI labels are two-line `content-desc` values (e.g. the bottom-nav tabs:
+Several of private app B's UI labels are two-line `content-desc` values (e.g. the bottom-nav tabs:
 `"History\nTab 2 of 3"`). Maestro's default text-selector regex doesn't span embedded newlines
 without an explicit `(?s)` DOTALL flag — undocumented, discovered live by watching a plain
 `tapOn: "History"` fail with "Element not found" against a label that visibly contains "History".
@@ -54,6 +54,6 @@ easier to write correct selectors for" as a claim, not just an assertion.
 ## What this means for B-2/B-3
 
 The benchmark harness (B-2) should run, per app:
-- **water-sip**: the full 9-flow comparison (all 9 have working equivalents in both tools now).
-- **nect-flutter**: the 7 flows with full parity, once nect-flutter's Android connectivity issue
+- **private app B**: the full 9-flow comparison (all 9 have working equivalents in both tools now).
+- **private app A**: the 7 flows with full parity, once private app A's Android connectivity issue
   is resolved (or run against iOS instead, per `probe.yaml`'s own default platform there).

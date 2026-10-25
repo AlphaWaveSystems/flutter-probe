@@ -1,6 +1,6 @@
 # R-1 evidence — tap-family verbs resolve `<var>` placeholders
 
-Real-device test against water-sip (Android emulator, `com.alphawavesystems.watersip`),
+Real-device test against private app B (Android emulator, `<app-b-bundle-id>`),
 using `r1_var_tap_evidence.probe`: quick-adds 250ml (via `#today_quick_add_250`), stores the
 visible "Undo" button's label in a variable, then taps `"<undo_label>"`.
 

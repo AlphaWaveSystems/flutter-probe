@@ -1,7 +1,7 @@
-# B-3 — baseline benchmark: FlutterProbe vs Maestro on water-sip
+# B-3 — baseline benchmark: FlutterProbe vs Maestro on private app B
 
 10 runs per tool, `scripts/bench/run-comparison.sh`, same booted Android emulator
-(`emulator-5554`), same 9-flow suite (water-sip's `tests/smoke.probe` vs the new
+(`emulator-5554`), same 9-flow suite (private app B's `tests/smoke.probe` vs the new
 `.maestro/flows/smoke/` suite from B-1). Probe ran first (all 10 runs), then Maestro (all 10 runs)
 against the same still-running emulator. Raw per-run logs, JSON reports, and JUnit XML are all
 included in `probe/` and `maestro/` alongside this file.

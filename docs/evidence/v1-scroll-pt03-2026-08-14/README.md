@@ -7,7 +7,7 @@ v0.10.0 fix (scroll drives `ScrollPosition` directly, per `probe_agent/test/
 scroll_scrollposition_test.dart`'s existing widget tests) actually holds on a real device, since
 the original reporting project couldn't cleanly re-test it.
 
-**Real-device test** (`v1_scroll_evidence.probe`, run against water-sip on an Android emulator):
+**Real-device test** (`v1_scroll_evidence.probe`, run against private app B on an Android emulator):
 18 quick-adds overflow one screen's worth of History's `ListView.builder`, then `scroll down` is
 issued. Result: **passed** — no timeout, no "widget not found," `scroll down` completed and the
 test proceeded normally. `ListView.builder` only materializes elements near the current viewport,
