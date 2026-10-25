@@ -112,7 +112,7 @@ The agent is not part of the pin. `probe test` prints `probe CLI X / agent A` on
 | Key | Type | Description |
 |-----|------|-------------|
 | `name` | string | Project display name |
-| `app` | string | Bundle ID (iOS) or package name (Android). Validated against `^[a-zA-Z][a-zA-Z0-9_.]*$` |
+| `app` | string | Bundle ID (iOS) or package name (Android). On Android, uppercase letters in the last segment become snake_case (`com.example.myApp` becomes `com.example.my_app`), for `--device`, `--devices` and parallel runs alike. Validated against `^[a-zA-Z][a-zA-Z0-9_.]*$` |
 
 ### defaults
 
