@@ -84,6 +84,19 @@ func TestRecordingNewDeviceInfoWritesPlatformAndOSVersion(t *testing.T) {
 	}
 }
 
+// The element a step acts on reaches the recorder, and a step without one carries no target.
+func TestRecordingEventCarriesTheTarget(t *testing.T) {
+	ev := runner.StepEvent{File: "test.probe", Target: &runner.StepTarget{Verb: "tap", Text: `"Sign in"`}}
+	got := recordingEvent(ev).Target
+	if got == nil || got.Verb != "tap" || got.Text != `"Sign in"` {
+		t.Fatalf("target = %+v", got)
+	}
+	ev.Target = nil
+	if recordingEvent(ev).Target != nil {
+		t.Fatal("a step without a target got one")
+	}
+}
+
 // A composite run's recorder takes the platform and OS version of its device from the composite device list.
 func TestRecordingCompositeRecorderWritesPlatformAndOSVersion(t *testing.T) {
 	r := newRunRecording(t.TempDir())

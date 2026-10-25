@@ -24,6 +24,16 @@ type Event struct {
 	Error          string
 	Attempt, Depth int
 	At             time.Time
+	// Target is the element the step acts on; nil for a step that acts on no element.
+	Target *Target
+}
+
+// Target is the element a step acts on. Text is the selector as the step resolved it, and it is redacted before it is
+// written. Lookup is what the recorder sends to find the element's bounds.
+type Target struct {
+	Verb   string
+	Text   string
+	Lookup probelink.SelectorParam
 }
 
 // Client is the subset of ProbeClient needed for recording.
@@ -31,6 +41,7 @@ type Client interface {
 	HTTPLog(context.Context, probelink.HTTPLogParams) (probelink.HTTPLogResult, error)
 	DumpWidgetTree(context.Context) (string, error)
 	Screenshot(context.Context, string) (string, error)
+	SelectorBounds(context.Context, probelink.SelectorParam) (probelink.BoundsResult, error)
 }
 
 var _ Client = (probelink.ProbeClient)(nil)
@@ -96,14 +107,40 @@ func (r *Recorder) warn(operation string, err error) error {
 
 // deviceCall contains failures (including faulty client panics) within recording.
 func deviceCall[T any](f func(context.Context) (T, error)) (value T, err error) {
+	return deviceCallWithin(15*time.Second, f)
+}
+
+// deviceCallWithin is deviceCall with its own time limit.
+func deviceCallWithin[T any](limit time.Duration, f func(context.Context) (T, error)) (value T, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("client panic: %v", p)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	return f(ctx)
+}
+
+// interaction records the element a step acts on: its selector, and its bounds and tap point when the element is on
+// screen as the step starts. The lookup has a two-second limit. A failed lookup is an advisory warning, and the step
+// runs as it would without recording.
+func (r *Recorder) interaction(client Client, t *Target) *Interaction {
+	in := &Interaction{Kind: t.Verb, Selector: RedactBody(t.Text)}
+	if client == nil {
+		return in
+	}
+	bounds, err := deviceCallWithin(2*time.Second, func(ctx context.Context) (probelink.BoundsResult, error) {
+		return client.SelectorBounds(ctx, t.Lookup)
+	})
+	if err != nil {
+		r.warn("element lookup", err)
+		return in
+	}
+	in.Target = &Rect{Left: bounds.X, Top: bounds.Y, Width: bounds.Width, Height: bounds.Height}
+	in.TapX = bounds.X + bounds.Width/2
+	in.TapY = bounds.Y + bounds.Height/2
+	return in
 }
 
 func (r *Recorder) BeginStep(client Client, ev Event) error {
@@ -124,6 +161,9 @@ func (r *Recorder) BeginStep(client Client, ev Event) error {
 		name, err := r.screenshot(client, step.Index, "before")
 		step.ScreenshotBefore = name
 		result = errors.Join(result, err)
+	}
+	if ev.Target != nil {
+		step.Interaction = r.interaction(client, ev.Target)
 	}
 	r.timeline.Steps = append(r.timeline.Steps, step)
 	r.open[step.Index-1] = true
