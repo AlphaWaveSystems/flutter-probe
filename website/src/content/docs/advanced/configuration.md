@@ -112,7 +112,7 @@ The agent is not part of the pin. `probe test` prints `probe CLI X / agent A` on
 | Key | Type | Description |
 |-----|------|-------------|
 | `name` | string | Project display name |
-| `app` | string | Bundle ID (iOS) or package name (Android). On Android, uppercase letters in the last segment become snake_case (`com.example.myApp` becomes `com.example.my_app`), for `--device`, `--devices` and parallel runs alike. Validated against `^[a-zA-Z][a-zA-Z0-9_.]*$` |
+| `app` | string | Bundle ID (iOS) or package name (Android). On Android, uppercase letters in the last segment can become snake_case (`com.example.myApp` becomes `com.example.my_app`). `--device` uses the snake_case ID only when the ID as written is not installed and the snake_case ID is; `--devices` and parallel runs always use it. Validated against `^[a-zA-Z][a-zA-Z0-9_.]*$` |
 
 ### defaults
 

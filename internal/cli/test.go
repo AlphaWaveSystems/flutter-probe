@@ -199,11 +199,19 @@ func init() {
 	f.StringArray("composite-device", nil, compositeDeviceUsage())
 }
 
-// resolveDeviceAppID makes project.app the application ID the device knows, so every later step of a single-device run
-// uses it. A camelCase Flutter bundle ID becomes the snake_case Android application ID, as --devices and parallel runs
-// already do (see runner.ResolveAppID); iOS keeps the bundle ID as written.
-func resolveDeviceAppID(cfg *config.Config, platform device.Platform) {
-	cfg.Project.App = runner.ResolveAppID(cfg.Project.App, platform)
+// resolveDeviceAppID returns the application ID a single-device run uses on the device. Flutter's camelCase bundle ID
+// has a snake_case Android form (see runner.ResolveAppID), and the converted form is used only when it is the installed
+// one. The ID as written is kept when it is installed, and when neither form is, so a run that works today keeps its ID.
+// iOS keeps the bundle ID as written, and installed is not asked about it.
+func resolveDeviceAppID(written string, platform device.Platform, installed func(id string) bool) string {
+	converted := runner.ResolveAppID(written, platform)
+	if converted == written || installed(written) {
+		return written
+	}
+	if installed(converted) {
+		return converted
+	}
+	return written
 }
 
 func runTests(cmd *cobra.Command, args []string) error {
@@ -875,8 +883,11 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 			}
 
-			// The app ID the device knows: a camelCase bundle ID becomes the snake_case Android application ID.
-			resolveDeviceAppID(cfg, platform)
+			// Use the application ID this device has installed (see resolveDeviceAppID).
+			cfg.Project.App = resolveDeviceAppID(cfg.Project.App, platform, func(id string) bool {
+				installed, err := dm.ADB().PackageInstalled(ctx, deviceSerial, id)
+				return err == nil && installed
+			})
 
 			// Install app if --app-path provided
 			if appPath != "" {
