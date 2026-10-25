@@ -55,6 +55,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Verify dependencies resolve
@@ -162,6 +163,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Build CLI
@@ -183,6 +185,7 @@ jobs:
         if: needs.changes.outputs.go == 'true'
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Go vulnerability check
@@ -220,6 +223,7 @@ jobs:
         if: needs.changes.outputs.go == 'true'
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Check Go dependency licenses
