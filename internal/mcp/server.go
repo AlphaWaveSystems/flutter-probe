@@ -333,10 +333,8 @@ Key flags for the flags parameter:
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
   --format junit              JUnit XML (add --junit-attempts to list every attempt of a re-run test, --junit-suffix/--junit-label to tell devices apart)
   --measure-all               measure every test (a window per test) with no script edits
-  --upload-report             upload the scrubbed report to the hosted service (Probe Cloud, preview; needs a probe_cloud license); --upload-dry-run prints the payload and sends nothing
   --record                    record each step locally (screenshots, widget trees and app-client HTTP exchanges); recordings are never uploaded
   --record-dir DIR            recording base directory (default: reports_folder/recordings)
-  --upload-local              upload this run as a local run (Probe Cloud, preview; unverified, never counts toward a pull request's verdict; needs a probe_cloud license and a team that enabled local uploads); never implied by --upload-report
   --perf-baseline FILE        fail tests whose measurements regress against FILE (--perf-update-baseline writes it, --perf-tolerance 20)
   --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data on physical devices, memory,cpu,data on emulators/simulators; all = also memory_growth,cpu_peak,frame_max)
   --perf-ignore LIST          metrics to leave out of the comparison; --perf-key-base DIR makes baseline keys relative to DIR
@@ -760,15 +758,36 @@ func (s *Server) writeTest(id any, path, content string) *mcpResponse {
 	}}
 }
 
+// hostedUploadPrefix names the probe test flags that send a report or a run to the hosted service. The MCP keeps to the
+// local tool surface, so run_tests and run_script refuse these flags before the CLI runs.
+const hostedUploadPrefix = "--upload-"
+
+// refusedHostedFlag returns an error when a flags string names a hosted upload flag.
+func refusedHostedFlag(flags string) error {
+	for _, f := range strings.Fields(flags) {
+		name, _, _ := strings.Cut(f, "=")
+		if strings.HasPrefix(name, hostedUploadPrefix) {
+			return fmt.Errorf("hosted upload is not available through MCP (%s): run the CLI from a terminal to upload", name)
+		}
+	}
+	return nil
+}
+
 func (s *Server) runScript(id any, script, flags, deviceID string) *mcpResponse {
 	if script == "" {
 		return errResp(id, -32602, "script is required")
+	}
+	if err := refusedHostedFlag(flags); err != nil {
+		return textResp(id, err.Error(), err)
 	}
 	out, err := s.runInlineScript(script, flags, deviceID)
 	return textResp(id, out, err)
 }
 
 func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
+	if err := refusedHostedFlag(args["flags"]); err != nil {
+		return textResp(id, err.Error(), err)
+	}
 	cmdArgs := []string{"test"}
 	if args["paths"] != "" {
 		cmdArgs = append(cmdArgs, strings.Fields(args["paths"])...)
