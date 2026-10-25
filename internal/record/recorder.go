@@ -35,7 +35,7 @@ type Client interface {
 
 var _ Client = (probelink.ProbeClient)(nil)
 
-type Options struct{ Dir, RunID, Device, Screenshots, CLIVersion string }
+type Options struct{ Dir, RunID, Device, Screenshots, CLIVersion, Platform, OSVersion string }
 
 type recordingKey struct {
 	file, test string
@@ -154,7 +154,7 @@ func (r *Recorder) start(ev Event) error {
 	r.timeline = Timeline{Steps: []Step{}}
 	r.open = make(map[int]bool)
 	r.exchanges = 0
-	r.manifest = Manifest{SchemaVersion: SchemaVersion, RunID: r.opts.RunID, TestName: ev.TestName, File: ev.File, Attempt: ev.Attempt, DeviceName: r.opts.Device, CLIVersion: r.opts.CLIVersion, StartedAt: ev.At, Status: "running", Capture: Capture{Screenshots: r.opts.Screenshots, Native: "off", Redaction: true}}
+	r.manifest = Manifest{SchemaVersion: SchemaVersion, RunID: r.opts.RunID, TestName: ev.TestName, File: ev.File, Attempt: ev.Attempt, DeviceName: r.opts.Device, Platform: r.opts.Platform, OSVersion: r.opts.OSVersion, CLIVersion: r.opts.CLIVersion, StartedAt: ev.At, Status: "running", Capture: Capture{Screenshots: r.opts.Screenshots, Native: "off", Redaction: true}}
 	data, err := os.ReadFile(ev.File)
 	if err != nil {
 		r.warn("read test file", err)

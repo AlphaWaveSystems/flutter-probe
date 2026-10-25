@@ -82,6 +82,28 @@ func recordStep(t *testing.T, r *Recorder, c Client, ev Event, status string) {
 	}
 }
 
+func TestRecorderManifestCarriesPlatformAndOSVersion(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "test.probe")
+	if err := os.WriteFile(file, []byte("test recording"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := NewRecorder(Options{Dir: filepath.Join(root, "recordings"), RunID: "run", Device: "device", Screenshots: "never", CLIVersion: "version", Platform: "ios", OSVersion: "iOS 18.6"})
+	ev := Event{File: file, TestName: "My Test!", Attempt: 1, Line: 1, Description: "first", Status: "started", At: time.Now()}
+	recordStep(t, r, &recorderClient{}, ev, "passed")
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "recordings", "my-test-attempt-1", "manifest.json")
+	if m := readRecorderJSON[Manifest](t, path); m.Platform != "ios" || m.OSVersion != "iOS 18.6" {
+		t.Fatal(m)
+	}
+	// The JSON keys are part of the bundle format, so check them by name as well.
+	if raw := readRecorderJSON[map[string]any](t, path); raw["platform"] != "ios" || raw["os_version"] != "iOS 18.6" {
+		t.Fatal(raw)
+	}
+}
+
 func TestRecorderBundleAndRedaction(t *testing.T) {
 	r, ev, root := recorderSetup(t, "every_step")
 	c := &recorderClient{replies: []recorderReply{

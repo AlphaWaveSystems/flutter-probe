@@ -358,11 +358,18 @@ func newRunRecording(base string) *runRecording {
 	return &runRecording{base: base, runID: time.Now().UTC().Format("20060102-150405")}
 }
 
+// NewDevice starts a recorder for one device whose platform and OS version are not known here.
 func (r *runRecording) NewDevice(device string) runner.StepRecorder {
+	return r.NewDeviceInfo(device, "", "")
+}
+
+// NewDeviceInfo starts a recorder for one device. platform and osVersion come from the run's metadata, the same values
+// the report carries, so the manifest and the report agree.
+func (r *runRecording) NewDeviceInfo(device, platform, osVersion string) runner.StepRecorder {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	dir := filepath.Join(r.base, r.runID, deviceSlug(device))
-	recorder := record.NewRecorder(record.Options{Dir: dir, RunID: r.runID, Device: device, Screenshots: "every_step", CLIVersion: Version})
+	recorder := record.NewRecorder(record.Options{Dir: dir, RunID: r.runID, Device: device, Platform: platform, OSVersion: osVersion, Screenshots: "every_step", CLIVersion: Version})
 	r.recorders = append(r.recorders, deviceRecording{dir, recorder})
 	return &stepRecording{recorder: recorder}
 }
