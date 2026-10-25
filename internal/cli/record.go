@@ -334,6 +334,9 @@ func recordingEvent(ev runner.StepEvent) record.Event {
 	if ev.Error != nil {
 		result.Error = ev.Error.Error()
 	}
+	if ev.Target != nil {
+		result.Target = &record.Target{Verb: ev.Target.Verb, Text: ev.Target.Text, Lookup: ev.Target.Lookup}
+	}
 	return result
 }
 

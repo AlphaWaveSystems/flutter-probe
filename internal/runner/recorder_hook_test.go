@@ -33,6 +33,37 @@ func (r *fakeStepRecorder) EndStep(client probelink.ProbeClient, ev StepEvent) e
 	return r.err
 }
 
+// A recorder gets the element an action step acts on, for the verbs that act on one. The selector is the resolved one,
+// and a typed value never reaches the target.
+func TestStepTargetIsSetOnlyForElementVerbs(t *testing.T) {
+	rec := &fakeStepRecorder{}
+	e := NewExecutor(nil, nil, nil, time.Second, false)
+	e.recorder = rec
+	e.SetVar("item", "Sign in")
+	sel := parser.Selector{Kind: parser.SelectorText, Text: "<item>"}
+
+	e.emitStep(parser.ActionStep{Verb: parser.VerbTap, Sel: &sel}, "tap", StepStarted, 0, nil)
+	e.emitStep(parser.ActionStep{Verb: parser.VerbType, Sel: &sel, Text: "hunter2"}, "type", StepStarted, 0, nil)
+	e.emitStep(parser.ActionStep{Verb: parser.VerbGoBack}, "go back", StepStarted, 0, nil)
+	e.emitStep(parser.ActionStep{Verb: parser.VerbTap, Sel: &sel}, "tap", StepPassed, time.Second, nil)
+	if len(rec.events) != 4 {
+		t.Fatalf("events=%d, want 4", len(rec.events))
+	}
+	tap, typed := rec.events[0].Target, rec.events[1].Target
+	if tap == nil || tap.Verb != "tap" || tap.Text != `"Sign in"` || tap.Lookup.Text != "Sign in" {
+		t.Fatalf("tap target = %+v", tap)
+	}
+	if typed == nil || typed.Verb != "type" || typed.Text != `"Sign in"` || typed.Lookup.Text != "Sign in" {
+		t.Fatalf("type target = %+v", typed)
+	}
+	if rec.events[2].Target != nil {
+		t.Fatalf("go back has a target: %+v", rec.events[2].Target)
+	}
+	if rec.events[3].Target != nil {
+		t.Fatalf("an end event carries a target: %+v", rec.events[3].Target)
+	}
+}
+
 func TestRecorderHookParsedTest(t *testing.T) {
 	for _, mode := range []string{"record", "errors", "no recorder", "no callback"} {
 		t.Run(mode, func(t *testing.T) {

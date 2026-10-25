@@ -26,6 +26,10 @@ func (c *restartClient) Screenshot(context.Context, string) (string, error) {
 	return "", os.ErrNotExist
 }
 
+func (c *restartClient) SelectorBounds(context.Context, probelink.SelectorParam) (probelink.BoundsResult, error) {
+	return probelink.BoundsResult{}, os.ErrNotExist
+}
+
 // After an app restart the agent's seq starts again. The exchange from the new process needs a file of its own, and
 // the exchange from the old process must keep the file it already has.
 func TestRecorderKeepsExchangesAcrossAppRestart(t *testing.T) {
