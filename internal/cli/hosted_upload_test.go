@@ -101,8 +101,9 @@ func TestHostedUploadFailureIsAWarningOnly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", http.StatusServiceUnavailable) }))
 	defer srv.Close()
 	var w bytes.Buffer
-	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL, Timeout: time.Second}}, hostedSampleResults(), runner.RunMetadata{Platform: "android"}, "emulator")
-	if !strings.Contains(w.String(), "unaffected") || !strings.Contains(w.String(), "503") {
+	// A tiny retry window makes the upload give up after its first 503; the 5-minute default would make this test slow.
+	hostedUpload(uploadCmd(true, false), &w, &config.Config{Hosted: config.HostedConfig{URL: srv.URL, Timeout: time.Second, RetryWindow: time.Millisecond}}, hostedSampleResults(), runner.RunMetadata{Platform: "android"}, "emulator")
+	if !strings.Contains(w.String(), "unaffected") || !strings.Contains(w.String(), "503") || !strings.Contains(w.String(), "still busy") {
 		t.Fatalf("out=%q", w.String())
 	}
 }
