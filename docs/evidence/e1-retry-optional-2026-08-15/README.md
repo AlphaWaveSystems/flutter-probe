@@ -19,7 +19,7 @@ regression guard proving the swallow is actually gated on the flag), and
 
 Full `go test ./...` passes with no regressions.
 
-## Real-device evidence (water-sip, Android emulator)
+## Real-device evidence (private app B, Android emulator)
 
 `e1_retry_optional_evidence.probe`, 3 tests, run against a real emulator:
 

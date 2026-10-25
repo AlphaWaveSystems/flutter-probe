@@ -27,7 +27,7 @@ All 3 fail — the third fails because `_stateCheckFailureReason` reports `conta
 
 ## Real-device attempt — inconclusive, documented honestly
 
-Attempted against nect-flutter (Android emulator, `com.alphawavesystems.nect.dev`, dev flavor)
+Attempted against private app A (Android emulator, `<app-a-bundle-id>`, dev flavor)
 via a temporary `dependency_overrides: flutter_probe_agent: {path: ...}` pointing at this
 worktree, `flutter build apk --flavor development --debug`, and a manual install. The app
 launched correctly and printed a stable `PROBE_TOKEN` to logcat, but every WebSocket dial attempt
@@ -39,10 +39,10 @@ This is very unlikely to be caused by this change: the fix touches only `_textOf
 existing `_findTextController` helper, both used exclusively *after* an RPC has already been
 dispatched over an established connection — nothing in the diff is anywhere near
 `server.dart`'s WebSocket upgrade/token-validation path. Given the time cost of debugging what
-looks like an unrelated emulator/dev-flavor/port-forwarding issue (`nect-flutter` runs its agent
+looks like an unrelated emulator/dev-flavor/port-forwarding issue (`private app A` runs its agent
 on a non-default port, 48688), this was not pursued further for R-4; it may be the same class of
 issue R-2/PT-25 is tracking and is worth revisiting there. The `dependency_overrides` used for
-this attempt were fully reverted — `nect-flutter`'s repo is back to its original state.
+this attempt were fully reverted — `private app A`'s repo is back to its original state.
 
 Real-device verification for this fix currently rests on the pre-fix/post-fix widget-test
 delta above, which is the same evidentiary bar the project's own `DONE.md` accepts for several

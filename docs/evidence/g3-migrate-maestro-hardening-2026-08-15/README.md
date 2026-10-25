@@ -1,9 +1,9 @@
-# G-3 evidence — hardening `probe migrate maestro` against nect-flutter's real 76-flow suite
+# G-3 evidence — hardening `probe migrate maestro` against private app A's real 76-flow suite
 
 ## The roadmap's four named commands didn't actually appear in the corpus
 
 The roadmap named `setPermissions`, `relativePoint`, `retry`, and `assertScreenshot` as the 2.x
-syntax to harden against. Running a command-frequency audit against nect-flutter's real
+syntax to harden against. Running a command-frequency audit against private app A's real
 `.maestro/flows/` tree first — before writing any conversion code — found **zero occurrences of
 any of the four** anywhere in the real suite. What the corpus actually contained, by frequency:
 
@@ -61,10 +61,10 @@ this one corpus happens to use them, and the corpus's own actual gaps were the h
 ## A structural bug found independent of any single command: non-recursive directory discovery
 
 `probe migrate maestro <dir>` used a single-level `os.ReadDir`, not a recursive walk. Maestro
-suites organized into feature subdirectories — nect-flutter's own real suite is laid out exactly
+suites organized into feature subdirectories — private app A's own real suite is laid out exactly
 this way (`flows/auth/`, `flows/settings/`, `flows/posts/`, ...) — got **zero files found and a
 silent "No Maestro YAML files found." with no error**, not a partial conversion. Running the tool
-against `nect-flutter/.maestro/flows/` before this fix reproduced exactly that. Fixed via
+against `app-a/.maestro/flows/` before this fix reproduced exactly that. Fixed via
 `filepath.WalkDir`, and output paths now mirror the source's subdirectory structure (previously
 flattened to one directory, which would silently overwrite same-named files from different
 subdirectories on collision — no collision existed in this corpus, but the risk was real and
@@ -73,12 +73,12 @@ free to close while already in this code).
 ## Full-corpus run
 
 ```
-probe migrate maestro nect-flutter/.maestro/flows/ --output <dir>
+probe migrate maestro app-a/.maestro/flows/ --output <dir>
 ```
 
 **76/76 files converted, 0 hard errors, 331 warnings** (mostly `extendedWaitUntil`'s dropped
 custom-timeout note — expected and correct, not a fault). Full log: `migrate_run.log`. Every
-converted file: `nect-flutter-migrated-suite/`.
+converted file: `<migrated-suite>/`.
 
 **Migration-fidelity check**: every one of the 76 generated `.probe` files was then run through
 `probe test --dry-run` against this branch's own parser — **76/76 parsed as valid ProbeScript**,

@@ -377,6 +377,14 @@ func (r *runRecording) NewDeviceInfo(device, platform, osVersion string) runner.
 	return &stepRecording{recorder: recorder}
 }
 
+// compositeRecorder is the recorder factory for a composite run. Each device's recorder takes the platform and OS version
+// the composite device list carries, as a single-device run takes them from its run metadata.
+func (r *runRecording) compositeRecorder() func(runner.CompositeDevice) runner.StepRecorder {
+	return func(d runner.CompositeDevice) runner.StepRecorder {
+		return r.NewDeviceInfo(d.DeviceName, string(d.Platform), d.OSVersion)
+	}
+}
+
 // Finish returns written device directories and advisory warnings, never a run error.
 func (r *runRecording) Finish() (dirs, warnings []string) {
 	r.mu.Lock()

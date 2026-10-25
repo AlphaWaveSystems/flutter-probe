@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
@@ -19,6 +20,8 @@ type CompositeDevice struct {
 	DeviceCtx  *DeviceContext // nil if the device has no platform ops (e.g. pure WiFi)
 	DeviceID   string
 	DeviceName string
+	Platform   device.Platform // empty for a WiFi device: the CLI does not learn its platform
+	OSVersion  string          // empty when the CLI cannot read it
 }
 
 // CompositeDeviceResult holds the outcome for one device in a composite test.
@@ -86,10 +89,14 @@ func NewCompositeRunner(cfg *config.Config, devices []CompositeDevice, opts RunO
 		recipes: make(map[string]parser.RecipeDef),
 		opts:    opts,
 	}
-	if opts.NewRecorder != nil {
+	if opts.NewRecorder != nil || opts.NewCompositeRecorder != nil {
 		cr.recorders = make([]StepRecorder, len(devices))
 		for i, d := range devices {
-			cr.recorders[i] = opts.NewRecorder(d.DeviceName)
+			if opts.NewCompositeRecorder != nil {
+				cr.recorders[i] = opts.NewCompositeRecorder(d)
+			} else {
+				cr.recorders[i] = opts.NewRecorder(d.DeviceName)
+			}
 		}
 	}
 	return cr

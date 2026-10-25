@@ -5,7 +5,7 @@
 This is a research/repro task, not a code-fix task (per the roadmap's own framing) — `DONE.md`
 explicitly says reproducing PT-25's core symptom "needs the specific background-network-load
 conditions the report describes... which this project's own generic test app doesn't produce
-regardless of run length." water-sip is a real Firebase-heavy app (Crashlytics, Analytics,
+regardless of run length." private app B is a real Firebase-heavy app (Crashlytics, Analytics,
 Remote Config, Performance, In-App Messaging) plus real IAP/billing SDK calls, so it was used as
 a more realistic stand-in.
 

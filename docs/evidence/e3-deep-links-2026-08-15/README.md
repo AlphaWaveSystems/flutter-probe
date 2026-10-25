@@ -23,31 +23,31 @@ skips gracefully and — critically — does *not* fall through to the external-
 
 Full `go test ./...` passes with no regressions.
 
-## Real-device evidence (water-sip)
+## Real-device evidence (private app B)
 
-water-sip has a genuine registered custom scheme (`watersip://`) on both platforms —
-`CFBundleURLSchemes` in `ios/Runner/Info.plist` and `android:scheme="watersip"` in
+private app B has a genuine registered custom scheme (`<app-b-scheme>://`) on both platforms —
+`CFBundleURLSchemes` in `ios/Runner/Info.plist` and `android:scheme="<app-b-scheme>"` in
 `android/app/src/main/AndroidManifest.xml` — so the deep link actually round-trips through real OS
 intent handling, not a scheme that's merely declared but unhandled.
 
 ### Android emulator
 
 `e3_android_deep_link_evidence.probe`, 1 test, proof strategy: open an `https://` link *without*
-`in the app` first (existing, unchanged behavior — external browser, backgrounding water-sip),
-then use the new `in the app` form with `watersip://` and confirm water-sip is back in the
+`in the app` first (existing, unchanged behavior — external browser, backgrounding private app B),
+then use the new `in the app` form with `<app-b-scheme>://` and confirm private app B is back in the
 foreground. This proves the OS genuinely routed the second URL to the app rather than the app just
 happening to still be there.
 
 ```
-✓  open link in the app brings water-sip back to foreground from a browser (11.173s)
+✓  open link in the app brings private app B back to foreground from a browser (11.173s)
 ```
 
 ### iOS simulator
 
 `e3_ios_deep_link_evidence.probe`, 1 test (simpler than the Android version — this build's agent
 predates `probe.open_link`, the pre-existing external-browser RPC, which is unrelated to E-3's own
-work; E-3's `DeepLink` path is entirely CLI-side and calls no Dart RPC at all). Restarts water-sip
-first (app running, not in foreground), then opens `watersip://...` `in the app` and confirms the
+work; E-3's `DeepLink` path is entirely CLI-side and calls no Dart RPC at all). Restarts private app B
+first (app running, not in foreground), then opens `<app-b-scheme>://...` `in the app` and confirms the
 app is showing a real screen afterward.
 
 ```
@@ -63,10 +63,10 @@ platform asymmetry surfaced:
 - **Android**: `adb shell am start -a android.intent.action.VIEW -d <url>` cold-launches the app
   from fully terminated with no prompt, confirmed by killing the app first
   (`am force-stop`) and then observing it start.
-- **iOS Simulator**: with water-sip fully terminated (confirmed absent from
-  `xcrun simctl spawn <udid> launchctl list`), `xcrun simctl openurl <udid> watersip://...`
+- **iOS Simulator**: with private app B fully terminated (confirmed absent from
+  `xcrun simctl spawn <udid> launchctl list`), `xcrun simctl openurl <udid> <app-b-scheme>://...`
   returns exit 0, but the app does **not** relaunch. A screenshot taken immediately after shows
-  the Home Screen with a system confirmation dialog — **"Open in 'WaterSip'? Cancel / Open"** —
+  the Home Screen with a system confirmation dialog — **"Open in '<app B>'? Cancel / Open"** —
   sitting on top, waiting for a manual tap. See `ios_cold_launch_confirmation_dialog.png`.
 
 This is a genuine iOS Simulator behavior, not a bug in this feature's Go code (`SimCtl.OpenURL`
