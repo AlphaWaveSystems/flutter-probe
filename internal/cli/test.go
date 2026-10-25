@@ -1282,7 +1282,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				name = deviceSerial
 			}
-			return recording.NewDevice(name)
+			return recording.NewDeviceInfo(name, runMeta.Platform, runMeta.OSVersion)
 		}
 	}
 	r := runner.New(cfg, client, devCtx, opts)
