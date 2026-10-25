@@ -1,16 +1,16 @@
 # B-2 evidence — comparison harness smoke test
 
-Ran `scripts/bench/run-comparison.sh` end-to-end with `--runs 2` against water-sip's new 9-flow
+Ran `scripts/bench/run-comparison.sh` end-to-end with `--runs 2` against private app B's new 9-flow
 suite (both tools, per B-1's evidence) to prove the harness itself works before committing to a
 full N=10 baseline run (B-3).
 
 ```
 scripts/bench/run-comparison.sh \
   --probe-bin <probe binary> \
-  --probe-config water-sip/probe.yaml \
-  --probe-target water-sip/tests/smoke.probe \
-  --maestro-target water-sip/.maestro/flows/smoke \
-  --maestro-app-id com.alphawavesystems.watersip \
+  --probe-config app-b/probe.yaml \
+  --probe-target app-b/tests/smoke.probe \
+  --maestro-target app-b/.maestro/flows/smoke \
+  --maestro-app-id <app-b-bundle-id> \
   --device emulator-5554 \
   --runs 2
 ```

@@ -27,9 +27,9 @@ nil `DeviceContext`.
 
 Full `go test ./...` passes with no regressions.
 
-## Real-device evidence (water-sip, Android emulator)
+## Real-device evidence (private app B, Android emulator)
 
-Neither water-sip nor nect-flutter has a share-sheet or system-picker flow of their own reachable
+Neither private app B nor private app A has a share-sheet or system-picker flow of their own reachable
 without deeper app exploration, so the evidence targets two Android-provided native UI surfaces
 directly instead — the system Share sheet and Settings' search screen. Both are genuine,
 unmodified OS UI with zero Flutter involvement, which is exactly the surface this feature targets;
@@ -39,7 +39,7 @@ being proven.
 ### `see native` / `tap native` — the Android Share sheet
 
 Triggered via `adb shell am start -a android.intent.action.SEND` (an external, real
-`ACTION_SEND` intent — the same mechanism any app's "Share" button fires) while water-sip's
+`ACTION_SEND` intent — the same mechanism any app's "Share" button fires) while private app B's
 ProbeAgent stayed connected in the background.
 
 ```

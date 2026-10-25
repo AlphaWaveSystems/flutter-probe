@@ -1,6 +1,6 @@
 # Full-feature test campaign — every ProbeScript feature, Android + iOS, local AI
 
-One suite exercising **every ProbeScript feature** against a real app (water-sip, freshly built
+One suite exercising **every ProbeScript feature** against a real app (private app B, freshly built
 with agent 0.12.x), run on a fresh Android emulator (`pixel_7_e2e_secondary`) and a
 freshly-created iOS 26.5 simulator, with the entire AI family running against a **local LM Studio
 `google/gemma-4-31b`** (validated up front to return probe's exact JSON verdict shape, vision
@@ -14,10 +14,10 @@ included). Suite files in `suite/`; raw per-run JSON results alongside.
 | iOS | **31/32** | 26/27 core (grant-all fixed post-run, verified live), 4/5 AI — see the true positive below |
 
 **The one "failure" worth celebrating**: `assert no visual defects with ai` on iOS failed
-because Gemma correctly identified a **real water-sip layout defect** — the bottom card row is
+because Gemma correctly identified a **real private app B layout defect** — the bottom card row is
 clipped behind the tab bar on the iOS 26.5 simulator (`ios_ai_flagged_clipped_cards.png`, verdict:
 "The buttons at the bottom of the 'Quick Add' section are partially cut off and overlapped by the
-navigation bar"). The feature did exactly its job; the finding belongs to water-sip.
+navigation bar"). The feature did exactly its job; the finding belongs to private app B.
 
 ## Six real CLI bugs found and fixed (shipped as 0.12.1, PR #242)
 
@@ -43,7 +43,7 @@ adopter-relevant pitfall.
 
 - `see exactly 1 "Quick Add"` — the text legitimately appears twice (header + nav label).
 - A `retry` body that tapped-then-asserted without waiting was non-idempotent by construction.
-- `wait for animations to end` can never settle on water-sip — it runs an infinite looping
+- `wait for animations to end` can never settle on private app B — it runs an infinite looping
   progress-ring animation, so "no scheduled frames" never becomes true. Working as documented;
   noted in the suite as a real caveat for apps with perpetual animations.
 - `wait until "Undo" disappears` passes on Android but times out on iOS (snackbar text lingers in
@@ -63,6 +63,6 @@ permissions (grant all), HTTP mock rule + real `call GET`, dump tree, save devic
 kill/open, clear app data, restart, shake/pause/close-keyboard, native verbs
 (`tap/see/type native`, Android, vs. the dedicated fixture app).
 
-Not exercisable on this app (honestly declared): Flutter-side `type`/`clear` — water-sip has
+Not exercisable on this app (honestly declared): Flutter-side `type`/`clear` — private app B has
 zero text fields; typing coverage came via `type native` (Android). Biometrics and composite
 multi-device tests were out of scope for this campaign.
