@@ -212,18 +212,30 @@ func (a *App) workspaceConfig() *config.Config {
 	return cfg
 }
 
-// ListDir returns immediate children of dir. Hidden entries (dot-prefixed)
-// are filtered. Returns empty slice + nil on missing directories so the UI
-// can render an empty state without special-casing errors.
+// ListDir returns immediate children of a folder inside the workspace a person opened or an automation folder. Hidden
+// entries (dot-prefixed) are filtered. A folder that does not exist yet lists as empty, so the UI can render an empty
+// state without special-casing errors; with no workspace open there is nothing to list.
 func (a *App) ListDir(dir string) ([]FileEntry, error) {
-	if dir == "" {
-		dir = "."
+	roots := a.automationRoots()
+	if len(roots) == 0 {
+		return []FileEntry{}, nil
 	}
-	entries, err := os.ReadDir(dir)
+	real, err := resolveInRoots(roots, dir, true)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []FileEntry{}, nil
-		}
+		return nil, err
+	}
+	info, err := os.Stat(real)
+	if os.IsNotExist(err) {
+		return []FileEntry{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a folder", dir)
+	}
+	entries, err := os.ReadDir(real)
+	if err != nil {
 		return nil, err
 	}
 	out := make([]FileEntry, 0, len(entries))
@@ -234,7 +246,7 @@ func (a *App) ListDir(dir string) ([]FileEntry, error) {
 		}
 		out = append(out, FileEntry{
 			Name:  name,
-			Path:  filepath.Join(dir, name),
+			Path:  filepath.Join(filepath.Clean(dir), name),
 			IsDir: e.IsDir(),
 		})
 	}
@@ -270,19 +282,17 @@ func hasDotDotSegment(p string) bool {
 	return false
 }
 
-// WriteFile saves content to a .probe path. Creates parent directories.
+// WriteFile saves content to a .probe file inside the workspace a person opened or an automation folder. Missing
+// folders are created inside the same check, so a folder that is a link out of the workspace refuses the write.
 func (a *App) WriteFile(path, content string) error {
-	if !strings.HasSuffix(path, ".probe") {
-		return fmt.Errorf("only .probe files can be written")
-	}
-	clean := filepath.Clean(path)
-	if strings.Contains(clean, "..") {
-		return fmt.Errorf("path traversal rejected: %s", path)
-	}
-	if err := os.MkdirAll(filepath.Dir(clean), 0o755); err != nil {
+	real, err := probeFileForWriteWithinRoots(a.automationRoots(), path)
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(clean, []byte(content), 0o644)
+	if err := os.MkdirAll(filepath.Dir(real), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(real, []byte(content), 0o644)
 }
 
 // ---- Lint ----

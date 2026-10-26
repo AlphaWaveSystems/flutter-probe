@@ -247,6 +247,7 @@ func TestApp_ListDir_MissingDirReturnsEmpty(t *testing.T) {
 func TestApp_ListDir_FiltersHiddenEntries(t *testing.T) {
 	a := NewApp()
 	dir := t.TempDir()
+	a.SetWorkspace(dir) // the page opens the workspace before it lists it
 	for _, name := range []string{"visible.probe", ".hidden"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)

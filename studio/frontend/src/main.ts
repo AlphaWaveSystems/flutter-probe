@@ -242,6 +242,8 @@ async function onFileClick(path: string, isDir: boolean) {
 $("btn-files-up").addEventListener("click", () => {
   if (currentDir === "." || currentDir === "/") return;
   const parent = currentDir.split("/").slice(0, -1).join("/") || ".";
+  // Studio lists only inside the open workspace, so the up button stops at its root.
+  if (workspaceRoot && !(parent === workspaceRoot || parent.startsWith(`${workspaceRoot}/`))) return;
   refreshFiles(parent);
 });
 

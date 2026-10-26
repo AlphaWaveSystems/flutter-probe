@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Studio no longer remembers WiFi tokens.** The token is typed for each connection. Studio deletes the plain-text copy that an earlier version kept in local storage on first start.
 - **Studio's Run File accepts only `.probe` files inside the open workspace or an automation folder.** Other paths are refused before anything runs, as the automation endpoint already refused them.
 - **Studio opens only `.probe` files inside the open workspace or an automation folder.** The editor's open action uses the same check as Run File, and a path with `..` is refused.
+- **Studio saves `.probe` files and lists folders only inside the open workspace or an automation folder.** Save and the file tree use the same rule as Read File and Run File, including the `..` and symlink checks. With no workspace open, the file tree is empty.
 
 ## [0.26.0] - 2026-10-14
 
