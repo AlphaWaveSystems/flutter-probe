@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The disclosure guard reports positions only, and can check a path tree.** A match is reported by rule number and position: a changed file's number, the line, or a tree file's number. The matched text, the file path and the pattern are never printed. `scripts/disclosure-scan.sh` takes `--tree PATH` to check every file tracked under a path at the end of the range. A deleted file is not matched. Binary files, and file names that git quotes, are scanned too.
 - **The MCP tools keep to the local tool surface.** `run_tests` and `run_script` refuse the upload flags (`--upload-report`, `--upload-local`, `--upload-dry-run`, and any other `--upload-` flag) with the message "hosted upload is not available through MCP". The MCP tool text no longer describes the upload flags. Use the CLI from a terminal for uploads.
 - **Building from source needs Go 1.26.10 or newer (was 1.26.1).** The `go` line in `go.mod`, `studio/go.mod`, `tools/probe-convert/go.mod` and `go.work` is now 1.26.10, and the install docs say so. With the default `GOTOOLCHAIN=auto`, an older Go 1.26 downloads 1.26.10 on its own; with `GOTOOLCHAIN=local` the build stops with a version error until Go is upgraded.
+- **Older evidence files removed.** The disclosure guard also scans `docs/evidence`.
 
 ### Docs
 - **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
