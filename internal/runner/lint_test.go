@@ -64,6 +64,16 @@ func TestLintReferencesExplainsAUseInsideATest(t *testing.T) {
 	requireFinding(t, findings, 2, false, "must come before the first test")
 }
 
+// go back takes no arguments, so the words after it on its line are read as a separate step. The message says so, and
+// the call is not reported as an unknown step on its own.
+func TestLintReferencesExplainsWordsAfterGoBack(t *testing.T) {
+	findings := lintSource(t, "test \"nav\"\n  go back to main menu\n")
+	requireFinding(t, findings, 2, false, "go back takes no arguments")
+	if len(findings) != 1 {
+		t.Errorf("expected only the go back explanation, got %+v", findings)
+	}
+}
+
 func TestLintReferencesAcceptsRecipesDefinedInTheFile(t *testing.T) {
 	src := "recipe \"sign in\" (email)\n  type \"<email>\" into the \"Email\" field\n\ntest \"login\"\n  sign in \"a@b.c\"\n"
 	requireNoFindings(t, lintSource(t, src))

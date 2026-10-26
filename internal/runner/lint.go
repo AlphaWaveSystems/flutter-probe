@@ -88,6 +88,8 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 	}
 
 	defined := map[string]bool{}
+	// Lines where a go back step starts. A call on such a line was read apart from the step (go back takes no arguments).
+	goBackLines := map[int]bool{}
 	for _, name := range runtimeVars {
 		defined[name] = true
 	}
@@ -112,7 +114,12 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 		walkSteps(rec.Body, func(s parser.Step) { markStored(s, defined) })
 	}
 	for _, body := range own {
-		walkSteps(body, func(s parser.Step) { markStored(s, defined) })
+		walkSteps(body, func(s parser.Step) {
+			markStored(s, defined)
+			if a, ok := s.(parser.ActionStep); ok && a.Verb == parser.VerbGoBack {
+				goBackLines[a.Line] = true
+			}
+		})
 	}
 
 	for _, body := range own {
@@ -121,7 +128,9 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 			if rc, ok := s.(parser.RecipeCall); ok {
 				if _, _, _, found := resolveCall(r.recipes, rc); !found {
 					msg := fmt.Sprintf("unknown step %q: not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)", rc.Name)
-					if strings.HasPrefix(rc.Name, "use ") || rc.Name == "use" {
+					if goBackLines[rc.Line] {
+						msg = fmt.Sprintf("go back takes no arguments: the words after it on line %d are read as a separate step %q", rc.Line, rc.Name)
+					} else if strings.HasPrefix(rc.Name, "use ") || rc.Name == "use" {
 						// The parser reads use only at the top of a file; inside a test it is an ordinary call.
 						msg = "a use statement must come before the first test; inside a test it is not read"
 					}
