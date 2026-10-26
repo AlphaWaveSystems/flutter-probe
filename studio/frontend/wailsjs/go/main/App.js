@@ -82,6 +82,10 @@ export function RunFileAsync(arg1) {
   return window['go']['main']['App']['RunFileAsync'](arg1);
 }
 
+export function RunFileScoped(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['RunFileScoped'](arg1, arg2, arg3, arg4);
+}
+
 export function RunState() {
   return window['go']['main']['App']['RunState']();
 }

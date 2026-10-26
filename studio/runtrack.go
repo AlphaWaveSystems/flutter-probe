@@ -88,6 +88,12 @@ func (a *App) RunState() RunState { return a.track.snapshot() }
 // RunFileAsync starts RunFile in the background and returns at once (poll RunState for progress).
 // It fails fast when not connected or a run is already in progress.
 func (a *App) RunFileAsync(path string) error {
+	return a.runFileAsync(path, RunScope{})
+}
+
+// runFileAsync is RunFileAsync for a scope. The scope is resolved before the run starts in the background, so a scope
+// that cannot run is returned to the caller rather than lost.
+func (a *App) runFileAsync(path string, scope RunScope) error {
 	a.mu.Lock()
 	connected := a.conn != nil
 	a.mu.Unlock()
@@ -100,6 +106,9 @@ func (a *App) RunFileAsync(path string) error {
 	if busy {
 		return errRunInProgress
 	}
-	go func() { _, _ = a.RunFile(path) }()
+	if _, _, err := a.resolveRunScope(path, scope); err != nil {
+		return err
+	}
+	go func() { _, _ = a.runScoped(path, scope) }()
 	return nil
 }

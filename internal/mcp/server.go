@@ -623,7 +623,7 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.takeScreenshot(req.ID, args["name"], args["device"])
 	case "studio_open_workspace", "studio_list_devices", "studio_connect", "studio_run_file", "studio_cancel",
 		"studio_run_state", "studio_results", "studio_screenshot", "studio_widget_tree", "studio_ui_state":
-		return s.studioTool(req.ID, params.Name, args)
+		return s.studioTool(req.ID, params.Name, args, params.Arguments)
 	case "get_report":
 		return s.getReport(req.ID, args["path"])
 	case "perf_trend":

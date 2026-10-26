@@ -13,7 +13,8 @@
     "demo:device-view": "node device-view-demo/mock-server.mjs",
     "gen:probescript": "node scripts/gen-probescript-dictionary.mjs",
     "check:probescript": "node scripts/gen-probescript-dictionary.mjs --check",
-    "test:probescript": "node --test probescript-tests/"
+    "test:probescript": "node --test probescript-tests/",
+    "test:run-scope": "node --test run-scope-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.50.0"

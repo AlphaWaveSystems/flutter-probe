@@ -5,6 +5,7 @@ import { initDeviceStream, onElementSelected, startStream, stopStream } from "./
 import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { initResults, type RunPlan, type RunStep } from "./results";
+import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
 
 import {
@@ -23,7 +24,7 @@ import {
   LoadWorkspaceSettings,
   PickWorkspace,
   ReadFile,
-  RunFile,
+  RunFileScoped,
   SaveWorkspaceSettings,
   SetAPIKey,
   StartRecording,
@@ -904,8 +905,29 @@ if (inspectorSearch) {
 
 initResults();
 
+// The scope control next to Run picks what runs: the whole file (the default), the test at the cursor, the tests with a
+// tag, or the tests that failed last time. The tag field shows only for the tag scope.
+function runScopeMode(): RunMode {
+  return ($("run-scope") as HTMLSelectElement).value as RunMode;
+}
+
+function runTagField(): HTMLInputElement {
+  return $("run-tag") as HTMLInputElement;
+}
+
+$("run-scope").addEventListener("change", () => {
+  const tagging = runScopeMode() === "tag";
+  runTagField().hidden = !tagging;
+  if (tagging) runTagField().focus();
+});
+
 $("btn-run").addEventListener("click", async () => {
   if (!currentPath || !connected) return;
+  const scope = runScopeArgs(runScopeMode(), editor.getPosition()?.lineNumber, runTagField().value);
+  if (!scope.ok) {
+    toast(scope.message, "info", 4000);
+    return;
+  }
   if (dirty) {
     await saveCurrent();
   }
@@ -913,7 +935,7 @@ $("btn-run").addEventListener("click", async () => {
   btn.disabled = true;
   setRunning(true);
   try {
-    await RunFile(currentPath);
+    await RunFileScoped(currentPath, scope.args.line, scope.args.tag, scope.args.failedOnly);
   } catch (err) {
     toast(`Run failed: ${err}`, "error", 6000);
   } finally {

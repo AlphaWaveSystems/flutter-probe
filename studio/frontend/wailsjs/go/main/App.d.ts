@@ -42,6 +42,8 @@ export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
 
 export function RunFileAsync(arg1:string):Promise<void>;
 
+export function RunFileScoped(arg1:string,arg2:number,arg3:string,arg4:boolean):Promise<Array<main.RunResult>>;
+
 export function RunState():Promise<main.RunState>;
 
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;

@@ -65,6 +65,9 @@ type App struct {
 	track   runTracker        // what the current/last run looks like, for automation and the UI
 	autoSrv *automationServer // non-nil when PROBE_STUDIO_AUTOMATION=1
 
+	// failures remembers which tests failed in each file this session, for a run of the failed tests only.
+	failures failureLedger
+
 	recMu     sync.Mutex
 	recActive bool
 	recLines  []string
@@ -906,6 +909,17 @@ type RunResult struct {
 // The connection must be established (Connect first). Lint warnings are not
 // surfaced here — use Lint() for that; this method runs whatever parses.
 func (a *App) RunFile(path string) ([]RunResult, error) {
+	return a.runScoped(path, RunScope{})
+}
+
+// RunFileScoped runs part of a file: the test at line (1-based; 0 for none), the tests with tag, or, when failedOnly is
+// set, the tests that failed the last time the file ran in this session. Set at most one of the three.
+func (a *App) RunFileScoped(path string, line int, tag string, failedOnly bool) ([]RunResult, error) {
+	return a.runScoped(path, RunScope{Line: line, Tag: tag, FailedOnly: failedOnly})
+}
+
+// runScoped is RunFile for a scope. A scope that cannot run is an error before any run event is emitted.
+func (a *App) runScoped(path string, scope RunScope) ([]RunResult, error) {
 	a.mu.Lock()
 	conn := a.conn
 	a.mu.Unlock()
@@ -930,15 +944,20 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 		cancel()
 	}()
 
-	plan := planFile(path)
+	sel, plan, err := a.resolveRunScope(path, scope)
+	if err != nil {
+		return nil, err
+	}
 	a.track.begin(path, plan)
 	a.emit("run:started", path)
 	a.emit("run:plan", plan)
 
 	r := runner.New(conn.cfg, conn.client, conn.deviceCtx, runner.RunOptions{
-		Files:   []string{path},
-		Timeout: conn.cfg.Defaults.Timeout,
-		Verbose: false,
+		Files:     []string{path},
+		TestNames: sel.names,
+		Tags:      sel.tags,
+		Timeout:   conn.cfg.Defaults.Timeout,
+		Verbose:   false,
 	})
 	r.OnResult(func(res runner.TestResult) {
 		rr := toRunResult(res)
@@ -951,6 +970,7 @@ func (a *App) RunFile(path string) ([]RunResult, error) {
 		a.emit("run:step", rs)
 	})
 	results, err := r.Run(runCtx)
+	a.failures.record(path, results)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))
@@ -1016,22 +1036,6 @@ type RunPlanTest struct {
 	Name  string `json:"name"`
 	Line  int    `json:"line"`
 	Steps int    `json:"steps"`
-}
-
-func planFile(path string) RunPlan {
-	var plan RunPlan
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return plan
-	}
-	prog, err := parser.ParseFile(string(src))
-	if err != nil || prog == nil {
-		return plan
-	}
-	for _, t := range prog.Tests {
-		plan.Tests = append(plan.Tests, RunPlanTest{Name: t.Name, Line: t.Line, Steps: len(t.Body)})
-	}
-	return plan
 }
 
 func toRunResult(res runner.TestResult) RunResult {

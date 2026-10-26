@@ -40,7 +40,7 @@ type automationBackend interface {
 	TestWiFi(host string, port int, token string) (string, error)
 	Disconnect()
 	Status() ConnectionStatus
-	RunFileAsync(path string) error
+	runFileAsync(path string, scope RunScope) error
 	CancelRun()
 	RunState() RunState
 	TakeScreenshot() (string, error)
@@ -328,7 +328,10 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		return b.Status(), nil
 	case "run_file":
 		var p struct {
-			Path string `json:"path"`
+			Path       string `json:"path"`
+			Line       int    `json:"line"`
+			Tag        string `json:"tag"`
+			FailedOnly bool   `json:"failedOnly"`
 		}
 		if err := param(raw, &p); err != nil || p.Path == "" {
 			return nil, fmt.Errorf("run_file needs {\"path\": ...}")
@@ -337,7 +340,9 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		if err != nil {
 			return nil, err
 		}
-		if err := b.RunFileAsync(real); err != nil {
+		// line, tag and failedOnly pick part of the file, as the Run control's scope does: at most one of them.
+		scope := RunScope{Line: p.Line, Tag: p.Tag, FailedOnly: p.FailedOnly}
+		if err := b.runFileAsync(real, scope); err != nil {
 			return nil, err
 		}
 		return map[string]any{"started": true, "path": p.Path}, nil

@@ -8,6 +8,7 @@
 // the editor can reveal it (main.ts listens).
 
 import { EventsOn } from "../wailsjs/runtime/runtime";
+import { groupByOutcome, type Outcome } from "./run-scope";
 
 type RunResult = {
   name: string;
@@ -69,6 +70,12 @@ let currentAttempt = 0;
 // Where the verdict row of the running test is inserted: before its first step.
 let firstStepOfTest: HTMLLIElement | null = null;
 
+// Rows of each finished test, so finishRun can regroup them by outcome. A block is the verdict, then the test's step
+// rows, perf lines and error. pendingRows holds the step rows of the test that is still running.
+type TestBlock = { outcome: Outcome; rows: HTMLElement[] };
+let blocks: TestBlock[] = [];
+let pendingRows: HTMLElement[] = [];
+
 export function initResults(): void {
   listEl = document.getElementById("results-list");
   summaryEl = document.getElementById("results-summary");
@@ -96,6 +103,8 @@ function resetForRun(path: string): void {
   currentTest = "";
   currentAttempt = 0;
   firstStepOfTest = null;
+  blocks = [];
+  pendingRows = [];
   if (!listEl) return;
   while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
   const li = document.createElement("li");
@@ -129,6 +138,7 @@ function onStep(s: RunStep): void {
       retry.setAttribute("aria-label", `retry: ${s.test} attempt ${s.attempt}`);
       retry.textContent = `↻ attempt ${s.attempt}`;
       listEl.appendChild(retry);
+      pendingRows.push(retry);
     }
   }
 
@@ -158,6 +168,7 @@ function onStep(s: RunStep): void {
       if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: s.line }));
     });
     listEl.appendChild(li);
+    pendingRows.push(li);
     openSteps.set(key, li);
     if (!firstStepOfTest) firstStepOfTest = li;
     listEl.scrollTop = listEl.scrollHeight;
@@ -178,6 +189,7 @@ function onStep(s: RunStep): void {
       errLi.classList.add("step-err");
       errLi.textContent = s.error;
       li.insertAdjacentElement("afterend", errLi);
+      pendingRows.push(errLi);
     }
   }
   openSteps.delete(key);
@@ -222,12 +234,16 @@ function appendResult(res: RunResult): void {
   openSteps = new Map();
   currentTest = "";
   currentAttempt = 0;
+  // The verdict heads the test's block, then its step rows, as the live view shows them.
+  const rows: HTMLElement[] = [li, ...pendingRows];
+  pendingRows = [];
 
   for (const m of res.perf ?? []) {
     const perfLi = document.createElement("li");
     perfLi.classList.add("perf");
     perfLi.textContent = `⏱ ${describePerf(m)}`;
     listEl.appendChild(perfLi);
+    rows.push(perfLi);
   }
 
   if (res.error) {
@@ -235,8 +251,10 @@ function appendResult(res: RunResult): void {
     errLi.classList.add("err");
     errLi.textContent = res.error;
     listEl.appendChild(errLi);
+    rows.push(errLi);
   }
 
+  blocks.push({ outcome: status, rows });
   updateSummary();
   listEl.scrollTop = listEl.scrollHeight;
 }
@@ -253,6 +271,7 @@ function finishRun(_results: RunResult[]): void {
     li.setAttribute("aria-label", `step cancelled: ${li.querySelector(".name")?.textContent ?? ""}`);
   }
   openSteps = new Map();
+  regroupByOutcome();
   updateSummary();
   if (listEl.children.length === 0) {
     const empty = document.createElement("li");
@@ -260,6 +279,27 @@ function finishRun(_results: RunResult[]): void {
     empty.textContent = "Run completed with no test results.";
     listEl.appendChild(empty);
   }
+}
+
+// regroupByOutcome lists the finished tests failures first, then passes, then skips, so a long run's failures are at the
+// top. A run whose tests all share one outcome keeps its run order and has no headings.
+function regroupByOutcome(): void {
+  if (!listEl || blocks.length === 0) return;
+  const groups = groupByOutcome(blocks);
+  const rows: HTMLElement[] = [];
+  for (const group of groups) {
+    if (groups.length > 1) {
+      const heading = document.createElement("li");
+      heading.classList.add("group-heading");
+      heading.textContent = `${group.label} (${group.items.length})`;
+      rows.push(heading);
+    }
+    for (const block of group.items) rows.push(...block.rows);
+  }
+  // Rows of a test that never reported a verdict (a cancelled run) stay at the end, in run order.
+  rows.push(...pendingRows);
+  pendingRows = [];
+  listEl.replaceChildren(...rows);
 }
 
 function updateSummary(): void {
