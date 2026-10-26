@@ -182,6 +182,62 @@ func TestWalkStepsVisitsNestedBodies(t *testing.T) {
 	}
 }
 
+// An ordinal selector needs a position of at least 1 and the text it counts. Checked on the selector directly, so the rule
+// holds whatever syntax reaches it.
+func TestSelectorProblemRejectsAnOrdinalWithoutPositionOrText(t *testing.T) {
+	bad := map[string]parser.Selector{
+		"position zero": {Kind: parser.SelectorOrdinal, Text: "Buy", Ordinal: 0},
+		"no text":       {Kind: parser.SelectorOrdinal, Text: "", Ordinal: 2},
+	}
+	for name, sel := range bad {
+		t.Run(name, func(t *testing.T) {
+			if selectorProblem(sel) == "" {
+				t.Errorf("ordinal selector %+v: want a problem", sel)
+			}
+		})
+	}
+	if problem := selectorProblem(parser.Selector{Kind: parser.SelectorOrdinal, Text: "Buy", Ordinal: 2}); problem != "" {
+		t.Errorf("a working ordinal selector: unexpected problem %q", problem)
+	}
+}
+
+// An #id selector needs a name after the #. A # that is not followed by a letter or underscore starts a comment in the
+// lexer, so a bare # never reaches this check from a file; it is checked on the selector directly.
+func TestSelectorProblemRejectsAnIDWithoutAName(t *testing.T) {
+	for _, text := range []string{"", "#"} {
+		if selectorProblem(parser.Selector{Kind: parser.SelectorID, Text: text}) == "" {
+			t.Errorf("id selector with text %q: want a problem", text)
+		}
+	}
+	if problem := selectorProblem(parser.Selector{Kind: parser.SelectorID, Text: "#buy_button"}); problem != "" {
+		t.Errorf("a named id selector: unexpected problem %q", problem)
+	}
+}
+
+func TestLintReferencesFlagsAnEmptyContainer(t *testing.T) {
+	findings := lintSource(t, "test \"x\"\n  tap \"Buy\" in \"\"\n")
+	requireFinding(t, findings, 2, false, "the container after \"in\" is empty")
+}
+
+// read ... with ai into names a variable, so a placeholder that uses it is defined.
+func TestLintReferencesAcceptsAPlaceholderFromReadWithAI(t *testing.T) {
+	src := "test \"x\"\n  read \"the order total\" with ai into total\n  type \"<total>\" into the \"Amount\" field\n"
+	requireNoFindings(t, lintSource(t, src))
+}
+
+// Hook bodies are checked like test bodies. The dry run checks only test bodies, so lint is what reports a bad step in a
+// hook before a run does.
+func TestLintReferencesChecksHookBodies(t *testing.T) {
+	src := "before each test\n  bogus thing\n\ntest \"x\"\n  tap \"Go\"\n"
+	requireFinding(t, lintSource(t, src), 2, false, "unknown step")
+}
+
+// The device blocks of a composite test are checked too, and a valid block passes. The dry run skips composite tests.
+func TestLintReferencesChecksCompositeDeviceBlocks(t *testing.T) {
+	requireNoFindings(t, lintSource(t, "composite test \"login\"\n  A:\n    tap \"Login\"\n"))
+	requireFinding(t, lintSource(t, "composite test \"login\"\n  A:\n    bogus thing\n"), 3, false, "unknown step")
+}
+
 func TestLintReferencesReportsAParseErrorWithoutFindings(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "flows.probe")
