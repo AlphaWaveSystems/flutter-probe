@@ -149,7 +149,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 36 tools are immediately available in any new Claude conversation.
+4. Done — all 40 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 
