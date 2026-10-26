@@ -28,6 +28,8 @@
 # file whose name holds a line break cannot be matched by name and is reported without
 # a position. Exit status 1 if anything matched, 2 on a usage error or a failed search.
 set -euo pipefail
+# Every tool reads bytes, so a file that is not valid UTF-8 is scanned, not a reason to stop the run.
+export LC_ALL=C
 
 if [ "$#" -lt 3 ]; then
   echo "usage: $0 <repo-dir> <git-range> <patterns-file> [--extra FILE]... [--tree PATH]..." >&2
