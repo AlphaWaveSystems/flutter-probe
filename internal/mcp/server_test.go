@@ -78,6 +78,7 @@ func TestToolsList(t *testing.T) {
 		"list_devices", "list_simulators", "list_avds", "start_device", "shutdown_device", "set_device_setting",
 		// authoring & execution
 		"get_widget_tree", "read_test", "write_test", "run_script", "run_tests",
+		"start_tests", "test_status", "test_result", "cancel_tests",
 		"list_files", "lint", "migrate_maestro", "take_screenshot",
 		// reporting
 		"get_report", "generate_test", "generate_report", "triage_failure", "system_dialog", "perf_trend", "perf_compare",
