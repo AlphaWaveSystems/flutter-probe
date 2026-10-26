@@ -19,12 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **The MCP tools keep to the local tool surface.** `run_tests` and `run_script` refuse the upload flags (`--upload-report`, `--upload-local`, `--upload-dry-run`, and any other `--upload-` flag) with the message "hosted upload is not available through MCP". The MCP tool text no longer describes the upload flags. Use the CLI from a terminal for uploads.
+- **Building from source needs Go 1.26.10 or newer (was 1.26.1).** The `go` line in `go.mod`, `studio/go.mod`, `tools/probe-convert/go.mod` and `go.work` is now 1.26.10, and the install docs say so. With the default `GOTOOLCHAIN=auto`, an older Go 1.26 downloads 1.26.10 on its own; with `GOTOOLCHAIN=local` the build stops with a version error until Go is upgraded.
 
 ### Docs
 - **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
 - **Run recording groundwork, internal only.** The CLI's new `internal/record` package can write a recording bundle, follow the agent's HTTP log without skipping requests still in flight, redact credentials from headers, URLs and bodies, and render a bundle as an offline viewer. Step events now carry their wall-clock time. The CLI now exposes this through `probe test --record`; the design is in `docs/prd/run-recording.md`.
 
 ### Fixed
+- **Studio: the frontend builds with `bundler` module resolution.** TypeScript 7 removed `moduleResolution: "Node"`, so the Studio build failed on the TypeScript 7 and Monaco 0.57 upgrades. The Studio tsconfig now uses `bundler`.
+- **CI: the website checks and the docs deploy run on Node 22.23.4.** Astro 7.4.2 needs Node 22.23.4 or newer, and the runner cache held 22.23.3. The Dependabot compatibility jobs and `docs.yml` now pin 22.23.4.
+- **VS Code: the extension compiles again with TypeScript 7 and @types/node 26.** The tsconfig names the Node types, which TypeScript 7 no longer loads by default. Without it, `npm test` failed to compile after those two upgrades.
+- **CI: the Dependabot auto-merge job adds approved pull requests to the merge queue again.** It passed `--squash` with `--auto`, so the queue ignored the request, nothing was queued, and the run still reported success. The job now passes no merge method and logs a warning for each pull request it cannot queue.
 - **CI: the Studio Go tests and the frontend and VS Code test suites run on every change to `studio/` or `vscode/`.** They ran in no workflow before, and only the browser suite covered Studio. The frontend suites run on Node 26.
 - **CI: the CLI test package runs in seconds, not minutes.** The hosted-upload failure test waited out the 5-minute retry window; it now uses a short window and checks that the failure is still only a warning.
 - **`probe test --device` finds the Android application ID for a camelCase `project.app`.** When the bundle ID as written is not installed on an Android device and its snake_case form is (`com.example.myApp` → `com.example.my_app`), the single-device run uses the snake_case ID, as `--devices` and parallel runs already did. Before, the restart relaunched the ID as written and failed. A run keeps the ID as written when that ID is installed, and when neither form is, so a project that runs today is unchanged. `--devices` and parallel runs still convert without this check.
