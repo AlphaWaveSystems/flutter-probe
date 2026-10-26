@@ -75,8 +75,11 @@ body { display: flex; flex-direction: column; overflow: hidden; }
      drag handle. */
   --wails-draggable: drag;
 }
-/* The toolbar's buttons and device picker must receive clicks, not start a drag. */
-#topbar .toolbar { --wails-draggable: no-drag; }
+/* Buttons and the device picker must receive clicks, not start a drag. The
+   toolbar box fills the middle of the bar, so it stays draggable. */
+#topbar button,
+#topbar select,
+#topbar input { --wails-draggable: no-drag; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark {
   display: inline-grid; place-items: center;
