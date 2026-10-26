@@ -75,6 +75,14 @@ if [ "${#trees[@]}" -gt 0 ]; then
     hits=$((hits + breaks))
   fi
   LC_ALL=C sort -u "$tmp/tree-names.txt" > "$tmp/tree-list.txt"
+  # The text of every tree file with its NUL bytes removed, one file per tree file, named by
+  # its number. A term split by a NUL byte then matches here as it does on the changed-file path.
+  mkdir "$tmp/tree-text"
+  tn=0
+  while IFS= read -r name; do
+    tn=$((tn + 1))
+    g cat-file blob "$end:$name" | tr -d '\000' > "$tmp/tree-text/$tn" || { echo "tree read failed" >&2; exit 2; }
+  done < "$tmp/tree-list.txt"
 else
   : > "$tmp/tree-list.txt"
 fi
@@ -136,18 +144,10 @@ while IFS= read -r pat || [ -n "$pat" ]; do
   if [ "${#trees[@]}" -gt 0 ]; then
     while IFS= read -r n; do echo "rule $rule: tree file #$n has a matching name"; hits=$((hits + 1)); done \
       < <(grep -a -n -iE -- "$pat" "$tmp/tree-list.txt" | cut -d: -f1 || true)
-    # The text of the tree's files. git grep reads binary files as text, and -z keeps
-    # each name unquoted. Each record is "<end>:<path>" and ends with a NUL.
-    set +e
-    g grep -a -z -l -i -E -e "$pat" "$end" -- "${trees[@]}" > "$tmp/tree-raw-hits.z" 2>/dev/null
-    status=$?
-    set -e
-    [ "$status" -le 1 ] || { echo "tree search failed" >&2; exit 2; }
-    : > "$tmp/tree-hits.txt"
-    while IFS= read -r -d '' rec; do printf '%s\n' "${rec#*:}" >> "$tmp/tree-hits.txt"; done < "$tmp/tree-raw-hits.z"
-    LC_ALL=C sort -u -o "$tmp/tree-hits.txt" "$tmp/tree-hits.txt"
+    # The text of the tree's files, NUL bytes removed (see above). grep lists the numbered files
+    # that hold a match; their numbers are the tree file numbers.
     while IFS= read -r n; do echo "rule $rule: tree file #$n has a match in its text"; hits=$((hits + 1)); done \
-      < <(grep -n -x -F -f "$tmp/tree-hits.txt" "$tmp/tree-list.txt" | cut -d: -f1 || true)
+      < <(grep -a -l -i -E -e "$pat" "$tmp/tree-text"/* 2>/dev/null | sed 's|.*/||' | sort -n -u || true)
   fi
 done < "$patterns"
 
