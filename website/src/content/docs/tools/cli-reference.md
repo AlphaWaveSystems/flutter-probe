@@ -154,7 +154,7 @@ probe lint tests/smoke/login.probe
 
 Lint checks the references a run would resolve, without running a step, and fails the command (exit status 1) for an error:
 
-- A step or recipe call that matches no built-in step and no recipe in the file, its `use` statements or the recipes folder. This is the check `probe test --dry-run` makes. A `use` statement inside a test is reported too, because a file reads `use` only before its first test.
+- A step or recipe call that matches no built-in step and no recipe in the file, its `use` statements or the recipes folder. This is the check `probe test --dry-run` makes. A `use` statement inside a test is reported too, because a file reads `use` only before its first test. A `go back` followed by words on its line is reported with that reason, because `go back` takes no arguments.
 - A selector that can never match: an ordinal selector without a number and text, an `#id` without a name, a `below`, `above`, `left of` or `right of` selector without anchor text, or an `in` with an empty container.
 
 It warns, without failing, when:

@@ -9,7 +9,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 
 ## What you get
 
-- **Monaco editor** with ProbeScript syntax highlighting, live lint markers, and the same TextMate grammar that powers the VS Code extension. Completions, hover help and snippets cover every command in the [ProbeScript dictionary](/probescript/dictionary/) and every reserved word in the [grammar](/probescript/grammar/); they are generated from those pages, so the editor and the docs agree.
+- **Monaco editor** with ProbeScript syntax highlighting, live lint markers (parse errors and empty tests; `probe lint` also checks step and recipe references, selectors and placeholders), and the same TextMate grammar that powers the VS Code extension. Completions, hover help and snippets cover every command in the [ProbeScript dictionary](/probescript/dictionary/) and every reserved word in the [grammar](/probescript/grammar/); they are generated from those pages, so the editor and the docs agree.
 - **Workspace folder picker** — point Studio at any project root with a `tests/` folder. Choice persists across launches.
 - **Device picker** that lists booted simulators, online emulators, and physical iOS/Android devices side by side, with a `physical` tag and a clear hint when nothing is connectable.
 - **Physical device support** — the same `internal/device` code the `probe` CLI uses: `iproxy` tunneling for physical iOS over USB, `adb forward` for physical Android (same path as emulators), and mDNS auto-discovery (`_flutterprobe._tcp`) for WiFi-connected devices. See [Physical devices](#physical-devices) below.
@@ -51,7 +51,7 @@ Studio's own UI is tested two ways. `make studio-e2e-web` runs the real frontend
 │ ┌─────────▼─────────────────────────────┐   │
 │ │ Go backend (App struct)               │   │
 │ │  imports internal/runner              │   │
-│ │  imports internal/lint                │   │
+│ │  imports internal/parser              │   │
 │ │  imports internal/probelink           │   │
 │ │  imports internal/device              │   │
 │ └─────────┬─────────────────────────────┘   │
