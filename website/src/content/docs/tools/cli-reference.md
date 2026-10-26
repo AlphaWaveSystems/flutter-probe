@@ -163,7 +163,16 @@ It warns, without failing, when:
 - A `use` names a file that does not exist. A run only needs that file when a call uses one of its recipes, and such a call is reported as an unknown step.
 - A `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged.
 
+Lint also checks the bodies of hooks (`before each test`, `before all` and their `after` forms) and the device blocks (`A:`, `B:`) of composite tests. `probe test --dry-run` checks only test bodies, so a bad step in a hook or a composite test fails at run time. A CI job that runs `probe lint` on composite files may see new errors there.
+
 Environment variables (`${NAME}`) are not checked, because lint does not know the environment that will run the tests.
+
+Known limits. A follow-up will address these:
+
+- Placeholders, recipe parameters and stored names are collected across the whole file and every recipe it can call, not per test, so a name defined in one test counts for the others.
+- The body of a recipe that comes from a `use` file is not checked. That file's recipes only define their names here.
+- A `use` line inside a used file is not checked for a missing file. Only the `use` lines of the file given to lint are.
+- A `#` followed by a space starts a comment, as it does elsewhere in ProbeScript, so `tap #` reads as `tap` with no target. Lint does not report it.
 
 ## probe record
 
