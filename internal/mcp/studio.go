@@ -44,7 +44,7 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 	},
 	{
 		Name:        "studio_run_file",
-		Description: "Start running a .probe file in Studio. Returns at once; poll studio_run_state for step-by-step progress and studio_results for the verdicts. Fails if Studio is not connected to a device or a run is already in progress.",
+		Description: "Start running a .probe file in Studio. Returns at once; poll studio_run_state for step-by-step progress and studio_results for the verdicts. The file must be a .probe file inside the open workspace or an automation folder; any other path is refused. Fails if Studio is not connected to a device or a run is already in progress.",
 		InputSchema: mcpSchema{Type: "object", Required: []string{"path"}, Properties: map[string]mcpProp{
 			"path": {Type: "string", Description: "Absolute path of the .probe file"},
 		}},

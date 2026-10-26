@@ -28,6 +28,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The recording viewer fits a 390 px phone screen.** Long step names, URLs and error text no longer push the page sideways: the single-column layout shrinks to the screen, long words wrap, and the 16 px side gutters stay. The desktop layout is unchanged. The viewer ships with `probe test --record`, which is not released yet.
 - **VS Code: the Run Test commands no longer pass `--name` to `probe test`.** This version of the CLI defines no such flag, so those runs failed with an unknown-flag error. "FlutterProbe: Run Test File at Cursor", the CodeLens buttons and the Tests view now run the file that contains the test, and their titles and tooltips say so. Until the CLI has a per-test filter, the extension runs whole files.
 
+### Security
+- **Studio no longer returns the Anthropic API key to the window.** The key panel shows whether a key is saved and starts with an empty field. Saving an empty field no longer clears a saved key; use Remove key to delete it.
+- **Studio no longer remembers WiFi tokens.** The token is typed for each connection. Studio deletes the plain-text copy that an earlier version kept in local storage on first start.
+- **Studio's Run File accepts only `.probe` files inside the open workspace or an automation folder.** Other paths are refused before anything runs, as the automation endpoint already refused them.
+
 ## [0.26.0] - 2026-10-14
 
 ### Added

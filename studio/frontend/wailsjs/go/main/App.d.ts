@@ -16,7 +16,7 @@ export function DeleteAPIKey():Promise<void>;
 
 export function Disconnect():Promise<void>;
 
-export function GetAPIKey():Promise<string>;
+export function GetAPIKey():Promise<boolean>;
 
 export function GetDeviceSettings():Promise<main.DeviceSettingsInfo>;
 

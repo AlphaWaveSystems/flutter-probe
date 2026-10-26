@@ -413,45 +413,12 @@ $("btn-settings-save").addEventListener("click", async () => {
 
 type WiFiDevice = { name: string; host: string; port: number; version: string };
 
-const WIFI_TOKENS_KEY = "fp.studio.wifi-tokens";
-
-// Token store: deviceName → token. Persisted in localStorage so a user who
-// has connected once doesn't need to paste the token again on subsequent
-// launches. Keyed by the Bonjour instance name (typically the device's
-// hostname) since the IP can change across DHCP leases but the name is
-// stable. Tokens for an LAN-only test agent inside a desktop app are an
-// acceptable trust boundary; this is not a credential vault.
-function loadTokenStore(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(WIFI_TOKENS_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveTokenStore(store: Record<string, string>) {
-  try {
-    localStorage.setItem(WIFI_TOKENS_KEY, JSON.stringify(store));
-  } catch {
-    // localStorage full or denied — non-fatal, user just re-enters next time
-  }
-}
-
-function rememberToken(deviceName: string, token: string) {
-  const store = loadTokenStore();
-  store[deviceName] = token;
-  saveTokenStore(store);
-}
-
-function forgetToken(deviceName: string) {
-  const store = loadTokenStore();
-  delete store[deviceName];
-  saveTokenStore(store);
-}
-
-function recalledToken(deviceName: string): string | undefined {
-  return loadTokenStore()[deviceName];
+// Earlier versions kept WiFi tokens in plain text in localStorage. Studio no longer remembers tokens, so remove that copy
+// on start.
+try {
+  localStorage.removeItem("fp.studio.wifi-tokens");
+} catch {
+  /* storage unavailable: nothing to remove */
 }
 
 let wifiSelected: WiFiDevice | null = null;
@@ -485,26 +452,11 @@ function selectWiFiDevice(dev: WiFiDevice) {
   for (const li of Array.from($("wifi-devices").children) as HTMLElement[]) {
     li.classList.toggle("selected", li.dataset.key === `${dev.host}:${dev.port}`);
   }
-  const remembered = recalledToken(dev.name);
   $("wifi-selected-label").textContent = `Connecting to ${dev.name} (${dev.host}:${dev.port})`;
   ($("wifi-token-row") as HTMLElement).hidden = false;
   const input = $("wifi-token-input") as HTMLInputElement;
-  input.value = remembered ?? "";
+  input.value = "";
   input.focus();
-}
-
-function renderForgetButton(deviceName: string, container: HTMLElement) {
-  const btn = document.createElement("button");
-  btn.className = "btn-mini wifi-forget";
-  btn.title = `Forget remembered token for ${deviceName}`;
-  btn.textContent = "✕";
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    forgetToken(deviceName);
-    btn.remove();
-    toast(`Forgot token for ${deviceName}`, "info", 1500);
-  });
-  container.appendChild(btn);
 }
 
 EventsOn("wifi:device-found", (dev: WiFiDevice) => {
@@ -525,14 +477,6 @@ EventsOn("wifi:device-found", (dev: WiFiDevice) => {
   hostEl.className = "wifi-host";
   hostEl.textContent = `${dev.host}:${dev.port}${dev.version ? ` · v${dev.version}` : ""}`;
   li.append(nameEl, hostEl);
-  if (recalledToken(dev.name)) {
-    const savedTag = document.createElement("span");
-    savedTag.className = "wifi-saved-tag";
-    savedTag.textContent = "🔑 saved";
-    savedTag.title = "Token remembered from a previous connection";
-    li.appendChild(savedTag);
-    renderForgetButton(dev.name, li);
-  }
   li.addEventListener("click", () => selectWiFiDevice(dev));
   list.appendChild(li);
 });
@@ -618,7 +562,6 @@ $("btn-wifi-connect").addEventListener("click", async () => {
   setStatus("connecting", `Connecting to ${wifiSelected.host}…`);
   try {
     await ConnectWiFi(wifiSelected.host, wifiSelected.port, token);
-    rememberToken(wifiSelected.name, token);
     setStatus(
       "connected",
       `Connected · ${wifiSelected.name}`,
@@ -1271,12 +1214,16 @@ $("btn-chat-key").addEventListener("click", openApiKeyOverlay);
 // ---- API key overlay ----------------------------------------------------
 
 async function openApiKeyOverlay() {
+  // The stored key is never sent to the page: the field starts empty, and the placeholder says whether one is saved.
+  const input = $("api-key-input") as HTMLInputElement;
+  input.value = "";
+  let saved = false;
   try {
-    const key = (await GetAPIKey()) as string;
-    ($("api-key-input") as HTMLInputElement).value = key || "";
+    saved = await GetAPIKey();
   } catch {
-    ($("api-key-input") as HTMLInputElement).value = "";
+    saved = false;
   }
+  input.placeholder = saved ? "A key is saved. Type a new key to replace it." : "sk-ant-…";
   $("api-key-overlay").hidden = false;
 }
 
@@ -1291,9 +1238,14 @@ $("api-key-overlay").addEventListener("click", (e) => {
 
 $("btn-api-key-save").addEventListener("click", async () => {
   const key = ($("api-key-input") as HTMLInputElement).value.trim();
+  // An empty field must not clear a saved key: removing one is the separate Remove key action.
+  if (!key) {
+    toast("Type a key to save it, or use Remove key to delete the saved one.", "info");
+    return;
+  }
   try {
     await SetAPIKey(key);
-    toast(key ? "API key saved to keychain." : "API key cleared.", "success");
+    toast("API key saved to keychain.", "success");
     closeApiKeyOverlay();
   } catch (err) {
     toast(`Failed to save key: ${err}`, "error");

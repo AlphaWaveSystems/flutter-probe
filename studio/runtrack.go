@@ -100,6 +100,10 @@ func (a *App) RunFileAsync(path string) error {
 	if busy {
 		return errRunInProgress
 	}
+	// Refuse a path outside the allowed folders now, not inside the goroutine, so the caller hears about it.
+	if _, err := probeFileWithinRoots(a.automationRoots(), path); err != nil {
+		return err
+	}
 	go func() { _, _ = a.RunFile(path) }()
 	return nil
 }

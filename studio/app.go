@@ -905,7 +905,14 @@ type RunResult struct {
 //
 // The connection must be established (Connect first). Lint warnings are not
 // surfaced here — use Lint() for that; this method runs whatever parses.
-func (a *App) RunFile(path string) ([]RunResult, error) {
+//
+// The path must be a .probe file inside the workspace a person opened or an automation folder: the check the
+// automation endpoint makes, applied to every caller. Other paths are refused before anything runs.
+func (a *App) RunFile(requested string) ([]RunResult, error) {
+	path, err := probeFileWithinRoots(a.automationRoots(), requested)
+	if err != nil {
+		return nil, err
+	}
 	a.mu.Lock()
 	conn := a.conn
 	a.mu.Unlock()
