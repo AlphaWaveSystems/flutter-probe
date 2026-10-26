@@ -16,7 +16,7 @@
     "test:probescript": "node --test probescript-tests/"
   },
   "dependencies": {
-    "monaco-editor": "^0.50.0"
+    "monaco-editor": "^0.57.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
