@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The recording viewer fits a 390 px phone screen.** Long step names, URLs and error text no longer push the page sideways: the single-column layout shrinks to the screen, long words wrap, and the 16 px side gutters stay. The desktop layout is unchanged. The viewer ships with `probe test --record`, which is not released yet.
 - **VS Code: the Run Test commands no longer pass `--name` to `probe test`.** This version of the CLI defines no such flag, so those runs failed with an unknown-flag error. "FlutterProbe: Run Test File at Cursor", the CodeLens buttons and the Tests view now run the file that contains the test, and their titles and tooltips say so. Until the CLI has a per-test filter, the extension runs whole files.
 - **Studio: the top bar is a window drag handle on macOS.** It used `-webkit-app-region`, which Wails does not read, so the full-size content view had no drag handle. It now sets `--wails-draggable: drag`; its buttons and device picker opt out so their clicks still work.
+- **Studio: the macOS window has its native title bar again.** The title bar was transparent, and Wails then makes the web view cover it, so the window had no native drag area and some toolbar controls did not show. The title bar is now opaque and sits above the top bar, so the window can be dragged from it and every control shows.
 
 ## [0.26.0] - 2026-10-14
 
