@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **The MCP tools keep to the local tool surface.** `run_tests` and `run_script` refuse the upload flags (`--upload-report`, `--upload-local`, `--upload-dry-run`, and any other `--upload-` flag) with the message "hosted upload is not available through MCP". The MCP tool text no longer describes the upload flags. Use the CLI from a terminal for uploads.
+- **Building from source needs Go 1.26.10 or newer (was 1.26.1).** The `go` line in `go.mod`, `studio/go.mod`, `tools/probe-convert/go.mod` and `go.work` is now 1.26.10, and the install docs say so. With the default `GOTOOLCHAIN=auto`, an older Go 1.26 downloads 1.26.10 on its own; with `GOTOOLCHAIN=local` the build stops with a version error until Go is upgraded.
 
 ### Docs
 - **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
