@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 - **Old evidence files are removed.** The disclosure guard also scans every file under `docs/evidence`, and its reports give rule numbers and positions instead of file paths.
-- **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
+- **Older evidence files removed.** The disclosure guard also scans `docs/evidence`.
 - **Run recording groundwork, internal only.** The CLI's new `internal/record` package can write a recording bundle, follow the agent's HTTP log without skipping requests still in flight, redact credentials from headers, URLs and bodies, and render a bundle as an offline viewer. Step events now carry their wall-clock time. The CLI now exposes this through `probe test --record`; the design is in `docs/prd/run-recording.md`.
 
 ### Fixed
