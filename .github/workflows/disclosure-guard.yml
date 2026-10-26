@@ -3,14 +3,28 @@ name: Disclosure guard
 # Blocks text that must not be published (names, identifiers and internal
 # wording the maintainers keep out of this repository). The patterns live in
 # the repository secret DISCLOSURE_DENYLIST, one extended regex per line, so the
-# list itself is never published. Matches are reported by location and rule
-# number only; the matched text is never printed.
+# list itself is never published. Matches are reported by rule number and
+# position only; the matched text, file paths and patterns are never printed.
+#
+# What each event checks, and where the scanner comes from:
+#   pull_request: the scanner of the base branch's tip (checked out). It checks
+#     the range from that tip to the pull request head: the lines and file names
+#     the pull request adds or modifies, its commit messages, its title and body,
+#     and, when that scanner supports --tree, every file under docs/evidence at
+#     the head.
+#   merge_group: the scanner of the queue's base commit (checked out). It checks
+#     the queued range, from that base to the queued commit. The queued commit is
+#     not checked out, so a queued change cannot change the scanner that checks
+#     it. The docs/evidence check runs when that base scanner supports --tree.
+#   push: the scanner of the pushed commit, over the pushed range. A push check
+#     runs after the change has landed, so it reports on what landed and cannot
+#     stop it. The docs/evidence check runs when the scanner of the commit before
+#     the push supports --tree.
 #
 # Also runs for merge-queue groups (so the check can be required with the queue on).
-# Scanned: lines a pull request adds, its changed file names, its commit
-# messages, and its title and body. The scanner runs from the trusted base
-# commit, never from the pull request's own checkout. Pushes to the default
-# branch are scanned too, which catches anything merged around the checks.
+# Fails closed when the secret is missing. Pull requests from forks cannot see the
+# secrets, so they fail with instructions: a maintainer re-opens them from a branch
+# in this repository. Bot dependency updates only touch dependency files and are skipped.
 #
 # Fails closed when the secret is missing. Pull requests from forks cannot see
 # secrets, so they fail with instructions: a maintainer re-opens them from a
@@ -39,12 +53,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Trusted code only: the CURRENT tip of the base branch for pull requests (not the
-      # base sha in the event, which can lag behind the branch right after a merge), the
-      # pushed or queued commit otherwise.
+      # The checkout is the trusted code for the event: the CURRENT tip of the base branch
+      # for pull requests (not the base sha in the event, which can lag behind the branch
+      # right after a merge), the queue's base commit for merge groups, and the pushed
+      # commit for pushes.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.base.ref || github.sha }}
+          ref: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -70,6 +85,7 @@ jobs:
           PUSH_SHA: ${{ github.sha }}
           MQ_BASE: ${{ github.event.merge_group.base_sha }}
           MQ_HEAD: ${{ github.event.merge_group.head_sha }}
+          MQ_HEAD_REF: ${{ github.event.merge_group.head_ref }}
         run: |
           set -euo pipefail
           if [ -z "$DENYLIST" ]; then
@@ -79,20 +95,41 @@ jobs:
           patterns="$RUNNER_TEMP/patterns.txt"
           ( umask 077; printf '%s\n' "$DENYLIST" > "$patterns" )
 
+          # The tree check reads docs/evidence. It runs only where the trusted comparison point
+          # already knows --tree: the base for a pull request, the queue's base for a merge group,
+          # the commit before a push. Otherwise a change that adds --tree and removes the files it
+          # checks could not pass its own guard.
+          supports_tree() {
+            local content
+            content=$(git show "$1:scripts/disclosure-scan.sh" 2>/dev/null) || return 1
+            grep -q -- '--tree' <<<"$content"
+          }
+
           if [ "$EVENT" = "pull_request" ]; then
             [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::invalid pull request number"; exit 1; }
             [ -x scripts/disclosure-scan.sh ] || { echo "::error::scripts/disclosure-scan.sh is missing on the base branch"; exit 1; }
             git fetch --no-tags origin "pull/${PR}/head:prhead"
             ( umask 077; printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" > "$RUNNER_TEMP/prtext.txt" )
             # HEAD is the checked-out tip of the base branch: the range is what the PR adds.
-            scripts/disclosure-scan.sh . "HEAD...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt"
+            # The tree check reads docs/evidence at the PR head, the range's end.
+            tree_args=(); if supports_tree HEAD; then tree_args=(--tree docs/evidence); fi
+            scripts/disclosure-scan.sh . "HEAD...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt" ${tree_args[@]+"${tree_args[@]}"}
           elif [ "$EVENT" = "merge_group" ]; then
             [[ "$MQ_BASE" =~ ^[0-9a-f]{40}$ && "$MQ_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid merge group shas"; exit 1; }
-            scripts/disclosure-scan.sh . "${MQ_BASE}...${MQ_HEAD}" "$patterns"
+            [[ "$MQ_HEAD_REF" =~ ^refs/heads/gh-readonly-queue/[A-Za-z0-9._/-]+$ ]] || { echo "::error::unexpected merge group ref"; exit 1; }
+            # The checkout is the queue's base, so the queued commit is fetched by its ref and
+            # checked to be the commit the queue named.
+            git fetch --no-tags origin "${MQ_HEAD_REF}:refs/remotes/origin/merge-group-head"
+            [ "$(git rev-parse refs/remotes/origin/merge-group-head)" = "$MQ_HEAD" ] || { echo "::error::the queued commit does not match"; exit 1; }
+            tree_args=(); if supports_tree "$MQ_BASE"; then tree_args=(--tree docs/evidence); fi
+            scripts/disclosure-scan.sh . "${MQ_BASE}...${MQ_HEAD}" "$patterns" ${tree_args[@]+"${tree_args[@]}"}
           else
+            # A push with no earlier commit to compare against checks an empty range and no tree.
             if [[ ! "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] || [[ "$PUSH_BEFORE" =~ ^0+$ ]]; then
-              echo "no previous commit to compare against; nothing to scan"
-              exit 0
+              range="${PUSH_SHA}...${PUSH_SHA}"
+            else
+              range="${PUSH_BEFORE}...${PUSH_SHA}"
             fi
-            scripts/disclosure-scan.sh . "${PUSH_BEFORE}...${PUSH_SHA}" "$patterns"
+            tree_args=(); if [[ "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] && supports_tree "$PUSH_BEFORE"; then tree_args=(--tree docs/evidence); fi
+            scripts/disclosure-scan.sh . "$range" "$patterns" ${tree_args[@]+"${tree_args[@]}"}
           fi
