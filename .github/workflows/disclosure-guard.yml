@@ -8,9 +8,11 @@ name: Disclosure guard
 #
 # Also runs for merge-queue groups (so the check can be required with the queue on).
 # Scanned: lines a pull request adds, its changed file names, its commit
-# messages, and its title and body. The scanner runs from the trusted base
-# commit, never from the pull request's own checkout. Pushes to the default
-# branch are scanned too, which catches anything merged around the checks.
+# messages, its title and body, and the names and text of every file under
+# docs/evidence at the commit it would merge, so a file already in the tree
+# fails too. The scanner runs from the trusted base commit, never from the pull
+# request's own checkout. Pushes to the default branch are scanned too, which
+# catches anything merged around the checks.
 #
 # Fails closed when the secret is missing. Pull requests from forks cannot see
 # secrets, so they fail with instructions: a maintainer re-opens them from a
@@ -85,14 +87,17 @@ jobs:
             git fetch --no-tags origin "pull/${PR}/head:prhead"
             ( umask 077; printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" > "$RUNNER_TEMP/prtext.txt" )
             # HEAD is the checked-out tip of the base branch: the range is what the PR adds.
-            scripts/disclosure-scan.sh . "HEAD...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt"
+            # The tree check reads docs/evidence at the PR head, the range's end.
+            scripts/disclosure-scan.sh . "HEAD...prhead" "$patterns" --extra "$RUNNER_TEMP/prtext.txt" --tree docs/evidence
           elif [ "$EVENT" = "merge_group" ]; then
             [[ "$MQ_BASE" =~ ^[0-9a-f]{40}$ && "$MQ_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid merge group shas"; exit 1; }
-            scripts/disclosure-scan.sh . "${MQ_BASE}...${MQ_HEAD}" "$patterns"
+            scripts/disclosure-scan.sh . "${MQ_BASE}...${MQ_HEAD}" "$patterns" --tree docs/evidence
           else
+            # A branch with no earlier commit adds nothing, but its evidence tree is still checked.
             if [[ ! "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] || [[ "$PUSH_BEFORE" =~ ^0+$ ]]; then
-              echo "no previous commit to compare against; nothing to scan"
-              exit 0
+              range="${PUSH_SHA}...${PUSH_SHA}"
+            else
+              range="${PUSH_BEFORE}...${PUSH_SHA}"
             fi
-            scripts/disclosure-scan.sh . "${PUSH_BEFORE}...${PUSH_SHA}" "$patterns"
+            scripts/disclosure-scan.sh . "$range" "$patterns" --tree docs/evidence
           fi
