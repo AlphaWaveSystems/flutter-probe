@@ -181,20 +181,11 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 	return results, nil
 }
 
-func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-
-	prog, err := parser.ParseFile(string(src))
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-
-	// --dry-run resolves each file on its own, like running that file alone: the
-	// recipes of other files in the same run must not make an unresolved call look
-	// fine (a runtime run of this one file could not see them).
+// loadFileRecipes makes the recipes that path can call available to its tests: those of the recipes folder, those of
+// its `use` statements (followed in turn), and its own. --dry-run resolves a file on its own, like running that file
+// alone: the recipes of other files in the same run must not make an unresolved call look fine (a runtime run of this
+// one file could not see them).
+func (r *Runner) loadFileRecipes(ctx context.Context, path string, prog *parser.Program) error {
 	if r.opts.DryRun && r.baseRecipes != nil {
 		r.recipes = make(map[string]parser.RecipeDef, len(r.baseRecipes))
 		for k, v := range r.baseRecipes {
@@ -211,13 +202,30 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	}
 	for _, u := range prog.Uses {
 		if err := r.loadUse(ctx, path, u, seen); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	// Register recipes from this file
 	for _, rec := range prog.Recipes {
 		r.recipes[rec.Name] = rec
+	}
+	return nil
+}
+
+func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	prog, err := parser.ParseFile(string(src))
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	if err := r.loadFileRecipes(ctx, path, prog); err != nil {
+		return nil, err
 	}
 
 	// Filter tests by tag

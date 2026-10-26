@@ -11,7 +11,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe validate` | Check `probe.yaml` and the `probe_version` pin without connecting to a device. Exits non-zero when a check fails; `--format json` prints the report. Run it in CI before `probe test` |
 | `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing. `--format json` prints the report |
 | `probe test [path]` | Run `.probe` test files |
-| `probe lint [path]` | Validate `.probe` files for syntax errors; warns, never fails, on count and zero-state text checks that a substring match passes by accident |
+| `probe lint [path]` | Validate `.probe` files without running them: syntax errors, steps and recipe calls that resolve to nothing, and selectors that can never match fail the command; unresolved placeholders and count or zero-state text checks warn |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
 | `probe device view` | Interactive device view over a local WebSocket (preview) |
@@ -152,7 +152,18 @@ probe lint tests/
 probe lint tests/smoke/login.probe
 ```
 
-Lint also warns, and never fails, on a `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged. Warnings do not change the exit status.
+Lint checks the references a run would resolve, without running a step, and fails the command (exit status 1) for an error:
+
+- A step or recipe call that matches no built-in step and no recipe in the file, its `use` statements or the recipes folder. This is the check `probe test --dry-run` makes. A `use` statement inside a test is reported too, because a file reads `use` only before its first test.
+- A selector that can never match: an ordinal selector without a number and text, an `#id` without a name, a `below`, `above`, `left of` or `right of` selector without anchor text, or an `in` with an empty container.
+
+It warns, without failing, when:
+
+- A `<name>` placeholder is not an example column, a recipe parameter, a value stored with `store` or `read ... with ai`, one of the runtime values `clipboard`, `response.status` or `response.body`, or a `<random.*>` generator. A run leaves such a placeholder in the text as written.
+- A `use` names a file that does not exist. A run only needs that file when a call uses one of its recipes, and such a call is reported as an unknown step.
+- A `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged.
+
+Environment variables (`${NAME}`) are not checked, because lint does not know the environment that will run the tests.
 
 ## probe record
 

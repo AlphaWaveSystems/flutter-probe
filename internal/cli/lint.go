@@ -17,6 +17,10 @@ var lintCmd = &cobra.Command{
 	Example: `  probe lint tests/
   probe lint tests/login.probe`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := loadConfig(cmd)
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
 		searchPaths := args
 		if len(searchPaths) == 0 {
 			searchPaths = []string{"tests"}
@@ -42,15 +46,39 @@ var lintCmd = &cobra.Command{
 				continue
 			}
 
-			// Lint checks
-			warnings := lintProgram(prog)
-			if len(warnings) > 0 {
-				fmt.Printf("  \033[33m⚠\033[0m  %s\n", f)
-				for _, w := range warnings {
-					fmt.Printf("     %s\n", w)
+			// Lint checks: a reference a run could not resolve is an error and fails the command; a placeholder that
+			// no value defines is a warning.
+			refs, err := runner.LintReferences(cfg, f)
+			if err != nil {
+				fmt.Printf("  \033[31m✗\033[0m  %s — %s\n", f, err)
+				errs++
+				continue
+			}
+			var problems, warnings []string
+			for _, ref := range refs {
+				line := fmt.Sprintf("line %d: %s", ref.Line, ref.Message)
+				if ref.Warning {
+					warnings = append(warnings, line)
+				} else {
+					problems = append(problems, line)
 				}
-			} else {
+			}
+			warnings = append(lintProgram(prog), warnings...)
+			if len(problems) == 0 && len(warnings) == 0 {
 				statusOK(os.Stdout, "%s  (%d test(s))", f, len(prog.Tests))
+				continue
+			}
+			if len(problems) > 0 {
+				errs++
+				fmt.Printf("  \033[31m✗\033[0m  %s\n", f)
+			} else {
+				fmt.Printf("  \033[33m⚠\033[0m  %s\n", f)
+			}
+			for _, p := range problems {
+				fmt.Printf("     %s\n", p)
+			}
+			for _, w := range warnings {
+				fmt.Printf("     %s\n", w)
 			}
 		}
 

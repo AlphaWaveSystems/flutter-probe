@@ -427,7 +427,7 @@ Takes the same arguments as run_tests (see its description for the flags). Then 
 	},
 	{
 		Name:        "lint",
-		Description: "Validate .probe files; warns on count and zero-state text checks, never fails.",
+		Description: "Validate .probe files without running them. Fails on a step or recipe call that resolves to nothing and on a selector that can never match; warns on unresolved placeholders, unknown use files and count or zero-state text checks.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
