@@ -92,10 +92,9 @@ func runGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// TestDisclosureScanIgnoresDeletedNames checks that deleting a file whose name
-// matches is not a match, because the guard is about what a change adds. Adding
-// the same file still fails.
-func TestDisclosureScanIgnoresDeletedNames(t *testing.T) {
+// newEmptyRepo returns a repository with one commit that holds base.txt.
+func newEmptyRepo(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
 	runGit(t, dir, "init", "-q", ".")
 	runGit(t, dir, "config", "user.email", "test@example.invalid")
@@ -103,11 +102,25 @@ func TestDisclosureScanIgnoresDeletedNames(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "base.txt"), "base\n")
 	runGit(t, dir, "add", "-A")
 	runGit(t, dir, "commit", "-q", "-m", "base")
-	writeFile(t, filepath.Join(dir, "docs", "evidence", syntheticTerm+"-folder", "readme.txt"), "x\n")
+	return dir
+}
+
+// commitAll stages everything in dir and commits it with msg.
+func commitAll(t *testing.T, dir, msg string) {
+	t.Helper()
 	runGit(t, dir, "add", "-A")
-	runGit(t, dir, "commit", "-q", "-m", "add")
+	runGit(t, dir, "commit", "-q", "-m", msg)
+}
+
+// TestDisclosureScanIgnoresDeletedNames checks that deleting a file whose name
+// matches is not a match, because the guard is about what a change adds. Adding
+// the same file still fails.
+func TestDisclosureScanIgnoresDeletedNames(t *testing.T) {
+	dir := newEmptyRepo(t)
+	writeFile(t, filepath.Join(dir, "docs", "evidence", syntheticTerm+"-folder", "readme.txt"), "x\n")
+	commitAll(t, dir, "add")
 	runGit(t, dir, "rm", "-q", "--", "docs/evidence/"+syntheticTerm+"-folder/readme.txt")
-	runGit(t, dir, "commit", "-q", "-m", "delete")
+	commitAll(t, dir, "delete")
 	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")
 
 	if out, code := scan(t, dir, "HEAD~1...HEAD", pats); code != 0 || !strings.Contains(out, "disclosure scan: clean") {
@@ -122,7 +135,8 @@ func TestDisclosureScanReportsPositionsOnly(t *testing.T) {
 	repo := newScanRepo(t)
 	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")
 	absent := writeFile(t, filepath.Join(t.TempDir(), "absent.txt"), "zzzabsent\n")
-	invalid := writeFile(t, filepath.Join(t.TempDir(), "invalid.txt"), "(\n")
+	// The invalid pattern contains the term, so an output that printed the pattern would leak it.
+	invalid := writeFile(t, filepath.Join(t.TempDir(), "invalid.txt"), syntheticTerm+"(\n")
 	extra := writeFile(t, filepath.Join(t.TempDir(), "extra.txt"), "a line with "+syntheticTerm+"\n")
 	cases := []struct {
 		name     string
@@ -164,5 +178,75 @@ func TestDisclosureScanReportsPositionsOnly(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestDisclosureScanReadsQuotedNamesAndBinaryFiles adds three files whose names git
+// quotes (a tab, a double quote, a non-ASCII letter), each holding the term, then a
+// binary file holding the term behind a NUL byte, then a binary file under the tree
+// path. Every one of them must be reported, and the output must name none of them.
+func TestDisclosureScanReadsQuotedNamesAndBinaryFiles(t *testing.T) {
+	dir := newEmptyRepo(t)
+	writeFile(t, filepath.Join(dir, "tab\tname.txt"), "a "+syntheticTerm+" line\n")
+	writeFile(t, filepath.Join(dir, `quote"name.txt`), "a "+syntheticTerm+" line\n")
+	writeFile(t, filepath.Join(dir, "caf\u00e9.txt"), "a "+syntheticTerm+" line\n")
+	commitAll(t, dir, "quoted")
+	writeFile(t, filepath.Join(dir, "binary.dat"), "x\x00"+syntheticTerm+"\x00\n")
+	commitAll(t, dir, "binary")
+	writeFile(t, filepath.Join(dir, "docs", "evidence", "record.dat"), "y\x00"+syntheticTerm+"\n")
+	commitAll(t, dir, "tree binary")
+	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")
+
+	out, code := scan(t, dir, "HEAD~3...HEAD~2", pats)
+	if code != 1 || strings.Count(out, "added line 1") != 3 {
+		t.Errorf("three quoted names: exit status %d, want three added-line findings:\n%s", code, out)
+	}
+	out, code = scan(t, dir, "HEAD~2...HEAD~1", pats)
+	if code != 1 || !strings.Contains(out, "changed file #1, added line 1") {
+		t.Errorf("binary file: exit status %d, want an added-line finding:\n%s", code, out)
+	}
+	out, code = scan(t, dir, "HEAD...HEAD", pats, "--tree", "docs/evidence")
+	if code != 1 || !strings.Contains(out, "tree file #1 has a match in its text") {
+		t.Errorf("binary tree file: exit status %d, want a tree text finding:\n%s", code, out)
+	}
+	for _, leak := range []string{syntheticTerm, "tab", "quote", "caf", "binary.dat", "record.dat"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("output names %q:\n%s", leak, out)
+		}
+	}
+}
+
+// TestDisclosureScanReportsLineBreakNames checks that a file whose name holds a line
+// break is reported by its number, and that the name appears nowhere in the output.
+func TestDisclosureScanReportsLineBreakNames(t *testing.T) {
+	dir := newEmptyRepo(t)
+	writeFile(t, filepath.Join(dir, "line\nbreak.txt"), "clean\n")
+	commitAll(t, dir, "line break")
+	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")
+
+	out, code := scan(t, dir, "HEAD~1...HEAD", pats)
+	if code != 1 || !strings.Contains(out, "changed file #1: its name holds a line break") {
+		t.Errorf("line break name: exit status %d, want the line break finding:\n%s", code, out)
+	}
+	if strings.Contains(out, "break.txt") {
+		t.Errorf("output names the file:\n%s", out)
+	}
+}
+
+// TestDisclosureScanExtraErrorNamesNoPath checks that an --extra file that cannot be
+// read fails the scan without printing its path.
+func TestDisclosureScanExtraErrorNamesNoPath(t *testing.T) {
+	dir := newEmptyRepo(t)
+	pats := writeFile(t, filepath.Join(t.TempDir(), "patterns.txt"), syntheticTerm+"\n")
+	missing := filepath.Join(t.TempDir(), "secret-title.txt")
+
+	out, code := scan(t, dir, "HEAD...HEAD", pats, "--extra", missing)
+	if code != 2 || !strings.Contains(out, "extra file unreadable") {
+		t.Errorf("unreadable extra file: exit status %d, want 2 with the unreadable message:\n%s", code, out)
+	}
+	for _, leak := range []string{"secret-title", "No such", missing} {
+		if strings.Contains(out, leak) {
+			t.Errorf("output names %q:\n%s", leak, out)
+		}
 	}
 }
