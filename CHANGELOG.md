@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Building from source needs Go 1.26.10 or newer (was 1.26.1).** The `go` line in `go.mod`, `studio/go.mod`, `tools/probe-convert/go.mod` and `go.work` is now 1.26.10, and the install docs say so. With the default `GOTOOLCHAIN=auto`, an older Go 1.26 downloads 1.26.10 on its own; with `GOTOOLCHAIN=local` the build stops with a version error until Go is upgraded.
 
 ### Docs
+- **Old evidence files that name private projects are removed.** The disclosure guard also scans every file under `docs/evidence`, and its reports give rule numbers and positions instead of file paths.
 - **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
 - **Run recording groundwork, internal only.** The CLI's new `internal/record` package can write a recording bundle, follow the agent's HTTP log without skipping requests still in flight, redact credentials from headers, URLs and bodies, and render a bundle as an offline viewer. Step events now carry their wall-clock time. The CLI now exposes this through `probe test --record`; the design is in `docs/prd/run-recording.md`.
 
