@@ -39,10 +39,12 @@ func main() {
 			app,
 		},
 		Mac: &mac.Options{
+			// Wails makes the web view full-size whenever the title bar is transparent,
+			// which puts it under the title bar and its drag area, so keep it opaque.
 			TitleBar: &mac.TitleBar{
-				TitlebarAppearsTransparent: true,
+				TitlebarAppearsTransparent: false,
 				HideTitle:                  true,
-				FullSizeContent:            true,
+				FullSizeContent:            false,
 			},
 			Appearance: mac.NSAppearanceNameDarkAqua,
 			About: &mac.AboutInfo{

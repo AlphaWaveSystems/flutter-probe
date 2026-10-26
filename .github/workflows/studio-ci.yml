@@ -1,0 +1,109 @@
+name: Studio CI
+
+# The Studio Go module, the frontend and the VS Code extension test suites. They run on every
+# change to studio/ or vscode/. The browser suite stays in studio-e2e-web.yml.
+#
+# The frontend suites run on Node 26: they pass a directory to `node --test`, which Node 22
+# does not accept. The VS Code suite passes on Node 22 and runs there.
+#
+# Not required yet, so there is no merge_group trigger: the merge queue does not wait for this
+# check, and a trigger there would run the Studio build for every unrelated merge group. Making the
+# check required takes two things: a merge_group trigger (types: [checks_requested]), and an
+# always-run gate job that reports success when no Studio file changed. A paths-filtered workflow
+# reports nothing for unrelated pull requests, so a required check would stay pending without it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "studio/**"
+      - "vscode/**"
+      - ".github/workflows/studio-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "studio/**"
+      - "vscode/**"
+      - ".github/workflows/studio-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Studio frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: studio/frontend/package-lock.json
+      - name: Install
+        working-directory: studio/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        working-directory: studio/frontend
+        run: npm run build
+      - name: Typecheck the device view
+        working-directory: studio/frontend
+        run: npm run typecheck:device-view
+      - name: Device view tests
+        working-directory: studio/frontend
+        run: npm run test:device-view
+      - name: ProbeScript tests
+        working-directory: studio/frontend
+        run: npm run test:probescript
+      - name: ProbeScript dictionary is up to date
+        working-directory: studio/frontend
+        run: npm run check:probescript
+
+  studio-go:
+    name: Studio Go tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The Studio binary embeds frontend/dist, so the frontend is built before the Go tests.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: studio/frontend/package-lock.json
+      - name: Build the frontend the binary embeds
+        working-directory: studio/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: true
+          cache-dependency-path: studio/go.sum
+      - name: Test
+        working-directory: studio
+        run: go test ./...
+
+  vscode:
+    name: VS Code extension tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Install
+        working-directory: vscode
+        run: npm ci --no-audit --no-fund
+      - name: Test
+        working-directory: vscode
+        run: npm test
