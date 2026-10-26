@@ -5,6 +5,12 @@ name: Studio CI
 #
 # The frontend suites run on Node 26: they pass a directory to `node --test`, which Node 22
 # does not accept. The VS Code suite passes on Node 22 and runs there.
+#
+# Not required yet, so there is no merge_group trigger: the merge queue does not wait for this
+# check, and a trigger there would run the Studio build for every unrelated merge group. Making the
+# check required takes two things: a merge_group trigger (types: [checks_requested]), and an
+# always-run gate job that reports success when no Studio file changed. A paths-filtered workflow
+# reports nothing for unrelated pull requests, so a required check would stay pending without it.
 
 on:
   push:
@@ -19,8 +25,6 @@ on:
       - "studio/**"
       - "vscode/**"
       - ".github/workflows/studio-ci.yml"
-  merge_group:
-    types: [checks_requested]
 
 permissions:
   contents: read
