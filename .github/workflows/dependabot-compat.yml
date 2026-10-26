@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.26.10"
           check-latest: true
           cache: true
 
@@ -162,7 +162,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.26.10"
           check-latest: true
           cache: true
 
@@ -184,7 +184,7 @@ jobs:
       - uses: actions/setup-go@v7
         if: needs.changes.outputs.go == 'true'
         with:
-          go-version: "1.26"
+          go-version: "1.26.10"
           check-latest: true
           cache: true
 
@@ -222,7 +222,7 @@ jobs:
       - uses: actions/setup-go@v7
         if: needs.changes.outputs.go == 'true'
         with:
-          go-version: "1.26"
+          go-version: "1.26.10"
           check-latest: true
           cache: true
 
