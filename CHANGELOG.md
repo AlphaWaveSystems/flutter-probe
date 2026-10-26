@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Studio no longer returns the Anthropic API key to the window.** The key panel shows whether a key is saved and starts with an empty field. Saving an empty field no longer clears a saved key; use Remove key to delete it.
 - **Studio no longer remembers WiFi tokens.** The token is typed for each connection. Studio deletes the plain-text copy that an earlier version kept in local storage on first start.
 - **Studio's Run File accepts only `.probe` files inside the open workspace or an automation folder.** Other paths are refused before anything runs, as the automation endpoint already refused them.
+- **Studio opens only `.probe` files inside the open workspace or an automation folder.** The editor's open action uses the same check as Run File, and a path with `..` is refused.
 
 ## [0.26.0] - 2026-10-14
 

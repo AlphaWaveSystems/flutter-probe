@@ -241,21 +241,33 @@ func (a *App) ListDir(dir string) ([]FileEntry, error) {
 	return out, nil
 }
 
-// ReadFile returns the contents of a .probe file. Path traversal is rejected
-// to keep the UI from accidentally opening anything outside the workspace.
+// ReadFile returns the contents of a .probe file inside the workspace a person opened or an automation folder. The
+// editor opens only the .probe entries of the open workspace tree, so those are the only files it reads. The check is
+// the one RunFile makes: an absolute path, resolved through every symlink, inside an allowed root, and a regular
+// .probe file. A ".." segment is refused before anything else, so a path cannot climb out of a root.
 func (a *App) ReadFile(path string) (string, error) {
-	if !strings.HasSuffix(path, ".probe") {
-		return "", fmt.Errorf("only .probe files can be opened")
-	}
-	clean := filepath.Clean(path)
-	if strings.Contains(clean, "..") {
+	if hasDotDotSegment(path) {
 		return "", fmt.Errorf("path traversal rejected: %s", path)
 	}
-	b, err := os.ReadFile(clean)
+	real, err := probeFileWithinRoots(a.automationRoots(), path)
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(real)
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// hasDotDotSegment reports whether any segment of p is "..", on either path separator.
+func hasDotDotSegment(p string) bool {
+	for _, part := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // WriteFile saves content to a .probe path. Creates parent directories.

@@ -179,6 +179,7 @@ func TestApp_WriteFile_ReadFile_RoundTrip(t *testing.T) {
 	a := NewApp()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.probe")
+	a.SetWorkspace(dir) // ReadFile reads inside the workspace a person opened
 	content := "test \"round trip\"\n  wait 1 seconds\n"
 
 	if err := a.WriteFile(path, content); err != nil {
