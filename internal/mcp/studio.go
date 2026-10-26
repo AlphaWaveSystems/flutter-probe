@@ -59,7 +59,7 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 	},
 	{
 		Name:        "studio_run_state",
-		Description: "The state of the current or last run in Studio: running, the plan (tests and step counts), the step being executed now (line, description), the finished steps with their verdicts and the test results so far.",
+		Description: "The state of the current or last run in Studio: running, the plan (tests and step counts), the step being executed now (line, description), the finished steps with their verdicts and the test results so far. A failed see or tap on a text or an id carries a triage: a suggested fix line (when the rules have one) and a reason. The triage is rule-based and runs without AI.",
 		InputSchema: mcpSchema{Type: "object"},
 	},
 	{
