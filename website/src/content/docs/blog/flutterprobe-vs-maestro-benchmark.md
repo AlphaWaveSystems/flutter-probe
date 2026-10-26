@@ -73,8 +73,7 @@ Connectivity held in all four combinations.
 We're not going to spin this as a win we almost had. The honest read is that the original finding
 was very likely a one-off property of that specific emulator session — normal toolchain flakiness
 that could have hit either tool, not a deterministic effect of run order or a real Maestro-specific
-stability issue. We're retiring it as a citable claim. The methodology and results are in this post, and the raw data is available on request —
-we'd rather publish a benchmark that walks back its own earlier finding than publish one that
+stability issue. We're retiring it as a citable claim. The methodology and results are in this post. We'd rather publish a benchmark that walks back its own earlier finding than publish one that
 quietly drops the inconvenient part.
 
 ## Where each tool stands today
@@ -104,4 +103,4 @@ time compounds. If your suite leans heavily on native pickers/share sheets on iO
 that's still a real, open gap for FlutterProbe as of this writing — track the proposal, or use
 Maestro for that slice of coverage in the meantime.
 
-Raw data for both orderings and every run is available on request: the same JSON reports and JUnit XML the harness itself produced, not summarized or cherry-picked.
+The methodology and results are in this post. The JSON reports and JUnit XML the harness itself produced for both orderings and every run were not summarized or cherry-picked.
