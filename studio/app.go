@@ -1057,7 +1057,7 @@ func toRunStep(ev runner.StepEvent) RunStep {
 		rs.Error = ev.Error.Error()
 	}
 	if ev.Status == runner.StepFailed {
-		if t, ok := triageStep(ev.Description, rs.Error, ev.Duration); ok {
+		if t, ok := triageStep(ev.Description, ev.SelectorIsID, rs.Error, ev.Duration); ok {
 			rs.Triage = &t
 		}
 	}

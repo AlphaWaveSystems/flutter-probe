@@ -12,7 +12,7 @@ import (
 // The known failing step of the Studio fixture app (native-test-apps/studio-fixture/probe-tests/failing.probe):
 // `see "This text does not exist"` fails at once. The failure text is the one a device run reported.
 func TestTriageFixtureSeeFailureSuggestsWaitAndGivesReason(t *testing.T) {
-	got, ok := triageStep(`see "This text does not exist"`,
+	got, ok := triageStep(`see "This text does not exist"`, false,
 		`rpc error -32002: Expected to see "text("This text does not exist")" but it was not found`,
 		6*time.Millisecond)
 	if !ok {
@@ -29,7 +29,7 @@ func TestTriageFixtureSeeFailureSuggestsWaitAndGivesReason(t *testing.T) {
 }
 
 func TestTriageTapOnMissingTextSuggestsWait(t *testing.T) {
-	got, ok := triageStep(`tap "Continue"`, `Widget not found: text("Continue")`, 4200*time.Millisecond)
+	got, ok := triageStep(`tap "Continue"`, false, `Widget not found: text("Continue")`, 4200*time.Millisecond)
 	if !ok {
 		t.Fatal("a failed tap on a quoted text is a step the rules cover")
 	}
@@ -43,9 +43,10 @@ func TestTriageTapOnMissingTextSuggestsWait(t *testing.T) {
 	}
 }
 
-// An id selector has no wait line in these rules: the reason names the id and the time spent.
+// The runner describes an id selector with the same quoted form as a text (tap "probe_open_paywall"), so the
+// flag from the step event decides: an id has a reason only, because a text wait would never match it.
 func TestTriageIDSelectorGivesReasonOnly(t *testing.T) {
-	got, ok := triageStep(`tap #probe_open_paywall`, `Widget not found: id("probe_open_paywall")`, time.Second)
+	got, ok := triageStep(`tap "probe_open_paywall"`, true, `Widget not found: id("probe_open_paywall")`, time.Second)
 	if !ok {
 		t.Fatal("a failed tap on an id is a step the rules cover")
 	}
@@ -59,7 +60,7 @@ func TestTriageIDSelectorGivesReasonOnly(t *testing.T) {
 
 // A failure the rules do not recognise still gets a reason: the failure text itself.
 func TestTriageUnknownFailureGivesReasonOnly(t *testing.T) {
-	got, ok := triageStep(`see "Welcome"`, `connection refused`, time.Second)
+	got, ok := triageStep(`see "Welcome"`, false, `connection refused`, time.Second)
 	if !ok {
 		t.Fatal("a failed see on a quoted text is a step the rules cover")
 	}
@@ -87,6 +88,23 @@ func TestToRunStepCarriesTriageForAFailedSelector(t *testing.T) {
 	}
 }
 
+// The step event's id flag reaches the triage: a failed tap on an id carries a reason and no fix.
+func TestToRunStepTriageUsesTheIDFlag(t *testing.T) {
+	rs := toRunStep(runner.StepEvent{
+		Description:  `tap "probe_open_paywall"`,
+		Status:       runner.StepFailed,
+		Duration:     time.Second,
+		Error:        errors.New(`Widget not found: id("probe_open_paywall")`),
+		SelectorIsID: true,
+	})
+	if rs.Triage == nil {
+		t.Fatal("a failed tap on an id carries a triage")
+	}
+	if rs.Triage.Fix != "" {
+		t.Errorf("Triage.Fix = %q, want none for an id selector", rs.Triage.Fix)
+	}
+}
+
 // A step that passed has no triage: there is nothing to explain.
 func TestToRunStepHasNoTriageForAPassedStep(t *testing.T) {
 	rs := toRunStep(runner.StepEvent{Description: `see "Home"`, Status: runner.StepPassed})
@@ -97,7 +115,7 @@ func TestToRunStepHasNoTriageForAPassedStep(t *testing.T) {
 
 // Steps that are not selector steps are outside the rules: no triage, so the Results pane shows only the error.
 func TestTriageNonSelectorStepIsNotCovered(t *testing.T) {
-	if _, ok := triageStep(`wait 4 seconds`, `timed out`, 4*time.Second); ok {
+	if _, ok := triageStep(`wait 4 seconds`, false, `timed out`, 4*time.Second); ok {
 		t.Error("a wait step is not a selector step; the rules must not cover it")
 	}
 }

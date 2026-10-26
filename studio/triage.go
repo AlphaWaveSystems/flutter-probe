@@ -15,25 +15,29 @@ type StepTriage struct {
 	Reason string `json:"reason"`
 }
 
-// selectorStep matches a see or tap on a quoted text or on an id: the selector forms the rules cover.
-var selectorStep = regexp.MustCompile(`^\s*(see|tap)\s+(?:"([^"]*)"|#(\S+))\s*$`)
+// selectorStep matches a see or tap on a quoted selector. The runner writes an id in the same quoted form as a
+// text, so the caller passes whether the selector is an id.
+var selectorStep = regexp.MustCompile(`^\s*(see|tap)\s+"([^"]*)"\s*$`)
 
-// triageStep returns the rule-based suggestion for a failed step. ok is false when the step is not a see or
-// tap on a text or an id, so the rules do not cover it. took is how long the step ran before it failed.
-func triageStep(description, failure string, took time.Duration) (StepTriage, bool) {
+// triageStep returns the rule-based suggestion for a failed step. description is the step text the runner reports;
+// isID says the selector is an id (#name), which the text cannot tell apart from a text. ok is false when the step
+// is not a see or tap on a quoted selector, so the rules do not cover it. took is how long the step ran before it
+// failed.
+func triageStep(description string, isID bool, failure string, took time.Duration) (StepTriage, bool) {
 	m := selectorStep.FindStringSubmatch(description)
 	if m == nil {
 		return StepTriage{}, false
 	}
-	verb, text, id := m[1], m[2], m[3]
+	verb, sel := m[1], m[2]
 	secs := took.Seconds()
 	if !strings.Contains(failure, "not found") {
 		return StepTriage{Reason: fmt.Sprintf("%s failed after %.1f s: %s", verb, secs, firstLine(failure))}, true
 	}
-	if id != "" {
-		return StepTriage{Reason: fmt.Sprintf("%s found no element with the id %s on screen after %.1f s.", verb, id, secs)}, true
+	if isID {
+		// A text wait would never match an id, so an id gets the reason only.
+		return StepTriage{Reason: fmt.Sprintf("%s found no element with the id %s on screen after %.1f s.", verb, sel, secs)}, true
 	}
-	quoted := `"` + text + `"`
+	quoted := `"` + sel + `"`
 	fix := fmt.Sprintf("wait until %s appears", quoted)
 	if verb == "see" {
 		return StepTriage{
