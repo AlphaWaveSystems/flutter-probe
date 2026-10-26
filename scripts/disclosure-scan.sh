@@ -81,7 +81,7 @@ if [ "${#trees[@]}" -gt 0 ]; then
   tn=0
   while IFS= read -r name; do
     tn=$((tn + 1))
-    g cat-file blob "$end:$name" | tr -d '\000' > "$tmp/tree-text/$tn" || { echo "tree read failed" >&2; exit 2; }
+    g cat-file blob "$end:$name" | LC_ALL=C tr -d '\000' > "$tmp/tree-text/$tn" || { echo "tree read failed" >&2; exit 2; }
   done < "$tmp/tree-list.txt"
 else
   : > "$tmp/tree-list.txt"
@@ -112,7 +112,7 @@ n=0
 while IFS= read -r -d '' p; do
   n=$((n + 1))
   g diff -U0 --text "${diff_opts[@]}" "$range" -- "$p" \
-    | tr -d '\000' \
+    | LC_ALL=C tr -d '\000' \
     | awk -v k="$n" '
         /^@@/ { match($0, /\+[0-9]+/); ln = substr($0, RSTART + 1, RLENGTH - 1) + 0; inhunk = 1; next }
         inhunk && /^\+/ { print k ":" ln ":" substr($0, 2); ln++ }
@@ -124,7 +124,7 @@ g log --format='commit %h:%n%B' "$range" > "$tmp/commits.txt"
 : > "$tmp/extra.txt"
 for f in "${extras[@]+"${extras[@]}"}"; do
   # The error names no path: an unreadable file is reported as such, and nothing else.
-  { tr -d '\000' < "$f" >> "$tmp/extra.txt"; } 2>/dev/null || { echo "extra file unreadable" >&2; exit 2; }
+  { LC_ALL=C tr -d '\000' < "$f" >> "$tmp/extra.txt"; } 2>/dev/null || { echo "extra file unreadable" >&2; exit 2; }
   echo >> "$tmp/extra.txt"
 done
 
