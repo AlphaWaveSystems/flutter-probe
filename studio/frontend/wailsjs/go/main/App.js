@@ -22,12 +22,20 @@ export function ConnectWiFi(arg1, arg2, arg3) {
   return window['go']['main']['App']['ConnectWiFi'](arg1, arg2, arg3);
 }
 
+export function ConnectWiFiSaved(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ConnectWiFiSaved'](arg1, arg2, arg3);
+}
+
 export function DeleteAPIKey() {
   return window['go']['main']['App']['DeleteAPIKey']();
 }
 
 export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
+}
+
+export function ForgetWiFiToken(arg1) {
+  return window['go']['main']['App']['ForgetWiFiToken'](arg1);
 }
 
 export function GetAPIKey() {
@@ -86,6 +94,10 @@ export function RunState() {
   return window['go']['main']['App']['RunState']();
 }
 
+export function SaveWiFiToken(arg1, arg2) {
+  return window['go']['main']['App']['SaveWiFiToken'](arg1, arg2);
+}
+
 export function SaveWorkspaceSettings(arg1, arg2) {
   return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
 }
@@ -124,6 +136,10 @@ export function TakeScreenshot() {
 
 export function TestWiFi(arg1, arg2, arg3) {
   return window['go']['main']['App']['TestWiFi'](arg1, arg2, arg3);
+}
+
+export function WiFiTokenSaved(arg1) {
+  return window['go']['main']['App']['WiFiTokenSaved'](arg1);
 }
 
 export function WriteFile(arg1, arg2) {

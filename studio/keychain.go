@@ -26,3 +26,24 @@ func keychainHas(service, user string) (bool, error) {
 	}
 	return true, nil
 }
+
+// keychainGetItem returns the value saved under user, or "" when nothing is saved.
+func keychainGetItem(user string) (string, error) {
+	value, err := keyring.Get(keychainService, user)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", nil
+	}
+	return value, err
+}
+
+// keychainSetItem saves value under user.
+func keychainSetItem(user, value string) error { return keyring.Set(keychainService, user, value) }
+
+// keychainDeleteItem removes the item saved under user. A missing item is not an error.
+func keychainDeleteItem(user string) error {
+	err := keyring.Delete(keychainService, user)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return nil
+	}
+	return err
+}

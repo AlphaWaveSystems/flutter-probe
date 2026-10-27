@@ -12,8 +12,10 @@ import {
   Chat,
   Connect,
   ConnectWiFi,
+  ConnectWiFiSaved,
   DeleteAPIKey,
   Disconnect,
+  ForgetWiFiToken,
   GetAPIKey,
   InitialWorkspace,
   SetWorkspace,
@@ -24,6 +26,7 @@ import {
   PickWorkspace,
   ReadFile,
   RunFile,
+  SaveWiFiToken,
   SaveWorkspaceSettings,
   SetAPIKey,
   StartRecording,
@@ -32,6 +35,7 @@ import {
   StopRecording,
   StopWiFiDiscovery,
   TestWiFi,
+  WiFiTokenSaved,
   WriteFile,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
@@ -415,8 +419,8 @@ $("btn-settings-save").addEventListener("click", async () => {
 
 type WiFiDevice = { name: string; host: string; port: number; version: string };
 
-// Earlier versions kept WiFi tokens in plain text in localStorage. Studio no longer remembers tokens, so remove that copy
-// on start.
+// Earlier versions kept WiFi tokens in plain text in localStorage. Those copies are removed on start; tokens now live in
+// the OS keychain, one item per device.
 try {
   localStorage.removeItem("fp.studio.wifi-tokens");
 } catch {
@@ -449,16 +453,55 @@ function closeWiFiOverlay() {
   StopWiFiDiscovery();
 }
 
-function selectWiFiDevice(dev: WiFiDevice) {
+async function selectWiFiDevice(dev: WiFiDevice) {
   wifiSelected = dev;
   for (const li of Array.from($("wifi-devices").children) as HTMLElement[]) {
     li.classList.toggle("selected", li.dataset.key === `${dev.host}:${dev.port}`);
   }
-  $("wifi-selected-label").textContent = `Connecting to ${dev.name} (${dev.host}:${dev.port})`;
   ($("wifi-token-row") as HTMLElement).hidden = false;
   const input = $("wifi-token-input") as HTMLInputElement;
   input.value = "";
+  // A saved token is used when the field is left blank. The window never receives the saved token itself.
+  const saved = await savedWiFiToken(dev.name);
+  if (wifiSelected !== dev) return;
+  $("wifi-selected-label").textContent =
+    `Connecting to ${dev.name} (${dev.host}:${dev.port})` +
+    (saved ? " · a saved token is used if the field is blank" : "");
   input.focus();
+}
+
+// Whether a WiFi token is saved for the device. A keychain that cannot be read counts as none saved.
+async function savedWiFiToken(device: string): Promise<boolean> {
+  try {
+    return await WiFiTokenSaved(device);
+  } catch {
+    return false;
+  }
+}
+
+// Marks a device that has a saved token, with the ✕ control that forgets it.
+async function markSavedWiFi(li: HTMLElement, dev: WiFiDevice) {
+  if (!(await savedWiFiToken(dev.name))) return;
+  const tag = document.createElement("span");
+  tag.className = "wifi-saved-tag";
+  tag.textContent = "🔑 saved";
+  tag.title = "A token is saved for this device";
+  const forget = document.createElement("button");
+  forget.className = "btn-mini wifi-forget";
+  forget.title = `Forget the saved token for ${dev.name}`;
+  forget.textContent = "✕";
+  forget.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      await ForgetWiFiToken(dev.name);
+      tag.remove();
+      forget.remove();
+      toast(`Forgot the token for ${dev.name}`, "info", 1500);
+    } catch (err) {
+      toast(`Could not forget the token: ${err}`, "error");
+    }
+  });
+  li.append(tag, forget);
 }
 
 EventsOn("wifi:device-found", (dev: WiFiDevice) => {
@@ -479,6 +522,7 @@ EventsOn("wifi:device-found", (dev: WiFiDevice) => {
   hostEl.className = "wifi-host";
   hostEl.textContent = `${dev.host}:${dev.port}${dev.version ? ` · v${dev.version}` : ""}`;
   li.append(nameEl, hostEl);
+  void markSavedWiFi(li, dev);
   li.addEventListener("click", () => selectWiFiDevice(dev));
   list.appendChild(li);
 });
@@ -555,19 +599,31 @@ $("btn-wifi-manual-test").addEventListener("click", () => manualWiFi(false));
 $("btn-wifi-manual-connect").addEventListener("click", () => manualWiFi(true));
 
 $("btn-wifi-connect").addEventListener("click", async () => {
-  if (!wifiSelected) return;
-  const token = ($("wifi-token-input") as HTMLInputElement).value.trim();
-  if (!token) {
+  const dev = wifiSelected;
+  if (!dev) return;
+  const typed = ($("wifi-token-input") as HTMLInputElement).value.trim();
+  const useSaved = !typed && (await savedWiFiToken(dev.name));
+  if (!typed && !useSaved) {
     toast("Token is required.", "error");
     return;
   }
-  setStatus("connecting", `Connecting to ${wifiSelected.host}…`);
+  setStatus("connecting", `Connecting to ${dev.host}…`);
   try {
-    await ConnectWiFi(wifiSelected.host, wifiSelected.port, token);
+    if (useSaved) {
+      await ConnectWiFiSaved(dev.host, dev.port, dev.name);
+    } else {
+      await ConnectWiFi(dev.host, dev.port, typed);
+      // Keep the typed token only once it has connected. A keychain that refuses the save does not undo the connection.
+      try {
+        await SaveWiFiToken(dev.name, typed);
+      } catch {
+        toast("Connected, but the token could not be saved to the keychain.", "info", 6000);
+      }
+    }
     setStatus(
       "connected",
-      `Connected · ${wifiSelected.name}`,
-      `${wifiSelected.name} (${wifiSelected.host}:${wifiSelected.port}) · WiFi transport`
+      `Connected · ${dev.name}`,
+      `${dev.name} (${dev.host}:${dev.port}) · WiFi transport`
     );
     closeWiFiOverlay();
     startStream();
