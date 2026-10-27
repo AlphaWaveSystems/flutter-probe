@@ -17,7 +17,7 @@ import (
 // successfully reconnect but never re-run the step: the retry switch matched
 // nothing, err stayed the stale pre-reconnect connection error, and the loop
 // burned every remaining attempt re-closing the connection tryReconnect had
-// just re-established. In a real multi-file Android run (NECT's smoke
+// just re-established. In a real multi-file Android run (the sample app's smoke
 // suite), that turned one transport blip at a file boundary into 76
 // cascading test failures.
 //
@@ -134,7 +134,7 @@ func TestRunConditional_ConnectionErrorPropagates(t *testing.T) {
 	e := NewExecutor(client, nil, nil, 5*time.Second, false)
 
 	step := parser.ConditionalStep{
-		Condition: "Login to NECT",
+		Condition: "Login to Sample",
 		Then:      []parser.Step{parser.ActionStep{Verb: parser.VerbTap, Sel: &parser.Selector{Kind: parser.SelectorText, Text: "Sign In"}}},
 		Else:      []parser.Step{parser.ActionStep{Verb: parser.VerbGoBack}},
 	}
@@ -161,7 +161,7 @@ func TestRunConditional_OrdinaryNotFoundStillTakesElse(t *testing.T) {
 	e := NewExecutor(client, nil, nil, 5*time.Second, false)
 
 	step := parser.ConditionalStep{
-		Condition: "Login to NECT",
+		Condition: "Login to Sample",
 		Else:      []parser.Step{parser.ActionStep{Verb: parser.VerbTap, Sel: &parser.Selector{Kind: parser.SelectorText, Text: "Elsewhere"}}},
 	}
 	if err := e.runConditional(context.Background(), step); err != nil {

@@ -1,6 +1,6 @@
 # Visual regression test suite
 # Each test captures a screenshot and compares against a baseline.
-use "tests/recipes/common.probe"
+use "../recipes/common.probe"
 
 before each test
   open and wait for the app

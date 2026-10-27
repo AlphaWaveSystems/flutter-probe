@@ -17,7 +17,7 @@ void main() {
     // distinguishes pre-fix (incremented once, at start()) from post-fix
     // (incremented again on every periodic tick). The real Android
     // cache-eviction filesystem behavior is verified on a real device
-    // instead (see docs/evidence/).
+    // instead.
     late ProbeServer server;
 
     tearDown(() async {

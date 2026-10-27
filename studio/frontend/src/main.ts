@@ -1045,13 +1045,6 @@ $("btn-record").addEventListener("click", async () => {
 
 // ---- Boot ---------------------------------------------------------------
 
-// macOS traffic lights need ~78px of leading inset; other platforms don't.
-// Wails uses standard chrome on Windows/Linux so reserve no space there.
-const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
-if (!isMac) {
-  document.documentElement.style.setProperty("--titlebar-inset", "0px");
-}
-
 initDeviceStream();
 initDeviceSettings();
 

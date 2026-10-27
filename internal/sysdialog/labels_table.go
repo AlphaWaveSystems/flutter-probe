@@ -15,8 +15,7 @@ import "sort"
 // The data was MEASURED, not translated by hand: for each language the iPhone
 // 17e simulator (iOS 26.3 runtime) was switched to that language and locale,
 // the alerts were triggered by a throwaway app, and the button labels were read
-// back with the system-dialog driver. Measured on 2026-10-09; the raw output
-// lives in docs/evidence/i18n-ios-dialog-labels-2026-10/.
+// back with the system-dialog driver. Measured on 2026-10-09.
 //
 // Roles that could not be observed on the simulator (ok, cancel, open) are
 // deliberately absent rather than guessed. Languages not listed were not

@@ -1,5 +1,0 @@
-test "dump tree canonical form"
-  restart the app
-  wait until "Quick Add" appears
-  dump tree
-  see "Quick Add"
