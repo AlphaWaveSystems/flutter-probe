@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Run recording groundwork, internal only.** The CLI's new `internal/record` package can write a recording bundle, follow the agent's HTTP log without skipping requests still in flight, redact credentials from headers, URLs and bodies, and render a bundle as an offline viewer. Step events now carry their wall-clock time. The CLI now exposes this through `probe test --record`; the design is in `docs/prd/run-recording.md`.
 
 ### Fixed
+- **Studio: dompurify is 3.4.17 in the frontend.** Monaco 0.57 pins an older dompurify with open advisories, which Dependabot reported as alerts #179 to #183 after the Monaco upgrade. The frontend now overrides it to 3.4.17, and `npm audit --omit=dev` reports no vulnerabilities.
 - **Studio: the frontend builds with `bundler` module resolution.** TypeScript 7 removed `moduleResolution: "Node"`, so the Studio build failed on the TypeScript 7 and Monaco 0.57 upgrades. The Studio tsconfig now uses `bundler`.
 - **CI: the website checks and the docs deploy run on Node 22.23.4.** Astro 7.4.2 needs Node 22.23.4 or newer, and the runner cache held 22.23.3. The Dependabot compatibility jobs and `docs.yml` now pin 22.23.4.
 - **VS Code: the extension compiles again with TypeScript 7 and @types/node 26.** The tsconfig names the Node types, which TypeScript 7 no longer loads by default. Without it, `npm test` failed to compile after those two upgrades.
