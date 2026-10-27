@@ -64,6 +64,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Dev tooling: `@azure/msal-node` is pinned to 7.1.0 in the VS Code extension's development tree, which closes GHSA-xcx6-jx8p-x3h5.** The package reaches that tree through `@azure/identity`, and the packaged extension does not include it.
 - **Dev tooling: the Studio frontend's npm tree resolves `dompurify` 3.4.17.** `monaco-editor` pins `dompurify` exactly to 3.4.15, so an override sets the npm package to 3.4.17. The editor bundles its own copy of DOMPurify, which is unchanged at 3.4.15, so the code Studio ships does not change. The advisories need options that the bundled sanitizer does not set.
 
+### Security
+- **Studio no longer returns the Anthropic API key to the window.** The key panel shows whether a key is saved and starts with an empty field. Saving an empty field no longer clears a saved key; use Remove key to delete it.
+- **Studio keeps each WiFi token in the OS keychain, under its device, and never returns it to the window.** A device with a saved token shows a 🔑 saved tag, and connecting to it needs no paste. Its ✕ control forgets the token. Studio deletes the plain-text copy that an earlier version kept in local storage on first start.
+- **Studio's Run File accepts only `.probe` files inside the open workspace or an automation folder.** Other paths are refused before anything runs, as the automation endpoint already refused them.
+- **Studio opens only `.probe` files inside the open workspace or an automation folder.** The editor's open action uses the same check as Run File, and a path with `..` is refused.
+- **Studio saves `.probe` files and lists folders only inside the open workspace or an automation folder.** Save and the file tree use the same rule as Read File and Run File, including the `..` and symlink checks. With no workspace open, the file tree is empty.
+
 ## [0.26.0] - 2026-10-14
 
 ### Added

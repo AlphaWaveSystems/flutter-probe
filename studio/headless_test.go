@@ -98,8 +98,9 @@ func TestHeadlessCallNeedsTheTokenAndALocalCaller(t *testing.T) {
 }
 
 func TestHeadlessCallsAppMethodsLikeWails(t *testing.T) {
-	s, _ := startHeadlessTest(t)
+	s, a := startHeadlessTest(t)
 	dir := t.TempDir()
+	a.SetWorkspace(dir) // the page opens the workspace before it lists or reads its files
 	if err := os.WriteFile(filepath.Join(dir, "a.probe"), []byte("test \"x\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

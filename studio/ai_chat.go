@@ -57,14 +57,10 @@ type claudeMessage struct {
 
 var chatHTTPClient = &http.Client{Timeout: 120 * time.Second}
 
-// GetAPIKey retrieves the stored Anthropic API key from the platform keychain.
-// Returns an empty string (not an error) when no key is stored.
-func (a *App) GetAPIKey() (string, error) {
-	key, err := keychainGet()
-	if err != nil {
-		return "", nil
-	}
-	return key, nil
+// GetAPIKey reports whether an Anthropic API key is saved in the platform keychain. It never returns the key: the
+// settings panel only needs to show that one is saved.
+func (a *App) GetAPIKey() (bool, error) {
+	return keychainHas(keychainService, keychainUser)
 }
 
 // SetAPIKey stores the Anthropic API key in the platform keychain.
