@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.26.1 - 2026-10-26
+
+- Security: secret text in password and credential-named fields is no longer listed or read as text in warnings, widget summaries or recordings.
+
 ## 0.26.0 - 2026-10-14
 
 - Added: device view methods, all additive and for debug or profile builds only: `probe.tap_at`, `probe.long_press_at`, `probe.swipe_at` (pointer events at logical coordinates), `probe.type_text` (inserts into the focused field), `probe.hit_test` (the widget at a point), `probe.dump_tree` with `bounds: true` (nodes with logical-pixel bounds), and `scale` on `probe.screenshot` (the reply also carries `width`, `height`, `logicalWidth`, `logicalHeight` and `dpr`). An older CLI never sends them.

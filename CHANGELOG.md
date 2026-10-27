@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-26
+
+### Security
+- Secret text is masked more thoroughly in warnings, run output and recordings. See the repository security advisories for details.
+
 ### Added
 - **MCP: `start_tests`, `test_status`, `test_result` and `cancel_tests` run tests in the background.** `run_tests` blocks until `probe test` exits, so a multi-device run (`--parallel`, `composite_devices`, several devices) could outlast the MCP client's tool timeout and be reported as failed while it kept running. `start_tests` takes the same arguments, returns a `job_id` at once and runs the command in its own process group; `test_status` returns the state, elapsed time and the last lines of output; `test_result` returns the retained output (the last 1 MB) and the exit code; `cancel_tests` sends SIGTERM to the run and kills it after 5 seconds. Jobs live in the `probe-mcp` process and are killed when it exits. The hosted-upload flags are refused here exactly as in `run_tests`. `run_tests` is unchanged. The MCP server now has 40 tools.
 - **`probe lint` checks the references a run would resolve.** Lint reports each step and recipe call that matches no built-in step and no recipe in the file, its `use` statements or the recipes folder (the check `probe test --dry-run` makes), each selector that can never match, and each `<name>` placeholder that no example column, recipe parameter or stored value defines. It runs without a device, gives the line of each finding, and checks hook bodies and the device blocks of composite tests too.
