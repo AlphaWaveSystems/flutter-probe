@@ -341,7 +341,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Agent warnings (e.g. a tap whose target is covered by another widget) are
 	// successful calls the user should still hear about (FP-19).
-	probelink.SetWarningHandler(func(w string) { statusWarn(statusW, "%s", w) })
+	probelink.SetWarningHandler(agentWarningHandler(statusW))
 	failOnWarning, _ := cmd.Flags().GetBool("fail-on-warning")
 	probelink.SetStrictWarnings(failOnWarning)
 
@@ -765,7 +765,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				announceRun(agentVersion)
 				if warning != "" {
-					statusWarn(statusW, "%s", warning)
+					printAgentWarning(statusW, warning)
 				}
 				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", targetDevice, provider.Name())
 			} else {
@@ -826,7 +826,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				announceRun(agentVersion)
 				if warning != "" {
-					statusWarn(statusW, "%s", warning)
+					printAgentWarning(statusW, warning)
 				}
 				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
 			}
@@ -953,12 +953,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			// IMPROVEMENT_TASKS.md: connect failures (especially Android) were
 			// previously a total black box with no visibility into where
 			// things actually broke.
-			trace := func(format string, args ...any) {} // no-op unless -v is set
-			if verbose {
-				trace = func(format string, args ...any) {
-					fmt.Fprintf(statusW, "  \033[2mtrace: "+format+"\033[0m\n", args...)
-				}
-			}
+			trace := traceFunc(verbose, statusW) // no-op unless -v is set
 
 			dialOpts := probelink.DialOptions{
 				Host:        host,
@@ -1100,7 +1095,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			trace("handshake: accepted")
 			announceRun(agentVersion)
 			if warning != "" {
-				statusWarn(statusW, "%s", warning)
+				printAgentWarning(statusW, warning)
 			}
 			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
 		}

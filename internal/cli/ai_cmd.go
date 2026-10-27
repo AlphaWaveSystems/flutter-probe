@@ -14,6 +14,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // Everything in this file is optional and advisory (FP-14). `probe test`
@@ -149,8 +150,15 @@ func triageToMarkdown(ctx context.Context, cfg *config.Config, failures []ai.Fai
 	if err != nil {
 		return "", err
 	}
-	notes, stopped := ai.Triage(ctx, c, failures, ai.TriageOptions{PerCall: cfg.AI.Timeout})
-	return ai.FormatTriageMarkdown(notes, stopped), nil
+	// The failures carry the runner's error text, which can hold a resolved environment value. The model gets them with
+	// the value masked, and the advice that comes back is masked too, before anything prints it or writes triage.md.
+	masked := make([]ai.Failure, len(failures))
+	for i, f := range failures {
+		f.Error = sysdialog.ScrubKnown(f.Error)
+		masked[i] = f
+	}
+	notes, stopped := ai.Triage(ctx, c, masked, ai.TriageOptions{PerCall: cfg.AI.Timeout})
+	return sysdialog.ScrubKnown(ai.FormatTriageMarkdown(notes, stopped)), nil
 }
 
 // maybeAITriage implements `probe test --ai-triage`. It is called after the

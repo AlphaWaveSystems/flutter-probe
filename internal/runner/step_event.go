@@ -6,6 +6,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // StepStatus is the lifecycle state carried by a StepEvent.
@@ -40,9 +41,9 @@ type StepEvent struct {
 	Target *StepTarget
 }
 
-// StepTarget is the element an action step acts on. Text is the selector as the step resolved it, before any
-// redaction. Lookup is the selector a recorder sends to find the element's bounds. A type step's typed text is never
-// part of a target.
+// StepTarget is the element an action step acts on. Text is the selector as the step resolved it, with resolved
+// environment values masked (sysdialog.ScrubKnown). Lookup is the selector a recorder sends to find the element's
+// bounds; it is never masked, because the device matches on it. A type step's typed text is never part of a target.
 type StepTarget struct {
 	Verb   string
 	Text   string
@@ -118,7 +119,8 @@ func (e *Executor) stepTarget(a parser.ActionStep) *StepTarget {
 		return nil
 	}
 	sel := e.resolveSelector(*a.Sel)
-	return &StepTarget{Verb: string(a.Verb), Text: selectorText(sel), Lookup: toSelectorParam(sel)}
+	// Text is shown on the timeline, so it is masked. Lookup stays exact: the device matches on it.
+	return &StepTarget{Verb: string(a.Verb), Text: sysdialog.ScrubKnown(selectorText(sel)), Lookup: toSelectorParam(sel)}
 }
 
 // selectorText writes a resolved selector the way a ProbeScript step does, for the timeline.

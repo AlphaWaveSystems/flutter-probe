@@ -223,6 +223,30 @@ void main() {
     expect(node?['key'], isNot('under'));
   });
 
+  testWidgets('collectProbeNodes gives an obscured field no text and a plain field its text', (tester) async {
+    final email = TextEditingController(text: 'dev@example.invalid');
+    final password = TextEditingController(text: 'quorvex-secret-123');
+    addTearDown(email.dispose);
+    addTearDown(password.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Column(children: [
+          TextField(key: const ValueKey('email'), controller: email),
+          TextField(key: const ValueKey('password'), controller: password, obscureText: true),
+        ]),
+      ),
+    ));
+
+    final fields = collectProbeNodes().where((n) => n.type == 'EditableText').toList();
+    expect(fields, hasLength(2));
+    expect(fields.where((n) => n.text == 'dev@example.invalid'), hasLength(1),
+        reason: 'a plain field keeps its text in the node list');
+    expect(fields.where((n) => n.text == null), hasLength(1),
+        reason: 'an obscured field has no text in the node list');
+    final dump = jsonEncode([for (final n in collectProbeNodes()) n.toJson()]);
+    expect(dump, isNot(contains('quorvex-secret-123')));
+  });
+
   testWidgets('probeScaledPng reads the size and downscales; metrics are logical', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     final m = probeViewMetrics();

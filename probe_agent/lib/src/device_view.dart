@@ -10,7 +10,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-import 'finder.dart' show probeRouteOf;
+import 'finder.dart' show ProbeFinder, probeRouteOf;
 import 'protocol.dart';
 
 // Support for the interactive device view (probe.tap_at, probe.long_press_at,
@@ -256,7 +256,9 @@ String? _labelOf(Widget w) {
 String? _textOf(Element e) {
   final w = e.widget;
   if (w is Text) return w.data ?? w.textSpan?.toPlainText();
-  if (w is EditableText) return w.obscureText ? null : w.controller.text;
+  if (w is EditableText) {
+    return ProbeFinder.instance.isSecretEditable(e) ? null : w.controller.text;
+  }
   if (!_isInteractive(w) && _keyOf(w.key) == null) return null;
   // A button or keyed container: its first visible label.
   String? found;

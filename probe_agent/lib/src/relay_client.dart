@@ -4,6 +4,15 @@ import 'dart:io';
 import 'executor.dart';
 import 'protocol.dart';
 
+/// [text] with [token] replaced by ***, both as written and as a query value. A relay error can name the connect URI,
+/// and that URI carries the agent token in its query. An empty token leaves [text] unchanged.
+String maskToken(String text, String token) {
+  if (token.isEmpty) return text;
+  return text
+      .replaceAll(token, '***')
+      .replaceAll(Uri.encodeQueryComponent(token), '***');
+}
+
 /// ProbeRelayClient connects the agent OUT to a ProbeRelay server instead of
 /// listening for incoming connections. Used for cloud device farms where
 /// inbound ports are not reachable.
@@ -69,13 +78,13 @@ class ProbeRelayClient {
         },
         onError: (e) {
           // ignore: avoid_print
-          print('ProbeAgent: relay error: $e');
+          print('ProbeAgent: relay error: ${maskToken('$e', agentToken)}');
         },
         cancelOnError: false,
       );
     } catch (e) {
       // ignore: avoid_print
-      print('ProbeAgent: relay connect failed: $e');
+      print('ProbeAgent: relay connect failed: ${maskToken('$e', agentToken)}');
       _ws = null;
       _executor = null;
       _reconnect();

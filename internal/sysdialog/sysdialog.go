@@ -28,8 +28,8 @@ type Dialog struct {
 	// ButtonIDs are the platform ids of Buttons when the platform has stable ones (Android
 	// resource ids); parallel to Buttons, may be empty.
 	ButtonIDs []string `json:"button_ids,omitempty"`
-	Fields  []string `json:"fields"`
-	App     string   `json:"app,omitempty"`
+	Fields    []string `json:"fields"`
+	App       string   `json:"app,omitempty"`
 }
 
 // Driver is the platform-independent surface used by ProbeScript steps and the
@@ -124,6 +124,15 @@ func ResolveSecret(text string) (value string, fromEnv bool, err error) {
 		return "", true, fmt.Errorf("environment variable %s is not set (needed for a system-field value)", m[1])
 	}
 	return v, true, nil
+}
+
+// SecretEnvName returns the name of the environment variable that text refers to, as ResolveSecret reads it, or "" when
+// text is not a reference to one. A caller that notes the resolved value passes this name to NoteEnvValue.
+func SecretEnvName(text string) string {
+	if m := envRef.FindStringSubmatch(strings.TrimSpace(text)); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // Scrub removes every occurrence of the given secrets from s. Used on error

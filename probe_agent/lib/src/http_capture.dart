@@ -210,6 +210,7 @@ class ProbeHttpLog {
 
 // ---------------------------------------------------------------------------
 
+/// The fixed header names the agent always masks. A header whose name passes the token rule below is masked too.
 const _redacted = {
   'authorization',
   'proxy-authorization',
@@ -225,8 +226,48 @@ const _redacted = {
   'x-xsrf-token',
 };
 
+/// Words that mark a name as a credential, by the token rule that internal/record/redact.go applies to header, query and body
+/// names: a name is a credential when one of its words is in _credentialTokens, two adjacent words are in _credentialPairs, or
+/// the whole name is in _credentialCompounds. Keep these three sets in step with the Go lists.
+const _credentialTokens = {
+  'password', 'passwd', 'pwd', 'pw', 'pass', 'passphrase', 'passcode', 'secret', 'secrets', 'token', 'tokens', 'jwt',
+  'credential', 'credentials', 'otp', 'pin', 'cvv', 'cvc', 'ssn', 'auth', 'authorization', 'session', 'bearer', 'cookie',
+  'apikey', 'apikeys', 'sid', 'csrf', 'signature', 'sig',
+};
+const _credentialPairs = {
+  'api key', 'private key', 'card number', 'signing key', 'encryption key', 'access key', 'card no', 'credit card',
+};
+const _credentialCompounds = {
+  'accesskey', 'accesstoken', 'refreshtoken', 'idtoken', 'clientsecret', 'pincode', 'otpcode', 'cardnumber', 'ccnumber',
+  'smscode', 'mfacode', 'authcode', 'verificationcode', 'passwordconfirmation', 'passwordhash', 'jsessionid', 'phpsessid',
+  'sessionid', 'cardno', 'creditcard',
+};
+
+/// The words of a name: runs of letters or digits, split at camel-case boundaries, as internal/sysdialog NameTokens splits
+/// them. Header names are ASCII, so the pattern reads ASCII letters only.
+final _nameWord = RegExp(r'[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+');
+
+List<String> _nameWords(String name) => [for (final m in _nameWord.allMatches(name)) m.group(0)!.toLowerCase()];
+
+/// True when [name] holds a credential by the token rule.
+bool _isCredentialName(String name) {
+  final words = _nameWords(name);
+  if (_credentialCompounds.contains(words.join())) return true;
+  for (var i = 0; i < words.length; i++) {
+    if (_credentialTokens.contains(words[i])) return true;
+    if (i + 1 < words.length && _credentialPairs.contains('${words[i]} ${words[i + 1]}')) return true;
+  }
+  return false;
+}
+
+/// True for a header whose value is a credential: one of the fixed names in [_redacted], or a name the token rule holds.
+bool _isCredentialHeader(String name) => _redacted.contains(name.toLowerCase()) || _isCredentialName(name);
+
 /// Query parameters whose values are credentials (`?key=...`, `?access_token=...`).
-const _redactedQuery = {'key', 'api_key', 'apikey', 'access_token', 'token', 'id_token', 'refresh_token', 'auth', 'secret', 'password', 'sig', 'signature'};
+const _redactedQuery = {
+  'key', 'api_key', 'apikey', 'access_token', 'token', 'id_token', 'refresh_token', 'auth', 'secret', 'password', 'sig', 'signature',
+  'x-amz-signature', 'x-goog-signature', 'x-amz-security-token', 'x-amz-credential',
+};
 
 /// [url] with the values of credential-looking query parameters replaced by `<redacted>`.
 String probeRedactUrl(String url) {
@@ -235,7 +276,8 @@ String probeRedactUrl(String url) {
   final parts = uri.query.split('&').map((p) {
     final i = p.indexOf('=');
     if (i < 0) return p;
-    return _redactedQuery.contains(p.substring(0, i).toLowerCase()) ? '${p.substring(0, i)}=<redacted>' : p;
+    final name = p.substring(0, i);
+    return _redactedQuery.contains(name.toLowerCase()) || _isCredentialName(name) ? '$name=<redacted>' : p;
   });
   return uri.replace(query: parts.join('&')).toString().replaceAll('%3Credacted%3E', '<redacted>');
 }
@@ -243,7 +285,7 @@ String probeRedactUrl(String url) {
 Map<String, String> _flatten(HttpHeaders h) {
   final out = <String, String>{};
   h.forEach((name, values) {
-    out[name] = _redacted.contains(name.toLowerCase()) ? '<redacted>' : values.join(', ');
+    out[name] = _isCredentialHeader(name) ? '<redacted>' : values.join(', ');
   });
   return out;
 }

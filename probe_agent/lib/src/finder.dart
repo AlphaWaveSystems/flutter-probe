@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart' show Tooltip;
+import 'package:flutter/cupertino.dart' show CupertinoTextField;
+import 'package:flutter/material.dart' show TextField, Tooltip;
 import 'package:flutter/widgets.dart';
 
 import 'textfold.dart';
@@ -44,6 +45,80 @@ ModalRoute<dynamic>? probeRouteOf(Element element) {
 class ProbeFinder {
   ProbeFinder._();
   static final ProbeFinder instance = ProbeFinder._();
+
+  /// Text fields seen obscured, keyed by controller so an entry does not keep a
+  /// field alive. A password field that a show-password toggle reveals stays
+  /// secret for the rest of the run.
+  final Expando<bool> _everObscured = Expando<bool>('probe obscured field');
+
+  /// The most keys remembered. A screen has a few password fields, so the cap is
+  /// not reached in practice. Once it is, every keyed field counts as secret: the
+  /// memory stays bounded, and the failure is toward hiding a value.
+  static const int _maxObscuredKeys = 256;
+
+  /// The keys (ValueKey values) of the fields seen obscured. A field that the app
+  /// rebuilds under the same key, with a new controller, is still secret.
+  final Set<String> _obscuredKeys = {};
+
+  /// The number of keys remembered. The cap test reads it to pin the bound.
+  @visibleForTesting
+  int get obscuredKeyCount => _obscuredKeys.length;
+
+  /// True for an [EditableText] that is obscured now, or was obscured at any
+  /// earlier read, by its controller or by the key of its field. Its value is
+  /// then never read into a summary or a message.
+  ///
+  /// [element] is the EditableText's element, because the field's key is not on
+  /// the EditableText: a TextField gives it a GlobalKey, so the key is read from
+  /// the field above it (see [_fieldKeyOf]).
+  ///
+  /// Limits, so they are not taken for guarantees: a field that is visible at
+  /// every read and typed into is ordinary text, because nothing ever saw it
+  /// obscured; a Text widget that mirrors a controller's value cannot be told
+  /// apart from any other Text, so it is reported as text; two fields that share
+  /// a key share this state; and Semantics identifiers are not used. Unkeyed
+  /// fields, and fields whose key is not a ValueKey<String> (a GlobalKey, for
+  /// example), are tracked per controller only, so such a field rebuilt with a
+  /// new controller is not covered. Once [_maxObscuredKeys] keys are remembered,
+  /// every keyed field counts as secret, whether or not it was seen obscured.
+  bool isSecretEditable(Element element) {
+    final w = element.widget as EditableText;
+    final key = _fieldKeyOf(element);
+    if (w.obscureText) {
+      _everObscured[w.controller] = true;
+      if (key != null && _obscuredKeys.length < _maxObscuredKeys) _obscuredKeys.add(key);
+    }
+    if (_everObscured[w.controller] == true) return true;
+    return key != null && (_obscuredKeys.contains(key) || _obscuredKeys.length >= _maxObscuredKeys);
+  }
+
+  /// The string value of the ValueKey that names the field [element] belongs to:
+  /// its own key, else the key of the nearest TextField, TextFormField or
+  /// CupertinoTextField above it. Other keyed ancestors are containers, not the
+  /// field, so they are not read: a keyed Column does not make its plain fields
+  /// secret.
+  String? _fieldKeyOf(Element element) {
+    final own = element.widget.key;
+    if (own is ValueKey<String>) return own.value;
+    String? found;
+    try {
+      element.visitAncestorElements((ancestor) {
+        final w = ancestor.widget;
+        final isField = w is TextField || w is FormField<String> || w is CupertinoTextField;
+        final key = w.key;
+        if (isField && key is ValueKey<String>) {
+          found = key.value;
+          return false;
+        }
+        return true;
+      });
+    } catch (_) {
+      // An element that is no longer in the tree cannot be walked: in debug builds
+      // visitAncestorElements asserts. Its field then counts by controller only.
+      return null;
+    }
+    return found;
+  }
 
   /// Returns all [Element]s matching the given selector map.
   /// Only returns elements that are currently visible on screen
@@ -355,13 +430,35 @@ class ProbeFinder {
     _visitElement(rootElement, visitor);
   }
 
-  void _visitElement(Element element, void Function(Element) visitor) {
+  /// [walkTree], except that it does not descend below an obscured
+  /// [EditableText] (a password field). The field itself is still visited, so
+  /// its own key can be reported, but nothing inside it is.
+  void _walkTreePruningObscuredFields(void Function(Element) visitor) {
+    final rootElement = WidgetsBinding.instance.rootElement;
+    if (rootElement == null) return;
+    _visitElement(rootElement, visitor, _isSecretField);
+  }
+
+  bool _isSecretField(Element e) {
+    final w = e.widget;
+    return w is EditableText && isSecretEditable(e);
+  }
+
+  /// Visits [element] and its descendants. When [skipChildrenOf] returns true
+  /// for an element, that element is still visited but its children are not.
+  void _visitElement(
+    Element element,
+    void Function(Element) visitor, [
+    bool Function(Element)? skipChildrenOf,
+  ]) {
     // Skip subtrees rooted at Offstage or Visibility(visible: false)
     final widget = element.widget;
     if (widget is Offstage && widget.offstage) return;
     if (widget is Visibility && !widget.visible) return;
     visitor(element);
-    element.visitChildren((child) => _visitElement(child, visitor));
+    if (skipChildrenOf != null && skipChildrenOf(element)) return;
+    element.visitChildren(
+        (child) => _visitElement(child, visitor, skipChildrenOf));
   }
 
   /// FP-13: a short snapshot of what a user could currently see — visible
@@ -369,17 +466,23 @@ class ProbeFinder {
   /// A timed-out step used to report only "context deadline exceeded", leaving
   /// the failure screenshot as the sole clue to what the screen showed.
   /// Bounded by [max] per list so the message stays one readable line.
+  ///
+  /// An obscured text field (an [EditableText] with `obscureText: true`, such as
+  /// a password) contributes no text: neither its controller value nor anything
+  /// beneath it. Every caller reads this one summary (the `visible_summary` RPC
+  /// and the failure hints the executor builds), so the rule lives here.
   Map<String, List<String>> visibleSummary({int max = 25}) {
     final texts = <String>[];
     final keys = <String>[];
-    walkTree((e) {
+    _walkTreePruningObscuredFields((e) {
       if (texts.length >= max && keys.length >= max) return;
       final widget = e.widget;
       final key = widget.key;
       if (key is ValueKey<String> && keys.length < max && !keys.contains(key.value) && _isVisible(e)) {
         keys.add(key.value);
       }
-      if (texts.length < max && (widget is Text || widget is EditableText)) {
+      // An obscured field's value is never read, so it cannot reach the summary.
+      if (texts.length < max && (widget is Text || (widget is EditableText && !isSecretEditable(e)))) {
         final text = widget is Text
             ? (widget.data ?? widget.textSpan?.toPlainText() ?? '')
             : (widget as EditableText).controller.text;

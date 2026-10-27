@@ -9,6 +9,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // stepTimeoutError is what a step that hit its deadline reports (FP-13).
@@ -107,13 +108,16 @@ func visibleHint(client probelink.ProbeClient) string {
 	if err != nil || (len(res.Texts) == 0 && len(res.Keys) == 0) {
 		return ""
 	}
-	return fmt.Sprintf(" — visible texts: [%s], keys: [%s]", quoteJoin(res.Texts), quoteJoin(res.Keys))
+	// The texts are agent text: a field can show a value the step typed from the environment, so the hint is masked.
+	return sysdialog.ScrubKnown(fmt.Sprintf(" — visible texts: [%s], keys: [%s]", quoteJoin(res.Texts), quoteJoin(res.Keys)))
 }
 
 func quoteJoin(items []string) string {
 	const maxLen = 40
 	parts := make([]string, 0, len(items))
 	for _, it := range items {
+		// Masked before the cut: a value longer than maxLen would otherwise show its first part, which matches nothing.
+		it = sysdialog.ScrubKnown(it)
 		if r := []rune(it); len(r) > maxLen {
 			it = string(r[:maxLen]) + "…"
 		}

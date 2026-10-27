@@ -184,7 +184,7 @@ func TestRecorderBundleAndRedaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := readRecorderJSON[Manifest](t, filepath.Join(dir, "manifest.json"))
-	if m.Status != "failed" || m.FileSHA256 == "" || m.Capture.Native != "off" || !m.Capture.Redaction || m.EndedAt.IsZero() {
+	if m.Status != "failed" || m.FileSHA256 == "" || m.Capture.Native != "off" || len(m.Capture.Redacted) == 0 || len(m.Capture.NotRedacted) == 0 || m.EndedAt.IsZero() {
 		t.Fatal(m)
 	}
 	timeline := readRecorderJSON[Timeline](t, filepath.Join(dir, "timeline.json"))

@@ -13,6 +13,11 @@ func eventToProbeScriptLine(params map[string]interface{}) string {
 	case "tap":
 		return fmt.Sprintf("  tap %s", selectorFromRecordedParams(params))
 	case "type":
+		// An obscured field's value is never recorded: the agent sends none. The line names the lookup, as the CLI does.
+		if obscured, _ := params["obscured"].(bool); obscured {
+			sel := selectorFromRecordedParams(params)
+			return fmt.Sprintf("  # type into %s was not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into %s by hand.", sel, sel)
+		}
 		text, _ := params["text"].(string)
 		// The typed text is the value, never the selector: without this, an event that names no target would
 		// have produced `type "hi" into the "hi" field` (selectorFromRecordedParams falls back to params["text"]).

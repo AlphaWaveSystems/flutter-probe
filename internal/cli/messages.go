@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"io"
+
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // ANSI formatting prefixes for status messages.
@@ -35,6 +37,12 @@ func statusOK(w io.Writer, format string, a ...any) {
 // statusWarn writes a warning status line (yellow ⚠) to w.
 func statusWarn(w io.Writer, format string, a ...any) {
 	fmt.Fprintf(w, prefixWarn+format+"\n", a...)
+}
+
+// printAgentWarning writes an agent or CLI warning (yellow ⚠) to w with resolved environment values masked, as errors
+// are. A warning can name the widget a step acted on, and that label can be a value the script took from the environment.
+func printAgentWarning(w io.Writer, msg string) {
+	statusWarn(w, "%s", sysdialog.ScrubKnown(msg))
 }
 
 // statusFail writes a failure status line (red ✗) to w.

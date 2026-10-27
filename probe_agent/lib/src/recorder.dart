@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import 'finder.dart' show ProbeFinder;
 import 'protocol.dart';
 
 typedef SendFn = void Function(String message);
@@ -21,6 +22,11 @@ class ProbeRecorder {
   Timer? _fieldScanTimer;
   final Map<int, _TrackedField> _trackedFields = {};
   int _nextFieldId = 0;
+  // Controllers of password fields seen in this recording. A field stays a
+  // password field after it is revealed, so its later edits are not sent as text.
+  // The entries are weak: a controller that is collected leaves the map, so a long
+  // recording does not keep old fields alive. A new map starts each recording.
+  Expando<bool> _secretControllers = Expando<bool>('probe recording secret field');
 
   // Thresholds
   static const double _swipeThreshold = 20.0;
@@ -256,6 +262,7 @@ class ProbeRecorder {
       tracked.debounceTimer?.cancel();
     }
     _trackedFields.clear();
+    _secretControllers = Expando<bool>('probe recording secret field');
   }
 
   void _scanForTextFields() {
@@ -267,12 +274,15 @@ class ProbeRecorder {
       if (element.widget is EditableText) {
         final controller = (element.widget as EditableText).controller;
         seen.add(controller);
+        if (_isSecret(element)) _secretControllers[controller] = true;
 
-        // Already tracking?
-        final alreadyTracked = _trackedFields.values
-            .any((t) => t.controller == controller);
-        if (!alreadyTracked) {
+        // Already tracking? A field rebuilt under the same controller has a new element. Once the old element has
+        // left the tree, the tracker takes the new one.
+        final existing = _trackedFields.values.where((t) => t.controller == controller);
+        if (existing.isEmpty) {
           _trackController(controller, element);
+        } else if (!existing.first.element.mounted) {
+          existing.first.element = element;
         }
       }
     });
@@ -290,39 +300,51 @@ class ProbeRecorder {
 
   void _trackController(TextEditingController controller, Element element) {
     final id = _nextFieldId++;
-    String lastText = controller.text;
-    Timer? debounceTimer;
+    final tracked = _TrackedField(
+      controller: controller,
+      element: element,
+      lastText: controller.text,
+    );
 
     void listener() {
       if (!_recording) return;
+      // A field that has left the tree has no widget to read, so its change is skipped here. A rebuilt field gets its
+      // new element at the next scan.
+      if (!tracked.element.mounted) return;
+      // Judged at each change, not only at emit time, so a revealed password
+      // stays a password for this recording.
+      if (_isSecret(tracked.element)) _secretControllers[controller] = true;
       final currentText = controller.text;
-      if (currentText == lastText) return;
-      lastText = currentText;
+      if (currentText == tracked.lastText) return;
+      tracked.lastText = currentText;
 
-      debounceTimer?.cancel();
-      debounceTimer = Timer(_textDebounce, () {
+      tracked.debounceTimer?.cancel();
+      tracked.debounceTimer = Timer(_textDebounce, () {
         if (!_recording || currentText.isEmpty) return;
         // Find the label for this text field
-        final fieldSelector = _fieldLabel(element);
+        final fieldSelector = _fieldLabel(tracked.element);
+        // An obscured field (a password) is reported as typed into, with the
+        // lookup but never the value.
+        final obscured = _isObscured(tracked);
         _emit({
           'action': 'type',
-          'text': currentText,
+          'text': obscured ? '' : currentText,
+          if (obscured) 'obscured': true,
           if (fieldSelector != null) 'selector': fieldSelector,
           'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
         });
       });
     }
 
+    tracked.listener = listener;
     controller.addListener(listener);
-    _trackedFields[id] = _TrackedField(
-      controller: controller,
-      listener: listener,
-      debounceTimer: debounceTimer,
-    );
+    _trackedFields[id] = tracked;
   }
 
   /// Try to find a label for a text field by walking ancestors.
   Map<String, dynamic>? _fieldLabel(Element element) {
+    // An element that has left the tree has no ancestors to read, and a debug build asserts on that walk.
+    if (!element.mounted) return null;
     Element? current = element;
     for (int i = 0; i < 15 && current != null; i++) {
       final widget = current.widget;
@@ -357,6 +379,23 @@ class ProbeRecorder {
     return null;
   }
 
+  /// True for a password field: an [EditableText] that is obscured now, or was
+  /// obscured at an earlier read, by its controller or by its field's key (see
+  /// [ProbeFinder.isSecretEditable]). So a field the app swaps for a plain one
+  /// under the same key is still secret. [_secretControllers] keeps the field's
+  /// status for this recording.
+  static bool _isSecret(Element element) {
+    final widget = element.widget;
+    return widget is EditableText && ProbeFinder.instance.isSecretEditable(element);
+  }
+
+  /// True when a field's text must not be recorded: the field is, or was earlier in this recording, a password field.
+  /// A field that has left the tree cannot be read, so it counts as one.
+  bool _isObscured(_TrackedField field) {
+    if (_secretControllers[field.controller] == true) return true;
+    return !field.element.mounted || _isSecret(field.element);
+  }
+
   void _visitElement(Element element, void Function(Element) visitor) {
     visitor(element);
     element.visitChildren((child) => _visitElement(child, visitor));
@@ -385,13 +424,16 @@ class _PointerSession {
 }
 
 class _TrackedField {
-  final TextEditingController controller;
-  final VoidCallback listener;
-  Timer? debounceTimer;
-
   _TrackedField({
     required this.controller,
-    required this.listener,
-    this.debounceTimer,
+    required this.element,
+    required this.lastText,
   });
+
+  final TextEditingController controller;
+  // The field's element as of the last scan. A rebuilt field has a new element under the same controller.
+  Element element;
+  String lastText;
+  late VoidCallback listener;
+  Timer? debounceTimer;
 }

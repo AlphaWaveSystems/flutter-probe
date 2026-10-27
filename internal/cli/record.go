@@ -52,6 +52,19 @@ type recordedEvent struct {
 	At     time.Time              `json:"at"`
 }
 
+// checkRecordAgent refuses an agent whose version does not match this CLI, and prints the version warning to w. probe
+// record runs it before recording starts.
+func checkRecordAgent(ctx context.Context, client probelink.ProbeClient, cliVersion string, w io.Writer) error {
+	_, warning, err := probelink.CheckHandshakeVersion(ctx, client, cliVersion)
+	if err != nil {
+		return fmt.Errorf("agent handshake failed: %w", err)
+	}
+	if warning != "" {
+		printAgentWarning(w, warning)
+	}
+	return nil
+}
+
 func runRecord(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	outFile, _ := cmd.Flags().GetString("output")
@@ -134,6 +147,12 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	}
 	defer client.Close()
 
+	// The obscured-field flag keeps a typed password out of a recording, and an agent built before it does not send
+	// the flag. Refuse a mismatched agent before recording starts, as test does.
+	if err := checkRecordAgent(ctx, client, cfg.CLIVersion, os.Stdout); err != nil {
+		return err
+	}
+
 	var events []recordedEvent
 
 	// Subscribe to recording notifications from the agent
@@ -200,6 +219,11 @@ func printRecordedEvent(e recordedEvent) {
 	case "tap":
 		statusOK(os.Stdout, "tap %s", sel)
 	case "type":
+		if obscuredEvent(params) {
+			// The agent sends no value for an obscured field, so there is nothing to show or record for it.
+			statusWarn(os.Stdout, "type into %s not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into it by hand.", sel)
+			break
+		}
 		text, _ := params["text"].(string)
 		if sel != "the element" {
 			statusOK(os.Stdout, "type %q into %s", text, sel)
@@ -241,8 +265,14 @@ func generateProbeScript(events []recordedEvent) string {
 			sel := selectorFromParams(params)
 			sb.WriteString(fmt.Sprintf("  tap %s\n", sel))
 		case "type":
-			text, _ := params["text"].(string)
 			sel := selectorFromParams(params)
+			if obscuredEvent(params) {
+				// The value of an obscured field is never written, so no type step is made for it. The comment names the
+				// lookup and tells the person what to add by hand.
+				sb.WriteString(fmt.Sprintf("  # type into %s was not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into %s by hand.\n", sel, sel))
+				break
+			}
+			text, _ := params["text"].(string)
 			if sel != "the element" {
 				sb.WriteString(fmt.Sprintf("  type %q into the %s field\n", text, sel))
 			} else {
@@ -268,6 +298,13 @@ func generateProbeScript(events []recordedEvent) string {
 	}
 
 	return sb.String()
+}
+
+// obscuredEvent reports whether a recorded type event came from an obscured field. The agent sends no value for such a
+// field, so the event has no text that a recording may keep.
+func obscuredEvent(params map[string]interface{}) bool {
+	obscured, _ := params["obscured"].(bool)
+	return obscured
 }
 
 // sanitizeText removes newlines and excess whitespace from text that will
