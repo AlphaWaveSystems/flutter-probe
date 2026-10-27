@@ -71,7 +71,7 @@ design. The runner becomes a library, not a child process.
 
 ## Prerequisites (when implementation lands)
 
-- Go 1.26+
+- Go 1.26.10+
 - [Wails CLI v2.10+](https://wails.io/docs/gettingstarted/installation)
 - Platform-specific WebView runtime:
   - **macOS**: WebKit (built in)
@@ -165,6 +165,7 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 
 - `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
 - `make studio-e2e-native`: the real window, driven through macOS accessibility (smoke set; needs a second display named by `STUDIO_E2E_DISPLAY`, and focus). `make studio-e2e` is a deprecated alias for one release.
+- CI (`.github/workflows/studio-ci.yml`) runs on changes to `studio/` or `vscode/`: the Studio Go tests (after the frontend build that the binary embeds), the frontend build and its `node --test` suites, and the VS Code extension tests. The frontend suites run on Node 26: they pass a directory to `node --test`, which Node 22 does not accept.
 
 ## Manual check of the native window (device view)
 

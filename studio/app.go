@@ -215,18 +215,30 @@ func (a *App) workspaceConfig() *config.Config {
 	return cfg
 }
 
-// ListDir returns immediate children of dir. Hidden entries (dot-prefixed)
-// are filtered. Returns empty slice + nil on missing directories so the UI
-// can render an empty state without special-casing errors.
+// ListDir returns immediate children of a folder inside the workspace a person opened or an automation folder. Hidden
+// entries (dot-prefixed) are filtered. A folder that does not exist yet lists as empty, so the UI can render an empty
+// state without special-casing errors; with no workspace open there is nothing to list.
 func (a *App) ListDir(dir string) ([]FileEntry, error) {
-	if dir == "" {
-		dir = "."
+	roots := a.automationRoots()
+	if len(roots) == 0 {
+		return []FileEntry{}, nil
 	}
-	entries, err := os.ReadDir(dir)
+	real, err := resolveInRoots(roots, dir, true)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []FileEntry{}, nil
-		}
+		return nil, err
+	}
+	info, err := os.Stat(real)
+	if os.IsNotExist(err) {
+		return []FileEntry{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a folder", dir)
+	}
+	entries, err := os.ReadDir(real)
+	if err != nil {
 		return nil, err
 	}
 	out := make([]FileEntry, 0, len(entries))
@@ -237,43 +249,53 @@ func (a *App) ListDir(dir string) ([]FileEntry, error) {
 		}
 		out = append(out, FileEntry{
 			Name:  name,
-			Path:  filepath.Join(dir, name),
+			Path:  filepath.Join(filepath.Clean(dir), name),
 			IsDir: e.IsDir(),
 		})
 	}
 	return out, nil
 }
 
-// ReadFile returns the contents of a .probe file. Path traversal is rejected
-// to keep the UI from accidentally opening anything outside the workspace.
+// ReadFile returns the contents of a .probe file inside the workspace a person opened or an automation folder. The
+// editor opens only the .probe entries of the open workspace tree, so those are the only files it reads. The check is
+// the one RunFile makes: an absolute path, resolved through every symlink, inside an allowed root, and a regular
+// .probe file. A ".." segment is refused before anything else, so a path cannot climb out of a root.
 func (a *App) ReadFile(path string) (string, error) {
-	if !strings.HasSuffix(path, ".probe") {
-		return "", fmt.Errorf("only .probe files can be opened")
-	}
-	clean := filepath.Clean(path)
-	if strings.Contains(clean, "..") {
+	if hasDotDotSegment(path) {
 		return "", fmt.Errorf("path traversal rejected: %s", path)
 	}
-	b, err := os.ReadFile(clean)
+	real, err := probeFileWithinRoots(a.automationRoots(), path)
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(real)
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
 }
 
-// WriteFile saves content to a .probe path. Creates parent directories.
+// hasDotDotSegment reports whether any segment of p is "..", on either path separator.
+func hasDotDotSegment(p string) bool {
+	for _, part := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// WriteFile saves content to a .probe file inside the workspace a person opened or an automation folder. Missing
+// folders are created inside the same check, so a folder that is a link out of the workspace refuses the write.
 func (a *App) WriteFile(path, content string) error {
-	if !strings.HasSuffix(path, ".probe") {
-		return fmt.Errorf("only .probe files can be written")
-	}
-	clean := filepath.Clean(path)
-	if strings.Contains(clean, "..") {
-		return fmt.Errorf("path traversal rejected: %s", path)
-	}
-	if err := os.MkdirAll(filepath.Dir(clean), 0o755); err != nil {
+	real, err := probeFileForWriteWithinRoots(a.automationRoots(), path)
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(clean, []byte(content), 0o644)
+	if err := os.MkdirAll(filepath.Dir(real), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(real, []byte(content), 0o644)
 }
 
 // ---- Lint ----
@@ -908,18 +930,27 @@ type RunResult struct {
 //
 // The connection must be established (Connect first). Lint warnings are not
 // surfaced here — use Lint() for that; this method runs whatever parses.
+//
+// The path must be a .probe file inside the workspace a person opened or an automation folder: the check the
+// automation endpoint makes, applied to every caller. Other paths are refused before anything runs.
 func (a *App) RunFile(path string) ([]RunResult, error) {
 	return a.runScoped(path, RunScope{})
 }
 
 // RunFileScoped runs part of a file: the test at line (1-based; 0 for none), the tests with tag, or, when failedOnly is
-// set, the tests that failed the last time the file ran in this session. Set at most one of the three.
+// set, the tests that failed the last time the file ran in this session. Set at most one of the three. The path gets the
+// same check as RunFile.
 func (a *App) RunFileScoped(path string, line int, tag string, failedOnly bool) ([]RunResult, error) {
 	return a.runScoped(path, RunScope{Line: line, Tag: tag, FailedOnly: failedOnly})
 }
 
-// runScoped is RunFile for a scope. A scope that cannot run is an error before any run event is emitted.
-func (a *App) runScoped(path string, scope RunScope) ([]RunResult, error) {
+// runScoped is RunFile for a scope. The path is checked first, for every caller, and a scope that cannot run is an error
+// before any run event is emitted.
+func (a *App) runScoped(requested string, scope RunScope) ([]RunResult, error) {
+	path, err := probeFileWithinRoots(a.automationRoots(), requested)
+	if err != nil {
+		return nil, err
+	}
 	a.mu.Lock()
 	conn := a.conn
 	a.mu.Unlock()

@@ -12,11 +12,15 @@ export function Connect(arg1:string):Promise<main.ConnectionStatus>;
 
 export function ConnectWiFi(arg1:string,arg2:number,arg3:string):Promise<main.ConnectionStatus>;
 
+export function ConnectWiFiSaved(arg1:string,arg2:number,arg3:string):Promise<main.ConnectionStatus>;
+
 export function DeleteAPIKey():Promise<void>;
 
 export function Disconnect():Promise<void>;
 
-export function GetAPIKey():Promise<string>;
+export function ForgetWiFiToken(arg1:string):Promise<void>;
+
+export function GetAPIKey():Promise<boolean>;
 
 export function GetDeviceSettings():Promise<main.DeviceSettingsInfo>;
 
@@ -46,6 +50,8 @@ export function RunFileScoped(arg1:string,arg2:number,arg3:string,arg4:boolean):
 
 export function RunState():Promise<main.RunState>;
 
+export function SaveWiFiToken(arg1:string,arg2:string):Promise<void>;
+
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
 export function SetAPIKey(arg1:string):Promise<void>;
@@ -65,5 +71,7 @@ export function StopWiFiDiscovery():Promise<void>;
 export function TakeScreenshot():Promise<string>;
 
 export function TestWiFi(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function WiFiTokenSaved(arg1:string):Promise<boolean>;
 
 export function WriteFile(arg1:string,arg2:string):Promise<void>;

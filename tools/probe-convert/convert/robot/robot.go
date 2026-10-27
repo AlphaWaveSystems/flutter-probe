@@ -40,6 +40,7 @@ func convertRobot(src, path string) (string, []convert.Warning) {
 	w := convert.NewProbeWriter()
 	var warnings []convert.Warning
 	lines := strings.Split(src, "\n")
+	keywords := collectKeywordNames(lines)
 
 	w.Comment("Converted from Robot Framework")
 	w.BlankLine()
@@ -127,7 +128,7 @@ func convertRobot(src, path string) (string, []convert.Warning) {
 				if currentSection == sectionTestCases {
 					w.Test(name)
 				} else {
-					w.Recipe(name, nil)
+					w.Recipe(strings.ToLower(name), nil)
 				}
 				continue
 			}
@@ -194,7 +195,12 @@ func convertRobot(src, path string) (string, []convert.Warning) {
 			} else {
 				// Unknown keyword — emit as recipe call or TODO.
 				if isLikelyKeywordCall(keyword) {
-					call := substituteVars(keyword)
+					call := strings.ToLower(substituteVars(keyword))
+						if name, ok := keywords[robotKeywordKey(call)]; ok {
+							// The lexer writes a call in lower case, and probe matches recipe names case-sensitively, so the
+							// call uses the lower-case spelling the recipe is written under.
+							call = name
+						}
 					if len(args) > 0 {
 						call += " with " + strings.Join(quoteArgs(args), " and ")
 					}
@@ -212,6 +218,41 @@ func convertRobot(src, path string) (string, []convert.Warning) {
 	}
 
 	return w.String(), warnings
+}
+
+// robotKeywordKey is how Robot Framework matches keyword names: case, spaces and underscores do not count.
+func robotKeywordKey(name string) string {
+	return strings.ToLower(strings.NewReplacer(" ", "", "_", "").Replace(strings.TrimSpace(name)))
+}
+
+// collectKeywordNames returns the keywords the file defines, keyed by robotKeywordKey, each mapped to the name its recipe
+// is written under. A call writes the keyword as its body spells it, so it resolves through this map. The sections are
+// read the way convertRobot reads them, so a header the converter ignores does not end the keywords section.
+func collectKeywordNames(lines []string) map[string]string {
+	names := map[string]string{}
+	inKeywords := false
+	for _, rawLine := range lines {
+		trimmed := strings.TrimSpace(rawLine)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "***") {
+			upper := strings.ToUpper(trimmed)
+			switch {
+			case strings.Contains(upper, "SETTING"), strings.Contains(upper, "VARIABLE"),
+				strings.Contains(upper, "TEST CASE"), strings.Contains(upper, "TASK"):
+				inKeywords = false
+			case strings.Contains(upper, "KEYWORD"):
+				inKeywords = true
+			}
+			continue
+		}
+		if inKeywords && rawLine[0] != ' ' && rawLine[0] != '\t' {
+			name := substituteVars(trimmed)
+			names[robotKeywordKey(name)] = strings.ToLower(name)
+		}
+	}
+	return names
 }
 
 // splitRobotCells splits a Robot Framework line by 2+ spaces or tab.

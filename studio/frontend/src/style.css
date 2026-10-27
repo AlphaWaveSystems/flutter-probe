@@ -38,9 +38,9 @@
   --pad: 10px;
   --pane-title-h: 30px;
   --topbar-h: 48px;
-  /* Reserved leading inset for the macOS traffic lights when the window is
-     in fullsize-content mode. Set to 0 on Windows/Linux via JS at runtime. */
-  --titlebar-inset: 78px;
+  /* The macOS window uses its native title bar, which holds the traffic
+     lights, so the web view reserves no leading inset. */
+  --titlebar-inset: 0px;
 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
@@ -64,15 +64,20 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 16px;
-  /* macOS traffic lights live in the top-left ~78px; reserve room so the
-     brand mark and toolbar don't slide under them. The platform-specific
-     padding is harmless on Windows/Linux where the inset is 0. */
+  /* The inset is zero: the native title bar holds the traffic lights. */
   padding: 0 14px 0 calc(var(--titlebar-inset) + 14px);
   border-bottom: 1px solid var(--border);
   background: var(--bg-2);
-  -webkit-app-region: drag;
+  /* Wails reads --wails-draggable, not -webkit-app-region. The full-size macOS
+     content view covers the native title bar, so this is the window's only
+     drag handle. */
+  --wails-draggable: drag;
 }
-#topbar > * { -webkit-app-region: no-drag; }
+/* Buttons and the device picker must receive clicks, not start a drag. The
+   toolbar box fills the middle of the bar, so it stays draggable. */
+#topbar button,
+#topbar select,
+#topbar input { --wails-draggable: no-drag; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark {
   display: inline-grid; place-items: center;

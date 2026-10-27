@@ -228,12 +228,23 @@ func TestUnscopedRunLeavesAFileThatDoesNotParseToTheRunner(t *testing.T) {
 	}
 }
 
-// A scope that cannot run is returned by runFileAsync itself; the run never starts in the background.
+// A scope that cannot run is returned by runFileAsync itself; the run never starts in the background. The file's folder is
+// the open workspace, so the root check passes and the scope is what refuses the run.
 func TestRunFileAsyncReturnsAScopeErrorAtOnce(t *testing.T) {
 	path := writeScopeFile(t, scopeFixture)
-	a := &App{conn: &connection{}}
+	dir, _ := filepath.EvalSymlinks(filepath.Dir(path))
+	a := &App{conn: &connection{}, humanWorkspace: dir}
 	if err := a.runFileAsync(path, RunScope{FailedOnly: true}); err == nil || !strings.Contains(err.Error(), "has not run in Studio yet") {
 		t.Errorf("runFileAsync with no earlier run: err %v; want the not-run-yet refusal", err)
+	}
+}
+
+// The folder check comes before the scope: with no open workspace, a file is refused for its path, not read for its tests.
+func TestRunFileAsyncRefusesAFileOutsideTheRootsBeforeItsScope(t *testing.T) {
+	path := writeScopeFile(t, scopeFixture)
+	a := &App{conn: &connection{}}
+	if err := a.runFileAsync(path, RunScope{FailedOnly: true}); err == nil || !strings.Contains(err.Error(), "no folder is open") {
+		t.Errorf("runFileAsync with no open workspace: err %v; want the folder refusal", err)
 	}
 }
 

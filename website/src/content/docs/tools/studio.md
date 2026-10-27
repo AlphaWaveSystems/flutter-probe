@@ -9,7 +9,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 
 ## What you get
 
-- **Monaco editor** with ProbeScript syntax highlighting, live lint markers, and the same TextMate grammar that powers the VS Code extension. Completions, hover help and snippets cover every command in the [ProbeScript dictionary](/probescript/dictionary/) and every reserved word in the [grammar](/probescript/grammar/); they are generated from those pages, so the editor and the docs agree.
+- **Monaco editor** with ProbeScript syntax highlighting, live lint markers (parse errors and empty tests; `probe lint` also checks step and recipe references, selectors and placeholders), and the same TextMate grammar that powers the VS Code extension. Completions, hover help and snippets cover every command in the [ProbeScript dictionary](/probescript/dictionary/) and every reserved word in the [grammar](/probescript/grammar/); they are generated from those pages, so the editor and the docs agree.
 - **Workspace folder picker** — point Studio at any project root with a `tests/` folder. Choice persists across launches.
 - **Device picker** that lists booted simulators, online emulators, and physical iOS/Android devices side by side, with a `physical` tag and a clear hint when nothing is connectable.
 - **Physical device support** — the same `internal/device` code the `probe` CLI uses: `iproxy` tunneling for physical iOS over USB, `adb forward` for physical Android (same path as emulators), and mDNS auto-discovery (`_flutterprobe._tcp`) for WiFi-connected devices. See [Physical devices](#physical-devices) below.
@@ -52,7 +52,7 @@ Studio's own UI is tested two ways. `make studio-e2e-web` runs the real frontend
 │ ┌─────────▼─────────────────────────────┐   │
 │ │ Go backend (App struct)               │   │
 │ │  imports internal/runner              │   │
-│ │  imports internal/lint                │   │
+│ │  imports internal/parser              │   │
 │ │  imports internal/probelink           │   │
 │ │  imports internal/device              │   │
 │ └─────────┬─────────────────────────────┘   │
@@ -81,7 +81,7 @@ The runner is a library, not a subprocess. The connection-stability work in v0.6
 Studio connects to physical iOS and Android devices through the exact same `internal/device` package the `probe` CLI uses — there is no separate device-management code path for Studio.
 
 - **USB** — plug in the device, launch the app with `--dart-define=PROBE_AGENT=true`, click ↻ to refresh the device picker, and pick the entry tagged `physical`. Physical iOS gets an `iproxy` tunnel automatically before Studio dials the agent; physical Android goes through `adb forward`, the same path as emulators. Connection errors for a missing `iproxy` or `adb` binary surface inline with an actionable fix (e.g. "install via: brew install libimobiledevice").
-- **WiFi (preferred for iOS)** — matching the CLI's own documented preference, WiFi is more stable than USB-C for physical iOS: a USB-C cable's charge/data mode-flipping can drop the `iproxy` tunnel mid-run, where WiFi has no such failure mode. Build the Flutter app with `--dart-define=PROBE_WIFI=true` and pass an advertiser to `ProbeAgent.start` (see [WiFi auto-discovery](#wifi-auto-discovery)), click the 📡 button to open the WiFi discovery overlay, and pick the device once it appears via mDNS (`_flutterprobe._tcp`). Paste the token printed in the app's `PROBE_TOKEN=...` log line — Studio remembers it per device in local storage for next time (with a "forget" control).
+- **WiFi (preferred for iOS)** — matching the CLI's own documented preference, WiFi is more stable than USB-C for physical iOS: a USB-C cable's charge/data mode-flipping can drop the `iproxy` tunnel mid-run, where WiFi has no such failure mode. Build the Flutter app with `--dart-define=PROBE_WIFI=true` and pass an advertiser to `ProbeAgent.start` (see [WiFi auto-discovery](#wifi-auto-discovery)), click the 📡 button to open the WiFi discovery overlay, and pick the device once it appears via mDNS (`_flutterprobe._tcp`). Paste the token printed in the app's `PROBE_TOKEN=...` log line. Studio keeps it in the OS keychain for that device, so the next connection needs no paste. A device with a saved token shows a 🔑 saved tag, and its ✕ control forgets the token.
 - The exact conditions for a physical iPhone over WiFi, with a three-command check, are in [Physical iPhone over WiFi](/platform/ios/#physical-iphone-over-wifi-cli-and-studio-what-must-be-true).
 - Devices that don't advertise over mDNS (no advertiser in the build, older agent versions, or networks that block mDNS): use **Connect manually** in the WiFi overlay (host, port, token) — see [Manual WiFi entry](#manual-wifi-entry) — or the CLI's `--host <ip> --token <token>`.
 
@@ -159,7 +159,7 @@ wails build
 
 - No multi-device side-by-side view.
 - No per-step replay / time-travel debugging — see the Results pane for pass/fail, but stack inspection requires re-running.
-- The AI chat pane talks to the Anthropic API only, with your own key stored in the OS keychain. Each message sends the open file. The failures of the last run and the connected device's widget tree are sent only when you turn them on, under **AI chat context** in Workspace settings, or in `probe.yaml` under `studio.ai_context` (`run_results` and `widget_tree`). **Both default to off**: until you change them, the chat sends only the open file. When either is on, a line above the chat input says what is sent. Before the widget tree is sent, obscured fields and credential-looking text (API keys such as `sk-…`, GitHub tokens such as `ghp_…`, `Bearer` values, and long hex or base64 runs) are redacted. Each part is cut to a size limit and marked when it is cut. The chat is not exposed through the automation endpoint or the MCP server; use the standalone `probe-mcp` binary with Claude Desktop or Cursor for MCP-driven work.
+- The AI chat pane talks to the Anthropic API only, with your own key stored in the OS keychain. The panel never shows the key again: it shows only whether one is saved. Each message sends the open file. The failures of the last run and the connected device's widget tree are sent only when you turn them on, under **AI chat context** in Workspace settings, or in `probe.yaml` under `studio.ai_context` (`run_results` and `widget_tree`). **Both default to off**: until you change them, the chat sends only the open file. When either is on, a line above the chat input says what is sent. Before the widget tree is sent, obscured fields and credential-looking text (API keys such as `sk-…`, GitHub tokens such as `ghp_…`, `Bearer` values, and long hex or base64 runs) are redacted. Each part is cut to a size limit and marked when it is cut. The chat is not exposed through the automation endpoint or the MCP server; use the standalone `probe-mcp` binary with Claude Desktop or Cursor for MCP-driven work.
 
 ## Configuration
 
@@ -174,7 +174,7 @@ Studio bugs go to the same tracker as the CLI: [github.com/AlphaWaveSystems/flut
 The 📡 overlay has a **Connect manually (host, port, token)** section for a phone that does not show up in the discovered list.
 
 - **Host**: an IPv4 address, an IPv6 address or a hostname (such as `iphone.local`): no `ws://`, path or port. **Port**: 1 to 65535, default 48686 (the port the app printed as `PROBE_PORT=` if it moved). **Token**: the value after `PROBE_TOKEN=` in the app's console (8 to 128 letters, digits and `_ . ~ -`; without the `PROBE_TOKEN=` part).
-- **Test connection** dials the agent and pings it without making it the active connection, and says whether the agent is reachable and the token accepted. **Connect** does the same and then connects. The host and port are remembered for next time; the token never is.
+- **Test connection** dials the agent and pings it without making it the active connection, and says whether the agent is reachable and the token accepted. **Connect** does the same and then connects. The host and port are remembered for next time. A manually entered device does not save its token, so paste it each time; a device found over mDNS keeps its token in the keychain.
 - When it fails, the message says what to check: the phone and this computer on the same network (and `curl http://<host>:<port>/probe/status` from this computer), the app in the foreground with the screen unlocked, a **profile build made with `--dart-define=PROBE_AGENT=true` and `--dart-define=PROBE_WIFI=true`** (a production or debug build does not listen), the port, and a fresh token (a new one is created whenever the app restarts).
 - An agent can do the same through the automation endpoint (`test_wifi`, `connect_wifi`) or the MCP tool `studio_connect` with `host`, `port` and `token` (and `test_only` to only check).
 

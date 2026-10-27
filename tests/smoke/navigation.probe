@@ -1,5 +1,5 @@
 # Smoke test: core navigation paths
-use "tests/recipes/common.probe"
+use "../recipes/common.probe"
 
 before each test
   open and wait for the app
@@ -22,7 +22,9 @@ test "navigate to keypad and back"
   @smoke
   navigate to keypad
   see "Activar"
-  go back to main menu
+  go back
+  wait 1 seconds
+  see "Home"
 
 test "navigate to lector and back"
   @smoke

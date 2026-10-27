@@ -1,6 +1,7 @@
 package robot
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -45,7 +46,7 @@ Login With Credentials
 		t.Fatalf("convert: %v", err)
 	}
 
-	assertContains(t, result.ProbeCode, `recipe "Login With Credentials"`)
+	assertContains(t, result.ProbeCode, `recipe "login with credentials"`)
 	assertContains(t, result.ProbeCode, "tap on #emailField")
 	assertContains(t, result.ProbeCode, "<email>")
 	assertContains(t, result.ProbeCode, "<password>")
@@ -163,6 +164,28 @@ XPath Fallback
 	// Non-extractable xpath → comment fallback
 	assertContains(t, result.ProbeCode, "# xpath:")
 	assertContains(t, result.ProbeCode, "LinearLayout")
+}
+
+// The lexer writes every call in lower case, and probe matches a call only to a recipe with exactly that name. So the
+// converter writes recipes in lower case too, and the calls in the converted checkout example name them that way.
+func TestConvert_RecipesAndCallsAgreeInCase(t *testing.T) {
+	src, err := os.ReadFile("../../examples/robot/checkout.robot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := New().Convert(src, "checkout.robot")
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	assertContains(t, result.ProbeCode, `recipe "login as user"`)
+	assertContains(t, result.ProbeCode, `recipe "add item to cart"`)
+	assertContains(t, result.ProbeCode, `login as user with "user@test.com" and "pass123"`)
+	assertContains(t, result.ProbeCode, `add item to cart with "Running Shoes"`)
+	for _, stale := range []string{`recipe "Login As User"`, `Login As User with`, `Add Item To Cart with`} {
+		if strings.Contains(result.ProbeCode, stale) {
+			t.Errorf("output still writes %q, which no call can match\n%s", stale, result.ProbeCode)
+		}
+	}
 }
 
 func assertContains(t *testing.T, haystack, needle string) {

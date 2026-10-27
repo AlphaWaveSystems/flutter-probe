@@ -44,7 +44,7 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 	},
 	{
 		Name:        "studio_run_file",
-		Description: "Start running a .probe file in Studio, or part of it: the test that contains a line (line), the tests with a tag (tag), or the tests that failed the last time the file ran in Studio (failed_only). Give at most one of line, tag and failed_only; with none, the whole file runs. Returns at once; poll studio_run_state for step-by-step progress and studio_results for the verdicts. Fails if Studio is not connected to a device, a run is already in progress, or no test matches the scope.",
+		Description: "Start running a .probe file in Studio, or part of it: the test that contains a line (line), the tests with a tag (tag), or the tests that failed the last time the file ran in Studio (failed_only). Give at most one of line, tag and failed_only; with none, the whole file runs. The file must be a .probe file inside the open workspace or an automation folder; any other path is refused. Returns at once; poll studio_run_state for step-by-step progress and studio_results for the verdicts. Fails if Studio is not connected to a device, a run is already in progress, or no test matches the scope.",
 		InputSchema: mcpSchema{Type: "object", Required: []string{"path"}, Properties: map[string]mcpProp{
 			"path":        {Type: "string", Description: "Absolute path of the .probe file"},
 			"line":        {Type: "integer", Description: "Run the test that contains this 1-based line of the file"},

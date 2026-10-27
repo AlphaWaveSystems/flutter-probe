@@ -1,5 +1,5 @@
 # Activation code entry tests
-use "tests/recipes/common.probe"
+use "recipes/common.probe"
 
 before each test
   open and wait for the app

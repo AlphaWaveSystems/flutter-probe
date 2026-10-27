@@ -106,9 +106,14 @@ func (a *App) runFileAsync(path string, scope RunScope) error {
 	if busy {
 		return errRunInProgress
 	}
-	if _, _, err := a.resolveRunScope(path, scope); err != nil {
+	// Refuse a path outside the allowed folders now, not inside the goroutine, so the caller hears about it.
+	checked, err := probeFileWithinRoots(a.automationRoots(), path)
+	if err != nil {
 		return err
 	}
-	go func() { _, _ = a.runScoped(path, scope) }()
+	if _, _, err := a.resolveRunScope(checked, scope); err != nil {
+		return err
+	}
+	go func() { _, _ = a.runScoped(checked, scope) }()
 	return nil
 }

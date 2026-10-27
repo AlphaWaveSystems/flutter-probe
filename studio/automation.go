@@ -187,13 +187,25 @@ func (s *automationServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 // decided with filepath.Rel, so a sibling such as /ws-evil is not inside /ws and a symlink inside
 // a root that points out of it does not get out.
 func withinRoots(roots []string, p string) (string, error) {
+	return resolveInRoots(roots, p, false)
+}
+
+// resolveInRoots is the one rule for every file and folder Studio touches, for the person in the window and for the
+// automation endpoint alike: the path must be absolute, must have no ".." segment on either separator, and after its
+// symlinks are resolved it must be one of the roots or inside one. With create set, the final part may not exist yet
+// (a new file, or the folders above it): the nearest existing parent is resolved and checked, and the missing part is
+// taken as written, which cannot hold a symlink. The resolved path is returned, and callers use that, not p.
+func resolveInRoots(roots []string, p string, create bool) (string, error) {
 	if len(roots) == 0 {
 		return "", fmt.Errorf("no folder is open to automation: open a workspace in Studio, or set PROBE_STUDIO_WORKSPACE or PROBE_STUDIO_AUTOMATION_ROOTS")
 	}
 	if !filepath.IsAbs(p) {
 		return "", fmt.Errorf("%s: use an absolute path", p)
 	}
-	real, err := filepath.EvalSymlinks(p)
+	if hasDotDotSegment(p) {
+		return "", fmt.Errorf("path traversal rejected: %s", p)
+	}
+	real, err := resolveExisting(filepath.Clean(p), create)
 	if err != nil {
 		return "", fmt.Errorf("%s: %v", p, err)
 	}
@@ -212,6 +224,51 @@ func withinRoots(roots []string, p string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%s is outside the folders automation may use", p)
+}
+
+// resolveExisting returns clean with every symlink that exists resolved. With create set, the parts that do not exist
+// yet are appended to the resolved nearest existing parent; a missing part cannot be a symlink, so nothing is hidden.
+func resolveExisting(clean string, create bool) (string, error) {
+	if !create {
+		return filepath.EvalSymlinks(clean)
+	}
+	existing, missing := clean, []string{}
+	for {
+		_, err := os.Lstat(existing)
+		if err == nil {
+			break
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			return "", fmt.Errorf("no existing folder above it")
+		}
+		missing = append([]string{filepath.Base(existing)}, missing...)
+		existing = parent
+	}
+	real, err := filepath.EvalSymlinks(existing)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(append([]string{real}, missing...)...), nil
+}
+
+// probeFileForWriteWithinRoots is the write side of probeFileWithinRoots: the file may be new, its folders may be new,
+// and its name must end in .probe. A path that is an existing folder is refused.
+func probeFileForWriteWithinRoots(roots []string, p string) (string, error) {
+	real, err := resolveInRoots(roots, p, true)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(real, ".probe") {
+		return "", fmt.Errorf("%s: only .probe files can be written", p)
+	}
+	if info, err := os.Lstat(real); err == nil && info.IsDir() {
+		return "", fmt.Errorf("%s is a folder", p)
+	}
+	return real, nil
 }
 
 // probeFileWithinRoots is withinRoots for a .probe file; the suffix is checked on the
