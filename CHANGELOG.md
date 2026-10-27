@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - **MCP: `start_tests`, `test_status`, `test_result` and `cancel_tests` run tests in the background.** `run_tests` blocks until `probe test` exits, so a multi-device run (`--parallel`, `composite_devices`, several devices) could outlast the MCP client's tool timeout and be reported as failed while it kept running. `start_tests` takes the same arguments, returns a `job_id` at once and runs the command in its own process group; `test_status` returns the state, elapsed time and the last lines of output; `test_result` returns the retained output (the last 1 MB) and the exit code; `cancel_tests` sends SIGTERM to the run and kills it after 5 seconds. Jobs live in the `probe-mcp` process and are killed when it exits. The hosted-upload flags are refused here exactly as in `run_tests`. `run_tests` is unchanged. The MCP server now has 40 tools.
+- **`probe lint` checks the references a run would resolve.** Lint reports each step and recipe call that matches no built-in step and no recipe in the file, its `use` statements or the recipes folder (the check `probe test --dry-run` makes), each selector that can never match, and each `<name>` placeholder that no example column, recipe parameter or stored value defines. It runs without a device, gives the line of each finding, and checks hook bodies and the device blocks of composite tests too.
 - **Recordings show the element each step acted on.** A step that taps, double taps, long presses, types, clears, toggles, or swipes or scrolls with a selector records its selector, and its bounds and tap point when the element is on screen as the step starts. The viewer shows them under "Element". Text typed into a field is never recorded, and a failed lookup is an advisory warning that does not change the step.
 - **`probe test --record` writes a step-by-step recording of each test.** Each test attempt includes source files and lines, screenshots before and after steps, widget trees after steps, and the app's `dart:io` HTTP exchanges with credential redaction, plus an offline viewer. Bundles stay under `reports_folder/recordings` or `--record-dir`; nothing uploads, and recording warnings do not change test results or exit codes. Native SDK and WebView traffic and screenshot redaction rules are not yet recorded; screenshots are not redacted and widget trees are not captured before steps. Keep recordings out of version control because they can contain screens and request or response bodies.
 - **Recording manifests name the platform and OS version.** `manifest.json` in each recording bundle now carries the run's `platform` (`ios` or `android`) and `os_version`, the same values the report shows, instead of leaving both empty.
@@ -23,6 +24,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The MCP tools keep to the local tool surface.** `run_tests` and `run_script` refuse the upload flags (`--upload-report`, `--upload-local`, `--upload-dry-run`, and any other `--upload-` flag) with the message "hosted upload is not available through MCP". The MCP tool text no longer describes the upload flags. Use the CLI from a terminal for uploads.
 - **Building from source needs Go 1.26.10 or newer (was 1.26.1).** The `go` line in `go.mod`, `studio/go.mod`, `tools/probe-convert/go.mod` and `go.work` is now 1.26.10, and the install docs say so. With the default `GOTOOLCHAIN=auto`, an older Go 1.26 downloads 1.26.10 on its own; with `GOTOOLCHAIN=local` the build stops with a version error until Go is upgraded.
 - **Older evidence files removed.** The disclosure guard also scans `docs/evidence`.
+- **`probe lint` fails on references a run cannot resolve.** A step or recipe call that resolves to nothing, or a selector that can never match, now makes the command exit with status 1, where it used to pass. A placeholder no value defines and a `use` file that does not exist are warnings and do not change the exit status. Lint also checks hook bodies and the device blocks of composite tests. `probe test --dry-run` checks only test bodies, so a bad step in those places fails at run time today, and a repository whose CI runs `probe lint` may see new failures there. Environment variables (`${NAME}`) are not checked, and the other limits are listed in the CLI reference. Within a file, errors print before warnings. Example output for a file with an error (colour codes omitted; the last line goes to stderr):
+
+  ```text
+    ✗  x.probe
+       line 7: unknown step "send reset code": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+       line 8: <code> is not defined: no example column, recipe parameter or stored value has that name
+
+  Error: 1 file(s) have errors
+  ```
+
+  A file with only warnings, such as a placeholder no value defines or a missing `use` file, prints them under a warning mark and still exits with status 0. The run then ends with `All files valid.`:
+
+  ```text
+    ⚠  y.probe
+       line 3: <code> is not defined: no example column, recipe parameter or stored value has that name
+
+    All files valid.
+  ```
 
 ### Docs
 - **Recording evidence write-ups no longer name private apps.** The prose and commands in the evidence notes use neutral labels and placeholders. The raw run output that the notes cite is unchanged.
@@ -34,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **VS Code: the extension compiles again with TypeScript 7 and @types/node 26.** The tsconfig names the Node types, which TypeScript 7 no longer loads by default. Without it, `npm test` failed to compile after those two upgrades.
 - **CI: the Dependabot auto-merge job adds approved pull requests to the merge queue again.** It passed `--squash` with `--auto`, so the queue ignored the request, nothing was queued, and the run still reported success. The job now passes no merge method and logs a warning for each pull request it cannot queue.
 - **CI: the Studio Go tests and the frontend and VS Code test suites run on every change to `studio/` or `vscode/`.** They ran in no workflow before, and only the browser suite covered Studio. The frontend suites run on Node 26.
+- **probe-convert writes Robot keyword recipes in lower case, and its calls match them.** The recipe kept its Robot spelling (`Login As User`), while the lexer writes every call word in lower case, so no converted call matched its recipe. The checkout golden is regenerated, and a test checks the names. A recipe name that keeps capital letters still cannot be called from a test; that is tracked separately.
 - **CI: the CLI test package runs in seconds, not minutes.** The hosted-upload failure test waited out the 5-minute retry window; it now uses a short window and checks that the failure is still only a warning.
 - **`probe test --device` finds the Android application ID for a camelCase `project.app`.** When the bundle ID as written is not installed on an Android device and its snake_case form is (`com.example.myApp` → `com.example.my_app`), the single-device run uses the snake_case ID, as `--devices` and parallel runs already did. Before, the restart relaunched the ID as written and failed. A run keeps the ID as written when that ID is installed, and when neither form is, so a project that runs today is unchanged. `--devices` and parallel runs still convert without this check.
 - **Composite runs write the platform and OS version into each recording manifest.** `probe test --composite-device` now passes each device's platform and OS version to its recorder, as single-device runs already do, so `manifest.json` is no longer empty for those devices. Devices the CLI cannot read a platform for (a WiFi composite device) still write empty values. The recording ships with `probe test --record`, which is not released yet.
