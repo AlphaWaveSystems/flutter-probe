@@ -1,4 +1,4 @@
-use "tests/recipes/common.probe"
+use "common.probe"
 
 recipe "activate code" (d1, d2, d3, d4, d5)
   navigate to keypad

@@ -614,13 +614,13 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 36 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 40 tools:
 
 | Category | Tools |
 |---|---|
 | Device lifecycle | `list_devices`, `list_simulators`, `list_avds`, `start_device`, `shutdown_device`, `set_device_setting` |
 | Authoring | `get_widget_tree`, `read_test`, `write_test`, `run_script` |
-| Execution | `run_tests`, `list_files`, `lint`, `take_screenshot` |
+| Execution | `run_tests`, `start_tests`, `test_status`, `test_result`, `cancel_tests`, `list_files`, `lint`, `take_screenshot` |
 | Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree`, `studio_ui_state` (read-only: the inspector's tree, and the connection and run state) (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
 | Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `validate_project`, `doctor`, `record` |
@@ -630,6 +630,7 @@ Every CLI feature is accessible from MCP. Key capabilities an agent can use:
 - **Composite tests** — `write_test` supports the full `composite test` syntax; `run_tests` accepts a `composite_devices` parameter (`"A=host:port/token B=udid"`)
 - **Structured results** — pass `--format json` in `run_tests`'s `flags` to get machine-readable output, then call `get_report` or `generate_report` for HTML
 - **Parallel/shard** — `--parallel` or `--shard 1/3` via `flags`
+- **Long and multi-device runs** — `run_tests` blocks until the run ends, so a run that outlasts your client's tool timeout is reported as failed. Use `start_tests` (same arguments) to get a `job_id` at once, poll `test_status` for the state and the last lines of output, then read `test_result`; `cancel_tests` stops a run. Jobs live in the `probe-mcp` process and are killed when it exits
 - **WiFi physical devices** — `--host <ip> --token <tok>` via `flags`
 - **Android + iOS shutdown** — `shutdown_device` accepts `udid` (iOS) or `serial` (Android)
 - **Pre-write validation** — `write_test` parses the content before writing; syntax errors are returned immediately without creating the file
@@ -646,7 +647,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 36 tools appear in Claude.
+4. Done — all 40 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 

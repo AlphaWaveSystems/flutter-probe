@@ -69,12 +69,12 @@ jobs:
                 fi
 
                 echo "PR #$NUMBER ($TITLE) — eligible, adding to merge queue"
-                # --auto is required here, not optional: this repo's main
-                # branch only accepts merges via the merge queue, and a
-                # bare `gh pr merge --squash` (no --auto) just prints
-                # "the merge strategy for main is set by the merge queue"
-                # and does nothing — it was never actually enqueuing
-                # anything even on the rare PR that got this far.
-                gh pr merge --squash --auto "$NUMBER" --repo "$REPO" || \
-                  echo "PR #$NUMBER — merge queue failed (may already be queued)"
+                # --auto is required: this repo's main branch only accepts
+                # merges through the merge queue, and --auto enqueues the PR.
+                # Pass no merge method, because the queue sets it. With
+                # --squash, gh prints "the merge strategy for main is set by
+                # the merge queue" and enqueues nothing, yet the step passed.
+                if ! gh pr merge --auto "$NUMBER" --repo "$REPO"; then
+                  echo "::warning::PR #$NUMBER: could not add to the merge queue (may already be queued)"
+                fi
               done

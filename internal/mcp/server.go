@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
@@ -30,6 +31,10 @@ var Version = "dev"
 type Server struct {
 	in  *bufio.Reader
 	out io.Writer
+
+	// Background test runs (jobs.go). Created on first use.
+	jobsOnce sync.Once
+	jobs     *jobRegistry
 }
 
 // NewServer creates a Server reading from os.Stdin and writing to os.Stdout.
@@ -42,6 +47,8 @@ func NewServer() *Server {
 
 // Run reads JSON-RPC 2.0 messages from stdin and writes responses to stdout.
 func (s *Server) Run() error {
+	// Never leave a background test run behind when the client goes away.
+	defer s.stopJobs()
 	for {
 		line, err := s.in.ReadString('\n')
 		if err != nil {
@@ -344,15 +351,55 @@ Key flags for the flags parameter:
   --video                     record device screen during the run
   --stream                    emit one ndjson line per test as it completes (requires --format json)
 
-For composite multi-device tests use the composite_devices parameter.`,
+For composite multi-device tests use the composite_devices parameter.
+
+This call blocks until the run ends. For multi-device runs (--parallel, composite_devices, several devices) or any run that may outlast your tool timeout, use start_tests instead: it returns a job_id at once and you poll test_status.`,
 		InputSchema: mcpSchema{
-			Type: "object",
+			Type:       "object",
+			Properties: testRunProps,
+		},
+	},
+	{
+		Name: "start_tests",
+		Description: `Start FlutterProbe tests in the background and return a job_id immediately, instead of blocking like run_tests. Use it for multi-device runs (--parallel, composite_devices, several devices), large suites, --retry-failed, or anything that may outlast your tool timeout: a blocking call that times out is reported as failed even though the run continues.
+
+Takes the same arguments as run_tests (see its description for the flags). Then poll test_status (state, elapsed time, the last lines of output), call test_result once the state is passed, failed or cancelled, and call cancel_tests to stop a run. Jobs live in this server process: they are killed when it exits and forgotten if it restarts.`,
+		InputSchema: mcpSchema{
+			Type:       "object",
+			Properties: testRunProps,
+		},
+	},
+	{
+		Name:        "test_status",
+		Description: "Progress of a background run started with start_tests: state (running, passed, failed, cancelled), elapsed seconds, the last lines of output, and the exit code once it has finished. Cheap; poll it every few seconds.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"job_id"},
 			Properties: map[string]mcpProp{
-				"paths":             {Type: "string", Description: "Space-separated .probe file paths or directories (default: tests/)"},
-				"tag":               {Type: "string", Description: "Only run tests with this tag (e.g. smoke)"},
-				"flags":             {Type: "string", Description: "Additional probe test flags (see description for key options)"},
-				"device":            {Type: "string", Description: "Primary device id (serial or UDID; default: first available)"},
-				"composite_devices": {Type: "string", Description: "Space-separated ALIAS=SPEC pairs for composite multi-device tests. Formats: host:port/token (WiFi), iOS UDID, or Android serial. Example: \"A=192.168.1.10:48686/tok B=emulator-5556\""},
+				"job_id":     {Type: "string", Description: "The job_id returned by start_tests"},
+				"tail_lines": {Type: "string", Description: "How many trailing output lines to return (default 20, max 500)"},
+			},
+		},
+	},
+	{
+		Name:        "test_result",
+		Description: "The full retained output and exit code of a finished background run (the last 1 MB of output; output_dropped_bytes says how much earlier output was cut). Errors while the run is still going: poll test_status first. For machine-readable results pass --format json in start_tests's flags, then call get_report.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"job_id"},
+			Properties: map[string]mcpProp{
+				"job_id": {Type: "string", Description: "The job_id returned by start_tests"},
+			},
+		},
+	},
+	{
+		Name:        "cancel_tests",
+		Description: "Stop a background run started with start_tests. The run's whole process group gets SIGTERM and is killed if it has not exited within 5 seconds. A finished job is reported as already finished.",
+		InputSchema: mcpSchema{
+			Type:     "object",
+			Required: []string{"job_id"},
+			Properties: map[string]mcpProp{
+				"job_id": {Type: "string", Description: "The job_id returned by start_tests"},
 			},
 		},
 	},
@@ -380,7 +427,7 @@ For composite multi-device tests use the composite_devices parameter.`,
 	},
 	{
 		Name:        "lint",
-		Description: "Validate .probe files; warns on count and zero-state text checks, never fails.",
+		Description: "Validate .probe files without running them. Fails on a step or recipe call that resolves to nothing and on a selector that can never match; warns on unresolved placeholders, unknown use files and count or zero-state text checks. It also checks hook and composite test bodies, which `probe test --dry-run` does not.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{
@@ -609,6 +656,14 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.runScript(req.ID, args["script"], args["flags"], args["device"])
 	case "run_tests":
 		return s.runTests(req.ID, args)
+	case "start_tests":
+		return s.startTests(req.ID, args)
+	case "test_status":
+		return s.testStatus(req.ID, args)
+	case "test_result":
+		return s.testResult(req.ID, args)
+	case "cancel_tests":
+		return s.cancelTests(req.ID, args)
 	case "list_files":
 		out, err := s.runProbe("lint", args["path"], "", "--list", "")
 		return textResp(req.ID, out, err)
@@ -784,9 +839,21 @@ func (s *Server) runScript(id any, script, flags, deviceID string) *mcpResponse 
 	return textResp(id, out, err)
 }
 
-func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
+// testRunProps are the arguments shared by run_tests and start_tests.
+var testRunProps = map[string]mcpProp{
+	"paths":             {Type: "string", Description: "Space-separated .probe file paths or directories (default: tests/)"},
+	"tag":               {Type: "string", Description: "Only run tests with this tag (e.g. smoke)"},
+	"flags":             {Type: "string", Description: "Additional probe test flags (see description for key options)"},
+	"device":            {Type: "string", Description: "Primary device id (serial or UDID; default: first available)"},
+	"composite_devices": {Type: "string", Description: "Space-separated ALIAS=SPEC pairs for composite multi-device tests. Formats: host:port/token (WiFi), iOS UDID, or Android serial. Example: \"A=192.168.1.10:48686/tok B=emulator-5556\""},
+}
+
+// buildTestArgs turns run_tests/start_tests arguments into a `probe test`
+// command line. Both tools go through it, so the hosted-upload refusal applies
+// to a background run exactly as it does to a blocking one.
+func buildTestArgs(args map[string]string) ([]string, error) {
 	if err := refusedHostedFlag(args["flags"]); err != nil {
-		return textResp(id, err.Error(), err)
+		return nil, err
 	}
 	cmdArgs := []string{"test"}
 	if args["paths"] != "" {
@@ -805,6 +872,14 @@ func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
 	// --composite-device flag so the runner can coordinate multi-device tests.
 	for _, spec := range strings.Fields(args["composite_devices"]) {
 		cmdArgs = append(cmdArgs, "--composite-device", spec)
+	}
+	return cmdArgs, nil
+}
+
+func (s *Server) runTests(id any, args map[string]string) *mcpResponse {
+	cmdArgs, err := buildTestArgs(args)
+	if err != nil {
+		return textResp(id, err.Error(), err)
 	}
 	cmd := exec.Command(probeBin(), cmdArgs...)
 	cmd.Env = os.Environ()
