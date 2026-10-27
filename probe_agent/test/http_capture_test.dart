@@ -67,6 +67,20 @@ void main() {
     expect(ProbeHttpLog.instance.query(method: 'GET', pattern: '/api/me'), isEmpty);
   });
 
+  test('custom credential headers are redacted by the token rule, and the fixed names too', () async {
+    final client = HttpClient();
+    final req = await client.getUrl(base.replace(path: '/api/me'));
+    req.headers.set('x-api-token', 'abc');
+    req.headers.set('x-amz-signature', 'def');
+    req.headers.set('x-request-id', 'r1');
+    final resp = await req.close();
+    await resp.drain<void>();
+    final sent = ProbeHttpLog.instance.query(method: 'GET', pattern: '/api/me').single.toJson()['requestHeaders'] as Map;
+    expect(sent['x-api-token'], '<redacted>');
+    expect(sent['x-amz-signature'], '<redacted>');
+    expect(sent['x-request-id'], 'r1');
+  });
+
   test('a mock answers instead of the network: status, body, headers', () async {
     ProbeHttpLog.instance.addMock(ProbeMock(
       method: 'GET',
@@ -120,5 +134,10 @@ void redactionTests() {
     expect(probeRedactUrl('https://x/api?Access_Token=abc'), 'https://x/api?Access_Token=<redacted>');
     expect(probeRedactUrl('https://x/api?q=1'), 'https://x/api?q=1');
     expect(probeRedactUrl('https://x/api'), 'https://x/api');
+    expect(probeRedactUrl('https://x/o?X-Amz-Signature=abc&X-Amz-Credential=AK%2F26&page=2'),
+        'https://x/o?X-Amz-Signature=<redacted>&X-Amz-Credential=<redacted>&page=2');
+    expect(probeRedactUrl('https://x/api?X-Custom-Token=abc'), 'https://x/api?X-Custom-Token=<redacted>');
+    expect(probeRedactUrl('https://x/api?cardno=4111&creditcard=4112&page=2'),
+        'https://x/api?cardno=<redacted>&creditcard=<redacted>&page=2');
   });
 }

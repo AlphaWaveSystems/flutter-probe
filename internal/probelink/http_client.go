@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -74,6 +76,17 @@ func DialHTTP(ctx context.Context, opts DialOptions) (*HTTPClient, error) {
 	return c, nil
 }
 
+// redact replaces the request URL of a transport error with the agent's address. The request URL carries the agent
+// token in its query, and the text of a *url.Error includes that URL. It is applied before the error is wrapped, since
+// a wrapped error's text is fixed when it is made.
+func (c *HTTPClient) redact(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		uerr.URL = c.addr
+	}
+	return err
+}
+
 // Call sends a JSON-RPC request as an HTTP POST and returns the response.
 func (c *HTTPClient) Call(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	c.mu.Lock()
@@ -93,16 +106,16 @@ func (c *HTTPClient) Call(ctx context.Context, method string, params any) (json.
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s?token=%s", c.baseURL, c.token)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
+	endpoint := fmt.Sprintf("%s?token=%s", c.baseURL, c.token)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("probelink: http request: %w", err)
+		return nil, fmt.Errorf("probelink: http request: %w", c.redact(err))
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("probelink: http call %s: %w", method, err)
+		return nil, fmt.Errorf("probelink: http call %s: %w", method, c.redact(err))
 	}
 	defer httpResp.Body.Close()
 

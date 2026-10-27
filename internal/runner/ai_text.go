@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // errNeedsVision is returned by the pixel-based AI steps when ai.vision is
@@ -36,7 +37,11 @@ func (e *Executor) runAssertWithAIText(ctx context.Context, assertion string) er
 	if err != nil {
 		return fmt.Errorf("with ai: reading the visible screen contents failed (agent too old for text-only mode?): %w", err)
 	}
-	verdict, err := ai.TextVerdict(ctx, e.aiText, assertion, sum.Texts, sum.Keys)
+	// The text model is a remote service. The assertion comes from the step, which can carry a value the run expanded
+	// from the environment, and the screen's texts and keys can show one too. All of them reach the model masked, and
+	// so does the assertion when the failure prints it.
+	assertion = sysdialog.ScrubKnown(assertion)
+	verdict, err := ai.TextVerdict(ctx, e.aiText, assertion, scrubKnownAll(sum.Texts), scrubKnownAll(sum.Keys))
 	if err != nil {
 		return fmt.Errorf("with ai: %w", err)
 	}
@@ -44,4 +49,13 @@ func (e *Executor) runAssertWithAIText(ctx context.Context, assertion string) er
 		return fmt.Errorf("AI assertion failed: %q — %s", assertion, verdict.Reasoning)
 	}
 	return nil
+}
+
+// scrubKnownAll returns items with every resolved environment value masked, as ScrubKnown masks them.
+func scrubKnownAll(items []string) []string {
+	out := make([]string, len(items))
+	for i, s := range items {
+		out[i] = sysdialog.ScrubKnown(s)
+	}
+	return out
 }

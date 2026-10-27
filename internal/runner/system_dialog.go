@@ -67,9 +67,12 @@ func (e *Executor) runSystemDialog(ctx context.Context, s parser.SystemDialogSte
 
 	case parser.SysType:
 		text := e.resolve(s.Text)
-		value, _, rerr := sysdialog.ResolveSecret(text)
+		value, fromEnv, rerr := sysdialog.ResolveSecret(text)
 		if rerr != nil {
 			return rerr
+		}
+		if fromEnv {
+			sysdialog.NoteEnvValue(sysdialog.SecretEnvName(text), value)
 		}
 		secrets = append(secrets, value, text)
 		return d.Type(ctx, e.resolve(s.Field), value, s.Title)
@@ -112,6 +115,8 @@ func (e *Executor) runSystemDialog(ctx context.Context, s parser.SystemDialogSte
 	case parser.SysSandbox:
 		user, pass := os.Getenv("PROBE_SANDBOX_USER"), os.Getenv("PROBE_SANDBOX_PASSWORD")
 		secrets = append(secrets, user, pass)
+		sysdialog.NoteEnvValue("PROBE_SANDBOX_USER", user)
+		sysdialog.NoteEnvValue("PROBE_SANDBOX_PASSWORD", pass)
 		_, err = sysdialog.SignInSandbox(ctx, d, sysdialog.SandboxOptions{User: user, Password: pass})
 		return err
 	}

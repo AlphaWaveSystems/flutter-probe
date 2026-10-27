@@ -93,6 +93,46 @@ func TestSystemDialogStep_LiteralTextIsMaskedToo(t *testing.T) {
 	}
 }
 
+// A value from a variable whose name has a secret word is masked from three characters, wherever the run prints it.
+func TestSystemDialogStep_ShortSecretEnvValueIsMasked(t *testing.T) {
+	t.Setenv("PROBE_TEST_PIN", "pn42")
+	f := &fakeSys{dialog: &sysdialog.Dialog{Title: "Sign in"}, typeErrText: "field rejected {text}"}
+	e := sysExecutor(f)
+	err := e.runStep(context.Background(), parser.SystemDialogStep{Op: parser.SysType, Text: "$PROBE_TEST_PIN", Field: "PIN", Line: 2})
+	if err == nil || strings.Contains(err.Error(), "pn42") {
+		t.Fatalf("the short PIN must be masked in the driver's error, got %v", err)
+	}
+	// The error path masks the typed value on its own, so also check that the value is noted: other printed text must mask it.
+	if got := sysdialog.ScrubKnown("pin pn42"); got != "pin ****" {
+		t.Errorf("the short PIN is not noted for masking: %q", got)
+	}
+}
+
+// A one-character value is below the minimum, so it is not masked wherever it appears, even from a secret-named variable.
+func TestSystemDialogStep_OneCharacterSecretEnvValueIsNotMaskedEverywhere(t *testing.T) {
+	t.Setenv("PROBE_TEST_PIN_DIGIT", "7")
+	f := &fakeSys{dialog: &sysdialog.Dialog{Title: "Sign in"}, typeErrText: "field rejected {text}"}
+	e := sysExecutor(f)
+	_ = e.runStep(context.Background(), parser.SystemDialogStep{Op: parser.SysType, Text: "$PROBE_TEST_PIN_DIGIT", Field: "PIN", Line: 3})
+	if got := sysdialog.ScrubKnown("7 of 10"); got != "7 of 10" {
+		t.Fatalf("a one-character value was masked everywhere: %q", got)
+	}
+}
+
+// The sandbox sign-in notes its credentials: the password is masked from three characters, and the user only from eight.
+func TestSystemDialogStep_SandboxCredentialsAreNoted(t *testing.T) {
+	t.Setenv("PROBE_SANDBOX_USER", "bob")
+	t.Setenv("PROBE_SANDBOX_PASSWORD", "sb9x")
+	e := sysExecutor(&fakeSys{dialog: &sysdialog.Dialog{}})
+	_ = e.runStep(context.Background(), parser.SystemDialogStep{Op: parser.SysSandbox, Line: 4})
+	if got := sysdialog.ScrubKnown("pw sb9x"); got != "pw ****" {
+		t.Errorf("the sandbox password was not noted: %q", got)
+	}
+	if got := sysdialog.ScrubKnown("user bob"); got != "user bob" {
+		t.Errorf("a three-character user was masked everywhere: %q", got)
+	}
+}
+
 func TestSystemDialogStep_UnsetEnvVarFailsWithItsName(t *testing.T) {
 	e := sysExecutor(&fakeSys{dialog: &sysdialog.Dialog{}})
 	err := e.runStep(context.Background(), parser.SystemDialogStep{Op: parser.SysType, Text: "$PROBE_NOPE_UNSET", Field: "Password", Line: 1})

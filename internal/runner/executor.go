@@ -42,7 +42,6 @@ type Executor struct {
 	onReconnect          func(probelink.ProbeClient) // callback to update Runner's client ref
 	timeout              time.Duration
 	recipes              map[string]parser.RecipeDef // loaded recipes by name
-	envValues            []string                    // values expanded from ${NAME} in steps; scrubbed from errors
 	envWarned            map[string]bool
 	useNote              string            // appended to "unknown recipe call" (missing `use` targets)
 	vars                 map[string]string // variable scope for data-driven tests
@@ -479,7 +478,9 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			if s.Sel != nil {
 				target = fmt.Sprintf(" into %q", s.Sel.Text)
 			}
-			return fmt.Sprintf("type %q%s", e.resolveVars(s.Text), target)
+			// A let variable can hold a value the run expanded from the environment, so the text is masked
+			// like any other printed value.
+			return fmt.Sprintf("type %q%s", sysdialog.ScrubKnown(e.resolveVars(s.Text)), target)
 		case parser.VerbClear:
 			if s.Sel != nil {
 				return fmt.Sprintf("clear %q", s.Sel.Text)
@@ -851,7 +852,8 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	case parser.VerbDumpTree:
 		tree, err := e.client.DumpWidgetTree(ctx)
 		if err == nil {
-			fmt.Printf("[widget_tree]\n%s\n[/widget_tree]\n", tree)
+			// The tree is agent text: a text field's value on screen can be a secret, so the dump is masked.
+			fmt.Printf("[widget_tree]\n%s\n[/widget_tree]\n", sysdialog.ScrubKnown(tree))
 		}
 		return err
 
@@ -1241,7 +1243,8 @@ func (e *Executor) runAssertWithAI(ctx context.Context, a parser.AssertStep) err
 		}
 		return fmt.Errorf(`"with ai" used but ai.provider/ai.api_key is not configured in probe.yaml`)
 	}
-	assertion := e.resolve(a.Sel.Text)
+	// Masked before the provider sees it, the same as the text-only path: a resolved env value must not leave the machine.
+	assertion := sysdialog.ScrubKnown(e.resolve(a.Sel.Text))
 
 	if !e.aiCfg.VisionEnabled() {
 		return e.runAssertWithAIText(ctx, assertion)
@@ -1307,7 +1310,8 @@ func (e *Executor) runReadWithAI(ctx context.Context, a parser.ActionStep) error
 	if !e.aiCfg.VisionEnabled() {
 		return errNeedsVision("read ... with ai")
 	}
-	query := e.resolve(a.Text)
+	// Masked before the provider sees it, the same as the text-only path: a resolved env value must not leave the machine.
+	query := sysdialog.ScrubKnown(e.resolve(a.Text))
 
 	path, imgBytes, err := e.captureRedactedScreenshot(ctx, "read_with_ai")
 	if err != nil {
@@ -1801,7 +1805,8 @@ func (e *Executor) resolve(s string) string {
 			}
 			if !e.envWarned[err.Error()] {
 				e.envWarned[err.Error()] = true
-				fmt.Fprintf(os.Stderr, "  warning: %v\n", err)
+				// The key can carry an environment value, which the lookup error names, so the warning is masked like any printed line.
+				fmt.Fprintf(os.Stderr, "  warning: %s\n", sysdialog.ScrubKnown(err.Error()))
 			}
 		}
 		s = out
@@ -1811,8 +1816,8 @@ func (e *Executor) resolve(s string) string {
 
 // expandEnv replaces ${NAME} with the value of the environment variable NAME
 // (the braced form only: a bare $ stays text, so "$5" and "$name" are untouched).
-// The values are remembered so they can be scrubbed from step errors, and the step
-// line shows the template (see stepDescription), never the value. An unset
+// The values are recorded with sysdialog.NoteEnvValue, so every printed line and error that can carry a noted value masks it (a short value from an ordinary name is not noted; see there).
+// The step line shows the template (see stepDescription), never the value. An unset
 // variable is left as written, with a one-time warning.
 func (e *Executor) expandEnv(s string) string {
 	if !strings.Contains(s, "${") {
@@ -1831,22 +1836,21 @@ func (e *Executor) expandEnv(s string) string {
 			}
 			return m
 		}
-		if v != "" {
-			e.envValues = append(e.envValues, v)
-		}
+		sysdialog.NoteEnvValue(name, v)
 		return v
 	})
 }
 
 var envRef = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*\}`)
 
-// scrubEnv removes expanded environment values from an error before it is shown.
+// scrubEnv masks the environment values that expanded steps recorded, in an error before it is shown. It is the same
+// sysdialog.ScrubKnown every other printed line uses, so a value another executor in this process expanded is masked too.
 func (e *Executor) scrubEnv(err error) error {
-	if err == nil || len(e.envValues) == 0 {
+	if err == nil {
 		return err
 	}
 	msg := err.Error()
-	scrubbed := sysdialog.Scrub(msg, e.envValues...)
+	scrubbed := sysdialog.ScrubKnown(msg)
 	if scrubbed == msg {
 		return err
 	}

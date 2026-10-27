@@ -272,7 +272,7 @@ func (v *viewConnector) connect(ctx context.Context) (deviceview.Agent, error) {
 		return nil, fmt.Errorf("agent handshake failed: %s", redactAgentToken(err.Error(), token))
 	}
 	if warning != "" {
-		statusWarn(v.warn, "%s", warning)
+		printAgentWarning(v.warn, warning)
 	}
 	return deviceview.NewProbeAgent(client), nil
 }

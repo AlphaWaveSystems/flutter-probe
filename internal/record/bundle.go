@@ -11,8 +11,9 @@ import (
 	"time"
 )
 
-// SchemaVersion is the version of the bundle's JSON files. RingSize lives in cursor.go.
-const SchemaVersion = 1
+// SchemaVersion is the version of the bundle's JSON files. RingSize lives in cursor.go. Version 2 changes capture.redaction
+// from a boolean to the redacted and not_redacted lists.
+const SchemaVersion = 2
 
 type Manifest struct {
 	SchemaVersion int        `json:"schema_version"`
@@ -36,7 +37,51 @@ type Manifest struct {
 type Capture struct {
 	Screenshots string `json:"screenshots"`
 	Native      string `json:"native"`
-	Redaction   bool   `json:"redaction"`
+	// Redacted lists what the recording removed or masked, and NotRedacted what it keeps as the app and the test produced
+	// it. A reader sharing a recording needs both: screenshots and step descriptions are not redacted.
+	Redacted    []string `json:"redacted"`
+	NotRedacted []string `json:"not_redacted"`
+}
+
+// redactedKinds lists what a recording removes or masks, for the manifest. Each entry says what its rule covers, and
+// notRedactedKinds says what the rules do not reach.
+func redactedKinds() []string {
+	return []string{
+		"http headers: the values of headers whose name holds a credential word by the token rule, such as X-Api-Token, Private-Token or X-Amz-Signature, and of the fixed names (authorization, cookie, api-key and the other fixed names)",
+		"http urls: the password in a userinfo, absolute or scheme-relative, and the values of query, fragment and path parameters whose names are credentials, such as X-Amz-Signature and X-Goog-Signature",
+		"http bodies: the values of JSON members, XML elements and multipart parts whose names are credentials (a multipart name quoted or not, and percent-decoded), of any value type; the value member (value, val, data, content, text or newValue, in any case) of a JSON object whose name, key, field, id or label member names a credential, where a name member may be a string or an array of strings; a name that holds a credential word is masked whatever else it says, counters such as Token-Count included; name=value assignments in form and plain text whose name is a credential and whose value has four or more characters; the whole value of authorization, proxy-authorization, cookie and set-cookie lines in text; and credential-shaped strings (API keys, bearer tokens, JWTs, private keys, long hex and base64 strings)",
+		"errors and warnings: the body rules applied to plain text (credential-shaped strings, URL userinfo passwords and name=value assignments), and resolved environment values",
+		"selectors and widget trees: resolved environment values only",
+	}
+}
+
+// notRedactedKinds lists what a recording keeps as the app and the test produced it, and what the redaction rules do not
+// reach, for the manifest.
+func notRedactedKinds() []string {
+	return []string{
+		"screenshots: pixels as rendered, so an on-screen value can appear",
+		"step descriptions: the test's own text, including literal text it types",
+		"free text with no assignment, such as a sentence that says a password is a value: it is not redacted",
+		"names that use lookalike letters, such as a Cyrillic letter in place of a Latin one: they are not matched as credentials",
+		"names outside the credential token, pair and compound lists, such as a bare code, card name, newpassword, secretkey or authtoken, or a plural such as cookies",
+		"base64 and hex credentials below the shape thresholds (40 base64 characters, 32 hex characters), and credentials in any other encoding",
+		"names and separators that are percent-encoded twice",
+		"form and plain-text values of under four characters, including in a JSON body that does not parse, such as a truncated one",
+		"environment values of under three characters, and of under eight characters when the variable's name has no secret word as a whole token (PASS, PASSWORD, PASSWD, PWD, PW, SECRET, TOKEN, OTP, CRED, PIN, KEY and the other listed words)",
+		"HTML attributes, such as the value of an input, and other formats that are not JSON, form, XML, multipart or plain text",
+		"selectors and widget trees: values the run did not resolve from the environment, such as a literal typed into a step",
+		"http bodies in other formats, such as HTML or XML, where a value is an attribute, as in an input's value",
+		"http bodies: values whose names are outside the credential token, pair and compound lists, such as a bare code or key",
+		"http urls: parameter names outside the credential query, token, pair and compound lists, such as a bare code",
+		"http bodies: a name/value pair whose name member is not name, key, field, id or label, or whose value member is not value, val, data, content, text or newValue, such as item and value or name and amount, and a form pair whose value is in a separate field, such as name=password&value=X",
+		"http urls: a userinfo password with an unencoded @, /, ?, # or whitespace, which keeps the whole password or its tail",
+		"http urls: a parameter whose value holds its own ?, such as next=/cb?token=X, so the nested parameter is kept",
+		"http bodies: a URL in a JSON string written with escaped slashes (\\/), whose userinfo password is kept",
+		"http bodies: a form or plain-text value that holds a space, quote, comma, semicolon, ampersand or angle bracket: only the part before it is masked",
+		"http bodies: a JSON member name, which is kept as written even when it holds a credential-shaped pair",
+		"http bodies: XML text that is CDATA, and a credential element with child elements, which is masked only through its children's own names",
+		"http bodies: an authorization, cookie or set-cookie header that does not start its line, such as one in a log line",
+	}
 }
 
 type Truncation struct {

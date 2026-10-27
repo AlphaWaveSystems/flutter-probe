@@ -11,6 +11,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // httpState is what an executor knows about the app's recorded backend traffic.
@@ -213,7 +214,8 @@ func (e *Executor) recentRequests(ctx context.Context) string {
 }
 
 func bodyHint(en probelink.HTTPEntry) string {
-	body := strings.TrimSpace(en.ResponseBody)
+	// Masked before the cut: a value that straddles the cut would otherwise show its first part.
+	body := strings.TrimSpace(sysdialog.ScrubKnown(en.ResponseBody))
 	if body == "" {
 		return ""
 	}

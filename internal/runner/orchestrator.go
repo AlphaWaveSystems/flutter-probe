@@ -12,6 +12,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
@@ -155,7 +156,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		return nil, fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)
 	}
 	if warning != "" {
-		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), warning)
+		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(warning))
 	}
 
 	fmt.Printf("  \033[32m✓\033[0m  [%s] Connected\n", po.shortID(dr.DeviceID))

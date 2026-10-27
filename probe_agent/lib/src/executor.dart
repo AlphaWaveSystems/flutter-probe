@@ -900,10 +900,6 @@ class ProbeExecutor {
     }
   }
 
-  /// Walks up and down from an element to find a TextEditingController.
-  TextEditingController? _findTextController(Element element) =>
-      _findEditableTarget(element)?.controller;
-
   /// Walks up and down from an element to find the underlying EditableText's
   /// controller and FocusNode together. TextField/TextFormField don't expose
   /// their FocusNode directly (they create one internally if none is given),
@@ -944,7 +940,8 @@ class ProbeExecutor {
   _EditableTarget _editableTargetOf(Element e) {
     final w = e.widget as EditableText;
     final state = e is StatefulElement && e.state is EditableTextState ? e.state as EditableTextState : null;
-    return _EditableTarget(w.controller, w.focusNode, state);
+    return _EditableTarget(
+        w.controller, w.focusNode, state, _finder.isSecretEditable(e));
   }
 
   /// Finds any currently focused text field.
@@ -996,6 +993,15 @@ class ProbeExecutor {
       // satisfied the checked state. "don't see X in state Y" must fail
       // only when X exists *and* is in state Y; if X exists but isn't in
       // that state, the negation is correctly satisfied.
+      // An obscured field's text is never read, so a negated contains check
+      // cannot be evaluated on it. Fail here: letting "no reason" count as
+      // "not matching" would pass the negation silently.
+      if (check == 'contains' && elements.any((e) => _textOf(e) == null)) {
+        throw ProbeError(
+          ProbeError.assertFailed,
+          '"${_selDesc(sel)}" is an obscured field, so a negated contains check cannot read its text',
+        );
+      }
       final matching = check.isEmpty
           ? elements
           : elements.where((e) => _stateCheckFailureReason(e, check, checkVal) == null).toList();
@@ -1049,8 +1055,16 @@ class ProbeExecutor {
       } on FormatException catch (e) {
         throw ProbeError(ProbeError.assertFailed, 'Invalid regular expression "$pattern": ${e.message}');
       }
-      final texts = elements.map(_textOf).toList();
+      // An obscured field has no readable text (see _textOf): it cannot match,
+      // and its text never reaches the message.
+      final texts = elements.map(_textOf).whereType<String>().toList();
       if (!texts.any(re.hasMatch)) {
+        if (texts.isEmpty) {
+          throw ProbeError(
+            ProbeError.assertFailed,
+            '"${_selDesc(sel)}" found, but its text is hidden (obscured field), so it cannot match /$pattern/',
+          );
+        }
         final shown = texts.take(5).map((t) => '"$t"').join(', ');
         throw ProbeError(
           ProbeError.assertFailed,
@@ -1077,6 +1091,9 @@ class ProbeExecutor {
         return null;
       case 'contains':
         final text = _textOf(element);
+        // An obscured field's text is never read, so nothing can be checked on it.
+        if (text == null)
+          return 'is an obscured field, so its text cannot be checked';
         if (!text.contains(checkVal)) return 'contains "$text", not "$checkVal"';
         return null;
       case 'checked':
@@ -1235,7 +1252,13 @@ class ProbeExecutor {
       final elements = _finder.findElements(sel);
       // `appears matching "<re>"`: the text must also match the expression
       // (substring selectors alone cannot say "exactly 0 ml").
-      final found = re == null ? elements.isNotEmpty : elements.any((e) => re!.hasMatch(_textOf(e)));
+      // An obscured field has no readable text, so it cannot satisfy a pattern.
+      final found = re == null
+          ? elements.isNotEmpty
+          : elements.any((e) {
+              final text = _textOf(e);
+              return text != null && re!.hasMatch(text);
+            });
       if (found == expect) return;
       await Future.delayed(const Duration(milliseconds: 100));
       await _sync.waitForSettled(timeout: const Duration(seconds: 1));
@@ -1759,7 +1782,8 @@ class ProbeExecutor {
       final texts = s['texts']!;
       final keys = s['keys']!;
       if (texts.isEmpty && keys.isEmpty) return '';
-      String fmt(List<String> l) => l.map((v) => '"${v.length > 40 ? '${v.substring(0, 40)}…' : v}"').join(', ');
+      // Not cut: the CLI masks resolved values before it prints, and a cut could print the start of one.
+      String fmt(List<String> l) => l.map((v) => '"$v"').join(', ');
       return ' — visible texts: [${fmt(texts)}], keys: [${fmt(keys)}]';
     } catch (_) {
       return '';
@@ -1856,18 +1880,24 @@ class ProbeExecutor {
     return null;
   }
 
-  String _textOf(Element e) {
+  /// The text a matched element shows, or null when there is none to show. An
+  /// obscured [EditableText] (a password field) gives null, so neither its
+  /// value nor any stand-in text reaches a `see` or `wait` message. Every
+  /// caller handles null.
+  String? _textOf(Element e) {
     final widget = e.widget;
     if (widget is Text) return widget.data ?? '';
     if (widget is RichText) return widget.text.toPlainText();
-    if (widget is EditableText) return widget.controller.text;
+    if (widget is EditableText)
+      return _finder.isSecretEditable(e) ? null : widget.controller.text;
     // TextField/TextFormField (and design-system wrappers around them) are
     // neither Text nor EditableText themselves — they build an EditableText
-    // several layers down. Reuse the same up/down search _findTextController
+    // several layers down. Reuse the same up/down search _findEditableTarget
     // already does for tap-to-focus and clear(), instead of returning '' for
     // every text field (see #field contains "..." always failed silently).
-    final controller = _findTextController(e);
-    if (controller != null) return controller.text;
+    final editable = _findEditableTarget(e);
+    if (editable != null)
+      return editable.obscured ? null : editable.controller.text;
     return '';
   }
 
@@ -1930,13 +1960,17 @@ class ProbeExecutor {
 /// The controller and real FocusNode of an EditableText resolved near a
 /// selector — see [ProbeExecutor._findEditableTarget].
 class _EditableTarget {
-  const _EditableTarget(this.controller, this.focusNode, [this.state]);
+  const _EditableTarget(this.controller, this.focusNode,
+      [this.state, this.obscured = false]);
   final TextEditingController controller;
   final FocusNode focusNode;
 
   /// The EditableText's state, when reachable — the entry point for
   /// keyboard-equivalent edits (see [ProbeExecutor._enterText]).
   final EditableTextState? state;
+
+  /// True for an obscured field (a password): its text is never read out.
+  final bool obscured;
 }
 
 // ---- Minimal gesture wrapper ----

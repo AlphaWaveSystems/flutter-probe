@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // Event describes a step boundary without depending on the runner.
@@ -100,9 +101,22 @@ func recordingSlug(s string) string {
 
 func (r *Recorder) warn(operation string, err error) error {
 	if err != nil {
-		r.warnings = append(r.warnings, operation+": "+RedactBody(err.Error()))
+		r.warnings = append(r.warnings, operation+": "+scrubText(err.Error()))
 	}
 	return err
+}
+
+// scrubText is what a recording writes for text the agent or the app produced: credential shapes are redacted, then
+// resolved environment values are masked with the same sysdialog.ScrubKnown the run uses for printed lines.
+func scrubText(s string) string { return sysdialog.ScrubKnown(RedactBody(s)) }
+
+// scrubHeaders is RedactHeaders with resolved environment values masked in the header values.
+func scrubHeaders(h map[string]string) map[string]string {
+	out := RedactHeaders(h)
+	for k, v := range out {
+		out[k] = sysdialog.ScrubKnown(v)
+	}
+	return out
 }
 
 // deviceCall contains failures (including faulty client panics) within recording.
@@ -126,7 +140,7 @@ func deviceCallWithin[T any](limit time.Duration, f func(context.Context) (T, er
 // screen as the step starts. The lookup has a two-second limit. A failed lookup is an advisory warning, and the step
 // runs as it would without recording.
 func (r *Recorder) interaction(client Client, t *Target) *Interaction {
-	in := &Interaction{Kind: t.Verb, Selector: RedactBody(t.Text)}
+	in := &Interaction{Kind: t.Verb, Selector: scrubText(t.Text)}
 	if client == nil {
 		return in
 	}
@@ -194,7 +208,7 @@ func (r *Recorder) start(ev Event) error {
 	r.timeline = Timeline{Steps: []Step{}}
 	r.open = make(map[int]bool)
 	r.exchanges = 0
-	r.manifest = Manifest{SchemaVersion: SchemaVersion, RunID: r.opts.RunID, TestName: ev.TestName, File: ev.File, Attempt: ev.Attempt, DeviceName: r.opts.Device, Platform: r.opts.Platform, OSVersion: r.opts.OSVersion, CLIVersion: r.opts.CLIVersion, StartedAt: ev.At, Status: "running", Capture: Capture{Screenshots: r.opts.Screenshots, Native: "off", Redaction: true}}
+	r.manifest = Manifest{SchemaVersion: SchemaVersion, RunID: r.opts.RunID, TestName: ev.TestName, File: ev.File, Attempt: ev.Attempt, DeviceName: r.opts.Device, Platform: r.opts.Platform, OSVersion: r.opts.OSVersion, CLIVersion: r.opts.CLIVersion, StartedAt: ev.At, Status: "running", Capture: Capture{Screenshots: r.opts.Screenshots, Native: "off", Redacted: redactedKinds(), NotRedacted: notRedactedKinds()}}
 	data, err := os.ReadFile(ev.File)
 	if err != nil {
 		r.warn("read test file", err)
@@ -244,7 +258,7 @@ func (r *Recorder) EndStep(client Client, ev Event) error {
 		return nil
 	}
 	step := &r.timeline.Steps[index]
-	step.Status, step.Error, step.DurationMs = ev.Status, RedactBody(ev.Error), ev.Duration.Milliseconds()
+	step.Status, step.Error, step.DurationMs = ev.Status, scrubText(ev.Error), ev.Duration.Milliseconds()
 	delete(r.open, index)
 	var result error
 	read, err := deviceCall(func(ctx context.Context) (Read, error) { return r.cursor.Next(ctx, client) })
@@ -256,7 +270,7 @@ func (r *Recorder) EndStep(client Client, ev Event) error {
 		for _, e := range read.Exchanges {
 			r.exchanges++
 			id := fmt.Sprintf("%04d", r.exchanges)
-			exchange := Exchange{ID: id, Seq: e.Seq, Method: e.Method, URL: RedactURL(e.URL), Status: e.Status, DurationMs: e.DurationMs, Mocked: e.Mocked, Error: RedactBody(e.Error), RequestHeaders: RedactHeaders(e.RequestHeaders), ResponseHeaders: RedactHeaders(e.ResponseHeaders), RequestBody: RedactBody(e.RequestBody), ResponseBody: RedactBody(e.ResponseBody), Source: "dart_io"}
+			exchange := Exchange{ID: id, Seq: e.Seq, Method: e.Method, URL: sysdialog.ScrubKnown(RedactURL(e.URL)), Status: e.Status, DurationMs: e.DurationMs, Mocked: e.Mocked, Error: scrubText(e.Error), RequestHeaders: scrubHeaders(e.RequestHeaders), ResponseHeaders: scrubHeaders(e.ResponseHeaders), RequestBody: scrubText(e.RequestBody), ResponseBody: scrubText(e.ResponseBody), Source: "dart_io"}
 			err := r.warn("write exchange", r.bundle.WriteExchange(exchange))
 			result = errors.Join(result, err)
 			if err == nil {
@@ -272,7 +286,7 @@ func (r *Recorder) EndStep(client Client, ev Event) error {
 			r.warn("capture tree", err)
 		} else {
 			id := fmt.Sprintf("%04d", step.Index)
-			err := r.warn("write tree", r.bundle.WriteTree(id, tree))
+			err := r.warn("write tree", r.bundle.WriteTree(id, sysdialog.ScrubKnown(tree)))
 			result = errors.Join(result, err)
 			if err == nil {
 				step.Tree = id

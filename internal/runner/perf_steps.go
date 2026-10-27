@@ -10,6 +10,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // perfRun is a measuring window that is open.
@@ -62,7 +63,8 @@ func (e *Executor) runPerf(ctx context.Context, s parser.PerfStep) error {
 	}
 	switch s.Kind {
 	case parser.PerfStart:
-		return e.startMeasuring(ctx, e.resolve(s.Name))
+		// The name is printed and written to reports and baselines, so a name built from an environment value is masked.
+		return e.startMeasuring(ctx, sysdialog.ScrubKnown(e.resolve(s.Name)))
 	case parser.PerfStop:
 		if e.perf.active == nil {
 			return fmt.Errorf("stop measuring: no measurement is running (start one with `start measuring \"name\"`)")

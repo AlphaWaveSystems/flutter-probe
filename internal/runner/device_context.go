@@ -523,7 +523,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		return nil, fmt.Errorf("reconnect: handshake: %w", err)
 	}
 	if warning != "" {
-		fmt.Printf("  \033[33m⚠\033[0m  %s\n", warning)
+		fmt.Printf("  \033[33m⚠\033[0m  %s\n", sysdialog.ScrubKnown(warning))
 	}
 
 	return client, nil
@@ -789,7 +789,7 @@ func (dc *DeviceContext) OpenDeepLink(ctx context.Context, url string) error {
 		fmt.Printf("    \033[33m⚠\033[0m  open link into the app is not supported on physical iOS devices — skipping\n")
 		return nil
 	}
-	fmt.Printf("    \033[36m🔗\033[0m  Opening %s via the OS (not the app's own url_launcher)\n", url)
+	fmt.Printf("    \033[36m🔗\033[0m  Opening %s via the OS (not the app's own url_launcher)\n", sysdialog.ScrubKnown(url))
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		if err := dc.Manager.ADB().OpenURLIn(ctx, dc.Serial, url, dc.AppID); err != nil {
@@ -813,7 +813,7 @@ func (dc *DeviceContext) AddMedia(ctx context.Context, localPath string) error {
 		fmt.Printf("    \033[33m⚠\033[0m  add media is not supported on physical iOS devices — skipping\n")
 		return nil
 	}
-	fmt.Printf("    \033[36m🖼\033[0m  Adding %s to the camera roll/gallery\n", localPath)
+	fmt.Printf("    \033[36m🖼\033[0m  Adding %s to the camera roll/gallery\n", sysdialog.ScrubKnown(localPath))
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		if err := dc.Manager.ADB().AddMedia(ctx, dc.Serial, localPath); err != nil {
