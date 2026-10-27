@@ -152,6 +152,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   font: inherit; font-size: 12px;
   min-width: 180px;
 }
+.run-tag {
+  background: var(--bg-1); color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius); padding: 4px 8px;
+  font: inherit; font-size: 12px;
+  width: 96px;
+}
 
 /* ------------------------------------------------------------------
    Layout grid
@@ -299,6 +306,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 #results-list li.perf { color: var(--fg-muted); font-size: 12px; font-family: monospace; padding-left: 28px; }
 #results-list li.empty { color: var(--fg-muted); padding: 12px; font-style: italic; }
+#results-list li.group-heading { color: var(--fg-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 10px 12px 4px; }
 #results-list li .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 #results-list li.pass .dot { background: var(--pass); }
 #results-list li.fail .dot { background: var(--fail); }
