@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/grandcat/zeroconf"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -120,13 +119,4 @@ func entryToDevice(e *zeroconf.ServiceEntry) WiFiDevice {
 		}
 	}
 	return dev
-}
-
-// Helper used by App methods to construct a default browse context tied to
-// the App's lifecycle.
-func discoveryContext(parent context.Context) (context.Context, context.CancelFunc) {
-	if parent == nil {
-		parent = context.Background()
-	}
-	return context.WithTimeout(parent, 24*time.Hour) // effectively forever; user stops manually
 }
