@@ -19,6 +19,7 @@ type fakeBackend struct {
 	connected string
 	wifiPort  int
 	ran       string
+	scope     RunScope
 	cancelled int
 	state     RunState
 	runErr    error
@@ -52,11 +53,12 @@ func (f *fakeBackend) Disconnect() { f.connected = "" }
 func (f *fakeBackend) Status() ConnectionStatus {
 	return ConnectionStatus{Connected: f.connected != "", DeviceID: f.connected}
 }
-func (f *fakeBackend) RunFileAsync(p string) error {
+func (f *fakeBackend) runFileAsync(p string, scope RunScope) error {
 	if f.runErr != nil {
 		return f.runErr
 	}
 	f.ran = p
+	f.scope = scope
 	return nil
 }
 func (f *fakeBackend) CancelRun()                      { f.cancelled++ }
