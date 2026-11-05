@@ -248,6 +248,57 @@ func TestRunFileAsyncRefusesAFileOutsideTheRootsBeforeItsScope(t *testing.T) {
 	}
 }
 
+// A run that is already in progress is refused by the call itself, not by a background run that silently does nothing.
+func TestRunFileAsyncRefusesAStartWhileARunHoldsTheSlot(t *testing.T) {
+	path := writeScopeFile(t, scopeFixture)
+	dir, _ := filepath.EvalSymlinks(filepath.Dir(path))
+	a := &App{conn: &connection{}, humanWorkspace: dir}
+	a.runCancel = func() {}
+	if err := a.runFileAsync(path, RunScope{}); err != errRunInProgress {
+		t.Errorf("runFileAsync while a run holds the slot: err %v; want errRunInProgress", err)
+	}
+}
+
+// A test that failed and has since been renamed or removed is left out of the re-run; the tests the file still has run.
+func TestFailedOnlyLeavesOutATestThatIsGone(t *testing.T) {
+	path := writeScopeFile(t, "test \"login\"\n  wait 1 seconds\n")
+	a := &App{}
+	a.failures.record(path, []runner.TestResult{
+		{TestName: "login", Row: -1, Passed: false},
+		{TestName: "renamed away", Row: -1, Passed: false},
+	})
+	sel, plan, err := a.resolveRunScope(path, RunScope{FailedOnly: true})
+	if err != nil {
+		t.Fatalf("failed-only with one failed test gone: err %v; want the test that still exists", err)
+	}
+	if len(sel.names) != 1 || sel.names[0] != "login" || len(plan.Tests) != 1 {
+		t.Errorf("failed-only: names %v, plan %+v; want only login", sel.names, plan.Tests)
+	}
+}
+
+// An explicit line of 0 or an empty tag names nothing, so run_file refuses it rather than running the whole file.
+func TestRunFileRefusesAnExplicitEmptyScope(t *testing.T) {
+	s, fb, _ := startTest(t)
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	fb.roots = []string{dir}
+	file := filepath.Join(dir, "x.probe")
+	if err := os.WriteFile(file, []byte("test \"x\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, params := range []map[string]any{
+		{"path": file, "line": 0},
+		{"path": file, "tag": ""},
+		{"path": file, "tag": "  @  "},
+	} {
+		if _, out := rpc(t, s, s.token, "run_file", params, nil); out["error"] == nil {
+			t.Errorf("run_file %v: started, want a refusal", params)
+		}
+	}
+	if fb.scope != (RunScope{}) {
+		t.Errorf("a refused run_file still reached the run with scope %+v", fb.scope)
+	}
+}
+
 // run_file passes its optional line, tag and failedOnly fields on to the run as its scope.
 func TestRunFileSendsItsScope(t *testing.T) {
 	s, fb, _ := startTest(t)

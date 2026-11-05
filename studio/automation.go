@@ -385,10 +385,10 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		return b.Status(), nil
 	case "run_file":
 		var p struct {
-			Path       string `json:"path"`
-			Line       int    `json:"line"`
-			Tag        string `json:"tag"`
-			FailedOnly bool   `json:"failedOnly"`
+			Path       string  `json:"path"`
+			Line       *int    `json:"line"`
+			Tag        *string `json:"tag"`
+			FailedOnly bool    `json:"failedOnly"`
 		}
 		if err := param(raw, &p); err != nil || p.Path == "" {
 			return nil, fmt.Errorf("run_file needs {\"path\": ...}")
@@ -397,8 +397,21 @@ func (s *automationServer) call(method string, raw json.RawMessage) (any, error)
 		if err != nil {
 			return nil, err
 		}
-		// line, tag and failedOnly pick part of the file, as the Run control's scope does: at most one of them.
-		scope := RunScope{Line: p.Line, Tag: p.Tag, FailedOnly: p.FailedOnly}
+		// line, tag and failedOnly pick part of the file, as the Run control's scope does: at most one of them. A line or
+		// tag that is sent must name something: an explicit 0 or an empty tag is refused, not read as the whole file.
+		scope := RunScope{FailedOnly: p.FailedOnly}
+		if p.Line != nil {
+			if *p.Line < 1 {
+				return nil, fmt.Errorf("line must be 1 or more; leave line out to run the whole file")
+			}
+			scope.Line = *p.Line
+		}
+		if p.Tag != nil {
+			if tagName(*p.Tag) == "" {
+				return nil, fmt.Errorf("tag needs a name, such as smoke; leave tag out to run the whole file")
+			}
+			scope.Tag = *p.Tag
+		}
 		if err := b.runFileAsync(real, scope); err != nil {
 			return nil, err
 		}
