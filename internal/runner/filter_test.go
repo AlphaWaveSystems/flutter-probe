@@ -66,3 +66,26 @@ func TestTestResultDefName(t *testing.T) {
 		}
 	}
 }
+
+// selectedName is the composite-test filter: every test is selected unless TestNames is set, and then only the named ones.
+func TestSelectedNameFollowsTestNames(t *testing.T) {
+	all := &Runner{opts: RunOptions{}}
+	named := &Runner{opts: RunOptions{TestNames: []string{"checkout"}}}
+	none := &Runner{opts: RunOptions{TestNames: []string{}}}
+	cases := []struct {
+		label string
+		r     *Runner
+		name  string
+		want  bool
+	}{
+		{"no filter selects a composite test", all, "payments", true},
+		{"a named composite test is selected", named, "checkout", true},
+		{"an unnamed composite test is not", named, "payments", false},
+		{"an empty name list selects nothing", none, "checkout", false},
+	}
+	for _, c := range cases {
+		if got := c.r.selectedName(c.name); got != c.want {
+			t.Errorf("%s: selectedName(%q) = %v, want %v", c.label, c.name, got, c.want)
+		}
+	}
+}

@@ -957,27 +957,26 @@ func (a *App) runScoped(requested string, scope RunScope) ([]RunResult, error) {
 	if conn == nil {
 		return nil, errNotConnected
 	}
-
-	// One run at a time; CancelRun stops it.
-	runCtx, cancel := context.WithCancel(a.ctx)
-	a.runMu.Lock()
-	if a.runCancel != nil {
-		a.runMu.Unlock()
-		cancel()
-		return nil, errRunInProgress
+	runCtx, cancel, err := a.claimRun()
+	if err != nil {
+		return nil, err
 	}
-	a.runCancel = cancel
-	a.runMu.Unlock()
-	defer func() {
-		a.runMu.Lock()
-		a.runCancel = nil
-		a.runMu.Unlock()
-		cancel()
-	}()
-
+	defer a.releaseRun(cancel)
 	sel, plan, err := a.resolveRunScope(path, scope)
 	if err != nil {
 		return nil, err
+	}
+	return a.executeRun(runCtx, path, sel, plan)
+}
+
+// executeRun runs the tests sel picks from path, whose scope is already resolved to plan. The caller holds the run slot
+// (see claimRun) and releases it. It emits the run events and records the results.
+func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, plan RunPlan) ([]RunResult, error) {
+	a.mu.Lock()
+	conn := a.conn
+	a.mu.Unlock()
+	if conn == nil {
+		return nil, errNotConnected
 	}
 	a.track.begin(path, plan)
 	a.emit("run:started", path)

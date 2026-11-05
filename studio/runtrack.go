@@ -1,6 +1,10 @@
 package main
 
-import "sync"
+import (
+	"context"
+	"errors"
+	"sync"
+)
 
 // maxTrackedSteps bounds the step history kept for a run (the newest are kept).
 const maxTrackedSteps = 2000
@@ -91,8 +95,8 @@ func (a *App) RunFileAsync(path string) error {
 	return a.runFileAsync(path, RunScope{})
 }
 
-// runFileAsync is RunFileAsync for a scope. The scope is resolved before the run starts in the background, so a scope
-// that cannot run is returned to the caller rather than lost.
+// runFileAsync is RunFileAsync for a scope. The run slot is taken and the scope resolved before this returns, so a run
+// that cannot start is returned to the caller rather than lost in the background; the background run uses that resolution.
 func (a *App) runFileAsync(path string, scope RunScope) error {
 	a.mu.Lock()
 	connected := a.conn != nil
@@ -100,20 +104,52 @@ func (a *App) runFileAsync(path string, scope RunScope) error {
 	if !connected {
 		return errNotConnected
 	}
-	a.runMu.Lock()
-	busy := a.runCancel != nil
-	a.runMu.Unlock()
-	if busy {
-		return errRunInProgress
-	}
 	// Refuse a path outside the allowed folders now, not inside the goroutine, so the caller hears about it.
 	checked, err := probeFileWithinRoots(a.automationRoots(), path)
 	if err != nil {
 		return err
 	}
-	if _, _, err := a.resolveRunScope(checked, scope); err != nil {
+	runCtx, cancel, err := a.claimRun()
+	if err != nil {
 		return err
 	}
-	go func() { _, _ = a.runScoped(checked, scope) }()
+	sel, plan, err := a.resolveRunScope(checked, scope)
+	if err != nil {
+		a.releaseRun(cancel)
+		return err
+	}
+	go func() {
+		defer a.releaseRun(cancel)
+		// A connection that drops after the checks above is reported in the run state: the caller has already returned.
+		if _, err := a.executeRun(runCtx, checked, sel, plan); errors.Is(err, errNotConnected) {
+			a.track.finish(nil, err)
+		}
+	}()
 	return nil
+}
+
+// claimRun takes the run slot for a run that is about to start. It fails at once when another run holds the slot, so a
+// caller learns that before it returns. The caller gives the slot back with releaseRun.
+func (a *App) claimRun() (context.Context, context.CancelFunc, error) {
+	parent := a.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(parent)
+	a.runMu.Lock()
+	defer a.runMu.Unlock()
+	if a.runCancel != nil {
+		cancel()
+		return nil, nil, errRunInProgress
+	}
+	a.runCancel = cancel
+	return runCtx, cancel, nil
+}
+
+// releaseRun gives back the run slot that claimRun took and stops the run's context.
+func (a *App) releaseRun(cancel context.CancelFunc) {
+	a.runMu.Lock()
+	a.runCancel = nil
+	a.runMu.Unlock()
+	cancel()
 }

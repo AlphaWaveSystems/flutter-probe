@@ -26,3 +26,16 @@ func TestStudioRunFileSendsTheScope(t *testing.T) {
 		}
 	}
 }
+
+// An explicit line of 0 is passed on as sent, so Studio refuses it rather than running the whole file.
+func TestStudioRunFileForwardsAnExplicitZeroLine(t *testing.T) {
+	calls := fakeStudio(t, map[string]any{"run_file": map[string]any{"started": true}})
+	callTool(t, "studio_run_file", map[string]any{"path": "/w/a.probe", "line": 0})
+	if len(*calls) != 1 {
+		t.Fatalf("got %d calls, want 1", len(*calls))
+	}
+	want := map[string]any{"path": "/w/a.probe", "line": float64(0)}
+	if got := (*calls)[0]["params"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("params = %v, want %v", got, want)
+	}
+}

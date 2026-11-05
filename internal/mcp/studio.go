@@ -170,22 +170,24 @@ func studioCall(method string, params any) (json.RawMessage, error) {
 // from the raw arguments: the string map the other tools read would hold an empty string for a number or a boolean.
 func studioRunParams(raw json.RawMessage) (map[string]any, error) {
 	var a struct {
-		Path       string `json:"path"`
-		Line       int    `json:"line"`
-		Tag        string `json:"tag"`
-		FailedOnly bool   `json:"failed_only"`
+		Path       string  `json:"path"`
+		Line       *int    `json:"line"`
+		Tag        *string `json:"tag"`
+		FailedOnly bool    `json:"failed_only"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return nil, fmt.Errorf("studio_run_file takes path (text), line (number), tag (text) and failed_only (true or false): %w", err)
 		}
 	}
+	// A line or tag the caller sent is passed on as sent, so Studio refuses an explicit 0 or an empty tag instead of running
+	// the whole file. A line or tag left out is not sent.
 	params := map[string]any{"path": a.Path}
-	if a.Line != 0 {
-		params["line"] = a.Line
+	if a.Line != nil {
+		params["line"] = *a.Line
 	}
-	if a.Tag != "" {
-		params["tag"] = a.Tag
+	if a.Tag != nil {
+		params["tag"] = *a.Tag
 	}
 	if a.FailedOnly {
 		params["failedOnly"] = true
