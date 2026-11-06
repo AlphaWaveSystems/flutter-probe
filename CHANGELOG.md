@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+- **Studio: two leftovers nothing used.** The `discoveryContext` helper in `studio/wifi_discovery.go` was never called (WiFi discovery builds its own context), and `studio/frontend/src/app.css` held Wails starter-template styles that nothing imported. No behavior changes. The third item in the issue, a commented-out `replace` in `studio/go.mod`, was already removed in #477. (#401)
+
 ## [0.26.1] - 2026-10-26
 
 ### Security
