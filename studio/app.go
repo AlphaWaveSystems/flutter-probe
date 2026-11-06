@@ -1035,8 +1035,10 @@ type RunStep struct {
 	Status      string  `json:"status"` // started | passed | failed | skipped
 	Duration    float64 `json:"durationMs"`
 	Error       string  `json:"error,omitempty"`
-	Attempt     int     `json:"attempt"`
-	Depth       int     `json:"depth"`
+	// Triage is the rule-based suggestion for a failed selector step (see triage.go); nil otherwise.
+	Triage  *StepTriage `json:"triage,omitempty"`
+	Attempt int         `json:"attempt"`
+	Depth   int         `json:"depth"`
 }
 
 func toRunStep(ev runner.StepEvent) RunStep {
@@ -1052,6 +1054,11 @@ func toRunStep(ev runner.StepEvent) RunStep {
 	}
 	if ev.Error != nil {
 		rs.Error = ev.Error.Error()
+	}
+	if ev.Status == runner.StepFailed {
+		if t, ok := triageStep(ev.Description, ev.SelectorIsID, rs.Error, ev.Duration); ok {
+			rs.Triage = &t
+		}
 	}
 	return rs
 }

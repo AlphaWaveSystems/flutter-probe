@@ -9,6 +9,7 @@
 
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { groupByOutcome, type Outcome } from "./run-scope";
+import { triageRows, type StepTriage } from "./triage";
 
 type RunResult = {
   name: string;
@@ -30,6 +31,8 @@ export type RunStep = {
   error?: string;
   attempt: number;
   depth: number;
+  // The rule-based suggestion for a failed selector step; absent otherwise (see triage.ts).
+  triage?: StepTriage;
 };
 
 export type RunPlan = { tests: { name: string; line: number; steps: number }[] | null };
@@ -182,6 +185,7 @@ function onStep(s: RunStep): void {
   li.setAttribute("aria-label", `step ${status}: ${s.description}${s.line > 0 ? ` (line ${s.line})` : ""}`);
   const duration = li.querySelector(".duration");
   if (duration) duration.textContent = `${Math.round(s.durationMs)}ms`;
+  let anchor: HTMLElement = li;
   if (s.error && (status === "fail" || status === "skip")) {
     li.title = s.error;
     if (status === "fail") {
@@ -190,6 +194,25 @@ function onStep(s: RunStep): void {
       errLi.textContent = s.error;
       li.insertAdjacentElement("afterend", errLi);
       pendingRows.push(errLi);
+      anchor = errLi;
+    }
+  }
+  if (status === "fail" && s.triage) {
+    // The suggested fix and the reason for a failed selector step, shown below its error (see triage.ts). The rows join
+    // pendingRows, so failure-first grouping keeps them with their test.
+    for (const row of triageRows(s.triage)) {
+      const triLi = document.createElement("li");
+      triLi.classList.add("step-triage");
+      const label = document.createElement("span");
+      label.classList.add("triage-label");
+      label.textContent = row.label;
+      const text = document.createElement("span");
+      text.classList.add("triage-text");
+      text.textContent = row.text;
+      triLi.append(label, text);
+      anchor.insertAdjacentElement("afterend", triLi);
+      pendingRows.push(triLi);
+      anchor = triLi;
     }
   }
   openSteps.delete(key);

@@ -39,6 +39,9 @@ type StepEvent struct {
 	At          time.Time     // wall-clock time this event was emitted
 	// Target is the element an action step acts on. It is set on StepStarted, and only when a recorder is attached.
 	Target *StepTarget
+	// SelectorIsID is true when the step's selector is an id (#name), not a text. The step text quotes both, so a
+	// consumer that needs to tell them apart (the Studio triage) reads this flag.
+	SelectorIsID bool
 }
 
 // StepTarget is the element an action step acts on. Text is the selector as the step resolved it, with resolved
@@ -88,6 +91,9 @@ func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status
 		Attempt:     e.stepAttempt,
 		Depth:       e.depth,
 		At:          time.Now(),
+	}
+	if a, ok := step.(parser.ActionStep); ok && a.Sel != nil {
+		ev.SelectorIsID = a.Sel.Kind == parser.SelectorID
 	}
 	if status == StepStarted && e.recorder != nil {
 		if a, ok := step.(parser.ActionStep); ok {

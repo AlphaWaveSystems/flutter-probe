@@ -327,6 +327,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #results-list li.step.skip .name { font-style: italic; }
 #results-list li.step .dot { width: 6px; height: 6px; }
 #results-list li.step-err { color: var(--fail); padding-left: 44px; white-space: pre-wrap; }
+/* The rule-based suggestion under a failed selector step: a fix line, then the reason. */
+#results-list li.step-triage { padding-left: 44px; color: var(--fg-muted); font-size: 12px; white-space: pre-wrap; }
+#results-list li.step-triage .triage-label { font-weight: 600; margin-right: 8px; }
+#results-list li.step-triage .triage-text { font-family: ui-monospace, SF Mono, Menlo, monospace; }
 
 /* Toolbar run progress + cancel */
 #btn-cancel[hidden], #run-progress[hidden] { display: none !important; }

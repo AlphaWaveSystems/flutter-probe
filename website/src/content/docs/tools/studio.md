@@ -100,7 +100,7 @@ Selecting a physical device shows what it needs in a line under the toolbar, ins
    ```
 3. **Open Studio.** Click the 📂 button in the Workspace pane and pick your project root (the folder containing `probe.yaml` and `tests/`).
 4. **Pick the device** in the toolbar dropdown (or use the 📡 WiFi button for a WiFi-connected physical device) and click **Connect**. The device pane should fill with a live mirror; the inspector pane gets a green pulsing **LIVE** badge.
-5. **Open a `.probe` file** from the Workspace pane (or write one inline) and click **Run**. Per-test results stream into the Results pane below. To run less than the file, pick the test at the cursor, the tagged tests or the failed tests in the scope control beside **Run**.
+5. **Open a `.probe` file** from the Workspace pane (or write one inline) and click **Run**. Per-test results stream into the Results pane below. To run less than the file, pick the test at the cursor, the tagged tests or the failed tests in the scope control beside **Run**. A failed `see` or `tap` on a text or an id shows, under the failed step, a suggested fix (for a text, a `wait until` line to try before the step) and the reason, from rules that run without AI.
 
 ## What the live view is, and its frame rate
 
