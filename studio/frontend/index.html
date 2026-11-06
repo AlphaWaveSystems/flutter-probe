@@ -17,6 +17,13 @@
         <button id="btn-run" class="btn btn-primary" disabled title="Run the open file">
           <span class="btn-icon">▶</span><span class="btn-label">Run</span>
         </button>
+        <select id="run-scope" class="select" title="What Run executes" aria-label="What to run">
+          <option value="file">Whole file</option>
+          <option value="line">Test at cursor</option>
+          <option value="tag">Tagged tests</option>
+          <option value="failed">Failed last run</option>
+        </select>
+        <input id="run-tag" class="run-tag" type="text" placeholder="smoke" hidden aria-label="Tag to run" autocomplete="off" spellcheck="false" />
         <button id="btn-cancel" class="btn btn-cancel" hidden title="Cancel the running test">
           <span class="btn-icon">■</span><span class="btn-label">Cancel</span>
         </button>

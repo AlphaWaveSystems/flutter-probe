@@ -44,9 +44,12 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 	},
 	{
 		Name:        "studio_run_file",
-		Description: "Start running a .probe file in Studio. Returns at once; poll studio_run_state for step-by-step progress and studio_results for the verdicts. The file must be a .probe file inside the open workspace or an automation folder; any other path is refused. Fails if Studio is not connected to a device or a run is already in progress.",
+		Description: "Start running a .probe file in Studio, or part of it: the test that contains a line (line), the tests with a tag (tag), or the tests that failed the last time the file ran in Studio (failed_only). Give at most one of line, tag and failed_only; with none, the whole file runs. The file must be a .probe file inside the open workspace or an automation folder; any other path is refused. Returns at once; poll studio_run_state for step-by-step progress and studio_results for the verdicts. Fails if Studio is not connected to a device, a run is already in progress, or no test matches the scope.",
 		InputSchema: mcpSchema{Type: "object", Required: []string{"path"}, Properties: map[string]mcpProp{
-			"path": {Type: "string", Description: "Absolute path of the .probe file"},
+			"path":        {Type: "string", Description: "Absolute path of the .probe file"},
+			"line":        {Type: "integer", Description: "Run the test that contains this 1-based line of the file"},
+			"tag":         {Type: "string", Description: "Run the tests that carry this tag, for example smoke (the @ is optional)"},
+			"failed_only": {Type: "boolean", Description: "Re-run the tests that failed the last time this file ran in Studio"},
 		}},
 	},
 	{
@@ -56,7 +59,7 @@ Studio automation is off by default: if no Studio answers, start it with PROBE_S
 	},
 	{
 		Name:        "studio_run_state",
-		Description: "The state of the current or last run in Studio: running, the plan (tests and step counts), the step being executed now (line, description), the finished steps with their verdicts and the test results so far.",
+		Description: "The state of the current or last run in Studio: running, the plan (tests and step counts), the step being executed now (line, description), the finished steps with their verdicts and the test results so far. A failed see or tap on a text or an id carries a triage: a suggested fix line (when the rules have one) and a reason. The triage is rule-based and runs without AI.",
 		InputSchema: mcpSchema{Type: "object"},
 	},
 	{
@@ -163,7 +166,36 @@ func studioCall(method string, params any) (json.RawMessage, error) {
 	return out.Result, nil
 }
 
-func (s *Server) studioTool(id any, name string, args map[string]string) *mcpResponse {
+// studioRunParams reads the arguments of studio_run_file. Its line and failed_only fields are typed, so they are decoded
+// from the raw arguments: the string map the other tools read would hold an empty string for a number or a boolean.
+func studioRunParams(raw json.RawMessage) (map[string]any, error) {
+	var a struct {
+		Path       string  `json:"path"`
+		Line       *int    `json:"line"`
+		Tag        *string `json:"tag"`
+		FailedOnly bool    `json:"failed_only"`
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &a); err != nil {
+			return nil, fmt.Errorf("studio_run_file takes path (text), line (number), tag (text) and failed_only (true or false): %w", err)
+		}
+	}
+	// A line or tag the caller sent is passed on as sent, so Studio refuses an explicit 0 or an empty tag instead of running
+	// the whole file. A line or tag left out is not sent.
+	params := map[string]any{"path": a.Path}
+	if a.Line != nil {
+		params["line"] = *a.Line
+	}
+	if a.Tag != nil {
+		params["tag"] = *a.Tag
+	}
+	if a.FailedOnly {
+		params["failedOnly"] = true
+	}
+	return params, nil
+}
+
+func (s *Server) studioTool(id any, name string, args map[string]string, rawArgs json.RawMessage) *mcpResponse {
 	method, params := "", map[string]any{}
 	switch name {
 	case "studio_open_workspace":
@@ -192,7 +224,11 @@ func (s *Server) studioTool(id any, name string, args map[string]string) *mcpRes
 			return textResp(id, "studio_connect needs device_id, or host with port and token", fmt.Errorf("missing arguments"))
 		}
 	case "studio_run_file":
-		method, params = "run_file", map[string]any{"path": args["path"]}
+		runParams, err := studioRunParams(rawArgs)
+		if err != nil {
+			return textResp(id, err.Error(), err)
+		}
+		method, params = "run_file", runParams
 	case "studio_cancel":
 		method = "cancel"
 	case "studio_run_state":

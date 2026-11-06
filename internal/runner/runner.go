@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,6 +38,20 @@ type TestResult struct {
 	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
 	StartedAt  time.Time        // when the (last) attempt started
 	AttemptLog []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
+}
+
+// DefName is the test's name as the file writes it. The result of a data-driven row carries " [row N]" after it, and
+// DefName drops that suffix, so every row of a test shares one name.
+func (r TestResult) DefName() string {
+	if r.Row < 0 {
+		return r.TestName
+	}
+	return strings.TrimSuffix(r.TestName, rowName("", r.Row))
+}
+
+// rowName is the result name of data-driven row (0-based) of the test called name.
+func rowName(name string, row int) string {
+	return fmt.Sprintf("%s [row %d]", name, row+1)
 }
 
 // AttemptOutcome is what one attempt of a test did. A test that failed and then passed on a retry keeps the
@@ -77,6 +92,7 @@ type RunOptions struct {
 
 	Files        []string // .probe files to run
 	Tags         []string // filter by tag
+	TestNames    []string // run only the tests with these names (composite tests too); nil runs every test
 	Watch        bool     // re-run on file change
 	Timeout      time.Duration
 	DryRun       bool   // parse only
@@ -292,6 +308,9 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 	// Run composite tests. If no CompositeRunner is configured, skip them
 	// and report each as SKIPPED with a descriptive reason.
 	for _, ct := range prog.CompositeTests {
+		if !r.selectedName(ct.Name) {
+			continue
+		}
 		var res TestResult
 		if r.compositeRunner == nil {
 			res = TestResult{
@@ -512,7 +531,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 
 	name := t.Name
 	if row >= 0 && t.Examples != nil {
-		name = fmt.Sprintf("%s [row %d]", t.Name, row+1)
+		name = rowName(t.Name, row)
 	}
 
 	exec.closePerf(ctx)
@@ -617,8 +636,17 @@ func (r *Runner) missingUsesNote() string {
 	return " — note: these `use` targets do not exist: " + strings.Join(r.missingUses, "; ")
 }
 
-// filterTests removes tests that don't match the tag filter.
+// filterTests keeps the tests the run selects: those named in TestNames when it is set, then those carrying a tag from Tags.
 func (r *Runner) filterTests(tests []parser.TestDef) []parser.TestDef {
+	if r.opts.TestNames != nil {
+		var named []parser.TestDef
+		for _, t := range tests {
+			if r.selectedName(t.Name) {
+				named = append(named, t)
+			}
+		}
+		tests = named
+	}
 	if len(r.opts.Tags) == 0 {
 		return tests
 	}
@@ -634,6 +662,11 @@ func (r *Runner) filterTests(tests []parser.TestDef) []parser.TestDef {
 		}
 	}
 	return filtered
+}
+
+// selectedName reports whether the run selects a test called name: every test is selected unless TestNames is set.
+func (r *Runner) selectedName(name string) bool {
+	return r.opts.TestNames == nil || slices.Contains(r.opts.TestNames, name)
 }
 
 // CollectFiles finds all .probe files under the given paths.
