@@ -127,6 +127,10 @@ git grep -n "flutter_probe_agent: *\^0" -- README.md website probe_agent/README.
 - **Grammar**: if the parser changed, the EBNF page and `internal/parser/grammar_test.go` are updated in the same PR.
 - **Surfaces**: README, `probe_agent/README.md`, the website pages the release touches, `llms.txt`, the MCP guide in `internal/mcp/server.go`, the VS Code
   README, snippets and completions, the wiki.
+- **Licence verification key**: a client release that lets customers upload reports must embed the production public key. Add one
+  `TrustedKey{KID: ..., PublicKey: ...}` line to `trustedKeys` in `internal/license/license.go`, then run `go test ./internal/license/`:
+  `TestEmbeddedTrustedKeysAreWellFormed` checks its key id and key. Do not cut the release for customer uploads while that list is
+  empty, since a licence key can then not be verified. Never embed a key from a test (`TestReleaseKeySetEmbedsNoTestKey`).
 
 ## After a stable tag: verify
 
