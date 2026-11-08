@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -55,18 +56,64 @@ func TestCheckKeyRejectsAMalformedKey(t *testing.T) {
 	}
 }
 
-// TestEmbeddedTrustedKeysAreWellFormed checks the list a release embeds. It passes on an empty list. Once a production key
-// is added, a typo in its key id or public key, or a key id listed twice, fails here before a release is cut.
-func TestEmbeddedTrustedKeysAreWellFormed(t *testing.T) {
+// checkKeys returns one error for each malformed key in a list, and one for each key id that is listed a second time.
+func checkKeys(keys []TrustedKey) []error {
+	var errs []error
 	seen := map[string]bool{}
-	for _, k := range trustedKeys {
+	for _, k := range keys {
 		if err := checkKey(k); err != nil {
-			t.Errorf("embedded key: %v", err)
+			errs = append(errs, err)
 		}
 		if seen[k.KID] {
-			t.Errorf("key id %s is embedded twice", k.KID)
+			errs = append(errs, fmt.Errorf("key id %s is listed twice", k.KID))
 		}
 		seen[k.KID] = true
+	}
+	return errs
+}
+
+// TestEmbeddedTrustedKeysAreWellFormed checks the list a release embeds. The list is empty in this release, so the test
+// passes; once a production key is added it fails on a typo in that key's id or public key, or on a key id listed twice.
+func TestEmbeddedTrustedKeysAreWellFormed(t *testing.T) {
+	for _, err := range checkKeys(trustedKeys) {
+		t.Errorf("embedded key: %v", err)
+	}
+}
+
+func TestCheckKeysAcceptsAGoodList(t *testing.T) {
+	_, pub := testKey(testSeed())
+	_, pub2 := testKey(append([]byte{0xff}, make([]byte, 31)...))
+	if errs := checkKeys([]TrustedKey{{KID: "k1", PublicKey: pub}, {KID: "k2", PublicKey: pub2}}); len(errs) != 0 {
+		t.Fatalf("a good list gave %v", errs)
+	}
+	if errs := checkKeys(nil); len(errs) != 0 {
+		t.Fatalf("the empty list gave %v", errs)
+	}
+}
+
+func TestCheckKeysReportsADuplicateKeyID(t *testing.T) {
+	_, pub := testKey(testSeed())
+	_, pub2 := testKey(append([]byte{0xff}, make([]byte, 31)...))
+	errs := checkKeys([]TrustedKey{{KID: "k1", PublicKey: pub}, {KID: "k1", PublicKey: pub2}})
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "listed twice") {
+		t.Fatalf("errs = %v, want one duplicate key id error", errs)
+	}
+}
+
+func TestCheckKeysReportsAMalformedKey(t *testing.T) {
+	_, pub := testKey(testSeed())
+	errs := checkKeys([]TrustedKey{{KID: "k1", PublicKey: pub}, {KID: "k2", PublicKey: "not a key!"}})
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "key k2") {
+		t.Fatalf("errs = %v, want one error for key k2", errs)
+	}
+}
+
+func TestCheckKeysReportsEveryProblem(t *testing.T) {
+	_, pub := testKey(testSeed())
+	// The second entry repeats k1 and has a malformed public key: a duplicate and a malformed key, so two errors.
+	errs := checkKeys([]TrustedKey{{KID: "k1", PublicKey: pub}, {KID: "k1", PublicKey: "bad"}})
+	if len(errs) != 2 {
+		t.Fatalf("errs = %v, want the duplicate and the malformed key", errs)
 	}
 }
 
@@ -77,6 +124,21 @@ func embedKeys(t *testing.T, keys ...TrustedKey) {
 	saved := trustedKeys
 	trustedKeys = keys
 	t.Cleanup(func() { trustedKeys = saved })
+}
+
+// TestEmbedKeysRestoresTheList runs embedKeys in a subtest, whose cleanup finishes before the subtest returns. The list must
+// be back to what it was whatever order the tests run in, so no test sees another test's keys.
+func TestEmbedKeysRestoresTheList(t *testing.T) {
+	before := trustedKeys
+	t.Run("sets a key", func(t *testing.T) {
+		embedKeys(t, TrustedKey{KID: "k1", PublicKey: "unused"})
+		if len(trustedKeys) != 1 {
+			t.Fatalf("embedKeys did not set the list: %v", trustedKeys)
+		}
+	})
+	if !reflect.DeepEqual(trustedKeys, before) {
+		t.Fatalf("trustedKeys = %v after embedKeys, want the original %v", trustedKeys, before)
+	}
 }
 
 // liveClaims are claims that are valid now, for a key signed at the current time.
