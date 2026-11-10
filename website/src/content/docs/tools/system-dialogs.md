@@ -43,7 +43,7 @@ tap "Allow" in system dialog optional
   same, so `tap "Don't Allow"` matches iOS's "Don’t Allow".
 - **Title filter**: an optional second string narrows to a dialog whose text contains it. Without one, the first
   system dialog is used.
-- **`dismiss system dialog`** taps the first of Cancel, Don't Allow, Not Now, Close, Dismiss, Later, No Thanks. It
+- **`dismiss system dialog`** taps the first of Cancel, Don't Allow, Not Now, Close, Dismiss, Later, No Thanks, Ask App Not to Track (the decline button of the App Tracking Transparency alert). It
   does nothing (and passes) when no dialog is showing.
 - **`optional`** on any step turns "no dialog showed up" into a warning instead of a failure, which keeps flows
   idempotent.

@@ -465,7 +465,7 @@ type "$PROBE_SANDBOX_PASSWORD" into system field "Password"
 see system dialog "Sign in to Apple Account"
 don't see system dialog "Notifications"
 wait for system dialog "Notifications" appears       # or: disappears
-dismiss system dialog                                # Cancel / Don't Allow / Not Now; no-op if none
+dismiss system dialog                                # Cancel / Don't Allow / Not Now / Ask App Not to Track; no-op if none
 sign in sandbox tester                               # StoreKit sandbox account; no-op if no sheet appears
 tap "Allow" in system dialog optional                # any step: don't fail when no dialog shows up
 ```

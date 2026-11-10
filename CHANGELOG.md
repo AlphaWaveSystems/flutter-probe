@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - **The embedded license key list has a test.** The test checks each embedded key's key id and Ed25519 public key, and that no key id is listed twice. It passes on the empty list in this release. A license signed with the matching private key verifies once its key is embedded, and one signed with another key is refused. Embedding the production public key before a client release lets customers upload reports is a manual release checklist item; no test enforces it. Verification itself is unchanged.
 
+### Fixed
+- **`dismiss system dialog` finds the App Tracking Transparency decline button.** On iOS, `dismiss system dialog` and `probe system-dialog dismiss` now tap "Ask App Not to Track". On Android, "No, thanks" counts as a cancel button. The iOS driver's own fallback list has the same label; that part reaches users with the next `probe-ios-driver.zip`. Only the English ATT label is included. Other languages are not measured yet.
+
 ## [0.26.1] - 2026-10-26
 
 ### Security

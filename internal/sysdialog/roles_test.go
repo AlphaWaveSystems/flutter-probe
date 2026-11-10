@@ -69,6 +69,30 @@ func TestDismissButtonByRole(t *testing.T) {
 	}
 }
 
+// TestDismissButtonTakesTheDeclineButtonOfEachAlert covers the App Tracking Transparency decline button on iOS and
+// the "No, thanks" button on Android, in either button order.
+func TestDismissButtonTakesTheDeclineButtonOfEachAlert(t *testing.T) {
+	cases := []struct {
+		name    string
+		buttons []string
+		want    int
+	}{
+		{"ATT decline second", []string{"Allow", "Ask App Not to Track"}, 1},
+		{"ATT decline first", []string{"Ask App Not to Track", "Allow"}, 0},
+		{"Android no thanks", []string{"Allow", "No, thanks"}, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if i := DismissButton(Dialog{Buttons: tc.buttons}); i != tc.want {
+				t.Errorf("DismissButton(%q) = %d, want %d", tc.buttons, i, tc.want)
+			}
+		})
+	}
+	if r, ok := RoleOf("Ask App Not to Track"); !ok || r != RoleDeny {
+		t.Errorf("RoleOf(Ask App Not to Track) = %v, %v; want deny", r, ok)
+	}
+}
+
 func TestRoleOfMeasuredIOSLabels(t *testing.T) {
 	cases := map[string]Role{
 		"Nicht erlauben":                  RoleDeny,

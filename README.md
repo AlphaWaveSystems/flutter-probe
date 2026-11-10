@@ -474,7 +474,7 @@ tap "Allow" in system dialog                        # permission alert button
 type "$PROBE_SANDBOX_PASSWORD" into system field "Password"   # value from the environment, always masked
 see system dialog "Sign in to Apple Account"
 wait for system dialog "Notifications" appears
-dismiss system dialog                                # Cancel / Don't Allow / Not Now
+dismiss system dialog                                # Cancel / Don't Allow / Not Now / Ask App Not to Track
 sign in sandbox tester                               # StoreKit sandbox account, idempotent
 tap "Allow" in system dialog optional                # no-op when no dialog shows up
 ```

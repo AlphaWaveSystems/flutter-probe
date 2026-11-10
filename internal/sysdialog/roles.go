@@ -21,15 +21,15 @@ const (
 // englishRoles are the English (iOS and Android) labels of each role, folded.
 var englishRoles = map[string]Role{
 	"allow": RoleAllow, "yes": RoleAllow,
-	"don't allow": RoleDeny, "deny": RoleDeny, "deny & don't ask again": RoleDeny, "block": RoleDeny,
+	"don't allow": RoleDeny, "deny": RoleDeny, "deny & don't ask again": RoleDeny, "block": RoleDeny, "ask app not to track": RoleDeny,
 	"allow once": RoleAllowOnce, "only this time": RoleAllowOnce, "this time only": RoleAllowOnce,
 	"allow while using app": RoleAllowWhileUsing, "while using the app": RoleAllowWhileUsing,
 	"allow while using the app": RoleAllowWhileUsing,
-	"allow all the time": RoleAllowAlways, "allow always": RoleAllowAlways,
+	"allow all the time":        RoleAllowAlways, "allow always": RoleAllowAlways,
 	"ok": RoleOK, "got it": RoleOK, "continue": RoleOK,
-	"cancel": RoleCancel, "no thanks": RoleCancel, "no": RoleCancel,
+	"cancel": RoleCancel, "no thanks": RoleCancel, "no, thanks": RoleCancel, "no": RoleCancel,
 	"not now": RoleNotNow, "later": RoleNotNow, "maybe later": RoleNotNow, "ask me later": RoleNotNow,
-	"open": RoleOpen,
+	"open":  RoleOpen,
 	"close": RoleClose, "dismiss": RoleClose,
 }
 
