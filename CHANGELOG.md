@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Tests
+- Expanded Studio recorder unit tests for event-to-ProbeScript mapping, selector edge cases, and parser compatibility (#404).
+
 ## [0.26.1] - 2026-10-26
 
 ### Security
