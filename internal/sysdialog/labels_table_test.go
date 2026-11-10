@@ -2,6 +2,73 @@ package sysdialog
 
 import "testing"
 
+// TestSystemLabelsResolveToTheirRole checks every label of the system alerts in every locale: each must resolve to the
+// role it is listed under, unambiguously. The count is the number of locales in the iOS 26.5 TCC bundle they were read from.
+func TestSystemLabelsResolveToTheirRole(t *testing.T) {
+	if len(iosSystemLabels) != 55 {
+		t.Errorf("expected 55 system alert locales, got %d", len(iosSystemLabels))
+	}
+	for loc, byRole := range iosSystemLabels {
+		for role, labels := range byRole {
+			for _, label := range labels {
+				if got, ok := LabelRole(label); !ok || got != role {
+					t.Errorf("system label %s %s %q: LabelRole = (%q, %v), want %s", loc, role, label, got, ok, role)
+				}
+			}
+		}
+	}
+}
+
+// measuredToSystem maps each measured language to its locale in the system bundle.
+var measuredToSystem = map[string]string{
+	"en": "en", "de": "de", "fr": "fr", "es": "es", "it": "it", "pt-BR": "pt_BR", "nl": "nl", "sv": "sv", "da": "da",
+	"nb": "no", "fi": "fi", "pl": "pl", "cs": "cs", "tr": "tr", "ru": "ru", "uk": "uk", "el": "el", "he": "he", "ar": "ar",
+	"hi": "hi", "th": "th", "vi": "vi", "id": "id", "ja": "ja", "ko": "ko", "zh-Hans": "zh_CN", "zh-Hant": "zh_TW",
+}
+
+// TestMeasuredLanguagesHaveSystemLabels checks that each measured language has a system locale, and that every label
+// measured on a device still resolves to the same role once the system labels are added.
+func TestMeasuredLanguagesHaveSystemLabels(t *testing.T) {
+	for tag, byRole := range iosRoleLabels {
+		loc, ok := measuredToSystem[tag]
+		if !ok {
+			t.Errorf("measured language %s has no system locale", tag)
+			continue
+		}
+		if _, ok := iosSystemLabels[loc]; !ok {
+			t.Errorf("system locale %s for %s is missing", loc, tag)
+		}
+		for role, labels := range byRole {
+			for _, label := range labels {
+				if got, ok := LabelRole(label); !ok || got != role {
+					t.Errorf("measured %s %s %q: LabelRole = (%q, %v), want %s", tag, role, label, got, ok, role)
+				}
+			}
+		}
+	}
+}
+
+func TestDismissButtonTakesTheDeclineInOtherLanguages(t *testing.T) {
+	cases := []struct {
+		name    string
+		buttons []string
+		want    int
+	}{
+		{"German ATT", []string{"Erlauben", "App-Tracking ablehnen"}, 1},
+		{"French ATT", []string{"Autoriser", "Demander à l’app de ne pas me suivre"}, 1},
+		{"Japanese ATT", []string{"許可", "アプリにトラッキングしないように要求"}, 1},
+		{"Dutch camera", []string{"Sta toe", "Weiger"}, 1},
+		{"German location keeps the allow-once button", []string{"Einmal erlauben", "Beim Verwenden der App erlauben", "Nicht erlauben"}, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if i := DismissButton(Dialog{Buttons: tc.buttons}); i != tc.want {
+				t.Errorf("DismissButton(%q) = %d, want %d", tc.buttons, i, tc.want)
+			}
+		})
+	}
+}
+
 func TestLabelRole(t *testing.T) {
 	tests := []struct {
 		label string
