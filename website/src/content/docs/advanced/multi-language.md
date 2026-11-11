@@ -51,8 +51,8 @@ deny permission "notifications"
 dismiss system dialog                    # the cancel-like button in the device's language
 ```
 
-On Android the roles come from the permission dialog's language-independent resource ids; on iOS from a table of labels measured
-on real simulators for each language. Measured for allow, deny, allow once and allow while using in 27 languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). `ok`, `cancel` and `open` labels outside English are not measured yet (use the exact label, or `dismiss system dialog`). An exact label of the device always wins over a role.
+On Android the roles come from the permission dialog's language-independent resource ids; on iOS from a table of labels for the 55
+locales of the iOS 26.5 runtime, read from the system's own localization strings (allow, deny including the App Tracking Transparency decline, allow once, allow while using). Measured on real simulators for allow, deny, allow once and allow while using in 27 of those languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). The other 28 locales come from the runtime strings only and are not measured on a device. The App Tracking Transparency decline was checked live on a simulator in English, German, French, Japanese and Arabic. `ok`, `cancel` and `open` labels outside English are not measured yet (use the exact label, or `dismiss system dialog`). An exact label of the device always wins over a role.
 
 ## Changing the app language
 
