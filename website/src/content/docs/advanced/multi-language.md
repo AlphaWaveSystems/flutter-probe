@@ -44,7 +44,7 @@ When the label differs per language, list them: `see any of "Save", "Speichern",
 Permission alerts are drawn in the **device** language. Their buttons are resolved by **role** (allow, deny, allow once,
 allow while using), so the script you write in English works on a German or Japanese device. On iOS that covers the 55 locales
 of the iOS 26.5 runtime; on Android the permission dialog's resource ids work in any language. OK, cancel, not now, open and
-close are known only in English, so use the exact label for them there:
+close are known only in English, so use the exact label for them there. `deny permission "notifications"` answers the notification alert by its Allow and Don't Allow labels; it has not been run against a real notification alert in every language:
 
 ```probe
 tap "Don't Allow" in system dialog      # finds "Nicht erlauben", "許可しない", ...
@@ -53,7 +53,7 @@ dismiss system dialog                    # declines a permission or tracking ale
 ```
 
 On Android the roles come from the permission dialog's language-independent resource ids; on iOS from a table of labels for the 55
-locales of the iOS 26.5 runtime, read from the system's own localization strings (allow, deny including the App Tracking Transparency decline, allow once, allow while using). Measured on real simulators for allow, deny, allow once and allow while using in 27 of those languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). The other 28 locales come from the runtime strings only and are not measured on a device. The App Tracking Transparency decline was checked live on a simulator in English, German, French, Japanese and Arabic. `ok`, `cancel` and `open` labels outside English are not measured yet (use the exact label, or `dismiss system dialog`). An exact label of the device always wins over a role.
+locales of the iOS 26.5 runtime, read from the system's own localization strings (allow, deny including the App Tracking Transparency decline, allow once, allow while using). Measured on real simulators for allow, deny, allow once and allow while using in 27 of those languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). The other 28 locales come from the runtime strings only and are not measured on a device. The App Tracking Transparency decline was checked live on a simulator in English, German, French, Japanese and Arabic. The `ok`, `cancel`, `not now`, `open` and `close` roles are known only in English: in another language, use the exact label. `dismiss system dialog` declines a permission or tracking alert in the 55 iOS locales, because its decline is a deny button, but it does not know other cancel buttons in other languages. An exact label of the device always wins over a role.
 
 ## Changing the app language
 

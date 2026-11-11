@@ -126,13 +126,13 @@ func TestTrackingPromptIsNotAPermissionAlert(t *testing.T) {
 // (U+00A0) in cs, pl, ru and sk, and a zero-width non-joiner (U+200C) in kn, or and te. The table keeps the exact
 // characters, so these are checked byte for byte.
 var attInvisible = []struct{ locale, decline string }{
-	{"cs", "Požádat aplikaci o nesledování"},
-	{"pl", "Poproś aplikację o nieśledzenie"},
-	{"ru", "Попросить не отслеживать"},
-	{"sk", "Požiadať apku o nesledovanie"},
-	{"kn", "ಆ್ಯಪ್‌ಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
-	{"or", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍‌କୁ କୁହନ୍ତୁ"},
-	{"te", "ట్ర్యాక్ చేయకూడదని యాప్‌కి చెప్పండి"},
+	{"cs", "Požádat aplikaci o\u00a0nesledování"},
+	{"pl", "Poproś aplikację o\u00a0nieśledzenie"},
+	{"ru", "Попросить не\u00a0отслеживать"},
+	{"sk", "Požiadať apku o\u00a0nesledovanie"},
+	{"kn", "ಆ್ಯಪ್\u200cಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
+	{"or", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍\u200cକୁ କୁହନ୍ତୁ"},
+	{"te", "ట్ర్యాక్ చేయకూడదని యాప్\u200cకి చెప్పండి"},
 }
 
 func TestATTDeclineKeepsItsInvisibleCharacters(t *testing.T) {
@@ -141,17 +141,28 @@ func TestATTDeclineKeepsItsInvisibleCharacters(t *testing.T) {
 			if got := iosATTDecline[c.locale]; got != c.decline {
 				t.Errorf("iosATTDecline[%s] = %q, want %q", c.locale, got, c.decline)
 			}
-			if !strings.ContainsAny(c.decline, " ‌") {
+			if !strings.ContainsAny(c.decline, "\u00a0\u200c") {
 				t.Errorf("%q has no no-break space or ZWNJ, so the case tests nothing special", c.decline)
 			}
 			if !IsTrackingDecline(c.decline) {
 				t.Errorf("IsTrackingDecline(%q) = false", c.decline)
 			}
 			// Folding turns a no-break space into a plain one, so the plain-space form is recognised too.
-			if strings.Contains(c.decline, " ") && !IsTrackingDecline(strings.ReplaceAll(c.decline, " ", " ")) {
+			if strings.Contains(c.decline, "\u00a0") && !IsTrackingDecline(strings.ReplaceAll(c.decline, "\u00a0", " ")) {
 				t.Errorf("the plain-space form of %q is not recognised", c.decline)
 			}
 		})
+	}
+}
+
+// TestTapDontAllowFindsTheTrackingDecline: "Don't Allow" resolves by role, so on the ATT alert it finds the decline
+// button in every locale, not the Allow button.
+func TestTapDontAllowFindsTheTrackingDecline(t *testing.T) {
+	for _, c := range attCases {
+		d := Dialog{Buttons: []string{c.allow, c.decline}}
+		if i := MatchButton(d, "Don't Allow"); i != 1 {
+			t.Errorf("%s: MatchButton(Don't Allow) = %d on %q, want the decline at 1", c.locale, i, d.Buttons)
+		}
 	}
 }
 

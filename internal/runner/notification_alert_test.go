@@ -19,7 +19,7 @@ var attAlerts = []struct{ locale, allow, decline string }{
 	{"fr", "Autoriser", "Demander à l’app de ne pas me suivre"},
 	{"ja", "許可", "アプリにトラッキングしないように要求"},
 	{"ar", "السماح", "مطالبة التطبيق بعدم التتبع"},
-	{"ru", "Разрешить", "Попросить не отслеживать"},
+	{"ru", "Разрешить", "Попросить не\u00a0отслеживать"},
 }
 
 var notificationAlerts = []struct{ locale, allow, deny string }{

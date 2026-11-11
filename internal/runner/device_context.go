@@ -1044,8 +1044,9 @@ func (dc *DeviceContext) answerNotificationAlertWithin(ctx context.Context, butt
 	if err != nil {
 		return fmt.Errorf("notifications: %w", err)
 	}
-	// The notification alert is recognised by its buttons (Allow + Don't Allow, in any language),
-	// not by its English title, so it works on a device set to any language.
+	// The notification alert is recognised by its buttons (Allow + Don't Allow),
+	// not by its English title. Its labels come from labels_table.go, so a device language
+	// missing from that table is not recognised.
 	deadline := time.Now().Add(wait)
 	for {
 		dialogs, err := d.Dialogs(ctx)
