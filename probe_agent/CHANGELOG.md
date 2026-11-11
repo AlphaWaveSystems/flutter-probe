@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.26.2 - 2026-11-11
+
+- No agent change (`flutter_probe_agent` is released in step with the CLI).
+
 ## 0.26.1 - 2026-10-26
 
 - Security: secret text in password and credential-named fields is no longer listed or read as text in warnings, widget summaries or recordings.
