@@ -2,6 +2,7 @@ package sysdialog
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -35,7 +36,7 @@ var attCases = []struct{ locale, allow, decline string }{
 	{"it", "Consenti", "Non tracciarmi"},
 	{"ja", "許可", "アプリにトラッキングしないように要求"},
 	{"kk", "Рұқсат беру", "Қолданбадан қадағаламауды сұрау"},
-	{"kn", "ಅನುಮತಿಸಿ", "ಆ್ಯಪ್‌ಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
+	{"kn", "ಅನುಮತಿಸಿ", "ಆ್ಯಪ್\u200cಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
 	{"ko", "허용", "앱에 추적 금지 요청"},
 	{"lt", "Leisti", "Paprašyti programos nesekti"},
 	{"ml", "അനുവദിക്കൂ", "ട്രാക്ക് ചെയ്യരുതെന്ന് ആപ്പിനോട് ആവശ്യപ്പെടൂ"},
@@ -43,7 +44,7 @@ var attCases = []struct{ locale, allow, decline string }{
 	{"ms", "Benarkan", "Minta App untuk Tidak Menjejak"},
 	{"nl", "Sta toe", "Vraag app om niet te tracken"},
 	{"no", "Tillat", "Be om å ikke bli sporet"},
-	{"or", "ଅନୁମତି ଦିଅନ୍ତୁ", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍‌କୁ କୁହନ୍ତୁ"},
+	{"or", "ଅନୁମତି ଦିଅନ୍ତୁ", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍\u200cକୁ କୁହନ୍ତୁ"},
 	{"pa", "ਆਗਿਆ ਦਿਓ", "ਐਪਾਂ ਨੂੰ ਕਹੋ ਕਿ ਟ੍ਰੈਕ ਨਾ ਕਰਨ"},
 	{"pl", "Pozwól", "Poproś aplikację o\u00a0nieśledzenie"},
 	{"pt_BR", "Permitir", "Pedir ao App para Não Rastrear"},
@@ -54,7 +55,7 @@ var attCases = []struct{ locale, allow, decline string }{
 	{"sl", "Dovoli", "Aplikaciji ne dovoli sledenja"},
 	{"sv", "Tillåt", "Begär att inte bli spårad av appen"},
 	{"ta", "அனுமதி", "செயலி கண்காணிக்க வேண்டாம் எனக் கோருக"},
-	{"te", "అనుమతించండి", "ట్ర్యాక్ చేయకూడదని యాప్‌కి చెప్పండి"},
+	{"te", "అనుమతించండి", "ట్ర్యాక్ చేయకూడదని యాప్\u200cకి చెప్పండి"},
 	{"th", "อนุญาต", "บอกแอปไม่ให้ติดตาม"},
 	{"tr", "İzin Ver", "Uygulama Beni Takip Etmesin"},
 	{"uk", "Дозволити", "Просити програму не стежити"},
@@ -118,6 +119,39 @@ func TestTrackingPromptIsNotAPermissionAlert(t *testing.T) {
 		if d := (Dialog{Buttons: buttons}); d.IsTrackingPrompt() {
 			t.Errorf("%q is taken for a tracking prompt", buttons)
 		}
+	}
+}
+
+// attInvisible are the declines whose Apple string holds a character that is easy to lose in a copy: a no-break space
+// (U+00A0) in cs, pl, ru and sk, and a zero-width non-joiner (U+200C) in kn, or and te. The table keeps the exact
+// characters, so these are checked byte for byte.
+var attInvisible = []struct{ locale, decline string }{
+	{"cs", "Požádat aplikaci o nesledování"},
+	{"pl", "Poproś aplikację o nieśledzenie"},
+	{"ru", "Попросить не отслеживать"},
+	{"sk", "Požiadať apku o nesledovanie"},
+	{"kn", "ಆ್ಯಪ್‌ಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
+	{"or", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍‌କୁ କୁହନ୍ତୁ"},
+	{"te", "ట్ర్యాక్ చేయకూడదని యాప్‌కి చెప్పండి"},
+}
+
+func TestATTDeclineKeepsItsInvisibleCharacters(t *testing.T) {
+	for _, c := range attInvisible {
+		t.Run(c.locale, func(t *testing.T) {
+			if got := iosATTDecline[c.locale]; got != c.decline {
+				t.Errorf("iosATTDecline[%s] = %q, want %q", c.locale, got, c.decline)
+			}
+			if !strings.ContainsAny(c.decline, " ‌") {
+				t.Errorf("%q has no no-break space or ZWNJ, so the case tests nothing special", c.decline)
+			}
+			if !IsTrackingDecline(c.decline) {
+				t.Errorf("IsTrackingDecline(%q) = false", c.decline)
+			}
+			// Folding turns a no-break space into a plain one, so the plain-space form is recognised too.
+			if strings.Contains(c.decline, " ") && !IsTrackingDecline(strings.ReplaceAll(c.decline, " ", " ")) {
+				t.Errorf("the plain-space form of %q is not recognised", c.decline)
+			}
+		})
 	}
 }
 
