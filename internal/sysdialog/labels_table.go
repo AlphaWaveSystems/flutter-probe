@@ -225,7 +225,7 @@ var iosSystemLabels = map[string]map[string][]string{
 	},
 	"cs": {
 		"allow":             {"Povolit"},
-		"deny":              {"Nepovolovat", "Požádat aplikaci o nesledování", "Zakázat"},
+		"deny":              {"Nepovolovat", "Požádat aplikaci o\u00a0nesledování", "Zakázat"},
 		"allow_once":        {"Povolit jednou"},
 		"allow_while_using": {"Povolit jen při používání aplikace"},
 	},
@@ -355,7 +355,7 @@ var iosSystemLabels = map[string]map[string][]string{
 	},
 	"kn": {
 		"allow":             {"ಅನುಮತಿಸಿ"},
-		"deny":              {"ಅನುಮತಿಸಬೇಡಿ", "ಆ್ಯಪ್‌ಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
+		"deny":              {"ಅನುಮತಿಸಬೇಡಿ", "ಆ್ಯಪ್\u200cಗೆ ಟ್ರ್ಯಾಕ್ ಮಾಡಬೇಡಿ ಎಂದು ಹೇಳಿ"},
 		"allow_once":        {"ಒಮ್ಮೆ ಅನುಮತಿಸಿ"},
 		"allow_while_using": {"ಆ್ಯಪ್ ಬಳಸುವಾಗ ಅನುಮತಿಸಿ"},
 	},
@@ -403,7 +403,7 @@ var iosSystemLabels = map[string]map[string][]string{
 	},
 	"or": {
 		"allow":             {"ଅନୁମତି ଦିଅନ୍ତୁ"},
-		"deny":              {"ଅନୁମତି ଦିଅନ୍ତୁ ନାହିଁ", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍‌କୁ କୁହନ୍ତୁ"},
+		"deny":              {"ଅନୁମତି ଦିଅନ୍ତୁ ନାହିଁ", "ଟ୍ରାକ୍ ନକରିବା ପାଇଁ ଆପ୍\u200cକୁ କୁହନ୍ତୁ"},
 		"allow_once":        {"ଥରେ ଅନୁମତି ଦିଅନ୍ତୁ"},
 		"allow_while_using": {"ଆପ୍ ବ୍ଯବହାର କରୁ଼ଥିବା ବେଳେ ଅନୁମତି ଦିଅନ୍ତୁ"},
 	},
@@ -415,7 +415,7 @@ var iosSystemLabels = map[string]map[string][]string{
 	},
 	"pl": {
 		"allow":             {"Pozwól"},
-		"deny":              {"Nie pozwalaj", "Poproś aplikację o nieśledzenie"},
+		"deny":              {"Nie pozwalaj", "Poproś aplikację o\u00a0nieśledzenie"},
 		"allow_once":        {"Pozwól raz"},
 		"allow_while_using": {"Pozwalaj, gdy używam aplikacji"},
 	},
@@ -439,13 +439,13 @@ var iosSystemLabels = map[string]map[string][]string{
 	},
 	"ru": {
 		"allow":             {"Разрешить"},
-		"deny":              {"Не разрешать", "Запретить", "Попросить не отслеживать"},
+		"deny":              {"Не разрешать", "Запретить", "Попросить не\u00a0отслеживать"},
 		"allow_once":        {"Однократно"},
 		"allow_while_using": {"При использовании приложения"},
 	},
 	"sk": {
 		"allow":             {"Povoliť"},
-		"deny":              {"Nepovoliť", "Požiadať apku o nesledovanie"},
+		"deny":              {"Nepovoliť", "Požiadať apku o\u00a0nesledovanie"},
 		"allow_once":        {"Povoliť raz"},
 		"allow_while_using": {"Povoliť len pri používaní apky"},
 	},
@@ -469,9 +469,9 @@ var iosSystemLabels = map[string]map[string][]string{
 	},
 	"te": {
 		"allow":             {"అనుమతించండి"},
-		"deny":              {"అనుమతించవద్దు", "ట్ర్యాక్ చేయకూడదని యాప్‌కి చెప్పండి"},
+		"deny":              {"అనుమతించవద్దు", "ట్ర్యాక్ చేయకూడదని యాప్\u200cకి చెప్పండి"},
 		"allow_once":        {"ఒకసారికి అనుమతించండి"},
-		"allow_while_using": {"యాప్‌ను ఉపయోగిస్తున్నప్పుడు"},
+		"allow_while_using": {"యాప్\u200cను ఉపయోగిస్తున్నప్పుడు"},
 	},
 	"th": {
 		"allow":             {"อนุญาต"},
