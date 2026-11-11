@@ -25,6 +25,86 @@ export namespace devsettings {
 
 export namespace main {
 	
+	export class AIConnectionCheck {
+	    name: string;
+	    ok: boolean;
+	    detail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConnectionCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.ok = source["ok"];
+	        this.detail = source["detail"];
+	    }
+	}
+	export class AIConnectionReport {
+	    ok: boolean;
+	    vision: boolean;
+	    visionChecked: boolean;
+	    checks: AIConnectionCheck[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConnectionReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.vision = source["vision"];
+	        this.visionChecked = source["visionChecked"];
+	        this.checks = this.convertValues(source["checks"], AIConnectionCheck);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AISettings {
+	    provider: string;
+	    endpoint: string;
+	    model: string;
+	    keySource: string;
+	    keyEnvName: string;
+	    vision: boolean;
+	    timeout: string;
+	    allowRemoteEndpoint: boolean;
+	    plainKeyInFile: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AISettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.endpoint = source["endpoint"];
+	        this.model = source["model"];
+	        this.keySource = source["keySource"];
+	        this.keyEnvName = source["keyEnvName"];
+	        this.vision = source["vision"];
+	        this.timeout = source["timeout"];
+	        this.allowRemoteEndpoint = source["allowRemoteEndpoint"];
+	        this.plainKeyInFile = source["plainKeyInFile"];
+	    }
+	}
 	export class ChatMessage {
 	    role: string;
 	    content: string;
@@ -44,6 +124,7 @@ export namespace main {
 	    inputTokens: number;
 	    outputTokens: number;
 	    costUSD: number;
+	    notice?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatResponse(source);
@@ -55,6 +136,7 @@ export namespace main {
 	        this.inputTokens = source["inputTokens"];
 	        this.outputTokens = source["outputTokens"];
 	        this.costUSD = source["costUSD"];
+	        this.notice = source["notice"];
 	    }
 	}
 	export class ConnectionStatus {
@@ -288,6 +370,20 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class StepTriage {
+	    fix?: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StepTriage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fix = source["fix"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class RunStep {
 	    file: string;
 	    test: string;
@@ -296,6 +392,7 @@ export namespace main {
 	    status: string;
 	    durationMs: number;
 	    error?: string;
+	    triage?: StepTriage;
 	    attempt: number;
 	    depth: number;
 	
@@ -312,9 +409,28 @@ export namespace main {
 	        this.status = source["status"];
 	        this.durationMs = source["durationMs"];
 	        this.error = source["error"];
+	        this.triage = this.convertValues(source["triage"], StepTriage);
 	        this.attempt = source["attempt"];
 	        this.depth = source["depth"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class RunState {
 	    running: boolean;
@@ -361,6 +477,27 @@ export namespace main {
 		}
 	}
 	
+	export class SelectorFix {
+	    suggestion: string;
+	    rationale: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    costUSD: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectorFix(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.suggestion = source["suggestion"];
+	        this.rationale = source["rationale"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.costUSD = source["costUSD"];
+	    }
+	}
+	
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;
@@ -379,8 +516,8 @@ export namespace main {
 	        this.defaultsTimeout = source["defaultsTimeout"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
-        this.aiContextRunResults = source["aiContextRunResults"];
-        this.aiContextWidgetTree = source["aiContextWidgetTree"];
+	        this.aiContextRunResults = source["aiContextRunResults"];
+	        this.aiContextWidgetTree = source["aiContextWidgetTree"];
 	    }
 	}
 
