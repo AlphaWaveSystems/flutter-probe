@@ -32,13 +32,19 @@ export function InitialWorkspace():Promise<string>;
 
 export function Lint(arg1:string):Promise<Array<main.Diagnostic>>;
 
+export function ListAIModels():Promise<Array<string>>;
+
 export function ListDevices():Promise<Array<main.DeviceInfo>>;
 
 export function ListDir(arg1:string):Promise<Array<main.FileEntry>>;
 
+export function LoadAISettings(arg1:string):Promise<main.AISettings>;
+
 export function LoadWorkspaceSettings(arg1:string):Promise<main.WorkspaceSettings>;
 
 export function PickWorkspace():Promise<string>;
+
+export function PreviewAIChat(arg1:Array<main.ChatMessage>,arg2:string):Promise<string>;
 
 export function ReadFile(arg1:string):Promise<string>;
 
@@ -49,6 +55,8 @@ export function RunFileAsync(arg1:string):Promise<void>;
 export function RunFileScoped(arg1:string,arg2:number,arg3:string,arg4:boolean):Promise<Array<main.RunResult>>;
 
 export function RunState():Promise<main.RunState>;
+
+export function SaveAISettings(arg1:string,arg2:main.AISettings):Promise<void>;
 
 export function SaveWiFiToken(arg1:string,arg2:string):Promise<void>;
 
@@ -68,7 +76,11 @@ export function StopRecording():Promise<string>;
 
 export function StopWiFiDiscovery():Promise<void>;
 
+export function SuggestSelectorFix(arg1:string):Promise<main.SelectorFix>;
+
 export function TakeScreenshot():Promise<string>;
+
+export function TestAIConnection():Promise<main.AIConnectionReport>;
 
 export function TestWiFi(arg1:string,arg2:number,arg3:string):Promise<string>;
 
