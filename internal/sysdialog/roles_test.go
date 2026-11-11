@@ -93,6 +93,28 @@ func TestDismissButtonTakesTheDeclineButtonOfEachAlert(t *testing.T) {
 	}
 }
 
+// TestDismissButtonTakesCancelBeforeDeny: dismissRoles tries cancel before deny, so a cancel-like button wins over a deny
+// button in the same dialog, whatever the order of the buttons.
+func TestDismissButtonTakesCancelBeforeDeny(t *testing.T) {
+	cases := []struct {
+		name    string
+		buttons []string
+		want    int
+	}{
+		{"deny first, Android cancel second", []string{"Don't Allow", "No, thanks"}, 1},
+		{"cancel first", []string{"No, thanks", "Don't Allow"}, 0},
+		{"ATT decline and Cancel", []string{"Ask App Not to Track", "Cancel"}, 1},
+		{"deny only", []string{"Allow", "Ask App Not to Track"}, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if i := DismissButton(Dialog{Buttons: tc.buttons}); i != tc.want {
+				t.Errorf("DismissButton(%q) = %d, want %d", tc.buttons, i, tc.want)
+			}
+		})
+	}
+}
+
 func TestRoleOfMeasuredIOSLabels(t *testing.T) {
 	cases := map[string]Role{
 		"Nicht erlauben":                  RoleDeny,

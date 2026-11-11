@@ -48,6 +48,22 @@ func TestMeasuredLanguagesHaveSystemLabels(t *testing.T) {
 	}
 }
 
+// TestLabelRoleRefusesALabelUnderTwoRoles puts one label under two roles, in a locale that does not exist, and checks
+// that LabelRole gives up on it rather than picking one. The entry is removed again afterwards.
+func TestLabelRoleRefusesALabelUnderTwoRoles(t *testing.T) {
+	iosSystemLabels["zz"] = map[string][]string{
+		"allow": {"Colliding"},
+		"deny":  {"Colliding"},
+	}
+	t.Cleanup(func() { delete(iosSystemLabels, "zz") })
+	if role, ok := LabelRole("Colliding"); ok {
+		t.Errorf("LabelRole(Colliding) = %q, want no role for a label under two roles", role)
+	}
+	if role, ok := LabelRole("Allow"); !ok || role != "allow" {
+		t.Errorf("LabelRole(Allow) = (%q, %v), want allow: a collision must not change other labels", role, ok)
+	}
+}
+
 func TestDismissButtonTakesTheDeclineInOtherLanguages(t *testing.T) {
 	cases := []struct {
 		name    string

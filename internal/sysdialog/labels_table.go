@@ -192,6 +192,12 @@ var iosRoleLabels = map[string]map[string][]string{
 // simulator runtime (TCC.framework and the CoreLocation prompt plugin), not from a device run. The measured table above
 // agrees with them for the 27 languages it covers, which the tests check. Only dismiss and button matching use these
 // labels; RoleLabels still lists the measured ones alone.
+//
+// Each label is the value of one localization key: REQUEST_ACCESS_ALLOW, REQUEST_ACCESS_DENY and REQUEST_ACCESS_DONT_ALLOW,
+// plus REQUEST_ACCESS_ALLOW_kTCCServiceUserTracking and REQUEST_ACCESS_DENY_kTCCServiceUserTracking for the ATT alert, in TCC.framework,
+// or DONT_ALLOW, LOCATION_CLIENT_PERMISSION_ONETIME_BUTTON and LOCATION_CLIENT_PERMISSION_WHENINUSE_BUTTON in the
+// CoreLocation plugin. A locale can list two deny labels because those keys differ: fr "Refuser" is REQUEST_ACCESS_DONT_ALLOW,
+// fr "Ne pas autoriser" is REQUEST_ACCESS_DENY.
 var iosSystemLabels = map[string]map[string][]string{
 	"ar": {
 		"allow":             {"السماح"},
