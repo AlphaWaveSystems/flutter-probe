@@ -48,6 +48,44 @@ func (o *openAIVision) Complete(ctx context.Context, system, user string) (strin
 	return o.chatCompletion(ctx, system, user, nil)
 }
 
+// Turn is one message of a multi-turn conversation: Role is "user" or "assistant".
+type Turn struct {
+	Role    string
+	Content string
+}
+
+// ChatCompleter sends a system prompt and a whole conversation, for chat surfaces such as Studio. Like TextCompleter, it
+// is advisory only: nothing that decides a pass or a fail may depend on it.
+type ChatCompleter interface {
+	CompleteTurns(ctx context.Context, system string, turns []Turn) (string, error)
+}
+
+// NewChatCompleter builds a ChatCompleter for an OpenAI-compatible provider ("local" or "openai"). The anthropic provider
+// has its own Messages API client in the caller, so it is refused here rather than built twice.
+func NewChatCompleter(provider, apiKey, model, endpoint string, timeout time.Duration) (ChatCompleter, error) {
+	switch provider {
+	case "openai", "local":
+		vp, err := NewVisionProvider(provider, apiKey, model, endpoint, timeout)
+		if err != nil {
+			return nil, err
+		}
+		return vp.(*openAIVision), nil
+	default:
+		return nil, fmt.Errorf("ai: chat completion needs \"openai\" or \"local\", not %q", provider)
+	}
+}
+
+// CompleteTurns sends the conversation in order, after the system prompt. It shares the request and response handling
+// with Complete.
+func (o *openAIVision) CompleteTurns(ctx context.Context, system string, turns []Turn) (string, error) {
+	msgs := make([]map[string]any, 0, len(turns)+1)
+	msgs = append(msgs, map[string]any{"role": "system", "content": system})
+	for _, t := range turns {
+		msgs = append(msgs, map[string]any{"role": t.Role, "content": t.Content})
+	}
+	return o.postChat(ctx, msgs)
+}
+
 // Complete makes the Claude-backed Generator a TextCompleter.
 func (g *Generator) Complete(ctx context.Context, system, user string) (string, error) {
 	return g.callAPI(ctx, system, user)

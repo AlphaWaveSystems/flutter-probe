@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Studio's AI chat can use a local model.** When `probe.yaml` has an `ai:` block with `provider: local`, the chat sends each turn to that OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, or another server) with no key. A local endpoint must be on this machine. Another address is refused unless `studio.ai_allow_remote_endpoint: true` is set in `probe.yaml`. A key must be an environment variable named as `${NAME}`: a plain key in `probe.yaml` is refused, and the key is read when a request is sent. With no `ai:` block and no saved Anthropic key, AI stays off and nothing is sent. The same block lists the local endpoint's models. The Settings tab for these options comes in a separate change.
+
 ### Changed
+- **Studio's AI chat redacts credentials in the open file and in the conversation,** as it already did for the run results and the widget tree. Before this change, the open file was sent as written.
 - **The system-dialog language claims say what is covered.** Permission buttons (allow, deny, allow once, allow while using) are matched by role in the 55 iOS 26.5 locales, and on Android for dialogs that use the stock permission controller ids. OK, cancel, not now, open and close are English only. The iOS label table writes its no-break spaces and zero-width non-joiners as escapes (the same bytes). Tests cover the ATT alert in either order and the invisible-character locales.
 - **The embedded license key list has a test.** The test checks each embedded key's key id and Ed25519 public key, and that no key id is listed twice. It passes on the empty list in this release. A license signed with the matching private key verifies once its key is embedded, and one signed with another key is refused. Embedding the production public key before a client release lets customers upload reports is a manual release checklist item; no test enforces it. Verification itself is unchanged.
 

@@ -204,15 +204,16 @@ func (o *openAIVision) chatCompletion(ctx context.Context, system, user string, 
 			{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + b64}},
 		}
 	}
-	reqBody := map[string]any{
-		"model": o.model,
-		"messages": []map[string]any{
-			{"role": "system", "content": system},
-			{"role": "user", "content": userContent},
-		},
-	}
+	return o.postChat(ctx, []map[string]any{
+		{"role": "system", "content": system},
+		{"role": "user", "content": userContent},
+	})
+}
 
-	payload, err := json.Marshal(reqBody)
+// postChat sends a chat-completions request with the given messages and returns the text of the first choice. Every
+// OpenAI-compatible call goes through here, so the key header, the timeout and the error text are the same everywhere.
+func (o *openAIVision) postChat(ctx context.Context, messages []map[string]any) (string, error) {
+	payload, err := json.Marshal(map[string]any{"model": o.model, "messages": messages})
 	if err != nil {
 		return "", fmt.Errorf("ai: marshal request: %w", err)
 	}
