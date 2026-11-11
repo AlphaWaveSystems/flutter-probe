@@ -45,7 +45,7 @@ timing (add `wait until "<next screen's text>" appears`, or `wait for idle` afte
   tapping. A tap returns before the route has finished building.
 - **Do not depend on the language.** Select by `#key`; for visible text run with `--match-loose` (folds case, accents,
   apostrophes) and use `see any of "Save", "Speichern"` for per-language labels. System-dialog permission buttons are matched by role: `tap "Don't Allow" in system dialog`
-  works on iOS devices in the 55 locales of the iOS 26.5 runtime, and on Android permission dialogs in any language. See [Testing localized apps](/advanced/multi-language/).
+  works on iOS devices in the 55 locales of the iOS 26.5 runtime, and on Android, in any language on permission dialogs that use the stock permission controller ids (OEM permission screens without those ids are not covered). See [Testing localized apps](/advanced/multi-language/).
 - **Prefer positive assertions.** `see "Dashboard"` is reliable. `don't see "X"` can pass for the wrong reason when
   the widget simply is not built yet (lists build rows lazily).
 - **Rows below the fold do not exist yet.** Use `scroll down until "X" appears`; `scroll down` reveals *later* content.

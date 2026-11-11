@@ -462,7 +462,7 @@ One suite for every language. Select by `#key` (language-independent); use `--ma
 case, accents, typographic apostrophes and whitespace in text selectors (`anderungen SPEICHERN` matches `Änderungen speichern`);
 list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**. On iOS,
 `tap "Don't Allow" in system dialog` finds the decline button in the 55 locales of the iOS 26.5 runtime, and on Android
-permission dialogs it works in any language. `deny permission "notifications"` answers an alert with Allow and Don't Allow
+permission dialogs that use the stock permission controller ids work in any language (OEM permission screens without those ids are not covered). `deny permission "notifications"` answers an alert with Allow and Don't Allow
 buttons; it has not been run against a real notification alert in every language.
 Guide: [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/).
 
@@ -481,7 +481,7 @@ sign in sandbox tester                               # StoreKit sandbox account,
 tap "Allow" in system dialog optional                # no-op when no dialog shows up
 ```
 
-On a device set to another language, buttons are matched by role (allow, deny, cancel, ...), so the English label still works.
+On a device set to another language, permission buttons (allow, deny, allow once, allow while using) are matched by role, so the English label of those buttons still works. OK, cancel, not now, open and close are English only: use the exact label for them on such a device.
 
 Secrets come from environment variables only and are masked in step output, reports and errors. The same
 operations are available without any test file or Flutter app: `probe system-dialog tap "Allow"`,

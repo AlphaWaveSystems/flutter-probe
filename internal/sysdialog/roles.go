@@ -133,7 +133,7 @@ func MatchButton(d Dialog, wanted string) int {
 // dismissRoles are tried in order by Dismiss.
 var dismissRoles = []Role{RoleCancel, RoleDeny, RoleNotNow, RoleClose}
 
-// DismissButton picks the cancel-like button of d (by role, in any language), or -1.
+// DismissButton picks the cancel-like button of d by role, for the languages the label tables cover, or -1.
 func DismissButton(d Dialog) int {
 	for _, want := range dismissRoles {
 		for i := range d.Buttons {
