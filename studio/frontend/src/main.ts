@@ -21,12 +21,16 @@ import {
   InitialWorkspace,
   SetWorkspace,
   Lint,
+  ListAIModels,
   ListDevices,
   ListDir,
+  LoadAISettings,
   LoadWorkspaceSettings,
   PickWorkspace,
+  PreviewAIChat,
   ReadFile,
   RunFileScoped,
+  SaveAISettings,
   SaveWiFiToken,
   SaveWorkspaceSettings,
   SetAPIKey,
@@ -35,6 +39,7 @@ import {
   Status,
   StopRecording,
   StopWiFiDiscovery,
+  TestAIConnection,
   TestWiFi,
   WiFiTokenSaved,
   WriteFile,
@@ -375,6 +380,7 @@ async function openSettingsOverlay() {
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
     ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
     ($("settings-ai-widget-tree") as HTMLInputElement).checked = s.aiContextWidgetTree === true;
+    fillAIForm(await LoadAISettings(workspaceRoot));
   } catch (err) {
     toast(`Cannot load settings: ${err}`, "error");
   }
@@ -389,6 +395,108 @@ $("btn-settings-close").addEventListener("click", closeSettingsOverlay);
 $("settings-overlay").addEventListener("click", (e) => {
   if ((e.target as HTMLElement).id === "settings-overlay") closeSettingsOverlay();
 });
+
+// ---- AI provider (Settings) and the first-send preview -----------------
+
+// aiPreviewSeen is true once this session has shown the preview of a chat message. The check runs once per session, and
+// again after the provider settings are saved (R10).
+let aiPreviewSeen = false;
+
+// The key is never in the form. probe.yaml names only the environment variable, and the keychain holds a saved key.
+function fillAIForm(s: main.AISettings): void {
+  ($("settings-ai-provider") as HTMLSelectElement).value = s.provider ?? "";
+  ($("settings-ai-endpoint") as HTMLInputElement).value = s.endpoint ?? "";
+  ($("settings-ai-model") as HTMLInputElement).value = s.model ?? "";
+  ($("settings-ai-key-source") as HTMLSelectElement).value = s.keySource === "env" ? "env" : "keychain";
+  ($("settings-ai-key-env") as HTMLInputElement).value = s.keyEnvName ?? "";
+  ($("settings-ai-timeout") as HTMLInputElement).value = s.timeout ?? "";
+  ($("settings-ai-vision") as HTMLInputElement).checked = s.vision !== false;
+  ($("settings-ai-remote") as HTMLInputElement).checked = s.allowRemoteEndpoint === true;
+  $("settings-ai-plain-key").hidden = s.plainKeyInFile !== true;
+  $("settings-ai-models").replaceChildren();
+  $("settings-ai-result").replaceChildren();
+}
+
+function readAIForm(): main.AISettings {
+  return main.AISettings.createFrom({
+    provider: ($("settings-ai-provider") as HTMLSelectElement).value,
+    endpoint: ($("settings-ai-endpoint") as HTMLInputElement).value.trim(),
+    model: ($("settings-ai-model") as HTMLInputElement).value.trim(),
+    keySource: ($("settings-ai-key-source") as HTMLSelectElement).value,
+    keyEnvName: ($("settings-ai-key-env") as HTMLInputElement).value.trim(),
+    timeout: ($("settings-ai-timeout") as HTMLInputElement).value.trim(),
+    vision: ($("settings-ai-vision") as HTMLInputElement).checked,
+    allowRemoteEndpoint: ($("settings-ai-remote") as HTMLInputElement).checked,
+    plainKeyInFile: false,
+  });
+}
+
+function aiResultItem(text: string, kind: "ok" | "fail" | "dim"): HTMLLIElement {
+  const li = document.createElement("li");
+  li.className = kind;
+  li.textContent = text;
+  return li;
+}
+
+// The model list and the connection test use the saved settings, so the form is saved first.
+$("btn-ai-list-models").addEventListener("click", async () => {
+  try {
+    const ids = (await ListAIModels()) ?? [];
+    $("settings-ai-models").replaceChildren(
+      ...ids.map((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        return option;
+      }),
+    );
+    if (ids.length === 0) {
+      toast("This provider lists no models here. Type the model name.", "info", 4000);
+    } else {
+      toast(`${ids.length} models listed.`, "success", 2200);
+    }
+  } catch (err) {
+    toast(`Cannot list models: ${err}`, "error");
+  }
+});
+
+$("btn-ai-test").addEventListener("click", async () => {
+  const out = $("settings-ai-result");
+  out.replaceChildren(aiResultItem("Testing the saved settings…", "dim"));
+  try {
+    const rep = await TestAIConnection();
+    const rows = rep.checks.map((c) => aiResultItem(`${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`, c.ok ? "ok" : "fail"));
+    let summary = "The provider is not usable for text features.";
+    if (rep.ok) {
+      summary = !rep.visionChecked || rep.vision
+        ? "Text works."
+        : "Text works. The model does not accept images, so visual assertions stay off.";
+    }
+    out.replaceChildren(...rows, aiResultItem(summary, rep.ok ? "ok" : "fail"));
+  } catch (err) {
+    out.replaceChildren(aiResultItem(`Cannot test: ${err}`, "fail"));
+  }
+});
+
+// confirmFirstChatSend shows what the next chat message carries and waits for Send or Cancel. Nothing is sent before Send.
+function confirmFirstChatSend(preview: string): Promise<boolean> {
+  const overlay = $("ai-preview-overlay");
+  const send = $("btn-ai-preview-send");
+  const cancel = $("btn-ai-preview-cancel");
+  $("ai-preview-text").textContent = preview;
+  overlay.hidden = false;
+  return new Promise((resolve) => {
+    const finish = (ok: boolean) => {
+      overlay.hidden = true;
+      send.removeEventListener("click", onSend);
+      cancel.removeEventListener("click", onCancel);
+      resolve(ok);
+    };
+    const onSend = () => finish(true);
+    const onCancel = () => finish(false);
+    send.addEventListener("click", onSend);
+    cancel.addEventListener("click", onCancel);
+  });
+}
 
 $("btn-settings-save").addEventListener("click", async () => {
   if (!workspaceRoot) return;
@@ -408,6 +516,8 @@ $("btn-settings-save").addEventListener("click", async () => {
   });
   try {
     await SaveWorkspaceSettings(workspaceRoot, settings);
+    await SaveAISettings(workspaceRoot, readAIForm());
+    aiPreviewSeen = false; // a changed provider is shown again before the next first message
     void updateChatContextNote();
     toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
     closeSettingsOverlay();
@@ -1233,6 +1343,22 @@ async function sendChat() {
   const input = $("chat-input") as HTMLTextAreaElement;
   const text = input.value.trim();
   if (!text) return;
+
+  if (!aiPreviewSeen) {
+    // The first message of a session shows what it carries before anything is sent. Cancel keeps the text in the input.
+    let preview: string;
+    try {
+      preview = await PreviewAIChat([...chatHistory, { role: "user", content: text }], model.getValue());
+    } catch (err) {
+      appendChatMessage("system", `Error: ${err}`);
+      return;
+    }
+    if (!(await confirmFirstChatSend(preview))) {
+      input.focus();
+      return;
+    }
+    aiPreviewSeen = true;
+  }
 
   input.value = "";
   input.disabled = true;
