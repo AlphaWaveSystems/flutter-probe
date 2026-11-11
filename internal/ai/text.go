@@ -36,7 +36,7 @@ func NewTextCompleter(provider, apiKey, model, endpoint string, timeout time.Dur
 			return nil, fmt.Errorf("ai: Anthropic API key is required (ai.api_key in probe.yaml)")
 		}
 		g := NewGenerator(apiKey, orDefault(model, defaultModel))
-		g.Client = &http.Client{Timeout: timeoutOrDefault(timeout)}
+		g.Client = &http.Client{Timeout: timeoutOrDefault(timeout), CheckRedirect: noRedirects}
 		return g, nil
 	default:
 		return nil, fmt.Errorf("ai: unknown provider %q — must be \"openai\", \"anthropic\", or \"local\"", provider)

@@ -61,7 +61,7 @@ type VisionProvider interface {
 // LM Studio instance, where a fixed 60s was the actual binding constraint
 // even after raising the ProbeScript step timeout well past it.
 func NewVisionProvider(provider, apiKey, model, endpoint string, timeout time.Duration) (VisionProvider, error) {
-	client := &http.Client{Timeout: timeoutOrDefault(timeout)}
+	client := &http.Client{Timeout: timeoutOrDefault(timeout), CheckRedirect: noRedirects}
 	switch provider {
 	case "openai":
 		if apiKey == "" {
@@ -243,7 +243,7 @@ func (o *openAIVision) postChat(ctx context.Context, messages []map[string]any) 
 		return "", fmt.Errorf("ai: %s rate limited (429) — try again shortly", o.baseURL)
 	}
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, string(respBytes))
+		return "", fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, errorBody(respBytes))
 	}
 
 	var apiResp struct {
@@ -352,7 +352,7 @@ func (a *anthropicVision) callAnthropic(ctx context.Context, system, user string
 		return "", fmt.Errorf("ai: anthropic API rate limited (429) — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ai: anthropic API returned %d: %s", resp.StatusCode, string(respBytes))
+		return "", fmt.Errorf("ai: anthropic API returned %d: %s", resp.StatusCode, errorBody(respBytes))
 	}
 
 	var apiResp apiResponse

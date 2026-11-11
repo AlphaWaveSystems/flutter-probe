@@ -47,6 +47,8 @@ type ChatResponse struct {
 	InputTokens  int     `json:"inputTokens"`
 	OutputTokens int     `json:"outputTokens"`
 	CostUSD      float64 `json:"costUSD"`
+	// Notice is a line to show with the reply, such as a plain key that Studio did not use. It is empty otherwise.
+	Notice string `json:"notice,omitempty"`
 }
 
 // claudeMessage is one turn of a request to the Messages API.
@@ -55,7 +57,7 @@ type claudeMessage struct {
 	Content string `json:"content"`
 }
 
-var chatHTTPClient = &http.Client{Timeout: 120 * time.Second}
+var chatHTTPClient = newAIClient(120 * time.Second)
 
 // GetAPIKey reports whether an Anthropic API key is saved in the platform keychain. It never returns the key: the
 // settings panel only needs to show that one is saved.
@@ -208,7 +210,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 		return ChatResponse{}, fmt.Errorf("rate limited — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, errorBody(body))
 	}
 
 	var apiResp struct {

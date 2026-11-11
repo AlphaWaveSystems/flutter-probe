@@ -159,7 +159,7 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
   simulator); not started
 - Multi-device side-by-side
 - Time-travel widget tree per step
-- AI chat pane (spawns `probe-mcp` and proxies)
+- AI chat pane (calls the configured provider directly: the Anthropic API, or a local endpoint named in `probe.yaml`; it does not run `probe-mcp`)
 
 ## Testing Studio
 

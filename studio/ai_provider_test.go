@@ -81,7 +81,7 @@ func appIn(dir string) *App {
 	return a
 }
 
-// R4: with no ai: block and no saved key, AI is off. The chat fails before any request, and the device is not asked.
+// With no ai: block and no saved key, AI is off. The chat fails before any request, and the device is not asked.
 func TestAIIsOffWithoutAnAIBlockOrSavedKey(t *testing.T) {
 	isolateProvider(t, "")
 	f := newLocalFake(t, "unused")
@@ -95,7 +95,7 @@ func TestAIIsOffWithoutAnAIBlockOrSavedKey(t *testing.T) {
 	}
 }
 
-// R1 and R9: the ai: block of probe.yaml picks a local provider. The turn goes to the configured endpoint with no key, and
+// The ai: block of probe.yaml picks a local provider. The turn goes to the configured endpoint with no key, and
 // the reply comes back as text.
 func TestLocalProviderAnswersTheChatWithoutAKey(t *testing.T) {
 	isolateProvider(t, "")
@@ -131,7 +131,7 @@ func TestLocalProviderAnswersTheChatWithoutAKey(t *testing.T) {
 	}
 }
 
-// R10: the open file and the conversation pass through the outbound gate, so a credential in them never reaches the
+// The open file and the conversation pass through the outbound gate, so a credential in them never reaches the
 // provider.
 func TestFileContentIsRedactedBeforeItLeaves(t *testing.T) {
 	isolateProvider(t, "")
@@ -150,7 +150,7 @@ func TestFileContentIsRedactedBeforeItLeaves(t *testing.T) {
 	}
 }
 
-// R11: a local provider that names an address off this machine is refused, and nothing is sent. The check runs before any
+// A local provider that names an address off this machine is refused, and nothing is sent. The check runs before any
 // request, so these cases never touch the network.
 func TestRemoteEndpointIsRefusedUnlessConfirmed(t *testing.T) {
 	cases := []struct {
@@ -188,7 +188,7 @@ func TestRemoteEndpointInProbeYAMLIsRefusedBeforeAnyRequest(t *testing.T) {
 	}
 }
 
-// R12: a plain key in probe.yaml is refused, and the error does not repeat it.
+// A plain key in probe.yaml is refused, and the error does not repeat it.
 func TestAPIKeyWrittenIntoProbeYAMLIsRefused(t *testing.T) {
 	isolateProvider(t, "")
 	const plain = "sk-ant-api03-plainvalue1234567890"
@@ -205,7 +205,7 @@ func TestAPIKeyWrittenIntoProbeYAMLIsRefused(t *testing.T) {
 	}
 }
 
-// R12: an environment variable named by ${NAME} supplies the key, read at request time. The file keeps only the name.
+// An environment variable named by ${NAME} supplies the key, read at request time. The file keeps only the name.
 func TestAPIKeyComesFromTheNamedEnvironmentVariable(t *testing.T) {
 	isolateProvider(t, "")
 	t.Setenv("PROBE_AI_TEST_KEY", "sk-env-test-key-000")
@@ -233,7 +233,7 @@ func TestUnsetEnvironmentVariableNamesTheVariableNotAValue(t *testing.T) {
 	}
 }
 
-// R3: the model list comes from the local endpoint. Anthropic has no listing here, so it sends nothing and returns none.
+// The model list comes from the local endpoint. Anthropic has no listing here, so it sends nothing and returns none.
 func TestListAIModelsReadsTheLocalEndpoint(t *testing.T) {
 	isolateProvider(t, "")
 	f := newLocalFake(t, "ok")
