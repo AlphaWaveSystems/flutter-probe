@@ -1,6 +1,6 @@
 ---
 title: Testing localized apps
-description: Write one FlutterProbe suite that runs in every app language and on devices set to any language - selectors, loose text matching, alternatives and system dialogs.
+description: Write one FlutterProbe suite that runs in every app language and on devices set to other languages - selectors, loose text matching, alternatives and system dialogs.
 ---
 
 FlutterProbe tests are written once and have to survive translation. This page is the playbook, in the order of what to
@@ -39,16 +39,17 @@ Marks that carry meaning (Indic vowel signs, Thai tone marks) are kept, so words
 When the label differs per language, list them: `see any of "Save", "Speichern", "Guardar"`,
 `wait until any of "Welcome", "Willkommen"`. For exact text use `see "0 ml" matching "^0 ml$"`.
 
-## 4. System dialogs in any device language
+## 4. System dialogs in the device's language
 
-Permission alerts and other OS dialogs are drawn in the **device** language. A button is resolved by its **role**
-(allow, deny, allow once, allow while using, OK, cancel, not now, open, close), so the script you write in English works on a
-German or Japanese device:
+Permission alerts are drawn in the **device** language. Their buttons are resolved by **role** (allow, deny, allow once,
+allow while using), so the script you write in English works on a German or Japanese device. On iOS that covers the 55 locales
+of the iOS 26.5 runtime; on Android the permission dialog's resource ids work in any language. OK, cancel, not now, open and
+close are known only in English, so use the exact label for them there:
 
 ```probe
 tap "Don't Allow" in system dialog      # finds "Nicht erlauben", "許可しない", ...
 deny permission "notifications"
-dismiss system dialog                    # the cancel-like button in the device's language
+dismiss system dialog                    # declines a permission or tracking alert, in the device's language
 ```
 
 On Android the roles come from the permission dialog's language-independent resource ids; on iOS from a table of labels for the 55

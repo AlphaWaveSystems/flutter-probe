@@ -460,8 +460,9 @@ Change the app language from a test or per run: `set language "de"`, `probe test
 
 One suite for every language. Select by `#key` (language-independent); use `--match-loose` (or `defaults.match: loose`) to fold
 case, accents, typographic apostrophes and whitespace in text selectors (`anderungen SPEICHERN` matches `Änderungen speichern`);
-list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**, so
-`tap "Don't Allow" in system dialog` and `deny permission "notifications"` work on a device set to any language.
+list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**: on iOS,
+`tap "Don't Allow" in system dialog` and `deny permission "notifications"` work in the 55 locales of the iOS 26.5 runtime,
+and `tap "Don't Allow" in system dialog` works on Android permission dialogs in any language.
 Guide: [Testing localized apps](https://flutterprobe.dev/advanced/multi-language/).
 
 ### System dialogs (permission alerts, sign-in sheets)
