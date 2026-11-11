@@ -25,11 +25,11 @@ var englishRoles = map[string]Role{
 	"allow once": RoleAllowOnce, "only this time": RoleAllowOnce, "this time only": RoleAllowOnce,
 	"allow while using app": RoleAllowWhileUsing, "while using the app": RoleAllowWhileUsing,
 	"allow while using the app": RoleAllowWhileUsing,
-	"allow all the time":        RoleAllowAlways, "allow always": RoleAllowAlways,
+	"allow all the time": RoleAllowAlways, "allow always": RoleAllowAlways,
 	"ok": RoleOK, "got it": RoleOK, "continue": RoleOK,
 	"cancel": RoleCancel, "no thanks": RoleCancel, "no, thanks": RoleCancel, "no": RoleCancel,
 	"not now": RoleNotNow, "later": RoleNotNow, "maybe later": RoleNotNow, "ask me later": RoleNotNow,
-	"open":  RoleOpen,
+	"open": RoleOpen,
 	"close": RoleClose, "dismiss": RoleClose,
 }
 
