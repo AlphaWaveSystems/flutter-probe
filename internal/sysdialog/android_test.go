@@ -25,6 +25,18 @@ const permissionDump = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
  </node>
 </hierarchy>`
 
+// noThanksDump is a permission-style dialog whose decline button has no resource id, so dismiss must find it by label.
+const noThanksDump = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+ <node class="android.widget.FrameLayout" package="com.google.android.permissioncontroller" bounds="[0,0][1080,2400]">
+  <node class="android.widget.LinearLayout" package="com.google.android.permissioncontroller" bounds="[100,800][980,1500]">
+   <node class="android.widget.TextView" text="Allow My App to send you notifications?" package="com.google.android.permissioncontroller" bounds="[150,850][930,1000]"/>
+   <node class="android.widget.Button" text="Allow" clickable="true" package="com.google.android.permissioncontroller" bounds="[150,1200][930,1300]"/>
+   <node class="android.widget.Button" text="No, thanks" clickable="true" package="com.google.android.permissioncontroller" bounds="[150,1320][930,1420]"/>
+  </node>
+ </node>
+</hierarchy>`
+
 const signInDump = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy rotation="0">
  <node class="android.widget.FrameLayout" package="com.android.vending" bounds="[0,0][1080,2400]">
@@ -109,6 +121,17 @@ func TestAndroidTap_ErrorsListWhatIsAvailable(t *testing.T) {
 	}
 	if _, err := newTestDriver(&fakeADB{dump: `<hierarchy/>`}).Tap(context.Background(), "Allow", ""); err == nil {
 		t.Error("no dialog must be an error for tap")
+	}
+}
+
+func TestAndroidDismissTapsNoThanksByLabel(t *testing.T) {
+	f := &fakeADB{dump: noThanksDump}
+	did, err := newTestDriver(f).Dismiss(context.Background(), "")
+	if err != nil || !did {
+		t.Fatalf("dismiss: %v %v", did, err)
+	}
+	if len(f.taps) != 1 || f.taps[0] != [2]int{540, 1370} {
+		t.Errorf("dismiss should tap No, thanks at (540,1370), tapped %v", f.taps)
 	}
 }
 

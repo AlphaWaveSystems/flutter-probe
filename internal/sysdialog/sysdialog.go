@@ -94,7 +94,7 @@ func (d Dialog) MatchesTitle(title string) bool {
 }
 
 // dismissLabels are tapped by Dismiss, in preference order.
-var dismissLabels = []string{"Cancel", "Don't Allow", "Don't allow", "Not Now", "Close", "Dismiss", "Later", "No Thanks", "Deny"}
+var dismissLabels = []string{"Cancel", "Don't Allow", "Don't allow", "Not Now", "Close", "Dismiss", "Later", "No Thanks", "Deny", "Ask App Not to Track"}
 
 // DismissIndex picks the cancel-like button among buttons, or -1.
 func DismissIndex(buttons []string) int {

@@ -26,7 +26,7 @@ final class Driver {
     }
 
     /// Button labels `dismiss` will tap, in preference order.
-    private let dismissLabels = ["Cancel", "Don’t Allow", "Don't Allow", "Not Now", "Close", "Dismiss", "Later", "No Thanks"]
+    private let dismissLabels = ["Cancel", "Don’t Allow", "Don't Allow", "Not Now", "Close", "Dismiss", "Later", "No Thanks", "Ask App Not to Track"]
 
     // MARK: - Model
 

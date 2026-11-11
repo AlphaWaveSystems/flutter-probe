@@ -31,6 +31,9 @@ func TestDismissIndexPrefersCancelOverAllow(t *testing.T) {
 	if i := DismissIndex([]string{"Allow", "Don’t Allow"}); i != 1 {
 		t.Errorf("got %d", i)
 	}
+	if i := DismissIndex([]string{"Allow", "Ask App Not to Track"}); i != 1 {
+		t.Errorf("DismissIndex should take the ATT decline button, got %d", i)
+	}
 	if i := DismissIndex([]string{"OK", "Cancel"}); i != 1 {
 		t.Errorf("got %d", i)
 	}
