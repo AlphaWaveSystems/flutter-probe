@@ -1,7 +1,7 @@
 import { expect, Page, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fakeProvider } from "./ai-fake";
+import { fakeProvider, freePort } from "./ai-fake";
 import { openStudio, workspace } from "./helpers";
 
 // The Settings AI section against a fake provider on 127.0.0.1. No hosted provider is called, no key is used, and the keychain
@@ -79,11 +79,12 @@ test.describe("Settings AI section (fake provider on 127.0.0.1)", () => {
       const note = page.locator("#settings-ai-plain-key");
       await expect(note).toBeVisible();
       await expect(note).toContainText("does not use and does not change");
-      await page.fill("#settings-port", "48801"); // change something that has nothing to do with the key
+      const port = await freePort();
+      await page.fill("#settings-port", String(port)); // change something that has nothing to do with the key
       await page.click("#btn-settings-save");
       await expect(page.locator("#toast-container")).toContainText("Saved probe.yaml");
       expect(readYaml()).toContain("api_key: plain-key-in-file-e2e");
-      expect(readYaml()).toMatch(/port:\s*48801/);
+      expect(readYaml()).toMatch(new RegExp(`port:\\s*${port}`));
     } finally {
       await f.close();
     }
