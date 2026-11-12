@@ -28,6 +28,7 @@ import {
   LoadWorkspaceSettings,
   PickWorkspace,
   PreviewAIChat,
+  AIChatLabel,
   ReadFile,
   RunFileScoped,
   SaveAISettings,
@@ -406,6 +407,18 @@ let aiPreviewConfirmed: string | null = null;
 
 function resetAIPreview(): void {
   aiPreviewConfirmed = null;
+  void refreshChatLabel(); // the same events change where a message goes, so they change the header too
+}
+
+// refreshChatLabel shows where the next message would go: the provider and the model id, or that AI is off. The text comes from
+// probe.yaml, so it is set with textContent, never as markup.
+async function refreshChatLabel(): Promise<void> {
+  const el = $("chat-provider");
+  try {
+    el.textContent = await AIChatLabel();
+  } catch {
+    el.textContent = "";
+  }
 }
 
 // previewLabel is the destination line PreviewAIChat puts first, such as "Sent to: local endpoint http://127.0.0.1:11434/v1, model m".
@@ -1307,6 +1320,7 @@ initDeviceSettings();
     refreshFiles(ws);
   } else {
     refreshFiles();
+    void refreshChatLabel(); // no workspace yet: the header still says whether AI is on
   }
 })();
 
