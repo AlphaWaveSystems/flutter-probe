@@ -158,7 +158,7 @@ func (t *httpTransport) hostAllowed(hostport string) bool {
 
 // peerAllowed reports whether the connection's remote address may talk to the endpoint. Without the
 // non-loopback switch only a loopback peer may; the listener is loopback-bound already, this is a
-// second check on the same rule.
+// second check on the same rule. With the switch every peer may, whatever the bind.
 func (t *httpTransport) peerAllowed(remote string) bool {
 	if t.allowNonLoopback {
 		return true
@@ -177,31 +177,41 @@ func emptyReply(w http.ResponseWriter, status int) {
 	w.WriteHeader(status)
 }
 
+// refuse answers a caller that has not shown the token (or may not ask at all) and ends the
+// connection. Without "Connection: close" the server would first read what the caller sends as a
+// body, up to 256 KiB, before it answers; a caller without the token gets nothing read.
+func refuse(w http.ResponseWriter, status int) {
+	w.Header().Set("Connection", "close")
+	emptyReply(w, status)
+}
+
 func (t *httpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	// 1. Where the request comes from and what it names. None of this looks at the token.
 	if !t.peerAllowed(r.RemoteAddr) || !t.hostAllowed(r.Host) {
-		emptyReply(w, http.StatusForbidden)
+		refuse(w, http.StatusForbidden)
 		return
 	}
 	// A browser sends Origin on every cross-origin request and on every POST; MCP clients (an IDE,
 	// curl) do not. No page is served from this address, so no Origin is an allowed one. No CORS
 	// header is ever sent, so a preflight (OPTIONS) ends here as well.
 	if len(r.Header.Values("Origin")) > 0 {
-		emptyReply(w, http.StatusForbidden)
+		refuse(w, http.StatusForbidden)
 		return
 	}
+	// Sec-Fetch-Site "none" is what a browser sends for a request no page started (an address typed
+	// by the user) and what some non-browser clients send; it goes on to the token check.
 	if f := r.Header.Get("Sec-Fetch-Site"); f != "" && f != "none" {
-		emptyReply(w, http.StatusForbidden)
+		refuse(w, http.StatusForbidden)
 		return
 	}
 
 	// 2. The token. Missing, malformed and wrong take the same path and get the same answer.
 	if !tokenMatches(t.tokenSum, bearerToken(r)) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		emptyReply(w, http.StatusUnauthorized)
+		refuse(w, http.StatusUnauthorized)
 		return
 	}
 
@@ -276,6 +286,19 @@ func (t *httpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// newHTTPServer is the http.Server of the endpoint, with every limit a slow or greedy client meets.
+func newHTTPServer(h http.Handler, logw io.Writer) *http.Server {
+	return &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+		ReadTimeout:       httpReadTimeout,
+		WriteTimeout:      httpWriteTimeout,
+		IdleTimeout:       httpIdleTimeout,
+		MaxHeaderBytes:    httpMaxHeader,
+		ErrorLog:          log.New(logw, "probe-mcp http: ", 0),
+	}
+}
+
 // RunHTTP serves the MCP tools over HTTP until ctx is done. It returns an error without listening
 // when the address or the token is refused.
 func RunHTTP(ctx context.Context, opts HTTPOptions) error {
@@ -288,12 +311,23 @@ func RunHTTP(ctx context.Context, opts HTTPOptions) error {
 		return err
 	}
 	token := opts.Token
-	tokenFile := ""
 	if token != "" {
 		if err := checkSuppliedToken(token); err != nil {
 			return err
 		}
-	} else {
+	}
+
+	// Listen before touching the token file: a start that fails because the port is taken must not
+	// replace, and then remove, the token file of the server that holds the port.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("mcp http: listen: %w", err)
+	}
+	defer ln.Close() // a second Close after Serve has closed it is harmless
+	bound := ln.Addr().(*net.TCPAddr)
+
+	tokenFile, replaced := "", false
+	if opts.Token == "" {
 		dir := opts.TokenDir
 		if dir == "" {
 			if dir, err = DefaultTokenDir(); err != nil {
@@ -303,34 +337,23 @@ func RunHTTP(ctx context.Context, opts HTTPOptions) error {
 		if token, err = newToken(); err != nil {
 			return err
 		}
-		if tokenFile, err = writeTokenFile(dir, token); err != nil {
+		if tokenFile, replaced, err = writeTokenFile(dir, token); err != nil {
 			return err
 		}
 		defer removeTokenFile(tokenFile, token)
 	}
 
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("mcp http: listen: %w", err)
-	}
-	bound := ln.Addr().(*net.TCPAddr)
-
 	s := &Server{}
 	// Never leave a background test run behind when the server stops.
 	defer s.stopJobs()
-	srv := &http.Server{
-		Handler:           newHTTPTransport(s, token, bound, opts.AllowNonLoopback),
-		ReadHeaderTimeout: httpReadHeaderTimeout,
-		ReadTimeout:       httpReadTimeout,
-		WriteTimeout:      httpWriteTimeout,
-		IdleTimeout:       httpIdleTimeout,
-		MaxHeaderBytes:    httpMaxHeader,
-		ErrorLog:          log.New(logw, "probe-mcp http: ", 0),
-	}
+	srv := newHTTPServer(newHTTPTransport(s, token, bound, opts.AllowNonLoopback), logw)
 
 	fmt.Fprintf(logw, "probe-mcp: MCP over HTTP at http://%s%s\n", bound.String(), HTTPEndpointPath)
 	if tokenFile != "" {
 		fmt.Fprintf(logw, "probe-mcp: bearer token written to %s (a new one on every start)\n", tokenFile)
+		if replaced {
+			fmt.Fprintf(logw, "probe-mcp: note: a token file was already there and has been replaced. If another probe-mcp HTTP server is still running, its token is no longer on disk; run one per user config directory, or start the second with %s.\n", TokenEnv)
+		}
 	} else {
 		fmt.Fprintf(logw, "probe-mcp: bearer token taken from %s\n", TokenEnv)
 	}

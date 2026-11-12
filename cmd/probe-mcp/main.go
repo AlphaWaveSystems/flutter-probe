@@ -53,14 +53,26 @@ func main() {
 		}
 	}
 
-	if wantsFlags(os.Args[1:]) {
-		os.Exit(runWithFlags(os.Args[1:], os.Stderr))
+	// Take the HTTP token out of the environment on every path: the tools start child processes
+	// (probe test, adb), and they have no business with it.
+	token := takeToken()
+
+	if code, handled := runArgs(os.Args[1:], token, os.Stderr); handled {
+		os.Exit(code)
 	}
 
 	if err := mcp.NewServer().Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "probe-mcp:", err)
 		os.Exit(1)
 	}
+}
+
+// takeToken returns PROBE_MCP_HTTP_TOKEN and removes it from this process's environment, so that
+// no child process inherits it.
+func takeToken() string {
+	token := os.Getenv(mcp.TokenEnv)
+	_ = os.Unsetenv(mcp.TokenEnv)
+	return token
 }
 
 const usage = `probe-mcp is the FlutterProbe MCP server.
@@ -70,12 +82,14 @@ const usage = `probe-mcp is the FlutterProbe MCP server.
 
 HTTP transport:
   --http host:port
-        Listen address. The host must be 127.0.0.1, ::1 or localhost; port 0 picks a free
-        port, printed on stderr. Every request needs "Authorization: Bearer <token>".
+        Listen address. The host must be a loopback address: 127.0.0.1:7391,
+        [::1]:7391 (IPv6, in brackets) or localhost:7391 (taken as 127.0.0.1). A host
+        name or any other address is refused. Port 0 picks a free port, printed on
+        stderr. Every request needs "Authorization: Bearer <token>".
         A new token is made on every start and written to a file only you can read
         (mode 0600); its path is printed on stderr, the token is not. To keep one token
-        across starts, set PROBE_MCP_HTTP_TOKEN (at least 43 random characters) and no
-        file is written.
+        across starts, set PROBE_MCP_HTTP_TOKEN (at least 43 random characters, at least
+        16 different ones) and no file is written.
   --dangerously-allow-non-loopback
         Allow --http on an address other machines can reach. The server runs tests and
         reads and writes files for anyone who holds the token, and the connection is
@@ -86,20 +100,38 @@ Environment:
   PROBE_MCP_HTTP_TOKEN   bearer token for --http instead of a generated one
 `
 
-// wantsFlags reports whether the arguments ask for something other than plain stdio. Anything
-// else is ignored, as it always was, so an existing client configuration behaves the same.
-func wantsFlags(args []string) bool {
+const usageLine = "usage: probe-mcp [--http host:port [--dangerously-allow-non-loopback]]   (probe-mcp --help for more)"
+
+// knownFlag reports whether a dash-prefixed argument is one of the options.
+func knownFlag(arg string) bool {
+	name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+	return name == "http" || name == "dangerously-allow-non-loopback" || name == "h" || name == "help"
+}
+
+// runArgs looks at the arguments. With none, or with words only, it reports handled = false and the
+// caller serves stdio, as it always did: an existing client configuration behaves the same. An
+// option that is not known (a mistyped --http, say) is an error, exit code 2: starting stdio in its
+// place would look like a server that hangs.
+func runArgs(args []string, token string, stderr io.Writer) (code int, handled bool) {
+	flags := false
 	for _, a := range args {
-		name, _, _ := strings.Cut(strings.TrimLeft(a, "-"), "=")
-		if strings.HasPrefix(a, "-") && (name == "http" || name == "dangerously-allow-non-loopback" || name == "h" || name == "help") {
-			return true
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			continue
 		}
+		if !knownFlag(a) {
+			fmt.Fprintf(stderr, "probe-mcp: unknown option %s\n%s\n", a, usageLine)
+			return 2, true
+		}
+		flags = true
 	}
-	return false
+	if !flags {
+		return 0, false
+	}
+	return runWithFlags(args, token, stderr), true
 }
 
 // runWithFlags handles --help and --http and returns the exit code.
-func runWithFlags(args []string, stderr io.Writer) int {
+func runWithFlags(args []string, token string, stderr io.Writer) int {
 	fs := flag.NewFlagSet("probe-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, usage) }
@@ -112,14 +144,9 @@ func runWithFlags(args []string, stderr io.Writer) int {
 		return 2
 	}
 	if *addr == "" {
-		fmt.Fprintln(stderr, "probe-mcp: --http needs an address, for example --http 127.0.0.1:7391")
+		fmt.Fprintf(stderr, "probe-mcp: --http needs an address before any other word, for example --http 127.0.0.1:7391\n%s\n", usageLine)
 		return 2
 	}
-
-	// Take the token out of the environment: the tools start child processes (probe test, adb),
-	// and they have no business with it.
-	token := os.Getenv(mcp.TokenEnv)
-	_ = os.Unsetenv(mcp.TokenEnv)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

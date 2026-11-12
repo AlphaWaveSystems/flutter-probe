@@ -246,9 +246,11 @@ The tools and their results are the same as over stdio. The endpoint follows the
 Every request must carry `Authorization: Bearer <token>`. A request without the right token gets `401` and an empty body.
 
 - **Default: a new token on every start.** It is 256 random bits, written to `http-token` in `flutter-probe-mcp` under your user config directory (`~/Library/Application Support` on macOS, `~/.config` on Linux, `%AppData%` on Windows). The file is readable only by you (mode `0600` in a `0700` directory) and is removed when the server stops. The path is printed on start; the token itself is never printed or logged. A token that leaked stops working as soon as the server stops.
-- **A token that stays the same:** set `PROBE_MCP_HTTP_TOKEN` to your own value of at least 43 characters, for example from `openssl rand -hex 32`. Then no file is written. Keep it out of files you share.
+- **A token that stays the same:** set `PROBE_MCP_HTTP_TOKEN` to your own value, for example from `openssl rand -base64 32`. It must be at least 43 characters long and use at least 16 different characters; a shorter or more repetitive value is refused. Then no file is written. Keep it out of files you share. `probe-mcp` removes the variable from its own environment at start, so the commands it runs do not inherit it, but the value stays visible in the process's initial environment to programs running as the same user. On a shared machine, do not reuse a stable token after the server has stopped: another program could listen on the same port and receive it.
 
-`probe-mcp` refuses to start if the token directory or an existing token file is a symlink or can be read by other users. Remove the file, or run `chmod 700` on the directory, and start again.
+`probe-mcp` refuses to start if the token directory or an existing token file is a symlink or can be read by other users. Remove the file, or run `chmod 700` on the directory, and start again. On Windows these file-mode checks are skipped: the file is protected by the access rules of your user profile folder, not by a mode.
+
+Run one HTTP server per user config directory. A second one started the same way replaces the first one's token file (it says so on start), and the first server's token is then no longer on disk. For a second server, set `PROBE_MCP_HTTP_TOKEN`.
 
 ```bash
 TOKEN=$(cat "$HOME/Library/Application Support/flutter-probe-mcp/http-token")
@@ -284,15 +286,15 @@ Add the server to `.vscode/mcp.json` in your workspace. The `inputs` entry makes
 }
 ```
 
-VS Code stores the value you enter, so with the default token you enter it again after each restart of `probe-mcp`. To avoid that, start the server with your own `PROBE_MCP_HTTP_TOKEN`. VS Code has more than one MCP configuration format; see its [MCP configuration reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration) for the one your version uses. The `type`, `url` and `headers` fields are the same in each.
+VS Code stores the value you enter, so with the default token you enter it again after each restart of `probe-mcp`. To avoid that, start the server with your own `PROBE_MCP_HTTP_TOKEN`. Keep the `127.0.0.1` literal in the URL, not `localhost`: a name can be made to resolve to another address, the literal cannot. VS Code has more than one MCP configuration format; see its [MCP configuration reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration) for the one your version uses. The `type`, `url` and `headers` fields are the same in each.
 
 ### Security model
 
 What the server does, in plain words:
 
 - **It listens only on your own machine.** The address must be a loopback one: `127.0.0.1`, `localhost` (which means `127.0.0.1` here), or `[::1]` for IPv6. It listens on exactly the address you give, not on both.
-- **Every request needs the token.** The comparison takes the same time whatever the wrong token looks like, and a missing token and a wrong one get the same answer.
-- **Web pages cannot use it.** A browser adds an `Origin` or `Sec-Fetch-Site` header to requests a page makes; any request with one is refused (`403`), and the server sends no CORS headers. The `Host` header must name the address the server listens on, which stops a web page that points its own domain name at `127.0.0.1` (DNS rebinding).
+- **Every request needs the token.** The comparison takes the same time whatever the wrong token looks like, and a missing token and a wrong one get the same answer. A request without the token is answered before its body is read, and the connection is closed.
+- **Web pages cannot use it.** A browser adds an `Origin` header, a `Sec-Fetch-Site` header, or both to requests a page makes. A request with an `Origin` header, or with a `Sec-Fetch-Site` value other than `none`, is refused (`403`), and the server sends no CORS headers. `none` means no page made the request (an address typed by hand, some command-line clients); such a request still needs the token. The `Host` header must name the address the server listens on, which stops a web page that points its own domain name at `127.0.0.1` (DNS rebinding).
 - **Only the expected kind of request is read.** `POST` to `/mcp` with `Content-Type: application/json`, up to 4 MiB; at most 8 requests at a time; time limits on reading and writing.
 
 What it does not do:

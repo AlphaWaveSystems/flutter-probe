@@ -15,39 +15,79 @@ import (
 	"time"
 )
 
-func TestWantsFlags(t *testing.T) {
-	for _, args := range [][]string{{"--http", "127.0.0.1:0"}, {"-http=127.0.0.1:0"}, {"--http=x"}, {"--dangerously-allow-non-loopback"}, {"-h"}, {"--help"}} {
-		if !wantsFlags(args) {
-			t.Errorf("wantsFlags(%v) = false", args)
-		}
-	}
-	// Everything else starts stdio, as before the HTTP transport existed.
-	for _, args := range [][]string{nil, {}, {"http"}, {"--stdio"}, {"--httpx"}, {"serve", "127.0.0.1:1"}, {"--verbose"}} {
-		if wantsFlags(args) {
-			t.Errorf("wantsFlags(%v) = true: stdio would not start", args)
+func TestRunArgsLeavesPlainStdioAlone(t *testing.T) {
+	// No arguments, or words only, start stdio, as before the HTTP transport existed.
+	for _, args := range [][]string{nil, {}, {"http"}, {"serve", "127.0.0.1:1"}, {"-"}, {"ignored"}} {
+		var stderr bytes.Buffer
+		if code, handled := runArgs(args, "", &stderr); handled || code != 0 || stderr.Len() != 0 {
+			t.Errorf("runArgs(%v) = %d, handled %v, stderr %q: stdio would not start", args, code, handled, stderr.String())
 		}
 	}
 }
 
-func TestRunWithFlagsRefusals(t *testing.T) {
+// TestRunArgsRefusesUnknownOptions: a mistyped option is an error, not a silent stdio server.
+func TestRunArgsRefusesUnknownOptions(t *testing.T) {
+	for _, args := range [][]string{{"--htpp", "127.0.0.1:0"}, {"--httpx"}, {"--stdio"}, {"--verbose"}, {"-x"}, {"word", "--htpp"}, {"--http=127.0.0.1:0", "--nope"}} {
+		var stderr bytes.Buffer
+		code, handled := runArgs(args, "", &stderr)
+		if !handled || code != 2 {
+			t.Errorf("runArgs(%v) = %d, handled %v; want exit 2", args, code, handled)
+		}
+		if out := stderr.String(); !strings.Contains(out, "unknown option") || !strings.Contains(out, "usage: probe-mcp") {
+			t.Errorf("runArgs(%v) stderr = %q, want the unknown option and a usage line", args, out)
+		}
+	}
+}
+
+func TestRunArgsRefusals(t *testing.T) {
 	cases := []struct {
 		args []string
 		code int
 		want string
 	}{
 		{[]string{"--help"}, 0, "--dangerously-allow-non-loopback"},
+		{[]string{"-h"}, 0, "[::1]:7391"},
 		{[]string{"--dangerously-allow-non-loopback"}, 2, "--http needs an address"},
+		{[]string{"word", "--http", "127.0.0.1:0"}, 2, "--http needs an address"},
 		// Addresses from the documentation ranges: no interface has them, so nothing can be opened
 		// to the network even if the refusal were missing.
 		{[]string{"--http", "192.0.2.1:1"}, 1, "not a loopback address"},
+		{[]string{"-http=192.0.2.1:1"}, 1, "not a loopback address"},
 		{[]string{"--http=[2001:db8::1]:1"}, 1, "not a loopback address"},
 		{[]string{"--http", "example.com:1"}, 1, "must be an IP address or localhost"},
 	}
 	for _, c := range cases {
 		var stderr bytes.Buffer
-		if code := runWithFlags(c.args, &stderr); code != c.code || !strings.Contains(stderr.String(), c.want) {
-			t.Errorf("%v: exit %d, stderr %q; want exit %d and %q", c.args, code, stderr.String(), c.code, c.want)
+		code, handled := runArgs(c.args, "", &stderr)
+		if !handled || code != c.code || !strings.Contains(stderr.String(), c.want) {
+			t.Errorf("%v: exit %d (handled %v), stderr %q; want exit %d and %q", c.args, code, handled, stderr.String(), c.code, c.want)
 		}
+	}
+}
+
+// TestTakeTokenUnsetsTheVariable: after the start-up read the variable is gone from the process, so
+// no child process (probe test, adb) inherits the token, on the stdio path as on the HTTP path.
+func TestTakeTokenUnsetsTheVariable(t *testing.T) {
+	t.Setenv("PROBE_MCP_HTTP_TOKEN", "value-for-this-test")
+	if got := takeToken(); got != "value-for-this-test" {
+		t.Errorf("takeToken() = %q", got)
+	}
+	if v, set := os.LookupEnv("PROBE_MCP_HTTP_TOKEN"); set {
+		t.Errorf("the variable is still set (%d characters): a child process would inherit it", len(v))
+	}
+	for _, kv := range exec.Command("true").Environ() {
+		if strings.HasPrefix(kv, "PROBE_MCP_HTTP_TOKEN=") {
+			t.Error("a child process would be started with the variable")
+		}
+	}
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// main takes the token before it looks at the arguments, so the stdio path is covered too.
+	take, args := strings.Index(string(src), "token := takeToken()"), strings.Index(string(src), "runArgs(os.Args[1:], token, os.Stderr)")
+	if take < 0 || args < 0 || take > args {
+		t.Error("main does not take the token before it handles the arguments")
 	}
 }
 
@@ -84,7 +124,7 @@ func TestBinary(t *testing.T) {
 
 	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize"}` + "\n"
 	const want = `{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"probe-mcp","version":"dev"}}}` + "\n"
-	for _, args := range [][]string{nil, {"--stdio"}, {"ignored"}} {
+	for _, args := range [][]string{nil, {"ignored"}, {"serve", "now"}} {
 		cmd := exec.Command(bin, args...)
 		cmd.Env = env
 		cmd.Stdin = strings.NewReader(initialize)
@@ -99,6 +139,20 @@ func TestBinary(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("a stdio run wrote under the home directory: %v", entries)
+	}
+
+	// A mistyped option: exit 2, a usage line, nothing on stdout, no server.
+	{
+		cmd := exec.Command(bin, "--htpp", "127.0.0.1:0")
+		cmd.Env = env
+		cmd.Stdin = strings.NewReader(initialize)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err := cmd.Run()
+		exit, ok := err.(*exec.ExitError)
+		if !ok || exit.ExitCode() != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "unknown option --htpp") {
+			t.Errorf("--htpp: err %v, stdout %q, stderr %q; want exit 2 and the unknown option on stderr", err, stdout.String(), stderr.String())
+		}
 	}
 
 	cmd := exec.Command(bin, "--http", "127.0.0.1:0")

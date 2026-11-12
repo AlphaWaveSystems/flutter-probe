@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -198,6 +200,17 @@ func TestHTTPOriginIsRefused(t *testing.T) {
 			t.Errorf("Sec-Fetch-Site %s: status = %d, want 403", site, resp.StatusCode)
 		}
 	}
+	// "none" is not a page's request (a typed address, some non-browser clients): it is not refused
+	// here, it goes on to the token check like any other request.
+	if resp, _ := f.post(t, listReq, func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "none") }); resp.StatusCode != http.StatusOK {
+		t.Errorf("Sec-Fetch-Site none with the token: status = %d, want 200", resp.StatusCode)
+	}
+	if resp, _ := f.post(t, listReq, func(r *http.Request) {
+		r.Header.Set("Sec-Fetch-Site", "none")
+		r.Header.Del("Authorization")
+	}); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Sec-Fetch-Site none without the token: status = %d, want 401", resp.StatusCode)
+	}
 	// A preflight gets no permission: no CORS header, whatever it asks for.
 	resp, _ := f.do(t, http.MethodOptions, HTTPEndpointPath, "", func(r *http.Request) {
 		r.Header.Del("Authorization")
@@ -222,6 +235,7 @@ func TestHTTPHostMustNameTheListener(t *testing.T) {
 		"evil.example", fmt.Sprintf("evil.example:%d", port), fmt.Sprintf("127.0.0.1.evil.example:%d", port),
 		fmt.Sprintf("127.0.0.1:%d", port+1), "127.0.0.1", "localhost",
 		fmt.Sprintf("127.0.0.2:%d", port), fmt.Sprintf("[::1]:%d", port), fmt.Sprintf("192.168.1.5:%d", port),
+		fmt.Sprintf("evillocalhost:%d", port), fmt.Sprintf("localhost.evil.com:%d", port), fmt.Sprintf(":%d", port),
 	}
 	for _, host := range bad {
 		resp, body := f.post(t, listReq, func(r *http.Request) { r.Host = host })
@@ -252,6 +266,18 @@ func TestHostAllowedByBoundAddress(t *testing.T) {
 		{net.IPv4zero, "localhost:9", true},
 		{net.IPv4zero, "evil.example:9", false},
 		{net.IPv4zero, "192.168.1.5:10", false},
+		// "localhost" is the whole host, not a part of one, on every kind of bind.
+		{net.IPv4(127, 0, 0, 1), "localhost:9", true},
+		{net.IPv4(127, 0, 0, 1), "evillocalhost:9", false},
+		{net.IPv4(127, 0, 0, 1), "localhost.evil.com:9", false},
+		{net.IPv4(127, 0, 0, 1), "evil.localhost:9", false},
+		{net.IPv4(127, 0, 0, 1), "localhost", false},
+		{net.IPv4(127, 0, 0, 1), "", false},
+		{net.IPv4(127, 0, 0, 1), ":9", false},
+		{net.IPv4zero, "evillocalhost:9", false},
+		{net.IPv4zero, "localhost.evil.com:9", false},
+		{net.IPv4zero, "", false},
+		{net.IPv4zero, ":9", false},
 	}
 	for _, c := range cases {
 		tr := &httpTransport{bound: &net.TCPAddr{IP: c.bound, Port: 9}}
@@ -500,9 +526,12 @@ func TestTokenFileModes(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), "cfg", tokenDirName)
 	token, _ := newToken()
-	path, err := writeTokenFile(dir, token)
+	path, replaced, err := writeTokenFile(dir, token)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if replaced {
+		t.Error("the first write reports a replaced file")
 	}
 	if len(token) != 64 {
 		t.Errorf("token is %d hex characters, want 64 (256 bits)", len(token))
@@ -518,8 +547,8 @@ func TestTokenFileModes(t *testing.T) {
 	}
 	// A second start replaces the token and leaves nothing else in the directory.
 	second, _ := newToken()
-	if _, err := writeTokenFile(dir, second); err != nil {
-		t.Fatal(err)
+	if _, replaced, err := writeTokenFile(dir, second); err != nil || !replaced {
+		t.Fatalf("second write: replaced = %v, err = %v; want replaced and no error", replaced, err)
 	}
 	if b, _ := os.ReadFile(path); string(b) != second+"\n" || second == token {
 		t.Error("a second start did not replace the token")
@@ -571,7 +600,7 @@ func TestTokenFileRefusals(t *testing.T) {
 			if err := os.Chmod(path, mode); err != nil {
 				t.Fatal(err)
 			}
-			_, err := writeTokenFile(dir, token)
+			_, _, err := writeTokenFile(dir, token)
 			wantRefusal(t, err, "token file", path, "is open to other users")
 			if b, _ := os.ReadFile(path); string(b) != "old\n" {
 				t.Errorf("mode %04o: the refused file was written", mode)
@@ -588,7 +617,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
-		_, err := writeTokenFile(dir, token)
+		_, _, err := writeTokenFile(dir, token)
 		wantRefusal(t, err, "token file", path, "is a symlink or not a regular file")
 		if b, _ := os.ReadFile(target); string(b) != "keep\n" {
 			t.Error("the link target was written")
@@ -604,7 +633,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
-		_, err := writeTokenFile(dir, token)
+		_, _, err := writeTokenFile(dir, token)
 		wantRefusal(t, err, "token file", path, "is a symlink or not a regular file")
 		if _, err := os.Stat(target); !os.IsNotExist(err) {
 			t.Error("the token was written through the link")
@@ -616,7 +645,7 @@ func TestTokenFileRefusals(t *testing.T) {
 			if err := os.Chmod(dir, mode); err != nil {
 				t.Fatal(err)
 			}
-			_, err := writeTokenFile(dir, token)
+			_, _, err := writeTokenFile(dir, token)
 			wantRefusal(t, err, "token directory", dir, "is open to other users")
 			if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 				t.Errorf("mode %04o: the token was written into the refused directory", mode)
@@ -629,7 +658,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(real, link); err != nil {
 			t.Fatal(err)
 		}
-		_, err := writeTokenFile(link, token)
+		_, _, err := writeTokenFile(link, token)
 		wantRefusal(t, err, "token directory", link, "is a symlink or not a directory")
 		if entries, _ := os.ReadDir(real); len(entries) != 0 {
 			t.Error("the token was written through the directory link")
@@ -637,12 +666,46 @@ func TestTokenFileRefusals(t *testing.T) {
 	})
 }
 
-func TestSuppliedTokenRules(t *testing.T) {
-	long := strings.Repeat("k", minSuppliedToken)
-	if err := checkSuppliedToken(long); err != nil {
-		t.Errorf("a %d-character token was refused: %v", len(long), err)
+// randomSuppliedToken is a token as a user would make one with `openssl rand -base64 32`.
+func randomSuppliedToken(t *testing.T) string {
+	t.Helper()
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		t.Fatal(err)
 	}
-	for _, bad := range []string{"short", long[1:], long + " x", long + "\n", long + "é"} {
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	if checkSuppliedToken(token) != nil {
+		return randomSuppliedToken(t) // fewer than 16 different characters: about once in 10^9
+	}
+	return token
+}
+
+func TestSuppliedTokenRules(t *testing.T) {
+	// The lengths are written out, not taken from the constant: 26 + 10 + 6 = 42, 26 + 10 + 7 = 43.
+	short := "abcdefghijklmnopqrstuvwxyz" + "0123456789" + "ABCDEF"
+	enough := "abcdefghijklmnopqrstuvwxyz" + "0123456789" + "ABCDEFG"
+	if len(short) != 42 || len(enough) != 43 {
+		t.Fatalf("test strings are %d and %d characters, want 42 and 43", len(short), len(enough))
+	}
+	if err := checkSuppliedToken(enough); err != nil {
+		t.Errorf("a 43-character token was refused: %v", err)
+	}
+	if err := checkSuppliedToken(short); err == nil || !strings.Contains(err.Error(), "too short") {
+		t.Errorf("a 42-character token: err = %v, want too short", err)
+	}
+	// Long enough, but few different characters: 15 are refused, 16 are accepted.
+	fifteen := strings.Repeat("abcdefghijklmno", 3)
+	sixteen := strings.Repeat("abcdefghijklmnop", 3)
+	if err := checkSuppliedToken(fifteen); err == nil || !strings.Contains(err.Error(), "too few different characters") {
+		t.Errorf("15 different characters in %d: err = %v, want a refusal", len(fifteen), err)
+	}
+	if err := checkSuppliedToken(strings.Repeat("k", 64)); err == nil {
+		t.Error("one character repeated 64 times was accepted")
+	}
+	if err := checkSuppliedToken(sixteen); err != nil {
+		t.Errorf("16 different characters in %d were refused: %v", len(sixteen), err)
+	}
+	for _, bad := range []string{"short", short, fifteen, enough + " x", enough + "\n", enough + "é", enough[:20] + "\t" + enough[20:]} {
 		err := checkSuppliedToken(bad)
 		if err == nil {
 			t.Errorf("token of length %d was accepted", len(bad))
@@ -765,11 +828,14 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	}
 	// A token file left by a server that was killed is replaced, never reused.
 	stale, _ := newToken()
-	if _, err := writeTokenFile(dir, stale); err != nil {
+	if _, _, err := writeTokenFile(dir, stale); err != nil {
 		t.Fatal(err)
 	}
-	firstURL, _, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	firstURL, firstLogs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir})
 	first := read()
+	if out := firstLogs.String(); !strings.Contains(out, "has been replaced") || strings.Contains(out, stale) || strings.Contains(out, first) {
+		t.Errorf("replacing a token file: the log must say so and name no token:\n%s", strings.ReplaceAll(strings.ReplaceAll(out, stale, "<stale>"), first, "<token>"))
+	}
 	if first == stale {
 		t.Fatal("a token file from an earlier server was reused")
 	}
@@ -779,8 +845,11 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}
-	url, _, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	url, secondLogs, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
 	second := read()
+	if strings.Contains(secondLogs.String(), "has been replaced") {
+		t.Error("a start with no token file on disk reports a replaced one")
+	}
 	if first == second {
 		t.Fatal("the token did not change between starts")
 	}
@@ -796,7 +865,7 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 // refused, and neither shows in the log or the error.
 func TestRunHTTPSuppliedToken(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), tokenDirName)
-	supplied, _ := newToken()
+	supplied := randomSuppliedToken(t)
 	url, logs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir, Token: supplied})
 	if resp, _ := (&httpFixture{url: url, token: supplied}).post(t, listReq, nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("the supplied token: status = %d, want 200", resp.StatusCode)
@@ -817,18 +886,131 @@ func TestRunHTTPSuppliedToken(t *testing.T) {
 	}
 }
 
-// TestHTTPServerLimitsAreSet pins the timeouts and caps a slow or greedy client meets.
+// TestHTTPServerLimitsAreSet pins the timeouts and caps a slow or greedy client meets, as numbers:
+// a limit that is raised by accident is as much a regression as one that is dropped.
 func TestHTTPServerLimitsAreSet(t *testing.T) {
+	srv := newHTTPServer(http.NotFoundHandler(), io.Discard)
+	for _, c := range []struct {
+		name      string
+		got, want time.Duration
+	}{
+		{"ReadHeaderTimeout", srv.ReadHeaderTimeout, 5 * time.Second},
+		{"ReadTimeout", srv.ReadTimeout, 30 * time.Second},
+		{"IdleTimeout", srv.IdleTimeout, 60 * time.Second},
+		{"WriteTimeout", srv.WriteTimeout, 30 * time.Minute},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
+	if srv.MaxHeaderBytes != 16*1024 {
+		t.Errorf("MaxHeaderBytes = %d, want 16384", srv.MaxHeaderBytes)
+	}
+	if maxHTTPBody != 4*1024*1024 || maxHTTPInFlight != 8 {
+		t.Errorf("body cap = %d, in-flight cap = %d; want 4194304 and 8", maxHTTPBody, maxHTTPInFlight)
+	}
+	if srv.ErrorLog == nil {
+		t.Error("the server logs to the process's default logger")
+	}
+	// RunHTTP serves with exactly this server.
 	src, err := os.ReadFile("http.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"ReadHeaderTimeout: httpReadHeaderTimeout", "ReadTimeout:       httpReadTimeout", "WriteTimeout:      httpWriteTimeout", "IdleTimeout:       httpIdleTimeout", "MaxHeaderBytes:    httpMaxHeader"} {
-		if !strings.Contains(string(src), field) {
-			t.Errorf("the http.Server does not set %q", field)
+	if !strings.Contains(string(src), "srv := newHTTPServer(newHTTPTransport(") || strings.Count(string(src), "&http.Server{") != 1 {
+		t.Error("RunHTTP does not serve with newHTTPServer")
+	}
+}
+
+// TestHTTPTokenComesBeforeBodyAndSlots: a caller without the token costs nothing. Its body is not
+// read and it takes no in-flight slot, so it cannot hold the server busy.
+func TestHTTPTokenComesBeforeBodyAndSlots(t *testing.T) {
+	f := newHTTPFixture(t)
+	host := strings.TrimPrefix(f.url, "http://")
+
+	// A request that announces a body and never sends it. The answer must come at once; a server
+	// that read the body first would wait for it until the read timeout.
+	conn, err := net.Dial("tcp", host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	fmt.Fprintf(conn, "POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n", HTTPEndpointPath, host)
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	status, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil || !strings.HasPrefix(status, "HTTP/1.1 401") {
+		t.Errorf("no token, body never sent: %q, %v; want 401 at once", strings.TrimSpace(status), err)
+	}
+
+	// Every slot taken: a caller without the token still gets 401, not 503, and learns nothing
+	// about the load; one with the token gets 503.
+	for i := 0; i < maxHTTPInFlight; i++ {
+		f.tr.inFlight <- struct{}{}
+	}
+	if resp, _ := f.post(t, listReq, func(r *http.Request) { r.Header.Del("Authorization") }); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("no token, every slot taken: status = %d, want 401", resp.StatusCode)
+	}
+	if resp, _ := f.post(t, listReq, nil); resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("token, every slot taken: status = %d, want 503", resp.StatusCode)
+	}
+	if got := len(f.tr.inFlight); got != maxHTTPInFlight {
+		t.Errorf("refused requests changed the slot count: %d", got)
+	}
+}
+
+// TestHTTPBearerMustBeTheTokenAlone: text after the token makes it another token.
+func TestHTTPBearerMustBeTheTokenAlone(t *testing.T) {
+	f := newHTTPFixture(t)
+	for _, auth := range []string{
+		"Bearer " + f.token + " extra", "Bearer " + f.token + ",", "Bearer " + f.token + "x", "Bearer x" + f.token,
+		"Bearer " + f.token + ", Bearer " + f.token, "Bearer", "Bearer ", f.token, "Basic " + f.token, "Token " + f.token,
+		"Bearer " + f.token[:len(f.token)-1], "Bearer " + strings.ToUpper(f.token),
+	} {
+		resp, body := f.post(t, listReq, func(r *http.Request) { r.Header.Set("Authorization", auth) })
+		if resp.StatusCode != http.StatusUnauthorized || body != "" {
+			t.Errorf("Authorization %q: status = %d, want 401 and no body", strings.ReplaceAll(auth, f.token, "<token>"), resp.StatusCode)
 		}
 	}
-	if httpReadHeaderTimeout <= 0 || httpReadTimeout <= 0 || httpWriteTimeout <= 0 || httpIdleTimeout <= 0 {
-		t.Error("a timeout is zero, which means none")
+	if resp, _ := f.post(t, listReq, func(r *http.Request) { r.Header.Set("Authorization", "bearer "+f.token) }); resp.StatusCode != http.StatusOK {
+		t.Errorf("lower-case scheme: status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// TestRunHTTPFailedStartLeavesTheRunningServerAlone: a second start on a port that is taken fails
+// and must not touch the token file of the server that holds the port.
+func TestRunHTTPFailedStartLeavesTheRunningServerAlone(t *testing.T) {
+	skipWithoutFileModes(t)
+	dir := filepath.Join(t.TempDir(), tokenDirName)
+	path := filepath.Join(dir, tokenFileName)
+	url, _, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := strings.TrimPrefix(url, "http://")
+	if !strings.HasPrefix(addr, "127.0.0.1:") {
+		t.Fatalf("the first server is at %s, not on 127.0.0.1", addr)
+	}
+
+	var logs syncBuffer
+	err = RunHTTP(context.Background(), HTTPOptions{Addr: addr, TokenDir: dir, Log: &logs})
+	if err == nil || !strings.Contains(err.Error(), "listen") {
+		t.Fatalf("second start on a taken port: err = %v, want a listen error", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the failed start removed the running server's token file: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("the failed start replaced the running server's token")
+	}
+	if logs.String() != "" {
+		t.Errorf("the failed start announced a server: %q", strings.ReplaceAll(logs.String(), strings.TrimSpace(string(after)), "<token>"))
+	}
+	if resp, _ := (&httpFixture{url: url, token: strings.TrimSpace(string(after))}).post(t, listReq, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("the running server with the token on disk: status = %d, want 200", resp.StatusCode)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Errorf("token dir holds %d entries after the failed start, want 1", len(entries))
 	}
 }

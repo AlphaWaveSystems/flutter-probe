@@ -31,6 +31,9 @@ const (
 	tokenBytes    = 32
 	// minSuppliedToken is the shortest supplied token accepted: 32 bytes in base64 are 43 characters.
 	minSuppliedToken = 43
+	// minSuppliedDistinct is a cheap floor against a long token that is one word repeated: it must
+	// use at least this many different characters.
+	minSuppliedDistinct = 16
 )
 
 // permsEnforced is false where the file mode does not describe who can read a file.
@@ -58,12 +61,22 @@ func newToken() (string, error) {
 // The message never repeats the token.
 func checkSuppliedToken(token string) error {
 	if len(token) < minSuppliedToken {
-		return fmt.Errorf("%s is too short: use at least %d characters from a random source, for example `openssl rand -hex 32`", TokenEnv, minSuppliedToken)
+		return fmt.Errorf("%s is too short: use at least %d characters from a random source, for example `openssl rand -base64 32`", TokenEnv, minSuppliedToken)
 	}
+	var seen [128]bool
+	distinct := 0
 	for i := 0; i < len(token); i++ {
-		if c := token[i]; c <= 0x20 || c >= 0x7f {
+		c := token[i]
+		if c <= 0x20 || c >= 0x7f {
 			return fmt.Errorf("%s must be printable ASCII without spaces", TokenEnv)
 		}
+		if !seen[c] {
+			seen[c] = true
+			distinct++
+		}
+	}
+	if distinct < minSuppliedDistinct {
+		return fmt.Errorf("%s uses too few different characters (at least %d are needed): take it from a random source, for example `openssl rand -base64 32`", TokenEnv, minSuppliedDistinct)
 	}
 	return nil
 }
@@ -72,36 +85,39 @@ func checkSuppliedToken(token string) error {
 // an existing token file that is a symlink or that other users can reach, instead of repairing it:
 // a token location someone else set up is not one to trust. The token is written to a new 0600
 // file that is then renamed into place, so the write never follows a link at the final name.
-func writeTokenFile(dir, token string) (string, error) {
+// replaced reports that a token file was already there: one left by a server that was killed, or
+// the one a running server still depends on.
+func writeTokenFile(dir, token string) (path string, replaced bool, err error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("mcp http: token directory: %w", err)
+		return "", false, fmt.Errorf("mcp http: token directory: %w", err)
 	}
 	di, err := os.Lstat(dir)
 	if err != nil {
-		return "", fmt.Errorf("mcp http: token directory: %w", err)
+		return "", false, fmt.Errorf("mcp http: token directory: %w", err)
 	}
 	if di.Mode()&os.ModeSymlink != 0 || !di.IsDir() {
-		return "", fmt.Errorf("mcp http: token directory %s is a symlink or not a directory; refusing to use it", dir)
+		return "", false, fmt.Errorf("mcp http: token directory %s is a symlink or not a directory; refusing to use it", dir)
 	}
 	if permsEnforced && di.Mode().Perm()&0o077 != 0 {
-		return "", fmt.Errorf("mcp http: token directory %s is open to other users (mode %04o); run `chmod 700` on it or remove it", dir, di.Mode().Perm())
+		return "", false, fmt.Errorf("mcp http: token directory %s is open to other users (mode %04o); run `chmod 700` on it or remove it", dir, di.Mode().Perm())
 	}
 
-	path := filepath.Join(dir, tokenFileName)
+	path = filepath.Join(dir, tokenFileName)
 	if fi, err := os.Lstat(path); err == nil {
+		replaced = true
 		if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
-			return "", fmt.Errorf("mcp http: token file %s is a symlink or not a regular file; refusing to use it. Remove it and start again", path)
+			return "", false, fmt.Errorf("mcp http: token file %s is a symlink or not a regular file; refusing to use it. Remove it and start again", path)
 		}
 		if permsEnforced && fi.Mode().Perm()&0o077 != 0 {
-			return "", fmt.Errorf("mcp http: token file %s is open to other users (mode %04o); refusing to use it. Remove it and start again", path, fi.Mode().Perm())
+			return "", false, fmt.Errorf("mcp http: token file %s is open to other users (mode %04o); refusing to use it. Remove it and start again", path, fi.Mode().Perm())
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("mcp http: token file: %w", err)
+		return "", false, fmt.Errorf("mcp http: token file: %w", err)
 	}
 
 	tmp, err := os.CreateTemp(dir, tokenFileName+".*") // created 0600, with O_EXCL
 	if err != nil {
-		return "", fmt.Errorf("mcp http: token file: %w", err)
+		return "", false, fmt.Errorf("mcp http: token file: %w", err)
 	}
 	_, werr := tmp.WriteString(token + "\n")
 	if cerr := tmp.Close(); werr == nil {
@@ -115,9 +131,9 @@ func writeTokenFile(dir, token string) (string, error) {
 	}
 	if werr != nil {
 		_ = os.Remove(tmp.Name())
-		return "", fmt.Errorf("mcp http: token file: %w", werr)
+		return "", false, fmt.Errorf("mcp http: token file: %w", werr)
 	}
-	return path, nil
+	return path, replaced, nil
 }
 
 // removeTokenFile removes the token file on shutdown, but only while it still holds this server's
