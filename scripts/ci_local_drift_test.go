@@ -79,7 +79,8 @@ var driftExceptions = []driftException{
 	},
 }
 
-// knownModifier is an `env:`, `if:`, `continue-on-error:`, `shell:` or `defaults:` key
+// knownModifier is an `env:`, `if:`, `continue-on-error:`, `shell:` or `defaults:` key,
+// or a job's `container:`, `strategy:`, `services:` or `timeout-minutes:` key,
 // the script knowingly does not copy. job is empty for a key of the workflow itself,
 // step is empty for a key of the job. A step is named by its `name:`, or by its
 // `uses:` when it has no name.
@@ -89,7 +90,29 @@ type knownModifier struct {
 	reason               string
 }
 
+const timeLimitReason = "A time limit for the hosted job. A local run has none: a command that hangs is stopped by the person who started it, and an interrupted run ends with FAIL."
+
 var knownModifiers = []knownModifier{
+	{
+		file: "disclosure-guard.yml", job: "guard", key: "timeout-minutes",
+		sha256: "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5",
+		reason: timeLimitReason,
+	},
+	{
+		file: "studio-ci.yml", job: "frontend", key: "timeout-minutes",
+		sha256: "e629fa6598d732768f7c726b4b621285f9c3b85303900aa912017db7617d8bdb",
+		reason: timeLimitReason,
+	},
+	{
+		file: "studio-ci.yml", job: "studio-go", key: "timeout-minutes",
+		sha256: "f5ca38f748a1d6eaf726b8a42fb575c3c71f1864a8143301782de13da2d9202b",
+		reason: timeLimitReason,
+	},
+	{
+		file: "studio-ci.yml", job: "vscode", key: "timeout-minutes",
+		sha256: "e629fa6598d732768f7c726b4b621285f9c3b85303900aa912017db7617d8bdb",
+		reason: timeLimitReason,
+	},
 	{
 		file: "disclosure-guard.yml", job: "guard", key: "if",
 		sha256: "42027374bb8db054a306b3f3107f56b6af6adb82f3f64d19f342a83c2338798c",
@@ -154,6 +177,10 @@ type workflowJob struct {
 	Env             any            `yaml:"env"`
 	ContinueOnError any            `yaml:"continue-on-error"`
 	Defaults        any            `yaml:"defaults"`
+	Container       any            `yaml:"container"`
+	Strategy        any            `yaml:"strategy"`
+	Services        any            `yaml:"services"`
+	TimeoutMinutes  any            `yaml:"timeout-minutes"`
 }
 
 type workflowFile struct {
@@ -172,7 +199,10 @@ func (s workflowStep) modifiers() []modifier {
 }
 
 func (j workflowJob) modifiers() []modifier {
-	return []modifier{{"if", j.If}, {"env", j.Env}, {"continue-on-error", j.ContinueOnError}, {"defaults", j.Defaults}}
+	return []modifier{
+		{"if", j.If}, {"env", j.Env}, {"continue-on-error", j.ContinueOnError}, {"defaults", j.Defaults},
+		{"container", j.Container}, {"strategy", j.Strategy}, {"services", j.Services}, {"timeout-minutes", j.TimeoutMinutes},
+	}
 }
 
 func (w workflowFile) modifiers() []modifier {

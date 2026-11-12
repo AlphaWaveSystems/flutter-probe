@@ -25,34 +25,55 @@
 #                               passed. The file is passed to the scanner by path and
 #                               its contents are never printed or copied.
 #
+# The last line is `ci-local: PASS (5 of 5 required checks) at <sha>` only when all
+# five required checks ran and passed on a clean tree. Every other run of the checks
+# ends with FAIL or PARTIAL. A base other than origin/main is named after the <sha>.
+#
+# Exit status of a run of the checks:
+#     0  PASS: all five required checks ran and passed on a clean tree
+#     1  FAIL: a check failed or was not run
+#     2  usage error, or the run could not start (no git repository, `git status`
+#        failed, the --report file cannot be written)
+#     3  FAIL: a required check was skipped because a tool is missing
+#     4  FAIL: nothing failed, but the tree was not the commit (see DIRTY TREE below)
+#     5  PARTIAL: nothing failed, but the run does not show that the commit passes the
+#        five checks (a --job selection, a skip allowed with --allow-skip, or GOFLAGS
+#        is set)
+#   130  FAIL (interrupted)
+# --list and --help run nothing and exit 0.
+#
+# Exit status of --release-dry-run. It runs no checks, never prints PASS, and cannot
+# be combined with --all, --job, --allow-skip, --report or --pr-text:
+#     0  BUILT: the eight binaries were built from a clean tree
+#     1  a build failed
+#     2  usage error, or the run could not start
+#     4  the binaries were built, but the tree was not the commit
+#   130  interrupted
+# end of help
+#
 # Each check runs the commands of the workflow job with the same check name. The
 # commands are declared in declare_jobs below, and scripts/ci_local_drift_test.go
 # fails when they no longer match the workflow files.
 #
-# A result is tied to a commit: the checks read the working tree, so the run is marked
-# DIRTY TREE and fails when a tracked file has uncommitted changes. Untracked files
-# that git does not ignore are counted in a note: the checks read them too (the Go
-# tools write an untracked go.work.sum, for example).
+# DIRTY TREE. A result is tied to a commit, and the checks read the working tree. So
+# the tree is read with `git status` before the first check, and the run is marked
+# DIRTY TREE and fails when the tree is not the commit:
+#   - a tracked file has a staged or unstaged change;
+#   - there is an untracked file that git does not ignore (a tracked file can use it,
+#     and a clean clone of the commit would not have it);
+#   - a file is hidden from `git status` with --assume-unchanged or --skip-worktree.
+# Files the run itself creates or changes do not count; they are named in a note.
 #
 # What a run leaves behind: the per-check logs in a temporary directory (its path is
 # printed), and what the commands themselves write inside the repository (bin/,
 # coverage.out, node_modules and build output, all ignored by git). `make build` runs
 # `go mod tidy`, as it does in the workflow. With --all, `npm ci` reinstalls
-# node_modules in studio/frontend, vscode and website. The only thing this script
-# deletes is the linter it installed into its own temporary directory.
+# node_modules in studio/frontend, vscode and website.
 #
-# The last line is `ci-local: PASS (5 of 5 required checks) at <sha>` only when all
-# five required checks ran and passed on a clean tree. Every other run ends with FAIL
-# or PARTIAL.
-#
-# Exit status:
-#   0  PASS: all five required checks ran and passed on a clean tree
-#   1  FAIL: a check failed or was not run
-#   2  usage error
-#   3  FAIL: a required check was skipped because a tool is missing
-#   4  FAIL: nothing failed, but tracked files had uncommitted changes
-#   5  PARTIAL: nothing failed, but not all five required checks ran (a --job
-#      selection, or a skip allowed with --allow-skip)
+# What this script deletes: the linter it installed into its own temporary directory,
+# and go.work.sum in the repository root when the file was not there before the run
+# and git does not track it. The Go tools write that file during a build of the
+# workspace; left behind, it would make the next run a DIRTY TREE.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -153,7 +174,7 @@ npm run build'
 declare_jobs
 
 # ---- Helpers ----------------------------------------------------------------------
-usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^# end of help$/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 die_usage() { echo "ci-local: $1" >&2; echo "try: scripts/ci-local.sh --help" >&2; exit 2; }
 
 # One line, single spaces: the form the drift test compares.
@@ -237,6 +258,12 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ "$RELEASE" -eq 1 ]; then
+  if [ "$ALL" -eq 1 ] || [ "$ALLOW_SKIP" -eq 1 ] || [ "${#WANTED[@]}" -gt 0 ] || [ -n "$REPORT" ] || [ "${#PR_TEXT[@]}" -gt 0 ]; then
+    die_usage "--release-dry-run runs no checks; it cannot be combined with --all, --job, --allow-skip, --report or --pr-text"
+  fi
+fi
+
 # A check runs once, even when --job names it twice.
 SELECTED=()
 if [ "${#WANTED[@]}" -gt 0 ]; then
@@ -268,29 +295,79 @@ if [ -n "$DENYLIST" ]; then DENYLIST=$(abs_path "$DENYLIST"); fi
 command -v git >/dev/null 2>&1 || { echo "ci-local: git is not installed" >&2; exit 2; }
 cd "$ROOT" || exit 2
 
+# A step must not read a start-up file: it could change what the commands do.
+unset BASH_ENV ENV
+
 # ---- Run state --------------------------------------------------------------------
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || { echo "ci-local: not a git repository" >&2; exit 2; }
+BASE_SHA=$(git rev-parse --verify -q "${BASE_REF}^{commit}" 2>/dev/null || true)
+export CI_LOCAL_BASE_SHA="$BASE_SHA" CI_LOCAL_HEAD_SHA="$HEAD_SHA"
+# The last line names a base that is not the default.
+BASE_NOTE=""
+if [ "$BASE_REF" != "origin/main" ]; then BASE_NOTE=" (base $BASE_REF)"; fi
+SELF="ci-local"
+if [ "$RELEASE" -eq 1 ]; then SELF="release-dry-run"; fi
+
+# The tree, read before anything runs. A failing `git status` is not a clean tree.
+STATUS_BEFORE=$(git status --porcelain 2>/dev/null) || { echo "ci-local: git status failed; cannot tell whether the tree is the commit" >&2; exit 2; }
+FLAGGED=$(git ls-files -v 2>/dev/null) || { echo "ci-local: git ls-files failed; cannot tell whether the tree is the commit" >&2; exit 2; }
+N_CHANGED=$(printf '%s\n' "$STATUS_BEFORE" | grep -c '^[^?]' || true)
+N_UNTRACKED=$(printf '%s\n' "$STATUS_BEFORE" | grep -c '^??' || true)
+# Lower case: --assume-unchanged. S: --skip-worktree. git status does not show changes to these.
+N_HIDDEN=$(printf '%s\n' "$FLAGGED" | LC_ALL=C grep -c '^[a-zS] ' || true)
+WORKSUM_BEFORE=""
+if [ -e go.work.sum ]; then WORKSUM_BEFORE=yes; fi
+
+# The report file is created now: a path that cannot be written stops the run before
+# any check, and an old report cannot be mistaken for the result of this run.
+if [ -n "$REPORT" ]; then
+  { : > "$REPORT"; } 2>/dev/null || { echo "ci-local: cannot write the report file $REPORT" >&2; exit 2; }
+fi
+
 TMP_BASE=${TMPDIR:-/tmp}
 LOG_DIR=$(mktemp -d "${TMP_BASE%/}/ci-local.XXXXXX") || { echo "ci-local: cannot create a temporary directory" >&2; exit 2; }
 TOOLS_BIN="$LOG_DIR/tools/bin"
 mkdir -p "$TOOLS_BIN"
-# The only deletion: the tools this run installed into its own temporary directory.
-# shellcheck disable=SC2329  # called by the EXIT trap
-cleanup() { if [ -n "${LOG_DIR:-}" ] && [ -d "$LOG_DIR/tools" ]; then rm -rf "$LOG_DIR/tools"; fi; }
-trap cleanup EXIT
 
-HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || { echo "ci-local: not a git repository" >&2; exit 2; }
-BASE_SHA=$(git rev-parse --verify -q "${BASE_REF}^{commit}" 2>/dev/null || true)
-export CI_LOCAL_BASE_SHA="$BASE_SHA" CI_LOCAL_HEAD_SHA="$HEAD_SHA"
+# go.work.sum, when this run's Go commands wrote it: not there before, not tracked.
+WORKSUM_REMOVED=""
+remove_new_worksum() {
+  if [ -z "$WORKSUM_BEFORE" ] && [ -f "$ROOT/go.work.sum" ] && ! git -C "$ROOT" ls-files --error-unmatch go.work.sum >/dev/null 2>&1; then
+    rm -f "$ROOT/go.work.sum" && WORKSUM_REMOVED=yes
+  fi
+}
+# The deletions: the tools this run installed into its own temporary directory, and
+# the go.work.sum this run wrote.
+# shellcheck disable=SC2329  # called by the EXIT trap
+cleanup() {
+  if [ -n "${LOG_DIR:-}" ] && [ -d "$LOG_DIR/tools" ]; then rm -rf "$LOG_DIR/tools"; fi
+  remove_new_worksum
+}
+trap cleanup EXIT
+# An interrupted run is a failed run. While a command of a check runs, bash handles
+# the signal when that command ends (Ctrl-C ends it at once).
+# shellcheck disable=SC2329  # called by the INT and TERM traps
+interrupted() {
+  echo
+  echo "$SELF: FAIL (interrupted) at $HEAD_SHA$BASE_NOTE"
+  if [ -n "$REPORT" ]; then echo "$SELF: FAIL (interrupted) at $HEAD_SHA$BASE_NOTE" > "$REPORT"; fi
+  exit 130
+}
+trap interrupted INT TERM
 
 TREE="clean"
-UNTRACKED=$(git status --porcelain 2>/dev/null | grep -c '^??' || true)
-if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-  TREE="DIRTY TREE"
+if [ "$N_CHANGED" -gt 0 ] || [ "$N_UNTRACKED" -gt 0 ] || [ "$N_HIDDEN" -gt 0 ]; then
+  TREE="DIRTY TREE ($N_CHANGED changed, $N_UNTRACKED untracked, $N_HIDDEN hidden from git status)"
   {
     echo "=================================================================="
-    echo "WARNING: DIRTY TREE. Tracked files have uncommitted changes."
+    echo "WARNING: DIRTY TREE. The working tree is not commit"
+    echo "$HEAD_SHA:"
+    echo "  $N_CHANGED tracked file(s) with staged or unstaged changes"
+    echo "  $N_UNTRACKED untracked file(s) that git does not ignore"
+    echo "  $N_HIDDEN file(s) hidden with --assume-unchanged or --skip-worktree"
     echo "The checks read the working tree, so this result does not describe"
-    echo "commit $HEAD_SHA. Commit the changes and run again."
+    echo "the commit. See \`git status\` and \`git ls-files -v\`; commit, remove"
+    echo "or ignore the files and run again."
     echo "=================================================================="
   } >&2
 fi
@@ -325,6 +402,12 @@ run_disclosure_guard() { # log
     echo "unknown base: $BASE_REF" >> "$log"
     STATUS="FAIL"; DETAIL="unknown base $BASE_REF"; return
   fi
+  # A base that is HEAD, or that already contains HEAD, leaves nothing to scan. That is
+  # also so on the main branch right after a merge: there is no change to check.
+  if [ "$BASE_SHA" = "$HEAD_SHA" ] || git merge-base --is-ancestor "$HEAD_SHA" "$BASE_SHA" 2>/dev/null; then
+    echo "empty range: $BASE_REF ($BASE_SHA) contains HEAD; nothing was scanned" >> "$log"
+    STATUS="NOT RUN"; DETAIL="empty range: $BASE_REF contains HEAD"; return
+  fi
   mkdir -p "$LOG_DIR/base-scanner"
   if ! git show "$BASE_SHA:scripts/disclosure-scan.sh" > "$scanner" 2>/dev/null; then
     echo "scripts/disclosure-scan.sh is missing on the base" >> "$log"
@@ -350,7 +433,7 @@ run_disclosure_guard() { # log
 # The `build` job of .github/workflows/release.yml: the probe and probe-mcp binaries
 # for the four release targets. Nothing is uploaded, no tag is made.
 release_dry_run() {
-  local out="$LOG_DIR/release" version target goos goarch ext failed=0 f
+  local out="$LOG_DIR/release" version target goos goarch ext failed=0 f built=0
   command -v go >/dev/null 2>&1 || { echo "ci-local: go is not installed" >&2; return 1; }
   version=$(cat "$ROOT/VERSION" 2>/dev/null || echo "0.0.0")
   mkdir -p "$out"
@@ -366,6 +449,7 @@ release_dry_run() {
   printf '%10s  %-64s  %s\n' "bytes" "sha256" "file"
   for f in "$out"/*; do
     [ -f "$f" ] || continue
+    built=$((built + 1))
     printf '%10s  %s  %s\n' "$(wc -c < "$f" | tr -d ' ')" "$(sha256_of "$f")" "$(basename "$f")"
   done
   echo
@@ -373,15 +457,16 @@ release_dry_run() {
   echo "Not built here: the Studio apps, the .mcpb bundles and the iOS driver."
   echo "The checksums describe these local files. A hosted release build has other checksums."
   echo "Nothing was published and no tag was created."
-  if [ "$failed" -ne 0 ]; then
-    echo "release-dry-run: FAIL (see $LOG_DIR/release.log) at $HEAD_SHA"
+  echo "No checks were run: this is not a result for a pull request."
+  if [ "$failed" -ne 0 ] || [ "$built" -ne 8 ]; then
+    echo "release-dry-run: FAIL ($built of 8 binaries built; see $LOG_DIR/release.log) at $HEAD_SHA"
     return 1
   fi
   if [ "$TREE" != "clean" ]; then
-    echo "release-dry-run: FAIL (DIRTY TREE; the files were built from uncommitted changes) at $HEAD_SHA"
+    echo "release-dry-run: FAIL (DIRTY TREE; the files were built from a tree that is not the commit) at $HEAD_SHA"
     return 4
   fi
-  echo "release-dry-run: PASS (8 binaries) at $HEAD_SHA"
+  echo "release-dry-run: BUILT 8 binaries at $HEAD_SHA (no checks run)"
 }
 
 if [ "$RELEASE" -eq 1 ]; then
@@ -427,9 +512,26 @@ done
 LINTER="not run in this selection"
 if [ -x "$TOOLS_BIN/staticcheck" ]; then LINTER=$("$TOOLS_BIN/staticcheck" -version 2>/dev/null || echo "staticcheck, version unknown"); fi
 
-CHANGED_BY_RUN=""
-if [ "$TREE" = "clean" ] && [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-  CHANGED_BY_RUN=yes
+# What the run itself changed or created, compared with the tree before the first check.
+remove_new_worksum
+STATUS_AFTER=$(git status --porcelain 2>/dev/null || true)
+CHANGED_BY_RUN=0
+if [ "$STATUS_AFTER" != "$STATUS_BEFORE" ]; then
+  while IFS= read -r status_line; do
+    [ -n "$status_line" ] || continue
+    case $'\n'"$STATUS_BEFORE"$'\n' in
+      *$'\n'"$status_line"$'\n'*) ;;
+      *) CHANGED_BY_RUN=$((CHANGED_BY_RUN + 1)) ;;
+    esac
+  done <<< "$STATUS_AFTER"
+fi
+
+# Go settings that change what the commands do. GOFLAGS can make a check pass without
+# running anything (-run, -tags, -mod), so a run with GOFLAGS is not a PASS.
+GO_FLAGS=${GOFLAGS:-}; GO_TOOLCHAIN=${GOTOOLCHAIN:-}
+if command -v go >/dev/null 2>&1; then
+  [ -n "$GO_FLAGS" ] || GO_FLAGS=$(go env GOFLAGS 2>/dev/null || true)
+  [ -n "$GO_TOOLCHAIN" ] || GO_TOOLCHAIN=$(go env GOTOOLCHAIN 2>/dev/null || true)
 fi
 
 # ---- Final block ------------------------------------------------------------------
@@ -458,13 +560,14 @@ req_missing=$((req_total - req_pass - req_skip))
 why=""
 [ "$req_skip" -gt 0 ] && why="$why; $req_skip skipped with --allow-skip"
 [ "$req_missing" -gt 0 ] && why="$why; $req_missing not selected"
+[ -n "$GO_FLAGS" ] && why="$why; GOFLAGS is set"
 if [ $((n_fail + n_notrun)) -gt 0 ]; then
   VERDICT="FAIL ($req_pass of $req_total required checks passed; not passed: $bad)"; CODE=1
 elif [ "$req_skip" -gt 0 ] && [ "$ALLOW_SKIP" -eq 0 ]; then
   VERDICT="FAIL ($req_pass of $req_total required checks passed; $req_skip skipped)"; CODE=3
 elif [ "$TREE" != "clean" ]; then
-  VERDICT="FAIL (DIRTY TREE; $req_pass of $req_total required checks passed on uncommitted changes)"; CODE=4
-elif [ "$req_pass" -eq "$req_total" ]; then
+  VERDICT="FAIL (DIRTY TREE; $req_pass of $req_total required checks passed on a tree that is not the commit)"; CODE=4
+elif [ "$req_pass" -eq "$req_total" ] && [ -z "$GO_FLAGS" ]; then
   VERDICT="PASS ($req_pass of $req_total required checks)"; CODE=0
 else
   VERDICT="PARTIAL ($req_pass of $req_total required checks passed$why)"; CODE=5
@@ -480,7 +583,9 @@ final_block() {
   echo "- go: ${V_GO:-not installed} (workflows: 1.26.10)"
   echo "- flutter: ${V_FLUTTER:-not installed} (workflows: 3.29.x)"
   echo "- node: ${V_NODE:-not installed} (workflows: 26 for Studio, 22 for the VS Code extension and the website)"
-  echo "- linter: $LINTER (workflows: staticcheck@latest)"
+  echo "- linter: $LINTER (workflows: staticcheck@latest, the newest release on the day of the run)"
+  if [ -n "$GO_FLAGS" ]; then echo "- GOFLAGS: \`$GO_FLAGS\` (workflows: not set)"; fi
+  if [ -n "$GO_TOOLCHAIN" ]; then echo "- GOTOOLCHAIN: \`$GO_TOOLCHAIN\`"; fi
   echo
   echo "| Result | Check | Required | Time |"
   echo "|---|---|---|---|"
@@ -502,21 +607,25 @@ final_block() {
   done
   echo
   if [ -n "$notes" ]; then printf '%s\n' "$notes"; fi
-  if [ -n "$CHANGED_BY_RUN" ]; then
-    echo "- Note: the run changed tracked files (see \`git status\`). The checks started on a clean tree."
+  if [ "$CHANGED_BY_RUN" -gt 0 ]; then
+    echo "- Note: the run itself changed or created $CHANGED_BY_RUN file(s) that git does not ignore (see \`git status\`). They were not there when the checks started."
+    echo
+  fi
+  if [ -n "$WORKSUM_REMOVED" ]; then
+    echo "- Note: the Go tools wrote go.work.sum during the run. It was not there before and git does not track it, so it was removed."
+    echo
+  fi
+  if [ -n "$GO_FLAGS" ]; then
+    echo "- Note: GOFLAGS is set. It changes what the Go commands do, so this run is not a PASS."
     echo
   fi
   if [ -n "$GUARD_SCANNED" ] && [ "${#PR_TEXT[@]}" -eq 0 ]; then
     echo "- Note: no --pr-text file was given, so the pull request title and body were not scanned. The hosted check always scans them."
     echo
   fi
-  if [ "$UNTRACKED" -gt 0 ]; then
-    echo "- Note: $UNTRACKED untracked file(s) were in the tree when the run started. They are not part of the commit, and the checks read them."
-    echo
-  fi
   echo "Counts: $n_pass passed, $n_fail failed, $n_skip skipped, $n_notrun not run (${#SELECTED[@]} selected, $req_total required)"
   echo
-  echo "ci-local: $VERDICT at $HEAD_SHA"
+  echo "ci-local: $VERDICT at $HEAD_SHA$BASE_NOTE"
 }
 
 read_tool_versions
@@ -526,6 +635,6 @@ echo "Logs: $LOG_DIR"
 echo
 printf '%s\n' "$BLOCK"
 if [ -n "$REPORT" ]; then
-  printf '%s\n' "$BLOCK" > "$REPORT" || { echo "ci-local: cannot write $REPORT" >&2; exit 2; }
+  printf '%s\n' "$BLOCK" > "$REPORT" || { echo "ci-local: cannot write the report file $REPORT" >&2; exit 2; }
 fi
 exit "$CODE"

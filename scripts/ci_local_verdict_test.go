@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // The tests for the verdict of scripts/ci-local.sh: its last line and its exit status.
@@ -32,19 +34,37 @@ var ciLocalUtilities = []struct {
 	{"mktemp", false}, {"grep", false}, {"awk", false}, {"cut", false}, {"rm", false},
 	{"mkdir", false}, {"cat", false}, {"wc", false}, {"dirname", false}, {"basename", false},
 	{"chmod", false}, {"sort", false}, {"ls", false}, {"env", false}, {"diff", false},
+	{"sleep", false},
 	{"file", true}, {"shasum", true}, {"sha256sum", true},
 }
 
-// The stand-in for go, make and staticcheck. `make build` and `make build-convert`
-// write the files the Build check tests for.
+// The stand-in for go, make, staticcheck and the tools of the optional checks.
+// `make build` and `make build-convert` write the files the Build check tests for,
+// and a command with `-o FILE` writes that file.
 const fakeTool = `#!%s
 name=$(basename "$0")
 line="$name $*"
 printf '%%s\n' "$line" >> "$FAKE_LOG"
 case "$line" in
-  "make build") if [ -z "${FAKE_NO_PROBE:-}" ]; then mkdir -p bin; : > bin/probe; chmod +x bin/probe; fi ;;
+  "make build")
+    if [ -z "${FAKE_NO_PROBE:-}" ]; then mkdir -p bin; : > bin/probe; chmod +x bin/probe; fi
+    if [ -n "${FAKE_WORKSUM:-}" ]; then echo "written by the build" > go.work.sum; fi ;;
   "make build-convert") mkdir -p bin; : > bin/probe-convert; chmod +x bin/probe-convert ;;
+  "go env GOFLAGS") printf '%%s\n' "${FAKE_GO_ENV_GOFLAGS:-}" ;;
+  "flutter --version") echo "Flutter 3.29.0" ;;
+  "node --version") echo "v26.1.0" ;;
 esac
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-o" ] && [ "$a" != "/dev/null" ]; then
+    case "$a" in *"${FAKE_NO_OUTPUT:-no such file}"*) ;; *) : > "$a" ;; esac
+  fi
+  prev=$a
+done
+if [ -n "${FAKE_SLEEP:-}" ] && [ "$line" = "$FAKE_SLEEP" ]; then
+  : > "$FAKE_LOG.started"
+  sleep 3
+fi
 if [ -n "${FAKE_FAIL:-}" ] && [ "$line" = "$FAKE_FAIL" ]; then
   echo "stand-in: failing $line"
   exit 1
@@ -53,7 +73,7 @@ exit 0
 `
 
 type ciLocalEnv struct {
-	repo, bin, deny, head string
+	repo, bin, deny, head, bash string
 }
 
 // newCILocalEnv builds the repository (a base commit that origin/main names, and one
@@ -78,8 +98,9 @@ func newCILocalEnv(t *testing.T) *ciLocalEnv {
 			t.Fatal(err)
 		}
 	}
+	e.bash = bash
 	for _, tool := range []string{"go", "make", "staticcheck"} {
-		e.addTool(t, tool, bash)
+		e.addTool(t, tool)
 	}
 
 	for _, name := range []string{"ci-local.sh", "disclosure-scan.sh"} {
@@ -107,9 +128,9 @@ func newCILocalEnv(t *testing.T) *ciLocalEnv {
 	return e
 }
 
-func (e *ciLocalEnv) addTool(t *testing.T, name, bash string) {
+func (e *ciLocalEnv) addTool(t *testing.T, name string) {
 	t.Helper()
-	text := strings.Replace(fakeTool, "%s", bash, 1)
+	text := strings.Replace(fakeTool, "%s", e.bash, 1)
 	text = strings.ReplaceAll(text, "%%", "%")
 	if err := os.WriteFile(filepath.Join(e.bin, name), []byte(text), 0o755); err != nil {
 		t.Fatal(err)
@@ -133,9 +154,10 @@ type ciLocalRun struct {
 	calls     []string // the command lines the stand-ins received
 }
 
-// run starts the script from dir (the repository when dir is empty) with the given
-// extra environment and arguments.
-func (e *ciLocalEnv) run(t *testing.T, dir string, env []string, args ...string) ciLocalRun {
+// command prepares a run of the script from dir (the repository when dir is empty)
+// with the given extra environment and arguments. The second value is the file the
+// stand-ins write their command lines to.
+func (e *ciLocalEnv) command(t *testing.T, dir string, env []string, args ...string) (*exec.Cmd, *bytes.Buffer, string) {
 	t.Helper()
 	if dir == "" {
 		dir = e.repo
@@ -150,11 +172,17 @@ func (e *ciLocalEnv) run(t *testing.T, dir string, env []string, args ...string)
 		"FAKE_LOG=" + log,
 		"GIT_CONFIG_NOSYSTEM=1",
 	}, env...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	out := &bytes.Buffer{}
+	cmd.Stdout = out
+	cmd.Stderr = out
+	return cmd, out, log
+}
+
+// result reads what a finished run left: its output, exit status and the calls.
+func result(t *testing.T, err error, out *bytes.Buffer, log string) ciLocalRun {
+	t.Helper()
 	r := ciLocalRun{}
-	if err := cmd.Run(); err != nil {
+	if err != nil {
 		ee, ok := err.(*exec.ExitError)
 		if !ok {
 			t.Fatalf("ci-local.sh: %v\n%s", err, out.String())
@@ -170,6 +198,13 @@ func (e *ciLocalEnv) run(t *testing.T, dir string, env []string, args ...string)
 	return r
 }
 
+// run runs the script to its end.
+func (e *ciLocalEnv) run(t *testing.T, dir string, env []string, args ...string) ciLocalRun {
+	t.Helper()
+	cmd, out, log := e.command(t, dir, env, args...)
+	return result(t, cmd.Run(), out, log)
+}
+
 func (e *ciLocalEnv) withDenylist() []string {
 	return []string{"PROBE_DISCLOSURE_DENYLIST=" + e.deny}
 }
@@ -178,11 +213,23 @@ func (e *ciLocalEnv) withDenylist() []string {
 // exit status 0 only ever come together, with all five checks.
 func (r ciLocalRun) expect(t *testing.T, e *ciLocalEnv, code int, verdict string) {
 	t.Helper()
+	r.expectBase(t, e, code, verdict, "")
+}
+
+// expectBase is expect for a run with --base: the last line names that base.
+func (r ciLocalRun) expectBase(t *testing.T, e *ciLocalEnv, code int, verdict, base string) {
+	t.Helper()
 	want := "ci-local: " + verdict + " at " + e.head
+	if base != "" {
+		want += " (base " + base + ")"
+	}
 	if r.last != want || r.code != code {
 		t.Errorf("last line %q, exit status %d\nwant      %q, exit status %d\n%s", r.last, r.code, want, code, r.out)
 	}
 	fullPass := "ci-local: PASS (5 of 5 required checks) at " + e.head
+	if base != "" {
+		fullPass += " (base " + base + ")"
+	}
 	if said := strings.Contains(r.last, "PASS"); said != (r.code == 0) || (said && r.last != fullPass) {
 		t.Errorf("PASS and exit status 0 belong together and only to a full run: last line %q, exit status %d", r.last, r.code)
 	}
@@ -287,9 +334,48 @@ func TestCILocalDisclosureGuardFindsAMatch(t *testing.T) {
 		t.Errorf("the output holds the matched text:\n%s", r.out)
 	}
 
-	// The match is in the range from the default base only.
-	e.run(t, "", e.withDenylist(), "--base", "HEAD").expect(t, e, 0, "PASS (5 of 5 required checks)")
-	e.run(t, "", e.withDenylist(), "--base", "no-such-ref").expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Disclosure guard)")
+	e.run(t, "", e.withDenylist(), "--base", "no-such-ref").
+		expectBase(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Disclosure guard)", "no-such-ref")
+
+	// A base the match is not in the range of: the commit before HEAD is clean, and
+	// the last line names the base.
+	e.git(t, "branch", "before", "HEAD~1")
+	writeFile(t, filepath.Join(e.repo, "more.txt"), "a clean line\n")
+	e.git(t, "add", "more.txt")
+	e.git(t, "commit", "-q", "-m", "more")
+	e.head = strings.TrimSpace(e.git(t, "rev-parse", "HEAD"))
+	e.run(t, "", e.withDenylist(), "--base", "HEAD~1").expectBase(t, e, 0, "PASS (5 of 5 required checks)", "HEAD~1")
+	e.run(t, "", e.withDenylist(), "--base", "before").
+		expectBase(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Disclosure guard)", "before")
+}
+
+// A base that is HEAD, or that already contains HEAD, leaves nothing to scan. The
+// Disclosure guard is then not run, and the run is not a PASS. This is also the
+// result on the main branch right after a merge.
+func TestCILocalEmptyRangeIsNotAPass(t *testing.T) {
+	e := newCILocalEnv(t)
+	verdict := "FAIL (4 of 5 required checks passed; not passed: Disclosure guard (not run))"
+	notRun := regexp.MustCompile(`(?m)^NOT RUN \(empty range: \S+ contains HEAD\)  Disclosure guard  \d+s$`)
+
+	r := e.run(t, "", e.withDenylist(), "--base", "HEAD")
+	r.expectBase(t, e, 1, verdict, "HEAD")
+	if !notRun.MatchString(r.out) {
+		t.Errorf("no NOT RUN line for the empty range:\n%s", r.out)
+	}
+
+	// origin/main is HEAD: the default base, so the last line names no base.
+	e.git(t, "update-ref", "refs/remotes/origin/main", "HEAD")
+	r = e.run(t, "", e.withDenylist())
+	r.expect(t, e, 1, verdict)
+	if !notRun.MatchString(r.out) {
+		t.Errorf("no NOT RUN line for the empty range:\n%s", r.out)
+	}
+
+	// The base is ahead of HEAD.
+	e.git(t, "branch", "ahead")
+	e.git(t, "reset", "-q", "--hard", "HEAD~1")
+	e.head = strings.TrimSpace(e.git(t, "rev-parse", "HEAD"))
+	e.run(t, "", e.withDenylist(), "--base", "ahead").expectBase(t, e, 1, verdict, "ahead")
 }
 
 func TestCILocalScansThePullRequestText(t *testing.T) {
@@ -394,25 +480,313 @@ func TestCILocalRepeatedJobCountsOnce(t *testing.T) {
 }
 
 func TestCILocalDirtyTreeFails(t *testing.T) {
-	e := newCILocalEnv(t)
-	writeFile(t, filepath.Join(e.repo, "tracked.txt"), "changed\n")
-
-	r := e.run(t, "", e.withDenylist())
-	r.expect(t, e, 4, "FAIL (DIRTY TREE; 5 of 5 required checks passed on uncommitted changes)")
-	if !strings.Contains(r.out, "- Tree: DIRTY TREE") {
-		t.Errorf("the result does not mark the tree:\n%s", r.out)
+	dirty := "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)"
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, e *ciLocalEnv)
+		tree  string
+	}{
+		{"an unstaged change", func(t *testing.T, e *ciLocalEnv) {
+			writeFile(t, filepath.Join(e.repo, "tracked.txt"), "changed\n")
+		}, "1 changed, 0 untracked, 0 hidden"},
+		{"a staged change only", func(t *testing.T, e *ciLocalEnv) {
+			writeFile(t, filepath.Join(e.repo, "tracked.txt"), "changed\n")
+			e.git(t, "add", "tracked.txt")
+		}, "1 changed, 0 untracked, 0 hidden"},
+		{"an untracked source file", func(t *testing.T, e *ciLocalEnv) {
+			writeFile(t, filepath.Join(e.repo, "extra_test.go"), "package extra\n")
+		}, "0 changed, 1 untracked, 0 hidden"},
+		{"a change hidden with --assume-unchanged", func(t *testing.T, e *ciLocalEnv) {
+			e.git(t, "update-index", "--assume-unchanged", "tracked.txt")
+			writeFile(t, filepath.Join(e.repo, "tracked.txt"), "changed\n")
+		}, "0 changed, 0 untracked, 1 hidden"},
+		{"a change hidden with --skip-worktree", func(t *testing.T, e *ciLocalEnv) {
+			e.git(t, "update-index", "--skip-worktree", "tracked.txt")
+			writeFile(t, filepath.Join(e.repo, "tracked.txt"), "changed\n")
+		}, "0 changed, 0 untracked, 1 hidden"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := newCILocalEnv(t)
+			c.setup(t, e)
+			r := e.run(t, "", e.withDenylist())
+			r.expect(t, e, 4, dirty)
+			if !strings.Contains(r.out, "- Tree: DIRTY TREE ("+c.tree) {
+				t.Errorf("the result does not say %q:\n%s", c.tree, r.out)
+			}
+		})
 	}
 
 	// A failing check outranks the dirty tree.
+	e := newCILocalEnv(t)
+	writeFile(t, filepath.Join(e.repo, "tracked.txt"), "changed\n")
 	e.run(t, "", append(e.withDenylist(), "FAKE_FAIL=go vet ./...")).
 		expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Lint)")
 
-	// An untracked file is counted in a note and does not fail the run.
-	e2 := newCILocalEnv(t)
-	writeFile(t, filepath.Join(e2.repo, "untracked.txt"), "x\n")
-	r = e2.run(t, "", e2.withDenylist())
-	r.expect(t, e2, 0, "PASS (5 of 5 required checks)")
-	if !strings.Contains(r.out, "1 untracked file(s)") {
-		t.Errorf("no note about the untracked file:\n%s", r.out)
+	// A file git ignores does not make the tree dirty.
+	e = newCILocalEnv(t)
+	writeFile(t, filepath.Join(e.repo, "coverage.out"), "x\n")
+	writeFile(t, filepath.Join(e.repo, "bin", "old"), "x\n")
+	r := e.run(t, "", e.withDenylist())
+	r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+	if !strings.Contains(r.out, "- Tree: clean") {
+		t.Errorf("the tree is not reported as clean:\n%s", r.out)
+	}
+}
+
+// The Go tools write go.work.sum during a build of the workspace. The file the run
+// itself wrote is removed and noted; it does not make this run or the next one dirty.
+func TestCILocalRemovesTheGoWorkSumItWrote(t *testing.T) {
+	e := newCILocalEnv(t)
+	sum := filepath.Join(e.repo, "go.work.sum")
+	env := append(e.withDenylist(), "FAKE_WORKSUM=1")
+
+	for i := 0; i < 2; i++ {
+		r := e.run(t, "", env)
+		r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+		if !strings.Contains(r.out, "the Go tools wrote go.work.sum during the run") {
+			t.Errorf("run %d: no note about go.work.sum:\n%s", i+1, r.out)
+		}
+		if _, err := os.Stat(sum); err == nil {
+			t.Fatalf("run %d left go.work.sum behind", i+1)
+		}
+	}
+
+	// A go.work.sum that was there before the run is the developer's file: the tree is
+	// dirty, and the file is not removed.
+	writeFile(t, sum, "mine\n")
+	e.run(t, "", env).expect(t, e, 4, "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)")
+	if _, err := os.Stat(sum); err != nil {
+		t.Errorf("the run removed a go.work.sum it did not write: %v", err)
+	}
+
+	// A tracked go.work.sum is never removed. The build changed it, which is noted.
+	writeFile(t, sum, "mine\n") // the run before rewrote it
+	e.git(t, "add", "go.work.sum")
+	e.git(t, "commit", "-q", "-m", "sum")
+	e.head = strings.TrimSpace(e.git(t, "rev-parse", "HEAD"))
+	r := e.run(t, "", env)
+	r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+	if _, err := os.Stat(sum); err != nil {
+		t.Errorf("the run removed a tracked go.work.sum: %v", err)
+	}
+	if !strings.Contains(r.out, "the run itself changed or created 1 file(s)") {
+		t.Errorf("no note about the file the run changed:\n%s", r.out)
+	}
+}
+
+// A failing `git status` does not mean a clean tree.
+func TestCILocalStopsWhenGitStatusFails(t *testing.T) {
+	e := newCILocalEnv(t)
+	writeFile(t, filepath.Join(e.repo, ".git", "index"), "not an index\n")
+	r := e.run(t, "", e.withDenylist())
+	if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS") {
+		t.Errorf("exit status %d, calls %q; want 2, no calls and no PASS\n%s", r.code, r.calls, r.out)
+	}
+}
+
+func TestCILocalFailedOptionalCheckFailsTheRun(t *testing.T) {
+	e := newCILocalEnv(t)
+	for _, tool := range []string{"flutter", "dart", "node", "npm"} {
+		e.addTool(t, tool)
+	}
+	for _, dir := range []string{"probe_agent", "studio/frontend", "vscode", "website"} {
+		writeFile(t, filepath.Join(e.repo, dir, "keep.txt"), "x\n")
+	}
+	e.git(t, "add", "-A")
+	e.git(t, "commit", "-q", "-m", "directories of the optional checks")
+	e.head = strings.TrimSpace(e.git(t, "rev-parse", "HEAD"))
+
+	r := e.run(t, "", e.withDenylist(), "--all")
+	r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+	if !strings.Contains(r.out, "Counts: 10 passed, 0 failed, 0 skipped, 0 not run (10 selected, 5 required)") {
+		t.Errorf("unexpected counts:\n%s", r.out)
+	}
+
+	r = e.run(t, "", append(e.withDenylist(), "FAKE_FAIL=npm test"), "--all")
+	r.expect(t, e, 1, "FAIL (5 of 5 required checks passed; not passed: VS Code extension tests)")
+	if !strings.Contains(r.out, "Counts: 9 passed, 1 failed, 0 skipped, 0 not run (10 selected, 5 required)") {
+		t.Errorf("unexpected counts:\n%s", r.out)
+	}
+}
+
+// The report holds the same result as the terminal, also for a run that fails, and a
+// report that cannot be written stops the run before the first check.
+func TestCILocalReport(t *testing.T) {
+	e := newCILocalEnv(t)
+	report := filepath.Join(t.TempDir(), "report.md")
+	writeFile(t, report, "ci-local: PASS (5 of 5 required checks) at an older commit\n")
+
+	r := e.run(t, "", append(e.withDenylist(), "FAKE_FAIL=go vet ./..."), "--report", report)
+	r.expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Lint)")
+	data, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := r.out[strings.Index(r.out, "### ci-local result"):]
+	if string(data) != block {
+		t.Errorf("the report is not the result the terminal shows.\nreport:\n%s\nterminal:\n%s", data, block)
+	}
+
+	for _, path := range []string{filepath.Join(t.TempDir(), "no-such-directory", "report.md"), t.TempDir()} {
+		r = e.run(t, "", e.withDenylist(), "--report", path)
+		if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS") {
+			t.Errorf("--report %s: exit status %d, calls %q; want 2, no calls and no PASS\n%s", path, r.code, r.calls, r.out)
+		}
+	}
+}
+
+// A run that is stopped with a signal ends with FAIL and exit status 130, and runs no
+// further step. bash handles the signal when the command it waits for ends.
+func TestCILocalInterruptedRunFails(t *testing.T) {
+	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGINT} {
+		t.Run(sig.String(), func(t *testing.T) {
+			e := newCILocalEnv(t)
+			report := filepath.Join(t.TempDir(), "report.md")
+			cmd, out, log := e.command(t, "", append(e.withDenylist(), "FAKE_SLEEP=go vet ./..."), "--report", report)
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			started := false
+			for i := 0; i < 600 && !started; i++ {
+				if _, err := os.Stat(log + ".started"); err == nil {
+					started = true
+				} else {
+					time.Sleep(50 * time.Millisecond)
+				}
+			}
+			if !started {
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+				t.Fatalf("the run never reached the Lint check:\n%s", out.String())
+			}
+			if err := cmd.Process.Signal(sig); err != nil {
+				t.Fatal(err)
+			}
+			r := result(t, cmd.Wait(), out, log)
+			r.expect(t, e, 130, "FAIL (interrupted)")
+			for _, later := range []string{"go install honnef.co/go/tools/cmd/staticcheck@latest", "staticcheck ./..."} {
+				if count(r.calls, later) != 0 {
+					t.Errorf("%q ran after the signal; calls: %q", later, r.calls)
+				}
+			}
+			data, err := os.ReadFile(report)
+			if err != nil || strings.TrimSpace(string(data)) != r.last {
+				t.Errorf("the report of an interrupted run is %q (%v), want the last line %q", data, err, r.last)
+			}
+		})
+	}
+}
+
+// Settings that change what the commands do.
+func TestCILocalGoSettings(t *testing.T) {
+	e := newCILocalEnv(t)
+	partial := "PARTIAL (5 of 5 required checks passed; GOFLAGS is set)"
+
+	r := e.run(t, "", append(e.withDenylist(), "GOFLAGS=-run=NoSuchTest", "GOTOOLCHAIN=go1.99.0"))
+	r.expect(t, e, 5, partial)
+	for _, line := range []string{"- GOFLAGS: `-run=NoSuchTest` (workflows: not set)", "- GOTOOLCHAIN: `go1.99.0`"} {
+		if !strings.Contains(r.out, line) {
+			t.Errorf("the result does not hold %q:\n%s", line, r.out)
+		}
+	}
+
+	// GOFLAGS from the go env file, not from the environment.
+	r = e.run(t, "", append(e.withDenylist(), "FAKE_GO_ENV_GOFLAGS=-mod=mod"))
+	r.expect(t, e, 5, partial)
+	if !strings.Contains(r.out, "- GOFLAGS: `-mod=mod` (workflows: not set)") {
+		t.Errorf("the result does not hold the GOFLAGS of `go env`:\n%s", r.out)
+	}
+
+	// A failure outranks it.
+	e.run(t, "", append(e.withDenylist(), "GOFLAGS=-mod=mod", "FAKE_FAIL=go vet ./...")).
+		expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Lint)")
+
+	// Without the settings the result names neither.
+	r = e.run(t, "", e.withDenylist())
+	r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+	if strings.Contains(r.out, "GOFLAGS") || strings.Contains(r.out, "GOTOOLCHAIN") {
+		t.Errorf("the result names a setting that is not set:\n%s", r.out)
+	}
+}
+
+// A start-up file named by BASH_ENV must not reach the steps: this one replaces
+// `test`, which would hide the missing bin/probe.
+func TestCILocalStepsDoNotReadBashEnv(t *testing.T) {
+	e := newCILocalEnv(t)
+	rc := writeFile(t, filepath.Join(t.TempDir(), "rc.sh"), "test() { return 0; }\n")
+	e.run(t, "", append(e.withDenylist(), "FAKE_NO_PROBE=1", "BASH_ENV="+rc, "ENV="+rc)).
+		expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Build)")
+}
+
+// --release-dry-run builds and runs no checks: it never says PASS, and it refuses the
+// options of a run of the checks.
+func TestCILocalReleaseDryRun(t *testing.T) {
+	e := newCILocalEnv(t)
+	last := func(text string) string { return "release-dry-run: " + text + " at " + e.head }
+
+	r := e.run(t, "", nil, "--release-dry-run")
+	if r.code != 0 || r.last != last("BUILT 8 binaries")+" (no checks run)" {
+		t.Errorf("last line %q, exit status %d\n%s", r.last, r.code, r.out)
+	}
+	if strings.Contains(r.out, "PASS") {
+		t.Errorf("a dry run of the release build says PASS:\n%s", r.out)
+	}
+	for _, call := range r.calls {
+		if !strings.HasPrefix(call, "go build ") && !strings.HasPrefix(call, "go env ") {
+			t.Errorf("the dry run called %q", call)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"--all"}, {"--job", "lint"}, {"--allow-skip"}, {"--report", filepath.Join(t.TempDir(), "r.md")},
+		{"--pr-text", filepath.Join(e.repo, "tracked.txt")},
+	} {
+		for _, order := range [][]string{append([]string{"--release-dry-run"}, args...), append(append([]string{}, args...), "--release-dry-run")} {
+			r := e.run(t, "", nil, order...)
+			if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS") || strings.Contains(r.out, "BUILT") {
+				t.Errorf("%q: exit status %d, calls %q; want 2 and nothing run\n%s", order, r.code, r.calls, r.out)
+			}
+		}
+	}
+
+	// One binary is missing.
+	r = e.run(t, "", []string{"FAKE_NO_OUTPUT=probe-mcp-linux-amd64"}, "--release-dry-run")
+	if r.code != 1 || !strings.HasPrefix(r.last, "release-dry-run: FAIL (7 of 8 binaries built;") {
+		t.Errorf("a missing binary: last line %q, exit status %d\n%s", r.last, r.code, r.out)
+	}
+
+	// A dirty tree: tracked change, or an untracked file.
+	for _, name := range []string{"tracked.txt", "new.go"} {
+		e := newCILocalEnv(t)
+		writeFile(t, filepath.Join(e.repo, name), "changed\n")
+		r := e.run(t, "", nil, "--release-dry-run")
+		want := "release-dry-run: FAIL (DIRTY TREE; the files were built from a tree that is not the commit) at " + e.head
+		if r.code != 4 || r.last != want {
+			t.Errorf("%s changed: last line %q, exit status %d\nwant %q, exit status 4\n%s", name, r.last, r.code, want, r.out)
+		}
+	}
+}
+
+// --help holds the exit statuses.
+func TestCILocalHelpHoldsTheExitStatuses(t *testing.T) {
+	e := newCILocalEnv(t)
+	r := e.run(t, "", nil, "--help")
+	if r.code != 0 {
+		t.Fatalf("--help: exit status %d\n%s", r.code, r.out)
+	}
+	for _, line := range []string{
+		"    0  PASS: all five required checks ran and passed on a clean tree",
+		"    4  FAIL: nothing failed, but the tree was not the commit",
+		"    5  PARTIAL:",
+		"  130  FAIL (interrupted)",
+		"    0  BUILT: the eight binaries were built from a clean tree",
+	} {
+		if !strings.Contains(r.out, line) {
+			t.Errorf("--help does not hold %q:\n%s", line, r.out)
+		}
+	}
+	if strings.Contains(r.out, "end of help") || strings.Contains(r.out, "#") {
+		t.Errorf("--help prints more than the help text:\n%s", r.out)
 	}
 }
