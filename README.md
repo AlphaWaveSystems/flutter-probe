@@ -668,6 +668,10 @@ For Cursor or any other MCP-compatible client, install the binary and point your
 }
 ```
 
+### HTTP on your own machine (optional)
+
+For a client that connects to a running server, such as an agent in VS Code, `probe-mcp --http 127.0.0.1:7391` serves the same tools at `http://127.0.0.1:7391/mcp`. It is off by default. It listens on loopback only, and every request needs `Authorization: Bearer <token>`. A new token is written on each start to a file only you can read; the path is printed, the token is not. Requests from web pages are refused. See [HTTP transport](https://flutterprobe.dev/tools/mcp/#http-transport) for the token, a VS Code example and the security model.
+
 The legacy `probe mcp-server` subcommand still works but prints a deprecation notice. Full setup guide for Claude Desktop, Cursor, and other MCP clients: [MCP Server docs](https://flutterprobe.dev/tools/mcp/).
 
 ## Visual Regression
