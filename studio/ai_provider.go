@@ -214,6 +214,12 @@ func checkLocalEndpoint(endpoint string, allowRemote bool) error {
 	return fmt.Errorf("ai.endpoint %s is not this machine: set studio.ai_allow_remote_endpoint: true in probe.yaml to confirm it", u.Hostname())
 }
 
+func init() {
+	// internal/ai cuts the text of a provider error. Install the gate there, so it runs before the cut and a token that straddles
+	// the cut leaves no start of itself on the OpenAI-compatible and local paths, as it does not on the Anthropic path.
+	ai.SetErrorTextFilter(redactCredentials)
+}
+
 // outbound is the one gate for text Studio sends to a provider. Every system prompt and every chat turn passes through it,
 // so a credential in the open file or the conversation is redacted before any provider sees it.
 func outbound(s string) string {

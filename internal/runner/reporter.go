@@ -210,6 +210,7 @@ type jsonResult struct {
 	DeviceName string   `json:"device_name,omitempty"`
 	Perf       []perf.Metrics `json:"perf,omitempty"` // `start measuring` windows of the test
 	Attempts   int      `json:"attempts,omitempty"` // only when a failed test was re-run (retry_failed_tests)
+	SelectorProposal *SelectorProposal `json:"selector_proposal,omitempty"` // advisory, only with --ai-heal
 }
 
 type jsonReport struct {
@@ -256,6 +257,7 @@ func (r *Reporter) buildJSONReport(results []TestResult) jsonReport {
 			DeviceID:   res.DeviceID,
 			DeviceName: res.DeviceName,
 			Perf:       res.Perf,
+			SelectorProposal: res.Proposal,
 		}
 		if res.Attempts > 1 {
 			jr.Attempts = res.Attempts
