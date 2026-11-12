@@ -152,6 +152,7 @@ func init() {
 
 	// Optional AI triage (advisory, after results are final; never affects the run)
 	f.Bool("ai-triage", false, "after the run, ask the configured ai: model to explain failures (advisory; needs ai: in probe.yaml; never changes results or the exit code)")
+	f.Bool("ai-heal", false, "after the run, ask the configured ai: model to propose a replacement selector for each failed selector step, in the JSON report (advisory; needs ai: in probe.yaml; never applied; never changes results or the exit code)")
 
 	// Permission pre-grant
 	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy; iOS notifications: taps Allow on the system alert, needs Xcode)")
@@ -570,6 +571,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 			report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 		}
 		report.SetJUnitOptions(junitOptionsFromFlags(cmd))
+		if aiHeal, _ := cmd.Flags().GetBool("ai-heal"); aiHeal {
+			maybeAIHeal(ctx, statusW, cfg, results)
+		}
 		if err := report.Report(results); err != nil {
 			return err
 		}
@@ -1402,6 +1406,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Optional and advisory: only sets the proposal text of failed results, before the report is written. Cannot fail.
+	if aiHeal, _ := cmd.Flags().GetBool("ai-heal"); aiHeal {
+		maybeAIHeal(ctx, statusW, cfg, results)
+	}
 	if err := report.Report(results); err != nil {
 		return err
 	}

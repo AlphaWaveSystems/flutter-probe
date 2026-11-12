@@ -53,6 +53,7 @@ type Executor struct {
 	aiProvider           ai.VisionProvider  // nil unless ai.provider/ai.api_key are both set and valid
 	aiConfigErr          error              // set by SetAI when ai.provider has an unrecognized value
 	aiText               ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
+	selectorFailures     []selectorFailure  // failed selector steps of this executor, for FailedSelector
 	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
 	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
@@ -357,6 +358,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	}
 	err = annotateStepError(step, desc, err)
 	err = e.scrubEnv(err)
+	e.noteSelectorFailure(step, desc, err)
 
 	// Stop the ticker goroutine and wait for it to fully exit before reading
 	// extraLines or printing the result — this eliminates any output race.
