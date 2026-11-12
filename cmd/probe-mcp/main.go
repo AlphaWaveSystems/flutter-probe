@@ -82,7 +82,8 @@ const usage = `probe-mcp is the FlutterProbe MCP server.
 
 HTTP transport:
   --http host:port
-        Listen address. The host must be a loopback address: 127.0.0.1:7391,
+        Listen address. Unless --dangerously-allow-non-loopback is given, the host must be
+        a loopback address: 127.0.0.1:7391,
         [::1]:7391 (IPv6, in brackets) or localhost:7391 (taken as 127.0.0.1). A host
         name or any other address is refused. Port 0 picks a free port, printed on
         stderr. Every request needs "Authorization: Bearer <token>".
