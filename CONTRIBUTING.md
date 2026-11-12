@@ -62,6 +62,25 @@ make test-convert-integration  # Golden files + lint + dry-run
 
 Ensure all tests pass and no regressions are introduced.
 
+### Run the CI checks locally
+
+You can run the CI checks locally, for example when hosted CI is unavailable:
+
+```bash
+make ci-local        # the five checks a pull request needs
+make ci-local-all    # also the Dart agent, Studio, VS Code extension and website checks
+```
+
+`scripts/ci-local.sh` runs the commands of the workflow job behind each check: Build, Go unit tests, probe-convert tests, Lint and Disclosure guard. It prints one line per check, the path of the logs, and a final block with the commit, the tool versions and a last line such as `ci-local: PASS (5 of 5 required checks) at <sha>`. `--report FILE` writes that block as Markdown, ready to paste into a pull request.
+
+- Commit first. The checks read the working tree, so a run with uncommitted changes to tracked files is marked `DIRTY TREE` and fails. Untracked files are counted in a note.
+- `--job NAME` runs one check (repeatable) and `--list` shows the names. A run that leaves out a required check ends with `PARTIAL`, not `PASS`.
+- A check whose tool is missing is `SKIPPED (tool X not installed)`. A skipped required check fails the run unless you pass `--allow-skip`.
+- The Disclosure guard check needs the maintainers' pattern file, which is not in this repository. Maintainers set `PROBE_DISCLOSURE_DENYLIST` to its path. Without it the check reports `NOT RUN (no denylist)` and the run does not pass, as the hosted check does not pass without its patterns. `--base REF` sets the start of the scanned range (default `origin/main`, as last fetched), and `--pr-text FILE` adds the pull request title or body to the scan.
+- `--release-dry-run` builds the `probe` and `probe-mcp` release binaries for the four release targets into a temporary directory and prints their sizes and checksums. It publishes nothing and creates no tag.
+
+The script uses the tools on your machine, so the final block shows their versions next to the ones the workflows use. Lint installs the current `staticcheck` into the run's temporary directory, as the workflow installs it on the runner. A test (`scripts/ci_local_drift_test.go`, part of `make test`) fails when a workflow command and the script no longer match.
+
 ## ProbeScript Language Changes
 
 If your change affects the ProbeScript language (new syntax, modified parsing):
