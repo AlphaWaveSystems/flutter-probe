@@ -374,48 +374,50 @@ func TestEnvKeyNeverReachesStderrOrTheLog(t *testing.T) {
 	}
 }
 
-// The Studio Anthropic path cuts a long error body and redacts a key the server echoes in it.
-func TestAnthropicErrorBodyIsCutAndRedacted(t *testing.T) {
-	isolateProvider(t, "sk-ant-errbody-probe-000000000011")
-	const echoed = "sk-echoed-by-anthropic-000000000012"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = io.WriteString(w, echoed+" "+strings.Repeat("plain error words ", 300))
-	}))
-	t.Cleanup(srv.Close)
-	chatEndpoint = srv.URL
-	dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n")
-	_, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
-	if err == nil {
-		t.Fatal("the server error was not reported")
+// The Studio Anthropic path shows at most the first 200 bytes of a provider's error text, for the body of a non-200 answer and
+// for the message of an error object in a 200 answer. The gate runs first and the cut second, so a key that starts near byte 190
+// leaves nothing of itself, and the size is exact: the fixed prefix plus 200 bytes.
+func TestAnthropicErrorTextIsGatedThenCut(t *testing.T) {
+	const echoed = "sk" + "-echoed-by-the-provider-000000000012"
+	words := strings.Repeat("plain error words ", 300)
+	placements := map[string]string{
+		"key at the start":         echoed + " " + words,
+		"key starting at byte 190": strings.Repeat("e", 189) + " " + echoed + " " + words,
 	}
-	if strings.Contains(err.Error(), "sk-echoed") {
-		t.Fatalf("the error echoes the key: %v", err)
+	kinds := []struct {
+		name   string
+		prefix string
+		serve  func(w http.ResponseWriter, text string)
+	}{
+		{"body of a non-200 answer", "API error 500: ", func(w http.ResponseWriter, text string) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, text)
+		}},
+		{"message of an error object in a 200 answer", "API error: ", func(w http.ResponseWriter, text string) {
+			b, _ := json.Marshal(map[string]any{"error": map[string]string{"message": text}})
+			_, _ = w.Write(b)
+		}},
 	}
-	if len(err.Error()) > 400 {
-		t.Fatalf("the error is %d bytes; the body must be cut", len(err.Error()))
-	}
-}
-
-// The Anthropic path cuts the message of an error object in a 200 answer too, and the gate still removes a key it echoes.
-func TestAnthropicErrorObjectIsCutAndRedacted(t *testing.T) {
-	isolateProvider(t, "sk"+"-ant-"+"errobj-probe-000000000013")
-	const echoed = "sk" + "-echoed-in-an-error-object-000000000014"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := json.Marshal(map[string]any{"error": map[string]string{"message": echoed + " " + strings.Repeat("plain error words ", 300)}})
-		_, _ = w.Write(b)
-	}))
-	t.Cleanup(srv.Close)
-	chatEndpoint = srv.URL
-	dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n")
-	_, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
-	if err == nil {
-		t.Fatal("the error object was not reported")
-	}
-	if strings.Contains(err.Error(), "sk-echoed") {
-		t.Fatalf("the error echoes the key: %v", err)
-	}
-	if len(err.Error()) > 400 {
-		t.Fatalf("the error is %d bytes; the message must be cut", len(err.Error()))
+	for _, k := range kinds {
+		for place, text := range placements {
+			t.Run(k.name+", "+place, func(t *testing.T) {
+				isolateProvider(t, "sk"+"-ant-"+"errtext-probe-000000000011")
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { k.serve(w, text) }))
+				t.Cleanup(srv.Close)
+				chatEndpoint = srv.URL
+				dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n")
+				_, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
+				if err == nil {
+					t.Fatal("the provider error was not reported")
+				}
+				msg := err.Error()
+				if strings.Contains(msg, "sk-") {
+					t.Fatalf("the error keeps the key or the start of it: %q", msg)
+				}
+				if want := len(k.prefix) + 200; len(msg) != want {
+					t.Fatalf("the error is %d bytes, want exactly %d (the prefix %q and 200 bytes of text)", len(msg), want, k.prefix)
+				}
+			})
+		}
 	}
 }
