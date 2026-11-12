@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -393,5 +394,28 @@ func TestAnthropicErrorBodyIsCutAndRedacted(t *testing.T) {
 	}
 	if len(err.Error()) > 400 {
 		t.Fatalf("the error is %d bytes; the body must be cut", len(err.Error()))
+	}
+}
+
+// The Anthropic path cuts the message of an error object in a 200 answer too, and the gate still removes a key it echoes.
+func TestAnthropicErrorObjectIsCutAndRedacted(t *testing.T) {
+	isolateProvider(t, "sk"+"-ant-"+"errobj-probe-000000000013")
+	const echoed = "sk" + "-echoed-in-an-error-object-000000000014"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := json.Marshal(map[string]any{"error": map[string]string{"message": echoed + " " + strings.Repeat("plain error words ", 300)}})
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	chatEndpoint = srv.URL
+	dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n")
+	_, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
+	if err == nil {
+		t.Fatal("the error object was not reported")
+	}
+	if strings.Contains(err.Error(), "sk-echoed") {
+		t.Fatalf("the error echoes the key: %v", err)
+	}
+	if len(err.Error()) > 400 {
+		t.Fatalf("the error is %d bytes; the message must be cut", len(err.Error()))
 	}
 }
