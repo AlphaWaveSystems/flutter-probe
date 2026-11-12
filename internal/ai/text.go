@@ -113,7 +113,7 @@ func TextVerdict(ctx context.Context, c TextCompleter, assertion string, texts, 
 	if err != nil {
 		return VisionVerdict{}, err
 	}
-	return parseVisionAnswer(ReasoningStripped(out))
+	return parseVisionAnswer(ReasoningStripped(out), secretOf(c))
 }
 
 // ReasoningStripped removes <think>...</think> blocks some local reasoning

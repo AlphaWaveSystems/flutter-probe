@@ -41,6 +41,9 @@ func NewGeneratorWithCompleter(c TextCompleter) *Generator {
 
 // usable reports whether g has anything to call: a provider-backed completer
 // or a Claude API key.
+// keySecret is the Claude API key, for secretOf.
+func (g *Generator) keySecret() string { return g.APIKey }
+
 func (g *Generator) usable() bool { return g.completer != nil || g.APIKey != "" }
 
 // GenerateRequest describes what to generate.
@@ -278,7 +281,7 @@ func (g *Generator) callAPI(ctx context.Context, system, userMsg string) (string
 	}
 
 	if apiResp.Error != nil {
-		return "", fmt.Errorf("API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
+		return "", fmt.Errorf("API error (%s): %s", errorString(apiResp.Error.Type, g.APIKey), errorString(apiResp.Error.Message, g.APIKey))
 	}
 
 	if len(apiResp.Content) == 0 {

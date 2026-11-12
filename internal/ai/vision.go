@@ -136,11 +136,11 @@ type visionAnswer struct {
 
 // parseVisionAnswer parses the strict JSON verdict shape, tolerating
 // markdown-fence-wrapped output despite the prompt's instructions not to.
-func parseVisionAnswer(raw string) (VisionVerdict, error) {
+func parseVisionAnswer(raw, secret string) (VisionVerdict, error) {
 	s := stripMarkdownFences(strings.TrimSpace(raw))
 	var a visionAnswer
 	if err := json.Unmarshal([]byte(s), &a); err != nil {
-		return VisionVerdict{}, fmt.Errorf("ai: could not parse provider response as a verdict: %w (raw: %s)", err, raw)
+		return VisionVerdict{}, fmt.Errorf("ai: could not parse provider response as a verdict: %w (raw: %s)", err, errorString(raw, secret))
 	}
 	return VisionVerdict{True: a.Answer, Reasoning: a.Reasoning}, nil
 }
@@ -161,6 +161,9 @@ func extractionUserPrompt(query string) string {
 
 // ---- OpenAI vision (also backs provider: local) ----
 
+// keySecret is the API key, for secretOf.
+func (o *openAIVision) keySecret() string { return o.apiKey }
+
 type openAIVision struct {
 	apiKey  string
 	model   string
@@ -173,7 +176,7 @@ func (o *openAIVision) AssertScreen(ctx context.Context, image []byte, assertion
 	if err != nil {
 		return VisionVerdict{}, err
 	}
-	return parseVisionAnswer(content)
+	return parseVisionAnswer(content, o.apiKey)
 }
 
 func (o *openAIVision) ExtractText(ctx context.Context, image []byte, query string) (string, error) {
@@ -243,7 +246,7 @@ func (o *openAIVision) postChat(ctx context.Context, messages []map[string]any) 
 		return "", fmt.Errorf("ai: %s rate limited (429) — try again shortly", o.baseURL)
 	}
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, errorBody(respBytes))
+		return "", fmt.Errorf("ai: %s returned %d: %s", o.baseURL, resp.StatusCode, errorBodyWithout(respBytes, o.apiKey))
 	}
 
 	var apiResp struct {
@@ -260,7 +263,7 @@ func (o *openAIVision) postChat(ctx context.Context, messages []map[string]any) 
 		return "", fmt.Errorf("ai: parsing response from %s: %w", o.baseURL, err)
 	}
 	if apiResp.Error != nil {
-		return "", fmt.Errorf("ai: %s error: %s", o.baseURL, apiResp.Error.Message)
+		return "", fmt.Errorf("ai: %s error: %s", o.baseURL, errorString(apiResp.Error.Message, o.apiKey))
 	}
 	if len(apiResp.Choices) == 0 {
 		return "", fmt.Errorf("ai: %s returned no choices", o.baseURL)
@@ -277,7 +280,11 @@ type anthropicVision struct {
 	apiKey string
 	model  string
 	client *http.Client
+	url    string // the Messages API URL; empty means defaultAPIURL (a test points it at a loopback fake)
 }
+
+// keySecret is the API key, for secretOf.
+func (a *anthropicVision) keySecret() string { return a.apiKey }
 
 func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assertion string) (VisionVerdict, error) {
 	if a.apiKey == "" {
@@ -287,7 +294,7 @@ func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assert
 	if err != nil {
 		return VisionVerdict{}, err
 	}
-	return parseVisionAnswer(content)
+	return parseVisionAnswer(content, a.apiKey)
 }
 
 func (a *anthropicVision) ExtractText(ctx context.Context, image []byte, query string) (string, error) {
@@ -330,7 +337,7 @@ func (a *anthropicVision) callAnthropic(ctx context.Context, system, user string
 		return "", fmt.Errorf("ai: marshal anthropic request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, defaultAPIURL, bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, orDefault(a.url, defaultAPIURL), bytes.NewReader(payload))
 	if err != nil {
 		return "", err
 	}
@@ -352,7 +359,7 @@ func (a *anthropicVision) callAnthropic(ctx context.Context, system, user string
 		return "", fmt.Errorf("ai: anthropic API rate limited (429) — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ai: anthropic API returned %d: %s", resp.StatusCode, errorBody(respBytes))
+		return "", fmt.Errorf("ai: anthropic API returned %d: %s", resp.StatusCode, errorBodyWithout(respBytes, a.apiKey))
 	}
 
 	var apiResp apiResponse
@@ -360,7 +367,7 @@ func (a *anthropicVision) callAnthropic(ctx context.Context, system, user string
 		return "", fmt.Errorf("ai: parsing anthropic response: %w", err)
 	}
 	if apiResp.Error != nil {
-		return "", fmt.Errorf("ai: anthropic API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
+		return "", fmt.Errorf("ai: anthropic API error (%s): %s", errorString(apiResp.Error.Type, a.apiKey), errorString(apiResp.Error.Message, a.apiKey))
 	}
 	if len(apiResp.Content) == 0 {
 		return "", fmt.Errorf("ai: anthropic API returned empty content")
