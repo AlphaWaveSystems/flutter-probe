@@ -47,6 +47,16 @@ probe ai doctor
 
 The doctor reports whether the model accepts images. A text-only model is a supported setup.
 
+## In Studio
+
+Studio's AI chat reads the same `ai:` block as the CLI, and these rules apply to it:
+
+- **Keys.** Save the key in the keychain from the AI panel, or write `api_key: ${NAME}` and set that variable in the environment that starts Studio. A plain key in `probe.yaml` is not used, and Studio says so. A saved keychain key goes only to the Anthropic provider, never to a local endpoint.
+- **Local endpoints.** `provider: local` must name `localhost` or a loopback address. Any other address is refused unless `studio.ai_allow_remote_endpoint: true` is set. An address with a user name or password is refused, and only `http` and `https` are accepted.
+- **Off.** With no `ai:` block and no saved key, AI is off, and the chat sends nothing. `provider: none` turns AI off even when a key is saved.
+- **Redirects.** Provider requests do not follow a redirect, so a prompt is never sent to a second host.
+- **Redaction.** Every system prompt and chat message is redacted before it leaves. The families are API keys of common providers (OpenAI and Anthropic style `sk-`, GitHub, AWS, Slack, Google and Stripe), PEM private keys, `Authorization: Basic` values, assignments whose name says secret, token, password or key, and secret query parameters such as `?token=`. Emails and file paths are not redacted.
+
 ## What you can do with it
 
 | Feature | Command | Needs vision |
@@ -96,6 +106,6 @@ its original behavior: Claude with `--api-key` / `ai.api_key`.
 
 `provider: openai` and `provider: anthropic` send the request to that vendor directly, never through a
 FlutterProbe service. Triage and text mode send error text and on-screen text, which can contain user data;
-use `provider: local` if that matters.
+use `provider: local` if that matters. In Studio's chat, `provider: openai` sends the open file with each message, as `provider: anthropic` already does.
 
 See [Configuration](/advanced/configuration/#ai) for every `ai:` key.
