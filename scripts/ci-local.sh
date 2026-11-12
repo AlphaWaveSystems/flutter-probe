@@ -14,8 +14,8 @@
 #                     as last fetched; this script does not fetch)
 #   --pr-text FILE    a text file the disclosure scan also reads, for example the pull
 #                     request title or body (repeatable)
-#   --allow-skip      a required check that is skipped because a tool is missing does
-#                     not fail the run
+#   --allow-skip      a required check that is skipped because a tool is missing ends
+#                     the run as PARTIAL instead of FAIL
 #   --report FILE     also write the final block to FILE as Markdown
 #
 # Environment:
@@ -41,9 +41,18 @@
 # node_modules in studio/frontend, vscode and website. The only thing this script
 # deletes is the linter it installed into its own temporary directory.
 #
-# Exit status: 0 every selected check passed on a clean tree; 1 a check failed or was
-# not run; 2 usage error; 3 a required check was skipped (see --allow-skip); 4 the
-# checks passed but tracked files had uncommitted changes.
+# The last line is `ci-local: PASS (5 of 5 required checks) at <sha>` only when all
+# five required checks ran and passed on a clean tree. Every other run ends with FAIL
+# or PARTIAL.
+#
+# Exit status:
+#   0  PASS: all five required checks ran and passed on a clean tree
+#   1  FAIL: a check failed or was not run
+#   2  usage error
+#   3  FAIL: a required check was skipped because a tool is missing
+#   4  FAIL: nothing failed, but tracked files had uncommitted changes
+#   5  PARTIAL: nothing failed, but not all five required checks ran (a --job
+#      selection, or a skip allowed with --allow-skip)
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -228,10 +237,14 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+# A check runs once, even when --job names it twice.
 SELECTED=()
 if [ "${#WANTED[@]}" -gt 0 ]; then
+  picked=" "
   for w in "${WANTED[@]}"; do
     idx=$(job_index "$w") || die_usage "unknown check: $w (see --list)"
+    case "$picked" in *" $idx "*) continue ;; esac
+    picked="$picked$idx "
     SELECTED+=("$idx")
   done
 else
@@ -239,9 +252,18 @@ else
     if [ "${JOB_KIND[$i]}" = "required" ] || [ "$ALL" -eq 1 ]; then SELECTED+=("$i"); fi
   done
 fi
-for f in ${PR_TEXT[@]+"${PR_TEXT[@]}"}; do
-  [ -f "$f" ] || die_usage "--pr-text file not found: $f"
+
+# Paths the caller gave are relative to the caller's directory, not to the repository
+# root this script changes to.
+CALLER_DIR=$PWD
+abs_path() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$CALLER_DIR/$1" ;; esac; }
+for n in ${PR_TEXT[@]+"${!PR_TEXT[@]}"}; do
+  PR_TEXT[n]=$(abs_path "${PR_TEXT[$n]}")
+  [ -f "${PR_TEXT[$n]}" ] || die_usage "--pr-text file not found: ${PR_TEXT[$n]}"
 done
+if [ -n "$REPORT" ]; then REPORT=$(abs_path "$REPORT"); fi
+DENYLIST=${PROBE_DISCLOSURE_DENYLIST:-}
+if [ -n "$DENYLIST" ]; then DENYLIST=$(abs_path "$DENYLIST"); fi
 
 command -v git >/dev/null 2>&1 || { echo "ci-local: git is not installed" >&2; exit 2; }
 cd "$ROOT" || exit 2
@@ -290,7 +312,7 @@ run_step() { # dir, command, log
 # range BASE...HEAD, any --pr-text files, and docs/evidence when that scanner knows
 # --tree. Sets STATUS and DETAIL.
 run_disclosure_guard() { # log
-  local log=$1 deny=${PROBE_DISCLOSURE_DENYLIST:-} scanner="$LOG_DIR/base-scanner/disclosure-scan.sh" args=() f
+  local log=$1 deny=$DENYLIST scanner="$LOG_DIR/base-scanner/disclosure-scan.sh" args=() f
   if [ -z "$deny" ]; then
     echo "PROBE_DISCLOSURE_DENYLIST is not set. The hosted check fails without its patterns; this check was not run." >> "$log"
     STATUS="NOT RUN"; DETAIL="no denylist"; return
@@ -315,6 +337,7 @@ run_disclosure_guard() { # log
     echo "range: $BASE_REF...HEAD ($BASE_SHA...$HEAD_SHA)"
     echo "pull request text files: ${#PR_TEXT[@]}"
   } >> "$log"
+  GUARD_SCANNED=yes
   # The scanner reports rule numbers and positions only, never the matched text.
   if (cd "$ROOT" && bash "$scanner" . "$BASE_REF...HEAD" "$deny" ${args[@]+"${args[@]}"}) >> "$log" 2>&1; then
     STATUS="PASS"; DETAIL=""
@@ -368,6 +391,7 @@ fi
 
 # ---- Run the checks ---------------------------------------------------------------
 R_STATUS=(); R_DETAIL=(); R_SECS=()
+GUARD_SCANNED=""
 echo "ci-local: $HEAD_SHA, ${#SELECTED[@]} check(s), logs in $LOG_DIR"
 for i in "${SELECTED[@]}"; do
   id=${JOB_ID[$i]}; name=${JOB_NAME[$i]}; log="$LOG_DIR/$id.log"
@@ -428,26 +452,22 @@ for n in "${!SELECTED[@]}"; do
 done
 bad=${bad#, }
 
-# Count each required check once, even when --job names it twice.
-req_seen=""; req_distinct=0
-for n in "${!SELECTED[@]}"; do
-  i=${SELECTED[$n]}
-  [ "${JOB_KIND[$i]}" = "required" ] || continue
-  case " $req_seen " in *" $i "*) ;; *) req_seen="$req_seen $i"; req_distinct=$((req_distinct + 1)) ;; esac
-done
-
+# PASS is only ever printed when every required check ran and passed on a clean tree.
+# SELECTED holds each check once, so req_pass counts distinct checks.
+req_missing=$((req_total - req_pass - req_skip))
+why=""
+[ "$req_skip" -gt 0 ] && why="$why; $req_skip skipped with --allow-skip"
+[ "$req_missing" -gt 0 ] && why="$why; $req_missing not selected"
 if [ $((n_fail + n_notrun)) -gt 0 ]; then
   VERDICT="FAIL ($req_pass of $req_total required checks passed; not passed: $bad)"; CODE=1
 elif [ "$req_skip" -gt 0 ] && [ "$ALLOW_SKIP" -eq 0 ]; then
   VERDICT="FAIL ($req_pass of $req_total required checks passed; $req_skip skipped)"; CODE=3
 elif [ "$TREE" != "clean" ]; then
   VERDICT="FAIL (DIRTY TREE; $req_pass of $req_total required checks passed on uncommitted changes)"; CODE=4
-elif [ "$req_distinct" -lt "$req_total" ]; then
-  VERDICT="PARTIAL ($req_pass of $req_total required checks passed; $((req_total - req_distinct)) not selected)"; CODE=0
-elif [ "$req_skip" -gt 0 ]; then
-  VERDICT="PASS ($req_pass of $req_total required checks; $req_skip skipped with --allow-skip)"; CODE=0
-else
+elif [ "$req_pass" -eq "$req_total" ]; then
   VERDICT="PASS ($req_pass of $req_total required checks)"; CODE=0
+else
+  VERDICT="PARTIAL ($req_pass of $req_total required checks passed$why)"; CODE=5
 fi
 
 final_block() {
@@ -484,6 +504,10 @@ final_block() {
   if [ -n "$notes" ]; then printf '%s\n' "$notes"; fi
   if [ -n "$CHANGED_BY_RUN" ]; then
     echo "- Note: the run changed tracked files (see \`git status\`). The checks started on a clean tree."
+    echo
+  fi
+  if [ -n "$GUARD_SCANNED" ] && [ "${#PR_TEXT[@]}" -eq 0 ]; then
+    echo "- Note: no --pr-text file was given, so the pull request title and body were not scanned. The hosted check always scans them."
     echo
   fi
   if [ "$UNTRACKED" -gt 0 ]; then

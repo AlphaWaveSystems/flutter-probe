@@ -3,9 +3,11 @@ package scripts
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -33,6 +35,13 @@ import (
 // driftExceptions with its reason and the hash of its text. When such a step
 // changes, the test fails until someone has compared the script's local equivalent
 // with the new step and updated the hash.
+//
+// A command is not all a step does. `env:` changes what the command sees, `if:` decides
+// whether it runs, `continue-on-error:` decides whether its failure counts, and
+// `shell:` and `defaults:` change how it runs. The script runs every command, with the
+// environment of the developer's shell, and counts every failure. So the test also
+// fails when a workflow, a job or a step of a check carries one of these keys, unless
+// knownModifiers lists it with its hash and the reason the script does not need it.
 
 // requiredChecks are the check names the main branch's protection requires.
 var requiredChecks = []string{
@@ -70,6 +79,50 @@ var driftExceptions = []driftException{
 	},
 }
 
+// knownModifier is an `env:`, `if:`, `continue-on-error:`, `shell:` or `defaults:` key
+// the script knowingly does not copy. job is empty for a key of the workflow itself,
+// step is empty for a key of the job. A step is named by its `name:`, or by its
+// `uses:` when it has no name.
+type knownModifier struct {
+	file, job, step, key string
+	sha256               string // of the value; see modifierValue
+	reason               string
+}
+
+var knownModifiers = []knownModifier{
+	{
+		file: "disclosure-guard.yml", job: "guard", key: "if",
+		sha256: "42027374bb8db054a306b3f3107f56b6af6adb82f3f64d19f342a83c2338798c",
+		reason: "Skips the job for the dependency bot. A local run is started by a person and always scans.",
+	},
+	{
+		file: "disclosure-guard.yml", job: "guard", step: "Pull request from this repository only", key: "if",
+		sha256: "de8c1be42d57517b7ad67198e90e37b27876368949316d1d9ebc929bcda9bf6f",
+		reason: "Belongs to a hosted-only step; see driftExceptions.",
+	},
+	{
+		file: "disclosure-guard.yml", job: "guard", step: "Pull request from this repository only", key: "env",
+		sha256: "9dbb0e46d81e506352e66681c750de0f9d63b0622ea6921ce0b4dca6d7e49fb6",
+		reason: "Belongs to a hosted-only step; see driftExceptions.",
+	},
+	{
+		file: "disclosure-guard.yml", job: "guard", step: "Scan", key: "env",
+		sha256: "e63331ca00bff4047da592c06f09d94ddbbe6e533aa81374199d8c4d848ba6e1",
+		reason: "The patterns, the event and the pull request text from the GitHub event. run_disclosure_guard reads them from " +
+			"PROBE_DISCLOSURE_DENYLIST, --base and --pr-text; see driftExceptions.",
+	},
+	{
+		file: "ci.yml", job: "unit-tests", step: "Upload coverage", key: "if",
+		sha256: "b2daf9a143924dc722c6703acb6c59f40053a84d610cd76163f239b269845f86",
+		reason: "An upload step (`uses:`), which the script does not run.",
+	},
+	{
+		file: "ci.yml", job: "dart-agent", step: "Enforce CHANGELOG entry when lib/ changes", key: "if",
+		sha256: "de8c1be42d57517b7ad67198e90e37b27876368949316d1d9ebc929bcda9bf6f",
+		reason: "Runs the step for pull requests only. The script's local step always runs it against --base; see driftExceptions.",
+	},
+}
+
 // unnamedJobs are workflow jobs without a `name:`; the script names its check itself.
 var unnamedJobs = map[string]string{
 	"docs.yml:deploy": "Website build",
@@ -88,13 +141,57 @@ type workflowStep struct {
 	Uses             string         `yaml:"uses"`
 	WorkingDirectory string         `yaml:"working-directory"`
 	With             map[string]any `yaml:"with"`
+	If               any            `yaml:"if"`
+	Env              any            `yaml:"env"`
+	ContinueOnError  any            `yaml:"continue-on-error"`
+	Shell            any            `yaml:"shell"`
+}
+
+type workflowJob struct {
+	Name            string         `yaml:"name"`
+	Steps           []workflowStep `yaml:"steps"`
+	If              any            `yaml:"if"`
+	Env             any            `yaml:"env"`
+	ContinueOnError any            `yaml:"continue-on-error"`
+	Defaults        any            `yaml:"defaults"`
 }
 
 type workflowFile struct {
-	Jobs map[string]struct {
-		Name  string         `yaml:"name"`
-		Steps []workflowStep `yaml:"steps"`
-	} `yaml:"jobs"`
+	Env      any                    `yaml:"env"`
+	Defaults any                    `yaml:"defaults"`
+	Jobs     map[string]workflowJob `yaml:"jobs"`
+}
+
+type modifier struct {
+	key   string
+	value any
+}
+
+func (s workflowStep) modifiers() []modifier {
+	return []modifier{{"if", s.If}, {"env", s.Env}, {"continue-on-error", s.ContinueOnError}, {"shell", s.Shell}}
+}
+
+func (j workflowJob) modifiers() []modifier {
+	return []modifier{{"if", j.If}, {"env", j.Env}, {"continue-on-error", j.ContinueOnError}, {"defaults", j.Defaults}}
+}
+
+func (w workflowFile) modifiers() []modifier {
+	return []modifier{{"env", w.Env}, {"defaults", w.Defaults}}
+}
+
+// modifierValue is the text whose hash knownModifiers holds: a map as its sorted
+// `key=value` lines, anything else as Go prints it.
+func modifierValue(v any) string {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Sprint(v)
+	}
+	lines := make([]string, 0, len(m))
+	for k, val := range m {
+		lines = append(lines, k+"="+modifierValue(val))
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n")
 }
 
 type localJob struct {
@@ -197,6 +294,48 @@ func TestCILocalKnowsEveryRequiredCheck(t *testing.T) {
 
 func TestCILocalRunsTheWorkflowCommands(t *testing.T) {
 	usedException := make([]bool, len(driftExceptions))
+	usedModifier := make([]bool, len(knownModifiers))
+
+	// checkModifiers fails for every key in mods that knownModifiers does not list
+	// with the hash of its present value.
+	checkModifiers := func(file, job, step string, mods []modifier) {
+		t.Helper()
+		where := file
+		if job != "" {
+			where += ", job " + job
+		}
+		if step != "" {
+			where += fmt.Sprintf(", step %q", step)
+		}
+		for _, m := range mods {
+			if m.value == nil {
+				continue
+			}
+			got := hashOf(modifierValue(m.value))
+			known := false
+			for i, k := range knownModifiers {
+				if k.file != file || k.job != job || k.step != step || k.key != m.key {
+					continue
+				}
+				known = true
+				usedModifier[i] = true
+				if k.reason == "" {
+					t.Errorf("%s: the entry for `%s:` in knownModifiers has no reason", where, m.key)
+				}
+				if got != k.sha256 {
+					t.Errorf("%s: `%s:` changed (sha256 %s).\n"+
+						"Check that ci-local.sh still does what this step or job does, then update the hash in knownModifiers.",
+						where, m.key, got)
+				}
+			}
+			if !known {
+				t.Errorf("%s has `%s:` (sha256 %s), which ci-local.sh does not copy: it runs every command, "+
+					"with the developer's environment, and counts every failure.\n"+
+					"Make the script do the same as the workflow, or list the key in knownModifiers with the reason it is not needed.",
+					where, m.key, got)
+			}
+		}
+	}
 
 	for _, j := range describeCILocal(t) {
 		wj, ok := loadWorkflow(t, j.file).Jobs[j.key]
@@ -210,6 +349,16 @@ func TestCILocalRunsTheWorkflowCommands(t *testing.T) {
 		}
 		if wantName != j.name {
 			t.Errorf("%s:%s is named %q in the workflow and %q in ci-local.sh", j.file, j.key, wj.Name, j.name)
+		}
+
+		checkModifiers(j.file, "", "", loadWorkflow(t, j.file).modifiers())
+		checkModifiers(j.file, j.key, "", wj.modifiers())
+		for _, s := range wj.Steps {
+			name := s.Name
+			if name == "" {
+				name = s.Uses
+			}
+			checkModifiers(j.file, j.key, name, s.modifiers())
 		}
 
 		var want []string
@@ -277,6 +426,11 @@ func TestCILocalRunsTheWorkflowCommands(t *testing.T) {
 		}
 	}
 
+	for i, k := range knownModifiers {
+		if !usedModifier[i] {
+			t.Errorf("the knownModifiers entry for %s job %q step %q `%s:` matches nothing in the workflow; remove it", k.file, k.job, k.step, k.key)
+		}
+	}
 	for i, e := range driftExceptions {
 		if !usedException[i] {
 			t.Errorf("the exception for %s:%s step %q matches no workflow step; remove it", e.file, e.job, e.step)
