@@ -20,7 +20,8 @@ var errorTextFilter atomic.Pointer[func(string) string]
 // installs it once at start, so a secret is redacted before the cut and a secret that straddles the cut leaves nothing of
 // itself. f must return the text, changed or not, and must not retain it. With no filter, or with nil, the text is only cut, as
 // it always was: the command line does not redact other secrets. Install it before the first request; replacing it while
-// requests run is safe, but a request in flight may use either filter.
+// requests run is safe, but a request in flight may use either filter. f must not panic: a panic is not recovered, and it
+// reaches the code that was building an error message.
 func SetErrorTextFilter(f func(string) string) {
 	if f == nil {
 		errorTextFilter.Store(nil)
