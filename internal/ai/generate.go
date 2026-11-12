@@ -39,11 +39,11 @@ func NewGeneratorWithCompleter(c TextCompleter) *Generator {
 	return &Generator{completer: c}
 }
 
-// usable reports whether g has anything to call: a provider-backed completer
-// or a Claude API key.
 // keySecret is the Claude API key, for secretOf.
 func (g *Generator) keySecret() string { return g.APIKey }
 
+// usable reports whether g has anything to call: a provider-backed completer
+// or a Claude API key.
 func (g *Generator) usable() bool { return g.completer != nil || g.APIKey != "" }
 
 // GenerateRequest describes what to generate.

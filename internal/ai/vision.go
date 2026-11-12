@@ -142,7 +142,8 @@ func parseVisionAnswer(raw, secret string) (VisionVerdict, error) {
 	if err := json.Unmarshal([]byte(s), &a); err != nil {
 		return VisionVerdict{}, fmt.Errorf("ai: could not parse provider response as a verdict: %w (raw: %s)", err, errorString(raw, secret))
 	}
-	return VisionVerdict{True: a.Answer, Reasoning: a.Reasoning}, nil
+	// The reasoning is the provider's text, and every failure message prints it, so it is cut and cleaned like an error body.
+	return VisionVerdict{True: a.Answer, Reasoning: errorString(a.Reasoning, secret)}, nil
 }
 
 // ---- Shared extraction prompt ----
@@ -282,9 +283,6 @@ type anthropicVision struct {
 	client *http.Client
 	url    string // the Messages API URL; empty means defaultAPIURL (a test points it at a loopback fake)
 }
-
-// keySecret is the API key, for secretOf.
-func (a *anthropicVision) keySecret() string { return a.apiKey }
 
 func (a *anthropicVision) AssertScreen(ctx context.Context, image []byte, assertion string) (VisionVerdict, error) {
 	if a.apiKey == "" {

@@ -182,3 +182,103 @@ func TestErrorBodyWithout(t *testing.T) {
 		}
 	})
 }
+
+// A verdict that parses, with answer false and a long reasoning that echoes the key, is what every failed `with ai` step
+// prints. The reasoning is cut and the key removed where the verdict is built, for every client that builds one.
+func TestEveryVerdictReasoningIsCutAndWithoutTheKey(t *testing.T) {
+	image := []byte("png")
+	verdict := func() string {
+		b, _ := json.Marshal(map[string]any{"answer": false, "reasoning": echo()})
+		return string(b)
+	}
+	openAIAnswer := func(w http.ResponseWriter, _ *http.Request) {
+		b, _ := json.Marshal(map[string]any{"choices": []map[string]any{{"message": map[string]string{"content": verdict()}}}})
+		_, _ = w.Write(b)
+	}
+	anthropicAnswer := func(w http.ResponseWriter, _ *http.Request) {
+		b, _ := json.Marshal(map[string]any{"content": []map[string]string{{"type": "text", "text": verdict()}}})
+		_, _ = w.Write(b)
+	}
+	cases := []struct {
+		name    string
+		handler http.HandlerFunc
+		call    func(t *testing.T, url string) (VisionVerdict, error)
+	}{
+		{"openai-compatible vision", openAIAnswer, func(t *testing.T, u string) (VisionVerdict, error) {
+			p, err := NewVisionProvider("local", echoedKey, "m", u+"/v1", 5*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return p.AssertScreen(context.Background(), image, "a")
+		}},
+		{"anthropic vision", anthropicAnswer, func(t *testing.T, u string) (VisionVerdict, error) {
+			a := &anthropicVision{apiKey: echoedKey, model: "m", client: &http.Client{Timeout: 5 * time.Second, CheckRedirect: noRedirects}, url: u + "/v1/messages"}
+			return a.AssertScreen(context.Background(), image, "a")
+		}},
+		{"text verdict through the openai-compatible completer", openAIAnswer, func(t *testing.T, u string) (VisionVerdict, error) {
+			c, err := NewTextCompleter("local", echoedKey, "m", u+"/v1", 5*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return TextVerdict(context.Background(), c, "a", []string{"x"}, nil)
+		}},
+		{"text verdict through the Claude generator", anthropicAnswer, func(t *testing.T, u string) (VisionVerdict, error) {
+			g := NewGenerator(echoedKey, "")
+			g.BaseURL = u + "/v1/messages"
+			return TextVerdict(context.Background(), g, "a", []string{"x"}, nil)
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(c.handler)
+			t.Cleanup(srv.Close)
+			v, err := c.call(t, srv.URL)
+			if err != nil {
+				t.Fatalf("a verdict that parses returned an error: %v", err)
+			}
+			if v.True {
+				t.Fatal("the fake answered false")
+			}
+			if strings.Contains(v.Reasoning, echoedKey[:10]) {
+				t.Fatalf("the reasoning carries the echoed key: %q", v.Reasoning)
+			}
+			if len(v.Reasoning) > 200 {
+				t.Fatalf("the reasoning is %d bytes; it must be cut to 200", len(v.Reasoning))
+			}
+		})
+	}
+}
+
+// The doctor report is shown to the user, so a server that echoes the key in its model ids or in its answer must not put it
+// there. The ids put the key at byte 190, across the cut; the answer starts with it, inside the first 40 characters.
+func TestDoctorReportNeverShowsTheKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			var ids []map[string]string
+			for i := 0; i < 10; i++ {
+				ids = append(ids, map[string]string{"id": fmt.Sprintf("%02d", i) + strings.Repeat("e", 188) + echoedKey + " tail"})
+			}
+			b, _ := json.Marshal(map[string]any{"data": ids})
+			_, _ = w.Write(b)
+			return
+		}
+		b, _ := json.Marshal(map[string]any{"choices": []map[string]any{{"message": map[string]string{"content": echoedKey + " and some more words after it"}}}})
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	rep := Doctor(context.Background(), DoctorInput{Provider: "local", APIKey: echoedKey, Model: "not-listed", Endpoint: srv.URL + "/v1", Timeout: 5 * time.Second})
+	names := map[string]bool{}
+	for _, c := range rep.Checks {
+		names[c.Name] = true
+		if strings.Contains(c.Detail, echoedKey[:10]) {
+			t.Fatalf("the %s check shows the key: %q", c.Name, c.Detail)
+		}
+		if c.Name == "endpoint" && len(c.Detail) > 8*200+200 {
+			t.Fatalf("the endpoint check is %d bytes; each model id must be cut to 200", len(c.Detail))
+		}
+	}
+	if !names["endpoint"] || !names["text"] {
+		t.Fatalf("the report did not reach the endpoint and text checks: %v", names)
+	}
+}
