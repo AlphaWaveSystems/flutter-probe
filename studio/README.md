@@ -159,7 +159,7 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
   simulator); not started
 - Multi-device side-by-side
 - Time-travel widget tree per step
-- AI chat pane (calls the configured provider directly: the Anthropic API, or a local endpoint named in `probe.yaml`; it does not run `probe-mcp`)
+- AI chat pane (calls the configured provider directly: the Anthropic API, or a local endpoint named in `probe.yaml`; it does not run `probe-mcp`). Workspace settings has an **AI provider** section that writes the `ai:` block, with **Test connection**; Settings never takes a key, and **Save** leaves a plain `api_key` in `probe.yaml` as it is
 
 ## Testing Studio
 

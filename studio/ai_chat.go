@@ -150,13 +150,20 @@ func (a *App) Chat(messages []ChatMessage, fileContent string) (ChatResponse, er
 	if err != nil {
 		return ChatResponse{}, err
 	}
+	system, msgs := a.chatTurn(messages, fileContent)
+	return completeChat(s, system, msgs)
+}
+
+// chatTurn builds what a chat turn carries: the system prompt with the open file, the last run and the widget tree, and the
+// conversation. Chat and PreviewAIChat each call it when they run, so the preview shows what the message would send now.
+func (a *App) chatTurn(messages []ChatMessage, fileContent string) (string, []claudeMessage) {
 	lastRun, tree := a.contextPieces(contextSwitches(a), a.track.snapshot())
 	system := chatBasePrompt + chatContext(fileContent, lastRun, tree)
 	msgs := make([]claudeMessage, len(messages))
 	for i, m := range messages {
 		msgs[i] = claudeMessage{Role: m.Role, Content: m.Content}
 	}
-	return completeChat(s, system, msgs)
+	return system, msgs
 }
 
 // callClaude sends one request to the Messages API and returns the reply with its token usage and cost. An empty model
