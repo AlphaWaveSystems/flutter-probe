@@ -127,7 +127,7 @@ func listModels(ctx context.Context, base, apiKey string, timeout time.Duration)
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := (&http.Client{CheckRedirect: noRedirects}).Do(req)
 	if err != nil {
 		return nil, err
 	}

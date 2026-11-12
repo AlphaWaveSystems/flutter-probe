@@ -47,6 +47,8 @@ type ChatResponse struct {
 	InputTokens  int     `json:"inputTokens"`
 	OutputTokens int     `json:"outputTokens"`
 	CostUSD      float64 `json:"costUSD"`
+	// Notice is a line to show with the reply, such as a plain key that Studio did not use. It is empty otherwise.
+	Notice string `json:"notice,omitempty"`
 }
 
 // claudeMessage is one turn of a request to the Messages API.
@@ -55,7 +57,7 @@ type claudeMessage struct {
 	Content string `json:"content"`
 }
 
-var chatHTTPClient = &http.Client{Timeout: 120 * time.Second}
+var chatHTTPClient = newAIClient(120 * time.Second)
 
 // GetAPIKey reports whether an Anthropic API key is saved in the platform keychain. It never returns the key: the
 // settings panel only needs to show that one is saved.
@@ -137,16 +139,16 @@ func (a *App) contextPieces(sw aiContextSettings, st RunState) (lastRun, tree st
 	return lastRun, tree
 }
 
-// Chat sends a multi-turn conversation to the Claude API and returns the assistant reply together with token usage for
-// the cost counter.
+// Chat sends a multi-turn conversation to the provider the workspace configures (probe.yaml's ai: block, or a saved
+// Anthropic key) and returns the assistant reply together with token usage for the cost counter.
 //
 // messages is the full conversation history (user + assistant alternating). The system prompt carries the open file
 // (fileContent), the last run of the app and, when a device is connected, its widget tree. Nothing is sent unless the
-// user sends a message.
+// user sends a message, and with AI off nothing is sent at all.
 func (a *App) Chat(messages []ChatMessage, fileContent string) (ChatResponse, error) {
-	apiKey, _ := apiKeyLookup()
-	if apiKey == "" {
-		return ChatResponse{}, errNoAPIKey
+	s, err := a.aiProvider()
+	if err != nil {
+		return ChatResponse{}, err
 	}
 	lastRun, tree := a.contextPieces(contextSwitches(a), a.track.snapshot())
 	system := chatBasePrompt + chatContext(fileContent, lastRun, tree)
@@ -154,11 +156,15 @@ func (a *App) Chat(messages []ChatMessage, fileContent string) (ChatResponse, er
 	for i, m := range messages {
 		msgs[i] = claudeMessage{Role: m.Role, Content: m.Content}
 	}
-	return callClaude(apiKey, system, msgs)
+	return completeChat(s, system, msgs)
 }
 
-// callClaude sends one request to the Messages API and returns the reply with its token usage and cost.
-func callClaude(apiKey, system string, msgs []claudeMessage) (ChatResponse, error) {
+// callClaude sends one request to the Messages API and returns the reply with its token usage and cost. An empty model
+// means chatModel.
+func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatResponse, error) {
+	if model == "" {
+		model = chatModel
+	}
 	type reqBody struct {
 		Model     string          `json:"model"`
 		MaxTokens int             `json:"max_tokens"`
@@ -166,7 +172,7 @@ func callClaude(apiKey, system string, msgs []claudeMessage) (ChatResponse, erro
 		Messages  []claudeMessage `json:"messages"`
 	}
 	payload, err := json.Marshal(reqBody{
-		Model:     chatModel,
+		Model:     model,
 		MaxTokens: chatMaxTokens,
 		System:    system,
 		Messages:  msgs,
@@ -204,7 +210,7 @@ func callClaude(apiKey, system string, msgs []claudeMessage) (ChatResponse, erro
 		return ChatResponse{}, fmt.Errorf("rate limited — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, errorBody(body))
 	}
 
 	var apiResp struct {
@@ -264,9 +270,9 @@ Reply with one fenced probe block that holds exactly one ProbeScript line replac
 // sends the failed step and its error, the last run, the open file and the connected device's widget tree. The key comes
 // from the keychain and is never returned.
 func (a *App) SuggestSelectorFix(fileContent string) (SelectorFix, error) {
-	apiKey, _ := apiKeyLookup()
-	if apiKey == "" {
-		return SelectorFix{}, errNoAPIKey
+	s, err := a.aiProvider()
+	if err != nil {
+		return SelectorFix{}, err
 	}
 	sw := contextSwitches(a)
 	if !sw.RunResults {
@@ -280,7 +286,7 @@ func (a *App) SuggestSelectorFix(fileContent string) (SelectorFix, error) {
 	prompt := fmt.Sprintf("The step below failed.\n\nTest %q, line %d: %s\nError: %s", step.Test, step.Line, step.Description, redactCredentials(step.Error))
 	lastRun, tree := a.contextPieces(sw, st)
 	system := selectorFixPrompt + chatContext(fileContent, lastRun, tree)
-	resp, err := callClaude(apiKey, system, []claudeMessage{{Role: "user", Content: prompt}})
+	resp, err := completeChat(s, system, []claudeMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		return SelectorFix{}, err
 	}

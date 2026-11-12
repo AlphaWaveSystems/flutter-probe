@@ -110,9 +110,13 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 type aiContextSettings struct {
 	RunResults bool
 	WidgetTree bool
+	// AllowRemoteEndpoint is the workspace's confirmation that a local provider may use an address that is not this machine
+	// (studio.ai_allow_remote_endpoint). It is off unless probe.yaml sets it.
+	AllowRemoteEndpoint bool
 }
 
-// readAIContext reads the two switches from probe.yaml's studio.ai_context section.
+// readAIContext reads the two switches from probe.yaml's studio.ai_context section, and the remote-endpoint confirmation
+// from studio.ai_allow_remote_endpoint.
 func readAIContext(workspace string) (aiContextSettings, error) {
 	data, err := os.ReadFile(filepath.Join(workspace, "probe.yaml"))
 	if os.IsNotExist(err) {
@@ -127,14 +131,16 @@ func readAIContext(workspace string) (aiContextSettings, error) {
 				RunResults bool `yaml:"run_results"`
 				WidgetTree bool `yaml:"widget_tree"`
 			} `yaml:"ai_context"`
+			AllowRemoteEndpoint bool `yaml:"ai_allow_remote_endpoint"`
 		} `yaml:"studio"`
 	}
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return aiContextSettings{}, fmt.Errorf("parsing probe.yaml: %w", err)
 	}
 	return aiContextSettings{
-		RunResults: doc.Studio.AIContext.RunResults,
-		WidgetTree: doc.Studio.AIContext.WidgetTree,
+		RunResults:          doc.Studio.AIContext.RunResults,
+		WidgetTree:          doc.Studio.AIContext.WidgetTree,
+		AllowRemoteEndpoint: doc.Studio.AllowRemoteEndpoint,
 	}, nil
 }
 

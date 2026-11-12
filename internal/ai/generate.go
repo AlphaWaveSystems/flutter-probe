@@ -69,7 +69,8 @@ func NewGenerator(apiKey, model string) *Generator {
 		Model:   model,
 		BaseURL: defaultAPIURL,
 		Client: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout:       120 * time.Second,
+			CheckRedirect: noRedirects,
 		},
 	}
 }
