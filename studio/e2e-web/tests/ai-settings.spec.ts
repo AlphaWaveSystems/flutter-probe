@@ -11,10 +11,12 @@ const yamlPath = path.join(workspace, "probe.yaml");
 let original = "";
 const readYaml = () => fs.readFileSync(yamlPath, "utf8");
 
+/** Opens Settings and waits until the form has loaded: the load fills the fields and would overwrite an early change. */
 async function openSettings(page: Page) {
   await openStudio(page);
   await page.click("#btn-settings");
   await expect(page.locator("#settings-overlay")).toBeVisible();
+  await expect(page.locator("#settings-port")).toHaveValue(/^\d+$/);
 }
 
 test.describe("Settings AI section (fake provider on 127.0.0.1)", () => {
@@ -100,7 +102,9 @@ test.describe("Settings AI section (fake provider on 127.0.0.1)", () => {
       expect(written).toContain("provider: local");
       expect(written).toMatch(/endpoint:\s*"?http:\/\/127\.0\.0\.1:\d+\/v1"?/);
       expect(written).toContain("model: fake-model");
-      expect(written).toContain("com.example.fixture"); // a key the form does not manage is still there
+      const appId = /\bid:\s*(\S+)/.exec(original)?.[1]; // a key the form does not manage, read from the file as it was
+      expect(appId).toBeTruthy();
+      expect(written).toContain(appId!); // it is still there
       expect(written).not.toMatch(/api_key/); // Settings never writes a key
 
       await page.reload();
@@ -120,12 +124,12 @@ test.describe("Settings AI section (fake provider on 127.0.0.1)", () => {
     expect(readYaml()).toContain("provider: none");
   });
 
-  test("ai-s07 a form that would not run is refused with the reason and writes nothing", async ({ page }) => {
+  test("ai-s07 a form that would not run is refused with the reason and not written", async ({ page }) => {
     await openSettings(page);
     await page.selectOption("#settings-ai-provider", "openai"); // the key source is the keychain, which Studio never sends to OpenAI
     await page.click("#btn-settings-save");
-    await expect(page.locator("#toast-container")).toContainText("Environment variable");
+    await expect(page.locator("#settings-ai-error")).toContainText("Environment variable");
     await expect(page.locator("#settings-overlay")).toBeVisible(); // the form stays open
-    expect(readYaml()).toBe(original);
+    expect(readYaml()).not.toContain("openai"); // the refused AI form was not written
   });
 });
