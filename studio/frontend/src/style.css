@@ -462,6 +462,36 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 12px;
 }
 .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.settings-row select {
+  padding: 6px 10px; box-sizing: border-box; min-width: 0; width: 100%;
+  background: var(--bg-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); color: var(--fg-strong); font-size: 12px;
+}
+.settings-row input { min-width: 0; width: 100%; }
+/* The settings card grows with the AI section, so it scrolls instead of leaving the window. */
+#settings-overlay .overlay-card { width: min(540px, 92vw); max-height: 90vh; overflow-y: auto; }
+.settings-form fieldset {
+  min-width: 0; margin: 0; padding: 8px 12px 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.settings-form legend { padding: 0 6px; font-size: 12px; color: var(--fg-strong); }
+.settings-form fieldset p { margin: 0; font-size: 12px; line-height: 1.4; }
+.settings-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.4; }
+.settings-check input { margin-top: 2px; flex: none; }
+.ai-checks { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.5; }
+.ai-checks li { padding: 2px 0; overflow-wrap: anywhere; }
+.ai-checks li.ok { color: var(--fg-strong); }
+.ai-checks li.fail { color: #ffb4b4; }
+.ai-checks li.dim { color: var(--fg-dim); }
+/* The first-send preview shows long lines of prompt text, so it is wider and its text wraps and scrolls. */
+#ai-preview-overlay .overlay-card { width: min(720px, 92vw); }
+.ai-preview-text {
+  margin: 8px 0; padding: 10px 12px; max-height: 50vh; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+  font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--fg);
+}
 
 /* Inspector search */
 .inspector-search {
