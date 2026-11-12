@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **`probe-mcp` refuses an option it does not know.** An argument that starts with a dash and is not `--http`, `--dangerously-allow-non-loopback` or `--help` (a mistyped `--htpp`, say) now ends with exit code 2 and a usage line. Before, it was ignored and the stdio server started. `probe-mcp` with no arguments, or with plain words, starts the stdio server as before. If your MCP client configuration passes a dash-prefixed argument to `probe-mcp`, remove it.
+- **A test now proves that Studio's AI makes no request when it is off or refused.** A counting transport replaces the default one and records every request, and the chat, the selector fix and the model list are run in nine configurations. No user-visible change.
 - **`ai.provider: openai` in `probe.yaml` now sends the open file to OpenAI with each message in Studio's chat.** Before this change, Studio's chat used only the Anthropic key, so this switch had no effect there. Set `provider: none` to keep Studio's AI off.
 - **Studio's chat reads only the `ai:` and `studio:` sections of `probe.yaml`.** An error in an unrelated key, such as `agent.port`, no longer blocks the chat.
 - **`provider: none` turns Studio's AI off,** even when an Anthropic key is saved.
