@@ -721,3 +721,29 @@ func TestUploadsNeverCarryASelectorProposal(t *testing.T) {
 		check(t, out.String())
 	})
 }
+
+// Step and selector are masked when the runner records them. A value noted after that is masked again before the
+// request is built, and before the selector is written to the report or the terminal.
+func TestMaybeAIHeal_AValueNotedAfterRecordingIsNotInTheRequestOrTheReport(t *testing.T) {
+	const secret = "late-noted-quorvex-55"
+	sysdialog.NoteSecret(secret)
+	model := newFakeModel(t, answering("NONE"))
+	results := healResults("a.probe", 1)
+	results[3].FailedSelector.Step = `tap "user ` + secret + `"`
+	results[3].FailedSelector.Selector = `"user ` + secret + `"`
+	var out bytes.Buffer
+	maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
+	body, _ := model.lastBody.Load().(string)
+	if model.requests.Load() != 1 || body == "" {
+		t.Fatalf("requests = %d, want 1", model.requests.Load())
+	}
+	entry, _ := json.Marshal(results[3].Proposal)
+	for where, text := range map[string]string{"request": body, "report": string(entry), "terminal": out.String()} {
+		if strings.Contains(text, secret) {
+			t.Errorf("the value reached the %s", where)
+		}
+	}
+	if !strings.Contains(body, `user ****`) {
+		t.Errorf("the request should carry the masked step:\n%.300s", body)
+	}
+}

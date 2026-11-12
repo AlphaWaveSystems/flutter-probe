@@ -17,7 +17,7 @@ import (
 const maxSelectorProposals = 3
 
 // selectorProposalAdvisory is the fixed label every proposal carries in the report.
-const selectorProposalAdvisory = "Proposed by a language model from the failure text. Not applied to the test file and not verified against the app. It does not change this result."
+const selectorProposalAdvisory = "Proposed by a language model from the texts and keys that were on screen when the step timed out. Not applied to the test file and not verified against the app. It does not change this result."
 
 // selectorProposalCeiling bounds the whole pass, on top of the per-request timeouts, so a wedged model server cannot hold
 // the report back for long. A variable so a test can shorten it.
@@ -80,7 +80,9 @@ func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results [
 	seen := map[string]*runner.SelectorProposal{}
 	requests, skipped, stopped := 0, 0, false
 	for _, i := range failed {
-		fs := results[i].FailedSelector
+		// Step and selector were masked when the runner recorded them; a value noted since is masked here, like the lists.
+		fs := *results[i].FailedSelector
+		fs.Step, fs.Selector = sysdialog.ScrubKnown(fs.Step), sysdialog.ScrubKnown(fs.Selector)
 		key := fmt.Sprintf("%s\x00%d\x00%s", results[i].File, fs.Line, fs.Selector)
 		if p, ok := seen[key]; ok {
 			results[i].Proposal = p

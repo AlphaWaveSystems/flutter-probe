@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -1857,7 +1858,27 @@ func (e *Executor) scrubEnv(err error) error {
 	if scrubbed == msg {
 		return err
 	}
-	return fmt.Errorf("%s", scrubbed)
+	return &scrubbedError{msg: scrubbed, err: err}
+}
+
+// scrubbedError is err with its message masked. It does not unwrap, so errors.Is sees what it saw before; only As
+// can find a *stepTimeoutError, which carries the items the selector proposal reads (they are masked when recorded).
+type scrubbedError struct {
+	msg string
+	err error
+}
+
+func (e *scrubbedError) Error() string { return e.msg }
+
+func (e *scrubbedError) As(target any) bool {
+	if t, ok := target.(**stepTimeoutError); ok {
+		var ste *stepTimeoutError
+		if errors.As(e.err, &ste) {
+			*t = ste
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Executor) resolveVars(s string) string {
