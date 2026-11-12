@@ -4,7 +4,7 @@
 
 ## 0.26.2 - 2026-11-11
 
-- No agent change (`flutter_probe_agent` is released in step with the CLI).
+- Fixed: the agent reports its package version at handshake. It reported 0.26.0 in 0.26.1, so the CLI warned of a version mismatch even when the versions matched. A test now fails when the two differ.
 
 ## 0.26.1 - 2026-10-26
 
