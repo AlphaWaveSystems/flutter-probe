@@ -80,3 +80,18 @@ func TestProviderErrorBodyIsCut(t *testing.T) {
 		t.Fatalf("the error is %d bytes; the body must be cut", len(err.Error()))
 	}
 }
+
+// The generate client (probe generate with a Claude key) does not follow a redirect, so the key and the prompt do not reach
+// another host.
+func TestGeneratorDoesNotFollowARedirect(t *testing.T) {
+	var hits atomic.Int32
+	target := redirectTarget(t, &hits)
+	g := NewGenerator("sk-ant-redirect-generate-000000000013", "")
+	g.BaseURL = redirector(t, target).URL + "/v1/messages"
+	if _, err := g.callAPI(context.Background(), "sys", "secret prompt"); err == nil {
+		t.Fatal("a redirect was answered as if it were the provider")
+	}
+	if n := hits.Load(); n != 0 {
+		t.Fatalf("the redirect target received %d request(s)", n)
+	}
+}

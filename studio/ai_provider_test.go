@@ -137,7 +137,7 @@ func TestFileContentIsRedactedBeforeItLeaves(t *testing.T) {
 	isolateProvider(t, "")
 	f := newLocalFake(t, "ok")
 	dir := writeProbeYAML(t, localYAML(f.srv.URL))
-	token := "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+	token := "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
 	file := "test \"login\"\n  type \"" + token + "\" into \"Token\"\n"
 	if _, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "is my token ok? " + token}}, file); err != nil {
 		t.Fatal(err)

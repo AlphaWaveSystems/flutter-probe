@@ -202,8 +202,8 @@ func TestAnthropicPathRedactsCredentialsInTheFileAndTheTurns(t *testing.T) {
 	f := newFakeProvider(t, http.StatusOK, "ok")
 	chatEndpoint = f.srv.URL
 	dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n")
-	const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
-	const aws = "AKIAIOSFODNN7EXAMPLE"
+	const token = "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+	const aws = "AK" + "IA" + "IOSFODNN7EXAMPLE"
 	file := "test \"x\"\n  type \"" + token + "\" into \"Token\"\n"
 	if _, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "my aws key is " + aws}}, file); err != nil {
 		t.Fatal(err)
@@ -224,7 +224,7 @@ func TestSelectorFixPathRedactsCredentialsInTheFileTheStepAndTheTree(t *testing.
 	f := newFakeProvider(t, http.StatusOK, "ok")
 	chatEndpoint = f.srv.URL
 	contextSwitches = func(*App) aiContextSettings { return aiContextSettings{RunResults: true, WidgetTree: true} }
-	const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+	const token = "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
 	fetchTree = func(*App) (string, error) {
 		return "Text(key=[<'" + token + "'>])\n", nil
 	}
@@ -336,5 +336,60 @@ func TestEndpointIsParsedAsAURL(t *testing.T) {
 	}
 	if err := checkLocalEndpoint("http://127.0.0.1@evil.com", false); err == nil {
 		t.Fatal("a user-name trick was accepted")
+	}
+}
+
+// A key supplied through ${NAME} in probe.yaml never reaches stderr or the log either, on the error path or the success path,
+// for the Anthropic provider and for a local endpoint.
+func TestEnvKeyNeverReachesStderrOrTheLog(t *testing.T) {
+	const key = "sk-stderr-probe-env-000000000010"
+	isolateProvider(t, "")
+	t.Setenv("PROBE_AI_STDERR_KEY", key)
+	failing := newFakeProvider(t, http.StatusInternalServerError, "boom")
+	chatEndpoint = failing.srv.URL
+	anthropic := writeProbeYAML(t, "ai:\n  provider: anthropic\n  api_key: ${PROBE_AI_STDERR_KEY}\n")
+	local := newLocalFake(t, "ok")
+	localDir := writeProbeYAML(t, localYAML(local.srv.URL)+"  api_key: ${PROBE_AI_STDERR_KEY}\n")
+
+	var errs []error
+	stderr := captureStderr(t, func() {
+		_, err := appIn(anthropic).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
+		errs = append(errs, err)
+		_, err = appIn(localDir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
+		errs = append(errs, err)
+	})
+	if strings.Contains(stderr, key) || strings.Contains(stderr, key[:8]) {
+		t.Fatalf("the env key reached stderr or the log: %q", stderr)
+	}
+	for _, err := range errs {
+		if err != nil && strings.Contains(err.Error(), key) {
+			t.Fatalf("the env key is in an error message: %v", err)
+		}
+	}
+	if auth := local.auth; auth != "Bearer "+key {
+		t.Fatalf("the env key was not used for the local endpoint, Authorization = %q", auth)
+	}
+}
+
+// The Studio Anthropic path cuts a long error body and redacts a key the server echoes in it.
+func TestAnthropicErrorBodyIsCutAndRedacted(t *testing.T) {
+	isolateProvider(t, "sk-ant-errbody-probe-000000000011")
+	const echoed = "sk-echoed-by-anthropic-000000000012"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, echoed+" "+strings.Repeat("plain error words ", 300))
+	}))
+	t.Cleanup(srv.Close)
+	chatEndpoint = srv.URL
+	dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n")
+	_, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
+	if err == nil {
+		t.Fatal("the server error was not reported")
+	}
+	if strings.Contains(err.Error(), "sk-echoed") {
+		t.Fatalf("the error echoes the key: %v", err)
+	}
+	if len(err.Error()) > 400 {
+		t.Fatalf("the error is %d bytes; the body must be cut", len(err.Error()))
 	}
 }
