@@ -484,6 +484,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .ai-checks li.ok { color: var(--fg-strong); }
 .ai-checks li.fail { color: #ffb4b4; }
 .ai-checks li.dim { color: var(--fg-dim); }
+.ai-error { color: #ffb4b4; }
 /* The first-send preview shows long lines of prompt text, so it is wider and its text wraps and scrolls. */
 #ai-preview-overlay .overlay-card { width: min(720px, 92vw); }
 .ai-preview-text {

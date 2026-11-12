@@ -39,6 +39,13 @@ function useProvider(f: Fake) {
   fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: fake-model\n`);
 }
 
+/** Opens Settings and waits until the form has loaded, because the load fills the fields and would overwrite an early change. */
+async function openSettings(page: Page) {
+  await page.click("#btn-settings");
+  await expect(page.locator("#settings-overlay")).toBeVisible();
+  await expect(page.locator("#settings-port")).toHaveValue(/^\d+$/); // the fixture's agent port, set by the load
+}
+
 async function ask(page: Page, text: string) {
   if (await page.locator("#chat-pane").isHidden()) await page.click("#btn-ai-toggle");
   await page.fill("#chat-input", text);
@@ -138,5 +145,106 @@ test.describe("AI chat preview (fake providers on 127.0.0.1)", () => {
     } finally {
       await f.close();
     }
+  });
+
+  test("ai-05 the preview is shown again after the provider settings are saved", async ({ page }) => {
+    const f = await fakeProvider("answer");
+    try {
+      useProvider(f);
+      await openStudio(page);
+      await ask(page, "first");
+      await page.click("#btn-ai-preview-send");
+      await expect(page.locator(".chat-msg-assistant")).toHaveCount(1);
+
+      await openSettings(page);
+      await page.fill("#settings-ai-timeout", "90s"); // any change to the provider settings
+      await page.click("#btn-settings-save");
+      await expect(page.locator("#toast-container")).toContainText("Saved probe.yaml");
+
+      await ask(page, "second");
+      await expect(page.locator("#ai-preview-overlay")).toBeVisible();
+      await page.click("#btn-ai-preview-cancel");
+      expect(f.chats()).toBe(1);
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("ai-06 the preview is shown again after the saved key changes", async ({ page }) => {
+    const f = await fakeProvider("answer");
+    try {
+      useProvider(f);
+      await openStudio(page);
+      await ask(page, "first");
+      await page.click("#btn-ai-preview-send");
+      await expect(page.locator(".chat-msg-assistant")).toHaveCount(1);
+
+      await page.click("#btn-chat-key");
+      await page.fill("#api-key-input", "sk" + "-ant-" + "e2e-memory-keychain-000"); // kept in memory: PROBE_STUDIO_KEYCHAIN=memory
+      await page.click("#btn-api-key-save");
+      await expect(page.locator("#toast-container")).toContainText("API key saved");
+
+      await ask(page, "second");
+      await expect(page.locator("#ai-preview-overlay")).toBeVisible();
+      await page.click("#btn-ai-preview-cancel");
+      expect(f.chats()).toBe(1);
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("ai-07 Save with an untouched AI form succeeds, for OpenAI with a plain key", async ({ page }) => {
+    // A setup the CLI accepts: OpenAI with a plain key. The AI form is not touched, so Save must write the rest.
+    const aiBlock = "ai:\n  provider: openai\n  model: m\n  api_key: plain-key-in-file-e2e\n";
+    fs.writeFileSync(yamlPath, `${original}${aiBlock}`);
+    await openStudio(page);
+    await openSettings(page);
+    await expect(page.locator("#settings-ai-plain-key")).toContainText("Name an environment variable here"); // advice for OpenAI
+    await page.fill("#settings-port", "48801");
+    await page.click("#btn-settings-save");
+    await expect(page.locator("#settings-overlay")).toBeHidden(); // a clean save closes the form
+    await expect(page.locator("#toast-container")).not.toContainText("except");
+    const written = fs.readFileSync(yamlPath, "utf8");
+    expect(written).toMatch(/port:\s*48801/);
+    expect(written).toContain("provider: openai");
+    expect(written).toContain("api_key: plain-key-in-file-e2e");
+  });
+
+  test("ai-09 Save with an untouched AI form succeeds, for OpenAI with no key", async ({ page }) => {
+    fs.writeFileSync(yamlPath, `${original}ai:\n  provider: openai\n  model: m\n`);
+    await openStudio(page);
+    await openSettings(page);
+    await page.fill("#settings-port", "48803");
+    await page.click("#btn-settings-save");
+    await expect(page.locator("#settings-overlay")).toBeHidden();
+    await expect(page.locator("#toast-container")).not.toContainText("except");
+    const written = fs.readFileSync(yamlPath, "utf8");
+    expect(written).toMatch(/port:\s*48803/);
+    expect(written).toContain("provider: openai");
+  });
+
+  test("ai-08 a refused AI form shows its reason and the rest of Settings still saves", async ({ page }) => {
+    await openStudio(page);
+    await openSettings(page);
+    await page.selectOption("#settings-ai-provider", "openai"); // keychain source: refused, Studio never sends it to OpenAI
+    await page.fill("#settings-port", "48802");
+    await page.click("#btn-settings-save");
+    await expect(page.locator("#settings-ai-error")).toContainText("Environment variable");
+    await expect(page.locator("#settings-overlay")).toBeVisible(); // the form stays open on the section that needs a change
+    const written = fs.readFileSync(yamlPath, "utf8");
+    expect(written).toMatch(/port:\s*48802/); // the rest was saved
+    expect(written).not.toContain("openai"); // the refused AI form was not
+  });
+
+  test("ai-10 changing the model while a plain key is in the file still saves, and keeps the key", async ({ page }) => {
+    fs.writeFileSync(yamlPath, `${original}ai:\n  provider: openai\n  model: m\n  api_key: plain-key-in-file-e2e\n`);
+    await openStudio(page);
+    await openSettings(page);
+    await page.fill("#settings-ai-model", "m2"); // a change to the AI form, so it is validated and written
+    await page.click("#btn-settings-save");
+    await expect(page.locator("#settings-overlay")).toBeHidden();
+    const written = fs.readFileSync(yamlPath, "utf8");
+    expect(written).toContain("model: m2");
+    expect(written).toContain("api_key: plain-key-in-file-e2e");
   });
 });

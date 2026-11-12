@@ -205,6 +205,7 @@
               <select id="settings-ai-key-source">
                 <option value="keychain">Saved key (keychain)</option>
                 <option value="env">Environment variable</option>
+                <option value="file" id="settings-ai-key-file" hidden>In probe.yaml (a plain key, not used)</option>
               </select>
             </label>
             <label class="settings-row">
@@ -217,7 +218,8 @@
             </label>
             <label class="settings-check"><input id="settings-ai-vision" type="checkbox" /> The model accepts images</label>
             <label class="settings-check"><input id="settings-ai-remote" type="checkbox" /> Allow an address that is not this machine</label>
-            <p id="settings-ai-plain-key" class="dim" hidden>probe.yaml holds a plain key, which Studio does not use and does not change. Save the key in the keychain and delete that line, or name an environment variable here.</p>
+            <p id="settings-ai-plain-key" class="dim" hidden></p>
+            <p id="settings-ai-error" class="ai-error" role="alert" hidden></p>
             <div class="settings-actions">
               <button type="button" id="btn-ai-test" class="btn">Test connection</button>
             </div>

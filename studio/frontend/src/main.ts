@@ -413,17 +413,43 @@ function previewLabel(preview: string): string {
   return preview.split("\n", 1)[0];
 }
 
+// plainKeyNoteText says what to do about a plain key in probe.yaml. A saved keychain key goes only to Anthropic, so for OpenAI
+// and a local endpoint the way out is a variable, or no key at all.
+function plainKeyNoteText(provider: string): string {
+  const base = "probe.yaml holds a plain key, which Studio does not use and does not change. ";
+  if (provider === "openai" || provider === "local") {
+    return base + "Name an environment variable here, or delete that line: Studio sends a saved keychain key only to Anthropic.";
+  }
+  return base + "Save the key in the keychain and delete that line, or name an environment variable here.";
+}
+
+let aiPlainKeyInFile = false;
+
+function refreshPlainKeyNote(): void {
+  const note = $("settings-ai-plain-key");
+  note.hidden = !aiPlainKeyInFile;
+  note.textContent = plainKeyNoteText(($("settings-ai-provider") as HTMLSelectElement).value);
+}
+
+$("settings-ai-provider").addEventListener("change", refreshPlainKeyNote);
+
 // The key is never in the form. probe.yaml names only the environment variable, and the keychain holds a saved key.
 function fillAIForm(s: main.AISettings): void {
   ($("settings-ai-provider") as HTMLSelectElement).value = s.provider ?? "";
   ($("settings-ai-endpoint") as HTMLInputElement).value = s.endpoint ?? "";
   ($("settings-ai-model") as HTMLInputElement).value = s.model ?? "";
-  ($("settings-ai-key-source") as HTMLSelectElement).value = s.keySource === "env" ? "env" : "keychain";
+  // A plain key already in probe.yaml is its own source, offered only while the file holds one, so a form that was loaded from
+  // such a file can be saved unchanged.
+  const hasPlainKey = s.keySource === "file";
+  ($("settings-ai-key-file") as HTMLOptionElement).hidden = !hasPlainKey;
+  ($("settings-ai-key-source") as HTMLSelectElement).value = s.keySource === "env" ? "env" : hasPlainKey ? "file" : "keychain";
   ($("settings-ai-key-env") as HTMLInputElement).value = s.keyEnvName ?? "";
   ($("settings-ai-timeout") as HTMLInputElement).value = s.timeout ?? "";
   ($("settings-ai-vision") as HTMLInputElement).checked = s.vision !== false;
   ($("settings-ai-remote") as HTMLInputElement).checked = s.allowRemoteEndpoint === true;
-  $("settings-ai-plain-key").hidden = s.plainKeyInFile !== true;
+  aiPlainKeyInFile = s.plainKeyInFile === true;
+  refreshPlainKeyNote();
+  $("settings-ai-error").hidden = true;
   $("settings-ai-models").replaceChildren();
   $("settings-ai-result").replaceChildren();
 }
@@ -525,17 +551,32 @@ $("btn-settings-save").addEventListener("click", async () => {
     aiContextRunResults: ($("settings-ai-run-results") as HTMLInputElement).checked,
     aiContextWidgetTree: ($("settings-ai-widget-tree") as HTMLInputElement).checked,
   });
+  // The AI form is saved first, because it is the one that can be refused. A refused AI form never stops the rest from saving:
+  // its reason is shown on the AI section, and the other settings are written.
+  const aiError = $("settings-ai-error");
+  aiError.hidden = true;
+  let aiFailure: unknown = null;
   try {
-    // The AI form is saved first: it is the one that can be refused, and nothing is written when it is.
     await SaveAISettings(workspaceRoot, readAIForm());
+  } catch (err) {
+    aiFailure = err;
+  }
+  try {
     await SaveWorkspaceSettings(workspaceRoot, settings);
-    resetAIPreview(); // changed provider settings are shown again before the next message
-    void updateChatContextNote();
-    toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
-    closeSettingsOverlay();
   } catch (err) {
     toast(`Save failed: ${err}`, "error");
+    return;
   }
+  resetAIPreview(); // changed provider settings are shown again before the next message
+  void updateChatContextNote();
+  if (aiFailure !== null) {
+    aiError.textContent = `The AI provider section was not saved: ${aiFailure}`;
+    aiError.hidden = false;
+    toast(`Saved probe.yaml, except the AI provider section: ${aiFailure}`, "error", 6000);
+    return; // the form stays open on the section that needs a change
+  }
+  toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
+  closeSettingsOverlay();
 });
 
 // ---- WiFi discovery overlay --------------------------------------------

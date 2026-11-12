@@ -37,6 +37,7 @@ export default defineConfig({
       PROBE_STUDIO_HEADLESS_PORT: port,
       PROBE_STUDIO_WORKSPACE: process.env.STUDIO_WORKSPACE ?? "",
       PROBE_STUDIO_DEVICE_VIEW: process.env.STUDIO_E2E_DEVICE_VIEW ?? "", // "1" runs Studio with the shared device view
+      PROBE_STUDIO_KEYCHAIN: "memory", // keys live in memory, so no spec reads or writes the real keychain
     },
     stdout: "pipe",
     stderr: "pipe",
