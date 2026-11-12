@@ -62,6 +62,10 @@ export function Lint(arg1) {
   return window['go']['main']['App']['Lint'](arg1);
 }
 
+export function ListAIModels() {
+  return window['go']['main']['App']['ListAIModels']();
+}
+
 export function ListDevices() {
   return window['go']['main']['App']['ListDevices']();
 }
@@ -70,12 +74,20 @@ export function ListDir(arg1) {
   return window['go']['main']['App']['ListDir'](arg1);
 }
 
+export function LoadAISettings(arg1) {
+  return window['go']['main']['App']['LoadAISettings'](arg1);
+}
+
 export function LoadWorkspaceSettings(arg1) {
   return window['go']['main']['App']['LoadWorkspaceSettings'](arg1);
 }
 
 export function PickWorkspace() {
   return window['go']['main']['App']['PickWorkspace']();
+}
+
+export function PreviewAIChat(arg1, arg2) {
+  return window['go']['main']['App']['PreviewAIChat'](arg1, arg2);
 }
 
 export function ReadFile(arg1) {
@@ -96,6 +108,10 @@ export function RunFileScoped(arg1, arg2, arg3, arg4) {
 
 export function RunState() {
   return window['go']['main']['App']['RunState']();
+}
+
+export function SaveAISettings(arg1, arg2) {
+  return window['go']['main']['App']['SaveAISettings'](arg1, arg2);
 }
 
 export function SaveWiFiToken(arg1, arg2) {
@@ -134,8 +150,16 @@ export function StopWiFiDiscovery() {
   return window['go']['main']['App']['StopWiFiDiscovery']();
 }
 
+export function SuggestSelectorFix(arg1) {
+  return window['go']['main']['App']['SuggestSelectorFix'](arg1);
+}
+
 export function TakeScreenshot() {
   return window['go']['main']['App']['TakeScreenshot']();
+}
+
+export function TestAIConnection() {
+  return window['go']['main']['App']['TestAIConnection']();
 }
 
 export function TestWiFi(arg1, arg2, arg3) {

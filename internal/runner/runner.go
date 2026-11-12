@@ -38,6 +38,10 @@ type TestResult struct {
 	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
 	StartedAt  time.Time        // when the (last) attempt started
 	AttemptLog []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
+	// FailedSelector is the selector step the test failed on, nil when it failed elsewhere or passed.
+	FailedSelector *FailedSelector
+	// Proposal is advisory report text set after the run by `probe test --ai-heal`. It never changes Passed or Error.
+	Proposal *SelectorProposal
 }
 
 // DefName is the test's name as the file writes it. The result of a data-driven row carries " [row N]" after it, and
@@ -543,6 +547,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		Passed:     runErr == nil,
 		Duration:   time.Since(start),
 		Error:      runErr,
+		FailedSelector: exec.FailedSelector(runErr),
 		Row:        row,
 		Artifacts:  exec.Artifacts(),
 		DeviceID:   r.opts.DeviceID,

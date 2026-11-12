@@ -61,7 +61,7 @@ func hostedUpload(cmd *cobra.Command, w io.Writer, cfg *config.Config, results [
 
 	rep := runner.NewReporter(runner.FormatJSON, io.Discard, false)
 	rep.SetMetadata(meta)
-	raw, err := rep.JSONBytes(results)
+	raw, err := rep.JSONBytes(withoutProposals(results))
 	if err != nil {
 		statusWarn(w, "report upload skipped: %v", err)
 		return
@@ -207,7 +207,7 @@ func localUpload(cmd *cobra.Command, w io.Writer, cfg *config.Config, results []
 	}
 	rep := runner.NewReporter(runner.FormatJSON, io.Discard, false)
 	rep.SetMetadata(meta)
-	raw, err := rep.JSONBytes(results)
+	raw, err := rep.JSONBytes(withoutProposals(results))
 	if err != nil {
 		statusWarn(w, "local upload skipped: %v", err)
 		return

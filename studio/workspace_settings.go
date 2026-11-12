@@ -178,7 +178,7 @@ func mapAt(m map[string]any, key string) (map[string]any, error) {
 	if inner, isMap := v.(map[string]any); isMap {
 		return inner, nil
 	}
-	return nil, fmt.Errorf("probe.yaml has a %q key that is not a map; fix it by hand before using the AI context settings", key)
+	return nil, fmt.Errorf("probe.yaml has a %q key that is not a map; fix it by hand before saving settings that use it", key)
 }
 
 func setSwitch(m map[string]any, key string, on bool) {

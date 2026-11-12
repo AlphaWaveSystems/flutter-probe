@@ -239,7 +239,7 @@ Settings for Probe Studio. The CLI ignores this section.
 | `ai_context.widget_tree` | bool | `false` | Let the Studio AI chat send the connected device's widget tree; obscured fields and credential-looking text are redacted first |
 | `ai_allow_remote_endpoint` | bool | `false` | Let the Studio AI chat use a local endpoint that is not on this machine. Without it, `ai.provider: local` must name `localhost` or a loopback address |
 
-The context switches are off unless set. While either is on, Studio shows a line above the chat input saying what is sent. The rules for keys, local endpoints and redaction are in [Use AI in Studio](/tools/ai/#in-studio). See [Studio](/tools/studio/).
+The context switches are off unless set. While either is on, Studio shows a line above the chat input saying what is sent. The rules for keys, local endpoints and redaction are in [Use AI in Studio](/tools/ai/#in-studio). See [Studio](/tools/studio/). Studio's Workspace settings has an **AI provider** section that edits the `ai:` block and `ai_allow_remote_endpoint`; it keeps a plain `api_key` already in the file, which the CLI reads and Studio does not use, and never takes a key itself.
 
 ### perf
 

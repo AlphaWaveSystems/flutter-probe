@@ -21,12 +21,16 @@ import {
   InitialWorkspace,
   SetWorkspace,
   Lint,
+  ListAIModels,
   ListDevices,
   ListDir,
+  LoadAISettings,
   LoadWorkspaceSettings,
   PickWorkspace,
+  PreviewAIChat,
   ReadFile,
   RunFileScoped,
+  SaveAISettings,
   SaveWiFiToken,
   SaveWorkspaceSettings,
   SetAPIKey,
@@ -35,13 +39,14 @@ import {
   Status,
   StopRecording,
   StopWiFiDiscovery,
+  TestAIConnection,
   TestWiFi,
   WiFiTokenSaved,
   WriteFile,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 type ChatMessage = { role: string; content: string };
-type ChatResponse = { content: string; inputTokens: number; outputTokens: number; costUSD: number };
+type ChatResponse = { content: string; inputTokens: number; outputTokens: number; costUSD: number; notice?: string };
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 const WORKSPACE_KEY = "fp.studio.workspace";
@@ -260,6 +265,7 @@ async function pickWorkspace() {
     if (!path) return;
     localStorage.setItem(WORKSPACE_KEY, path);
     await SetWorkspace(path);
+    resetAIPreview();
     workspaceRoot = path;
     refreshFiles(path);
     toast(`Workspace: ${path}`, "success", 1800);
@@ -375,6 +381,7 @@ async function openSettingsOverlay() {
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
     ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
     ($("settings-ai-widget-tree") as HTMLInputElement).checked = s.aiContextWidgetTree === true;
+    fillAIForm(await LoadAISettings(workspaceRoot));
   } catch (err) {
     toast(`Cannot load settings: ${err}`, "error");
   }
@@ -389,6 +396,144 @@ $("btn-settings-close").addEventListener("click", closeSettingsOverlay);
 $("settings-overlay").addEventListener("click", (e) => {
   if ((e.target as HTMLElement).id === "settings-overlay") closeSettingsOverlay();
 });
+
+// ---- AI provider (Settings) and the first-send preview -----------------
+
+// aiPreviewConfirmed is the "Sent to:" line of the last preview the person confirmed with Send. A message whose preview names a
+// different destination is shown again, and so is the first one after the workspace, the provider settings or the saved key
+// change. The gate lives in the window: Chat and SuggestSelectorFix send without it, also through the headless bridge.
+let aiPreviewConfirmed: string | null = null;
+
+function resetAIPreview(): void {
+  aiPreviewConfirmed = null;
+}
+
+// previewLabel is the destination line PreviewAIChat puts first, such as "Sent to: local endpoint http://127.0.0.1:11434/v1, model m".
+function previewLabel(preview: string): string {
+  return preview.split("\n", 1)[0];
+}
+
+// plainKeyNoteText says what to do about a plain key in probe.yaml. A saved keychain key goes only to Anthropic, so for OpenAI
+// and a local endpoint the way out is a variable, or no key at all.
+function plainKeyNoteText(provider: string): string {
+  const base = "probe.yaml holds a plain key, which Studio does not use and does not change. ";
+  if (provider === "openai" || provider === "local") {
+    return base + "Name an environment variable here, or delete that line: Studio sends a saved keychain key only to Anthropic.";
+  }
+  return base + "Save the key in the keychain and delete that line, or name an environment variable here.";
+}
+
+let aiPlainKeyInFile = false;
+
+function refreshPlainKeyNote(): void {
+  const note = $("settings-ai-plain-key");
+  note.hidden = !aiPlainKeyInFile;
+  note.textContent = plainKeyNoteText(($("settings-ai-provider") as HTMLSelectElement).value);
+}
+
+$("settings-ai-provider").addEventListener("change", refreshPlainKeyNote);
+
+// The key is never in the form. probe.yaml names only the environment variable, and the keychain holds a saved key.
+function fillAIForm(s: main.AISettings): void {
+  ($("settings-ai-provider") as HTMLSelectElement).value = s.provider ?? "";
+  ($("settings-ai-endpoint") as HTMLInputElement).value = s.endpoint ?? "";
+  ($("settings-ai-model") as HTMLInputElement).value = s.model ?? "";
+  // A plain key already in probe.yaml is its own source, offered only while the file holds one, so a form that was loaded from
+  // such a file can be saved unchanged.
+  const hasPlainKey = s.keySource === "file";
+  ($("settings-ai-key-file") as HTMLOptionElement).hidden = !hasPlainKey;
+  ($("settings-ai-key-source") as HTMLSelectElement).value = s.keySource === "env" ? "env" : hasPlainKey ? "file" : "keychain";
+  ($("settings-ai-key-env") as HTMLInputElement).value = s.keyEnvName ?? "";
+  ($("settings-ai-timeout") as HTMLInputElement).value = s.timeout ?? "";
+  ($("settings-ai-vision") as HTMLInputElement).checked = s.vision !== false;
+  ($("settings-ai-remote") as HTMLInputElement).checked = s.allowRemoteEndpoint === true;
+  aiPlainKeyInFile = s.plainKeyInFile === true;
+  refreshPlainKeyNote();
+  $("settings-ai-error").hidden = true;
+  $("settings-ai-models").replaceChildren();
+  $("settings-ai-result").replaceChildren();
+}
+
+function readAIForm(): main.AISettings {
+  return main.AISettings.createFrom({
+    provider: ($("settings-ai-provider") as HTMLSelectElement).value,
+    endpoint: ($("settings-ai-endpoint") as HTMLInputElement).value.trim(),
+    model: ($("settings-ai-model") as HTMLInputElement).value.trim(),
+    keySource: ($("settings-ai-key-source") as HTMLSelectElement).value,
+    keyEnvName: ($("settings-ai-key-env") as HTMLInputElement).value.trim(),
+    timeout: ($("settings-ai-timeout") as HTMLInputElement).value.trim(),
+    vision: ($("settings-ai-vision") as HTMLInputElement).checked,
+    allowRemoteEndpoint: ($("settings-ai-remote") as HTMLInputElement).checked,
+    plainKeyInFile: false,
+  });
+}
+
+function aiResultItem(text: string, kind: "ok" | "fail" | "dim"): HTMLLIElement {
+  const li = document.createElement("li");
+  li.className = kind;
+  li.textContent = text;
+  return li;
+}
+
+// The model list and the connection test use the saved settings, so the form is saved first.
+$("btn-ai-list-models").addEventListener("click", async () => {
+  try {
+    const ids = (await ListAIModels()) ?? [];
+    $("settings-ai-models").replaceChildren(
+      ...ids.map((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        return option;
+      }),
+    );
+    if (ids.length === 0) {
+      toast("This provider lists no models here. Type the model name.", "info", 4000);
+    } else {
+      toast(`${ids.length} models listed.`, "success", 2200);
+    }
+  } catch (err) {
+    toast(`Cannot list models: ${err}`, "error");
+  }
+});
+
+$("btn-ai-test").addEventListener("click", async () => {
+  const out = $("settings-ai-result");
+  out.replaceChildren(aiResultItem("Testing the saved settings…", "dim"));
+  try {
+    const rep = await TestAIConnection();
+    const rows = rep.checks.map((c) => aiResultItem(`${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`, c.ok ? "ok" : "fail"));
+    let summary = "The provider is not usable for text features.";
+    if (rep.ok) {
+      summary = !rep.visionChecked || rep.vision
+        ? "Text works."
+        : "Text works. The model does not accept images, so visual assertions stay off.";
+    }
+    out.replaceChildren(...rows, aiResultItem(summary, rep.ok ? "ok" : "fail"));
+  } catch (err) {
+    out.replaceChildren(aiResultItem(`Cannot test: ${err}`, "fail"));
+  }
+});
+
+// confirmFirstChatSend shows what the next chat message carries and waits for Send or Cancel. Nothing is sent before Send.
+function confirmFirstChatSend(preview: string): Promise<boolean> {
+  const overlay = $("ai-preview-overlay");
+  const send = $("btn-ai-preview-send");
+  const cancel = $("btn-ai-preview-cancel");
+  $("ai-preview-text").textContent = preview;
+  overlay.hidden = false;
+  return new Promise((resolve) => {
+    const finish = (ok: boolean) => {
+      overlay.hidden = true;
+      send.removeEventListener("click", onSend);
+      cancel.removeEventListener("click", onCancel);
+      resolve(ok);
+    };
+    const onSend = () => finish(true);
+    const onCancel = () => finish(false);
+    send.addEventListener("click", onSend);
+    cancel.addEventListener("click", onCancel);
+  });
+}
 
 $("btn-settings-save").addEventListener("click", async () => {
   if (!workspaceRoot) return;
@@ -406,14 +551,32 @@ $("btn-settings-save").addEventListener("click", async () => {
     aiContextRunResults: ($("settings-ai-run-results") as HTMLInputElement).checked,
     aiContextWidgetTree: ($("settings-ai-widget-tree") as HTMLInputElement).checked,
   });
+  // The AI form is saved first, because it is the one that can be refused. A refused AI form never stops the rest from saving:
+  // its reason is shown on the AI section, and the other settings are written.
+  const aiError = $("settings-ai-error");
+  aiError.hidden = true;
+  let aiFailure: unknown = null;
+  try {
+    await SaveAISettings(workspaceRoot, readAIForm());
+  } catch (err) {
+    aiFailure = err;
+  }
   try {
     await SaveWorkspaceSettings(workspaceRoot, settings);
-    void updateChatContextNote();
-    toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
-    closeSettingsOverlay();
   } catch (err) {
     toast(`Save failed: ${err}`, "error");
+    return;
   }
+  resetAIPreview(); // changed provider settings are shown again before the next message
+  void updateChatContextNote();
+  if (aiFailure !== null) {
+    aiError.textContent = `The AI provider section was not saved: ${aiFailure}`;
+    aiError.hidden = false;
+    toast(`Saved probe.yaml, except the AI provider section: ${aiFailure}`, "error", 6000);
+    return; // the form stays open on the section that needs a change
+  }
+  toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
+  closeSettingsOverlay();
 });
 
 // ---- WiFi discovery overlay --------------------------------------------
@@ -1139,6 +1302,7 @@ initDeviceSettings();
   if (ws) {
     localStorage.setItem(WORKSPACE_KEY, ws);
     await SetWorkspace(ws);
+    resetAIPreview();
     workspaceRoot = ws;
     refreshFiles(ws);
   } else {
@@ -1229,10 +1393,46 @@ async function updateChatContextNote(): Promise<void> {
   note.hidden = text === "";
 }
 
+// chatSending is true while a message is waiting for its preview or for the provider. A second Enter or click in that time
+// is ignored, so one Send cannot answer two messages.
+let chatSending = false;
+
 async function sendChat() {
+  if (chatSending) return;
+  chatSending = true;
+  try {
+    await sendChatTurn();
+  } finally {
+    chatSending = false;
+  }
+}
+
+async function sendChatTurn() {
   const input = $("chat-input") as HTMLTextAreaElement;
   const text = input.value.trim();
   if (!text) return;
+
+  // A message shows what it would send now whenever its destination is not the one the person last confirmed. Cancel keeps the
+  // text in the input. The request builds its own turn when it runs, so a change in between, such as a new run result, can
+  // make it differ from what was shown.
+  let preview: string;
+  try {
+    preview = await PreviewAIChat([...chatHistory, { role: "user", content: text }], model.getValue());
+  } catch (err) {
+    appendChatMessage("system", `Error: ${err}`);
+    return;
+  }
+  const label = previewLabel(preview);
+  if (label !== aiPreviewConfirmed) {
+    input.disabled = true;
+    const send = await confirmFirstChatSend(preview);
+    input.disabled = false;
+    if (!send) {
+      input.focus();
+      return;
+    }
+    aiPreviewConfirmed = label;
+  }
 
   input.value = "";
   input.disabled = true;
@@ -1246,6 +1446,7 @@ async function sendChat() {
 
   try {
     const resp = (await Chat(chatHistory, fileContent)) as ChatResponse;
+    if (resp.notice) appendChatMessage("system", resp.notice);
     chatHistory.push({ role: "assistant", content: resp.content });
     appendChatMessage("assistant", resp.content);
     chatTotalCost += resp.costUSD;
@@ -1318,6 +1519,7 @@ $("btn-api-key-save").addEventListener("click", async () => {
   }
   try {
     await SetAPIKey(key);
+    resetAIPreview();
     toast("API key saved to keychain.", "success");
     closeApiKeyOverlay();
   } catch (err) {
@@ -1328,6 +1530,7 @@ $("btn-api-key-save").addEventListener("click", async () => {
 $("btn-api-key-delete").addEventListener("click", async () => {
   try {
     await DeleteAPIKey();
+    resetAIPreview();
     ($("api-key-input") as HTMLInputElement).value = "";
     toast("API key removed from keychain.", "success");
     closeApiKeyOverlay();
