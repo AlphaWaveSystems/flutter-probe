@@ -31,6 +31,6 @@ jobs:
 
       - uses: <owner>/<repo>@v1      # where this action is published
         with:
-          version: '0.26.0'
+          version: '0.27.0'
           device: ${{ steps.sim.outputs.udid }}
           tests: tests/
