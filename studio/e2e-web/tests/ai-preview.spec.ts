@@ -1,6 +1,7 @@
 import { expect, Page, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as http from "node:http";
+import * as net from "node:net";
 import * as path from "node:path";
 import { openStudio, workspace } from "./helpers";
 
@@ -37,6 +38,18 @@ let original = "";
 
 function useProvider(f: Fake) {
   fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: fake-model\n`);
+}
+
+/** A port the OS says is free. The specs write it as the agent port, so no port number is a literal in this file. */
+async function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as net.AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
 }
 
 /** Opens Settings and waits until the form has loaded, because the load fills the fields and would overwrite an early change. */
@@ -200,12 +213,13 @@ test.describe("AI chat preview (fake providers on 127.0.0.1)", () => {
     await openStudio(page);
     await openSettings(page);
     await expect(page.locator("#settings-ai-plain-key")).toContainText("Name an environment variable here"); // advice for OpenAI
-    await page.fill("#settings-port", "48801");
+    const port = await freePort();
+    await page.fill("#settings-port", String(port));
     await page.click("#btn-settings-save");
     await expect(page.locator("#settings-overlay")).toBeHidden(); // a clean save closes the form
     await expect(page.locator("#toast-container")).not.toContainText("except");
     const written = fs.readFileSync(yamlPath, "utf8");
-    expect(written).toMatch(/port:\s*48801/);
+    expect(written).toMatch(new RegExp(`port:\\s*${port}`));
     expect(written).toContain("provider: openai");
     expect(written).toContain("api_key: plain-key-in-file-e2e");
   });
@@ -214,12 +228,13 @@ test.describe("AI chat preview (fake providers on 127.0.0.1)", () => {
     fs.writeFileSync(yamlPath, `${original}ai:\n  provider: openai\n  model: m\n`);
     await openStudio(page);
     await openSettings(page);
-    await page.fill("#settings-port", "48803");
+    const port = await freePort();
+    await page.fill("#settings-port", String(port));
     await page.click("#btn-settings-save");
     await expect(page.locator("#settings-overlay")).toBeHidden();
     await expect(page.locator("#toast-container")).not.toContainText("except");
     const written = fs.readFileSync(yamlPath, "utf8");
-    expect(written).toMatch(/port:\s*48803/);
+    expect(written).toMatch(new RegExp(`port:\\s*${port}`));
     expect(written).toContain("provider: openai");
   });
 
@@ -227,12 +242,13 @@ test.describe("AI chat preview (fake providers on 127.0.0.1)", () => {
     await openStudio(page);
     await openSettings(page);
     await page.selectOption("#settings-ai-provider", "openai"); // keychain source: refused, Studio never sends it to OpenAI
-    await page.fill("#settings-port", "48802");
+    const port = await freePort();
+    await page.fill("#settings-port", String(port));
     await page.click("#btn-settings-save");
     await expect(page.locator("#settings-ai-error")).toContainText("Environment variable");
     await expect(page.locator("#settings-overlay")).toBeVisible(); // the form stays open on the section that needs a change
     const written = fs.readFileSync(yamlPath, "utf8");
-    expect(written).toMatch(/port:\s*48802/); // the rest was saved
+    expect(written).toMatch(new RegExp(`port:\\s*${port}`)); // the rest was saved
     expect(written).not.toContain("openai"); // the refused AI form was not
   });
 
