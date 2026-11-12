@@ -175,10 +175,76 @@
             <label class="settings-check"><input id="settings-ai-widget-tree" type="checkbox" /> Include the screen (widget tree)</label>
             <p class="dim">Off by default. When on, the chat sends the chosen parts to the AI provider with every message you send.</p>
           </fieldset>
+          <fieldset class="settings-ai" id="settings-ai-provider-group">
+            <legend>AI provider</legend>
+            <p class="dim">Off unless you choose a provider. A key is never written to <code>probe.yaml</code>: keep it in the keychain, or name an environment variable. The model list and the connection test use the saved settings, so save before you test.</p>
+            <label class="settings-row">
+              <span>Provider</span>
+              <select id="settings-ai-provider">
+                <option value="">Not set (Anthropic if a key is saved)</option>
+                <option value="none">Off</option>
+                <option value="anthropic">Anthropic API</option>
+                <option value="local">Local or OpenAI-compatible endpoint</option>
+                <option value="openai">OpenAI API</option>
+              </select>
+            </label>
+            <label class="settings-row">
+              <span>Endpoint</span>
+              <input id="settings-ai-endpoint" type="text" placeholder="http://127.0.0.1:11434/v1" autocomplete="off" spellcheck="false" />
+            </label>
+            <label class="settings-row">
+              <span>Model</span>
+              <input id="settings-ai-model" type="text" list="settings-ai-models" placeholder="qwen3-coder:30b" autocomplete="off" spellcheck="false" />
+              <datalist id="settings-ai-models"></datalist>
+            </label>
+            <div class="settings-actions">
+              <button type="button" id="btn-ai-list-models" class="btn">List models</button>
+            </div>
+            <label class="settings-row">
+              <span>Key source</span>
+              <select id="settings-ai-key-source">
+                <option value="keychain">Saved key (keychain)</option>
+                <option value="env">Environment variable</option>
+                <option value="file" id="settings-ai-key-file" hidden>In probe.yaml (a plain key, not used)</option>
+              </select>
+            </label>
+            <label class="settings-row">
+              <span>Variable name</span>
+              <input id="settings-ai-key-env" type="text" placeholder="ANTHROPIC_API_KEY" autocomplete="off" spellcheck="false" />
+            </label>
+            <label class="settings-row">
+              <span>Request timeout</span>
+              <input id="settings-ai-timeout" type="text" placeholder="60s" />
+            </label>
+            <label class="settings-check"><input id="settings-ai-vision" type="checkbox" /> The model accepts images</label>
+            <label class="settings-check"><input id="settings-ai-remote" type="checkbox" /> Allow an address that is not this machine</label>
+            <p id="settings-ai-plain-key" class="dim" hidden></p>
+            <p id="settings-ai-error" class="ai-error" role="alert" hidden></p>
+            <div class="settings-actions">
+              <button type="button" id="btn-ai-test" class="btn">Test connection</button>
+            </div>
+            <ul id="settings-ai-result" class="ai-checks" aria-live="polite"></ul>
+          </fieldset>
           <div class="settings-actions">
             <button type="button" id="btn-settings-save" class="btn btn-primary">Save</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="ai-preview-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2>Before this message</h2>
+        </div>
+        <p class="dim">
+          This is what the chat would send to the AI provider now, with credentials redacted. Nothing is sent until you press Send. You see this again when the destination changes.
+        </p>
+        <pre id="ai-preview-text" class="ai-preview-text"></pre>
+        <div class="settings-actions">
+          <button type="button" id="btn-ai-preview-cancel" class="btn">Cancel</button>
+          <button type="button" id="btn-ai-preview-send" class="btn btn-primary">Send</button>
+        </div>
       </div>
     </div>
 

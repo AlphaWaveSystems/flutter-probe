@@ -346,6 +346,8 @@ Key flags for the flags parameter:
   --perf-metrics LIST         metrics that gate (default memory,cpu,slow_frames,frame_time,data on physical devices, memory,cpu,data on emulators/simulators; all = also memory_growth,cpu_peak,frame_max)
   --perf-ignore LIST          metrics to leave out of the comparison; --perf-key-base DIR makes baseline keys relative to DIR
   --retry-failed N            re-run a failing test up to N extra times
+  --ai-heal                   optional: add an advisory selector_proposal to each selector step that ran into its timeout in the JSON report
+                               (needs ai: in probe.yaml; not applied, not verified; the step stays failed)
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
   -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run

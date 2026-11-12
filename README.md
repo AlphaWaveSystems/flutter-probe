@@ -599,6 +599,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `--agent-port <n>` | `48686` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators can't collide. A failed dial names the process holding the port |
 | `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera` (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
 | `--ai-triage` | off | Optional: after the run, explain failures with the configured `ai:` model (advisory; never changes results) |
+| `--ai-heal` | off | Optional: after the run, propose a replacement selector for each selector step that ran into its timeout in the JSON report (advisory; never applied; never changes results) |
 
 ## Studio (Beta Preview)
 
@@ -767,6 +768,7 @@ The `ai:` block can also power, with the same provider (a local model needs no A
 |---|---|
 | Check the provider | `probe ai doctor` — endpoint, model, text, and whether the model can see images |
 | Explain failures | `probe test --ai-triage`, or later `probe triage --input reports/results.json`; MCP tool `triage_failure` |
+| Propose a selector for a failed step | `probe test --ai-heal --format json` adds a `selector_proposal` to the failed result. It is not applied and not verified, and the step stays failed |
 | Generate tests | `probe generate ...` uses the configured provider (Claude stays the default with no `ai.provider`) |
 | Text-only models | `ai.vision: false` judges `see "..." with ai` from the screen's visible texts instead of a screenshot |
 

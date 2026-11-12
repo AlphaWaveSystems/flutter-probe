@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
@@ -22,6 +23,7 @@ type stepTimeoutError struct {
 	desc    string
 	timeout time.Duration
 	visible string // pre-formatted " — visible texts: ..." suffix; may be empty
+	items   VisibleItems
 	cause   error
 }
 
@@ -55,11 +57,13 @@ func annotateStepTimeout(client probelink.ProbeClient, step parser.Step, desc st
 	if errors.As(err, &already) {
 		return err
 	}
+	hint, items := visibleSnapshot(client)
 	return &stepTimeoutError{
 		line:    step.GetLine(),
 		desc:    desc,
 		timeout: timeout,
-		visible: visibleHint(client),
+		visible: hint,
+		items:   items,
 		cause:   err,
 	}
 }
@@ -95,25 +99,63 @@ type visibleSummarizer interface {
 	VisibleSummary(ctx context.Context) (probelink.VisibleSummaryResult, error)
 }
 
+// VisibleItems is what the agent reported as on screen when a step timed out, as data. Texts and Keys hold only the
+// items that fit the printed form whole, with resolved environment values masked; Cut counts the items the printed
+// form cut short, which are left out because a cut item is not the whole text. The selector proposal reads this and
+// nothing else: it never reads the printed list back out of a failure text, which any widget text or key could forge.
+type VisibleItems struct {
+	Texts []string
+	Keys  []string
+	Cut   int
+}
+
+// maxVisibleItemLen is the length the printed form cuts an item to.
+const maxVisibleItemLen = 40
+
 // visibleHint asks the agent what is on screen. Best effort, never fails the
 // caller: a dead connection or an older agent yields "".
 func visibleHint(client probelink.ProbeClient) string {
+	hint, _ := visibleSnapshot(client)
+	return hint
+}
+
+// visibleSnapshot is visibleHint plus the same snapshot as data. The text is the printed form; the items are what the
+// selector proposal may use. Both are empty when the agent gave no snapshot.
+func visibleSnapshot(client probelink.ProbeClient) (string, VisibleItems) {
 	vs, ok := client.(visibleSummarizer)
 	if !ok {
-		return ""
+		return "", VisibleItems{}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	res, err := vs.VisibleSummary(ctx)
 	if err != nil || (len(res.Texts) == 0 && len(res.Keys) == 0) {
-		return ""
+		return "", VisibleItems{}
 	}
+	var items VisibleItems
+	var cutTexts, cutKeys int
+	items.Texts, cutTexts = wholeItems(res.Texts)
+	items.Keys, cutKeys = wholeItems(res.Keys)
+	items.Cut = cutTexts + cutKeys
 	// The texts are agent text: a field can show a value the step typed from the environment, so the hint is masked.
-	return sysdialog.ScrubKnown(fmt.Sprintf(" — visible texts: [%s], keys: [%s]", quoteJoin(res.Texts), quoteJoin(res.Keys)))
+	return sysdialog.ScrubKnown(fmt.Sprintf(" — visible texts: [%s], keys: [%s]", quoteJoin(res.Texts), quoteJoin(res.Keys))), items
+}
+
+// wholeItems masks each item and keeps those the printed form does not cut; n is how many were cut.
+func wholeItems(items []string) (whole []string, n int) {
+	for _, it := range items {
+		it = sysdialog.ScrubKnown(it)
+		if utf8.RuneCountInString(it) > maxVisibleItemLen {
+			n++
+			continue
+		}
+		whole = append(whole, it)
+	}
+	return whole, n
 }
 
 func quoteJoin(items []string) string {
-	const maxLen = 40
+	const maxLen = maxVisibleItemLen
 	parts := make([]string, 0, len(items))
 	for _, it := range items {
 		// Masked before the cut: a value longer than maxLen would otherwise show its first part, which matches nothing.

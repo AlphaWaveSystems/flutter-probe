@@ -86,6 +86,7 @@ probe test [path] [flags]
 | `--port <int>` | `48686` | Agent WebSocket port |
 | `--agent-port <int>` | — | Alias of `--port`. Pair with the app's `--dart-define=PROBE_PORT=<n>` so two simulators (or a stale process on 48686) can't collide. A failed dial on loopback names the process holding the port. |
 | `--ai-triage` | `false` | After the run, ask the configured `ai:` model to explain failures (advisory, needs `ai:` in `probe.yaml`). Runs after results are final; cannot change results, reports or the exit code. Writes `<reports>/triage.md` |
+| `--ai-heal` | `false` | After the run, ask the configured `ai:` model to propose a replacement selector for each selector step that ran into its timeout (advisory, needs `ai:` in `probe.yaml`). The proposal is a `selector_proposal` object on the failed result in the JSON report, marked not applied and not verified. The step stays failed; results, the test file and the exit code do not change. At most 3 requests per run |
 | `--grant <list>` | — | Pre-grant OS permissions once before the first test, e.g. `--grant notifications,camera,location`. Android: `adb shell pm grant`; iOS simulator: `simctl privacy`. iOS notifications have no simctl service: a watcher taps Allow when the alert appears (needs Xcode, see [System dialogs](/tools/system-dialogs/)). |
 | `--dial-timeout` | `30s` | WebSocket connection timeout |
 | `--token-timeout` | `30s` | Agent auth token wait timeout |
