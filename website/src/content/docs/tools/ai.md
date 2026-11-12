@@ -96,9 +96,9 @@ probe triage --input reports/results.json -o reports/triage.md
 probe test tests/ --ai-heal --format json -o reports/results.json
 ```
 
-When a step fails on its text or key selector (`tap "Save"`, `see #total`) and the failure text lists what
-was visible on screen, the model is asked for one replacement, and the failed result in the JSON report
-gets a `selector_proposal`:
+When a step runs into its timeout on a text or key selector (`tap "Save"`, `see #total`), `probe` records
+the texts and widget keys that were visible on screen at that moment. The model is asked for one replacement
+from them, and the failed result in the JSON report gets a `selector_proposal`:
 
 ```json
 "selector_proposal": {
@@ -119,21 +119,25 @@ What it does and does not do:
 - **The step stays failed.** The results, the summary and the exit code are the same when the model
   answers, fails or times out. Nothing is written to the `.probe` file, and the proposal is not tried
   against the app. You decide whether to edit the test.
-- **Only what the failure text lists.** A step that runs into its timeout ends its failure text with two
-  lists: the texts and the widget keys that were visible on screen. A proposal is kept only when it is
-  exactly one of those texts, written as `"text"`, or exactly one of those keys, written as `#key`. A part
-  of a listed text, a text offered as a key, a key offered as a text, or any other word of the failure text
-  is not kept, and the entry gets an `unavailable` reason with no `proposed_selector`.
-- **No list, no request.** A failure text that does not end with those lists (most failures other than a
-  step timeout) is not sent to the model. Its entry says so in `unavailable`. The failure text shows at
-  most 40 characters of each listed text and marks a longer one with `…`. A text cut this way is not the
-  whole text, so it is never proposed.
+- **Only what was recorded as on screen.** When a step runs into its timeout, `probe` keeps the visible
+  texts and widget keys as two lists of data. A proposal is kept only when it is exactly one of those texts,
+  written as `"text"`, or exactly one of those keys, written as `#key`. A part of a listed text, a text
+  offered as a key, a key offered as a text, or any other word of the failure text is not kept, and the
+  entry gets an `unavailable` reason with no `proposed_selector`.
+- **Only step timeouts, and no list is read from the failure text.** The lists are recorded when the step
+  runs into its timeout. They are never read back out of the failure text, because the text on screen is
+  part of it and could be written to look like a list. The app's own "Widget not found" message also lists
+  the visible texts, but it is plain text that a widget can shape, so it is not used: a failure that is not
+  a step timeout is not sent to the model, and its entry says so in `unavailable`. The failure text keeps at
+  most 40 characters of each listed text, and a text over that length is never proposed, even though the
+  full text was on screen. When every listed item is that long, the `unavailable` reason says so.
 - **Bounded.** At most one request per failed step, at most 3 requests per run, each limited by
   `ai.timeout`, no retries, none after a failed request, and two minutes for all of them together. Model
-  text is cut to 200 bytes, the API key is removed from it, and control characters in it are replaced by
-  spaces before it is printed or written to the report.
-- **What is sent.** The failed step, its selector and the failure text, with resolved environment values
-  masked. This is the text `--ai-triage` sends. No screenshot is sent.
+  text is cut to 200 bytes, the API key is removed from it, and control characters, line and paragraph
+  separators and bidirectional controls in it are replaced by spaces before it is printed or written to
+  the report. The file name and the selector in the terminal line get the same treatment.
+- **What is sent.** The failed step, its selector, the failure text and the two lists, with resolved
+  environment values masked. The failure text is what `--ai-triage` sends. No screenshot is sent.
 - **Where it shows.** The JSON report and one line per proposal in the terminal. `location` is `local` for
   `provider: local` on this machine, `network` for `provider: local` on another host, and `hosted` for
   `openai` and `anthropic`. Proposals are left out of an uploaded report. JUnit and HTML reports do not

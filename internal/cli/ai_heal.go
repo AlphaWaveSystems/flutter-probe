@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
@@ -45,7 +46,7 @@ func failedRunError(results []runner.TestResult, failed error) error {
 // maybeAIHeal implements `probe test --ai-heal`. It runs after the results are final and before the report is written,
 // and it only sets the advisory Proposal of a failed result: it never changes Passed, Skipped or Error, never writes a
 // test file, and cannot return an error. With no ai: block it makes no request. At most one request per failed selector
-// step (file, line and selector) and none for a failure text that does not list the visible texts and keys, at most
+// step (file, line and selector) and none for a failure that carries no recorded visible texts or keys, at most
 // maxSelectorProposals requests per run, each bounded by ai.timeout; after the first failed request it stops asking, and
 // that step's entry carries the cleaned reason.
 func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results []runner.TestResult) {
@@ -95,13 +96,17 @@ func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results [
 			Selector: fs.Selector,
 			Step:     fs.Step,
 			Error:    sysdialog.ScrubKnown(results[i].Error.Error()),
+			Texts:    scrubAll(fs.Visible.Texts),
+			Keys:     scrubAll(fs.Visible.Keys),
+			Cut:      fs.Visible.Cut,
 		}, cfg.AI.Timeout)
 		if a.Requested {
 			requests++
 		}
-		proposed, unavailable := sysdialog.ScrubKnown(a.Proposed), sysdialog.ScrubKnown(a.Unavailable)
-		if proposed != a.Proposed {
-			// The listed text was written before its value was known to be masked. A masked selector names no widget.
+		proposed, unavailable := a.Proposed, sysdialog.ScrubKnown(a.Unavailable)
+		if strings.Contains(proposed, maskedValue) {
+			// An item the runner masked reads "****". A masked selector names no widget. (A value noted after the runner
+			// recorded the items is masked above, before the items reach the model, so the model cannot return it.)
 			proposed, unavailable = "", "the proposed selector held a masked value"
 		}
 		p := &runner.SelectorProposal{
@@ -117,15 +122,26 @@ func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results [
 		seen[key] = p
 		results[i].Proposal = p
 		if proposed != "" {
-			fmt.Fprintf(w, "  AI selector proposal (advisory, not applied, not verified) for %s line %d: %s -> %s\n", results[i].File, fs.Line, p.FailedSelector, p.ProposedSelector)
+			fmt.Fprintf(w, "  AI selector proposal (advisory, not applied, not verified) for %s line %d: %s -> %s\n", ai.PlainLine(results[i].File), fs.Line, ai.PlainLine(p.FailedSelector), ai.PlainLine(p.ProposedSelector))
 		} else {
-			fmt.Fprintf(w, "  AI selector proposal unavailable for %s line %d: %s (tests are unaffected)\n", results[i].File, fs.Line, p.Unavailable)
+			fmt.Fprintf(w, "  AI selector proposal unavailable for %s line %d: %s (tests are unaffected)\n", ai.PlainLine(results[i].File), fs.Line, ai.PlainLine(p.Unavailable))
 		}
 		stopped = a.ProviderFailed
 	}
 	if skipped > 0 {
 		fmt.Fprintf(w, "  AI selector proposal: %d more failed selector step(s) were not sent (at most %d requests per run, none after a failed request)\n", skipped, maxSelectorProposals)
 	}
+}
+
+// maskedValue is what sysdialog.ScrubKnown writes in place of a value it masks.
+const maskedValue = "****"
+
+func scrubAll(items []string) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = sysdialog.ScrubKnown(it)
+	}
+	return out
 }
 
 // withoutProposals returns a copy of results with no selector proposal. An uploaded report is built from it, so the

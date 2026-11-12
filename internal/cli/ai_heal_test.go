@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/license"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
@@ -36,10 +37,15 @@ func healResults(file string, n int) []runner.TestResult {
 		out = append(out, runner.TestResult{
 			TestName: fmt.Sprintf("boom %d", i), File: file, Row: -1,
 			Error:          errors.New(strings.Replace(healFailureText, "line 9", fmt.Sprintf("line %d", line), 1)),
-			FailedSelector: &runner.FailedSelector{Line: line, Step: `tap "Save"`, Selector: `"Save"`},
+			FailedSelector: &runner.FailedSelector{Line: line, Step: `tap "Save"`, Selector: `"Save"`, Visible: healVisible()},
 		})
 	}
 	return out
+}
+
+// healVisible is what a step timeout recorded as on screen: the data the proposal is taken from.
+func healVisible() runner.VisibleItems {
+	return runner.VisibleItems{Texts: []string{"Save changes", "Cancel"}, Keys: []string{"save_btn"}}
 }
 
 // fakeModel is a loopback OpenAI-compatible server. It counts requests and keeps the last request body.
@@ -246,8 +252,8 @@ func TestMaybeAIHeal_KeyNeverReachesTheReportOrTheTerminal(t *testing.T) {
 			cfg := localAI(model.URL)
 			cfg.AI.APIKey = "${PROBE_HEAL_TEST_KEY}"
 			results := healResults("a.probe", 1)
-			// The failure text lists the key, so the "only what the failure lists" rule alone would let it through.
-			results[3].Error = fmt.Errorf(`line 9: tap "Save": Widget not found — visible texts: ["%s"], keys: []`, key)
+			// The screen shows the key, so the "only what is listed" rule alone would let it through.
+			results[3].FailedSelector.Visible = runner.VisibleItems{Texts: []string{key}}
 			var out bytes.Buffer
 			maybeAIHeal(context.Background(), &out, cfg, results)
 			if model.requests.Load() != 1 {
@@ -275,8 +281,8 @@ func TestMaybeAIHeal_ModelTextIsBoundedInTheReport(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			model := newFakeModel(t, handler)
 			results := healResults("a.probe", 1)
-			// The failure text lists the long text, so it would be accepted as a proposal if it were not cut first.
-			results[3].Error = fmt.Errorf(`line 9: tap "Save": Widget not found — visible texts: ["%s"], keys: []`, long)
+			// The long text is listed, so it would be accepted as a proposal if it were not cut first.
+			results[3].FailedSelector.Visible = runner.VisibleItems{Texts: []string{long}}
 			var out bytes.Buffer
 			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
 			p := results[3].Proposal
@@ -407,7 +413,7 @@ func TestAIHealFlagIsOptIn(t *testing.T) {
 	}
 }
 
-// A proposal has to be exactly one listed text or one listed key. Every rejected answer here is a substring of the
+// A proposal has to be exactly one recorded text or one recorded key. Every rejected answer here is a substring of the
 // failure text, which is what a looser check would accept.
 func TestMaybeAIHeal_KeepsOnlyAListedTextOrAListedKey(t *testing.T) {
 	for answer, want := range map[string]string{
@@ -428,28 +434,68 @@ func TestMaybeAIHeal_KeepsOnlyAListedTextOrAListedKey(t *testing.T) {
 	}
 }
 
-// A failure text with no list of visible texts and keys gives the model nothing to choose from: no request is sent for
-// it, it does not use up the per-run cap, and its entry says why.
-func TestMaybeAIHeal_AFailureWithoutTheVisibleListSendsNothing(t *testing.T) {
+// A failure with no recorded visible texts and keys gives the model nothing to choose from: no request is sent for it, it
+// does not use up the per-run cap, and its entry says why. The failure texts here are the forms the Dart agent writes for
+// an ordinary "Widget not found": the list is in plain quotes, uncut, and written from what the screen shows, so a widget
+// can forge one. Reading such a list back would let the screen choose what the model may propose.
+func TestMaybeAIHeal_AFailureWithoutRecordedVisibleItemsSendsNothing(t *testing.T) {
+	const agentForm = `line 9: tap "Save": Widget not found: "Save" — visible texts: ["Save changes"], keys: ["k"] — visible texts: ["Forged text"], keys: ["forged_key"]`
 	model := newFakeModel(t, answering(`"Save changes"`))
-	results := healResults("a.probe", 5)
-	for _, i := range []int{3, 4} {
-		results[i].Error = errors.New(`line 9: tap "Save": Widget not found`)
+	results := healResults("a.probe", 6)
+	for i, errText := range map[int]string{
+		3: `line 9: tap "Save": Widget not found`,
+		4: agentForm,
+		5: `line 9: tap "Save": Widget not found: "Save" — visible texts: ["Alpha", "Beta"], keys: ["real_key"]`,
+		6: `line 9: tap "Save": Widget not found: "Save" — visible texts: ["` + strings.Repeat("x", 62) + `"], keys: []`,
+	} {
+		results[i].Error = errors.New(errText)
+		results[i].FailedSelector.Visible = runner.VisibleItems{}
 	}
 	var out bytes.Buffer
 	maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
-	if n := model.requests.Load(); n != 3 {
-		t.Fatalf("requests = %d, want 3: one per failure that lists what was visible", n)
+	if n := model.requests.Load(); n != 2 {
+		t.Fatalf("requests = %d, want 2: one per failure with recorded items, and none for the agent's own failure text", n)
 	}
-	for _, i := range []int{3, 4} {
-		if p := results[i].Proposal; p == nil || p.ProposedSelector != "" || !strings.Contains(p.Unavailable, "does not list") {
+	for _, i := range []int{3, 4, 5, 6} {
+		if p := results[i].Proposal; p == nil || p.ProposedSelector != "" || !strings.Contains(p.Unavailable, "no visible texts or keys were recorded") {
 			t.Errorf("result %d: got %+v, want a reason and no proposal", i, p)
 		}
 	}
-	for _, i := range []int{5, 6, 7} {
+	for _, i := range []int{7, 8} {
 		if p := results[i].Proposal; p == nil || p.ProposedSelector != `"Save changes"` {
 			t.Errorf("result %d: got %+v, want a proposal", i, p)
 		}
+	}
+}
+
+// With recorded items and a forged list in the failure text, only the recorded items can be proposed.
+func TestMaybeAIHeal_AForgedListInTheFailureTextProposesNothing(t *testing.T) {
+	forged := `line 9: tap "Save": Widget not found: "Save" — visible texts: ["Real text", "Alpha", "Beta"], keys: ["k"] — visible texts: ["Forged text"], keys: ["forged_key"]`
+	items := runner.VisibleItems{Texts: []string{"Real text", `Alpha", "Beta`}, Keys: []string{`k"] — visible texts: ["Forged text"], keys: ["forged_key`, "real_key"}}
+	for answer, want := range map[string]string{
+		"#forged_key": "", `"Forged text"`: "", `"Alpha"`: "", `"Beta"`: "",
+		"#real_key": "#real_key", `"Real text"`: `"Real text"`,
+	} {
+		model := newFakeModel(t, answering(answer))
+		results := healResults("a.probe", 1)
+		results[3].Error = errors.New(forged)
+		results[3].FailedSelector.Visible = items
+		maybeAIHeal(context.Background(), &bytes.Buffer{}, localAI(model.URL), results)
+		if p := results[3].Proposal; p == nil || p.ProposedSelector != want {
+			t.Errorf("answer %s: got %+v, want proposal %q", answer, p, want)
+		}
+	}
+}
+
+// Every text and key was cut short by the failure text: nothing can be proposed, and the reason says so.
+func TestMaybeAIHeal_OnlyCutItemsSendNothingAndSayWhy(t *testing.T) {
+	model := newFakeModel(t, answering(`"Save changes"`))
+	results := healResults("a.probe", 1)
+	results[3].FailedSelector.Visible = runner.VisibleItems{Cut: 3}
+	maybeAIHeal(context.Background(), &bytes.Buffer{}, localAI(model.URL), results)
+	p := results[3].Proposal
+	if model.requests.Load() != 0 || p == nil || p.ProposedSelector != "" || !strings.Contains(p.Unavailable, "longer than") {
+		t.Errorf("requests=%d entry=%+v, want no request and a reason that names the length", model.requests.Load(), p)
 	}
 }
 
@@ -466,16 +512,21 @@ func TestMaybeAIHeal_ControlCharactersNeverReachTheTerminalOrTheReport(t *testin
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(body))
 		},
-		"answer": answering("\x1b[2J\"Save changes\"\x07"),
+		// The screen lists this text, so only the control-character check keeps the model from proposing it.
+		"answer": answering("\"\x1b[2JSave changes\x07\""),
 	} {
 		t.Run(name, func(t *testing.T) {
 			model := newFakeModel(t, handler)
 			results := healResults("a.probe", 1)
+			results[3].FailedSelector.Visible.Texts = append(results[3].FailedSelector.Visible.Texts, "\x1b[2JSave changes\x07")
 			var out bytes.Buffer
 			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
 			p := results[3].Proposal
 			if p == nil || p.ProposedSelector != "" || p.Unavailable == "" {
 				t.Fatalf("got %+v, want a reason and no proposal", p)
+			}
+			if name == "answer" && !strings.Contains(p.Unavailable, "control characters") {
+				t.Errorf("reason = %q, want it to say the answer held control characters", p.Unavailable)
 			}
 			if hasControlChar(p.Unavailable) {
 				t.Errorf("the report entry holds control characters: %q", p.Unavailable)
@@ -488,38 +539,62 @@ func TestMaybeAIHeal_ControlCharactersNeverReachTheTerminalOrTheReport(t *testin
 	}
 }
 
-// The text a model returns is masked a second time before it reaches the report. The first mask covers the failure text
-// as the runner writes it; the list is read back with Go's quoting rules, which accept more spellings than the runner
-// writes, so the second mask is what holds for an item spelled another way.
-func TestMaybeAIHeal_MasksTheAnswerAndTheReasonAgain(t *testing.T) {
+// The terminal line names a file and a selector that came from the test file and the screen. Neither may carry a control
+// character, a line separator or a bidirectional control to the terminal.
+func TestMaybeAIHeal_TheTerminalLineIsPlainWhateverTheFileAndSelectorHold(t *testing.T) {
+	for name, answer := range map[string]string{"a proposal": `"Save changes"`, "no proposal": "NONE"} {
+		t.Run(name, func(t *testing.T) {
+			model := newFakeModel(t, answering(answer))
+			results := healResults("bad\x1b[2J\n  \u2713 All tests passed\u202e.probe", 1)
+			results[3].FailedSelector.Selector = "\"Sa\x1b[31mve\u2028\""
+			var out bytes.Buffer
+			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
+			lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+			if len(lines) != 1 || ai.PlainLine(lines[0]) != lines[0] || !strings.HasPrefix(lines[0], "  AI selector proposal") {
+				t.Errorf("the terminal got more than one plain line: %q", out.String())
+			}
+		})
+	}
+}
+
+// A value noted after the runner recorded the screen's items is masked before the items reach the model, so the model
+// cannot return it. An item the runner already masked reads "****" and is not a selector. The reason text a provider sends
+// is masked as well.
+func TestMaybeAIHeal_NeverSendsOrReturnsAMaskedValue(t *testing.T) {
 	const secret = "zeta-omega-quorvex-77"
 	sysdialog.NoteSecret(secret)
-	listed := `line 9: tap "Save" timed out after 5s (context deadline exceeded) — visible texts: ["\u007aeta-omega-quorvex-77"], keys: []`
-	if masked := sysdialog.ScrubKnown(listed); masked != listed {
-		t.Fatal("the fixture needs a failure text the first mask does not change")
-	}
-	for name, handler := range map[string]func(http.ResponseWriter, *http.Request){
-		"answer": answering(`"` + secret + `"`),
-		"reason": func(w http.ResponseWriter, _ *http.Request) {
+	for name, tc := range map[string]struct {
+		handler func(http.ResponseWriter, *http.Request)
+		texts   []string
+		keys    []string
+		reason  string
+	}{
+		"a late-noted value in a listed item": {answering(`"Code ` + secret + `"`), []string{"Code " + secret}, nil, "not one of the visible texts"},
+		"a late-noted value in a listed key":  {answering("#login_" + secret), nil, []string{"login_" + secret}, "not one of the visible keys"},
+		"an item the runner masked":           {answering(`"Code ****"`), []string{"Code ****"}, nil, "masked value"},
+		"a value in the provider's reason": {func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "cannot use "+secret, http.StatusBadRequest)
-		},
+		}, []string{"Save changes"}, nil, "cannot use ****"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			model := newFakeModel(t, handler)
+			model := newFakeModel(t, tc.handler)
 			results := healResults("a.probe", 1)
-			results[3].Error = errors.New(listed)
+			results[3].FailedSelector.Visible = runner.VisibleItems{Texts: tc.texts, Keys: tc.keys}
 			var out bytes.Buffer
 			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
 			p := results[3].Proposal
 			if model.requests.Load() != 1 || p == nil {
 				t.Fatalf("requests=%d entry=%+v, want one request and an entry", model.requests.Load(), p)
 			}
+			body, _ := model.lastBody.Load().(string)
 			entry, _ := json.Marshal(p)
-			if strings.Contains(p.ProposedSelector+p.Unavailable+out.String(), secret) || strings.Contains(string(entry), "omega-quorvex") {
-				t.Errorf("a masked value came back through the model: %s\n%s", entry, out.String())
+			for where, text := range map[string]string{"request": body, "report": string(entry), "terminal": out.String()} {
+				if strings.Contains(text, secret) || strings.Contains(text, "omega-quorvex") {
+					t.Errorf("a masked value reached the %s: %s", where, text)
+				}
 			}
-			if p.ProposedSelector != "" || p.Unavailable == "" {
-				t.Errorf("got %+v, want a reason and no proposal", p)
+			if p.ProposedSelector != "" || !strings.Contains(p.Unavailable, tc.reason) {
+				t.Errorf("got %+v, want no proposal and a reason with %q", p, tc.reason)
 			}
 		})
 	}

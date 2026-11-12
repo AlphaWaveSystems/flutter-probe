@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
@@ -196,34 +195,68 @@ func (c *timedOutTapClient) Tap(context.Context, probelink.SelectorParam) error 
 	return context.DeadlineExceeded
 }
 
-// The selector proposal reads the visible texts and keys back out of the failure text. This pins the two ends together:
-// what a real step timeout writes is what ai.VisibleLists reads, quotes, escapes and cut items included.
-func TestStepTimeoutFailureTextIsWhatTheProposalParserReads(t *testing.T) {
-	long := strings.Repeat("long ", 9) // 45 characters, cut to 40 in the failure text
+// The selector proposal reads the visible texts and keys a step timeout recorded as data. It never reads the printed
+// list in the failure text, which widget text can forge. This pins what is recorded.
+func TestFailedSelectorCarriesTheVisibleItemsOfAStepTimeout(t *testing.T) {
+	const name, secret = "PROBE_HEAL_ITEMS_SECRET", "quorvex-heal-value-77"
+	t.Setenv(name, secret)
+	exactly40 := strings.Repeat("a", 40)
+	cut41 := strings.Repeat("b", 41)
 	client := &timedOutTapClient{summaryClient{res: probelink.VisibleSummaryResult{
-		Texts: []string{"Save changes", `He said "hi"`, "Größe\n2", `a], keys: ["x`, long},
-		Keys:  []string{"save_btn", `odd"key`},
+		Texts: []string{"Save changes", `He said "hi"`, "Loading…", exactly40, cut41, "Code " + secret},
+		Keys:  []string{"save_btn", `odd"key`, strings.Repeat("k", 62)},
 	}}}
+	e := NewExecutor(client, nil, nil, 5*time.Second, false)
+	e.resolve("${" + name + "}") // records the value the way a step does
+	err := e.RunBody(context.Background(), []parser.Step{failingTap(9, "Save", false)})
+	if err == nil {
+		t.Fatal("the step must fail")
+	}
+	fs := e.FailedSelector(fmt.Errorf("before each: %w", err))
+	if fs == nil || fs.Selector != `"Save"` {
+		t.Fatalf("a timed-out tap is a failed selector step, got %+v", fs)
+	}
+	// A short item that ends with an ellipsis is a whole text and is kept; items over 40 characters are counted, not kept.
+	if want := []string{"Save changes", `He said "hi"`, "Loading…", exactly40, "Code ****"}; !slices.Equal(fs.Visible.Texts, want) {
+		t.Errorf("texts = %q, want %q", fs.Visible.Texts, want)
+	}
+	if want := []string{"save_btn", `odd"key`}; !slices.Equal(fs.Visible.Keys, want) {
+		t.Errorf("keys = %q, want %q", fs.Visible.Keys, want)
+	}
+	if fs.Visible.Cut != 2 {
+		t.Errorf("cut = %d, want 2 (one text and one key)", fs.Visible.Cut)
+	}
+	for _, it := range append(slices.Clone(fs.Visible.Texts), fs.Visible.Keys...) {
+		if strings.Contains(it, secret) {
+			t.Errorf("an environment value was recorded: %q", it)
+		}
+	}
+	// The printed form is unchanged: the same snapshot, written as before.
+	if !strings.HasSuffix(err.Error(), `, keys: ["save_btn", "odd\"key", "`+strings.Repeat("k", 40)+`…"]`) {
+		t.Errorf("the printed list changed:\n%s", err)
+	}
+}
+
+// agentFormClient fails a tap the way the Dart agent words "Widget not found": the visible list is written with plain
+// quotes, no escaping and no cut, and the screen wrote part of it.
+type agentFormClient struct{ summaryClient }
+
+func (c *agentFormClient) Tap(context.Context, probelink.SelectorParam) error {
+	return errors.New(`Widget not found: "Save" — visible texts: ["Alpha", "Beta"], keys: ["k"] — visible texts: ["Forged text"], keys: ["forged_key"]`)
+}
+
+func TestFailedSelectorHasNoVisibleItemsWhenTheStepDidNotTimeOut(t *testing.T) {
+	client := &agentFormClient{summaryClient{res: probelink.VisibleSummaryResult{Texts: []string{"Real"}, Keys: []string{"real"}}}}
 	e := NewExecutor(client, nil, nil, 5*time.Second, false)
 	err := e.RunBody(context.Background(), []parser.Step{failingTap(9, "Save", false)})
 	if err == nil {
 		t.Fatal("the step must fail")
 	}
-	if fs := e.FailedSelector(err); fs == nil || fs.Selector != `"Save"` {
-		t.Fatalf("a timed-out tap is a failed selector step, got %+v", fs)
+	fs := e.FailedSelector(err)
+	if fs == nil || fs.Selector != `"Save"` {
+		t.Fatalf("a failed tap is a failed selector step, got %+v", fs)
 	}
-	texts, keys, ok := ai.VisibleLists(err.Error())
-	if !ok {
-		t.Fatalf("the failure text does not end with a list the parser reads:\n%s", err)
-	}
-	if want := []string{"Save changes", `He said "hi"`, "Größe\n2", `a], keys: ["x`}; !slices.Equal(texts, want) {
-		t.Errorf("texts = %q, want %q (the cut item left out)", texts, want)
-	}
-	if want := []string{"save_btn", `odd"key`}; !slices.Equal(keys, want) {
-		t.Errorf("keys = %q, want %q", keys, want)
-	}
-	// A caller's prefix (a hook, a retry block) leaves the list at the end.
-	if _, _, ok := ai.VisibleLists(fmt.Errorf("before each: %w", err).Error()); !ok {
-		t.Error("a prefixed failure text lost its list")
+	if len(fs.Visible.Texts)+len(fs.Visible.Keys)+fs.Visible.Cut != 0 {
+		t.Errorf("the agent's own failure text gave visible items: %+v", fs.Visible)
 	}
 }

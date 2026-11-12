@@ -152,7 +152,7 @@ func init() {
 
 	// Optional AI triage (advisory, after results are final; never affects the run)
 	f.Bool("ai-triage", false, "after the run, ask the configured ai: model to explain failures (advisory; needs ai: in probe.yaml; never changes results or the exit code)")
-	f.Bool("ai-heal", false, "after the run, ask the configured ai: model to propose a replacement selector for each failed selector step, in the JSON report (advisory; needs ai: in probe.yaml; never applied; never changes results or the exit code)")
+	f.Bool("ai-heal", false, "after the run, ask the configured ai: model to propose a replacement selector for each selector step that ran into its timeout, in the JSON report (advisory; needs ai: in probe.yaml; never applied; never changes results or the exit code)")
 
 	// Permission pre-grant
 	f.StringSlice("grant", nil, "pre-grant OS permissions before the first test, e.g. --grant notifications,camera,location (Android: adb pm grant; iOS simulator: simctl privacy; iOS notifications: taps Allow on the system alert, needs Xcode)")

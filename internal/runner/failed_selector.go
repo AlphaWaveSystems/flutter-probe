@@ -13,6 +13,10 @@ type FailedSelector struct {
 	Line     int
 	Step     string // the step as the run prints it
 	Selector string // the selector the step sent (as written in the test when the step resolved none), in the timeline's form
+
+	// Visible is what the agent reported on screen when the step timed out. It is set only from the runner's own step
+	// timeout error, as data, and stays empty for every other failure, including the agent's own "Widget not found".
+	Visible VisibleItems
 }
 
 // SelectorProposal is the advisory replacement selector a language model proposed for a failed selector step. It is
@@ -84,11 +88,16 @@ func (e *Executor) noteSelectorFailure(step parser.Step, desc string, err error)
 	if len(e.selectorFailures) >= maxSelectorFailures {
 		e.selectorFailures = e.selectorFailures[1:]
 	}
-	e.selectorFailures = append(e.selectorFailures, selectorFailure{err: err, sel: FailedSelector{
+	fs := FailedSelector{
 		Line:     step.GetLine(),
 		Step:     sysdialog.ScrubKnown(desc),
 		Selector: sysdialog.ScrubKnown(selectorText(used)),
-	}})
+	}
+	var timeout *stepTimeoutError
+	if errors.As(err, &timeout) {
+		fs.Visible = timeout.items
+	}
+	e.selectorFailures = append(e.selectorFailures, selectorFailure{err: err, sel: fs})
 }
 
 // FailedSelector returns the selector step runErr comes from, or nil when the test did not fail on one. A failure that
