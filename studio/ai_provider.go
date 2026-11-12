@@ -216,6 +216,15 @@ func outbound(s string) string {
 	return redactCredentials(s)
 }
 
+// fromProvider cleans text a provider returned before Studio shows it: the exact key sent in the request is removed, and the
+// credential families are redacted. The key is removed first, so a key of no known family does not survive.
+func fromProvider(s, key string) string {
+	if key != "" {
+		s = strings.ReplaceAll(s, key, redactedMark)
+	}
+	return outbound(s)
+}
+
 // noRedirects stops a provider client at the first answer. A redirect would carry the request, its prompt and any key to
 // another host, so an endpoint that redirects is an error.
 func noRedirects(*http.Request, []*http.Request) error {
@@ -328,7 +337,7 @@ func (a *App) ListAIModels() ([]string, error) {
 	ids := make([]string, 0, len(listing.Data))
 	for _, m := range listing.Data {
 		if m.ID != "" {
-			ids = append(ids, m.ID)
+			ids = append(ids, fromProvider(m.ID, s.APIKey))
 		}
 	}
 	sort.Strings(ids)

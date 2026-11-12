@@ -37,7 +37,10 @@ var (
 // envRef returns the variable name of a ${NAME} reference.
 func envRef(raw string) (string, bool) {
 	if strings.HasPrefix(raw, "${") && strings.HasSuffix(raw, "}") {
-		return raw[2 : len(raw)-1], true
+		// One variable only: ${A}-${B} and ${A}${B} are not a reference.
+		if name := raw[2 : len(raw)-1]; envNamePattern.MatchString(name) {
+			return name, true
+		}
 	}
 	return "", false
 }
@@ -86,13 +89,19 @@ func readAISettings(workspace string) (AISettings, error) {
 	return s, nil
 }
 
-// validate refuses a form that would not run, so a saved file always works or says why it does not.
+// validate refuses a form it can tell would not run: an unknown provider, a bad variable name or timeout, a provider that
+// needs a model, an endpoint or a variable and has none, and a local endpoint that is not allowed. It cannot know whether
+// a variable is set or a server is up, so a saved file can still fail when it is used; Test connection says why.
 func (s AISettings) validate() error {
 	if !aiProviderKind[s.Provider] {
 		return fmt.Errorf("provider %q is not one of anthropic, local or openai", s.Provider)
 	}
 	if s.KeySource == "env" && !envNamePattern.MatchString(s.KeyEnvName) {
 		return fmt.Errorf("the key variable name must be letters, digits and underscores, and must not start with a digit")
+	}
+	if s.Provider == "openai" && s.KeySource != "env" {
+		// Studio sends a saved keychain key only to the Anthropic provider, so openai needs a variable to run.
+		return fmt.Errorf("provider openai needs the key source Environment variable: Studio sends a saved keychain key only to Anthropic")
 	}
 	if s.Timeout != "" {
 		if _, err := time.ParseDuration(s.Timeout); err != nil {
@@ -147,15 +156,22 @@ func writeAISettings(workspace string, s AISettings) error {
 	if s.Provider == "local" {
 		endpoint = s.Endpoint
 	}
-	keyValue := ""
-	if s.KeySource == "env" {
-		keyValue = "${" + s.KeyEnvName + "}"
-	}
 	mergeKey(raw, "ai", "provider", s.Provider)
 	mergeKey(raw, "ai", "endpoint", endpoint)
 	mergeKey(raw, "ai", "model", s.Model)
 	mergeKey(raw, "ai", "timeout", s.Timeout)
-	mergeKey(raw, "ai", "api_key", keyValue)
+	// The key line changes only when the form asks for it. A form that names an environment variable writes that reference. A
+	// form that uses the keychain removes an existing reference, because the person switched the source, and leaves a plain
+	// key alone: Studio never reads a plain key, but the CLI does, and deleting it would break a setup Save did not make.
+	aiBlock, _ := raw["ai"].(map[string]any)
+	existingKey, _ := aiBlock["api_key"].(string)
+	_, existingIsRef := envRef(existingKey)
+	switch {
+	case s.KeySource == "env":
+		mergeKey(raw, "ai", "api_key", "${"+s.KeyEnvName+"}")
+	case existingKey == "" || existingIsRef:
+		mergeKey(raw, "ai", "api_key", "")
+	}
 	ai := ensureMap(raw, "ai")
 	if s.Vision {
 		delete(ai, "vision")
@@ -175,7 +191,9 @@ func writeAISettings(workspace string, s AISettings) error {
 	if err != nil {
 		return fmt.Errorf("encoding probe.yaml: %w", err)
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	// A new probe.yaml is private to the user. WriteFile applies the mode only when it creates the file, so an existing one
+	// keeps its own.
+	if err := os.WriteFile(path, out, 0o600); err != nil {
 		return fmt.Errorf("writing probe.yaml: %w", err)
 	}
 	return nil
@@ -231,15 +249,18 @@ func (a *App) TestAIConnection() (AIConnectionReport, error) {
 		VisionChecked: r.VisionChecked,
 		Checks:        make([]AIConnectionCheck, 0, len(r.Checks)),
 	}
+	// A server can echo the request in an error body, so what the doctor reports passes the same gate as everything else that
+	// comes back from a provider.
 	for _, c := range r.Checks {
-		out.Checks = append(out.Checks, AIConnectionCheck{Name: c.Name, OK: c.OK, Detail: c.Detail})
+		out.Checks = append(out.Checks, AIConnectionCheck{Name: c.Name, OK: c.OK, Detail: fromProvider(c.Detail, s.APIKey)})
 	}
 	return out, nil
 }
 
 // PreviewAIChat returns the text the next chat turn would send, after the outbound gate, and the provider it would go to.
-// It sends nothing. Settings and the chat call the same chatTurn and the same gate, so the preview cannot show a
-// different text from the one a request carries.
+// It sends nothing. The preview and the request each build the turn when they run, with the same chatTurn and the same gate,
+// so the preview shows what the message would send now. A change between the preview and Send, such as a new run result or
+// a different widget tree, can make the request differ from what was shown.
 func (a *App) PreviewAIChat(messages []ChatMessage, fileContent string) (string, error) {
 	s, err := a.aiProvider()
 	if err != nil {
