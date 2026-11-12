@@ -39,7 +39,8 @@ func useCountingTransport(t *testing.T) *countingTransport {
 	return c
 }
 
-// With AI off, or refused, no AI surface makes a request, to any address. The plan's check R4, by a counting transport.
+// With AI off, or refused, no AI surface makes a request, to any address. A counting transport sees a surface that reaches for
+// a provider nobody configured, which a fake server on a configured address cannot.
 func TestAIOffMakesNoRequestOnAnySurface(t *testing.T) {
 	savedKey := "sk" + "-ant-" + "off-probe-000000000030"
 	cases := []struct {
@@ -60,14 +61,21 @@ func TestAIOffMakesNoRequestOnAnySurface(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			isolateProvider(t, c.saved)
+			seedFailedRun(t)
 			counter := useCountingTransport(t)
-			app := appIn(writeProbeYAML(t, c.yaml))
+			app := failedRunApp() // the last run failed a step, so SuggestSelectorFix reaches the provider gate and not the missing-run error
+			app.workspace = writeProbeYAML(t, c.yaml)
 
-			if _, err := app.Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "file"); err == nil {
-				t.Error("Chat answered, so something was sent")
+			// Every surface must stop at the provider refusal, and the refusal is what each one returns.
+			_, want := app.aiProvider()
+			if want == nil {
+				t.Fatal("this configuration should be refused by the provider settings")
 			}
-			if _, err := app.SuggestSelectorFix("file"); err == nil {
-				t.Error("SuggestSelectorFix answered, so something was sent")
+			if _, err := app.Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "file"); err == nil || err.Error() != want.Error() {
+				t.Errorf("Chat returned %v, want the provider refusal %q", err, want)
+			}
+			if _, err := app.SuggestSelectorFix("file"); err == nil || err.Error() != want.Error() {
+				t.Errorf("SuggestSelectorFix returned %v, want the provider refusal %q", err, want)
 			}
 			_, _ = app.ListAIModels()
 
@@ -78,13 +86,30 @@ func TestAIOffMakesNoRequestOnAnySurface(t *testing.T) {
 	}
 }
 
-// The counter sees a request when AI is on, so the test above cannot pass by counting nothing.
+// seedFailedRun lets SuggestSelectorFix read the last run, which it needs before it reaches the provider.
+func seedFailedRun(t *testing.T) {
+	t.Helper()
+	prev := contextSwitches
+	t.Cleanup(func() { contextSwitches = prev })
+	contextSwitches = func(*App) aiContextSettings { return aiContextSettings{RunResults: true} }
+}
+
+// The counter sees a request from the chat and from the selector fix when AI is on, so the test above cannot pass by counting
+// nothing on either surface.
 func TestTheCountingTransportSeesARequestWhenAIIsOn(t *testing.T) {
 	isolateProvider(t, "")
+	seedFailedRun(t)
 	counter := useCountingTransport(t)
-	app := appIn(writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: m\n"))
+	app := failedRunApp()
+	app.workspace = writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: m\n")
+
 	_, _ = app.Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
-	if got := counter.seen(); len(got) == 0 {
-		t.Fatal("a configured local provider made no request, so the counting transport sees nothing")
+	afterChat := len(counter.seen())
+	if afterChat == 0 {
+		t.Fatal("Chat with a configured local provider made no request, so the counting transport sees nothing")
+	}
+	_, _ = app.SuggestSelectorFix("file")
+	if len(counter.seen()) <= afterChat {
+		t.Fatal("SuggestSelectorFix with a configured local provider made no request, so the counter does not see that surface")
 	}
 }
