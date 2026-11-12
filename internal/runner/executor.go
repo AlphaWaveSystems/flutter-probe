@@ -54,6 +54,7 @@ type Executor struct {
 	aiConfigErr          error              // set by SetAI when ai.provider has an unrecognized value
 	aiText               ai.TextCompleter   // set only when ai.vision: false (text-only `with ai`)
 	selectorFailures     []selectorFailure  // failed selector steps of this executor, for FailedSelector
+	resolvedSelectors    []resolvedSelector // selectors the running step resolved, cleared when the step ends
 	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
 	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
@@ -1976,6 +1977,7 @@ func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error
 // built from a stored variable or example-table column silently matched
 // nothing instead of the intended target.
 func (e *Executor) resolveSelector(s parser.Selector) parser.Selector {
+	written := s
 	s.Text = e.resolve(s.Text)
 	if s.Container != "" {
 		s.Container = e.resolve(s.Container)
@@ -1983,6 +1985,7 @@ func (e *Executor) resolveSelector(s parser.Selector) parser.Selector {
 	if s.Anchor != "" {
 		s.Anchor = e.resolve(s.Anchor)
 	}
+	e.rememberResolved(written, s)
 	return s
 }
 

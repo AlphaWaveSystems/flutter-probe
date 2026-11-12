@@ -3,6 +3,8 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +32,16 @@ func TestProposeSelectorKeepsOnlyAGroundedTextOrKeySelector(t *testing.T) {
 		{"repeats the failed selector", `"Save"`, "", "repeated"},
 		{"not listed in the failure", `"Delete account"`, "", "does not list"},
 		{"key not listed", "#delete_btn", "", "does not list"},
+		// Every one of these is a substring of the failure text, and none is a listed text or a listed key.
+		{"a listed text as a key", "#Save", "", "key the failure text does not list"},
+		{"another listed text as a key", "#Cancel", "", "key the failure text does not list"},
+		{"a listed key as a text", `"save_btn"`, "", "text the failure text does not list"},
+		{"the agent's message", `"Widget not found"`, "", "text the failure text does not list"},
+		{"the list's own label", `"visible texts"`, "", "text the failure text does not list"},
+		{"a word of the failure text as a key", "#line", "", "key the failure text does not list"},
+		{"part of a listed text", `"Sav"`, "", "text the failure text does not list"},
+		{"one letter", `"a"`, "", "text the failure text does not list"},
+		{"a listed text in another case", `"save changes"`, "", "text the failure text does not list"},
 		{"prose", "tap on Save changes", "", "not a text or key selector"},
 		{"two selectors", `"Save changes" in "Cancel"`, "", "not a text or key selector"},
 	}
@@ -43,8 +55,8 @@ func TestProposeSelectorKeepsOnlyAGroundedTextOrKeySelector(t *testing.T) {
 			if tc.want == "" && (a.Unavailable == "" || !strings.Contains(a.Unavailable, tc.whyHas)) {
 				t.Errorf("unavailable %q, want it to contain %q", a.Unavailable, tc.whyHas)
 			}
-			if a.ProviderFailed {
-				t.Error("an answered request is not a provider failure")
+			if a.ProviderFailed || !a.Requested {
+				t.Errorf("an answered request is a request and not a provider failure: %+v", a)
 			}
 			if c.calls != 1 {
 				t.Errorf("calls = %d, want exactly 1 (no retry)", c.calls)
@@ -86,7 +98,7 @@ func TestProposeSelectorRemovesTheClientsKeyAndCutsTheAnswer(t *testing.T) {
 	const key = "sk-heal-unit-key-0123456789"
 	// The failure text lists the key and a very long text, so only the cleaning keeps them out of a proposal.
 	long := strings.Repeat("L", 5000)
-	f := SelectorFailure{Selector: `"Save"`, Step: `tap "Save"`, Error: `visible texts: ["` + key + `", "` + long + `"]`}
+	f := SelectorFailure{Selector: `"Save"`, Step: `tap "Save"`, Error: `tap "Save" timed out — visible texts: ["` + key + `", "` + long + `"], keys: []`}
 
 	a := ProposeSelector(context.Background(), keyedCompleter{key: key, answer: `"` + key + `"`}, f, time.Second)
 	if a.Proposed != "" || strings.Contains(a.Unavailable, key) {
@@ -109,7 +121,7 @@ func TestProposeSelectorBoundsTheCallAndThePrompt(t *testing.T) {
 		return "NONE", nil
 	})
 	f := healFailure()
-	f.Error = strings.Repeat("é", 10000)
+	f.Error = strings.Repeat("é", 10000) + healErr
 	ProposeSelector(context.Background(), c, f, 2*time.Second)
 	if deadline <= 0 || deadline > 2*time.Second {
 		t.Errorf("the request had deadline %s, want at most 2s", deadline)
@@ -117,8 +129,80 @@ func TestProposeSelectorBoundsTheCallAndThePrompt(t *testing.T) {
 	if n := len([]rune(gotUser)); n > 3200 {
 		t.Errorf("the prompt has %d runes, want the error cut to 3000", n)
 	}
+	if !strings.Contains(gotUser, `keys: ["save_btn"]`) {
+		t.Error("the cut removed the list of visible texts and keys, which is at the end of the error")
+	}
 	if !strings.Contains(gotUser, `Failed selector: "Save"`) {
 		t.Errorf("the prompt does not name the failed selector:\n%.200s", gotUser)
+	}
+}
+
+func TestVisibleListsReadsOnlyAListAtTheEndOfTheFailureText(t *testing.T) {
+	cut := strings.Repeat("x", 40) + "…"
+	cases := []struct {
+		name, failure string
+		texts, keys   []string
+		ok            bool
+	}{
+		{"texts and keys", healErr, []string{"Save changes", "Cancel"}, []string{"save_btn"}, true},
+		{"no keys", `t — visible texts: ["A"], keys: []`, []string{"A"}, nil, true},
+		{"no texts", `t — visible texts: [], keys: ["k"]`, nil, []string{"k"}, true},
+		{"escaped items", `t — visible texts: ["say \"hi\"", "a\tb", "x], keys: [\"y"], keys: ["k\\1"]`, []string{`say "hi"`, "a\tb", `x], keys: ["y`}, []string{`k\1`}, true},
+		{"a cut item is left out", `t — visible texts: ["` + cut + `", "Short"], keys: ["` + cut + `"]`, []string{"Short"}, nil, true},
+		{"no list", `line 9: tap "Save": Widget not found`, nil, nil, false},
+		{"the agent's own wait message", `Timed out waiting for "Save" (visible: Save changes, Cancel)`, nil, nil, false},
+		{"texts without keys", `t — visible texts: ["A"]`, nil, nil, false},
+		{"text after the list", `t — visible texts: ["A"], keys: ["k"] (attempt 2)`, nil, nil, false},
+		{"unterminated", `t — visible texts: ["A", "B`, nil, nil, false},
+		{"single quotes", `t — visible texts: ['A'], keys: []`, nil, nil, false},
+		// A step description or an agent message can hold text that looks like a list. Only the list the failure text
+		// ends with is read.
+		{"a made-up list before the real one", `tap "x — visible texts: ["Evil"], keys: ["evil"]" timed out — visible texts: ["Real"], keys: ["real"]`, []string{"Real"}, []string{"real"}, true},
+		{"a made-up list inside a listed item", `t — visible texts: ["a — visible texts: [], keys: []"], keys: ["k"]`, []string{"a — visible texts: [], keys: []"}, []string{"k"}, true},
+	}
+	for _, tc := range cases {
+		texts, keys, ok := VisibleLists(tc.failure)
+		if ok != tc.ok || !slices.Equal(texts, tc.texts) || !slices.Equal(keys, tc.keys) {
+			t.Errorf("%s: got %q %q %v, want %q %q %v", tc.name, texts, keys, ok, tc.texts, tc.keys, tc.ok)
+		}
+	}
+}
+
+func TestProposeSelectorSendsNothingWhenTheFailureTextHasNoList(t *testing.T) {
+	for name, failure := range map[string]string{
+		"no list":          `line 9: tap "Save": Widget not found`,
+		"both lists empty": `tap "Save" timed out — visible texts: [], keys: []`,
+		"only cut items":   `tap "Save" timed out — visible texts: ["` + strings.Repeat("x", 40) + `…"], keys: []`,
+		"list not at end":  healErr + " (retried)",
+	} {
+		c := &scriptedCompleter{answers: []string{`"Save changes"`}}
+		a := ProposeSelector(context.Background(), c, SelectorFailure{Selector: `"Save"`, Step: `tap "Save"`, Error: failure}, time.Second)
+		if c.calls != 0 || a.Requested || a.ProviderFailed || a.Proposed != "" || !strings.Contains(a.Unavailable, "does not list") {
+			t.Errorf("%s: calls=%d answer=%+v, want no request, no proposal and a reason", name, c.calls, a)
+		}
+	}
+}
+
+func hasControl(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return r < 0x20 || (r >= 0x7f && r <= 0x9f) })
+}
+
+func TestProposeSelectorKeepsControlCharactersOutOfTheAnswer(t *testing.T) {
+	const body = "boom\x1b[2J\x1b[31m\n  ✓ All tests passed\r\x07\x7f\u009b"
+	a := ProposeSelector(context.Background(), &scriptedCompleter{err: errors.New("ai: endpoint returned 500: " + body)}, healFailure(), time.Second)
+	if hasControl(a.Unavailable) || !strings.Contains(a.Unavailable, "boom [2J") || !a.ProviderFailed {
+		t.Errorf("a provider error reached the reason with control characters: %q", a.Unavailable)
+	}
+
+	// The screen can list a text with an escape sequence in it, and a model can repeat it: it is listed, and still not kept.
+	esc := "\x1b[2JSave"
+	f := SelectorFailure{Selector: `"Save"`, Step: `tap "Save"`, Error: fmt.Sprintf("tap \"Save\" timed out — visible texts: [%q], keys: []", esc)}
+	if texts, _, ok := VisibleLists(f.Error); !ok || !slices.Contains(texts, esc) {
+		t.Fatalf("the fixture must list the text with the escape sequence: %q %v", texts, ok)
+	}
+	a = ProposeSelector(context.Background(), &scriptedCompleter{answers: []string{`"` + esc + `"`}}, f, time.Second)
+	if a.Proposed != "" || hasControl(a.Unavailable) || !strings.Contains(a.Unavailable, "control characters") {
+		t.Errorf("an answer with an escape sequence was kept: %+v", a)
 	}
 }
 

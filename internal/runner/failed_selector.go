@@ -12,7 +12,7 @@ import (
 type FailedSelector struct {
 	Line     int
 	Step     string // the step as the run prints it
-	Selector string // the selector as the step resolved it, written as the timeline writes it
+	Selector string // the selector the step sent (as written in the test when the step resolved none), in the timeline's form
 }
 
 // SelectorProposal is the advisory replacement selector a language model proposed for a failed selector step. It is
@@ -38,8 +38,27 @@ type selectorFailure struct {
 // maxSelectorFailures bounds what one executor remembers; a test fails on one step, the rest are tolerated failures.
 const maxSelectorFailures = 16
 
-// noteSelectorFailure remembers that step failed with err, when step looks a widget up by a selector.
+// resolvedSelector is one selector the running step resolved: as written in the test, and as sent to the agent.
+type resolvedSelector struct{ written, sent parser.Selector }
+
+// maxResolvedSelectors bounds what one step remembers; a step resolves one or two selectors per attempt.
+const maxResolvedSelectors = 8
+
+// rememberResolved keeps what resolveSelector made of a selector until the step ends. Resolving again would give a
+// selector with a <random.…> value a different value from the one the step used.
+func (e *Executor) rememberResolved(written, sent parser.Selector) {
+	if len(e.resolvedSelectors) >= maxResolvedSelectors {
+		e.resolvedSelectors = e.resolvedSelectors[1:]
+	}
+	e.resolvedSelectors = append(e.resolvedSelectors, resolvedSelector{written: written, sent: sent})
+}
+
+// noteSelectorFailure remembers that step failed with err, when step looks a widget up by a selector. It runs at the end
+// of every step and resolves nothing itself: the selector it records is the one the step's last attempt sent, or the
+// selector as the test file writes it when the step did not resolve one.
 func (e *Executor) noteSelectorFailure(step parser.Step, desc string, err error) {
+	resolved := e.resolvedSelectors
+	e.resolvedSelectors = nil
 	if err == nil || isConnectionError(err) {
 		return
 	}
@@ -55,13 +74,20 @@ func (e *Executor) noteSelectorFailure(step parser.Step, desc string, err error)
 	if sel == nil || sel.Text == "" {
 		return
 	}
+	used := *sel
+	for i := len(resolved) - 1; i >= 0; i-- {
+		if resolved[i].written == *sel {
+			used = resolved[i].sent
+			break
+		}
+	}
 	if len(e.selectorFailures) >= maxSelectorFailures {
 		e.selectorFailures = e.selectorFailures[1:]
 	}
 	e.selectorFailures = append(e.selectorFailures, selectorFailure{err: err, sel: FailedSelector{
 		Line:     step.GetLine(),
 		Step:     sysdialog.ScrubKnown(desc),
-		Selector: sysdialog.ScrubKnown(selectorText(e.resolveSelector(*sel))),
+		Selector: sysdialog.ScrubKnown(selectorText(used)),
 	}})
 }
 

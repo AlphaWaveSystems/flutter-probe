@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 func failingTap(line int, text string, optional bool) parser.ActionStep {
@@ -125,5 +129,101 @@ func TestJSONReportCarriesTheProposalOnlyWhenSet(t *testing.T) {
 	}
 	if _, ok := p["unavailable"]; ok {
 		t.Error("an empty reason must be omitted")
+	}
+}
+
+// recordingTapClient fails every tap and keeps the selector text each tap was sent.
+type recordingTapClient struct {
+	*scriptedClient
+	sent []string
+}
+
+func (c *recordingTapClient) Tap(_ context.Context, sel probelink.SelectorParam) error {
+	c.sent = append(c.sent, sel.Text)
+	return errors.New("widget not found")
+}
+
+func TestFailedSelectorIsTheSelectorTheStepSentNotASecondResolve(t *testing.T) {
+	client := &recordingTapClient{scriptedClient: &scriptedClient{fakeAIClient: &fakeAIClient{}}}
+	e := NewExecutor(client, nil, nil, 5*time.Second, false)
+	// A <random.…> value is new on every resolve, so resolving again for the record would name a selector no step sent.
+	err := e.RunBody(context.Background(), []parser.Step{failingTap(4, "user <random.uuid>", false)})
+	if err == nil || len(client.sent) != 1 {
+		t.Fatalf("err=%v taps=%d, want one failed tap", err, len(client.sent))
+	}
+	fs := e.FailedSelector(err)
+	if fs == nil || fs.Selector != fmt.Sprintf("%q", client.sent[0]) {
+		t.Fatalf("recorded %+v, the step sent %q", fs, client.sent[0])
+	}
+	if strings.Contains(fs.Selector, "<random") {
+		t.Fatalf("the recorded selector is unresolved: %s", fs.Selector)
+	}
+	if len(e.resolvedSelectors) != 0 {
+		t.Errorf("%d resolved selectors outlived their step", len(e.resolvedSelectors))
+	}
+
+	// A retried step resolves once per attempt: the record is the last attempt's selector.
+	client.sent = nil
+	err = e.RunBody(context.Background(), []parser.Step{parser.RetryStep{Count: 3, Body: []parser.Step{failingTap(6, "row <random.uuid>", false)}, Line: 5}})
+	if err == nil || len(client.sent) != 3 {
+		t.Fatalf("err=%v taps=%d, want three failed taps", err, len(client.sent))
+	}
+	if fs := e.FailedSelector(err); fs == nil || fs.Selector != fmt.Sprintf("%q", client.sent[2]) {
+		t.Fatalf("recorded %+v, the last attempt sent %q", fs, client.sent[2])
+	}
+
+	// A step that resolves the same selector twice (a re-run after a reconnect) is recorded with the later value.
+	written := parser.Selector{Kind: parser.SelectorText, Text: "cell <random.uuid>"}
+	first, second := e.resolveSelector(written), e.resolveSelector(written)
+	again := errors.New("again")
+	e.noteSelectorFailure(parser.ActionStep{Verb: parser.VerbTap, Sel: &written, Line: 7}, "tap", again)
+	if fs := e.FailedSelector(again); first == second || fs == nil || fs.Selector != fmt.Sprintf("%q", second.Text) {
+		t.Fatalf("recorded %+v, the later resolve gave %q", fs, second.Text)
+	}
+
+	// A step that resolved no selector is recorded as the test file writes it; nothing is resolved for the record.
+	boom := errors.New("boom")
+	e.noteSelectorFailure(failingTap(8, "id <random.uuid>", false), "tap", boom)
+	if fs := e.FailedSelector(boom); fs == nil || fs.Selector != `"id <random.uuid>"` {
+		t.Fatalf("got %+v, want the selector as written", fs)
+	}
+}
+
+// timedOutTapClient answers probe.visible_summary and lets every tap run into its deadline.
+type timedOutTapClient struct{ summaryClient }
+
+func (c *timedOutTapClient) Tap(context.Context, probelink.SelectorParam) error {
+	return context.DeadlineExceeded
+}
+
+// The selector proposal reads the visible texts and keys back out of the failure text. This pins the two ends together:
+// what a real step timeout writes is what ai.VisibleLists reads, quotes, escapes and cut items included.
+func TestStepTimeoutFailureTextIsWhatTheProposalParserReads(t *testing.T) {
+	long := strings.Repeat("long ", 9) // 45 characters, cut to 40 in the failure text
+	client := &timedOutTapClient{summaryClient{res: probelink.VisibleSummaryResult{
+		Texts: []string{"Save changes", `He said "hi"`, "Größe\n2", `a], keys: ["x`, long},
+		Keys:  []string{"save_btn", `odd"key`},
+	}}}
+	e := NewExecutor(client, nil, nil, 5*time.Second, false)
+	err := e.RunBody(context.Background(), []parser.Step{failingTap(9, "Save", false)})
+	if err == nil {
+		t.Fatal("the step must fail")
+	}
+	if fs := e.FailedSelector(err); fs == nil || fs.Selector != `"Save"` {
+		t.Fatalf("a timed-out tap is a failed selector step, got %+v", fs)
+	}
+	texts, keys, ok := ai.VisibleLists(err.Error())
+	if !ok {
+		t.Fatalf("the failure text does not end with a list the parser reads:\n%s", err)
+	}
+	if want := []string{"Save changes", `He said "hi"`, "Größe\n2", `a], keys: ["x`}; !slices.Equal(texts, want) {
+		t.Errorf("texts = %q, want %q (the cut item left out)", texts, want)
+	}
+	if want := []string{"save_btn", `odd"key`}; !slices.Equal(keys, want) {
+		t.Errorf("keys = %q, want %q", keys, want)
+	}
+	// A caller's prefix (a hook, a retry block) leaves the list at the end.
+	if _, _, ok := ai.VisibleLists(fmt.Errorf("before each: %w", err).Error()); !ok {
+		t.Error("a prefixed failure text lost its list")
 	}
 }

@@ -571,9 +571,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 			report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 		}
 		report.SetJUnitOptions(junitOptionsFromFlags(cmd))
-		if aiHeal, _ := cmd.Flags().GetBool("ai-heal"); aiHeal {
-			maybeAIHeal(ctx, statusW, cfg, results)
-		}
+		aiHeal, _ := cmd.Flags().GetBool("ai-heal")
+		healIfAsked(ctx, statusW, cfg, results, aiHeal)
 		if err := report.Report(results); err != nil {
 			return err
 		}
@@ -582,10 +581,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 			maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 		}
 
-		if !runner.AllPassed(results) {
-			return fmt.Errorf("%s", runner.Summary(results))
-		}
-		return nil
+		return failedRunError(results, nil)
 	}
 
 	// ── Single-device mode (default) ──
@@ -1407,9 +1403,8 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	// Optional and advisory: only sets the proposal text of failed results, before the report is written. Cannot fail.
-	if aiHeal, _ := cmd.Flags().GetBool("ai-heal"); aiHeal {
-		maybeAIHeal(ctx, statusW, cfg, results)
-	}
+	aiHeal, _ := cmd.Flags().GetBool("ai-heal")
+	healIfAsked(ctx, statusW, cfg, results, aiHeal)
 	if err := report.Report(results); err != nil {
 		return err
 	}
@@ -1487,10 +1482,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 	}
 
-	if !runner.AllPassed(results) {
-		return errTestFailed
-	}
-	return nil
+	return failedRunError(results, errTestFailed)
 }
 
 // generateCloudJSON serializes test results in the format expected by the

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/license"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
@@ -213,7 +215,11 @@ func TestMaybeAIHeal_NoAIBlockMakesNoRequest(t *testing.T) {
 func TestMaybeAIHeal_PassingRunMakesNoRequest(t *testing.T) {
 	model := newFakeModel(t, answering(`"Save changes"`))
 	results := []runner.TestResult{{TestName: "ok", Passed: true}, {TestName: "skipped", Skipped: true},
-		{TestName: "no selector", Error: errors.New("line 3: boom")}}
+		{TestName: "no selector", Error: errors.New("line 3: boom")},
+		// A result that passed is never sent, whatever else it carries (a retry block that passed on a later attempt).
+		{TestName: "passed with a selector", Passed: true, FailedSelector: &runner.FailedSelector{Line: 9, Step: `tap "Save"`, Selector: `"Save"`}},
+		{TestName: "passed with a selector and an error", Passed: true, Error: errors.New(healFailureText), FailedSelector: &runner.FailedSelector{Line: 9, Step: `tap "Save"`, Selector: `"Save"`}},
+		{TestName: "skipped with a selector", Skipped: true, Error: errors.New(healFailureText), FailedSelector: &runner.FailedSelector{Line: 9, Step: `tap "Save"`, Selector: `"Save"`}}}
 	var out bytes.Buffer
 	maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
 	if model.requests.Load() != 0 || out.Len() != 0 {
@@ -241,7 +247,7 @@ func TestMaybeAIHeal_KeyNeverReachesTheReportOrTheTerminal(t *testing.T) {
 			cfg.AI.APIKey = "${PROBE_HEAL_TEST_KEY}"
 			results := healResults("a.probe", 1)
 			// The failure text lists the key, so the "only what the failure lists" rule alone would let it through.
-			results[3].Error = fmt.Errorf(`line 9: tap "Save": Widget not found — visible texts: ["%s"]`, key)
+			results[3].Error = fmt.Errorf(`line 9: tap "Save": Widget not found — visible texts: ["%s"], keys: []`, key)
 			var out bytes.Buffer
 			maybeAIHeal(context.Background(), &out, cfg, results)
 			if model.requests.Load() != 1 {
@@ -270,7 +276,7 @@ func TestMaybeAIHeal_ModelTextIsBoundedInTheReport(t *testing.T) {
 			model := newFakeModel(t, handler)
 			results := healResults("a.probe", 1)
 			// The failure text lists the long text, so it would be accepted as a proposal if it were not cut first.
-			results[3].Error = fmt.Errorf(`line 9: tap "Save": Widget not found — visible texts: ["%s"]`, long)
+			results[3].Error = fmt.Errorf(`line 9: tap "Save": Widget not found — visible texts: ["%s"], keys: []`, long)
 			var out bytes.Buffer
 			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
 			p := results[3].Proposal
@@ -342,7 +348,7 @@ func TestMaybeAIHeal_SendsMaskedFailureTextAndNothingElse(t *testing.T) {
 	sysdialog.NoteSecret("hunter2-quorvex-99") // what the runner does when a step resolves a value
 	model := newFakeModel(t, answering("NONE"))
 	results := healResults("a.probe", 1)
-	results[3].Error = errors.New(healFailureText + ` typed "hunter2-quorvex-99"`)
+	results[3].Error = errors.New(strings.Replace(healFailureText, "Widget not found", `no widget after typing "hunter2-quorvex-99"`, 1))
 	maybeAIHeal(context.Background(), &bytes.Buffer{}, localAI(model.URL), results)
 	body, _ := model.lastBody.Load().(string)
 	if body == "" {
@@ -399,4 +405,244 @@ func TestAIHealFlagIsOptIn(t *testing.T) {
 	if f == nil || f.DefValue != "false" {
 		t.Fatalf("--ai-heal must exist and default to false: %+v", f)
 	}
+}
+
+// A proposal has to be exactly one listed text or one listed key. Every rejected answer here is a substring of the
+// failure text, which is what a looser check would accept.
+func TestMaybeAIHeal_KeepsOnlyAListedTextOrAListedKey(t *testing.T) {
+	for answer, want := range map[string]string{
+		`"Save changes"`: `"Save changes"`, "#save_btn": "#save_btn",
+		"#Save": "", "#Cancel": "", `"save_btn"`: "", `"Widget not found"`: "", `"visible texts"`: "", "#line": "", `"Sav"`: "", `"a"`: "",
+	} {
+		model := newFakeModel(t, answering(answer))
+		results := healResults("a.probe", 1)
+		var out bytes.Buffer
+		maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
+		p := results[3].Proposal
+		if p == nil || p.ProposedSelector != want || (want == "") != (p.Unavailable != "") {
+			t.Errorf("answer %s: got %+v, want proposal %q", answer, p, want)
+		}
+		if want == "" && strings.Contains(out.String(), "->") {
+			t.Errorf("answer %s: the terminal shows a proposal:\n%s", answer, out.String())
+		}
+	}
+}
+
+// A failure text with no list of visible texts and keys gives the model nothing to choose from: no request is sent for
+// it, it does not use up the per-run cap, and its entry says why.
+func TestMaybeAIHeal_AFailureWithoutTheVisibleListSendsNothing(t *testing.T) {
+	model := newFakeModel(t, answering(`"Save changes"`))
+	results := healResults("a.probe", 5)
+	for _, i := range []int{3, 4} {
+		results[i].Error = errors.New(`line 9: tap "Save": Widget not found`)
+	}
+	var out bytes.Buffer
+	maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
+	if n := model.requests.Load(); n != 3 {
+		t.Fatalf("requests = %d, want 3: one per failure that lists what was visible", n)
+	}
+	for _, i := range []int{3, 4} {
+		if p := results[i].Proposal; p == nil || p.ProposedSelector != "" || !strings.Contains(p.Unavailable, "does not list") {
+			t.Errorf("result %d: got %+v, want a reason and no proposal", i, p)
+		}
+	}
+	for _, i := range []int{5, 6, 7} {
+		if p := results[i].Proposal; p == nil || p.ProposedSelector != `"Save changes"` {
+			t.Errorf("result %d: got %+v, want a proposal", i, p)
+		}
+	}
+}
+
+func hasControlChar(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return r < 0x20 || (r >= 0x7f && r <= 0x9f) })
+}
+
+// What a model server sends is printed on the terminal. Control characters in it could clear the screen or draw a line
+// that looks like the run's own output.
+func TestMaybeAIHeal_ControlCharactersNeverReachTheTerminalOrTheReport(t *testing.T) {
+	const body = "boom\x1b[2J\x1b[31m\n  \u2713 All tests passed\r\x07"
+	for name, handler := range map[string]func(http.ResponseWriter, *http.Request){
+		"error body": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(body))
+		},
+		"answer": answering("\x1b[2J\"Save changes\"\x07"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			model := newFakeModel(t, handler)
+			results := healResults("a.probe", 1)
+			var out bytes.Buffer
+			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
+			p := results[3].Proposal
+			if p == nil || p.ProposedSelector != "" || p.Unavailable == "" {
+				t.Fatalf("got %+v, want a reason and no proposal", p)
+			}
+			if hasControlChar(p.Unavailable) {
+				t.Errorf("the report entry holds control characters: %q", p.Unavailable)
+			}
+			lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+			if len(lines) != 1 || hasControlChar(lines[0]) || !strings.HasPrefix(lines[0], "  AI selector proposal unavailable") {
+				t.Errorf("the terminal got more than the one plain line: %q", out.String())
+			}
+		})
+	}
+}
+
+// The text a model returns is masked a second time before it reaches the report. The first mask covers the failure text
+// as the runner writes it; the list is read back with Go's quoting rules, which accept more spellings than the runner
+// writes, so the second mask is what holds for an item spelled another way.
+func TestMaybeAIHeal_MasksTheAnswerAndTheReasonAgain(t *testing.T) {
+	const secret = "zeta-omega-quorvex-77"
+	sysdialog.NoteSecret(secret)
+	listed := `line 9: tap "Save" timed out after 5s (context deadline exceeded) — visible texts: ["\u007aeta-omega-quorvex-77"], keys: []`
+	if masked := sysdialog.ScrubKnown(listed); masked != listed {
+		t.Fatal("the fixture needs a failure text the first mask does not change")
+	}
+	for name, handler := range map[string]func(http.ResponseWriter, *http.Request){
+		"answer": answering(`"` + secret + `"`),
+		"reason": func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "cannot use "+secret, http.StatusBadRequest)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			model := newFakeModel(t, handler)
+			results := healResults("a.probe", 1)
+			results[3].Error = errors.New(listed)
+			var out bytes.Buffer
+			maybeAIHeal(context.Background(), &out, localAI(model.URL), results)
+			p := results[3].Proposal
+			if model.requests.Load() != 1 || p == nil {
+				t.Fatalf("requests=%d entry=%+v, want one request and an entry", model.requests.Load(), p)
+			}
+			entry, _ := json.Marshal(p)
+			if strings.Contains(p.ProposedSelector+p.Unavailable+out.String(), secret) || strings.Contains(string(entry), "omega-quorvex") {
+				t.Errorf("a masked value came back through the model: %s\n%s", entry, out.String())
+			}
+			if p.ProposedSelector != "" || p.Unavailable == "" {
+				t.Errorf("got %+v, want a reason and no proposal", p)
+			}
+		})
+	}
+}
+
+// The whole pass has a ceiling on top of ai.timeout. The test shortens the ceiling instead of waiting two minutes.
+func TestMaybeAIHeal_TheWholePassHasACeiling(t *testing.T) {
+	if selectorProposalCeiling != 2*time.Minute {
+		t.Fatalf("the ceiling is %s, want 2m", selectorProposalCeiling)
+	}
+	selectorProposalCeiling = 50 * time.Millisecond
+	t.Cleanup(func() { selectorProposalCeiling = 2 * time.Minute })
+	release := make(chan struct{})
+	defer close(release)
+	hanging := newFakeModel(t, func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	})
+	cfg := localAI(hanging.URL)
+	cfg.AI.Timeout = time.Minute // the per-request bound alone would hold the report for a minute
+	results := healResults("a.probe", 2)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		maybeAIHeal(context.Background(), &bytes.Buffer{}, cfg, results)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the pass outlived its ceiling")
+	}
+	if p := results[3].Proposal; p == nil || p.ProposedSelector != "" || p.Unavailable == "" {
+		t.Errorf("got %+v, want a reason and no proposal", p)
+	}
+	if hanging.requests.Load() != 1 || results[4].Proposal != nil {
+		t.Errorf("requests = %d, want 1: nothing is asked after the ceiling", hanging.requests.Load())
+	}
+}
+
+// --ai-heal is the only switch: without it the pass does not run at all, and with it the error `probe test` ends with
+// is the one it ends with without it.
+func TestHealIfAsked_FlagOffSendsNothingAndTheExitIsTheSameEitherWay(t *testing.T) {
+	model := newFakeModel(t, answering(`"Save changes"`))
+	cfg := localAI(model.URL)
+
+	off := healResults("a.probe", 2)
+	var out bytes.Buffer
+	healIfAsked(context.Background(), &out, cfg, off, false)
+	if model.requests.Load() != 0 || out.Len() != 0 || off[3].Proposal != nil {
+		t.Fatalf("flag off: requests=%d output=%q proposal=%+v", model.requests.Load(), out.String(), off[3].Proposal)
+	}
+
+	on := healResults("a.probe", 2)
+	healIfAsked(context.Background(), &out, cfg, on, true)
+	if model.requests.Load() != 2 || on[3].Proposal == nil || on[3].Proposal.ProposedSelector != `"Save changes"` {
+		t.Fatalf("flag on: requests=%d proposal=%+v", model.requests.Load(), on[3].Proposal)
+	}
+	if outcome(t, on) != outcome(t, off) {
+		t.Errorf("the outcome differs with the flag on:\n%s\n---\n%s", outcome(t, on), outcome(t, off))
+	}
+	// Both run modes end with failedRunError: the single-device mode with errTestFailed, the parallel mode with the summary.
+	if got := failedRunError(on, errTestFailed); got != errTestFailed || failedRunError(off, errTestFailed) != errTestFailed {
+		t.Errorf("single-device exit with the flag on = %v, want errTestFailed", got)
+	}
+	gotOn, gotOff := failedRunError(on, nil), failedRunError(off, nil)
+	if gotOn == nil || gotOff == nil || gotOn.Error() != gotOff.Error() || gotOn.Error() != runner.Summary(off) {
+		t.Errorf("parallel exit: on=%v off=%v, want the run summary both times", gotOn, gotOff)
+	}
+	passed := []runner.TestResult{{TestName: "ok", Passed: true}, {TestName: "skipped", Skipped: true}}
+	if failedRunError(passed, errTestFailed) != nil || failedRunError(passed, nil) != nil {
+		t.Error("a run with no failed test must exit clean")
+	}
+}
+
+// The two uploads are built from the run's results. A result that carries a proposal must not take it along: this fails
+// if either upload is built from the results as they are.
+func TestUploadsNeverCarryASelectorProposal(t *testing.T) {
+	withProposal := func() []runner.TestResult {
+		results := healResults("tests/login.probe", 1)
+		results[3].Proposal = &runner.SelectorProposal{Advisory: selectorProposalAdvisory, FailedSelector: `"Save"`, ProposedSelector: `"Save changes"`, Model: "fake-model", Provider: "local", Location: "local"}
+		if !strings.Contains(reportJSON(t, results), `"selector_proposal"`) {
+			t.Fatal("the fixture's own report must carry the proposal")
+		}
+		return results
+	}
+	check := func(t *testing.T, body string) {
+		t.Helper()
+		if !strings.Contains(body, "boom 0") {
+			t.Fatalf("the upload does not carry the failed test:\n%s", body)
+		}
+		for _, leak := range []string{"selector_proposal", "proposed_selector", selectorProposalAdvisory, "fake-model"} {
+			if strings.Contains(body, leak) {
+				t.Errorf("the upload carries %q", leak)
+			}
+		}
+	}
+	t.Run("hosted upload", func(t *testing.T) {
+		ciEnv(t)
+		t.Setenv("HOME", t.TempDir())
+		pub, key := signedTestKey(t, license.Claims{ID: "l", Customer: "acme", Plans: []license.Plan{license.PlanProbeCloud}, Seats: 1, Expires: time.Now().Add(time.Hour)})
+		t.Setenv(license.KeyEnv, pub)
+		if err := runLicenseActivate(licenseActivateCmd, []string{key}); err != nil {
+			t.Fatal(err)
+		}
+		var body []byte
+		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { body, _ = io.ReadAll(r.Body) }))
+		defer srv.Close()
+		results := withProposal()
+		hostedUpload(uploadCmd(true, false), &bytes.Buffer{}, &config.Config{Hosted: config.HostedConfig{URL: srv.URL}}, results, runner.RunMetadata{ProbeVersion: "x", Platform: "ios"}, "simulator")
+		check(t, string(body))
+		if results[3].Proposal == nil {
+			t.Error("the upload removed the proposal from the run's own results")
+		}
+	})
+	t.Run("local upload", func(t *testing.T) {
+		useTempHome(t)
+		repo := localGitRepo(t, "git@github.com:owner/name.git")
+		cmd := localUploadCmd(true)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		localUpload(cmd, &bytes.Buffer{}, &config.Config{}, withProposal(), runner.RunMetadata{Platform: "ios"}, "simulator", repo)
+		check(t, out.String())
+	})
 }

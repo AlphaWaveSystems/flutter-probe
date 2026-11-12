@@ -96,8 +96,9 @@ probe triage --input reports/results.json -o reports/triage.md
 probe test tests/ --ai-heal --format json -o reports/results.json
 ```
 
-When a step fails on its text or key selector (`tap "Save"`, `see #total`), the model is asked for one
-replacement, and the failed result in the JSON report gets a `selector_proposal`:
+When a step fails on its text or key selector (`tap "Save"`, `see #total`) and the failure text lists what
+was visible on screen, the model is asked for one replacement, and the failed result in the JSON report
+gets a `selector_proposal`:
 
 ```json
 "selector_proposal": {
@@ -118,13 +119,19 @@ What it does and does not do:
 - **The step stays failed.** The results, the summary and the exit code are the same when the model
   answers, fails or times out. Nothing is written to the `.probe` file, and the proposal is not tried
   against the app. You decide whether to edit the test.
-- **Only what the failure text lists.** A proposal is kept only when it is a `"text"` or a `#key` that the
-  failure text lists as visible on screen. Anything else becomes an `unavailable` reason with no
-  `proposed_selector`. The list of visible texts and keys is added to a failure when a step times out, so
-  other failures usually get no proposal.
-- **Bounded.** One request per failed step, at most 3 requests per run, each limited by `ai.timeout`, no
-  retries, and none after a failed request. Model text is cut to 200 bytes, and the API key is removed
-  from it.
+- **Only what the failure text lists.** A step that runs into its timeout ends its failure text with two
+  lists: the texts and the widget keys that were visible on screen. A proposal is kept only when it is
+  exactly one of those texts, written as `"text"`, or exactly one of those keys, written as `#key`. A part
+  of a listed text, a text offered as a key, a key offered as a text, or any other word of the failure text
+  is not kept, and the entry gets an `unavailable` reason with no `proposed_selector`.
+- **No list, no request.** A failure text that does not end with those lists (most failures other than a
+  step timeout) is not sent to the model. Its entry says so in `unavailable`. The failure text shows at
+  most 40 characters of each listed text and marks a longer one with `…`. A text cut this way is not the
+  whole text, so it is never proposed.
+- **Bounded.** At most one request per failed step, at most 3 requests per run, each limited by
+  `ai.timeout`, no retries, none after a failed request, and two minutes for all of them together. Model
+  text is cut to 200 bytes, the API key is removed from it, and control characters in it are replaced by
+  spaces before it is printed or written to the report.
 - **What is sent.** The failed step, its selector and the failure text, with resolved environment values
   masked. This is the text `--ai-triage` sends. No screenshot is sent.
 - **Where it shows.** The JSON report and one line per proposal in the terminal. `location` is `local` for

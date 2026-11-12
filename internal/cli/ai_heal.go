@@ -18,11 +18,36 @@ const maxSelectorProposals = 3
 // selectorProposalAdvisory is the fixed label every proposal carries in the report.
 const selectorProposalAdvisory = "Proposed by a language model from the failure text. Not applied to the test file and not verified against the app. It does not change this result."
 
+// selectorProposalCeiling bounds the whole pass, on top of the per-request timeouts, so a wedged model server cannot hold
+// the report back for long. A variable so a test can shorten it.
+var selectorProposalCeiling = 2 * time.Minute
+
+// healIfAsked runs the selector proposal pass when `probe test` was given --ai-heal, and does nothing otherwise. Both
+// run modes call it right before the report is written.
+func healIfAsked(ctx context.Context, w io.Writer, cfg *config.Config, results []runner.TestResult, asked bool) {
+	if asked {
+		maybeAIHeal(ctx, w, cfg, results)
+	}
+}
+
+// failedRunError is the error `probe test` ends with: nil when every test passed, otherwise failed (errTestFailed), or
+// the run summary when failed is nil. It reads the results and nothing else, so no advisory flag can change the exit.
+func failedRunError(results []runner.TestResult, failed error) error {
+	if runner.AllPassed(results) {
+		return nil
+	}
+	if failed != nil {
+		return failed
+	}
+	return fmt.Errorf("%s", runner.Summary(results))
+}
+
 // maybeAIHeal implements `probe test --ai-heal`. It runs after the results are final and before the report is written,
 // and it only sets the advisory Proposal of a failed result: it never changes Passed, Skipped or Error, never writes a
-// test file, and cannot return an error. With no ai: block it makes no request. One request per failed selector step
-// (file, line and selector), at most maxSelectorProposals requests per run, each bounded by ai.timeout; after the first
-// failed request it stops asking, and that step's entry carries the cleaned reason.
+// test file, and cannot return an error. With no ai: block it makes no request. At most one request per failed selector
+// step (file, line and selector) and none for a failure text that does not list the visible texts and keys, at most
+// maxSelectorProposals requests per run, each bounded by ai.timeout; after the first failed request it stops asking, and
+// that step's entry carries the cleaned reason.
 func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results []runner.TestResult) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -48,8 +73,7 @@ func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results [
 		fmt.Fprintf(w, "  AI selector proposal skipped: %v (tests are unaffected)\n", err)
 		return
 	}
-	// A ceiling on top of the per-request timeouts, so a wedged model server cannot hold the report back for long.
-	hctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	hctx, cancel := context.WithTimeout(ctx, selectorProposalCeiling)
 	defer cancel()
 
 	seen := map[string]*runner.SelectorProposal{}
@@ -65,7 +89,6 @@ func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results [
 			skipped++
 			continue
 		}
-		requests++
 		// The failure text can hold a resolved environment value: the model gets it masked, like triage does, and what
 		// comes back is masked again before it reaches the report.
 		a := ai.ProposeSelector(hctx, c, ai.SelectorFailure{
@@ -73,19 +96,27 @@ func maybeAIHeal(ctx context.Context, w io.Writer, cfg *config.Config, results [
 			Step:     fs.Step,
 			Error:    sysdialog.ScrubKnown(results[i].Error.Error()),
 		}, cfg.AI.Timeout)
+		if a.Requested {
+			requests++
+		}
+		proposed, unavailable := sysdialog.ScrubKnown(a.Proposed), sysdialog.ScrubKnown(a.Unavailable)
+		if proposed != a.Proposed {
+			// The listed text was written before its value was known to be masked. A masked selector names no widget.
+			proposed, unavailable = "", "the proposed selector held a masked value"
+		}
 		p := &runner.SelectorProposal{
 			Advisory:         selectorProposalAdvisory,
 			Line:             fs.Line,
 			FailedSelector:   fs.Selector,
-			ProposedSelector: sysdialog.ScrubKnown(a.Proposed),
-			Unavailable:      sysdialog.ScrubKnown(a.Unavailable),
+			ProposedSelector: proposed,
+			Unavailable:      unavailable,
 			Model:            ai.ModelName(cfg.AI.Provider, cfg.AI.Model),
 			Provider:         cfg.AI.Provider,
 			Location:         ai.Location(cfg.AI.Provider, endpoint),
 		}
 		seen[key] = p
 		results[i].Proposal = p
-		if a.Proposed != "" {
+		if proposed != "" {
 			fmt.Fprintf(w, "  AI selector proposal (advisory, not applied, not verified) for %s line %d: %s -> %s\n", results[i].File, fs.Line, p.FailedSelector, p.ProposedSelector)
 		} else {
 			fmt.Fprintf(w, "  AI selector proposal unavailable for %s line %d: %s (tests are unaffected)\n", results[i].File, fs.Line, p.Unavailable)
