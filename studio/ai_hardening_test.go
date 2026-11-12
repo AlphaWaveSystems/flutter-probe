@@ -130,7 +130,9 @@ func TestErrorBodyThatEchoesAKeyIsCutAndRedacted(t *testing.T) {
 	}
 }
 
-// captureStderr runs fn with stderr and the standard log both going to a pipe, and returns everything written.
+// captureStderr runs fn with os.Stderr and the standard log's writer both going to a pipe, and returns what was written
+// through those two. A raw write to file descriptor 2 (the println builtin, cgo) does not go through either and is not
+// captured.
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
