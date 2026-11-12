@@ -1003,6 +1003,31 @@ func (dc *DeviceContext) biometricCapture(ctx context.Context, match bool) error
 	return nil
 }
 
+// isNotificationAlert reports whether dialogs show the iOS notification-permission alert: Allow and Don't Allow, and no
+// allow-once button (that is the location alert). While an App Tracking Transparency alert is on screen it reports
+// false. Its decline button has the deny role too, and a tap by label for "Allow" could land on that alert's Allow.
+func isNotificationAlert(dialogs []sysdialog.Dialog) bool {
+	if isTrackingPromptShowing(dialogs) {
+		return false
+	}
+	for _, dlg := range dialogs {
+		if dlg.HasRoles(sysdialog.RoleAllow, sysdialog.RoleDeny) && !dlg.HasRoles(sysdialog.RoleAllowOnce) {
+			return true
+		}
+	}
+	return false
+}
+
+// isTrackingPromptShowing reports whether one of dialogs is the App Tracking Transparency alert.
+func isTrackingPromptShowing(dialogs []sysdialog.Dialog) bool {
+	for _, dlg := range dialogs {
+		if dlg.IsTrackingPrompt() {
+			return true
+		}
+	}
+	return false
+}
+
 // answerNotificationAlert taps button on the iOS notification-permission
 // alert, if one is showing within a few seconds. There is no simctl service
 // for notifications, so this is the only way to answer the prompt (FP-16).
@@ -1010,27 +1035,34 @@ func (dc *DeviceContext) biometricCapture(ctx context.Context, match bool) error
 // that keeps `allow permission "notifications"` idempotent. Needs the iOS
 // system-dialog driver (Xcode).
 func (dc *DeviceContext) answerNotificationAlert(ctx context.Context, button string) error {
+	return dc.answerNotificationAlertWithin(ctx, button, 5*time.Second)
+}
+
+// answerNotificationAlertWithin is answerNotificationAlert with the given wait for the alert.
+func (dc *DeviceContext) answerNotificationAlertWithin(ctx context.Context, button string, wait time.Duration) error {
 	d, err := dc.SystemDriver(ctx)
 	if err != nil {
 		return fmt.Errorf("notifications: %w", err)
 	}
-	// The notification alert is recognised by its buttons (Allow + Don't Allow, in any language),
-	// not by its English title, so it works on a device set to any language.
-	deadline := time.Now().Add(5 * time.Second)
+	// The notification alert is recognised by its buttons (Allow + Don't Allow),
+	// not by its English title. Its labels come from labels_table.go, so a device language
+	// missing from that table is not recognised.
+	deadline := time.Now().Add(wait)
 	for {
 		dialogs, err := d.Dialogs(ctx)
 		if err != nil {
 			return fmt.Errorf("notifications: %w", err)
 		}
-		for _, dlg := range dialogs {
-			if dlg.HasRoles(sysdialog.RoleAllow, sysdialog.RoleDeny) && !dlg.HasRoles(sysdialog.RoleAllowOnce) {
-				if _, err := d.Tap(ctx, button, ""); err != nil {
-					return fmt.Errorf("notifications: %w", err)
-				}
-				return nil
+		if isNotificationAlert(dialogs) {
+			if _, err := d.Tap(ctx, button, ""); err != nil {
+				return fmt.Errorf("notifications: %w", err)
 			}
+			return nil
 		}
 		if time.Now().After(deadline) {
+			if isTrackingPromptShowing(dialogs) {
+				fmt.Printf("    \033[33m⚠\033[0m  an App Tracking Transparency alert is showing, so the notification alert was not answered\n")
+			}
 			return nil // no alert: nothing to answer
 		}
 		select {

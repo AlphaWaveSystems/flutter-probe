@@ -239,7 +239,7 @@ var sysTypeCmd = &cobra.Command{
 
 var sysDismissCmd = &cobra.Command{
 	Use:   "dismiss",
-	Short: "Dismiss the system dialog via Cancel / Don't Allow / Not Now (no-op if none)",
+	Short: "Dismiss the system dialog via Cancel / Don't Allow / Not Now / Ask App Not to Track (no-op if none)",
 	Args:  cobra.NoArgs,
 	RunE: withDriver(func(ctx context.Context, d sysdialog.Driver, cmd *cobra.Command, _ []string) error {
 		title, _ := cmd.Flags().GetString("title")

@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "4270861a86aee40bd8fb75fcbd86a92e53cd2519760dc2d69a2e3d8cd39526f8";
+export const SOURCE_SHA256 = "1a60af252b02157b15d18b2d219cdb25061c466e3cc9e6fc5d0d2dfc5f437611";
 
 export const COMMANDS = [
   {
@@ -290,7 +290,7 @@ export const COMMANDS = [
   {
     "command": "dismiss system dialog",
     "syntax": "dismiss system dialog",
-    "description": "Tap Cancel / Don't Allow / Not Now; no-op when nothing is showing",
+    "description": "Tap Cancel / Don't Allow / Not Now / Ask App Not to Track; no-op when nothing is showing",
     "category": "Wait"
   },
   {

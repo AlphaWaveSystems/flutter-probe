@@ -21,13 +21,13 @@ const (
 // englishRoles are the English (iOS and Android) labels of each role, folded.
 var englishRoles = map[string]Role{
 	"allow": RoleAllow, "yes": RoleAllow,
-	"don't allow": RoleDeny, "deny": RoleDeny, "deny & don't ask again": RoleDeny, "block": RoleDeny,
+	"don't allow": RoleDeny, "deny": RoleDeny, "deny & don't ask again": RoleDeny, "block": RoleDeny, "ask app not to track": RoleDeny,
 	"allow once": RoleAllowOnce, "only this time": RoleAllowOnce, "this time only": RoleAllowOnce,
 	"allow while using app": RoleAllowWhileUsing, "while using the app": RoleAllowWhileUsing,
 	"allow while using the app": RoleAllowWhileUsing,
 	"allow all the time": RoleAllowAlways, "allow always": RoleAllowAlways,
 	"ok": RoleOK, "got it": RoleOK, "continue": RoleOK,
-	"cancel": RoleCancel, "no thanks": RoleCancel, "no": RoleCancel,
+	"cancel": RoleCancel, "no thanks": RoleCancel, "no, thanks": RoleCancel, "no": RoleCancel,
 	"not now": RoleNotNow, "later": RoleNotNow, "maybe later": RoleNotNow, "ask me later": RoleNotNow,
 	"open": RoleOpen,
 	"close": RoleClose, "dismiss": RoleClose,
@@ -43,8 +43,8 @@ var androidIDRoles = map[string]Role{
 	"permission_deny_and_dont_ask_again_button": RoleDeny,
 }
 
-// extraLabelRole is filled by the measured iOS label table (labels_table.go) and by
-// user-supplied labels, to translate a button label of any language to its role.
+// extraLabelRole is filled by the iOS label tables (labels_table.go), to translate a button label
+// of one of those locales to its role.
 var extraLabelRole func(folded string) (Role, bool)
 
 // RoleOf returns the role of a button label in any supported language.
@@ -133,7 +133,7 @@ func MatchButton(d Dialog, wanted string) int {
 // dismissRoles are tried in order by Dismiss.
 var dismissRoles = []Role{RoleCancel, RoleDeny, RoleNotNow, RoleClose}
 
-// DismissButton picks the cancel-like button of d (by role, in any language), or -1.
+// DismissButton picks the cancel-like button of d by role, for the languages the label tables cover, or -1.
 func DismissButton(d Dialog) int {
 	for _, want := range dismissRoles {
 		for i := range d.Buttons {

@@ -547,7 +547,7 @@ Returns a short probable cause and next step per failure. It never re-runs tests
 	{
 		Name: "system_dialog",
 		Description: `Inspect and answer OS-level system dialogs that live outside the Flutter app and are invisible to get_widget_tree: iOS permission alerts, the StoreKit "Sign in to Apple Account" sheet, the app's iOS share (activity) sheet, Android permission dialogs. Works on iOS simulators (needs Xcode; the driver downloads on first use) and Android emulators/devices.
-Actions: list (titles, buttons, fields of what is showing), see, tap (needs button), dismiss (Cancel / Don't Allow / Not Now; closes a share sheet via its Close button, a tap outside or a swipe down; no-op if none), wait (appears; set gone=true to wait for it to disappear), sign-in-sandbox (StoreKit sandbox tester from the PROBE_SANDBOX_USER / PROBE_SANDBOX_PASSWORD environment variables; no-op if no sheet shows).
+Actions: list (titles, buttons, fields of what is showing), see, tap (needs button), dismiss (Cancel / Don't Allow / Not Now / Ask App Not to Track; closes a share sheet via its Close button, a tap outside or a swipe down; no-op if none), wait (appears; set gone=true to wait for it to disappear), sign-in-sandbox (StoreKit sandbox tester from the PROBE_SANDBOX_USER / PROBE_SANDBOX_PASSWORD environment variables; no-op if no sheet shows).
 Typing into system fields is intentionally not available here so secrets never pass through an agent: use the ProbeScript step type "$ENV_VAR" into system field "Password" in a test, which reads the environment and masks the value.`,
 		InputSchema: mcpSchema{
 			Type:     "object",

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 - **Studio: two leftovers nothing used.** The `discoveryContext` helper in `studio/wifi_discovery.go` was never called (WiFi discovery builds its own context), and `studio/frontend/src/app.css` held Wails starter-template styles that nothing imported. No behavior changes. The third item in the issue, a commented-out `replace` in `studio/go.mod`, was already removed in #477. (#401)
+### Changed
+- **The system-dialog language claims say what is covered.** Permission buttons (allow, deny, allow once, allow while using) are matched by role in the 55 iOS 26.5 locales, and on Android for dialogs that use the stock permission controller ids. OK, cancel, not now, open and close are English only. The iOS label table writes its no-break spaces and zero-width non-joiners as escapes (the same bytes). Tests cover the ATT alert in either order and the invisible-character locales.
+- **The embedded license key list has a test.** The test checks each embedded key's key id and Ed25519 public key, and that no key id is listed twice. It passes on the empty list in this release. A license signed with the matching private key verifies once its key is embedded, and one signed with another key is refused. Embedding the production public key before a client release lets customers upload reports is a manual release checklist item; no test enforces it. Verification itself is unchanged.
+
+### Fixed
+- **`dismiss system dialog` and button matching know the iOS system alerts in the 55 locales of the iOS 26.5 runtime.** On iOS, `dismiss system dialog` and `probe system-dialog dismiss` now tap the decline button of the App Tracking Transparency alert ("Ask App Not to Track" in English, with its translation in each of those 55 locales). `tap "Don't Allow"` on that alert taps the same decline button. `allow permission "notifications"` and `deny permission "notifications"` no longer answer the tracking alert: they skip it and wait for the notification alert. The standard permission alerts and the location alert (allow once, allow while using app) are recognised the same way. The labels are the system's own localization strings in that runtime; 27 of those languages were also measured on a device, and the table agrees with the measurements. On Android, "No, thanks" counts as a cancel button. The iOS driver's own English fallback list has the same ATT label; that part reaches users with the next `probe-ios-driver.zip`.
 
 ## [0.26.1] - 2026-10-26
 

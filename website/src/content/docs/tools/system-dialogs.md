@@ -3,9 +3,11 @@ title: System Dialogs
 description: Drive OS-level dialogs — permission alerts, the iOS share sheet, the StoreKit "Sign in to Apple Account" sheet, Android permission dialogs — from ProbeScript or the command line.
 ---
 
-> **Any device language.** Buttons are resolved by role (allow, deny, allow once, allow while using, OK, cancel, not now, open, close):
-> `tap "Don't Allow" in system dialog` finds "Nicht erlauben" on a German device. Android uses the permission dialog's
-> language-independent resource ids; iOS uses a table of labels measured on real simulators (allow, deny, allow once, allow while using in 27 languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional)). An exact label always wins over a role.
+> **Device language.** Permission buttons (allow, deny, allow once, allow while using) are resolved by role, in the device's language:
+> `tap "Don't Allow" in system dialog` finds "Nicht erlauben" on a German device. On iOS the labels are a table for the 55 locales of the
+> iOS 26.5 runtime, read from the system's own localization strings (the App Tracking Transparency decline is included). Android works in any language on the stock permission controller's dialogs (OEM permission screens without those ids are not covered), matched by their language-independent
+> resource ids.
+> 27 of those iOS languages were also measured on real simulators: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). OK, cancel, not now, open and close are known only in English: in another language, use the exact label. An exact label always wins over a role.
 > Matching also folds case, accents and typographic apostrophes (`Don’t Allow` = `don't allow`).
 
 > **Notifications on iOS.** The system keeps the Allow / Don't Allow decision per app for good, and `simctl` has no command to
@@ -43,8 +45,13 @@ tap "Allow" in system dialog optional
   same, so `tap "Don't Allow"` matches iOS's "Don’t Allow".
 - **Title filter**: an optional second string narrows to a dialog whose text contains it. Without one, the first
   system dialog is used.
-- **`dismiss system dialog`** taps the first of Cancel, Don't Allow, Not Now, Close, Dismiss, Later, No Thanks. It
+- **`dismiss system dialog`** taps the first of Cancel, Don't Allow, Not Now, Close, Dismiss, Later, No Thanks, Ask App Not to Track (the decline button of the App Tracking Transparency alert, in the 55 iOS locales of the iOS 26.5 runtime). It
   does nothing (and passes) when no dialog is showing.
+- **`tap "Don't Allow"`** on the App Tracking Transparency alert taps its decline button ("Ask App Not to Track", or its translation).
+  Both have the deny role, so this is the intended match: the decline is the deny button of that alert.
+- **Notifications and the tracking alert.** `allow permission "notifications"` and `deny permission "notifications"` never answer the
+  App Tracking Transparency alert. While that alert is on screen they skip the notification alert, and if it is still showing when they
+  stop waiting they print a warning and change nothing.
 - **`optional`** on any step turns "no dialog showed up" into a warning instead of a failure, which keeps flows
   idempotent.
 - Failures say what *is* showing: `... (showing: "Allow Notifications?" [Allow | Don’t Allow])`.

@@ -1,6 +1,6 @@
 ---
 title: Testing localized apps
-description: Write one FlutterProbe suite that runs in every app language and on devices set to any language - selectors, loose text matching, alternatives and system dialogs.
+description: Write one FlutterProbe suite that runs in every app language and on devices set to other languages - selectors, loose text matching, alternatives and system dialogs.
 ---
 
 FlutterProbe tests are written once and have to survive translation. This page is the playbook, in the order of what to
@@ -39,20 +39,21 @@ Marks that carry meaning (Indic vowel signs, Thai tone marks) are kept, so words
 When the label differs per language, list them: `see any of "Save", "Speichern", "Guardar"`,
 `wait until any of "Welcome", "Willkommen"`. For exact text use `see "0 ml" matching "^0 ml$"`.
 
-## 4. System dialogs in any device language
+## 4. System dialogs in the device's language
 
-Permission alerts and other OS dialogs are drawn in the **device** language. A button is resolved by its **role**
-(allow, deny, allow once, allow while using, OK, cancel, not now, open, close), so the script you write in English works on a
-German or Japanese device:
+Permission alerts are drawn in the **device** language. Their buttons are resolved by **role** (allow, deny, allow once,
+allow while using), so the script you write in English works on a German or Japanese device. On iOS that covers the 55 locales
+of the iOS 26.5 runtime; on Android the stock permission controller's resource ids work in any language (OEM permission screens without those ids are not covered). OK, cancel, not now, open and
+close are known only in English, so use the exact label for them there. `deny permission "notifications"` answers the notification alert by its Allow and Don't Allow labels; it has not been run against a real notification alert in every language:
 
 ```probe
 tap "Don't Allow" in system dialog      # finds "Nicht erlauben", "許可しない", ...
 deny permission "notifications"
-dismiss system dialog                    # the cancel-like button in the device's language
+dismiss system dialog                    # declines a permission or tracking alert, in the device's language
 ```
 
-On Android the roles come from the permission dialog's language-independent resource ids; on iOS from a table of labels measured
-on real simulators for each language. Measured for allow, deny, allow once and allow while using in 27 languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). `ok`, `cancel` and `open` labels outside English are not measured yet (use the exact label, or `dismiss system dialog`). An exact label of the device always wins over a role.
+On Android the roles come from the language-independent resource ids of the stock permission controller (OEM permission screens without those ids are not covered); on iOS from a table of labels for the 55
+locales of the iOS 26.5 runtime, read from the system's own localization strings (allow, deny including the App Tracking Transparency decline, allow once, allow while using). Measured on real simulators for allow, deny, allow once and allow while using in 27 of those languages: English, German, French, Spanish, Italian, Portuguese (BR), Dutch, Swedish, Danish, Norwegian (Bokmål), Finnish, Polish, Czech, Turkish, Russian, Ukrainian, Greek, Hebrew, Arabic, Hindi, Thai, Vietnamese, Indonesian, Japanese, Korean, Chinese (Simplified and Traditional). The other 28 locales come from the runtime strings only and are not measured on a device. The App Tracking Transparency decline was checked live on a simulator in English, German, French, Japanese and Arabic. The `ok`, `cancel`, `not now`, `open` and `close` roles are known only in English: in another language, use the exact label. `dismiss system dialog` declines a permission or tracking alert in the 55 iOS locales, because its decline is a deny button, but it does not know other cancel buttons in other languages. An exact label of the device always wins over a role.
 
 ## Changing the app language
 
