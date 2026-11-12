@@ -217,7 +217,7 @@
             </label>
             <label class="settings-check"><input id="settings-ai-vision" type="checkbox" /> The model accepts images</label>
             <label class="settings-check"><input id="settings-ai-remote" type="checkbox" /> Allow an address that is not this machine</label>
-            <p id="settings-ai-plain-key" class="dim" hidden>probe.yaml holds a plain key, which Studio does not use. Move the key to the keychain, or name an environment variable instead.</p>
+            <p id="settings-ai-plain-key" class="dim" hidden>probe.yaml holds a plain key, which Studio does not use and does not change. Save the key in the keychain and delete that line, or name an environment variable here.</p>
             <div class="settings-actions">
               <button type="button" id="btn-ai-test" class="btn">Test connection</button>
             </div>
@@ -233,10 +233,10 @@
     <div id="ai-preview-overlay" class="overlay" hidden>
       <div class="overlay-card">
         <div class="overlay-header">
-          <h2>Before the first message</h2>
+          <h2>Before this message</h2>
         </div>
         <p class="dim">
-          This is what the chat sends to the AI provider, with credentials redacted. Nothing is sent until you press Send. You see this once per session.
+          This is what the chat would send to the AI provider now, with credentials redacted. Nothing is sent until you press Send. You see this again when the destination changes.
         </p>
         <pre id="ai-preview-text" class="ai-preview-text"></pre>
         <div class="settings-actions">

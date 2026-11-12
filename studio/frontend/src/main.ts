@@ -265,6 +265,7 @@ async function pickWorkspace() {
     if (!path) return;
     localStorage.setItem(WORKSPACE_KEY, path);
     await SetWorkspace(path);
+    resetAIPreview();
     workspaceRoot = path;
     refreshFiles(path);
     toast(`Workspace: ${path}`, "success", 1800);
@@ -398,9 +399,19 @@ $("settings-overlay").addEventListener("click", (e) => {
 
 // ---- AI provider (Settings) and the first-send preview -----------------
 
-// aiPreviewSeen is true once this session has shown the preview of a chat message. The check runs once per session, and
-// again after the provider settings are saved (R10).
-let aiPreviewSeen = false;
+// aiPreviewConfirmed is the "Sent to:" line of the last preview the person confirmed with Send. A message whose preview names a
+// different destination is shown again, and so is the first one after the workspace, the provider settings or the saved key
+// change. The gate lives in the window: Chat and SuggestSelectorFix send without it, also through the headless bridge.
+let aiPreviewConfirmed: string | null = null;
+
+function resetAIPreview(): void {
+  aiPreviewConfirmed = null;
+}
+
+// previewLabel is the destination line PreviewAIChat puts first, such as "Sent to: local endpoint http://127.0.0.1:11434/v1, model m".
+function previewLabel(preview: string): string {
+  return preview.split("\n", 1)[0];
+}
 
 // The key is never in the form. probe.yaml names only the environment variable, and the keychain holds a saved key.
 function fillAIForm(s: main.AISettings): void {
@@ -515,9 +526,10 @@ $("btn-settings-save").addEventListener("click", async () => {
     aiContextWidgetTree: ($("settings-ai-widget-tree") as HTMLInputElement).checked,
   });
   try {
-    await SaveWorkspaceSettings(workspaceRoot, settings);
+    // The AI form is saved first: it is the one that can be refused, and nothing is written when it is.
     await SaveAISettings(workspaceRoot, readAIForm());
-    aiPreviewSeen = false; // a changed provider is shown again before the next first message
+    await SaveWorkspaceSettings(workspaceRoot, settings);
+    resetAIPreview(); // changed provider settings are shown again before the next message
     void updateChatContextNote();
     toast(`Saved probe.yaml in ${workspaceRoot}`, "success", 2200);
     closeSettingsOverlay();
@@ -1249,6 +1261,7 @@ initDeviceSettings();
   if (ws) {
     localStorage.setItem(WORKSPACE_KEY, ws);
     await SetWorkspace(ws);
+    resetAIPreview();
     workspaceRoot = ws;
     refreshFiles(ws);
   } else {
@@ -1339,25 +1352,45 @@ async function updateChatContextNote(): Promise<void> {
   note.hidden = text === "";
 }
 
+// chatSending is true while a message is waiting for its preview or for the provider. A second Enter or click in that time
+// is ignored, so one Send cannot answer two messages.
+let chatSending = false;
+
 async function sendChat() {
+  if (chatSending) return;
+  chatSending = true;
+  try {
+    await sendChatTurn();
+  } finally {
+    chatSending = false;
+  }
+}
+
+async function sendChatTurn() {
   const input = $("chat-input") as HTMLTextAreaElement;
   const text = input.value.trim();
   if (!text) return;
 
-  if (!aiPreviewSeen) {
-    // The first message of a session shows what it carries before anything is sent. Cancel keeps the text in the input.
-    let preview: string;
-    try {
-      preview = await PreviewAIChat([...chatHistory, { role: "user", content: text }], model.getValue());
-    } catch (err) {
-      appendChatMessage("system", `Error: ${err}`);
-      return;
-    }
-    if (!(await confirmFirstChatSend(preview))) {
+  // A message shows what it would send now whenever its destination is not the one the person last confirmed. Cancel keeps the
+  // text in the input. The request builds its own turn when it runs, so a change in between, such as a new run result, can
+  // make it differ from what was shown.
+  let preview: string;
+  try {
+    preview = await PreviewAIChat([...chatHistory, { role: "user", content: text }], model.getValue());
+  } catch (err) {
+    appendChatMessage("system", `Error: ${err}`);
+    return;
+  }
+  const label = previewLabel(preview);
+  if (label !== aiPreviewConfirmed) {
+    input.disabled = true;
+    const send = await confirmFirstChatSend(preview);
+    input.disabled = false;
+    if (!send) {
       input.focus();
       return;
     }
-    aiPreviewSeen = true;
+    aiPreviewConfirmed = label;
   }
 
   input.value = "";
@@ -1445,6 +1478,7 @@ $("btn-api-key-save").addEventListener("click", async () => {
   }
   try {
     await SetAPIKey(key);
+    resetAIPreview();
     toast("API key saved to keychain.", "success");
     closeApiKeyOverlay();
   } catch (err) {
@@ -1455,6 +1489,7 @@ $("btn-api-key-save").addEventListener("click", async () => {
 $("btn-api-key-delete").addEventListener("click", async () => {
   try {
     await DeleteAPIKey();
+    resetAIPreview();
     ($("api-key-input") as HTMLInputElement).value = "";
     toast("API key removed from keychain.", "success");
     closeApiKeyOverlay();
