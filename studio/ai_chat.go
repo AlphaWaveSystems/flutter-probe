@@ -237,7 +237,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 		return ChatResponse{}, fmt.Errorf("parse response: %w", err)
 	}
 	if apiResp.Error != nil {
-		return ChatResponse{}, fmt.Errorf("API error: %s", apiResp.Error.Message)
+		return ChatResponse{}, fmt.Errorf("API error: %s", errorBody([]byte(apiResp.Error.Message)))
 	}
 
 	text := ""
