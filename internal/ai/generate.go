@@ -39,6 +39,9 @@ func NewGeneratorWithCompleter(c TextCompleter) *Generator {
 	return &Generator{completer: c}
 }
 
+// keySecret is the Claude API key, for secretOf.
+func (g *Generator) keySecret() string { return g.APIKey }
+
 // usable reports whether g has anything to call: a provider-backed completer
 // or a Claude API key.
 func (g *Generator) usable() bool { return g.completer != nil || g.APIKey != "" }
@@ -69,7 +72,8 @@ func NewGenerator(apiKey, model string) *Generator {
 		Model:   model,
 		BaseURL: defaultAPIURL,
 		Client: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout:       120 * time.Second,
+			CheckRedirect: noRedirects,
 		},
 	}
 }
@@ -268,7 +272,7 @@ func (g *Generator) callAPI(ctx context.Context, system, userMsg string) (string
 		return "", fmt.Errorf("API rate limited (429) — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API returned %d: %s", resp.StatusCode, string(respBytes))
+		return "", fmt.Errorf("API returned %d: %s", resp.StatusCode, errorBodyWithout(respBytes, g.APIKey))
 	}
 
 	var apiResp apiResponse
@@ -277,7 +281,7 @@ func (g *Generator) callAPI(ctx context.Context, system, userMsg string) (string
 	}
 
 	if apiResp.Error != nil {
-		return "", fmt.Errorf("API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
+		return "", fmt.Errorf("API error (%s): %s", errorString(apiResp.Error.Type, g.APIKey), errorString(apiResp.Error.Message, g.APIKey))
 	}
 
 	if len(apiResp.Content) == 0 {

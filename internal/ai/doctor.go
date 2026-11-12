@@ -82,7 +82,7 @@ func Doctor(ctx context.Context, in DoctorInput) DoctorReport {
 		case contains(ids, in.Model):
 			r.add("endpoint", true, "reachable, model %q is available", in.Model)
 		default:
-			r.add("endpoint", false, "reachable, but model %q is not listed (available: %s)", in.Model, strings.Join(firstN(ids, 8), ", "))
+			r.add("endpoint", false, "reachable, but model %q is not listed (available: %s)", in.Model, strings.Join(cleanAll(firstN(ids, 8), in.APIKey), ", "))
 		}
 	}
 
@@ -95,7 +95,7 @@ func Doctor(ctx context.Context, in DoctorInput) DoctorReport {
 		return r
 	}
 	r.TextOK = true
-	r.add("text", true, "answered in %s: %q", time.Since(start).Round(time.Millisecond), truncate(ReasoningStripped(out), 40))
+	r.add("text", true, "answered in %s: %q", time.Since(start).Round(time.Millisecond), truncate(errorString(ReasoningStripped(out), in.APIKey), 40))
 
 	vp, verr := NewVisionProvider(in.Provider, in.APIKey, in.Model, in.Endpoint, in.Timeout)
 	if verr != nil {
@@ -117,6 +117,15 @@ func Doctor(ctx context.Context, in DoctorInput) DoctorReport {
 	return r
 }
 
+// cleanAll applies errorString to each id: model ids come from the server, which can put anything in them.
+func cleanAll(ids []string, secret string) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = errorString(id, secret)
+	}
+	return out
+}
+
 func listModels(ctx context.Context, base, apiKey string, timeout time.Duration) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeoutOrDefault(timeout))
 	defer cancel()
@@ -127,7 +136,7 @@ func listModels(ctx context.Context, base, apiKey string, timeout time.Duration)
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := (&http.Client{CheckRedirect: noRedirects}).Do(req)
 	if err != nil {
 		return nil, err
 	}
