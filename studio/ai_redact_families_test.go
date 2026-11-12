@@ -33,6 +33,8 @@ func TestCredentialFamiliesAreRedacted(t *testing.T) {
 		{"stripe live secret", stripeSecret, stripeSecret},
 		{"stripe live restricted", stripeRestricted, stripeRestricted},
 		{"pem private key body", pem, pemBody[:22]},
+		{"pem begin line", pem, "BEGIN RSA " + "PRIVATE KEY"},
+		{"pem end line", pem, "END RSA " + "PRIVATE KEY"},
 		{"basic authorization header", "Authorization: Basic dXNlcjpwYXNzd29yZDEyMw==", "dXNlcjpwYXNzd29yZDEyMw"},
 		{"secret-named assignment", "MY_API_KEY=abcd1234efgh5678", "abcd1234efgh5678"},
 		{"password line", "password: hunter2!", "hunter2"},

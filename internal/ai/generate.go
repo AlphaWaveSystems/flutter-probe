@@ -269,7 +269,7 @@ func (g *Generator) callAPI(ctx context.Context, system, userMsg string) (string
 		return "", fmt.Errorf("API rate limited (429) — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API returned %d: %s", resp.StatusCode, string(respBytes))
+		return "", fmt.Errorf("API returned %d: %s", resp.StatusCode, errorBodyWithout(respBytes, g.APIKey))
 	}
 
 	var apiResp apiResponse
