@@ -223,6 +223,94 @@ In Cursor, open **Settings → MCP** (or edit `.cursor/mcp.json` at the repo roo
 
 Restart Cursor after saving.
 
+## HTTP transport
+
+By default `probe-mcp` talks over stdio: the client starts it and owns it. For a client that connects to a running server instead, such as an agent inside VS Code, `probe-mcp` can also serve the same tools over HTTP on your own machine. It is off unless you start it this way:
+
+```bash
+cd /path/to/my-flutter-app
+probe-mcp --http 127.0.0.1:7391
+```
+
+```
+probe-mcp: MCP over HTTP at http://127.0.0.1:7391/mcp
+probe-mcp: bearer token written to /Users/you/Library/Application Support/flutter-probe-mcp/http-token (a new one on every start)
+```
+
+Pick any free port; `127.0.0.1:0` lets the system choose one and prints it. The server works in the directory you start it in (or in `PROBE_PROJECT_DIR`), so start it in your Flutter project. Stop it with Ctrl+C.
+
+The tools and their results are the same as over stdio. The endpoint follows the MCP "Streamable HTTP" transport in its simplest form: one `POST` per JSON-RPC message, one JSON answer. It does not open event streams, so `GET` answers `405`. A long run is best started with `start_tests` and followed with `test_status`.
+
+### The token
+
+Every request must carry `Authorization: Bearer <token>`. A request without the right token gets `401` and an empty body.
+
+- **Default: a new token on every start.** It is 256 random bits, written to `http-token` in `flutter-probe-mcp` under your user config directory (`~/Library/Application Support` on macOS, `~/.config` on Linux, `%AppData%` on Windows). The file is readable only by you (mode `0600` in a `0700` directory) and is removed when the server stops. The path is printed on start; the token itself is never printed or logged. A token that leaked stops working as soon as the server stops.
+- **A token that stays the same:** set `PROBE_MCP_HTTP_TOKEN` to your own value of at least 43 characters, for example from `openssl rand -hex 32`. Then no file is written. Keep it out of files you share.
+
+`probe-mcp` refuses to start if the token directory or an existing token file is a symlink or can be read by other users. Remove the file, or run `chmod 700` on the directory, and start again.
+
+```bash
+TOKEN=$(cat "$HOME/Library/Application Support/flutter-probe-mcp/http-token")
+curl -s http://127.0.0.1:7391/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+### VS Code
+
+Add the server to `.vscode/mcp.json` in your workspace. The `inputs` entry makes VS Code ask for the token and keep it out of the file:
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "probe-mcp-token",
+      "description": "probe-mcp HTTP token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "flutter-probe": {
+      "type": "http",
+      "url": "http://127.0.0.1:7391/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:probe-mcp-token}"
+      }
+    }
+  }
+}
+```
+
+VS Code stores the value you enter, so with the default token you enter it again after each restart of `probe-mcp`. To avoid that, start the server with your own `PROBE_MCP_HTTP_TOKEN`. VS Code has more than one MCP configuration format; see its [MCP configuration reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration) for the one your version uses. The `type`, `url` and `headers` fields are the same in each.
+
+### Security model
+
+What the server does, in plain words:
+
+- **It listens only on your own machine.** The address must be a loopback one: `127.0.0.1`, `localhost` (which means `127.0.0.1` here), or `[::1]` for IPv6. It listens on exactly the address you give, not on both.
+- **Every request needs the token.** The comparison takes the same time whatever the wrong token looks like, and a missing token and a wrong one get the same answer.
+- **Web pages cannot use it.** A browser adds an `Origin` or `Sec-Fetch-Site` header to requests a page makes; any request with one is refused (`403`), and the server sends no CORS headers. The `Host` header must name the address the server listens on, which stops a web page that points its own domain name at `127.0.0.1` (DNS rebinding).
+- **Only the expected kind of request is read.** `POST` to `/mcp` with `Content-Type: application/json`, up to 4 MiB; at most 8 requests at a time; time limits on reading and writing.
+
+What it does not do:
+
+- **No TLS.** Traffic on the loopback interface does not leave your machine, so the server does not encrypt it.
+- **No protection from other programs running as you.** Anything that runs under your user account can read the token file, as it can read your other files.
+- **No per-tool permissions.** A client with the token can call every tool, including the ones that write test files and run commands on your devices. This is the same as over stdio.
+
+### Listening on another address
+
+`probe-mcp` refuses any address that is not loopback. The switch `--dangerously-allow-non-loopback` turns that refusal off:
+
+```bash
+probe-mcp --http 192.168.1.20:7391 --dangerously-allow-non-loopback
+```
+
+**Do not use this on a network you do not fully control.** The token and everything the tools return then cross the network unencrypted, and anyone who captures the token can run tests, write files in your project and drive your devices. If you need remote access, keep the server on loopback and reach it through an SSH tunnel or a proxy that adds TLS.
+
 ## Working directory
 
 The MCP server inherits the working directory from the client. For tools like `run_tests`, `list_files`, and `get_report` to find your test files, the working directory must be your Flutter project root (the folder containing `probe.yaml` and `tests/`).
