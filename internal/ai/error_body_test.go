@@ -250,14 +250,15 @@ func TestEveryVerdictReasoningIsCutAndWithoutTheKey(t *testing.T) {
 }
 
 // The doctor report is shown to the user, so a server that echoes the key in its model ids or in its answer must not put it
-// there. The ids put the key at byte 190, across the cut; the answer starts with it, inside the first 40 characters.
+// there. Each id puts the key at byte 190, across the cut, and follows it with a long tail, so an id that is cleaned but not
+// cut is far over 200 bytes. The answer starts with the key, inside the first 40 characters.
 func TestDoctorReportNeverShowsTheKey(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/models") {
 			var ids []map[string]string
 			for i := 0; i < 10; i++ {
-				ids = append(ids, map[string]string{"id": fmt.Sprintf("%02d", i) + strings.Repeat("e", 188) + echoedKey + " tail"})
+				ids = append(ids, map[string]string{"id": fmt.Sprintf("%02d", i) + strings.Repeat("e", 188) + echoedKey + " " + strings.Repeat("tail words ", 40)})
 			}
 			b, _ := json.Marshal(map[string]any{"data": ids})
 			_, _ = w.Write(b)
@@ -274,8 +275,21 @@ func TestDoctorReportNeverShowsTheKey(t *testing.T) {
 		if strings.Contains(c.Detail, echoedKey[:10]) {
 			t.Fatalf("the %s check shows the key: %q", c.Name, c.Detail)
 		}
-		if c.Name == "endpoint" && len(c.Detail) > 8*200+200 {
-			t.Fatalf("the endpoint check is %d bytes; each model id must be cut to 200", len(c.Detail))
+		if c.Name == "endpoint" {
+			// The detail lists up to 8 ids as "(available: a, b, c)". Each one is at most 200 bytes.
+			_, list, ok := strings.Cut(c.Detail, "(available: ")
+			if !ok {
+				t.Fatalf("the endpoint check does not list the ids: %q", c.Detail)
+			}
+			ids := strings.Split(strings.TrimSuffix(list, ")"), ", ")
+			if len(ids) != 8 {
+				t.Fatalf("the endpoint check lists %d ids, want 8: %q", len(ids), c.Detail)
+			}
+			for _, id := range ids {
+				if len(id) > 200 {
+					t.Fatalf("a listed model id is %d bytes; each must be cut to 200", len(id))
+				}
+			}
 		}
 	}
 	if !names["endpoint"] || !names["text"] {
