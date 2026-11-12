@@ -260,3 +260,32 @@ func TestFailedSelectorHasNoVisibleItemsWhenTheStepDidNotTimeOut(t *testing.T) {
 		t.Errorf("the agent's own failure text gave visible items: %+v", fs.Visible)
 	}
 }
+
+// A timeout whose message holds an environment value is masked before it is shown, and still records its items: the
+// masked error keeps the step timeout findable, so the selector proposal does not silently lose it.
+func TestFailedSelectorKeepsItsItemsWhenTheTimeoutMessageHoldsAnEnvValue(t *testing.T) {
+	const name, secret = "PROBE_HEAL_SCRUBBED_TIMEOUT", "quorvex-timeout-value-31"
+	t.Setenv(name, secret)
+	client := &timedOutTapClient{summaryClient{res: probelink.VisibleSummaryResult{Texts: []string{"Welcome " + secret, "Save changes"}, Keys: []string{"save_btn"}}}}
+	e := NewExecutor(client, nil, nil, 5*time.Second, false)
+	e.resolve("${" + name + "}") // records the value the way a step does
+	// The step description holds the value, so the timeout message does too and the masking path has work to do.
+	err := e.RunBody(context.Background(), []parser.Step{failingTap(9, "user "+secret, false)})
+	if err == nil {
+		t.Fatal("the step must fail")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("the error shows the environment value: %s", err)
+	}
+	var scrubbed *scrubbedError
+	if !errors.As(err, &scrubbed) {
+		t.Fatalf("the fixture must hit the masking path: %T", err)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Error("the masked error must not start matching context.DeadlineExceeded: callers saw false before")
+	}
+	fs := e.FailedSelector(err)
+	if fs == nil || !slices.Equal(fs.Visible.Texts, []string{"Welcome ****", "Save changes"}) || !slices.Equal(fs.Visible.Keys, []string{"save_btn"}) {
+		t.Fatalf("recorded %+v, want the masked items", fs)
+	}
+}

@@ -104,7 +104,7 @@ from them, and the failed result in the JSON report gets a `selector_proposal`:
 
 ```json
 "selector_proposal": {
-  "advisory": "Proposed by a language model from the failure text. Not applied to the test file and not verified against the app. It does not change this result.",
+  "advisory": "Proposed by a language model from the texts and keys that were on screen when the step timed out. Not applied to the test file and not verified against the app. It does not change this result.",
   "line": 9,
   "failed_selector": "\"Save\"",
   "proposed_selector": "\"Save changes\"",
