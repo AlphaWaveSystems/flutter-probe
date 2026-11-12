@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
 
 // echoServer stands in for a hostile or confused provider on 127.0.0.1. The model listing answers 200. The chat answer is
@@ -116,8 +119,8 @@ func TestSaveLeavesAPlainKeyAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !form.PlainKeyInFile || form.KeySource != "keychain" {
-		t.Fatalf("the form should report the plain key and the keychain source: %+v", form)
+	if !form.PlainKeyInFile || form.KeySource != "file" {
+		t.Fatalf("the form should report the plain key as its own source: %+v", form)
 	}
 	if err := writeAISettings(dir, form); err != nil {
 		t.Fatal(err)
@@ -233,5 +236,144 @@ func TestPreviewErrorsWithAIOff(t *testing.T) {
 	_, err := appIn(dir).PreviewAIChat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
 	if !errors.Is(err, errAIOff) {
 		t.Fatalf("the preview with AI off returned %v, want the AI-off error", err)
+	}
+}
+
+// A form that equals what the file already says is never refused and never written, so a setup the CLI accepts cannot stop the
+// rest of Settings from saving. The three setups are valid for the CLI and not for a changed form.
+func TestAnUnchangedSaveNeverBlocksTheRest(t *testing.T) {
+	cases := map[string]string{
+		"openai with a plain key":                     "agent:\n  port: 9999\nai:\n  provider: openai\n  model: m\n  api_key: plain-value-000000000040\n",
+		"openai with no key":                          "agent:\n  port: 9999\nai:\n  provider: openai\n  model: m\n",
+		"local at another address without the switch": "agent:\n  port: 9999\nai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\n",
+	}
+	for name, yamlText := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := writeProbeYAML(t, yamlText)
+			before, _ := os.ReadFile(filepath.Join(dir, "probe.yaml"))
+			form, err := readAISettings(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			app := appIn(dir)
+			if err := app.SaveAISettings(dir, form); err != nil {
+				t.Fatalf("an unchanged AI form was refused: %v", err)
+			}
+			// The rest of Settings saves, and the ai block means the same afterwards.
+			if err := app.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48777}); err != nil {
+				t.Fatal(err)
+			}
+			after, _ := os.ReadFile(filepath.Join(dir, "probe.yaml"))
+			if !strings.Contains(string(after), "48777") || strings.Contains(string(after), "9999") {
+				t.Fatalf("the port was not saved:\n%s", after)
+			}
+			now, err := readAISettings(dir)
+			if err != nil || now != form {
+				t.Fatalf("the ai block changed in meaning: %+v then %+v (%v)\nbefore:\n%s\nafter:\n%s", form, now, err, before, after)
+			}
+		})
+	}
+}
+
+// A changed form is still validated: the same setups, edited into something that would not run, are refused.
+func TestAChangedFormIsStillRefused(t *testing.T) {
+	dir := writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: m\n")
+	form, _ := readAISettings(dir)
+	form.Provider = "openai" // keychain source, which Studio never sends to OpenAI
+	if err := appIn(dir).SaveAISettings(dir, form); err == nil {
+		t.Fatal("a changed form that would not run was written")
+	}
+}
+
+// A plain key in the file is its own loaded state, valid for any provider as it stands, and the line is kept.
+func TestAPlainKeyIsItsOwnLoadedState(t *testing.T) {
+	dir := writeProbeYAML(t, "ai:\n  provider: openai\n  model: m\n  api_key: plain-value-000000000041\n")
+	form, _ := readAISettings(dir)
+	if form.KeySource != "file" || !form.PlainKeyInFile {
+		t.Fatalf("the loaded form is %+v", form)
+	}
+	if err := form.validate(); err != nil {
+		t.Fatalf("openai with a plain key as it stands was refused: %v", err)
+	}
+	form.Model = "m2" // a change, so it is written, and the plain key stays
+	if err := appIn(dir).SaveAISettings(dir, form); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "probe.yaml"))
+	if !strings.Contains(string(data), "api_key: plain-value-000000000041") || !strings.Contains(string(data), "model: m2") {
+		t.Fatalf("the change was not written with the plain key kept:\n%s", data)
+	}
+}
+
+// The advice follows the provider: a saved keychain key goes only to Anthropic, so OpenAI and a local endpoint are not told to
+// save a key in the panel.
+func TestPlainKeyAdviceMatchesTheProvider(t *testing.T) {
+	isolateProvider(t, "")
+	for provider, wantPanel := range map[string]bool{"anthropic": true, "openai": false, "local": false} {
+		extra := ""
+		if provider == "local" {
+			extra = "  endpoint: http://127.0.0.1:11434/v1\n  model: m\n"
+		}
+		dir := writeProbeYAML(t, "ai:\n  provider: "+provider+"\n"+extra+"  api_key: plain-value-000000000042\n")
+		_, err := appIn(dir).aiProvider()
+		if err == nil {
+			t.Fatalf("%s with a plain key was accepted", provider)
+		}
+		if got := strings.Contains(err.Error(), "AI panel"); got != wantPanel {
+			t.Errorf("%s: advice %q, mentions the AI panel = %v, want %v", provider, err, got, wantPanel)
+		}
+	}
+}
+
+// What the doctor returns passes the Studio gate before it is shown. The doctor is replaced by one that hands back details no
+// cleaning has touched, so this tests Studio's own step and not internal/ai's.
+func TestConnectionTestCleansWhatTheDoctorReturns(t *testing.T) {
+	isolateProvider(t, "")
+	const key = "plainEchoSecretValue0000000043"
+	token := "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+	t.Setenv("PROBE_RAW_DOCTOR_KEY", key)
+	prev := runDoctor
+	t.Cleanup(func() { runDoctor = prev })
+	runDoctor = func(context.Context, ai.DoctorInput) ai.DoctorReport {
+		return ai.DoctorReport{Checks: []ai.DoctorCheck{{Name: "text", Detail: "refused " + key + " with Bearer " + key + " and " + token}}}
+	}
+	dir := writeProbeYAML(t, localYAML("http://127.0.0.1:1")+"  api_key: ${PROBE_RAW_DOCTOR_KEY}\n")
+	rep, err := appIn(dir).TestAIConnection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := rep.Checks[0].Detail
+	if strings.Contains(got, key) || strings.Contains(got, token[:10]) {
+		t.Fatalf("the report shows the key or a token: %q", got)
+	}
+}
+
+// A model id from a server is cleaned and then bounded: the gate runs before the cut, so a token that straddles byte 200 leaves
+// no start of itself, and an id of any length comes back at 200 bytes or less.
+func TestModelIDsAreGatedThenBounded(t *testing.T) {
+	isolateProvider(t, "")
+	token := "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := json.Marshal(map[string]any{"data": []map[string]string{
+			{"id": strings.Repeat("z", 200_010)},                     // not hex, so the gate leaves its length alone
+			{"id": strings.Repeat("e", 189) + " " + token + " tail"}, // the token starts at byte 190, across the cut
+		}})
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	ids, err := appIn(writeProbeYAML(t, localYAML(srv.URL))).ListAIModels()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("got %d ids, want 2", len(ids))
+	}
+	for _, id := range ids {
+		if len(id) > 200 {
+			t.Errorf("an id is %d bytes; it must be cut to 200", len(id))
+		}
+		if strings.Contains(id, "ghp_") {
+			t.Errorf("an id keeps the start of a token: %q", id[len(id)-30:])
+		}
 	}
 }

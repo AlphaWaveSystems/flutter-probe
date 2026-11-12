@@ -33,7 +33,11 @@ type aiProviderSettings struct {
 }
 
 var (
-	errAIOff    = errors.New("AI is off: ai.provider is none in probe.yaml")
+	errAIOff = errors.New("AI is off: ai.provider is none in probe.yaml")
+	// errPlainKeyEnvOnly is the same refusal for providers that never take the keychain key: Studio sends a saved keychain key
+	// only to Anthropic, so for OpenAI and a local endpoint the way out is a variable, or no key at all.
+	errPlainKeyEnvOnly = errors.New("probe.yaml holds a plain API key in ai.api_key, which Studio does not use. Name an environment " +
+		"variable instead, as ${NAME}, or remove the line: Studio sends a saved keychain key only to Anthropic")
 	errPlainKey = errors.New("probe.yaml holds a plain API key in ai.api_key, which Studio does not use. Save the key in the AI panel, " +
 		"or name an environment variable instead, as ${NAME}")
 )
@@ -138,7 +142,7 @@ func (a *App) aiProvider() (aiProviderSettings, error) {
 		return aiProviderSettings{Provider: provider, Model: cfg.AI.Model, APIKey: key, Timeout: timeout, Notice: notice}, nil
 	case "openai":
 		if plain {
-			return aiProviderSettings{}, errPlainKey
+			return aiProviderSettings{}, errPlainKeyEnvOnly
 		}
 		if key == "" {
 			return aiProviderSettings{}, fmt.Errorf("provider openai needs ai.api_key set to an environment variable, as ${NAME}")
@@ -146,7 +150,7 @@ func (a *App) aiProvider() (aiProviderSettings, error) {
 		return aiProviderSettings{Provider: provider, Model: cfg.AI.Model, APIKey: key, Timeout: timeout}, nil
 	case "local":
 		if plain {
-			return aiProviderSettings{}, errPlainKey
+			return aiProviderSettings{}, errPlainKeyEnvOnly
 		}
 		if cfg.AI.Endpoint == "" {
 			return aiProviderSettings{}, fmt.Errorf("provider local needs ai.endpoint in probe.yaml, such as http://127.0.0.1:11434/v1")
@@ -214,6 +218,12 @@ func checkLocalEndpoint(endpoint string, allowRemote bool) error {
 // so a credential in the open file or the conversation is redacted before any provider sees it.
 func outbound(s string) string {
 	return redactCredentials(s)
+}
+
+// modelID cleans and bounds a model id from a server's listing: the exact key is removed, the gate runs, and then the id is
+// cut to 200 bytes, in that order, so a key that straddles the cut leaves nothing behind.
+func modelID(id, key string) string {
+	return errorBody([]byte(fromProvider(id, key)))
 }
 
 // fromProvider cleans text a provider returned before Studio shows it: the exact key sent in the request is removed, and the
@@ -337,7 +347,7 @@ func (a *App) ListAIModels() ([]string, error) {
 	ids := make([]string, 0, len(listing.Data))
 	for _, m := range listing.Data {
 		if m.ID != "" {
-			ids = append(ids, fromProvider(m.ID, s.APIKey))
+			ids = append(ids, modelID(m.ID, s.APIKey))
 		}
 	}
 	sort.Strings(ids)

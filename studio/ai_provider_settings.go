@@ -21,7 +21,7 @@ type AISettings struct {
 	Provider            string `json:"provider"`            // "", "anthropic", "local" or "openai"; empty means AI is off
 	Endpoint            string `json:"endpoint"`            // OpenAI-compatible base URL, for "local" only
 	Model               string `json:"model"`               // required for "local"
-	KeySource           string `json:"keySource"`           // "keychain" (the saved Anthropic key) or "env"
+	KeySource           string `json:"keySource"`           // "keychain" (the saved Anthropic key), "env", or "file" (a plain key already in probe.yaml)
 	KeyEnvName          string `json:"keyEnvName"`          // the environment variable, when KeySource is "env"
 	Vision              bool   `json:"vision"`              // false for a text-only model; on unless probe.yaml says otherwise
 	Timeout             string `json:"timeout"`             // a Go duration such as "60s"; empty means the default
@@ -84,6 +84,8 @@ func readAISettings(workspace string) (AISettings, error) {
 		s.KeySource = "env"
 		s.KeyEnvName = name
 	} else if doc.AI.APIKey != "" {
+		// A plain key is its own state, so a form that was loaded from such a file is valid when it is saved unchanged.
+		s.KeySource = "file"
 		s.PlainKeyInFile = true
 	}
 	return s, nil
@@ -96,10 +98,15 @@ func (s AISettings) validate() error {
 	if !aiProviderKind[s.Provider] {
 		return fmt.Errorf("provider %q is not one of anthropic, local or openai", s.Provider)
 	}
+	switch s.KeySource {
+	case "keychain", "env", "file":
+	default:
+		return fmt.Errorf("key source %q is not one of keychain, env or file", s.KeySource)
+	}
 	if s.KeySource == "env" && !envNamePattern.MatchString(s.KeyEnvName) {
 		return fmt.Errorf("the key variable name must be letters, digits and underscores, and must not start with a digit")
 	}
-	if s.Provider == "openai" && s.KeySource != "env" {
+	if s.Provider == "openai" && s.KeySource == "keychain" {
 		// Studio sends a saved keychain key only to the Anthropic provider, so openai needs a variable to run.
 		return fmt.Errorf("provider openai needs the key source Environment variable: Studio sends a saved keychain key only to Anthropic")
 	}
@@ -172,6 +179,7 @@ func writeAISettings(workspace string, s AISettings) error {
 	case existingKey == "" || existingIsRef:
 		mergeKey(raw, "ai", "api_key", "")
 	}
+	// Otherwise the file holds a plain key and the form names the keychain or the file: the line stays as it is.
 	ai := ensureMap(raw, "ai")
 	if s.Vision {
 		delete(ai, "vision")
@@ -210,6 +218,14 @@ func (a *App) LoadAISettings(workspace string) (AISettings, error) {
 // SaveAISettings writes the provider form into a workspace's probe.yaml. It never writes a key: a key stays in the keychain
 // or in the environment.
 func (a *App) SaveAISettings(workspace string, s AISettings) error {
+	// A form that equals what the file already says changes nothing, so it is neither validated nor written. A setup the CLI
+	// accepts, such as OpenAI with a plain key, must not stop the rest of Settings from saving.
+	if cur, err := readAISettings(workspace); err == nil {
+		s.PlainKeyInFile = cur.PlainKeyInFile // read-only: the form cannot change it
+		if s == cur {
+			return nil
+		}
+	}
 	return writeAISettings(workspace, s)
 }
 
@@ -229,6 +245,10 @@ type AIConnectionReport struct {
 	Checks        []AIConnectionCheck `json:"checks"`
 }
 
+// runDoctor is ai.Doctor. A test replaces it to hand back details no cleaning has touched, so what Studio does with them is
+// tested apart from what internal/ai does.
+var runDoctor = ai.Doctor
+
 // TestAIConnection runs the checks of `probe ai doctor` against the saved provider. It sends a fixed prompt and a fixed
 // one-pixel image, and never any file or conversation text. With AI off it fails before any request.
 func (a *App) TestAIConnection() (AIConnectionReport, error) {
@@ -236,7 +256,7 @@ func (a *App) TestAIConnection() (AIConnectionReport, error) {
 	if err != nil {
 		return AIConnectionReport{}, err
 	}
-	r := ai.Doctor(context.Background(), ai.DoctorInput{
+	r := runDoctor(context.Background(), ai.DoctorInput{
 		Provider: s.Provider,
 		APIKey:   s.APIKey,
 		Model:    s.Model,

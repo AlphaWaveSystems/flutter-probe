@@ -155,7 +155,7 @@ func (a *App) Chat(messages []ChatMessage, fileContent string) (ChatResponse, er
 }
 
 // chatTurn builds what a chat turn carries: the system prompt with the open file, the last run and the widget tree, and the
-// conversation. Chat and PreviewAIChat both use it, so the preview shows what a request carries.
+// conversation. Chat and PreviewAIChat each call it when they run, so the preview shows what the message would send now.
 func (a *App) chatTurn(messages []ChatMessage, fileContent string) (string, []claudeMessage) {
 	lastRun, tree := a.contextPieces(contextSwitches(a), a.track.snapshot())
 	system := chatBasePrompt + chatContext(fileContent, lastRun, tree)
