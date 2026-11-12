@@ -19,6 +19,8 @@ func TestCredentialFamiliesAreRedacted(t *testing.T) {
 	stripeRestricted := "rk_" + "li" + "ve_" + "abcdefghijklmnop1234"
 	pemBody := "MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu"
 	pem := "-----BEGIN RSA " + "PRIVATE KEY-----\n" + pemBody + "\n-----END RSA " + "PRIVATE KEY-----"
+	ecPem := "-----BEGIN EC " + "PRIVATE KEY-----\n" + pemBody + "\n-----END EC " + "PRIVATE KEY-----"
+	pkcs8Pem := "-----BEGIN " + "PRIVATE KEY-----\n" + pemBody + "\n-----END " + "PRIVATE KEY-----"
 	cases := []struct {
 		name   string
 		input  string
@@ -33,6 +35,11 @@ func TestCredentialFamiliesAreRedacted(t *testing.T) {
 		{"stripe live secret", stripeSecret, stripeSecret},
 		{"stripe live restricted", stripeRestricted, stripeRestricted},
 		{"pem private key body", pem, pemBody[:22]},
+		{"pem begin line", pem, "BEGIN RSA " + "PRIVATE KEY"},
+		{"pem end line", pem, "END RSA " + "PRIVATE KEY"},
+		{"pem ec begin line", ecPem, "BEGIN EC " + "PRIVATE KEY"},
+		{"pem ec end line", ecPem, "END EC " + "PRIVATE KEY"},
+		{"pem pkcs8 begin line", pkcs8Pem, "BEGIN " + "PRIVATE KEY"},
 		{"basic authorization header", "Authorization: Basic dXNlcjpwYXNzd29yZDEyMw==", "dXNlcjpwYXNzd29yZDEyMw"},
 		{"secret-named assignment", "MY_API_KEY=abcd1234efgh5678", "abcd1234efgh5678"},
 		{"password line", "password: hunter2!", "hunter2"},
