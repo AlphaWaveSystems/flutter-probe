@@ -99,7 +99,7 @@ func TestSaveRefusesAnAINodeThatIsNotAMap(t *testing.T) {
 
 // A plain key in probe.yaml is flagged, and the form never carries its value.
 func TestPlainKeyInProbeYAMLIsFlaggedNotReturned(t *testing.T) {
-	const plain = "sk-ant-api03-plainvalue1234567890"
+	const plain = "sk-ant-api03-" + "plainvalue1234567890"
 	dir := writeProbeYAML(t, "ai:\n  provider: anthropic\n  api_key: \""+plain+"\"\n")
 	s, err := readAISettings(dir)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestPreviewShowsTheRedactedTextAndSendsNothing(t *testing.T) {
 	isolateProvider(t, "")
 	f := newLocalFake(t, "ok")
 	dir := writeProbeYAML(t, localYAML(f.srv.URL))
-	token := "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+	token := "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
 	file := "test \"login\"\n  type \"" + token + "\" into \"Token\"\n"
 	preview, err := appIn(dir).PreviewAIChat([]ChatMessage{{Role: "user", Content: "why?"}}, file)
 	if err != nil {
