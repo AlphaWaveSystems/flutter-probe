@@ -17,12 +17,19 @@ var assets embed.FS
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
+// keychainMemoryRequested says whether keys are kept in memory instead of the platform keychain. Only the headless build does,
+// and only when asked, so a person running the app never loses a saved key to it.
+func keychainMemoryRequested(headless bool, env string) bool {
+	return headless && env == "memory"
+}
+
 func main() {
 	app := NewApp()
-	if os.Getenv("PROBE_STUDIO_HEADLESS") == "1" {
-		if os.Getenv("PROBE_STUDIO_KEYCHAIN") == "memory" {
-			keyring.MockInit() // the browser suite keeps keys in memory, so no test touches the real keychain
-		}
+	headless := os.Getenv("PROBE_STUDIO_HEADLESS") == "1"
+	if keychainMemoryRequested(headless, os.Getenv("PROBE_STUDIO_KEYCHAIN")) {
+		keyring.MockInit() // the browser suite keeps keys in memory, so no test touches the real keychain
+	}
+	if headless {
 		runHeadless(app)
 		return
 	}

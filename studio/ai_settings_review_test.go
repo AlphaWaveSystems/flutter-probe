@@ -377,3 +377,66 @@ func TestModelIDsAreGatedThenBounded(t *testing.T) {
 		}
 	}
 }
+
+// An empty workspace is refused before the form is compared with a file, so it never reads ./probe.yaml from the current directory.
+func TestSaveWithoutAWorkspaceIsRefused(t *testing.T) {
+	form := AISettings{KeySource: "keychain", Vision: true} // equals what an absent file reads as
+	if err := (&App{}).SaveAISettings("", form); err == nil || !strings.Contains(err.Error(), "workspace path is required") {
+		t.Fatalf("an empty workspace returned %v, want the workspace error", err)
+	}
+}
+
+// A form that differs from the file in one field only is written, for every field. A compare that ignores a field would skip
+// the write and lose the edit. Each case checks the field it changed: the writer drops what the new form makes meaningless,
+// such as the endpoint of a provider that is off.
+func TestEachFieldAloneIsWritten(t *testing.T) {
+	base := "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: m\n  api_key: ${PROBE_FIELD_A}\n"
+	cases := map[string]struct {
+		change func(f *AISettings)
+		saved  func(got AISettings) bool
+	}{
+		"provider":            {func(f *AISettings) { f.Provider = "none" }, func(g AISettings) bool { return g.Provider == "none" }},
+		"endpoint":            {func(f *AISettings) { f.Endpoint = "http://127.0.0.1:1234/v1" }, func(g AISettings) bool { return g.Endpoint == "http://127.0.0.1:1234/v1" }},
+		"model":               {func(f *AISettings) { f.Model = "m2" }, func(g AISettings) bool { return g.Model == "m2" }},
+		"key source":          {func(f *AISettings) { f.KeySource = "keychain" }, func(g AISettings) bool { return g.KeySource == "keychain" }},
+		"key variable name":   {func(f *AISettings) { f.KeyEnvName = "PROBE_FIELD_B" }, func(g AISettings) bool { return g.KeyEnvName == "PROBE_FIELD_B" }},
+		"timeout":             {func(f *AISettings) { f.Timeout = "30s" }, func(g AISettings) bool { return g.Timeout == "30s" }},
+		"vision":              {func(f *AISettings) { f.Vision = false }, func(g AISettings) bool { return !g.Vision }},
+		"remote confirmation": {func(f *AISettings) { f.AllowRemoteEndpoint = true }, func(g AISettings) bool { return g.AllowRemoteEndpoint }},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := writeProbeYAML(t, base)
+			form, err := readAISettings(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.change(&form)
+			if err := appIn(dir).SaveAISettings(dir, form); err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := readAISettings(dir); !c.saved(got) {
+				t.Fatalf("the %s edit was not written: the file now reads %+v", name, got)
+			}
+		})
+	}
+}
+
+// Keys stay in memory only for the headless build and only when asked.
+func TestKeychainMemoryIsForTheHeadlessBuildOnly(t *testing.T) {
+	for _, c := range []struct {
+		headless bool
+		env      string
+		want     bool
+	}{
+		{true, "memory", true},
+		{false, "memory", false}, // the app a person runs never swaps its keychain
+		{true, "", false},
+		{true, "file", false},
+		{false, "", false},
+	} {
+		if got := keychainMemoryRequested(c.headless, c.env); got != c.want {
+			t.Errorf("keychainMemoryRequested(%v, %q) = %v, want %v", c.headless, c.env, got, c.want)
+		}
+	}
+}

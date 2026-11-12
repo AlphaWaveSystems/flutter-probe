@@ -218,6 +218,9 @@ func (a *App) LoadAISettings(workspace string) (AISettings, error) {
 // SaveAISettings writes the provider form into a workspace's probe.yaml. It never writes a key: a key stays in the keychain
 // or in the environment.
 func (a *App) SaveAISettings(workspace string, s AISettings) error {
+	if workspace == "" {
+		return fmt.Errorf("workspace path is required") // before the compare: an empty path would read ./probe.yaml
+	}
 	// A form that equals what the file already says changes nothing, so it is neither validated nor written. A setup the CLI
 	// accepts, such as OpenAI with a plain key, must not stop the rest of Settings from saving.
 	if cur, err := readAISettings(workspace); err == nil {
