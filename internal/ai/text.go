@@ -88,6 +88,9 @@ func (o *openAIVision) CompleteTurns(ctx context.Context, system string, turns [
 
 // Complete makes the Claude-backed Generator a TextCompleter.
 func (g *Generator) Complete(ctx context.Context, system, user string) (string, error) {
+	if !g.usable() {
+		return "", fmt.Errorf("ai: API key is required (set --api-key or ai.api_key in probe.yaml)")
+	}
 	return g.callAPI(ctx, system, user)
 }
 
