@@ -28,6 +28,7 @@ func (c *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 // countRequests makes http.DefaultTransport a countingTransport until the test ends, and returns it.
+// The swap is process-wide, so tests in this package must not call t.Parallel while it is in use.
 func countRequests(t *testing.T) *countingTransport {
 	t.Helper()
 	ct := &countingTransport{next: http.DefaultTransport}

@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Studio's chat redacts credentials in the open file and in the conversation,** as it already did for the run results and the widget tree. Before this change, the open file was sent as written.
 - **The system-dialog language claims say what is covered.** Permission buttons (allow, deny, allow once, allow while using) are matched by role in the 55 iOS 26.5 locales, and on Android for dialogs that use the stock permission controller ids. OK, cancel, not now, open and close are English only. The iOS label table writes its no-break spaces and zero-width non-joiners as escapes (the same bytes). Tests cover the ATT alert in either order and the invisible-character locales.
 - **The embedded license key list has a test.** The test checks each embedded key's key id and Ed25519 public key, and that no key id is listed twice. It passes on the empty list in this release. A license signed with the matching private key verifies once its key is embedded, and one signed with another key is refused. Embedding the production public key before a client release lets customers upload reports is a manual release checklist item; no test enforces it. Verification itself is unchanged.
-- **The AI helpers make no HTTP request when no `ai:` block is set.** A new test counts every request the AI code makes and fails if a helper that a test run or `probe doctor` reaches sends one with no AI configuration.
+- **The AI helpers make no HTTP request when no `ai:` block is set.** A new test counts every request the AI code makes and fails if a helper that a test run or `probe ai doctor` reaches sends one with no AI configuration.
 
 ### Removed
 
