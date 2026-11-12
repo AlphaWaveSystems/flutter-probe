@@ -210,7 +210,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 		return ChatResponse{}, fmt.Errorf("rate limited — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, errorBody(body))
+		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, errorBody([]byte(redactCredentials(string(body)))))
 	}
 
 	var apiResp struct {
@@ -230,7 +230,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 		return ChatResponse{}, fmt.Errorf("parse response: %w", err)
 	}
 	if apiResp.Error != nil {
-		return ChatResponse{}, fmt.Errorf("API error: %s", errorBody([]byte(apiResp.Error.Message)))
+		return ChatResponse{}, fmt.Errorf("API error: %s", errorBody([]byte(redactCredentials(apiResp.Error.Message))))
 	}
 
 	text := ""
