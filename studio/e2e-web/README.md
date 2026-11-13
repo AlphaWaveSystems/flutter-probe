@@ -9,6 +9,8 @@ calls become HTTP calls to the same Go methods, `EventsOn` becomes a server-sent
 refuses non-loopback hosts and cross-origin pages, and exposes every exported `App` method, so it is **not** the interface
 for agents (that is the confined automation endpoint, `PROBE_STUDIO_AUTOMATION=1`).
 
+The suite sets `PROBE_STUDIO_KEYCHAIN=memory` in `playwright.config.ts`. Studio then keeps API keys in memory, so no test reads or writes the real keychain. Only the headless build reads that variable; a normal Studio launch ignores it.
+
 ## Run
 
 ```bash
@@ -49,8 +51,13 @@ Report: `reports/studio-e2e-web/html/index.html` (+ `report.json`, traces and sc
 | 23 | no | Manual WiFi entry with an empty host says a host is needed |
 | 24 | no | Record and Save: disabled without a device or an edited file; Save enables once the file is edited |
 | 25 | no | A device picked while the list is refreshing stays selected |
+| 26 | no | The device settings panel opens and says to connect a simulator or emulator first |
+| 27 | no | `ApplyDeviceSetting` without a connection is refused |
 | 36 | yes, and `STUDIO_E2E_DEVICE_VIEW=1` | The shared device view: a canvas with the hub's frames (no screenshot loop image), Alt+click selects `#counter_button`, a click taps the List tab |
 | 30-33 | **a physical phone** (opt-in) | Test connection, Connect with screen and widget tree, a probe file runs, a wrong token is refused; never in CI. See [PHYSICAL.md](PHYSICAL.md) |
+| ai-01 to ai-10 | no | AI chat preview and form (`ai-preview.spec.ts`, fake providers on 127.0.0.1): the first message names its destination and nothing is sent until **Send**; a repeat to the same destination has no preview; the preview returns after the destination, the provider or the saved key changes; a second Enter sends once; an untouched AI form saves; a refused one shows its reason while the rest of Settings saves; a model change keeps a plain key |
+| ai-s01 to ai-s07 | no | Settings AI section (`ai-settings.spec.ts`, fake provider on 127.0.0.1): Test connection with AI off makes no request; a local provider shows its checks; List models fills the suggestions; a plain key in `probe.yaml` survives Save; Save writes the `ai:` block and keeps the other keys; Off writes `provider: none`; a form that would not run is refused and not written |
+| ai-h01 to ai-h09 | no | Chat header (`ai-chat-label.spec.ts`, fake provider on 127.0.0.1): AI off says so; a local model shows its model and that it runs on this machine; a remote endpoint says so when confirmed; the header follows a Settings save, a saved key or a removed key; a model id cannot change the header's text |
 
 Not covered here (they need the real window, so they stay in the native suite `make studio-e2e-native`): the native folder picker,
 window chrome and keyboard focus, the recorder (it records taps made on the simulator itself).
