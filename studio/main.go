@@ -35,7 +35,7 @@ func main() {
 	if keychainMemoryRequested(headless, os.Getenv("PROBE_STUDIO_KEYCHAIN")) {
 		keyring.MockInit() // the browser suite keeps keys in memory, so no test touches the real keychain
 	}
-	seeded, seedNote := seededResults(headless, os.Getenv("PROBE_STUDIO_SEED_RUN"))
+	seeded, seedNote := seededResults(headless, os.Getenv("PROBE_STUDIO_SEED_RUN"), os.Getenv("PROBE_STUDIO_WORKSPACE"))
 	if seedNote != "" {
 		fmt.Fprintln(os.Stderr, "studio:", seedNote)
 	}

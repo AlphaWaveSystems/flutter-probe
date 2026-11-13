@@ -275,6 +275,22 @@ func (in explainInput) omitted() string {
 	return strings.Join(parts, "; ") + "."
 }
 
+// ExplainOffer says whether the interface offers Explain: AI is on and the last run has a failed test with an error text to explain.
+// It reads no result text out of the run beyond counting it, and it sends nothing.
+type ExplainOffer struct {
+	Available bool `json:"available"`
+	Failures  int  `json:"failures"` // failed tests with an error text, before the cap of 5
+}
+
+// ExplainAvailability returns ExplainOffer. With AI off, a refused configuration or no failed test, nothing is offered.
+func (a *App) ExplainAvailability() ExplainOffer {
+	in, err := a.explainSetup()
+	if err != nil {
+		return ExplainOffer{}
+	}
+	return ExplainOffer{Available: true, Failures: len(in.failures)}
+}
+
 // PreviewExplain returns what ExplainLastRun would send, and where. It sends nothing: the same ai.Triage runs with a completer
 // that records the prompts, behind the same gate.
 func (a *App) PreviewExplain() (ExplainPreview, error) {
@@ -311,6 +327,24 @@ func (a *App) ExplainLastRun() (ExplainResult, error) {
 	if err != nil {
 		return ExplainResult{}, err
 	}
+	return a.explainRun(in)
+}
+
+// ExplainPreviewed is ExplainLastRun for the interface: it asks only when the destination is still the one the preview named, so a
+// setting that changed between the preview and Send, such as a provider switched to a hosted one, cannot send to a place the person
+// did not see. The window must call PreviewExplain first and show it; this is the check that what is sent still goes where it said.
+func (a *App) ExplainPreviewed(destination string) (ExplainResult, error) {
+	in, err := a.explainSetup()
+	if err != nil {
+		return ExplainResult{}, err
+	}
+	if label, _ := explainDestination(in.settings); label != destination {
+		return ExplainResult{}, errors.New("the destination changed since the preview: press Explain again to see where it goes now")
+	}
+	return a.explainRun(in)
+}
+
+func (a *App) explainRun(in explainInput) (ExplainResult, error) {
 	s := in.settings
 	c, err := makeExplainCompleter(s)
 	if err != nil {

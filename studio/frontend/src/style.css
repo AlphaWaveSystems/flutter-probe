@@ -494,6 +494,23 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--fg);
 }
 
+/* Explain: the bar under the Results title, the advisory card and the preview that comes before it. */
+#explain-preview-overlay .overlay-card { width: min(720px, 92vw); }
+.explain-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid var(--border); }
+.explain-card { margin: 6px 10px; padding: 8px 10px; background: var(--bg-2, var(--bg-1)); border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; max-height: min(40vh, 130px); overflow: auto; flex-shrink: 0; }
+.explain-bar[hidden], .explain-card[hidden] { display: none; } /* display: flex and block would otherwise win over the hidden attribute */
+.explain-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.explain-card-title { font-weight: 600; }
+.explain-card-dest { color: var(--fg-muted); overflow-wrap: anywhere; }
+.explain-place { padding: 0 6px; border: 1px solid var(--border); border-radius: 8px; font-size: 10px; }
+.explain-place-hosted { color: #ffd98a; border-color: #ffd98a; }
+.explain-card-close { margin-left: auto; }
+.explain-disclaimer { margin: 4px 0 6px; color: var(--fg-dim); font-size: 11px; }
+.explain-row { margin: 6px 0; }
+.explain-row-label { font-weight: 600; overflow-wrap: anywhere; }
+.explain-row-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.explain-row-stopped .explain-row-text, .explain-row-omitted .explain-row-text { color: var(--fg-muted); }
+
 /* Inspector search */
 .inspector-search {
   flex: 1; max-width: 200px; margin-left: auto; margin-right: 8px;
