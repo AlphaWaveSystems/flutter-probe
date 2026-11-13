@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -263,7 +262,7 @@ func (g *Generator) callAPI(ctx context.Context, system, userMsg string) (string
 	}
 	defer resp.Body.Close()
 
-	respBytes, err := io.ReadAll(resp.Body)
+	respBytes, err := ReadResponse(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("reading API response: %w", err)
 	}

@@ -12,38 +12,34 @@ const (
 	chatLabelKey = "Anthropic, key needed"
 )
 
-// unsafeLabelRune says whether a character in a model id could scramble or spoof the one-line label: control characters, line
-// and paragraph separators, every format (Cf) character, the blank-looking ones the category does not hold, and the comma that separates the model from the place
-// ("x, on this machine" must not read as a place). They are shown as ?.
-func unsafeLabelRune(r rune) bool {
+// hiddenRune says whether a character is one that hides text or scrambles it. It is a rule, not a list of what was found: a
+// character is hidden unless it is a graphic character (a letter, mark, number, punctuation, symbol or a space separator), so every
+// control, format (Cf), private-use, surrogate, line or paragraph separator and unassigned code point is hidden; it is also hidden
+// when Unicode marks it default-ignorable or a variation selector (the Mongolian free variation selectors, the Hangul fillers,
+// the combining grapheme joiner, the Khmer inherent vowels); noncharacters are unassigned, so they are hidden as well; and the blank-looking or glyphless graphic
+// characters found so far are named (braille blank, the object replacement character, the soft hyphen, the Tifinagh, Brahmi, Zanabazar and Soyombo joiners, the Khitan filler, the ideographic half fill space). It is the one rule for every text
+// Studio sends to a provider or shows from one: a model id in the label, a failure Explain sends, and the advice it shows.
+// Dropped before the redaction gate reads a text, such a character cannot split a token past it. A combining mark, a space
+// separator and a lookalike of an ASCII letter or hyphen are graphic, so they are not hidden, and another glyphless joiner or
+// filler that Unicode keeps graphic and that is not named above can still split a token: that is a limit of the rule. The sweep test
+// is pinned to the Unicode version of the Go release and to the number of kept characters, so a new version fails it and is read.
+func hiddenRune(r rune) bool {
 	switch {
-	case unicode.IsControl(r): // C0, DEL and C1
+	case !unicode.IsGraphic(r):
 		return true
-	case r == 0x2028 || r == 0x2029:
+	case unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r), unicode.Is(unicode.Variation_Selector, r):
 		return true
-	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F, r == 0x061C:
+	case r == 0x2800, r == 0xFFFC, r == 0x00AD, r == 0x034F, r == 0x180E: // blank-looking graphic characters, named
 		return true
-	case r >= 0x200B && r <= 0x200D, r == 0x2060, r == 0xFEFF:
-		return true
-	case r == 0x2800, r == 0x3164, r == 0x115F, r == 0x1160, r == 0xFFA0: // blank-looking characters: braille blank, Hangul fillers
-		return true
-	case r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF: // variation selectors
-		return true
-	case r >= 0xE0000 && r <= 0xE007F: // tag characters
-		return true
-	case r == 0x00AD, r == 0x180E, r == 0x034F: // soft hyphen, Mongolian vowel separator, combining grapheme joiner
-		return true
-	case r >= 0x206A && r <= 0x206F, r >= 0xFFF9 && r <= 0xFFFB: // deprecated format controls, interlinear annotation
-		return true
-	case r == 0xFFFC, r == 0x17B4, r == 0x17B5: // object replacement character; Khmer inherent vowels, which show as nothing (not Cf)
-		return true
-	case unicode.Is(unicode.Cf, r): // every other format character: the lists above are what was found, this is the category
-		return true
-	case r == ',':
+	case r == 0x2D7F, r == 0x16FE4, r == 0x1107F, r == 0x11A47, r == 0x11A99, r == 0x303F: // glyphless joiners and fillers that Unicode keeps graphic, named
 		return true
 	}
 	return false
 }
+
+// unsafeLabelRune says whether a character in a model id could scramble or spoof the one-line label: a hidden character, or the
+// comma that separates the model from the place ("x, on this machine" must not read as a place). They are shown as ?.
+func unsafeLabelRune(r rune) bool { return hiddenRune(r) || r == ',' }
 
 // labelModel is a model id made fit for the label: gated and cut like every provider string, then with the characters above
 // replaced.
