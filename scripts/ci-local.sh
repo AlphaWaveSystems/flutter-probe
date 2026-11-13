@@ -37,13 +37,13 @@
 #     3  FAIL: a required check was skipped because a tool is missing
 #     4  FAIL: nothing failed, but the tree was not the commit (see DIRTY TREE below)
 #     5  PARTIAL: nothing failed, but the run does not show that the commit passes the
-#        five checks (a --job selection, a skip allowed with --allow-skip, or GOFLAGS
-#        is set)
+#        five checks (a --job selection, a skip allowed with --allow-skip, a requested
+#        optional check that was skipped because its tool is missing, or GOFLAGS is set)
 #   130  FAIL (interrupted)
 # --list and --help run nothing and exit 0.
 #
 # Exit status of --release-dry-run. It runs no checks, never prints PASS, and cannot
-# be combined with --all, --job, --allow-skip, --report or --pr-text:
+# be combined with --all, --job, --allow-skip, --base, --report or --pr-text:
 #     0  BUILT: the eight binaries were built from a clean tree
 #     1  a build failed
 #     2  usage error, or the run could not start
@@ -61,8 +61,16 @@
 #   - a tracked file has a staged or unstaged change;
 #   - there is an untracked file that git does not ignore (a tracked file can use it,
 #     and a clean clone of the commit would not have it);
-#   - a file is hidden from `git status` with --assume-unchanged or --skip-worktree.
-# Files the run itself creates or changes do not count; they are named in a note.
+#   - a file is hidden from `git status` with --assume-unchanged or --skip-worktree;
+#   - a check changed a tracked file (the tree is read again after the last check).
+# `git status` is run with --untracked-files=normal and --ignore-submodules=none, so
+# the user's git configuration cannot hide an untracked file. Untracked files the run
+# itself creates do not count; they are named in a note.
+#
+# Environment. A step does not read BASH_ENV or ENV, and the exported shell functions
+# of the caller are removed before anything runs, so that a function named like a tool
+# cannot stand in for it; the final block says how many were removed. A hostile
+# environment (a function named like a shell builtin, a changed PATH) is out of scope.
 #
 # What a run leaves behind: the per-check logs in a temporary directory (its path is
 # printed), and what the commands themselves write inside the repository (bin/,
@@ -75,6 +83,14 @@
 # and git does not track it. The Go tools write that file during a build of the
 # workspace; left behind, it would make the next run a DIRTY TREE.
 set -uo pipefail
+
+# Exported shell functions of the caller could stand in for a tool (a function named
+# go that returns 0). Remove them before anything runs, and count them for the report.
+EXPORTED_FUNCS=0
+for fn in $(compgen -A function); do
+  unset -f "$fn"
+  EXPORTED_FUNCS=$((EXPORTED_FUNCS + 1))
+done
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
@@ -240,7 +256,7 @@ tool_version() {
 }
 
 # ---- Arguments --------------------------------------------------------------------
-ALL=0; ALLOW_SKIP=0; RELEASE=0; BASE_REF="origin/main"; REPORT=""
+ALL=0; ALLOW_SKIP=0; RELEASE=0; BASE_REF="origin/main"; BASE_SET=0; REPORT=""
 WANTED=(); PR_TEXT=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -250,7 +266,8 @@ while [ "$#" -gt 0 ]; do
     --list) list_jobs; exit 0 ;;
     --describe) describe_jobs; exit 0 ;;
     --job) [ "$#" -ge 2 ] || die_usage "--job needs a name"; WANTED+=("$2"); shift 2 ;;
-    --base) [ "$#" -ge 2 ] || die_usage "--base needs a ref"; BASE_REF=$2; shift 2 ;;
+    --base) [ "$#" -ge 2 ] || die_usage "--base needs a ref"
+      case $2 in *[[:cntrl:]]*) die_usage "--base holds a control character" ;; esac; BASE_REF=$2; BASE_SET=1; shift 2 ;;
     --pr-text) [ "$#" -ge 2 ] || die_usage "--pr-text needs a file"; PR_TEXT+=("$2"); shift 2 ;;
     --report) [ "$#" -ge 2 ] || die_usage "--report needs a file"; REPORT=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -259,8 +276,8 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$RELEASE" -eq 1 ]; then
-  if [ "$ALL" -eq 1 ] || [ "$ALLOW_SKIP" -eq 1 ] || [ "${#WANTED[@]}" -gt 0 ] || [ -n "$REPORT" ] || [ "${#PR_TEXT[@]}" -gt 0 ]; then
-    die_usage "--release-dry-run runs no checks; it cannot be combined with --all, --job, --allow-skip, --report or --pr-text"
+  if [ "$ALL" -eq 1 ] || [ "$ALLOW_SKIP" -eq 1 ] || [ "${#WANTED[@]}" -gt 0 ] || [ "$BASE_SET" -eq 1 ] || [ -n "$REPORT" ] || [ "${#PR_TEXT[@]}" -gt 0 ]; then
+    die_usage "--release-dry-run runs no checks; it cannot be combined with --all, --job, --allow-skip, --base, --report or --pr-text"
   fi
 fi
 
@@ -309,7 +326,7 @@ SELF="ci-local"
 if [ "$RELEASE" -eq 1 ]; then SELF="release-dry-run"; fi
 
 # The tree, read before anything runs. A failing `git status` is not a clean tree.
-STATUS_BEFORE=$(git status --porcelain 2>/dev/null) || { echo "ci-local: git status failed; cannot tell whether the tree is the commit" >&2; exit 2; }
+STATUS_BEFORE=$(git status --porcelain --untracked-files=normal --ignore-submodules=none 2>/dev/null) || { echo "ci-local: git status failed; cannot tell whether the tree is the commit" >&2; exit 2; }
 FLAGGED=$(git ls-files -v 2>/dev/null) || { echo "ci-local: git ls-files failed; cannot tell whether the tree is the commit" >&2; exit 2; }
 N_CHANGED=$(printf '%s\n' "$STATUS_BEFORE" | grep -c '^[^?]' || true)
 N_UNTRACKED=$(printf '%s\n' "$STATUS_BEFORE" | grep -c '^??' || true)
@@ -321,6 +338,23 @@ if [ -e go.work.sum ]; then WORKSUM_BEFORE=yes; fi
 # The report file is created now: a path that cannot be written stops the run before
 # any check, and an old report cannot be mistaken for the result of this run.
 if [ -n "$REPORT" ]; then
+  # Not a file the repository tracks, not go.work.sum (which the script may remove),
+  # and not a link: the truncation below must not destroy anything.
+  report_dir=$(cd "$(dirname "$REPORT")" 2>/dev/null && pwd -P) || report_dir=""
+  if [ -L "$REPORT" ]; then
+    echo "ci-local: the report file $REPORT is a symbolic link; choose a plain file" >&2; exit 2
+  fi
+  if [ -n "$report_dir" ]; then
+    root_phys=$(pwd -P)
+    case "$report_dir/$(basename "$REPORT")" in
+      "$root_phys"/*)
+        report_rel=${report_dir#"$root_phys"}; report_rel=${report_rel#/}
+        report_rel=${report_rel:+$report_rel/}$(basename "$REPORT")
+        if [ "$(printf '%s' "$report_rel" | tr '[:upper:]' '[:lower:]')" = "go.work.sum" ] || git ls-files --error-unmatch -- "$report_rel" >/dev/null 2>&1; then
+          echo "ci-local: the report file $REPORT is a file git tracks, or go.work.sum; choose another path" >&2; exit 2
+        fi ;;
+    esac
+  fi
   { : > "$REPORT"; } 2>/dev/null || { echo "ci-local: cannot write the report file $REPORT" >&2; exit 2; }
 fi
 
@@ -514,16 +548,23 @@ if [ -x "$TOOLS_BIN/staticcheck" ]; then LINTER=$("$TOOLS_BIN/staticcheck" -vers
 
 # What the run itself changed or created, compared with the tree before the first check.
 remove_new_worksum
-STATUS_AFTER=$(git status --porcelain 2>/dev/null || true)
-CHANGED_BY_RUN=0
+STATUS_AFTER=$(git status --porcelain --untracked-files=normal --ignore-submodules=none 2>/dev/null) || STATUS_AFTER="git status failed"
+CHANGED_BY_RUN=0; TRACKED_BY_RUN=0
 if [ "$STATUS_AFTER" != "$STATUS_BEFORE" ]; then
   while IFS= read -r status_line; do
     [ -n "$status_line" ] || continue
     case $'\n'"$STATUS_BEFORE"$'\n' in
       *$'\n'"$status_line"$'\n'*) ;;
-      *) CHANGED_BY_RUN=$((CHANGED_BY_RUN + 1)) ;;
+      *)
+        CHANGED_BY_RUN=$((CHANGED_BY_RUN + 1))
+        case $status_line in "??"*) ;; *) TRACKED_BY_RUN=$((TRACKED_BY_RUN + 1)) ;; esac ;;
     esac
   done <<< "$STATUS_AFTER"
+fi
+# A check that changed a tracked file (go mod tidy, a generator) ran on one tree and
+# left another: the result is not about the commit.
+if [ "$TRACKED_BY_RUN" -gt 0 ] && [ "$TREE" = "clean" ]; then
+  TREE="DIRTY TREE (a check changed $TRACKED_BY_RUN tracked file(s))"
 fi
 
 # Go settings that change what the commands do. GOFLAGS can make a check pass without
@@ -538,7 +579,7 @@ fi
 req_total=0
 for i in "${!JOB_ID[@]}"; do [ "${JOB_KIND[$i]}" = "required" ] && req_total=$((req_total + 1)); done
 n_pass=0; n_fail=0; n_skip=0; n_notrun=0
-req_pass=0; req_skip=0; bad=""
+req_pass=0; req_skip=0; bad=""; opt_skip=0; opt_skipped=""
 for n in "${!SELECTED[@]}"; do
   i=${SELECTED[$n]}; st=${R_STATUS[$n]}
   case "$st" in
@@ -550,6 +591,8 @@ for n in "${!SELECTED[@]}"; do
   if [ "${JOB_KIND[$i]}" = "required" ]; then
     [ "$st" = "PASS" ] && req_pass=$((req_pass + 1))
     [ "$st" = "SKIPPED" ] && req_skip=$((req_skip + 1))
+  elif [ "$st" = "SKIPPED" ]; then
+    opt_skip=$((opt_skip + 1)); opt_skipped="$opt_skipped, ${JOB_NAME[$i]}"
   fi
 done
 bad=${bad#, }
@@ -561,13 +604,14 @@ why=""
 [ "$req_skip" -gt 0 ] && why="$why; $req_skip skipped with --allow-skip"
 [ "$req_missing" -gt 0 ] && why="$why; $req_missing not selected"
 [ -n "$GO_FLAGS" ] && why="$why; GOFLAGS is set"
+[ "$opt_skip" -gt 0 ] && why="$why; requested optional checks skipped: ${opt_skipped#, }"
 if [ $((n_fail + n_notrun)) -gt 0 ]; then
   VERDICT="FAIL ($req_pass of $req_total required checks passed; not passed: $bad)"; CODE=1
 elif [ "$req_skip" -gt 0 ] && [ "$ALLOW_SKIP" -eq 0 ]; then
   VERDICT="FAIL ($req_pass of $req_total required checks passed; $req_skip skipped)"; CODE=3
 elif [ "$TREE" != "clean" ]; then
   VERDICT="FAIL (DIRTY TREE; $req_pass of $req_total required checks passed on a tree that is not the commit)"; CODE=4
-elif [ "$req_pass" -eq "$req_total" ] && [ -z "$GO_FLAGS" ]; then
+elif [ "$req_pass" -eq "$req_total" ] && [ -z "$GO_FLAGS" ] && [ "$opt_skip" -eq 0 ]; then
   VERDICT="PASS ($req_pass of $req_total required checks)"; CODE=0
 else
   VERDICT="PARTIAL ($req_pass of $req_total required checks passed$why)"; CODE=5
@@ -613,6 +657,10 @@ final_block() {
   fi
   if [ -n "$WORKSUM_REMOVED" ]; then
     echo "- Note: the Go tools wrote go.work.sum during the run. It was not there before and git does not track it, so it was removed."
+    echo
+  fi
+  if [ "$EXPORTED_FUNCS" -gt 0 ]; then
+    echo "- Note: $EXPORTED_FUNCS exported shell function(s) were in the environment and were removed before the checks ran, so that none stands in for a tool."
     echo
   fi
   if [ -n "$GO_FLAGS" ]; then

@@ -48,7 +48,8 @@ printf '%%s\n' "$line" >> "$FAKE_LOG"
 case "$line" in
   "make build")
     if [ -z "${FAKE_NO_PROBE:-}" ]; then mkdir -p bin; : > bin/probe; chmod +x bin/probe; fi
-    if [ -n "${FAKE_WORKSUM:-}" ]; then echo "written by the build" > go.work.sum; fi ;;
+    if [ -n "${FAKE_WORKSUM:-}" ]; then echo "written by the build" > go.work.sum; fi
+    if [ -n "${FAKE_TOUCH_TRACKED:-}" ]; then echo "changed by the build" > tracked.txt; fi ;;
   "make build-convert") mkdir -p bin; : > bin/probe-convert; chmod +x bin/probe-convert ;;
   "go env GOFLAGS") printf '%%s\n' "${FAKE_GO_ENV_GOFLAGS:-}" ;;
   "flutter --version") echo "Flutter 3.29.0" ;;
@@ -560,18 +561,154 @@ func TestCILocalRemovesTheGoWorkSumItWrote(t *testing.T) {
 		t.Errorf("the run removed a go.work.sum it did not write: %v", err)
 	}
 
-	// A tracked go.work.sum is never removed. The build changed it, which is noted.
+	// A tracked go.work.sum is never removed. The build changes it, so the run is a
+	// DIRTY TREE, with a note.
+	dirty := "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)"
 	writeFile(t, sum, "mine\n") // the run before rewrote it
 	e.git(t, "add", "go.work.sum")
 	e.git(t, "commit", "-q", "-m", "sum")
 	e.head = strings.TrimSpace(e.git(t, "rev-parse", "HEAD"))
 	r := e.run(t, "", env)
-	r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+	r.expect(t, e, 4, dirty)
 	if _, err := os.Stat(sum); err != nil {
 		t.Errorf("the run removed a tracked go.work.sum: %v", err)
 	}
 	if !strings.Contains(r.out, "the run itself changed or created 1 file(s)") {
 		t.Errorf("no note about the file the run changed:\n%s", r.out)
+	}
+
+	// A tracked go.work.sum that is missing from the tree (a deletion, so a dirty tree)
+	// and that the build writes again is still not removed.
+	e.git(t, "checkout", "-q", "--", "go.work.sum")
+	if err := os.Remove(sum); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t, "", env).expect(t, e, 4, dirty)
+	if _, err := os.Stat(sum); err != nil {
+		t.Errorf("the run removed a tracked go.work.sum that it had written: %v", err)
+	}
+}
+
+// The go.work.sum a run wrote is also removed when the run fails or is interrupted:
+// the removal is in the exit handler, not only on the way to the final block.
+func TestCILocalRemovesTheGoWorkSumOfAFailedOrInterruptedRun(t *testing.T) {
+	e := newCILocalEnv(t)
+	sum := filepath.Join(e.repo, "go.work.sum")
+
+	e.run(t, "", append(e.withDenylist(), "FAKE_WORKSUM=1", "FAKE_FAIL=go vet ./...")).
+		expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Lint)")
+	if _, err := os.Stat(sum); err == nil {
+		t.Error("a failed run left go.work.sum behind")
+	}
+
+	cmd, out, log := e.command(t, "", append(e.withDenylist(), "FAKE_WORKSUM=1", "FAKE_SLEEP=go vet ./..."))
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 600; i++ {
+		if _, err := os.Stat(log + ".started"); err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if _, err := os.Stat(sum); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("the build did not write go.work.sum before the signal: %v\n%s", err, out.String())
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	r := result(t, cmd.Wait(), out, log)
+	r.expect(t, e, 130, "FAIL (interrupted)")
+	if _, err := os.Stat(sum); err == nil {
+		t.Error("an interrupted run left go.work.sum behind")
+	}
+}
+
+// `git status` follows the user's configuration; the script must not.
+func TestCILocalGitConfigCannotHideAnUntrackedFile(t *testing.T) {
+	e := newCILocalEnv(t)
+	e.git(t, "config", "status.showUntrackedFiles", "no")
+	writeFile(t, filepath.Join(e.repo, "extra_test.go"), "package extra\n")
+	e.run(t, "", e.withDenylist()).
+		expect(t, e, 4, "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)")
+}
+
+// A check that changes a tracked file leaves a tree that is not the commit.
+func TestCILocalCheckThatChangesATrackedFileIsDirty(t *testing.T) {
+	e := newCILocalEnv(t)
+	r := e.run(t, "", append(e.withDenylist(), "FAKE_TOUCH_TRACKED=1"))
+	r.expect(t, e, 4, "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)")
+	if !strings.Contains(r.out, "- Tree: DIRTY TREE (a check changed 1 tracked file(s))") {
+		t.Errorf("the result does not say that a check changed a tracked file:\n%s", r.out)
+	}
+}
+
+// Optional checks that were asked for and skipped do not make a PASS.
+func TestCILocalSkippedOptionalChecksAreNotAPass(t *testing.T) {
+	e := newCILocalEnv(t) // no flutter, dart, node or npm
+	all := "PARTIAL (5 of 5 required checks passed; requested optional checks skipped: Dart agent, Studio frontend, Studio Go tests, VS Code extension tests, Website build)"
+	r := e.run(t, "", e.withDenylist(), "--all")
+	r.expect(t, e, 5, all)
+	if !strings.Contains(r.out, "Counts: 5 passed, 0 failed, 5 skipped, 0 not run (10 selected, 5 required)") {
+		t.Errorf("unexpected counts:\n%s", r.out)
+	}
+	e.run(t, "", e.withDenylist(), "--all", "--allow-skip").expect(t, e, 5, all)
+	e.run(t, "", nil, "--job", "frontend").
+		expect(t, e, 5, "PARTIAL (0 of 5 required checks passed; 5 not selected; requested optional checks skipped: Studio frontend)")
+	// A failure outranks it.
+	e.run(t, "", append(e.withDenylist(), "FAKE_FAIL=go vet ./..."), "--all").
+		expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Lint)")
+}
+
+// A --base with a control character could write its own last line.
+func TestCILocalRefusesABaseWithAControlCharacter(t *testing.T) {
+	e := newCILocalEnv(t)
+	for _, base := range []string{"x\nci-local: PASS (5 of 5 required checks) at " + e.head, "x\ry", "x\x1b[2Ky"} {
+		r := e.run(t, "", e.withDenylist(), "--base", base)
+		if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS (5 of 5") {
+			t.Errorf("--base %q: exit status %d, calls %q; want 2 and nothing run\n%s", base, r.code, r.calls, r.out)
+		}
+	}
+}
+
+// A --report path that the repository tracks, or go.work.sum, or a link, is refused
+// before anything is truncated or run.
+func TestCILocalRefusesAReportThatWouldDestroyAFile(t *testing.T) {
+	e := newCILocalEnv(t)
+	link := filepath.Join(t.TempDir(), "link.md")
+	if err := os.Symlink(filepath.Join(e.repo, "tracked.txt"), link); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(e.repo, "tracked.txt"),
+		filepath.Join(e.repo, "scripts", "..", "tracked.txt"),
+		filepath.Join(e.repo, "go.work.sum"),
+		filepath.Join(e.repo, "GO.WORK.SUM"),
+		link,
+	} {
+		r := e.run(t, "", e.withDenylist(), "--report", path)
+		if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS") {
+			t.Errorf("--report %s: exit status %d, calls %q; want 2 and nothing run\n%s", path, r.code, r.calls, r.out)
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(e.repo, "tracked.txt")); err != nil || string(data) != "one\n" {
+		t.Errorf("tracked.txt was changed: %q (%v)", data, err)
+	}
+	// A report path inside the repository that git ignores is fine.
+	e.run(t, "", e.withDenylist(), "--report", filepath.Join(e.repo, "coverage.out")).
+		expect(t, e, 0, "PASS (5 of 5 required checks)")
+}
+
+// An exported shell function cannot stand in for a tool.
+func TestCILocalRemovesExportedShellFunctions(t *testing.T) {
+	e := newCILocalEnv(t)
+	env := append(e.withDenylist(), "BASH_FUNC_go%%=() { return 0; }", "FAKE_FAIL=go vet ./...")
+	r := e.run(t, "", env)
+	r.expect(t, e, 1, "FAIL (4 of 5 required checks passed; not passed: Lint)")
+	if !strings.Contains(r.out, "1 exported shell function(s) were in the environment and were removed") {
+		t.Errorf("no note about the exported function:\n%s", r.out)
 	}
 }
 
@@ -740,7 +877,7 @@ func TestCILocalReleaseDryRun(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"--all"}, {"--job", "lint"}, {"--allow-skip"}, {"--report", filepath.Join(t.TempDir(), "r.md")},
-		{"--pr-text", filepath.Join(e.repo, "tracked.txt")},
+		{"--pr-text", filepath.Join(e.repo, "tracked.txt")}, {"--base", "HEAD"},
 	} {
 		for _, order := range [][]string{append([]string{"--release-dry-run"}, args...), append(append([]string{}, args...), "--release-dry-run")} {
 			r := e.run(t, "", nil, order...)
