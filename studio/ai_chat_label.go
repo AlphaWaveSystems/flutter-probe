@@ -12,10 +12,11 @@ const (
 	chatLabelKey = "Anthropic, key needed"
 )
 
-// unsafeLabelRune says whether a character in a model id could scramble or spoof the one-line label: control characters, line
-// and paragraph separators, every format (Cf) character, the blank-looking ones the category does not hold, and the comma that separates the model from the place
-// ("x, on this machine" must not read as a place). They are shown as ?.
-func unsafeLabelRune(r rune) bool {
+// hiddenRune says whether a character is one that hides text or scrambles it: control characters, line and paragraph separators,
+// every format (Cf) character, variation selectors, tag characters, and the blank-looking ones the category does not hold. It is the
+// one list for every text Studio sends to a provider or shows from one: a model id in the label, a failure Explain sends, and the
+// advice it shows. Dropped before the redaction gate reads a text, such a character cannot split a token past it.
+func hiddenRune(r rune) bool {
 	switch {
 	case unicode.IsControl(r): // C0, DEL and C1
 		return true
@@ -39,11 +40,13 @@ func unsafeLabelRune(r rune) bool {
 		return true
 	case unicode.Is(unicode.Cf, r): // every other format character: the lists above are what was found, this is the category
 		return true
-	case r == ',':
-		return true
 	}
 	return false
 }
+
+// unsafeLabelRune says whether a character in a model id could scramble or spoof the one-line label: a hidden character, or the
+// comma that separates the model from the place ("x, on this machine" must not read as a place). They are shown as ?.
+func unsafeLabelRune(r rune) bool { return hiddenRune(r) || r == ',' }
 
 // labelModel is a model id made fit for the label: gated and cut like every provider string, then with the characters above
 // replaced.

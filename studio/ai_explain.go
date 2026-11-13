@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -9,7 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
@@ -26,7 +26,7 @@ const (
 
 	// Text is gated before it is cut, so a field is first bounded to a size far above its cap. A token that straddles this bound
 	// lies beyond every cap and is cut away with the rest.
-	explainPreGate = 20 * explainMaxError
+	explainPreGate = 20 * explainMaxError // 60000
 )
 
 // The two time bounds on one model call. Each is enough on its own: the client gives up on a silent server, and the context ends
@@ -115,24 +115,8 @@ func scrubPersonal(s string) string {
 	return homePathPattern.ReplaceAllString(s, "~")
 }
 
-// invisibleRune says whether r is a control, line or paragraph separator, bidirectional control or zero-width character: text that
-// can hide a token from the gate or scramble what a person reads.
-func invisibleRune(r rune) bool {
-	switch {
-	case unicode.IsControl(r):
-		return true
-	case r == 0x2028 || r == 0x2029:
-		return true
-	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F, r == 0x061C:
-		return true
-	case r >= 0x200B && r <= 0x200D, r == 0x2060, r == 0xFEFF:
-		return true
-	}
-	return false
-}
-
-// withoutInvisible drops invisible characters, so a token split by one is whole again before the gate reads it. A line break is
-// kept when keepLines is set and is a space otherwise, and a tab is a space.
+// withoutInvisible drops hidden characters (hiddenRune, the one list shared with the chat label), so a token split by one is
+// whole again before the gate reads it. A line break is kept when keepLines is set and is a space otherwise, and a tab is a space.
 func withoutInvisible(s string, keepLines bool) string {
 	return strings.Map(func(r rune) rune {
 		switch {
@@ -140,7 +124,7 @@ func withoutInvisible(s string, keepLines bool) string {
 			return r
 		case r == '\n' || r == '\t' || r == '\r':
 			return ' '
-		case invisibleRune(r):
+		case hiddenRune(r):
 			return -1
 		}
 		return r
@@ -156,16 +140,17 @@ func capRunes(s string, max int) string {
 	return string(r[:max-1]) + "…"
 }
 
-// explainField makes one field of a failure fit to send, in this order: the exact key is removed, the field is bounded, personal
-// text is scrubbed, invisible characters are dropped, the gate runs, and the field is cut to its cap. Every field takes the same
-// path, so no field reaches ai.Triage, or the preview, in a form the gate has not seen. The gate runs exactly once.
+// explainField makes one field of a failure fit to send, in this order: hidden characters are dropped, the field is bounded, the
+// exact key is removed, personal text is scrubbed, the gate runs, and the field is cut to its cap. Dropping comes first, so no
+// later step is read around a character that splits what it looks for: a token, the key, an email address or a home folder. The key
+// is dropped the same way, so a key that holds one still matches. Every field takes the same path, so no field reaches ai.Triage,
+// or the preview, in a form the gate has not seen. The gate runs exactly once.
 func explainField(s, key string, keepLines bool, max int) string {
-	if key != "" {
+	s = capRunes(withoutInvisible(s, keepLines), explainPreGate)
+	if key = withoutInvisible(key, false); key != "" {
 		s = strings.ReplaceAll(s, key, redactedMark)
 	}
-	s = capRunes(s, explainPreGate)
-	s = withoutInvisible(scrubPersonal(s), keepLines)
-	s = explainGate(s)
+	s = explainGate(scrubPersonal(s))
 	return strings.TrimSpace(capRunes(s, max))
 }
 
@@ -221,7 +206,15 @@ func explainDestination(s aiProviderSettings) (label string, hosted bool) {
 
 // explainSetup resolves the provider and the failures an Explain would use. With AI off, or a refused configuration, it returns
 // the refusal and nothing is built or sent.
-func (a *App) explainSetup() (explainInput, error) {
+//
+// A panic while the fields are prepared (the gate is replaceable) is recovered here, outside ai.Triage's own recover: nothing is
+// built or sent, and the error is the fixed sentence for a provider failure.
+func (a *App) explainSetup() (in explainInput, err error) {
+	defer func() {
+		if recover() != nil {
+			in, err = explainInput{}, errors.New(explainStoppedOther)
+		}
+	}()
 	s, err := a.aiProvider()
 	if err != nil {
 		return explainInput{}, err
@@ -326,11 +319,12 @@ func stoppedText(stopped string, providerFailed bool, total int) string {
 	return explainStoppedOther
 }
 
-// cleanAdvice makes a model's answer fit for the card. The exact key is removed and the gate runs, because an answer can repeat
-// what it was sent; invisible characters are dropped, runs of blank lines are shortened, and the text is cut. The card sets it
-// with textContent, so a tag in it stays text.
+// cleanAdvice makes a model's answer fit for the card, in the order the fields of a failure take: hidden characters are dropped
+// first, so one cannot split a token or the key past the steps after it; then the exact key is removed and the gate runs, because an
+// answer can repeat what it was sent; runs of blank lines are shortened, and the text is cut. The card sets it with textContent, so
+// a tag in it stays text.
 func cleanAdvice(s, key string) string {
-	s = withoutInvisible(fromProvider(s, key), true)
+	s = fromProvider(withoutInvisible(s, true), withoutInvisible(key, false))
 	for strings.Contains(s, "\n\n\n") {
 		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
 	}
