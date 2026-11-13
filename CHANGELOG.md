@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **The name of `take screenshot` accepts placeholders, so a new run no longer overwrites the old image.** The name is expanded like other steps (`<var>`, `${ENV}`, `<random.*>`), and three built-ins are new: `<timestamp>` (the time of the step to the millisecond, `20261113-141502-123`), `<run>` (one stamp for the whole `probe test` run) and `<test>` (the running test's name, made safe for a file name). A variable of the same name wins, and an unknown placeholder stays as written. `compare screenshot` expands variables but not the built-ins, because its name is the key of the baseline. A script that uses neither a placeholder nor a variable in the name behaves as before.
+
 ## [0.27.0] - 2026-11-11
 
 ### Added
