@@ -48,6 +48,9 @@ func TestSeededResultsIgnoresABadFileWithANote(t *testing.T) {
 			if len(got) != 0 || !strings.Contains(note, "PROBE_STUDIO_SEED_RUN was ignored") {
 				t.Fatalf("results %d, note %q", len(got), note)
 			}
+			if name == "too large" && !strings.Contains(note, "larger than 1 MB") {
+				t.Fatalf("a file over the limit was not refused for its size: %q", note)
+			}
 			if strings.Contains(note, p) {
 				t.Fatalf("the note names the path: %q", note)
 			}
