@@ -270,4 +270,42 @@ test.describe("Explain (fake providers on 127.0.0.1, a seeded run)", () => {
       await f.close();
     }
   });
+
+  test("ex-09 at a narrow window the preview and the card stay inside it, with a long model name and an unbroken word", async ({ page }) => {
+    const longName = "a-very-long-model-name-for-narrow-windows:30b-instruct-q4_K_M";
+    const f = await fakeProvider("Try the other label. " + "word ".repeat(60) + "x".repeat(200));
+    try {
+      useProvider(f, longName);
+      for (const width of [400, 800, 1100]) {
+        await page.setViewportSize({ width, height: 800 });
+        await openStudio(page);
+        await page.click("#btn-explain");
+        await expect(overlay(page)).toBeVisible();
+        const dialog = await page.locator("#explain-preview-overlay .overlay-card").boundingBox();
+        expect(dialog!.x, `preview at ${width}`).toBeGreaterThanOrEqual(0);
+        expect(dialog!.x + dialog!.width, `preview at ${width}`).toBeLessThanOrEqual(width);
+        await expect(page.locator("#btn-explain-preview-send")).toBeInViewport();
+        await page.click("#btn-explain-preview-send");
+        await expect(card(page)).toBeVisible();
+        const box = await card(page).boundingBox();
+        expect(box!.x, `card at ${width}`).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width, `card at ${width}`).toBeLessThanOrEqual(width);
+        expect(box!.y + box!.height, `card at ${width}`).toBeLessThanOrEqual(800);
+        // Nothing in the card runs sideways, so the long word wraps and the model name wraps instead of widening it.
+        expect(await card(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+        await expect(card(page).locator(".explain-card-close")).toBeInViewport();
+        await card(page).locator(".explain-card-close").click();
+        await expect(card(page)).toBeHidden();
+      }
+      // At a wide window the card stays in the Results pane.
+      await page.setViewportSize({ width: 1480, height: 920 });
+      await openStudio(page);
+      await page.click("#btn-explain");
+      await page.click("#btn-explain-preview-send");
+      await expect(card(page)).toBeVisible();
+      expect(await card(page).evaluate((el) => getComputedStyle(el).position)).not.toBe("fixed");
+    } finally {
+      await f.close();
+    }
+  });
 });
