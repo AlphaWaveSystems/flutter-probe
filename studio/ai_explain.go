@@ -283,7 +283,13 @@ type ExplainOffer struct {
 }
 
 // ExplainAvailability returns ExplainOffer. With AI off, a refused configuration or no failed test, nothing is offered.
+//
+// The run is looked at first, and the provider only when there is a failed test with error text to explain: resolving the
+// provider can read the keychain, which a run with no failure, or a launch, should not do.
 func (a *App) ExplainAvailability() ExplainOffer {
+	if !a.hasFailedWithText() {
+		return ExplainOffer{}
+	}
 	in, err := a.explainSetup()
 	if err != nil {
 		return ExplainOffer{}
@@ -411,4 +417,14 @@ func makeExplainCompleter(s aiProviderSettings) (c ai.TextCompleter, err error) 
 		}
 	}()
 	return newExplainCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainClientTimeout)
+}
+
+// hasFailedWithText says whether the last run has a failed test with an error text, before any cleaning. It reads the run only.
+func (a *App) hasFailedWithText() bool {
+	for _, r := range a.track.snapshot().Results {
+		if !r.Passed && !r.Skipped && r.Error != "" {
+			return true
+		}
+	}
+	return false
 }

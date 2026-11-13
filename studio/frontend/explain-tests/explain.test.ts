@@ -118,6 +118,95 @@ describe("ExplainSession", () => {
   });
 });
 
+describe("ExplainSession, a newer state makes an older Explain stale", () => {
+  /** Deps whose steps wait until the test lets them go. */
+  function gated(p: ExplainPreview) {
+    const gates: Record<"preview" | "confirm" | "explain", (() => void) | null> = { preview: null, confirm: null, explain: null };
+    const wait = (k: "preview" | "confirm" | "explain") => new Promise<void>((r) => (gates[k] = r));
+    const log: string[] = [];
+    const d: ExplainDeps = {
+      preview: async () => (log.push("preview"), await wait("preview"), p),
+      confirm: async () => (log.push("confirm"), await wait("confirm"), true),
+      explain: async (dest) => (log.push("explain:" + dest), await wait("explain"), result(p)),
+    };
+    return { d, gates, log };
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("drops a result that arrives after the state changed, and the button is usable at once", async () => {
+    const s = new ExplainSession();
+    const g = gated(local());
+    const first = s.run(g.d);
+    await tick();
+    g.gates.preview!();
+    await tick();
+    g.gates.confirm!();
+    await tick();
+    assert.equal(s.running, true);
+    s.invalidate(); // a new run started
+    assert.equal(s.running, false, "usable again while the old request is still out");
+    g.gates.explain!();
+    assert.deepEqual(await first, { kind: "stale" });
+  });
+
+  it("sends nothing when the state changed while the preview was open", async () => {
+    const s = new ExplainSession();
+    const g = gated(local());
+    const first = s.run(g.d);
+    await tick();
+    g.gates.preview!();
+    await tick();
+    s.reset(); // the settings changed under the open dialog
+    g.gates.confirm!(); // and the person presses Send
+    assert.deepEqual(await first, { kind: "stale" });
+    assert.deepEqual(g.log, ["preview", "confirm"], "no request was made");
+  });
+
+  it("drops a preview that arrives after the state changed", async () => {
+    const s = new ExplainSession();
+    const g = gated(local());
+    const first = s.run(g.d);
+    await tick();
+    s.invalidate();
+    g.gates.preview!();
+    assert.deepEqual(await first, { kind: "stale" });
+    assert.deepEqual(g.log, ["preview"]);
+  });
+
+  it("an error from an Explain that was dropped is not raised, and one from the current Explain is", async () => {
+    const s = new ExplainSession();
+    let fail!: (e: Error) => void;
+    const dropped = s.run({ preview: () => new Promise<ExplainPreview>((_, rej) => (fail = rej)), confirm: async () => true, explain: async () => result(local()) });
+    await tick();
+    s.invalidate();
+    fail(new Error("late"));
+    assert.deepEqual(await dropped, { kind: "stale" });
+    await assert.rejects(s.run({ preview: async () => Promise.reject(new Error("now")), confirm: async () => true, explain: async () => result(local()) }), /now/);
+  });
+
+  it("a newer Explain after an invalidation is not hurt by the older one finishing late", async () => {
+    const s = new ExplainSession();
+    const old = gated(local("old, on this machine"));
+    const first = s.run(old.d);
+    await tick();
+    s.invalidate();
+    const fresh = gated(local("new, on this machine"));
+    const second = s.run(fresh.d);
+    await tick();
+    assert.equal(s.running, true);
+    old.gates.preview!(); // the old one finishes now
+    assert.deepEqual(await first, { kind: "stale" });
+    assert.equal(s.running, true, "the old one must not free the newer one's slot");
+    fresh.gates.preview!();
+    await tick();
+    fresh.gates.confirm!();
+    await tick();
+    fresh.gates.explain!();
+    assert.equal((await second)?.kind, "result");
+    assert.equal(s.running, false);
+  });
+});
+
 describe("explainCardModel", () => {
   it("says Advisory, names the destination and whether it is local or hosted", () => {
     const m = explainCardModel({ destination: "m, on this machine", hosted: false, notes: [{ test: "t", advice: "a" }] });

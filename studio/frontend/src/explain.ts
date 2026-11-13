@@ -35,7 +35,7 @@ export function needsPreview(hosted: boolean, destination: string, confirmedHere
   return hosted || destination !== confirmedHere;
 }
 
-export type ExplainOutcome = { kind: "cancelled" } | { kind: "result"; result: ExplainResult };
+export type ExplainOutcome = { kind: "cancelled" } | { kind: "stale" } | { kind: "result"; result: ExplainResult };
 
 export interface ExplainDeps {
   preview(): Promise<ExplainPreview>;
@@ -45,14 +45,26 @@ export interface ExplainDeps {
   explain(destination: string): Promise<ExplainResult>;
 }
 
-/** One Explain at a time, and the memory of which destination on this machine was confirmed. */
+/**
+ * One Explain at a time, and the memory of which destination on this machine was confirmed. An Explain belongs to the state it was
+ * started in: a new run, a change of workspace, settings or key, or a newer Explain makes an older one stale, and a stale one shows
+ * nothing and, if it has not been sent yet, is never sent.
+ */
 export class ExplainSession {
   private confirmedHere: string | null = null;
   private busy = false;
+  private generation = 0;
 
-  /** Settings, the saved key or the workspace changed: the next Explain shows its preview again. */
+  /** Settings, the saved key or the workspace changed: the next Explain shows its preview again, and one in flight is dropped. */
   reset(): void {
     this.confirmedHere = null;
+    this.invalidate();
+  }
+
+  /** Drops the Explain in flight, if any, and makes the next one possible at once. */
+  invalidate(): void {
+    this.generation++;
+    this.busy = false;
   }
 
   get running(): boolean {
@@ -61,20 +73,30 @@ export class ExplainSession {
 
   /**
    * Preview first, then the request, and the request only after Send. A second call while one is running does nothing, so one click
-   * cannot send twice. A hosted destination is never remembered.
+   * cannot send twice. A hosted destination is never remembered. After every wait the Explain checks that it is still the current
+   * one: when it is not, it returns "stale", and nothing more is sent.
    */
   async run(deps: ExplainDeps): Promise<ExplainOutcome | null> {
     if (this.busy) return null;
+    const mine = ++this.generation;
     this.busy = true;
     try {
       const p = await deps.preview();
+      if (mine !== this.generation) return { kind: "stale" };
       if (needsPreview(p.hosted, p.destination, this.confirmedHere)) {
-        if (!(await deps.confirm(p))) return { kind: "cancelled" };
+        const sent = await deps.confirm(p);
+        if (mine !== this.generation) return { kind: "stale" };
+        if (!sent) return { kind: "cancelled" };
       }
       this.confirmedHere = p.hosted ? null : p.destination;
-      return { kind: "result", result: await deps.explain(p.destination) };
+      const result = await deps.explain(p.destination);
+      if (mine !== this.generation) return { kind: "stale" };
+      return { kind: "result", result };
+    } catch (err) {
+      if (mine !== this.generation) return { kind: "stale" }; // an error for an Explain that was dropped is not shown
+      throw err;
     } finally {
-      this.busy = false;
+      if (mine === this.generation) this.busy = false;
     }
   }
 }

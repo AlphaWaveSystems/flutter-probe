@@ -17,7 +17,7 @@ interface Fake {
 }
 
 /** A fake OpenAI-compatible server: it records every chat request body and answers each with status and reply. */
-async function fakeProvider(reply: string, status = 200): Promise<Fake> {
+async function fakeProvider(reply: string, status = 200, delayMs = 0): Promise<Fake> {
   const bodies: string[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -27,7 +27,7 @@ async function fakeProvider(reply: string, status = 200): Promise<Fake> {
       if (req.method === "POST" && (req.url ?? "").endsWith("/chat/completions")) {
         bodies.push(Buffer.concat(chunks).toString("utf8"));
         res.statusCode = status;
-        res.end(JSON.stringify({ choices: [{ message: { content: reply } }] }));
+        setTimeout(() => res.end(JSON.stringify({ choices: [{ message: { content: reply } }] })), delayMs);
         return;
       }
       res.end(JSON.stringify({ data: [{ id: "fake-model" }] }));
@@ -291,6 +291,8 @@ test.describe("Explain (fake providers on 127.0.0.1, a seeded run)", () => {
         expect(box!.x, `card at ${width}`).toBeGreaterThanOrEqual(0);
         expect(box!.x + box!.width, `card at ${width}`).toBeLessThanOrEqual(width);
         expect(box!.y + box!.height, `card at ${width}`).toBeLessThanOrEqual(800);
+        // The card does not cover the Explain button, so it can be pressed again.
+        expect(await page.locator("#btn-explain").evaluate((el) => { const r = el.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === el; }), `button at ${width}`).toBe(true);
         // Nothing in the card runs sideways, so the long word wraps and the model name wraps instead of widening it.
         expect(await card(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
         await expect(card(page).locator(".explain-card-close")).toBeInViewport();
@@ -304,6 +306,124 @@ test.describe("Explain (fake providers on 127.0.0.1, a seeded run)", () => {
       await page.click("#btn-explain-preview-send");
       await expect(card(page)).toBeVisible();
       expect(await card(page).evaluate((el) => getComputedStyle(el).position)).not.toBe("fixed");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("ex-10 an Explain whose state changed while the provider was thinking shows nothing, and the button works again", async ({ page }) => {
+    const f = await fakeProvider("late advice", 200, 1500);
+    try {
+      useProvider(f);
+      await openStudio(page);
+      await page.click("#btn-explain");
+      await page.click("#btn-explain-preview-send");
+      await expect.poll(() => f.chats()).toBe(1); // the first request is out and the provider is slow
+
+      // The provider settings change now: the Explain of the old state is dropped. (A new run does the same through run:started.)
+      await page.click("#btn-settings");
+      await expect(page.locator("#settings-port")).toHaveValue(/^\d+$/);
+      await page.fill("#settings-ai-timeout", "90s");
+      await page.click("#btn-settings-save");
+      await expect(page.locator("#toast-container")).toContainText("Saved probe.yaml");
+      await expect(page.locator("#btn-explain")).toBeEnabled(); // usable at once, not after the old answer
+      await expect(page.locator("#explain-status")).toHaveText("");
+
+      await page.waitForTimeout(2500); // the old answer has come back by now
+      await expect(card(page)).toBeHidden();
+      await expect(card(page)).toHaveText("");
+
+      // And a fresh Explain works: its preview is shown again (the settings changed) and its answer shows.
+      await page.click("#btn-explain");
+      await expect(overlay(page)).toBeVisible();
+      await page.click("#btn-explain-preview-send");
+      await expect(card(page)).toBeVisible({ timeout: 15_000 });
+      await expect(card(page)).toContainText("late advice");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("ex-11 Escape on the preview is Cancel and sends nothing", async ({ page }) => {
+    const f = await fakeProvider("advice");
+    try {
+      useProvider(f);
+      await openStudio(page);
+      await page.click("#btn-explain");
+      await expect(overlay(page)).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(overlay(page)).toBeHidden();
+      await expect(card(page)).toBeHidden();
+      await expect(page.locator("#btn-explain")).toBeEnabled();
+      expect(f.chats()).toBe(0); // Escape sent nothing
+
+      await page.click("#btn-explain");
+      await expect(overlay(page)).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(overlay(page)).toBeHidden();
+      expect(f.chats()).toBe(0);
+    } finally {
+      await f.close();
+    }
+  });
+
+  /** The callbacks the page registers for an event are kept, so a test can call the ones for run:started as the bridge would. */
+  async function captureEvents(page: Page) {
+    await page.addInitScript(() => {
+      const handlers: Record<string, Array<(...a: unknown[]) => void>> = {};
+      (window as any).__handlers = handlers;
+      let rt: any;
+      Object.defineProperty(window, "runtime", {
+        configurable: true,
+        get: () => rt,
+        set: (v) => {
+          rt = v;
+          const orig = v.EventsOnMultiple.bind(v);
+          v.EventsOnMultiple = (name: string, cb: (...a: unknown[]) => void, max: number) => {
+            (handlers[name] = handlers[name] || []).push(cb);
+            return orig(name, cb, max);
+          };
+        },
+      });
+    });
+    return () => page.evaluate(() => (((window as any).__handlers["run:started"]) || []).forEach((cb: (p: string) => void) => cb("x.probe")));
+  }
+
+  test("ex-12 a new run drops an Explain in flight: its answer never shows, and a fresh Explain works", async ({ page }) => {
+    const runStarted = await captureEvents(page);
+    const f = await fakeProvider("advice for the run", 200, 1500);
+    try {
+      useProvider(f);
+      await openStudio(page);
+      await page.click("#btn-explain");
+      await page.click("#btn-explain-preview-send");
+      await expect.poll(() => f.chats()).toBe(1); // the request is out and the provider is slow
+      await runStarted(); // a new run begins
+      await expect(page.locator("#btn-explain")).toBeEnabled(); // usable at once
+      await page.waitForTimeout(2500); // the old answer has come back by now
+      await expect(card(page)).toBeHidden();
+      await expect(card(page)).toHaveText("");
+
+      await page.click("#btn-explain"); // this destination was confirmed in the session, so no second preview
+      await expect(card(page)).toBeVisible({ timeout: 15_000 });
+      await expect(card(page)).toContainText("advice for the run");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("ex-13 a new run closes an open preview, and nothing is sent", async ({ page }) => {
+    const runStarted = await captureEvents(page);
+    const f = await fakeProvider("advice");
+    try {
+      useProvider(f);
+      await openStudio(page);
+      await page.click("#btn-explain");
+      await expect(overlay(page)).toBeVisible();
+      await runStarted();
+      await expect(overlay(page)).toBeHidden();
+      await expect(page.locator("#btn-explain")).toBeEnabled();
+      expect(f.chats()).toBe(0);
     } finally {
       await f.close();
     }

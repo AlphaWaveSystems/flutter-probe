@@ -515,8 +515,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
    its text, its close button and the whole answer are reachable at any width. */
 @media (max-width: 1150px) {
   .explain-card:not([hidden]) {
-    position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 30; margin: 0;
-    max-height: 60vh; box-sizing: border-box; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    position: fixed; left: 8px; right: 8px; bottom: 210px; z-index: 30; margin: 0; /* above the Results pane (200 px), so the Explain button stays uncovered */
+    max-height: min(60vh, calc(100vh - 260px)); box-sizing: border-box; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   }
 }
 

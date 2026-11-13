@@ -44,14 +44,15 @@ func seededResults(headless bool, path, workspace string) (results []RunResult, 
 	if rel, err := filepath.Rel(realWS, realFile); err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return ignored("the file is not inside the workspace")
 	}
+	// A regular file only, decided before it is opened: opening a named pipe would wait for a writer and block startup.
+	if st, err := os.Stat(realFile); err != nil || !st.Mode().IsRegular() {
+		return ignored("the file is not a regular file")
+	}
 	f, err := os.Open(realFile)
 	if err != nil {
 		return ignored("the file cannot be read")
 	}
 	defer f.Close()
-	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
-		return ignored("the file cannot be read")
-	}
 	b, err := io.ReadAll(io.LimitReader(f, maxSeedBytes+1))
 	if err != nil || len(b) > maxSeedBytes {
 		return ignored("the file cannot be read or is larger than 1 MB")

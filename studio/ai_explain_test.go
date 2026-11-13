@@ -671,3 +671,45 @@ func TestExplainPreviewedRefusesAChangedDestination(t *testing.T) {
 		t.Fatalf("a refused destination sent %d more request(s)", p.requests()-1)
 	}
 }
+
+// Asking whether Explain is offered reads the keychain only when it has to: not for a run with no failed test, and not for a
+// provider that is decided without a key (off, a local model, OpenAI or Anthropic with a variable). It does when the provider is
+// unset and a saved key may decide it.
+func TestExplainAvailabilityReadsTheKeychainOnlyWhenItMust(t *testing.T) {
+	isolateProvider(t, "")
+	lookups := 0
+	prev := apiKeyLookup
+	t.Cleanup(func() { apiKeyLookup = prev })
+	apiKeyLookup = func() (string, error) { lookups++; return "", nil }
+	t.Setenv("PROBE_EXPLAIN_KEY", "plainExplainSecretValue0000000080")
+	p := newExplainProvider(t, 200, "ok", 0)
+	ok := []RunResult{failed("a", "x")}
+	cases := []struct {
+		name    string
+		yaml    string
+		results []RunResult
+		reads   bool
+	}{
+		{"no failure and no ai block", "agent:\n  port: 9999\n", []RunResult{{Name: "p", Passed: true}}, false},
+		{"no failure with a provider that needs the keychain", "ai:\n  provider: anthropic\n", []RunResult{{Name: "p", Passed: true}}, false},
+		{"a failed test with no error text", "ai:\n  provider: anthropic\n", []RunResult{failed("a", "")}, false},
+		{"AI off", "ai:\n  provider: none\n", ok, false},
+		{"a local model", localYAML(p.srv.URL), ok, false},
+		{"OpenAI with a variable", "ai:\n  provider: openai\n  model: m\n  api_key: ${PROBE_EXPLAIN_KEY}\n", ok, false},
+		{"Anthropic with a variable", "ai:\n  provider: anthropic\n  api_key: ${PROBE_EXPLAIN_KEY}\n", ok, false},
+		{"the provider is not set", "agent:\n  port: 9999\n", ok, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			a := explainApp(t, c.yaml, c.results...)
+			lookups = 0
+			a.ExplainAvailability()
+			if !c.reads && lookups != 0 {
+				t.Fatalf("the keychain was read %d time(s)", lookups)
+			}
+			if c.reads && lookups == 0 {
+				t.Fatal("the keychain was not read, though the provider is not set and a saved key decides it")
+			}
+		})
+	}
+}
