@@ -1,4 +1,4 @@
-.PHONY: studio-e2e studio-e2e-native studio-e2e-web build build-convert install test test-convert test-convert-integration lint clean deps ios-driver
+.PHONY: studio-e2e studio-e2e-native studio-e2e-web build build-convert install test test-convert test-convert-integration lint clean deps ios-driver ci-local ci-local-all
 
 BINARY  = probe
 OUT_DIR = bin
@@ -43,6 +43,14 @@ test-convert:
 ## Requires probe binary — builds it first if missing.
 test-convert-integration: build build-convert
 	cd tools/probe-convert && go test -v -run "TestGoldenFiles|TestLintGeneratedOutput|TestVerifyDryRun" .
+
+## Run the checks a pull request needs, locally (see scripts/ci-local.sh --help)
+ci-local:
+	scripts/ci-local.sh
+
+## The same, plus the Dart agent, Studio, VS Code extension and website checks
+ci-local-all:
+	scripts/ci-local.sh --all
 
 ## Lint .probe test files in the tests/ directory
 lint:
