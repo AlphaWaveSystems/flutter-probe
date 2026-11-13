@@ -247,6 +247,7 @@ See [Testing against backend data](/advanced/backend-data/).
 
 ```
 take screenshot "checkout_page"    # save PNG to screenshots folder
+take screenshot "checkout_<timestamp>"  # a name that carries the time, so a new run never overwrites the old image
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
@@ -257,6 +258,23 @@ shake                              # simulate device shake gesture
 log "checkpoint reached"           # print to test output
 pause                              # 1-second pause
 ```
+
+### Screenshot names
+
+A screenshot is saved under the name you give it, so the same name in a later run (or a second step) replaces the earlier image. The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in every other step, and three built-in placeholders make a name unique:
+
+| Placeholder | Value |
+| --- | --- |
+| `<timestamp>` | the time of the step, `20261113-141502-123` (local time, to the millisecond) |
+| `<run>` | one stamp shared by every screenshot of this `probe test` run, `20261113-141502` |
+| `<test>` | the name of the running test, letters and digits of any script stay (UTF-8 is kept); spaces, `/`, emoji, punctuation and invalid bytes become `_` |
+
+```
+take screenshot "F14_<test>_s02_<run>"
+```
+
+A variable with the same name as a built-in (`<run>`) wins. A placeholder that is neither is left as written. `compare screenshot` expands variables but not the built-ins: its name is the key of the baseline, and a name that changes every run would never find it.
+
 
 ## App Lifecycle
 
