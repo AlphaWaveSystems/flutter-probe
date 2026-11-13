@@ -167,6 +167,8 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 - `make studio-e2e-native`: the real window, driven through macOS accessibility (smoke set; needs a second display named by `STUDIO_E2E_DISPLAY`, and focus). `make studio-e2e` is a deprecated alias for one release.
 - CI (`.github/workflows/studio-ci.yml`) runs on changes to `studio/` or `vscode/`: the Studio Go tests (after the frontend build that the binary embeds), the frontend build and its `node --test` suites, and the VS Code extension tests. The frontend suites run on Node 26: they pass a directory to `node --test`, which Node 22 does not accept.
 
+The headless suite sets `PROBE_STUDIO_KEYCHAIN=memory` in `e2e-web/playwright.config.ts`, which keeps API keys in memory so no test reads or writes the real keychain. Only the headless build reads that variable.
+
 ## Manual check of the native window (device view)
 
 Automated tests cover the browser mode; these checks need a person at an unlocked screen with the real window. Use one simulator or emulator at a time, with a Probe-enabled app running and its agent port and token known.
