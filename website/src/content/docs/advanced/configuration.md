@@ -199,7 +199,7 @@ this is a deliberate departure from Maestro's mandatory-cloud-upload model).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `provider` | string | — | `openai`, `anthropic`, or `local`. No default — must be set explicitly, and a test using `with ai` fails fast (before any device connects) if this is unset |
+| `provider` | string | — | `openai`, `anthropic`, `local`, or `none` (Studio only: turns AI off even when a key is saved; the CLI does not accept it as a provider). No default — must be set explicitly, and a test using `with ai` fails fast (before any device connects) if this is unset |
 | `api_key` | string | — | Provider API key. Supports `${ENV_VAR}` syntax. Not required for `provider: local` |
 | `model` | string | `claude-sonnet-4-20250514` | Model name. Required, no default, for `provider: local` |
 | `endpoint` | string | — | OpenAI-compatible base URL (e.g. `http://localhost:11434/v1`) for `provider: local`. Supports `${ENV_VAR}`. Required when `provider: local` — a test using `with ai` fails fast if it's missing |

@@ -61,6 +61,10 @@ cd probe_agent && flutter test
 make test-convert                 # Unit tests
 make test-convert-integration     # Golden files + lint + dry-run
 
+# The CI checks, run locally (for example when hosted CI is unavailable)
+make ci-local                     # Build, Go unit tests, probe-convert tests, Lint, Disclosure guard
+make ci-local-all                 # also the Dart agent, Studio, VS Code extension and website checks
+
 # E2E health check (requires emulator/simulator)
 ./tests/e2e_cli_params/health_check.sh
 ```

@@ -1,5 +1,6 @@
 import "./style.css";
 import * as monaco from "monaco-editor";
+import { latestWins } from "./latest-wins";
 import { PROBESCRIPT_LANGUAGE_ID, registerProbeScript } from "./probescript";
 import { initDeviceStream, onElementSelected, startStream, stopStream } from "./device-stream";
 import { initDeviceSettings } from "./device-settings";
@@ -29,6 +30,7 @@ import {
   PickWorkspace,
   PreviewAIChat,
   FindLocalModels,
+  AIChatLabel,
   ReadFile,
   RunFileScoped,
   SaveAISettings,
@@ -407,7 +409,23 @@ let aiPreviewConfirmed: string | null = null;
 
 function resetAIPreview(): void {
   aiPreviewConfirmed = null;
+  // The same events change where a message goes, so they change the header too, but only while the chat pane is open: the header is
+  // not visible otherwise, and asking for it may read the keychain, which should not happen at launch for a pane nobody opened.
+  if (!$("chat-pane").hidden) void refreshChatLabel();
 }
+
+// refreshChatLabel shows where the next message would go: the provider and the model id, or that AI is off. The text comes from
+// probe.yaml, so it is set with textContent, never as markup. The latest call wins: two refreshes that finish out of order cannot
+// leave an older label on screen.
+const refreshChatLabel = latestWins(
+  () => AIChatLabel(),
+  (text) => {
+    $("chat-provider").textContent = text;
+  },
+  () => {
+    $("chat-provider").textContent = "";
+  },
+);
 
 // previewLabel is the destination line PreviewAIChat puts first, such as "Sent to: local endpoint http://127.0.0.1:11434/v1, model m".
 function previewLabel(preview: string): string {
@@ -1389,7 +1407,10 @@ function showChatPane(visible: boolean) {
   chatVisible = visible;
   $("chat-pane").hidden = !visible;
   $("btn-ai-toggle").classList.toggle("btn-active", visible);
-  if (visible) void updateChatContextNote();
+  if (visible) {
+    void updateChatContextNote();
+    void refreshChatLabel(); // the header is filled when the pane opens, so a hidden pane never asks
+  }
 }
 
 function updateCostDisplay() {

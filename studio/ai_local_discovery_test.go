@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // fakeOllama is a model server on 127.0.0.1 that records every request. Nothing here talks to a real Ollama.
@@ -302,5 +303,66 @@ func TestLocalDiscoveryEndpoint(t *testing.T) {
 				t.Errorf("note = %q, want one containing %q", note, c.note)
 			}
 		})
+	}
+}
+
+// An error status is an error even when the body is a valid model list: a server that answers 401, 404 or 500 has not given its
+// models, whatever it sent.
+func TestFindLocalModelsRejectsAnErrorStatusWithAValidList(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError, http.StatusTemporaryRedirect + 1} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			f := newFakeOllama(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+				listing("looks-valid")(w, r)
+			})
+			useDiscoveryTarget(t, f.endpoint())
+			got, err := (&App{}).FindLocalModels("")
+			if err == nil || len(got.Models) != 0 {
+				t.Fatalf("an answer with status %d was accepted: %+v, %v", status, got, err)
+			}
+			if !strings.Contains(err.Error(), fmt.Sprint(status)) {
+				t.Fatalf("the error does not say the status: %v", err)
+			}
+		})
+	}
+}
+
+// Each address gets 2 seconds. The value is pinned, and a server that never answers is given up on in about that time, not held.
+func TestFindLocalModelsGivesUpAfterTwoSeconds(t *testing.T) {
+	if discoveryTimeout != 2*time.Second {
+		t.Fatalf("discoveryTimeout = %v, want 2s", discoveryTimeout)
+	}
+	release := make(chan struct{})
+	f := newFakeOllama(t, func(w http.ResponseWriter, r *http.Request) { <-release })
+	t.Cleanup(func() { close(release) }) // runs before the server closes, so its handler can finish
+	useDiscoveryTarget(t, f.endpoint())
+	start := time.Now()
+	_, err := (&App{}).FindLocalModels("")
+	if err == nil || !strings.Contains(err.Error(), "no answer") {
+		t.Fatalf("error = %v", err)
+	}
+	if took := time.Since(start); took < time.Second || took > 3500*time.Millisecond {
+		t.Fatalf("it gave up after %v, want about 2s", took)
+	}
+}
+
+// The form endpoint may be any loopback port, and its path is kept: /models is added after what was typed. A query in it is sent as
+// given, so it ends up before /models; the settings do not stop it, because it is still this machine.
+func TestFindLocalModelsUsesAnyLoopbackPortAndKeepsThePath(t *testing.T) {
+	f := newFakeOllama(t, listing("m"))
+	useDiscoveryTarget(t, closedEndpoint(t))
+	got, err := (&App{}).FindLocalModels(f.srv.URL + "/api/v1")
+	if err != nil || len(got.Models) != 1 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if r := f.requests(); len(r) != 1 || r[0] != "GET /api/v1/models" {
+		t.Fatalf("requests = %v", r)
+	}
+	f2 := newFakeOllama(t, listing("m"))
+	if _, err := (&App{}).FindLocalModels(f2.srv.URL + "/v1?x=1"); err != nil {
+		t.Fatal(err)
+	}
+	if r := f2.requests(); len(r) != 1 || r[0] != "GET /v1?x=1/models" {
+		t.Fatalf("a query is sent as given, so the request is %v", r)
 	}
 }
