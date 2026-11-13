@@ -399,6 +399,182 @@ export namespace main {
 	        this.skipped = source["skipped"];
 	    }
 	}
+	export class NetBody {
+	    kind: string;
+	    text?: string;
+	    size: number;
+	    truncated?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetBody(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.text = source["text"];
+	        this.size = source["size"];
+	        this.truncated = source["truncated"];
+	    }
+	}
+	export class NetHeader {
+	    name: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetHeader(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.value = source["value"];
+	    }
+	}
+	export class NetDetail {
+	    seq: number;
+	    method: string;
+	    url: string;
+	    status: number;
+	    durationMs: number;
+	    mocked: boolean;
+	    error?: string;
+	    requestBytes: number;
+	    responseBytes: number;
+	    requestHeaders: NetHeader[];
+	    responseHeaders: NetHeader[];
+	    moreRequestHeaders?: number;
+	    moreResponseHeaders?: number;
+	    requestBody: NetBody;
+	    responseBody: NetBody;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seq = source["seq"];
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.status = source["status"];
+	        this.durationMs = source["durationMs"];
+	        this.mocked = source["mocked"];
+	        this.error = source["error"];
+	        this.requestBytes = source["requestBytes"];
+	        this.responseBytes = source["responseBytes"];
+	        this.requestHeaders = this.convertValues(source["requestHeaders"], NetHeader);
+	        this.responseHeaders = this.convertValues(source["responseHeaders"], NetHeader);
+	        this.moreRequestHeaders = source["moreRequestHeaders"];
+	        this.moreResponseHeaders = source["moreResponseHeaders"];
+	        this.requestBody = this.convertValues(source["requestBody"], NetBody);
+	        this.responseBody = this.convertValues(source["responseBody"], NetBody);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class NetFilter {
+	    since: number;
+	    method: string;
+	    status: string;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetFilter(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.since = source["since"];
+	        this.method = source["method"];
+	        this.status = source["status"];
+	        this.text = source["text"];
+	    }
+	}
+	
+	export class NetRow {
+	    seq: number;
+	    method: string;
+	    url: string;
+	    status: number;
+	    durationMs: number;
+	    mocked: boolean;
+	    error?: string;
+	    requestBytes: number;
+	    responseBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seq = source["seq"];
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.status = source["status"];
+	        this.durationMs = source["durationMs"];
+	        this.mocked = source["mocked"];
+	        this.error = source["error"];
+	        this.requestBytes = source["requestBytes"];
+	        this.responseBytes = source["responseBytes"];
+	    }
+	}
+	export class NetList {
+	    epoch: string;
+	    latest: number;
+	    total: number;
+	    shown: number;
+	    rows: NetRow[];
+	
+	    static createFrom(source: any = {}) {
+	        return new NetList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.epoch = source["epoch"];
+	        this.latest = source["latest"];
+	        this.total = source["total"];
+	        this.shown = source["shown"];
+	        this.rows = this.convertValues(source["rows"], NetRow);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class RunPlanTest {
 	    name: string;
 	    line: number;
