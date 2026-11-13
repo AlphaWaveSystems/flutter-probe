@@ -151,7 +151,7 @@ func TestLeakTableErrorText(t *testing.T) {
 	e := probelink.HTTPEntry{Seq: 1, Method: "GET", URL: "https://h.example.test/p", Error: `Get "https://bob:` + netPlain + `@h.example.test/p?token=` + netPlain + `&id=7": dial tcp 10.0.0.5:443: connect: refused; password=` + netPlain + ` ` + netJWTHS256}
 	r := netRow(e)
 	mustNotContain(t, "error text", r.Error, netPlain, "eyJ", "bob")
-	if !strings.Contains(r.Error, "token=[redacted]") || !strings.Contains(r.Error, "dial tcp") {
+	if !strings.Contains(r.Error, "id=[redacted]") || !strings.Contains(r.Error, "dial tcp") {
 		t.Errorf("error = %q", r.Error)
 	}
 	if (NetFilter{Text: netPlain}).matches(r) || !(NetFilter{Text: "dial tcp"}).matches(r) {

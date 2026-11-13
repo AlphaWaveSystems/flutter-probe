@@ -27,6 +27,7 @@ var (
 	errNetLogFailed    = errors.New("the app did not answer the request log")
 	errNetNoExchange   = errors.New("that request is no longer in the log")
 	errNetEpoch        = errors.New("the app restarted since the list was read: refresh the list")
+	errNetNoEpoch      = errors.New("this app sends no restart marker, so one request cannot be told from another after a restart: refresh the list")
 )
 
 // NetFilter selects rows of the listing. Method, Status and Text are matched against what is shown, never against a raw value, so a
@@ -183,6 +184,9 @@ func (a *App) HTTPExchange(epoch string, seq int) (NetDetail, error) {
 	if err != nil {
 		return NetDetail{}, err
 	}
+	if epoch == "" || shortText(res.Epoch, 64) == "" {
+		return NetDetail{}, errNetNoEpoch // with no marker on either side a restart cannot be seen
+	}
 	if shortText(res.Epoch, 64) != epoch {
 		return NetDetail{}, errNetEpoch
 	}
@@ -190,11 +194,12 @@ func (a *App) HTTPExchange(epoch string, seq int) (NetDetail, error) {
 		if e.Seq != seq {
 			continue
 		}
+		budget := newNetBudget() // what one exchange may have processed in all
 		d := NetDetail{Epoch: epoch, NetRow: netRow(e)}
-		d.RequestHeaders, d.MoreRequestHeaders = redactHeaders(e.RequestHeaders)
-		d.ResponseHeaders, d.MoreResponseHeaders = redactHeaders(e.ResponseHeaders)
-		d.RequestBody = redactBody(e.RequestBody, e.RequestBytes, headerValue(e.RequestHeaders, "content-type"))
-		d.ResponseBody = redactBody(e.ResponseBody, e.ResponseBytes, headerValue(e.ResponseHeaders, "content-type"))
+		d.RequestHeaders, d.MoreRequestHeaders = redactHeadersBudget(e.RequestHeaders, budget)
+		d.ResponseHeaders, d.MoreResponseHeaders = redactHeadersBudget(e.ResponseHeaders, budget)
+		d.RequestBody = redactBodyBudget(e.RequestBody, e.RequestBytes, headerValue(e.RequestHeaders, "content-type"), budget)
+		d.ResponseBody = redactBodyBudget(e.ResponseBody, e.ResponseBytes, headerValue(e.ResponseHeaders, "content-type"), budget)
 		return d, nil
 	}
 	return NetDetail{}, errNetNoExchange

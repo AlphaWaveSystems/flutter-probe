@@ -188,17 +188,17 @@ func TestHTTPExchangeIsRedactedInEveryPosition(t *testing.T) {
 }
 
 func TestHTTPExchangeMissingAndBadSequence(t *testing.T) {
-	c := &fakeNetClient{res: probelink.HTTPLogResult{Entries: []probelink.HTTPEntry{hostileEntry(3)}}}
+	c := &fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e1", Entries: []probelink.HTTPEntry{hostileEntry(3)}}}
 	a := netApp(c)
 	for _, seq := range []int{0, -4} {
-		if _, err := a.HTTPExchange("", seq); !errors.Is(err, errNetNoExchange) {
+		if _, err := a.HTTPExchange("e1", seq); !errors.Is(err, errNetNoExchange) {
 			t.Errorf("seq %d: %v", seq, err)
 		}
 	}
 	if c.calls() != 0 {
 		t.Errorf("a sequence below 1 asked the app %d time(s)", c.calls())
 	}
-	if _, err := a.HTTPExchange("", 99); !errors.Is(err, errNetNoExchange) || c.calls() != 1 {
+	if _, err := a.HTTPExchange("e1", 99); !errors.Is(err, errNetNoExchange) || c.calls() != 1 {
 		t.Errorf("a missing sequence: %v, %d call(s)", err, c.calls())
 	}
 }
@@ -265,8 +265,8 @@ func TestHTTPExchangeRefusesAnotherEpoch(t *testing.T) {
 	if _, err := a.HTTPExchange("run-1", 4); !errors.Is(err, errNetEpoch) {
 		t.Fatalf("another epoch: %v", err)
 	}
-	if _, err := a.HTTPExchange("", 4); !errors.Is(err, errNetEpoch) {
-		t.Fatalf("no epoch: %v", err)
+	if _, err := a.HTTPExchange("", 4); !errors.Is(err, errNetNoEpoch) {
+		t.Fatalf("no epoch given: %v", err)
 	}
 	list, err := a.HTTPExchanges(NetFilter{})
 	if err != nil || list.Epoch != "run-2" {
@@ -281,5 +281,21 @@ func TestHTTPExchangeRefusesAnotherEpoch(t *testing.T) {
 	list, _ = a.HTTPExchanges(NetFilter{})
 	if _, err := a.HTTPExchange(list.Epoch, 4); err != nil || strings.Contains(list.Epoch, "ghp_") {
 		t.Fatalf("a cleaned epoch: %q, %v", list.Epoch, err)
+	}
+}
+
+// With no restart marker on either side a restart cannot be seen, so the answer is a refusal, not a match of empty with empty.
+func TestHTTPExchangeRefusesWhenTheAgentSendsNoEpoch(t *testing.T) {
+	c := &fakeNetClient{res: probelink.HTTPLogResult{Epoch: "", Entries: []probelink.HTTPEntry{hostileEntry(4)}}}
+	a := netApp(c)
+	list, err := a.HTTPExchanges(NetFilter{})
+	if err != nil || list.Epoch != "" {
+		t.Fatalf("list %+v, %v", list, err)
+	}
+	if _, err := a.HTTPExchange(list.Epoch, 4); !errors.Is(err, errNetNoEpoch) {
+		t.Fatalf("empty against empty: %v", err)
+	}
+	if _, err := a.HTTPExchange("run-1", 4); !errors.Is(err, errNetNoEpoch) {
+		t.Fatalf("an epoch given, none sent: %v", err)
 	}
 }

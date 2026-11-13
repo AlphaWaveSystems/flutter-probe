@@ -149,17 +149,23 @@ func capRunes(s string, max int) string {
 	return string(r[:max-1]) + "…"
 }
 
-// boundBeforeGate bounds a field to explainPreGate characters before the gate reads it, so a very long error does not hand the
-// gate a whole megabyte. A field that is cut here ends in the middle of whatever was there, and the gate can shrink the text (a
-// private key block becomes one marker), which would move the cut end up into the part that is sent. So when it cuts, it also
-// drops the run of characters at the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then
-// explainTailCut more characters: nothing that was cut in two survives.
-func boundBeforeGate(s string) string {
+// boundBeforeGate bounds a field to explainPreGate characters before the gate reads it. See boundRunes.
+func boundBeforeGate(s string) string { return boundRunes(s, explainPreGate) }
+
+// boundRunes bounds a text to limit characters before a pattern reads it, so a very long text does not hand the pattern a megabyte.
+// A text that is cut here ends in the middle of whatever was there, and a redactor can shrink the text (a private key block becomes
+// one marker), which would move the cut end up into the part that is shown. So when it cuts, it also drops the run of characters at
+// the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then explainTailCut more characters:
+// nothing that was cut in two survives. A text that fits is returned as it is (with invalid UTF-8 replaced).
+func boundRunes(s string, limit int) string {
+	if len(s) <= limit { // fewer bytes than characters allowed: nothing to cut
+		return strings.ToValidUTF8(s, "?")
+	}
 	r := []rune(strings.ToValidUTF8(s, "?"))
-	if len(r) <= explainPreGate {
+	if len(r) <= limit {
 		return string(r)
 	}
-	r = r[:explainPreGate]
+	r = r[:limit]
 	i := len(r)
 	for i > 0 && len(r)-i < explainTailRun && !unicode.IsSpace(r[i-1]) {
 		i--
