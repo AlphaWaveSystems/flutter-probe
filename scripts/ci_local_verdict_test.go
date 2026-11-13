@@ -49,7 +49,9 @@ case "$line" in
   "make build")
     if [ -z "${FAKE_NO_PROBE:-}" ]; then mkdir -p bin; : > bin/probe; chmod +x bin/probe; fi
     if [ -n "${FAKE_WORKSUM:-}" ]; then echo "written by the build" > go.work.sum; fi
-    if [ -n "${FAKE_TOUCH_TRACKED:-}" ]; then echo "changed by the build" > tracked.txt; fi ;;
+    if [ -n "${FAKE_TOUCH_TRACKED:-}" ]; then echo "changed by the build" > tracked.txt; fi
+    if [ -n "${FAKE_NEW_FILE:-}" ]; then echo "made by the build" > made_by_the_build.txt; fi
+    if [ -n "${FAKE_TOUCH_SUB:-}" ]; then echo "changed by the build" > sub/f.txt; fi ;;
   "make build-convert") mkdir -p bin; : > bin/probe-convert; chmod +x bin/probe-convert ;;
   "go env GOFLAGS") printf '%%s\n' "${FAKE_GO_ENV_GOFLAGS:-}" ;;
   "flutter --version") echo "Flutter 3.29.0" ;;
@@ -665,7 +667,10 @@ func TestCILocalSkippedOptionalChecksAreNotAPass(t *testing.T) {
 // A --base with a control character could write its own last line.
 func TestCILocalRefusesABaseWithAControlCharacter(t *testing.T) {
 	e := newCILocalEnv(t)
-	for _, base := range []string{"x\nci-local: PASS (5 of 5 required checks) at " + e.head, "x\ry", "x\x1b[2Ky"} {
+	for _, base := range []string{
+		"x\nci-local: PASS (5 of 5 required checks) at " + e.head, "x\ry", "x\x1b[2Ky",
+		"x\u2028y", "x\u2029y", "x\u0085y", "x\u202ey", "x\u200fy", "x y", "",
+	} {
 		r := e.run(t, "", e.withDenylist(), "--base", base)
 		if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS (5 of 5") {
 			t.Errorf("--base %q: exit status %d, calls %q; want 2 and nothing run\n%s", base, r.code, r.calls, r.out)
@@ -681,12 +686,28 @@ func TestCILocalRefusesAReportThatWouldDestroyAFile(t *testing.T) {
 	if err := os.Symlink(filepath.Join(e.repo, "tracked.txt"), link); err != nil {
 		t.Fatal(err)
 	}
+	hard := filepath.Join(t.TempDir(), "hard.md") // another name for the tracked file
+	if err := os.Link(filepath.Join(e.repo, "tracked.txt"), hard); err != nil {
+		t.Skipf("hard links are not available: %v", err)
+	}
+	gitFiles := map[string][]byte{}
+	for _, f := range []string{"config", "HEAD"} {
+		data, err := os.ReadFile(filepath.Join(e.repo, ".git", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		gitFiles[f] = data
+	}
 	for _, path := range []string{
 		filepath.Join(e.repo, "tracked.txt"),
 		filepath.Join(e.repo, "scripts", "..", "tracked.txt"),
 		filepath.Join(e.repo, "go.work.sum"),
 		filepath.Join(e.repo, "GO.WORK.SUM"),
+		filepath.Join(e.repo, ".git", "config"),
+		filepath.Join(e.repo, ".git", "HEAD"),
+		filepath.Join(e.repo, ".git", "info", "exclude"),
 		link,
+		hard,
 	} {
 		r := e.run(t, "", e.withDenylist(), "--report", path)
 		if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS") {
@@ -695,6 +716,11 @@ func TestCILocalRefusesAReportThatWouldDestroyAFile(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(e.repo, "tracked.txt")); err != nil || string(data) != "one\n" {
 		t.Errorf("tracked.txt was changed: %q (%v)", data, err)
+	}
+	for f, want := range gitFiles {
+		if got, err := os.ReadFile(filepath.Join(e.repo, ".git", f)); err != nil || !bytes.Equal(got, want) {
+			t.Errorf(".git/%s was changed: %q (%v)", f, got, err)
+		}
 	}
 	// A report path inside the repository that git ignores is fine.
 	e.run(t, "", e.withDenylist(), "--report", filepath.Join(e.repo, "coverage.out")).
@@ -918,6 +944,8 @@ func TestCILocalHelpHoldsTheExitStatuses(t *testing.T) {
 		"    5  PARTIAL:",
 		"  130  FAIL (interrupted)",
 		"    0  BUILT: the eight binaries were built from a clean tree",
+		"overriding a shell builtin (compgen, unset)",
+		"inside .git",
 	} {
 		if !strings.Contains(r.out, line) {
 			t.Errorf("--help does not hold %q:\n%s", line, r.out)
@@ -925,5 +953,118 @@ func TestCILocalHelpHoldsTheExitStatuses(t *testing.T) {
 	}
 	if strings.Contains(r.out, "end of help") || strings.Contains(r.out, "#") {
 		t.Errorf("--help prints more than the help text:\n%s", r.out)
+	}
+}
+
+// GIT_* variables can point git somewhere else: GIT_WORK_TREE at a clean clone made
+// every tree look clean.
+func TestCILocalIgnoresGitVariables(t *testing.T) {
+	e := newCILocalEnv(t)
+	clone := filepath.Join(t.TempDir(), "clone")
+	cmd := exec.Command("git", "clone", "-q", e.repo, clone)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git clone: %v\n%s", err, out)
+	}
+	writeFile(t, filepath.Join(e.repo, "extra_test.go"), "package extra\n")
+	dirty := "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)"
+
+	for _, env := range [][]string{
+		{"GIT_WORK_TREE=" + clone},
+		{"GIT_DIR=" + filepath.Join(clone, ".git")},
+		{"GIT_DIR=" + filepath.Join(clone, ".git"), "GIT_WORK_TREE=" + clone},
+		{"GIT_INDEX_FILE=" + filepath.Join(clone, ".git", "index")},
+	} {
+		r := e.run(t, "", append(e.withDenylist(), env...))
+		r.expect(t, e, 4, dirty)
+		if !strings.Contains(r.out, "GIT_* variable(s) were in the environment and were removed") {
+			t.Errorf("%q: no note about the removed variables:\n%s", env, r.out)
+		}
+	}
+}
+
+// A submodule that is configured to be ignored, and that is not at its commit, is a
+// dirty tree; so is a submodule a check changes.
+func TestCILocalSubmoduleConfigCannotHideAChange(t *testing.T) {
+	e := newCILocalEnv(t)
+	sub := t.TempDir()
+	runIn := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "protocol.file.allow=always"}, args...)...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	runIn(sub, "init", "-q", ".")
+	writeFile(t, filepath.Join(sub, "f.txt"), "one\n")
+	runIn(sub, "add", "f.txt")
+	runIn(sub, "commit", "-q", "-m", "sub")
+	runIn(e.repo, "submodule", "add", "-q", sub, "sub")
+	runIn(e.repo, "commit", "-q", "-m", "add a submodule")
+	e.head = strings.TrimSpace(e.git(t, "rev-parse", "HEAD"))
+	e.git(t, "config", "submodule.sub.ignore", "all")
+	e.git(t, "config", "diff.ignoreSubmodules", "all")
+	dirty := "FAIL (DIRTY TREE; 5 of 5 required checks passed on a tree that is not the commit)"
+
+	// Clean submodule: a pass.
+	e.run(t, "", e.withDenylist()).expect(t, e, 0, "PASS (5 of 5 required checks)")
+
+	// A check changes a file of the submodule.
+	r := e.run(t, "", append(e.withDenylist(), "FAKE_TOUCH_SUB=1"))
+	r.expect(t, e, 4, dirty)
+	if !strings.Contains(r.out, "a check changed 1 tracked file(s)") {
+		t.Errorf("the result does not say that a check changed the submodule:\n%s", r.out)
+	}
+	runIn(filepath.Join(e.repo, "sub"), "checkout", "-q", "--", "f.txt")
+
+	// The submodule was changed before the run.
+	writeFile(t, filepath.Join(e.repo, "sub", "f.txt"), "two\n")
+	r = e.run(t, "", e.withDenylist())
+	r.expect(t, e, 4, dirty)
+	if !strings.Contains(r.out, "- Tree: DIRTY TREE (1 changed, 0 untracked, 0 hidden") {
+		t.Errorf("the change to the submodule was not seen before the checks:\n%s", r.out)
+	}
+}
+
+// A report path is refused inside any .git directory, and inside the git directory of
+// this repository when that is not called .git.
+func TestCILocalRefusesAReportInsideAGitDirectory(t *testing.T) {
+	e := newCILocalEnv(t)
+
+	nested := filepath.Join(e.repo, "nested", ".git")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	other := t.TempDir()
+	gitdir := filepath.Join(other, "gitdata")
+	if err := os.Rename(filepath.Join(e.repo, ".git"), gitdir); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(e.repo, ".git"), "gitdir: "+gitdir+"\n")
+	config, err := os.ReadFile(filepath.Join(gitdir, "config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{filepath.Join(nested, "HEAD"), filepath.Join(gitdir, "config"), filepath.Join(gitdir, "info", "exclude")} {
+		r := e.run(t, "", e.withDenylist(), "--report", path)
+		if r.code != 2 || len(r.calls) != 0 || strings.Contains(r.out, "PASS") {
+			t.Errorf("--report %s: exit status %d, calls %q; want 2 and nothing run\n%s", path, r.code, r.calls, r.out)
+		}
+	}
+	if got, err := os.ReadFile(filepath.Join(gitdir, "config")); err != nil || !bytes.Equal(got, config) {
+		t.Errorf("the git configuration was changed: %q (%v)", got, err)
+	}
+}
+
+// A file the run creates is noted even when the user's configuration hides untracked
+// files.
+func TestCILocalNotesAnUntrackedFileTheRunCreatedDespiteGitConfig(t *testing.T) {
+	e := newCILocalEnv(t)
+	e.git(t, "config", "status.showUntrackedFiles", "no")
+	r := e.run(t, "", append(e.withDenylist(), "FAKE_NEW_FILE=1"))
+	r.expect(t, e, 0, "PASS (5 of 5 required checks)")
+	if !strings.Contains(r.out, "the run itself changed or created 1 file(s)") {
+		t.Errorf("no note about the file the run created:\n%s", r.out)
 	}
 }

@@ -49,6 +49,18 @@
 #     2  usage error, or the run could not start
 #     4  the binaries were built, but the tree was not the commit
 #   130  interrupted
+#
+# What the options refuse. --report refuses a file git tracks, a path inside .git,
+# go.work.sum, a symbolic link and an existing file with more than one hard link
+# (exit 2); it overwrites any other path you name. --base may hold only letters,
+# digits and . _ / ~ ^ @ { } : + , - (the ref is written on the last line).
+#
+# Environment. A step does not read BASH_ENV or ENV. Exported shell functions and
+# GIT_* variables are removed before anything runs, and the result says how many.
+# A hostile environment is out of scope: overriding a shell builtin (compgen, unset),
+# aliases set through BASH_ENV, and a changed PATH are not defended against. Files
+# that git ignores (.gitignore, .git/info/exclude, core.excludesFile) do not make a
+# tree dirty, by design.
 # end of help
 #
 # Each check runs the commands of the workflow job with the same check name. The
@@ -70,7 +82,12 @@
 # Environment. A step does not read BASH_ENV or ENV, and the exported shell functions
 # of the caller are removed before anything runs, so that a function named like a tool
 # cannot stand in for it; the final block says how many were removed. A hostile
-# environment (a function named like a shell builtin, a changed PATH) is out of scope.
+# environment is out of scope: overriding a shell builtin (compgen, unset), aliases set
+# through BASH_ENV, and a changed PATH are not defended against.
+# --report refuses a file git tracks, a path inside .git, go.work.sum, a symbolic link
+# and an existing file with more than one hard link (exit 2); it overwrites any other
+# path you name. --base may hold only letters, digits and . _ / ~ ^ @ { } : + , - The GIT_* variables
+# that redirect git (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_CONFIG_*, ...) are removed.
 #
 # What a run leaves behind: the per-check logs in a temporary directory (its path is
 # printed), and what the commands themselves write inside the repository (bin/,
@@ -90,6 +107,14 @@ EXPORTED_FUNCS=0
 for fn in $(compgen -A function); do
   unset -f "$fn"
   EXPORTED_FUNCS=$((EXPORTED_FUNCS + 1))
+done
+
+# GIT_* variables can point git at another repository or work tree (GIT_WORK_TREE at a
+# clean clone made every tree look clean). Remove them all, and count them.
+N_GITVARS=0
+for gv in $(compgen -v GIT_); do
+  unset "$gv"
+  N_GITVARS=$((N_GITVARS + 1))
 done
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -193,6 +218,18 @@ declare_jobs
 usage() { sed -n '2,/^# end of help$/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 die_usage() { echo "ci-local: $1" >&2; echo "try: scripts/ci-local.sh --help" >&2; exit 2; }
 
+# A ref is written on the last line, so it may hold only plain characters. A byte test
+# in the C locale: it also refuses U+2028, U+2029, NEL and the bidi controls, which a
+# [[:cntrl:]] test does not catch in a UTF-8 locale.
+safe_ref() {
+  local LC_ALL=C
+  case $1 in
+    "") return 1 ;;
+    *[!A-Za-z0-9._/~^@{}:+,-]*) return 1 ;;
+  esac
+  return 0
+}
+
 # One line, single spaces: the form the drift test compares.
 normalise() { printf '%s' "$1" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//'; }
 
@@ -267,7 +304,7 @@ while [ "$#" -gt 0 ]; do
     --describe) describe_jobs; exit 0 ;;
     --job) [ "$#" -ge 2 ] || die_usage "--job needs a name"; WANTED+=("$2"); shift 2 ;;
     --base) [ "$#" -ge 2 ] || die_usage "--base needs a ref"
-      case $2 in *[[:cntrl:]]*) die_usage "--base holds a control character" ;; esac; BASE_REF=$2; BASE_SET=1; shift 2 ;;
+      safe_ref "$2" || die_usage "--base may hold only letters, digits and . _ / ~ ^ @ { } : + , -"; BASE_REF=$2; BASE_SET=1; shift 2 ;;
     --pr-text) [ "$#" -ge 2 ] || die_usage "--pr-text needs a file"; PR_TEXT+=("$2"); shift 2 ;;
     --report) [ "$#" -ge 2 ] || die_usage "--report needs a file"; REPORT=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -338,14 +375,31 @@ if [ -e go.work.sum ]; then WORKSUM_BEFORE=yes; fi
 # The report file is created now: a path that cannot be written stops the run before
 # any check, and an old report cannot be mistaken for the result of this run.
 if [ -n "$REPORT" ]; then
-  # Not a file the repository tracks, not go.work.sum (which the script may remove),
-  # and not a link: the truncation below must not destroy anything.
+  # Refused, because the truncation below would destroy it: a file git tracks, anything
+  # inside a .git directory or the git directory, go.work.sum (which the script may
+  # remove), a symbolic link, and a file with more than one hard link (it may be a
+  # tracked file under another name).
   report_dir=$(cd "$(dirname "$REPORT")" 2>/dev/null && pwd -P) || report_dir=""
   if [ -L "$REPORT" ]; then
     echo "ci-local: the report file $REPORT is a symbolic link; choose a plain file" >&2; exit 2
   fi
+  # shellcheck disable=SC2012  # the link count of one path; find -links is no more portable
+  if [ -e "$REPORT" ] && [ "$(ls -ld -- "$REPORT" | awk '{print $2}')" -gt 1 ]; then
+    echo "ci-local: the report file $REPORT has more than one hard link; choose another path" >&2; exit 2
+  fi
   if [ -n "$report_dir" ]; then
     root_phys=$(pwd -P)
+    git_phys=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd -P) || git_phys=""
+    report_full="$report_dir/$(basename "$REPORT")/"
+    case "$report_full" in
+      */.git/*|*/.GIT/*)
+        echo "ci-local: the report file $REPORT is inside a .git directory; choose another path" >&2; exit 2 ;;
+    esac
+    if [ -n "$git_phys" ]; then
+      case "$report_full" in
+        "$git_phys"/*) echo "ci-local: the report file $REPORT is inside the git directory; choose another path" >&2; exit 2 ;;
+      esac
+    fi
     case "$report_dir/$(basename "$REPORT")" in
       "$root_phys"/*)
         report_rel=${report_dir#"$root_phys"}; report_rel=${report_rel#/}
@@ -657,6 +711,10 @@ final_block() {
   fi
   if [ -n "$WORKSUM_REMOVED" ]; then
     echo "- Note: the Go tools wrote go.work.sum during the run. It was not there before and git does not track it, so it was removed."
+    echo
+  fi
+  if [ "$N_GITVARS" -gt 0 ]; then
+    echo "- Note: $N_GITVARS GIT_* variable(s) were in the environment and were removed before the checks ran, so that git reads this repository."
     echo
   fi
   if [ "$EXPORTED_FUNCS" -gt 0 ]; then
