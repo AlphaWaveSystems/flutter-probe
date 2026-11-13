@@ -1,10 +1,31 @@
 package ai
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 )
+
+// maxResponseBytes bounds what a provider's answer may be. An answer is a short text, so 1 MB is far above any real one, and a
+// server that streams without end cannot fill the memory of the program that asked.
+const maxResponseBytes = 1 << 20
+
+// errResponseTooLarge is the error for an answer over the limit. It names the limit and repeats none of the answer.
+var errResponseTooLarge = errors.New("the provider's answer is larger than 1 MB")
+
+// readResponse reads a provider's answer up to maxResponseBytes, and returns errResponseTooLarge for more.
+func readResponse(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxResponseBytes {
+		return nil, errResponseTooLarge
+	}
+	return b, nil
+}
 
 // noRedirects stops a provider client at the first answer. A redirect would carry the request, its prompt and any key to
 // another host, so an endpoint that redirects is an error.
