@@ -615,3 +615,101 @@ func TestExplainCapCountsCharactersNotBytes(t *testing.T) {
 		t.Fatalf("a field under its cap was cut:\n%.300s", user)
 	}
 }
+
+// Explain is offered only when AI is on and the last run has a failed test with error text, and asking sends nothing.
+func TestExplainAvailabilityIsOfferedOnlyWithAIOnAndAFailedTest(t *testing.T) {
+	isolateProvider(t, "")
+	counter := useCountingTransport(t)
+	p := newExplainProvider(t, 200, "ok", 0)
+	on := localYAML(p.srv.URL)
+	cases := []struct {
+		name    string
+		yaml    string
+		results []RunResult
+		want    ExplainOffer
+	}{
+		{"AI on, two failed tests", on, []RunResult{failed("a", "x"), failed("b", "y"), {Name: "c", Passed: true}}, ExplainOffer{true, 2}},
+		{"AI off", "ai:\n  provider: none\n", []RunResult{failed("a", "x")}, ExplainOffer{}},
+		{"no AI block", "agent:\n  port: 9999\n", []RunResult{failed("a", "x")}, ExplainOffer{}},
+		{"a refused remote endpoint", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\n", []RunResult{failed("a", "x")}, ExplainOffer{}},
+		{"AI on, no failed test", on, []RunResult{{Name: "c", Passed: true}}, ExplainOffer{}},
+		{"AI on, a failed test with no error text", on, []RunResult{failed("a", "")}, ExplainOffer{}},
+		{"AI on, a skipped test with error text", on, []RunResult{{Name: "s", Skipped: true, Error: "why"}}, ExplainOffer{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := explainApp(t, c.yaml, c.results...).ExplainAvailability(); got != c.want {
+				t.Fatalf("got %+v, want %+v", got, c.want)
+			}
+		})
+	}
+	if n := len(counter.seen()) + p.requests(); n != 0 {
+		t.Fatalf("%d request(s) were made", n)
+	}
+}
+
+// ExplainPreviewed sends only while the destination is the one the preview named. A switch between the preview and Send, from a
+// local model to a hosted provider or to another model, is refused and nothing is sent.
+func TestExplainPreviewedRefusesAChangedDestination(t *testing.T) {
+	isolateProvider(t, "")
+	p := newExplainProvider(t, 200, "advice", 0)
+	a := explainApp(t, localYAML(p.srv.URL), failed("a", "x"))
+	prev, err := a.PreviewExplain()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.ExplainPreviewed(prev.Destination)
+	if err != nil || len(got.Notes) != 1 || p.requests() != 1 {
+		t.Fatalf("the same destination: %+v, %v, %d request(s)", got, err, p.requests())
+	}
+	for name, dest := range map[string]string{"another model": "other-model:7b, on this machine", "a hosted provider": "Anthropic, claude-sonnet-4-6", "empty": ""} {
+		if _, err := a.ExplainPreviewed(dest); err == nil || !strings.Contains(err.Error(), "destination changed") {
+			t.Errorf("%s: error = %v", name, err)
+		}
+	}
+	if p.requests() != 1 {
+		t.Fatalf("a refused destination sent %d more request(s)", p.requests()-1)
+	}
+}
+
+// Asking whether Explain is offered reads the keychain only when it has to: not for a run with no failed test, and not for a
+// provider that is decided without a key (off, a local model, OpenAI or Anthropic with a variable). It does when the provider is
+// unset and a saved key may decide it.
+func TestExplainAvailabilityReadsTheKeychainOnlyWhenItMust(t *testing.T) {
+	isolateProvider(t, "")
+	lookups := 0
+	prev := apiKeyLookup
+	t.Cleanup(func() { apiKeyLookup = prev })
+	apiKeyLookup = func() (string, error) { lookups++; return "", nil }
+	t.Setenv("PROBE_EXPLAIN_KEY", "plainExplainSecretValue0000000080")
+	p := newExplainProvider(t, 200, "ok", 0)
+	ok := []RunResult{failed("a", "x")}
+	cases := []struct {
+		name    string
+		yaml    string
+		results []RunResult
+		reads   bool
+	}{
+		{"no failure and no ai block", "agent:\n  port: 9999\n", []RunResult{{Name: "p", Passed: true}}, false},
+		{"no failure with a provider that needs the keychain", "ai:\n  provider: anthropic\n", []RunResult{{Name: "p", Passed: true}}, false},
+		{"a failed test with no error text", "ai:\n  provider: anthropic\n", []RunResult{failed("a", "")}, false},
+		{"AI off", "ai:\n  provider: none\n", ok, false},
+		{"a local model", localYAML(p.srv.URL), ok, false},
+		{"OpenAI with a variable", "ai:\n  provider: openai\n  model: m\n  api_key: ${PROBE_EXPLAIN_KEY}\n", ok, false},
+		{"Anthropic with a variable", "ai:\n  provider: anthropic\n  api_key: ${PROBE_EXPLAIN_KEY}\n", ok, false},
+		{"the provider is not set", "agent:\n  port: 9999\n", ok, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			a := explainApp(t, c.yaml, c.results...)
+			lookups = 0
+			a.ExplainAvailability()
+			if !c.reads && lookups != 0 {
+				t.Fatalf("the keychain was read %d time(s)", lookups)
+			}
+			if c.reads && lookups == 0 {
+				t.Fatal("the keychain was not read, though the provider is not set and a saved key decides it")
+			}
+		})
+	}
+}
