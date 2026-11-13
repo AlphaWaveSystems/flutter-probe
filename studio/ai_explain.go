@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -15,14 +17,36 @@ import (
 const (
 	explainMaxFailures = 5 // ai.Triage's own cap
 	explainMaxAdvice   = 2000
+
+	// Caps for the three fields of a failure, in characters. The error cap is the one ai.Triage applies itself, so its cut never
+	// fires on text Studio sends: the cut that counts is made here, after the gate.
+	explainMaxTest  = 200
+	explainMaxFile  = 300
+	explainMaxError = 3000
+
+	// Text is gated before it is cut, so a field is first bounded to a size far above its cap. A token that straddles this bound
+	// lies beyond every cap and is cut away with the rest.
+	explainPreGate = 20 * explainMaxError
 )
 
-// explainPerCall bounds each model call. There are no retries: ai.Triage stops after the first provider error.
-var explainPerCall = 45 * time.Second
+// The two time bounds on one model call. Each is enough on its own: the client gives up on a silent server, and the context ends
+// the call from our side. There are no retries: ai.Triage stops after the first provider error.
+var (
+	explainClientTimeout = 45 * time.Second
+	explainCallTimeout   = 45 * time.Second
+)
 
 // explainGate is the one gate for the text Explain sends. A test replaces it with a counter to prove it runs exactly once on the
-// system prompt and once on each failure's text.
+// system prompt and once on each field of each failure.
 var explainGate = outbound
+
+// Fixed texts for why an Explain stopped early. The provider's own error is never shown: it can carry an endpoint, a path or text
+// that was sent.
+const (
+	explainStoppedError = "The AI provider could not answer. Check Settings, then Test connection."
+	explainStoppedEmpty = "The model returned an empty answer."
+	explainStoppedOther = "The AI provider failed."
+)
 
 // ExplainPreview is what an Explain would send, built by the same code as the request, and where it goes.
 type ExplainPreview struct {
@@ -43,14 +67,24 @@ type ExplainResult struct {
 	Destination string        `json:"destination"`
 	Hosted      bool          `json:"hosted"`
 	Notes       []ExplainNote `json:"notes"`
-	Stopped     string        `json:"stopped,omitempty"` // why it stopped early, when it did
+	Stopped     string        `json:"stopped,omitempty"` // why it stopped early, when it did: always one of the fixed texts or the cap
+	Omitted     string        `json:"omitted,omitempty"` // failures that were not sent, and why
 }
 
-// gatedCompleter passes the system prompt and the user text through the gate, once each, on their way to the completer.
-type gatedCompleter struct{ inner ai.TextCompleter }
+// gatedCompleter passes the system prompt through the gate on its way to the completer. The user text is built from fields that
+// were each gated on their own (see explainFailures), so it is not gated again. It records whether the provider returned an
+// error, because ai.Triage's own message carries that error.
+type gatedCompleter struct {
+	inner  ai.TextCompleter
+	failed *atomic.Bool
+}
 
 func (g gatedCompleter) Complete(ctx context.Context, system, user string) (string, error) {
-	return g.inner.Complete(ctx, explainGate(system), explainGate(user))
+	out, err := g.inner.Complete(ctx, explainGate(system), user)
+	if err != nil && g.failed != nil {
+		g.failed.Store(true)
+	}
+	return out, err
 }
 
 // recorder is a completer that sends nothing: it keeps what it was asked and answers a stand-in, so a dry run of ai.Triage
@@ -69,16 +103,90 @@ func (r *recorder) Complete(_ context.Context, system, user string) (string, err
 	return "(preview)", nil
 }
 
-// explainFailures turns the failed tests of the last run into what ai.Triage reads. The text is not redacted here: the gate in
-// gatedCompleter does that once, for the request and for the preview alike. A file is shown relative to the workspace, so an
-// absolute path with a user name never leaves the machine.
-func (a *App) explainFailures() []ai.Failure {
+var (
+	emailPattern    = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}`)
+	homePathPattern = regexp.MustCompile(`(?:/Users/|/home/)[^/\s"'<>]+|[A-Za-z]:\\Users\\[^\\\s"'<>]+`)
+)
+
+// scrubPersonal replaces an email address and the home-directory part of a path, because a failure text can hold the name of the
+// person who ran the test. The gate does not do this: for chat, an email or a path is ordinary text the person typed.
+func scrubPersonal(s string) string {
+	s = emailPattern.ReplaceAllString(s, "[email]")
+	return homePathPattern.ReplaceAllString(s, "~")
+}
+
+// invisibleRune says whether r is a control, line or paragraph separator, bidirectional control or zero-width character: text that
+// can hide a token from the gate or scramble what a person reads.
+func invisibleRune(r rune) bool {
+	switch {
+	case unicode.IsControl(r):
+		return true
+	case r == 0x2028 || r == 0x2029:
+		return true
+	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F, r == 0x061C:
+		return true
+	case r >= 0x200B && r <= 0x200D, r == 0x2060, r == 0xFEFF:
+		return true
+	}
+	return false
+}
+
+// withoutInvisible drops invisible characters, so a token split by one is whole again before the gate reads it. A line break is
+// kept when keepLines is set and is a space otherwise, and a tab is a space.
+func withoutInvisible(s string, keepLines bool) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' && keepLines:
+			return r
+		case r == '\n' || r == '\t' || r == '\r':
+			return ' '
+		case invisibleRune(r):
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// capRunes cuts s to max characters, marking the cut with an ellipsis that counts within max.
+func capRunes(s string, max int) string {
+	r := []rune(strings.ToValidUTF8(s, "?"))
+	if len(r) <= max {
+		return string(r)
+	}
+	return string(r[:max-1]) + "…"
+}
+
+// explainField makes one field of a failure fit to send, in this order: the exact key is removed, the field is bounded, personal
+// text is scrubbed, invisible characters are dropped, the gate runs, and the field is cut to its cap. Every field takes the same
+// path, so no field reaches ai.Triage, or the preview, in a form the gate has not seen. The gate runs exactly once.
+func explainField(s, key string, keepLines bool, max int) string {
+	if key != "" {
+		s = strings.ReplaceAll(s, key, redactedMark)
+	}
+	s = capRunes(s, explainPreGate)
+	s = withoutInvisible(scrubPersonal(s), keepLines)
+	s = explainGate(s)
+	return strings.TrimSpace(capRunes(s, max))
+}
+
+// explainInput is what an Explain sends: the provider, the failures, and what was left out.
+type explainInput struct {
+	settings aiProviderSettings
+	failures []ai.Failure
+	noText   int // failed tests with no error text
+	repeats  int // failures identical to one already listed
+}
+
+// explainFailures turns the failed tests of the last run into what ai.Triage reads. Every field goes through explainField. A
+// file is shown relative to the workspace, or by its name alone, so an absolute path never leaves the machine. A failed test with
+// no error text is counted and not sent, and an identical failure is sent once.
+func (a *App) explainFailures(key string) (out []ai.Failure, noText, repeats int) {
 	a.mu.Lock()
 	ws := a.workspace
 	a.mu.Unlock()
-	var out []ai.Failure
+	seen := map[ai.Failure]bool{}
 	for _, r := range a.track.snapshot().Results {
-		if r.Passed || r.Skipped || r.Error == "" {
+		if r.Passed || r.Skipped {
 			continue
 		}
 		file := r.File
@@ -87,9 +195,22 @@ func (a *App) explainFailures() []ai.Failure {
 		} else if file != "" {
 			file = filepath.Base(file)
 		}
-		out = append(out, ai.Failure{Test: r.Name, File: file, Error: r.Error})
+		f := ai.Failure{
+			Test:  explainField(r.Name, key, false, explainMaxTest),
+			File:  explainField(file, key, false, explainMaxFile),
+			Error: explainField(r.Error, key, true, explainMaxError),
+		}
+		switch {
+		case f.Error == "":
+			noText++
+		case seen[f]:
+			repeats++
+		default:
+			seen[f] = true
+			out = append(out, f)
+		}
 	}
-	return out
+	return out, noText, repeats
 }
 
 // explainDestination names where an Explain would go, with the label the chat header uses, and whether it is not this machine.
@@ -100,36 +221,58 @@ func explainDestination(s aiProviderSettings) (label string, hosted bool) {
 
 // explainSetup resolves the provider and the failures an Explain would use. With AI off, or a refused configuration, it returns
 // the refusal and nothing is built or sent.
-func (a *App) explainSetup() (aiProviderSettings, []ai.Failure, error) {
+func (a *App) explainSetup() (explainInput, error) {
 	s, err := a.aiProvider()
 	if err != nil {
-		return aiProviderSettings{}, nil, err
+		return explainInput{}, err
 	}
-	failures := a.explainFailures()
+	failures, noText, repeats := a.explainFailures(s.APIKey)
 	if len(failures) == 0 {
-		return aiProviderSettings{}, nil, fmt.Errorf("the last run has no failed test: run the test first")
+		if noText > 0 {
+			return explainInput{}, fmt.Errorf("the failed tests of the last run have no error text to explain")
+		}
+		return explainInput{}, fmt.Errorf("the last run has no failed test: run the test first")
 	}
-	return s, failures, nil
+	return explainInput{settings: s, failures: failures, noText: noText, repeats: repeats}, nil
+}
+
+// omitted says in one sentence what was left out of an Explain, or "" when nothing was.
+func (in explainInput) omitted() string {
+	var parts []string
+	if in.noText > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed test(s) have no error text and are not sent", in.noText))
+	}
+	if in.repeats > 0 {
+		parts = append(parts, fmt.Sprintf("%d identical failure(s) are sent once", in.repeats))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "; ") + "."
 }
 
 // PreviewExplain returns what ExplainLastRun would send, and where. It sends nothing: the same ai.Triage runs with a completer
 // that records the prompts, behind the same gate.
 func (a *App) PreviewExplain() (ExplainPreview, error) {
-	s, failures, err := a.explainSetup()
+	in, err := a.explainSetup()
 	if err != nil {
 		return ExplainPreview{}, err
 	}
 	rec := &recorder{}
-	ai.Triage(context.Background(), gatedCompleter{rec}, failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainPerCall})
-	label, hosted := explainDestination(s)
+	ai.Triage(context.Background(), gatedCompleter{inner: rec}, in.failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainCallTimeout})
+	label, hosted := explainDestination(in.settings)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Sent to: %s\n\n", label)
-	fmt.Fprintf(&b, "%d failed test(s), one request each, at most %d.\n\nSystem prompt:\n%s\n", len(rec.users), explainMaxFailures, rec.system)
+	fmt.Fprintf(&b, "%d failed test(s), one request each, at most %d.\n", len(rec.users), explainMaxFailures)
+	if o := in.omitted(); o != "" {
+		fmt.Fprintf(&b, "%s\n", o)
+	}
+	fmt.Fprintf(&b, "\nSystem prompt:\n%s\n", rec.system)
 	for i, u := range rec.users {
 		fmt.Fprintf(&b, "\nFailure %d of %d:\n%s\n", i+1, len(rec.users), u)
 	}
-	if len(failures) > explainMaxFailures {
-		fmt.Fprintf(&b, "\nOnly the first %d of %d failures are sent.\n", explainMaxFailures, len(failures))
+	if len(in.failures) > explainMaxFailures {
+		fmt.Fprintf(&b, "\nOnly the first %d of %d failures are sent.\n", explainMaxFailures, len(in.failures))
 	}
 	return ExplainPreview{Destination: label, Hosted: hosted, Failures: len(rec.users), Text: b.String()}, nil
 }
@@ -137,34 +280,59 @@ func (a *App) PreviewExplain() (ExplainPreview, error) {
 // ExplainLastRun asks the provider for advice on each failed test of the last run. It is advisory: it reads results that are
 // already final, writes nothing, never changes the run, stops after the first provider error, and has no retries.
 func (a *App) ExplainLastRun() (ExplainResult, error) {
-	s, failures, err := a.explainSetup()
+	in, err := a.explainSetup()
 	if err != nil {
 		return ExplainResult{}, err
 	}
-	c, err := ai.NewTextCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainPerCall)
+	s := in.settings
+	c, err := ai.NewTextCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainClientTimeout)
 	if err != nil {
-		return ExplainResult{}, err
+		return ExplainResult{}, errorFrom(err, s.APIKey)
 	}
-	notes, stopped := ai.Triage(context.Background(), gatedCompleter{c}, failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainPerCall})
+	var failed atomic.Bool
+	notes, stopped := ai.Triage(context.Background(), gatedCompleter{inner: c, failed: &failed}, in.failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainCallTimeout})
 	label, hosted := explainDestination(s)
-	out := ExplainResult{Destination: label, Hosted: hosted, Stopped: errorBody([]byte(stopped)), Notes: make([]ExplainNote, 0, len(notes))}
+	out := ExplainResult{
+		Destination: label,
+		Hosted:      hosted,
+		Stopped:     stoppedText(stopped, failed.Load(), len(in.failures)),
+		Omitted:     in.omitted(),
+		Notes:       make([]ExplainNote, 0, len(notes)),
+	}
 	for _, n := range notes {
-		out.Notes = append(out.Notes, ExplainNote{Test: errorBody([]byte(n.Test)), Advice: cleanAdvice(n.Advice)})
+		out.Notes = append(out.Notes, ExplainNote{Test: n.Test, Advice: cleanAdvice(n.Advice, s.APIKey)})
 	}
 	return out, nil
 }
 
-// cleanAdvice makes a model's answer fit for the card: control characters other than a line break are dropped and the text is cut.
-// The card sets it with textContent, so a tag in it stays text.
-func cleanAdvice(s string) string {
-	s = strings.Map(func(r rune) rune {
-		if r != '\n' && unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, s)
-	if len(s) > explainMaxAdvice {
-		s = strings.ToValidUTF8(s[:explainMaxAdvice], "?")
+// errorFrom is an error whose text is cleaned like any text from a provider: the key is removed and the gate runs.
+func errorFrom(err error, key string) error {
+	return fmt.Errorf("%s", errorBody([]byte(fromProvider(err.Error(), key))))
+}
+
+// stoppedText turns why ai.Triage stopped into a fixed text. ai.Triage's own message carries the provider's error, which can
+// hold an endpoint or text that was sent, so it is never passed on: the kind decides the text.
+func stoppedText(stopped string, providerFailed bool, total int) string {
+	switch {
+	case stopped == "":
+		return ""
+	case providerFailed:
+		return explainStoppedError
+	case strings.HasPrefix(stopped, "only the first"):
+		return fmt.Sprintf("Only the first %d of %d failures were explained.", explainMaxFailures, total)
+	case strings.HasSuffix(stopped, "empty answer"):
+		return explainStoppedEmpty
 	}
-	return s
+	return explainStoppedOther
+}
+
+// cleanAdvice makes a model's answer fit for the card. The exact key is removed and the gate runs, because an answer can repeat
+// what it was sent; invisible characters are dropped, runs of blank lines are shortened, and the text is cut. The card sets it
+// with textContent, so a tag in it stays text.
+func cleanAdvice(s, key string) string {
+	s = withoutInvisible(fromProvider(s, key), true)
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(capRunes(s, explainMaxAdvice))
 }
