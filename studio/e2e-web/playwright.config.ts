@@ -38,6 +38,7 @@ export default defineConfig({
       PROBE_STUDIO_WORKSPACE: process.env.STUDIO_WORKSPACE ?? "",
       PROBE_STUDIO_DEVICE_VIEW: process.env.STUDIO_E2E_DEVICE_VIEW ?? "", // "1" runs Studio with the shared device view
       PROBE_STUDIO_KEYCHAIN: "memory", // keys live in memory, so no spec reads or writes the real keychain
+      PROBE_STUDIO_LOCAL_ENDPOINT: "http://127.0.0.1:1/v1", // Find local models never asks a real Ollama: this default refuses at once
     },
     stdout: "pipe",
     stderr: "pipe",
