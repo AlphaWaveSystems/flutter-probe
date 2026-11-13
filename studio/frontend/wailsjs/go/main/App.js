@@ -34,6 +34,10 @@ export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }
 
+export function FindLocalModels(arg1) {
+  return window['go']['main']['App']['FindLocalModels'](arg1);
+}
+
 export function ForgetWiFiToken(arg1) {
   return window['go']['main']['App']['ForgetWiFiToken'](arg1);
 }
