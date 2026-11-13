@@ -198,8 +198,10 @@
               <datalist id="settings-ai-models"></datalist>
             </label>
             <div class="settings-actions">
+              <button type="button" id="btn-ai-find-models" class="btn" title="Asks this machine's own model server, such as Ollama, which models it has. Nothing is saved.">Find local models</button>
               <button type="button" id="btn-ai-list-models" class="btn">List models</button>
             </div>
+            <p id="settings-ai-find-status" class="dim" aria-live="polite"></p>
             <label class="settings-row">
               <span>Key source</span>
               <select id="settings-ai-key-source">

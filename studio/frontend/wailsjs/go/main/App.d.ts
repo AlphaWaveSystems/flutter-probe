@@ -20,6 +20,8 @@ export function DeleteAPIKey():Promise<void>;
 
 export function Disconnect():Promise<void>;
 
+export function FindLocalModels(arg1:string):Promise<main.LocalModels>;
+
 export function ForgetWiFiToken(arg1:string):Promise<void>;
 
 export function GetAPIKey():Promise<boolean>;

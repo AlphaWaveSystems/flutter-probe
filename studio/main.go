@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"os"
 
 	"github.com/wailsapp/wails/v2"
@@ -26,6 +27,11 @@ func keychainMemoryRequested(headless bool, env string) bool {
 func main() {
 	app := NewApp()
 	headless := os.Getenv("PROBE_STUDIO_HEADLESS") == "1"
+	endpoint, note := localDiscoveryEndpoint(headless, os.Getenv("PROBE_STUDIO_LOCAL_ENDPOINT"))
+	localDiscoveryTarget = endpoint
+	if note != "" {
+		fmt.Fprintln(os.Stderr, "studio:", note)
+	}
 	if keychainMemoryRequested(headless, os.Getenv("PROBE_STUDIO_KEYCHAIN")) {
 		keyring.MockInit() // the browser suite keeps keys in memory, so no test touches the real keychain
 	}
