@@ -13,7 +13,7 @@ const (
 )
 
 // unsafeLabelRune says whether a character in a model id could scramble or spoof the one-line label: control characters, line
-// and paragraph separators, bidirectional controls, zero-width characters, and the comma that separates the model from the place
+// and paragraph separators, every format (Cf) character, the blank-looking ones the category does not hold, and the comma that separates the model from the place
 // ("x, on this machine" must not read as a place). They are shown as ?.
 func unsafeLabelRune(r rune) bool {
 	switch {
@@ -34,6 +34,10 @@ func unsafeLabelRune(r rune) bool {
 	case r == 0x00AD, r == 0x180E, r == 0x034F: // soft hyphen, Mongolian vowel separator, combining grapheme joiner
 		return true
 	case r >= 0x206A && r <= 0x206F, r >= 0xFFF9 && r <= 0xFFFB: // deprecated format controls, interlinear annotation
+		return true
+	case r == 0xFFFC, r == 0x17B4, r == 0x17B5: // object replacement character; Khmer inherent vowels, which show as nothing (not Cf)
+		return true
+	case unicode.Is(unicode.Cf, r): // every other format character: the lists above are what was found, this is the category
 		return true
 	case r == ',':
 		return true

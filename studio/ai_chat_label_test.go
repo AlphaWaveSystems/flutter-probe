@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // The header names the provider and the model id only, for every state, and never an endpoint, a key, a key source or a path.
@@ -333,9 +334,13 @@ func TestChatLabelPartsJoinToTheLabel(t *testing.T) {
 		{"local, remote confirmed", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\nstudio:\n  ai_allow_remote_endpoint: true\n", "", "", "m", ", remote endpoint"},
 		{"anthropic", "ai:\n  provider: anthropic\n  model: claude-x\n", savedKey, "Anthropic, ", "claude-x", ""},
 		{"ai off", "ai:\n  provider: none\n", "", chatLabelOff, "", ""},
-		{"a refused configuration", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\n", "", chatLabelFix, "", ""},
+		{"openai with a model", "ai:\n  provider: openai\n  model: gpt-x\n  api_key: ${PROBE_LABEL_KEY}\n", "", "OpenAI, ", "gpt-x", ""},
+		{"openai without a model", "ai:\n  provider: openai\n  api_key: ${PROBE_LABEL_KEY}\n", "", "OpenAI", "", ""},
+		{"anthropic with the default model", "ai:\n  provider: anthropic\n", savedKey, "Anthropic, ", chatModel, ""},
+		{"remote endpoint, not confirmed", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\n", "", chatLabelFix, "", ""},
 		{"anthropic without a key", "ai:\n  provider: anthropic\n", "", "Anthropic, key needed", "", ""},
 	}
+	t.Setenv("PROBE_LABEL_KEY", "plainLabelSecretValue0000000078")
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			isolateProvider(t, c.saved)
@@ -348,5 +353,39 @@ func TestChatLabelPartsJoinToTheLabel(t *testing.T) {
 				t.Fatalf("the parts join to %q, the label is %q", got.String(), app.AIChatLabel())
 			}
 		})
+	}
+}
+
+// Every format (Cf) character in a model id is shown as ?, not only the ones found so far: the whole category, both ranges of
+// the Unicode table, is checked one rune at a time.
+func TestChatLabelReplacesEveryFormatCharacter(t *testing.T) {
+	isolateProvider(t, "")
+	checked := 0
+	check := func(r rune) {
+		checked++
+		if got := labelModel("a"+string(r)+"b", ""); got != "a?b" {
+			t.Errorf("U+%04X is shown as %q, want a?b", r, got)
+		}
+	}
+	for _, rg := range unicode.Cf.R16 {
+		for r := rune(rg.Lo); r <= rune(rg.Hi); r += rune(rg.Stride) {
+			check(r)
+		}
+	}
+	for _, rg := range unicode.Cf.R32 {
+		for r := rune(rg.Lo); r <= rune(rg.Hi); r += rune(rg.Stride) {
+			check(r)
+		}
+	}
+	if checked < 100 {
+		t.Fatalf("only %d format characters were checked", checked)
+	}
+	// Found by the review, through the whole label: invisible math operators, musical and shorthand format controls, Egyptian
+	// hieroglyph format controls, Arabic and Syriac marks, and U+FFFC, which is an object replacement character and not a format
+	// character, so the category rule does not hold it.
+	for _, r := range []rune{0x2061, 0x2064, 0x1D173, 0x1D17A, 0x1BCA0, 0x1BCA3, 0x13430, 0x1343F, 0x110BD, 0x110CD, 0x0600, 0x0605, 0x06DD, 0x070F, 0x0890, 0x0891, 0x08E2, 0x17B4, 0x17B5, 0xFFFC} {
+		if got := labelModel("a"+string(r)+"b", ""); got != "a?b" {
+			t.Errorf("U+%04X is shown as %q, want a?b", r, got)
+		}
 	}
 }

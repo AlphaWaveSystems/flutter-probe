@@ -30,6 +30,7 @@ import {
   PickWorkspace,
   PreviewAIChat,
   AIChatLabelParts,
+  FindLocalModels,
   ReadFile,
   RunFileScoped,
   SaveAISettings,
@@ -484,6 +485,7 @@ function fillAIForm(s: main.AISettings): void {
   refreshPlainKeyNote();
   $("settings-ai-error").hidden = true;
   $("settings-ai-models").replaceChildren();
+  $("settings-ai-find-status").textContent = "";
   $("settings-ai-result").replaceChildren();
 }
 
@@ -526,6 +528,53 @@ $("btn-ai-list-models").addEventListener("click", async () => {
     }
   } catch (err) {
     toast(`Cannot list models: ${err}`, "error");
+  }
+});
+
+// Find local models asks this machine's own model server, on this click only. It fills only empty fields and says what it filled.
+// It never saves, so nothing reaches probe.yaml until Save. The model is filled only when exactly one is listed; with several, the
+// list is offered as suggestions and the person picks. Everything from the server is set as option values and text, never markup.
+$("btn-ai-find-models").addEventListener("click", async () => {
+  const status = $("settings-ai-find-status");
+  const provider = $("settings-ai-provider") as HTMLSelectElement;
+  const endpoint = $("settings-ai-endpoint") as HTMLInputElement;
+  const model = $("settings-ai-model") as HTMLInputElement;
+  status.textContent = "Looking on this machine…";
+  try {
+    const found = await FindLocalModels(endpoint.value.trim());
+    const models = found.models ?? [];
+    $("settings-ai-models").replaceChildren(
+      ...models.map((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        return option;
+      }),
+    );
+    const filled: string[] = [];
+    if (provider.value === "") {
+      provider.value = "local";
+      filled.push("provider");
+      refreshPlainKeyNote();
+    }
+    if (provider.value === "local") {
+      if (endpoint.value.trim() === "") {
+        endpoint.value = found.endpoint;
+        filled.push("endpoint");
+      }
+      if (model.value.trim() === "" && models.length === 1) {
+        model.value = models[0];
+        filled.push("model");
+      }
+    }
+    const parts = [`Found ${models.length} model${models.length === 1 ? "" : "s"} at ${found.host}.`];
+    parts.push(filled.length > 0 ? `Filled: ${filled.join(", ")}.` : "Filled nothing: the fields already have a value.");
+    if (models.length === 0) parts.push("The server has no models yet.");
+    else if (models.length > 1 && provider.value === "local" && model.value.trim() === "") parts.push("Pick one in the Model field.");
+    if (found.skipped) parts.push(`${found.skipped}.`);
+    parts.push("Nothing is saved until you press Save.");
+    status.textContent = parts.join(" ");
+  } catch (err) {
+    status.textContent = `${err}`;
   }
 });
 

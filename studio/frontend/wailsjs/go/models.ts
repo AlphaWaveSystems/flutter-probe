@@ -297,6 +297,24 @@ export namespace main {
 	        this.isDir = source["isDir"];
 	    }
 	}
+	export class LocalModels {
+	    endpoint: string;
+	    host: string;
+	    models: string[];
+	    skipped?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalModels(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.endpoint = source["endpoint"];
+	        this.host = source["host"];
+	        this.models = source["models"];
+	        this.skipped = source["skipped"];
+	    }
+	}
 	export class RunPlanTest {
 	    name: string;
 	    line: number;
