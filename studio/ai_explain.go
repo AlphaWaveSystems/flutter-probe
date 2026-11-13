@@ -312,9 +312,13 @@ func (a *App) ExplainLastRun() (ExplainResult, error) {
 		return ExplainResult{}, err
 	}
 	s := in.settings
-	c, err := newExplainCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainClientTimeout)
+	c, err := makeExplainCompleter(s)
 	if err != nil {
 		return ExplainResult{}, errorFrom(err, s.APIKey)
+	}
+	if c == nil { // the constructor panicked: nothing was built, and nothing is sent
+		label, hosted := explainDestination(s)
+		return ExplainResult{Destination: label, Hosted: hosted, Stopped: explainStoppedOther, Notes: []ExplainNote{}, Omitted: in.omitted()}, nil
 	}
 	var failed atomic.Bool
 	notes, stopped := ai.Triage(context.Background(), gatedCompleter{inner: c, failed: &failed}, in.failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainCallTimeout})
@@ -363,4 +367,14 @@ func cleanAdvice(s, key string) string {
 		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
 	}
 	return strings.TrimSpace(capRunes(s, explainMaxAdvice))
+}
+
+// makeExplainCompleter builds the completer, and returns nil and no error when the constructor panics.
+func makeExplainCompleter(s aiProviderSettings) (c ai.TextCompleter, err error) {
+	defer func() {
+		if recover() != nil {
+			c, err = nil, nil
+		}
+	}()
+	return newExplainCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainClientTimeout)
 }

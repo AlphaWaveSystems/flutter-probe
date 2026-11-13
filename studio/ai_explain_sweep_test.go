@@ -20,6 +20,8 @@ func keptByRule(r rune) bool {
 		return false
 	case r == 0x2800, r == 0xFFFC, r == 0x00AD, r == 0x034F, r == 0x180E:
 		return false
+	case r == 0x2D7F, r == 0x16FE4, r == 0x1107F, r == 0x11A47, r == 0x11A99, r == 0x303F: // glyphless joiners and fillers
+		return false
 	}
 	return true
 }
@@ -65,8 +67,10 @@ func TestHiddenRuleOverEveryCodePoint(t *testing.T) {
 		}
 	}
 	t.Logf("kept %d, dropped %d, space separators converted %d", kept, dropped, spaces)
-	if kept < 100000 || dropped < 800000 || spaces != 16 {
-		t.Fatalf("kept %d, dropped %d, spaces %d: the sweep did not look at what it should", kept, dropped, spaces)
+	// The numbers are those of the Unicode tables of this Go release. A new release can add a glyphless joiner or filler that
+	// Unicode keeps graphic and the rule does not name: this fails then, so the new characters are read and named or accepted.
+	if unicode.Version != "15.0.0" || kept != 148723 || dropped != 963322 || spaces != 16 {
+		t.Fatalf("Unicode %s: kept %d, dropped %d, spaces %d; want 15.0.0, 148723, 963322, 16: read what changed and name any glyphless character", unicode.Version, kept, dropped, spaces)
 	}
 }
 

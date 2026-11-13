@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
 
 // pemOf is a private key block of exactly n characters.
@@ -78,5 +81,40 @@ func TestExplainLimitsArePinned(t *testing.T) {
 		if p[0] != p[1] {
 			t.Errorf("%s limit is %d, want %d", name, p[0], p[1])
 		}
+	}
+}
+
+// Hidden characters are dropped BEFORE the bound reads the text. The bound walks back over the run that has no space in it, and
+// U+0085, the vertical tab, the form feed and the two separators count as spaces to it: left in, one near the cut would end the walk
+// early and leave the head of a long key. A key block that shrinks, then a 318-character exact key with one of them 5 and 40
+// characters before the cut.
+func TestExplainDropsHiddenCharactersBeforeTheBoundReadsTheText(t *testing.T) {
+	long := "longExplainSecret" + strings.Repeat("Qx7", 100) // 317 characters, no space
+	for _, h := range []rune{0x85, '\v', '\f', 0x2028, 0x2029} {
+		for _, before := range []int{5, 40} {
+			// The key starts 250 characters before the cut, so the cut falls inside it with the hidden character before..cut.
+			cutAt := 250
+			head, tail := long[:cutAt-before], long[cutAt-before:]
+			text := pemOf(explainPreGate-cutAt-1) + " " + head + string(h) + tail
+			got := explainField(text, long, true, explainMaxError)
+			if strings.Contains(got, "longEx") {
+				t.Fatalf("U+%04X %d characters before the cut: the head of the key reaches the text: %.80q", h, before, got)
+			}
+		}
+	}
+}
+
+// A panic inside the constructor of the completer is contained like one inside the completer.
+func TestExplainContainsAPanicInTheCompleterConstructor(t *testing.T) {
+	isolateProvider(t, "")
+	prev := newExplainCompleter
+	t.Cleanup(func() { newExplainCompleter = prev })
+	newExplainCompleter = func(string, string, string, string, time.Duration) (ai.TextCompleter, error) {
+		panic("constructor failed")
+	}
+	p := newExplainProvider(t, 200, "ok", 0)
+	got, err := explainApp(t, localYAML(p.srv.URL), failed("a", "x")).ExplainLastRun()
+	if err != nil || got.Stopped != explainStoppedOther || len(got.Notes) != 0 {
+		t.Fatalf("%+v, %v", got, err)
 	}
 }
