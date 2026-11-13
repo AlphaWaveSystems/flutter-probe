@@ -116,7 +116,7 @@
 
     <section id="chat-pane" hidden>
       <div class="pane-title">
-        <span>AI Chat <span class="dim" style="font-size:10px;font-weight:normal">claude-sonnet-4-6 · BYOK</span></span>
+        <span>AI Chat <span id="chat-provider" class="dim" style="font-size:10px;font-weight:normal;unicode-bidi:isolate"></span></span>
         <span id="chat-cost" class="dim chat-cost"></span>
         <span class="pane-actions">
           <button id="btn-chat-key" class="btn-mini" title="Set API key">🔑</button>
@@ -198,8 +198,10 @@
               <datalist id="settings-ai-models"></datalist>
             </label>
             <div class="settings-actions">
+              <button type="button" id="btn-ai-find-models" class="btn" title="Asks this machine's own model server, such as Ollama, which models it has. Nothing is saved.">Find local models</button>
               <button type="button" id="btn-ai-list-models" class="btn">List models</button>
             </div>
+            <p id="settings-ai-find-status" class="dim" aria-live="polite"></p>
             <label class="settings-row">
               <span>Key source</span>
               <select id="settings-ai-key-source">

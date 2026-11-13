@@ -166,3 +166,128 @@ func TestNoFilterIsInstalledByDefault(t *testing.T) {
 		t.Fatalf("nil did not take the filter out: %q", got)
 	}
 }
+
+// verdictClients return the verdict of a parsed answer with answer false and the given text as its reasoning, through the two
+// clients that build a verdict from a provider's answer.
+func verdictClients(text string) []struct {
+	name string
+	call func(t *testing.T, url string) (VisionVerdict, error)
+	body func(w http.ResponseWriter)
+} {
+	verdict, _ := json.Marshal(map[string]any{"answer": false, "reasoning": text})
+	openAIAnswer, _ := json.Marshal(map[string]any{"choices": []map[string]any{{"message": map[string]string{"content": string(verdict)}}}})
+	anthropicAnswer, _ := json.Marshal(map[string]any{"content": []map[string]string{{"type": "text", "text": string(verdict)}}})
+	return []struct {
+		name string
+		call func(t *testing.T, url string) (VisionVerdict, error)
+		body func(w http.ResponseWriter)
+	}{
+		{"openai-compatible vision", func(t *testing.T, u string) (VisionVerdict, error) {
+			p, err := NewVisionProvider("local", "key-not-in-the-text", "m", u+"/v1", 5*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return p.AssertScreen(context.Background(), []byte("png"), "a")
+		}, func(w http.ResponseWriter) { _, _ = w.Write(openAIAnswer) }},
+		{"anthropic vision", func(t *testing.T, u string) (VisionVerdict, error) {
+			a := &anthropicVision{apiKey: "key-not-in-the-text", model: "m", client: &http.Client{Timeout: 5 * time.Second, CheckRedirect: noRedirects}, url: u + "/v1/messages"}
+			return a.AssertScreen(context.Background(), []byte("png"), "a")
+		}, func(w http.ResponseWriter) { _, _ = w.Write(anthropicAnswer) }},
+	}
+}
+
+// The filter runs on the reasoning of a verdict that parses, which every failed with-ai step prints: before the cut, with the
+// secret at byte 0 and at byte 190, so nothing of it is left and exactly 200 bytes of the filtered text are kept.
+func TestTheFilterRunsOnAVerdictsReasoning(t *testing.T) {
+	useFilter(t, dropMarker)
+	for place, text := range placements() {
+		for _, c := range verdictClients(text) {
+			t.Run(c.name+", "+place, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { c.body(w) }))
+				t.Cleanup(srv.Close)
+				v, err := c.call(t, srv.URL)
+				if err != nil {
+					t.Fatalf("a verdict that parses returned an error: %v", err)
+				}
+				if strings.Contains(v.Reasoning, "zq-") {
+					t.Fatalf("a start of the secret is left in the reasoning: %q", v.Reasoning)
+				}
+				if len(v.Reasoning) != 200 {
+					t.Fatalf("the reasoning is %d bytes, want exactly 200 of the filtered text", len(v.Reasoning))
+				}
+			})
+		}
+	}
+}
+
+// doctorServer answers the model listing with ids and every chat with answer, so the doctor reaches its endpoint and text checks.
+func doctorServer(t *testing.T, ids []string, answer string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			data := make([]map[string]string, len(ids))
+			for i, id := range ids {
+				data[i] = map[string]string{"id": id}
+			}
+			b, _ := json.Marshal(map[string]any{"data": data})
+			_, _ = w.Write(b)
+			return
+		}
+		b, _ := json.Marshal(map[string]any{"choices": []map[string]any{{"message": map[string]string{"content": answer}}}})
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func doctorDetail(t *testing.T, srv *httptest.Server, check string) string {
+	t.Helper()
+	rep := Doctor(context.Background(), DoctorInput{Provider: "local", APIKey: "key-not-in-the-text", Model: "not-listed", Endpoint: srv.URL + "/v1", Timeout: 5 * time.Second})
+	for _, c := range rep.Checks {
+		if c.Name == check {
+			return c.Detail
+		}
+	}
+	t.Fatalf("the doctor report has no %s check", check)
+	return ""
+}
+
+// The filter runs on each model id the doctor lists, before the cut, with the secret at byte 0 and at byte 190.
+func TestTheFilterRunsOnTheDoctorsModelIDs(t *testing.T) {
+	useFilter(t, dropMarker)
+	for place, text := range placements() {
+		t.Run(place, func(t *testing.T) {
+			ids := make([]string, 10)
+			for i := range ids {
+				ids[i] = text
+			}
+			detail := doctorDetail(t, doctorServer(t, ids, "pong"), "endpoint")
+			_, list, ok := strings.Cut(detail, "(available: ")
+			if !ok {
+				t.Fatalf("the endpoint check does not list the ids: %q", detail)
+			}
+			for _, id := range strings.Split(strings.TrimSuffix(list, ")"), ", ") {
+				if strings.Contains(id, "zq-") {
+					t.Fatalf("a start of the secret is left in a listed id: %q", id)
+				}
+				if len(id) != 200 {
+					t.Fatalf("a listed id is %d bytes, want exactly 200 of the filtered text", len(id))
+				}
+			}
+		})
+	}
+}
+
+// The filter runs on the doctor's sample of the model's answer, before the 40-character cut. The secret starts the answer, so
+// without the filter its first characters would be shown.
+func TestTheFilterRunsOnTheDoctorsSample(t *testing.T) {
+	useFilter(t, dropMarker)
+	detail := doctorDetail(t, doctorServer(t, []string{"not-listed"}, marker+" and some more words after it"), "text")
+	if strings.Contains(detail, "zq-") {
+		t.Fatalf("a start of the secret is shown in the sample: %q", detail)
+	}
+	if !strings.Contains(detail, "[x]") {
+		t.Fatalf("the filtered sample is not shown: %q", detail)
+	}
+}

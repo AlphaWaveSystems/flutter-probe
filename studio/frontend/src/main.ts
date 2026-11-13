@@ -1,5 +1,6 @@
 import "./style.css";
 import * as monaco from "monaco-editor";
+import { chatLabelRefresher, labelText, type ChatLabelParts } from "./chat-label";
 import { PROBESCRIPT_LANGUAGE_ID, registerProbeScript } from "./probescript";
 import { initDeviceStream, onElementSelected, startStream, stopStream } from "./device-stream";
 import { initDeviceSettings } from "./device-settings";
@@ -28,6 +29,8 @@ import {
   LoadWorkspaceSettings,
   PickWorkspace,
   PreviewAIChat,
+  AIChatLabelParts,
+  FindLocalModels,
   ReadFile,
   RunFileScoped,
   SaveAISettings,
@@ -406,7 +409,38 @@ let aiPreviewConfirmed: string | null = null;
 
 function resetAIPreview(): void {
   aiPreviewConfirmed = null;
+  // The same events change where a message goes, so they change the header too, but only while the chat pane is open: the header is
+  // not visible otherwise, and asking for it may read the keychain, which should not happen at launch for a pane nobody opened.
+  if (!$("chat-pane").hidden) void refreshChatLabel();
 }
+
+// refreshChatLabel shows where the next message would go: the provider and the model id, or that AI is off. The text comes from
+// probe.yaml, so it is set with textContent, never as markup. The latest call wins: two refreshes that finish out of order cannot
+// leave an older label on screen.
+// The model is its own element, so a long id is shortened with an ellipsis while the place after it stays in view. The whole line is
+// the title, set as an attribute, never as markup.
+function showChatLabel(parts: ChatLabelParts | null): void {
+  const el = $("chat-provider");
+  el.replaceChildren();
+  el.removeAttribute("title");
+  if (parts === null) return; // a refresh that failed leaves the header blank
+  el.append(document.createTextNode(parts.prefix));
+  if (parts.model !== "") {
+    const model = document.createElement("span");
+    model.className = "chat-provider-model";
+    model.textContent = parts.model;
+    el.append(model);
+  }
+  if (parts.suffix !== "") {
+    const place = document.createElement("span");
+    place.className = "chat-provider-place";
+    place.textContent = parts.suffix;
+    el.append(place);
+  }
+  el.setAttribute("title", labelText(parts));
+}
+
+const refreshChatLabel = chatLabelRefresher(() => AIChatLabelParts(), showChatLabel);
 
 // previewLabel is the destination line PreviewAIChat puts first, such as "Sent to: local endpoint http://127.0.0.1:11434/v1, model m".
 function previewLabel(preview: string): string {
@@ -451,6 +485,7 @@ function fillAIForm(s: main.AISettings): void {
   refreshPlainKeyNote();
   $("settings-ai-error").hidden = true;
   $("settings-ai-models").replaceChildren();
+  $("settings-ai-find-status").textContent = "";
   $("settings-ai-result").replaceChildren();
 }
 
@@ -493,6 +528,53 @@ $("btn-ai-list-models").addEventListener("click", async () => {
     }
   } catch (err) {
     toast(`Cannot list models: ${err}`, "error");
+  }
+});
+
+// Find local models asks this machine's own model server, on this click only. It fills only empty fields and says what it filled.
+// It never saves, so nothing reaches probe.yaml until Save. The model is filled only when exactly one is listed; with several, the
+// list is offered as suggestions and the person picks. Everything from the server is set as option values and text, never markup.
+$("btn-ai-find-models").addEventListener("click", async () => {
+  const status = $("settings-ai-find-status");
+  const provider = $("settings-ai-provider") as HTMLSelectElement;
+  const endpoint = $("settings-ai-endpoint") as HTMLInputElement;
+  const model = $("settings-ai-model") as HTMLInputElement;
+  status.textContent = "Looking on this machine…";
+  try {
+    const found = await FindLocalModels(endpoint.value.trim());
+    const models = found.models ?? [];
+    $("settings-ai-models").replaceChildren(
+      ...models.map((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        return option;
+      }),
+    );
+    const filled: string[] = [];
+    if (provider.value === "") {
+      provider.value = "local";
+      filled.push("provider");
+      refreshPlainKeyNote();
+    }
+    if (provider.value === "local") {
+      if (endpoint.value.trim() === "") {
+        endpoint.value = found.endpoint;
+        filled.push("endpoint");
+      }
+      if (model.value.trim() === "" && models.length === 1) {
+        model.value = models[0];
+        filled.push("model");
+      }
+    }
+    const parts = [`Found ${models.length} model${models.length === 1 ? "" : "s"} at ${found.host}.`];
+    parts.push(filled.length > 0 ? `Filled: ${filled.join(", ")}.` : "Filled nothing: the fields already have a value.");
+    if (models.length === 0) parts.push("The server has no models yet.");
+    else if (models.length > 1 && provider.value === "local" && model.value.trim() === "") parts.push("Pick one in the Model field.");
+    if (found.skipped) parts.push(`${found.skipped}.`);
+    parts.push("Nothing is saved until you press Save.");
+    status.textContent = parts.join(" ");
+  } catch (err) {
+    status.textContent = `${err}`;
   }
 });
 
@@ -1340,7 +1422,10 @@ function showChatPane(visible: boolean) {
   chatVisible = visible;
   $("chat-pane").hidden = !visible;
   $("btn-ai-toggle").classList.toggle("btn-active", visible);
-  if (visible) void updateChatContextNote();
+  if (visible) {
+    void updateChatContextNote();
+    void refreshChatLabel(); // the header is filled when the pane opens, so a hidden pane never asks
+  }
 }
 
 function updateCostDisplay() {

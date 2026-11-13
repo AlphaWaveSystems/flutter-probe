@@ -1,10 +1,31 @@
 package ai
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 )
+
+// MaxResponseBytes bounds what a provider's answer may be. An answer is a short text, so 1 MB is far above any real one, and a
+// server that streams without end cannot fill the memory of the program that asked.
+const MaxResponseBytes = 1 << 20
+
+// ErrResponseTooLarge is the error for an answer over the limit. It names the limit and repeats none of the answer.
+var ErrResponseTooLarge = errors.New("the provider's answer is larger than 1 MB")
+
+// ReadResponse reads a provider's answer up to MaxResponseBytes, and returns ErrResponseTooLarge for more.
+func ReadResponse(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, MaxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > MaxResponseBytes {
+		return nil, ErrResponseTooLarge
+	}
+	return b, nil
+}
 
 // noRedirects stops a provider client at the first answer. A redirect would carry the request, its prompt and any key to
 // another host, so an endpoint that redirects is an error.
@@ -20,7 +41,8 @@ var errorTextFilter atomic.Pointer[func(string) string]
 // installs it once at start, so a secret is redacted before the cut and a secret that straddles the cut leaves nothing of
 // itself. f must return the text, changed or not, and must not retain it. With no filter, or with nil, the text is only cut, as
 // it always was: the command line does not redact other secrets. Install it before the first request; replacing it while
-// requests run is safe, but a request in flight may use either filter.
+// requests run is safe, but a request in flight may use either filter. f must not panic: a panic is not recovered, and it
+// reaches the code that was building an error message.
 func SetErrorTextFilter(f func(string) string) {
 	if f == nil {
 		errorTextFilter.Store(nil)

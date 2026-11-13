@@ -610,3 +610,8 @@ kbd {
 .ds-label { width: 96px; color: var(--fg-dim); flex-shrink: 0; }
 .ds-input { flex: 1; min-width: 0; background: var(--bg-1); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 12px; }
 .ds-note { color: var(--fg-muted); font-size: 11px; margin: 2px 0 4px 102px; }
+
+/* The chat header's line: a long model id is shortened with an ellipsis, and the provider or the place stays in view. */
+#chat-provider { display: inline-flex; align-items: baseline; min-width: 0; max-width: 100%; white-space: pre; }
+#chat-provider .chat-provider-model { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: isolate; }
+#chat-provider .chat-provider-place { flex: none; }
