@@ -4,15 +4,23 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
+
+	"github.com/alphawavesystems/flutter-probe/internal/record"
 )
 
 // The redactor for recorded backend traffic. Everything Studio shows of an exchange passes through it, in Go, before it reaches the
 // page: the page never holds a raw header value, query value or body. Nothing here writes to disk or to a log, and nothing of an
 // exchange is sent to an AI provider or anywhere else.
+//
+// It is layered on the redactor the recorder and the agent already share (internal/record): that one is run first on bodies, URLs and
+// header names, and the rules here are added to it, so there is one list of credential words, not two.
 //
 // The order is the one Explain uses: hidden characters are dropped first (the shared hiddenRune rule), so a name, a key or a token
 // split by one is whole again; then the structure-aware rules (header names, query values, JSON keys, form keys); then the home-path
@@ -31,15 +39,27 @@ const (
 	netSniff          = 8192    // bytes looked at to tell text from binary
 )
 
-// secretFamilies are the name families whose values are never shown. A name is matched after it is lower-cased and its separators
-// and hidden characters are removed, so X_Api_Key, x-auth-token, APIKEY and user[password] all match.
+// secretFamilies are the name families whose values are never shown. A name is matched after it is percent-decoded, folded to its
+// compatibility form (so full-width and other look-alike letters read as ASCII), lower-cased, and stripped of separators and hidden
+// characters, so X_Api_Key, x-auth-token, APIKEY and user[password] all match.
 var secretFamilies = []string{
-	"authorization", "cookie", "token", "secret", "password", "passwd", "apikey", "privatekey", "accesskey", "credential",
-	"session", "csrf", "xsrf", "signature", "bearer", "cardnumber", "creditcard", "jwt",
+	"authorization", "cookie", "token", "secret", "password", "passwd", "passphrase", "passcode", "apikey", "privatekey", "accesskey",
+	"credential", "session", "xsrf", "signature", "bearer", "creditcard", "jwt", "codeverifier", "verificationcode",
+	"subscriptionkey", "functionskey", "appkey", "masterkey", "fastlykey", "signingkey", "encryptionkey",
 }
 
-// secretExact are short names that are secrets only as a whole name, so "pin" does not match "shipping".
-var secretExact = map[string]bool{"key": true, "keys": true, "pin": true, "otp": true, "cvv": true, "cvc": true, "pwd": true, "sig": true, "ssn": true, "iban": true}
+// secretExact are short names that are secrets only as a whole name, so "code" does not match "zipcode". The recorder's token rule adds
+// pass, sid, pin, otp, cvv, cvc, ssn, sig and csrf the same way, so they are not repeated here.
+var secretExact = map[string]bool{"key": true, "keys": true, "iban": true, "code": true, "private": true}
+
+// foldName reads the escapes of a name and folds it to its compatibility form, with hidden characters dropped.
+func foldName(name string) string {
+	name = withoutInvisible(strings.ToValidUTF8(name, "?"), false)
+	if dec, err := url.QueryUnescape(name); err == nil {
+		name = dec
+	}
+	return norm.NFKC.String(name)
+}
 
 // normalizeName lower-cases a name and removes hidden characters and the separators that vary between spellings.
 func normalizeName(name string) string {
@@ -54,9 +74,7 @@ func normalizeName(name string) string {
 	}, name)
 }
 
-// isSecretName says whether a header, query, JSON or form name is in a secret family.
-func isSecretName(name string) bool {
-	n := normalizeName(name)
+func secretNormalized(n string) bool {
 	if secretExact[n] {
 		return true
 	}
@@ -69,10 +87,74 @@ func isSecretName(name string) bool {
 	return strings.Contains(strings.ReplaceAll(n, "author", ""), "auth")
 }
 
+// isSecretName says whether a header, query, JSON or form name is in a secret family: by this file's families, or by the token rule of
+// the recorder's redactor (pass, sid, passphrase, otp, pin, session and the rest).
+func isSecretName(name string) bool {
+	plain := withoutInvisible(strings.ToValidUTF8(name, "?"), false)
+	folded := foldName(name)
+	return secretNormalized(normalizeName(plain)) || secretNormalized(normalizeName(folded)) || record.IsCredentialName(folded)
+}
+
+// keyHeader matches a header name that ends in the word key, such as x-functions-key or Ocp-Apim-Subscription-Key.
+var keyHeader = regexp.MustCompile(`(?i)(^|[-_. ])key$`)
+
+// isSecretHeader is isSecretName, and any header name that ends in "key" (x-foo-key, Subscription_Key). The exact header names the
+// recorder keeps (x-api-key, x-csrf-token, set-cookie and the rest) are all in the families above.
+func isSecretHeader(name string) bool {
+	return isSecretName(name) || keyHeader.MatchString(foldName(name))
+}
+
+var (
+	jwtPattern       = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*`)
+	base64urlPattern = regexp.MustCompile(`[A-Za-z0-9_-]{24,}`)
+	uuidPattern      = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
+	cardPattern      = regexp.MustCompile(`\b\d(?:[ -]?\d){12,18}\b`)
+)
+
+// luhn says whether a run of digits passes the card number check.
+func luhn(digits string) bool {
+	sum, double := 0, false
+	for i := len(digits) - 1; i >= 0; i-- {
+		d := int(digits[i] - '0')
+		if double {
+			if d *= 2; d > 9 {
+				d -= 9
+			}
+		}
+		sum += d
+		double = !double
+	}
+	return sum%10 == 0
+}
+
+// redactShapes redacts what has the shape of a secret but no name: a JWT, a base64url run of 24 characters or more that holds a digit
+// (a UUID is kept), and a run of 13 to 19 digits that passes the card number check.
+func redactShapes(s string) string {
+	s = jwtPattern.ReplaceAllString(s, redactedMark)
+	s = base64urlPattern.ReplaceAllStringFunc(s, func(run string) string {
+		if strings.ContainsAny(run, "0123456789") && !uuidPattern.MatchString(run) {
+			return redactedMark
+		}
+		return run
+	})
+	return cardPattern.ReplaceAllStringFunc(s, func(run string) string {
+		digits := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, run)
+		if len(digits) >= 13 && len(digits) <= 19 && luhn(digits) {
+			return redactedMark
+		}
+		return run
+	})
+}
+
 // cleanText makes a string that came from traffic fit to show: hidden characters dropped, home folders and emails replaced, and
 // credential shapes redacted. A line break is kept when keepLines is set.
 func cleanText(s string, keepLines bool) string {
-	return redactCredentials(scrubPersonal(withoutInvisible(strings.ToValidUTF8(s, "?"), keepLines)))
+	return redactShapes(redactCredentials(scrubPersonal(withoutInvisible(strings.ToValidUTF8(s, "?"), keepLines))))
 }
 
 // shortText is cleanText cut to max characters.
@@ -80,11 +162,32 @@ func shortText(s string, max int) string {
 	return strings.TrimSpace(capRunes(cleanText(s, false), max))
 }
 
-// redactURL shows a URL without what can identify or authorize: the user name and password are removed, the fragment is dropped,
-// every query value is replaced and only the names stay, and the path is scrubbed. It works on the text and does not parse it, so a
-// URL that does not parse is treated the same way.
+// urlInText finds a URL inside free text, such as an error message.
+var urlInText = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.\-]*://[^\s"'<>]+`)
+
+// redactURL shows a URL without what can identify or authorize: the user name and password are removed (everything before the
+// last @ of the authority, even when the password holds a ? or a #), the fragment is dropped, every query value is replaced and
+// only the names stay, a query component with no name=value form is replaced whole, and the path is scrubbed. It first runs the
+// recorder's URL redactor, then works on the text and does not parse it, so a URL that does not parse is treated the same way.
 func redactURL(raw string) string {
-	s := withoutInvisible(strings.ToValidUTF8(raw, "?"), false)
+	s := record.RedactURL(withoutInvisible(strings.ToValidUTF8(raw, "?"), false))
+	s = strings.ReplaceAll(s, record.Placeholder, redactedMark)
+	start := -1 // where the authority begins: after "://", or after a leading "//"
+	if i := strings.Index(s, "://"); i >= 0 {
+		start = i + 3
+	} else if strings.HasPrefix(s, "//") {
+		start = 2
+	}
+	if start >= 0 {
+		rest := s[start:]
+		end := strings.IndexByte(rest, '/')
+		if end < 0 {
+			end = len(rest)
+		}
+		if at := strings.LastIndexByte(rest[:end], '@'); at >= 0 {
+			s = s[:start] + rest[at+1:]
+		}
+	}
 	if i := strings.IndexByte(s, '#'); i >= 0 {
 		s = s[:i]
 	}
@@ -92,37 +195,33 @@ func redactURL(raw string) string {
 	if i := strings.IndexByte(s, '?'); i >= 0 {
 		s, query = s[:i], s[i+1:]
 	}
-	if i := strings.Index(s, "://"); i >= 0 {
-		rest := s[i+3:]
-		end := strings.IndexByte(rest, '/')
-		if end < 0 {
-			end = len(rest)
-		}
-		if at := strings.LastIndexByte(rest[:end], '@'); at >= 0 {
-			s = s[:i+3] + rest[at+1:]
-		}
-	}
 	out := cleanText(s, false)
 	if query != "" {
 		parts := strings.Split(query, "&")
 		for i, p := range parts {
-			name := p
-			if eq := strings.IndexByte(p, '='); eq >= 0 {
-				name = p[:eq]
-				if dec, err := url.QueryUnescape(name); err == nil {
-					name = dec
-				}
-				parts[i] = shortText(name, 100) + "=" + redactedMark
+			eq := strings.IndexByte(p, '=')
+			if eq < 0 {
+				parts[i] = redactedMark // a component with no name is the value
 				continue
 			}
+			name := p[:eq]
 			if dec, err := url.QueryUnescape(name); err == nil {
 				name = dec
 			}
-			parts[i] = shortText(name, 100)
+			parts[i] = shortText(name, 100) + "=" + redactedMark
 		}
 		out += "?" + strings.Join(parts, "&")
 	}
 	return capRunes(out, netMaxURL)
+}
+
+// redactErrorText makes an error text from the app fit to show: every URL in it goes through redactURL, and the rest through
+// cleanText and the recorder's body redactor.
+func redactErrorText(s string, max int) string {
+	s = withoutInvisible(strings.ToValidUTF8(s, "?"), false)
+	s = urlInText.ReplaceAllStringFunc(s, redactURL)
+	s = strings.ReplaceAll(record.RedactBody(s), record.Placeholder, redactedMark)
+	return strings.TrimSpace(capRunes(cleanText(s, false), max))
 }
 
 // urlHeaders are headers whose value is a URL.
@@ -147,7 +246,7 @@ func redactHeaders(h map[string]string) (out []NetHeader, more int) {
 			continue
 		}
 		hdr := NetHeader{Name: shortText(n, netMaxHeaderName)}
-		if isSecretName(n) {
+		if isSecretHeader(n) {
 			hdr.Value = redactedMark
 		} else if urlHeaders[normalizeName(n)] {
 			hdr.Value = redactURL(h[n]) // a redirect target or a referring page carries a query, whose values are never shown
@@ -207,6 +306,20 @@ func looksBinary(b []byte) bool {
 	return true
 }
 
+// dropHiddenKeepSpace drops hidden characters but keeps line breaks, carriage returns and tabs as they are, for the recorder's
+// redactor that reads a multipart body by its CRLF lines. They become spaces in what is shown, at the end (cleanText).
+func dropHiddenKeepSpace(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			return r
+		case hiddenRune(r):
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // redactBody makes a body fit to show. reported is the size the agent recorded, which can be larger than the text it kept.
 func redactBody(body string, reported int64, contentType string) NetBody {
 	size := int64(len(body))
@@ -221,7 +334,7 @@ func redactBody(body string, reported int64, contentType string) NetBody {
 	case binaryType(contentType) || looksBinary([]byte(body)):
 		return NetBody{Kind: "binary", Size: size}
 	}
-	text := withoutInvisible(strings.ToValidUTF8(body, "?"), true)
+	text := dropHiddenKeepSpace(strings.ToValidUTF8(body, "?"))
 	shown := redactStructured(text, contentType)
 	out := NetBody{Kind: "text", Size: size}
 	if r := []rune(shown); len(r) > netBodyShown {
@@ -234,6 +347,9 @@ func redactBody(body string, reported int64, contentType string) NetBody {
 
 // redactStructured redacts a text body by what it is: JSON by key, a form by name, anything else by shape.
 func redactStructured(text, contentType string) string {
+	// The recorder's redactor first: it reads JSON that is cut, has comments or one value per line, XML elements (a WS-Security
+	// UsernameToken), multipart parts and GraphQL arguments, which the structure rules below do not parse.
+	text = strings.ReplaceAll(record.RedactBody(text), record.Placeholder, redactedMark)
 	trimmed := strings.TrimSpace(text)
 	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") || strings.Contains(strings.ToLower(contentType), "json") {
 		dec := json.NewDecoder(strings.NewReader(trimmed))
@@ -241,8 +357,12 @@ func redactStructured(text, contentType string) string {
 		var v any
 		if err := dec.Decode(&v); err == nil {
 			if _, err := dec.Token(); err != nil { // nothing may follow the value
-				if out, err := json.MarshalIndent(redactJSON(v, 0), "", "  "); err == nil {
-					return string(out)
+				var buf bytes.Buffer
+				enc := json.NewEncoder(&buf)
+				enc.SetEscapeHTML(false) // markup in a value is shown as it is, not as \u003c
+				enc.SetIndent("", "  ")
+				if err := enc.Encode(redactJSON(v, 0)); err == nil {
+					return strings.TrimSuffix(buf.String(), "\n")
 				}
 			}
 		}
@@ -297,9 +417,10 @@ func redactJSON(v any, depth int) any {
 	switch t := v.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
+		pair := namesASecret(t)
 		for k, val := range t {
 			key := shortText(k, 100)
-			if isSecretName(k) {
+			if isSecretName(k) || (pair && pairValueMembers[strings.ToLower(k)]) {
 				out[key] = redactedMark
 			} else {
 				out[key] = redactJSON(val, depth+1)
@@ -316,4 +437,33 @@ func redactJSON(v any, depth int) any {
 		return cleanText(t, true)
 	}
 	return v
+}
+
+// pairNameMembers and pairValueMembers are the members of a {"name": "api_key", "value": "..."} object: when a name member names a
+// secret, the value member is one.
+var (
+	pairNameMembers  = map[string]bool{"name": true, "key": true, "field": true, "param": true, "id": true, "label": true}
+	pairValueMembers = map[string]bool{"value": true, "val": true, "data": true, "content": true, "text": true, "newvalue": true}
+)
+
+// namesASecret says whether an object has a pair name member, as a string or an array of strings, that is in a secret family.
+func namesASecret(obj map[string]any) bool {
+	for member, v := range obj {
+		if !pairNameMembers[strings.ToLower(member)] {
+			continue
+		}
+		switch names := v.(type) {
+		case string:
+			if isSecretName(names) {
+				return true
+			}
+		case []any:
+			for _, item := range names {
+				if name, ok := item.(string); ok && isSecretName(name) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

@@ -40,7 +40,7 @@ export function GetDeviceView():Promise<main.DeviceViewInfo>;
 
 export function GetWidgetTree():Promise<string>;
 
-export function HTTPExchange(arg1:number):Promise<main.NetDetail>;
+export function HTTPExchange(arg1:string,arg2:number):Promise<main.NetDetail>;
 
 export function HTTPExchanges(arg1:main.NetFilter):Promise<main.NetList>;
 

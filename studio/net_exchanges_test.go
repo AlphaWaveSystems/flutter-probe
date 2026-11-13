@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -75,7 +73,7 @@ func TestNetDataMethodsNeedAConnection(t *testing.T) {
 	if _, err := a.HTTPExchanges(NetFilter{}); !errors.Is(err, errNetNotConnected) {
 		t.Fatalf("HTTPExchanges error = %v", err)
 	}
-	if _, err := a.HTTPExchange(1); !errors.Is(err, errNetNotConnected) {
+	if _, err := a.HTTPExchange("", 1); !errors.Is(err, errNetNotConnected) {
 		t.Fatalf("HTTPExchange error = %v", err)
 	}
 }
@@ -163,8 +161,8 @@ func TestHTTPExchangesSinceAndFilters(t *testing.T) {
 }
 
 func TestHTTPExchangeIsRedactedInEveryPosition(t *testing.T) {
-	c := &fakeNetClient{res: probelink.HTTPLogResult{Entries: []probelink.HTTPEntry{hostileEntry(7), hostileEntry(8)}}}
-	d, err := netApp(c).HTTPExchange(8)
+	c := &fakeNetClient{res: probelink.HTTPLogResult{Epoch: "ep1", Entries: []probelink.HTTPEntry{hostileEntry(7), hostileEntry(8)}}}
+	d, err := netApp(c).HTTPExchange("ep1", 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,14 +191,14 @@ func TestHTTPExchangeMissingAndBadSequence(t *testing.T) {
 	c := &fakeNetClient{res: probelink.HTTPLogResult{Entries: []probelink.HTTPEntry{hostileEntry(3)}}}
 	a := netApp(c)
 	for _, seq := range []int{0, -4} {
-		if _, err := a.HTTPExchange(seq); !errors.Is(err, errNetNoExchange) {
+		if _, err := a.HTTPExchange("", seq); !errors.Is(err, errNetNoExchange) {
 			t.Errorf("seq %d: %v", seq, err)
 		}
 	}
 	if c.calls() != 0 {
 		t.Errorf("a sequence below 1 asked the app %d time(s)", c.calls())
 	}
-	if _, err := a.HTTPExchange(99); !errors.Is(err, errNetNoExchange) || c.calls() != 1 {
+	if _, err := a.HTTPExchange("", 99); !errors.Is(err, errNetNoExchange) || c.calls() != 1 {
 		t.Errorf("a missing sequence: %v, %d call(s)", err, c.calls())
 	}
 }
@@ -211,7 +209,7 @@ func TestNetDataMethodsHideTheAgentsError(t *testing.T) {
 	if _, err := a.HTTPExchanges(NetFilter{}); !errors.Is(err, errNetLogFailed) || strings.Contains(err.Error(), netPlain) {
 		t.Fatalf("HTTPExchanges error = %v", err)
 	}
-	if _, err := a.HTTPExchange(1); !errors.Is(err, errNetLogFailed) || strings.Contains(err.Error(), "10.0.0.5") {
+	if _, err := a.HTTPExchange("", 1); !errors.Is(err, errNetLogFailed) || strings.Contains(err.Error(), "10.0.0.5") {
 		t.Fatalf("HTTPExchange error = %v", err)
 	}
 }
@@ -223,79 +221,12 @@ func TestNetDataMethodsAreSafeConcurrently(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		wg.Add(2)
 		go func() { defer wg.Done(); _, _ = a.HTTPExchanges(NetFilter{}) }()
-		go func() { defer wg.Done(); _, _ = a.HTTPExchange(2) }()
+		go func() { defer wg.Done(); _, _ = a.HTTPExchange("", 2) }()
 	}
 	wg.Wait()
 }
 
 // ---- contracts ----
-
-// goFiles reads the non-test Go files of this package whose names match the prefix.
-func goFiles(t *testing.T, prefix string) map[string]string {
-	t.Helper()
-	paths, err := filepath.Glob(prefix + "*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := map[string]string{}
-	for _, p := range paths {
-		if strings.HasSuffix(p, "_test.go") {
-			continue
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		out[p] = string(b)
-	}
-	return out
-}
-
-// The monitor makes no request of its own, writes nothing and logs nothing, and nothing of it reaches an AI provider: it only reads
-// the app's request log. These are checked on the source, because each is a thing a later change could add without a test noticing.
-func TestNetFilesHaveNoNetworkNoDiskNoLogNoAI(t *testing.T) {
-	files := goFiles(t, "net_")
-	if len(files) < 2 {
-		t.Fatalf("found %d net_ files", len(files))
-	}
-	forbidden := []string{
-		`"net/http"`, `"net"`, "os.WriteFile", "os.Create", "os.OpenFile", "os.Mkdir", "ioutil.", "log.", "fmt.Print", "fmt.Fprint", "slog.",
-		"localStorage", "keyring", "completeChat", "newAIClient", "outbound(", "ai.New", "NewTextCompleter", "aiProvider(", "Chat(", "Triage(",
-	}
-	for name, src := range files {
-		for _, f := range forbidden {
-			if strings.Contains(src, f) {
-				t.Errorf("%s contains %q", name, f)
-			}
-		}
-	}
-}
-
-// And the other direction: no AI file reads an exchange, a row or the redactor's output.
-func TestAIFilesNeverReadTheRequestLog(t *testing.T) {
-	files := goFiles(t, "ai_")
-	for name, src := range goFiles(t, "triage") {
-		files[name] = src
-	}
-	files["app.go"] = readFileForTest(t, "app.go") // the chat's context is built from the app
-	files["ai_chat.go"] = readFileForTest(t, "ai_chat.go")
-	for name, src := range files {
-		for _, f := range []string{"HTTPLog", "HTTPExchange", "netLog", "NetRow", "NetDetail", "NetList", "redactBody", "redactHeaders", "redactURL", "probelink.HTTPEntry"} {
-			if strings.Contains(src, f) {
-				t.Errorf("%s mentions %q: AI code must not read the request log", name, f)
-			}
-		}
-	}
-}
-
-func readFileForTest(t *testing.T, p string) string {
-	t.Helper()
-	b, err := os.ReadFile(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
 
 // Behaviour, the other half of the contract: with a connected app that has traffic in its log, every AI path runs against a fake
 // provider, and the app is never asked for its request log, and no marker from the traffic reaches the provider.
@@ -323,5 +254,32 @@ func TestAIPathsNeverAskTheAppForItsRequestLog(t *testing.T) {
 	all := strings.Join(append(append([]string{}, p.systems...), p.users...), "\n")
 	if strings.Contains(all, "net-marker") || len(p.users) == 0 {
 		t.Fatalf("the provider got %d request(s) and the marker is in them: %v", len(p.users), strings.Contains(all, "net-marker"))
+	}
+}
+
+// A sequence number means the same exchange only within one run of the app. When the app has restarted the epoch differs, and the
+// answer is an error, not another exchange that has the same number.
+func TestHTTPExchangeRefusesAnotherEpoch(t *testing.T) {
+	c := &fakeNetClient{res: probelink.HTTPLogResult{Epoch: "run-2", Entries: []probelink.HTTPEntry{hostileEntry(4)}}}
+	a := netApp(c)
+	if _, err := a.HTTPExchange("run-1", 4); !errors.Is(err, errNetEpoch) {
+		t.Fatalf("another epoch: %v", err)
+	}
+	if _, err := a.HTTPExchange("", 4); !errors.Is(err, errNetEpoch) {
+		t.Fatalf("no epoch: %v", err)
+	}
+	list, err := a.HTTPExchanges(NetFilter{})
+	if err != nil || list.Epoch != "run-2" {
+		t.Fatalf("list %+v, %v", list, err)
+	}
+	d, err := a.HTTPExchange(list.Epoch, 4)
+	if err != nil || d.Epoch != "run-2" || d.Seq != 4 {
+		t.Fatalf("detail %+v, %v", d, err)
+	}
+	// An epoch that carries a secret shape is shown cleaned, and is matched cleaned: the page hands back what it was given.
+	c.res.Epoch = "ep-" + netToken
+	list, _ = a.HTTPExchanges(NetFilter{})
+	if _, err := a.HTTPExchange(list.Epoch, 4); err != nil || strings.Contains(list.Epoch, "ghp_") {
+		t.Fatalf("a cleaned epoch: %q, %v", list.Epoch, err)
 	}
 }

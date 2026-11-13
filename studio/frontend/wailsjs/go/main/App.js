@@ -78,8 +78,8 @@ export function GetWidgetTree() {
   return window['go']['main']['App']['GetWidgetTree']();
 }
 
-export function HTTPExchange(arg1) {
-  return window['go']['main']['App']['HTTPExchange'](arg1);
+export function HTTPExchange(arg1, arg2) {
+  return window['go']['main']['App']['HTTPExchange'](arg1, arg2);
 }
 
 export function HTTPExchanges(arg1) {

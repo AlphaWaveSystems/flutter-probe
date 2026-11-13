@@ -432,6 +432,7 @@ export namespace main {
 	    }
 	}
 	export class NetDetail {
+	    epoch: string;
 	    seq: number;
 	    method: string;
 	    url: string;
@@ -454,6 +455,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.epoch = source["epoch"];
 	        this.seq = source["seq"];
 	        this.method = source["method"];
 	        this.url = source["url"];

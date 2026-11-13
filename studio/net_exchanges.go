@@ -26,6 +26,7 @@ var (
 	errNetNotConnected = errors.New("connect to a device first: the request log is read from the app")
 	errNetLogFailed    = errors.New("the app did not answer the request log")
 	errNetNoExchange   = errors.New("that request is no longer in the log")
+	errNetEpoch        = errors.New("the app restarted since the list was read: refresh the list")
 )
 
 // NetFilter selects rows of the listing. Method, Status and Text are matched against what is shown, never against a raw value, so a
@@ -62,6 +63,7 @@ type NetList struct {
 
 // NetDetail is one exchange with its headers and bodies, all redacted.
 type NetDetail struct {
+	Epoch string `json:"epoch"`
 	NetRow
 	RequestHeaders      []NetHeader `json:"requestHeaders"`
 	ResponseHeaders     []NetHeader `json:"responseHeaders"`
@@ -86,10 +88,20 @@ func netRow(e probelink.HTTPEntry) NetRow {
 		Status:        e.Status,
 		DurationMs:    e.DurationMs,
 		Mocked:        e.Mocked,
-		Error:         shortText(e.Error, netMaxError),
+		Error:         redactErrorText(e.Error, netMaxError),
 		RequestBytes:  reqBytes,
 		ResponseBytes: respBytes,
 	}
+}
+
+// filterNeedle is the filter text as it is searched for: trimmed, lower-cased and cut to netMaxFilter characters. The cut is by
+// characters, because a cut by bytes can end in half of one.
+func filterNeedle(text string) string {
+	t := strings.ToLower(strings.TrimSpace(text))
+	if r := []rune(t); len(r) > netMaxFilter {
+		t = string(r[:netMaxFilter])
+	}
+	return t
 }
 
 func (f NetFilter) matches(r NetRow) bool {
@@ -110,10 +122,7 @@ func (f NetFilter) matches(r NetRow) bool {
 	default:
 		return false
 	}
-	if t := strings.ToLower(strings.TrimSpace(f.Text)); t != "" {
-		if len(t) > netMaxFilter {
-			t = t[:netMaxFilter]
-		}
+	if t := filterNeedle(f.Text); t != "" {
 		hay := strings.ToLower(r.Method + " " + r.URL + " " + strconv.Itoa(r.Status) + " " + r.Error)
 		if !strings.Contains(hay, t) {
 			return false
@@ -163,8 +172,10 @@ func (a *App) HTTPExchanges(f NetFilter) (NetList, error) {
 	return NetList{Epoch: shortText(res.Epoch, 64), Latest: res.Latest, Total: total, Shown: len(rows), Rows: rows}, nil
 }
 
-// HTTPExchange returns one recorded exchange with its headers and bodies, redacted and cut.
-func (a *App) HTTPExchange(seq int) (NetDetail, error) {
+// HTTPExchange returns one recorded exchange with its headers and bodies, redacted and cut. epoch is the one the listing returned: a
+// sequence number means the same exchange only within one run of the app, so when the app has restarted the answer is an error and
+// not another exchange that has the same number.
+func (a *App) HTTPExchange(epoch string, seq int) (NetDetail, error) {
 	if seq < 1 {
 		return NetDetail{}, errNetNoExchange
 	}
@@ -172,11 +183,14 @@ func (a *App) HTTPExchange(seq int) (NetDetail, error) {
 	if err != nil {
 		return NetDetail{}, err
 	}
+	if shortText(res.Epoch, 64) != epoch {
+		return NetDetail{}, errNetEpoch
+	}
 	for _, e := range res.Entries {
 		if e.Seq != seq {
 			continue
 		}
-		d := NetDetail{NetRow: netRow(e)}
+		d := NetDetail{Epoch: epoch, NetRow: netRow(e)}
 		d.RequestHeaders, d.MoreRequestHeaders = redactHeaders(e.RequestHeaders)
 		d.ResponseHeaders, d.MoreResponseHeaders = redactHeaders(e.ResponseHeaders)
 		d.RequestBody = redactBody(e.RequestBody, e.RequestBytes, headerValue(e.RequestHeaders, "content-type"))

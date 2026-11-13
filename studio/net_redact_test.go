@@ -13,7 +13,7 @@ import (
 const (
 	netToken  = "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
 	netAnt    = "sk" + "-ant-" + "api03-abcdefghijklmnopqrstuv"
-	netPlain  = "plainNetSecretValue0000000090" // a secret of no known family: only its position says it is one
+	netPlain  = "hunter2-Xk9pq" // a secret with no shape: only its position or its name says it is one (short, so no shape rule catches it)
 	netEmail  = "jane.doe@example.com"
 	netHome   = "/Users/alice/project"
 	netPEMKey = "-----BEGIN PRIVATE " + "KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE " + "KEY-----"
@@ -83,7 +83,7 @@ func TestRedactURL(t *testing.T) {
 		{"https://api.example.test/v1/users?id=7&token=" + netPlain, "https://api.example.test/v1/users?id=[redacted]&token=[redacted]"},
 		{"https://user:" + netPlain + "@api.example.test/x", "https://api.example.test/x"},
 		{"https://api.example.test/x#access_token=" + netPlain, "https://api.example.test/x"},
-		{"https://api.example.test/x?flag&a=1", "https://api.example.test/x?flag&a=[redacted]"},
+		{"https://api.example.test/x?flag&a=1", "https://api.example.test/x?[redacted]&a=[redacted]"},
 		{"https://api.example.test/u/" + netEmail + "/f", "https://api.example.test/u/[email]/f"},
 		{"file://" + netHome + "/a.json", "file://~/project/a.json"},
 		{"https://api.example.test/p?q=%61%62&%74oken=" + netPlain, "https://api.example.test/p?q=[redacted]&token=[redacted]"},
@@ -94,8 +94,8 @@ func TestRedactURL(t *testing.T) {
 			t.Errorf("redactURL(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
-	if got := redactURL(strings.Repeat("a", 5000)); len([]rune(got)) > netMaxURL {
-		t.Errorf("a long URL is %d characters", len([]rune(got)))
+	if got := redactURL("https://h.example.test/" + strings.Repeat("ab.", 2000)); len([]rune(got)) != 2000 {
+		t.Errorf("a long URL is %d characters, want 2000", len([]rune(got)))
 	}
 }
 
@@ -118,7 +118,8 @@ func TestRedactBodyJSONByKeyAtAnyDepth(t *testing.T) {
 func TestRedactBodyFormAndText(t *testing.T) {
 	form := redactBody("user=jane&password="+netPlain+"&api_key="+netPlain+"&next=%2Fhome%2Falice", 0, "application/x-www-form-urlencoded")
 	mustNotContain(t, "form", form.Text, netPlain)
-	if !strings.Contains(form.Text, "user=jane") || !strings.Contains(form.Text, "password=[redacted]") || !strings.Contains(form.Text, "api_key=[redacted]") {
+	// The recorder's redactor replaces a whole credential assignment, so the name goes with the value; the rest of the form stays.
+	if !strings.Contains(form.Text, "user=jane") || strings.Count(form.Text, redactedMark) < 2 || strings.Contains(form.Text, "alice") {
 		t.Errorf("form = %q", form.Text)
 	}
 	guess := redactBody("a=1&token="+netPlain, 0, "") // no content type: it looks like a form
@@ -131,14 +132,18 @@ func TestRedactBodyFormAndText(t *testing.T) {
 	}
 }
 
-// A body that is not JSON but is declared JSON, or is JSON followed by more, is still redacted by shape.
+// A body that is not JSON but is declared JSON, or is JSON followed by more, is still redacted: the plain password goes, not only the
+// token shapes.
 func TestRedactBodyBrokenJSONIsStillRedacted(t *testing.T) {
-	for _, body := range []string{`{"password": "` + netPlain + `", "x":`, `{"a":1} trailing ` + netPlain + ` password=` + netPlain, `[1,2,` + netToken} {
+	for _, body := range []string{
+		`{"password": "` + netPlain + `", "x":`,
+		`{"a":1} trailing ` + netPlain + ` password=` + netPlain,
+		`[1,2,` + netToken,
+		`{"user":"bob","password":"` + netPlain,
+		`{"items":[{"id":1},{"secret":"` + netPlain + `"},{"id":`,
+	} {
 		b := redactBody(body, 0, "application/json")
-		mustNotContain(t, "broken JSON "+body[:12], b.Text, netToken)
-		if strings.Contains(body, "password=") && strings.Contains(b.Text, netPlain) {
-			t.Errorf("assignment survived: %q", b.Text)
-		}
+		mustNotContain(t, "broken JSON "+body[:12], b.Text, netToken, netPlain)
 	}
 }
 

@@ -84,6 +84,10 @@ func isCredentialName(name string) bool {
 	return false
 }
 
+// IsCredentialName reports whether a name, already percent-decoded, holds a credential by the token rule (see isCredentialName).
+// Studio's traffic monitor uses it so that there is one list of credential words, not two.
+func IsCredentialName(name string) bool { return isCredentialName(name) }
+
 // decodeName returns name with its percent escapes read, or name itself when the escapes do not decode.
 func decodeName(name string) string {
 	if decoded, err := url.QueryUnescape(name); err == nil {
