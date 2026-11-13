@@ -148,7 +148,7 @@ packages:
       path: "../../probe_agent"
       relative: true
     source: path
-    version: "0.26.0"
+    version: "0.27.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter
