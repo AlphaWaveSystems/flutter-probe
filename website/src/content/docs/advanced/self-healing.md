@@ -3,7 +3,7 @@ title: Self-Healing Selectors
 description: AI-powered selector recovery using fuzzy matching against the widget tree.
 ---
 
-FlutterProbe includes a self-healing system that can recover from broken selectors by fuzzy-matching against the live widget tree. When a selector fails to find its target, the AI module tries alternative strategies before giving up.
+FlutterProbe includes a self-healing system that can recover from broken selectors by fuzzy-matching against the live widget tree. When a selector fails to find its target, the AI module tries alternative strategies before giving up. A failed step can also get an AI-proposed replacement selector, shown in the JSON report with `probe test --ai-heal` ([AI selector proposals](https://flutterprobe.dev/tools/ai/#selector-proposals-for-failed-steps)).
 
 ## How It Works
 
@@ -48,7 +48,7 @@ Uses semantic labels and accessibility information to find widgets.
 
 ## Configuration
 
-Self-healing is enabled by default. The system only attempts recovery when a standard selector lookup fails — there is no performance overhead for passing selectors.
+Self-healing is enabled by default. The system only attempts recovery when a standard selector lookup fails — there is no performance overhead for passing selectors. The AI proposal is separate: it runs only with `probe test --ai-heal` and an `ai:` block ([AI selector proposals](https://flutterprobe.dev/tools/ai/#selector-proposals-for-failed-steps)).
 
 ## Logging
 

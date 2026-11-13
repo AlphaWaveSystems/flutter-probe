@@ -486,7 +486,7 @@ Takes the same arguments as run_tests (see its description for the flags). Then 
 	},
 	{
 		Name:        "generate_test",
-		Description: "Use AI to generate a .probe test file from a natural language description.",
+		Description: "Use AI to generate a .probe test file from a natural language description. It follows the ai: block in probe.yaml (a local OpenAI-compatible model such as Ollama or LM Studio works with no API key); without an ai: block it uses the Anthropic key.",
 		InputSchema: mcpSchema{
 			Type:     "object",
 			Required: []string{"prompt"},
