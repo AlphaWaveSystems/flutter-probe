@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
@@ -24,9 +25,11 @@ const (
 	explainMaxFile  = 300
 	explainMaxError = 3000
 
-	// Text is gated before it is cut, so a field is first bounded to a size far above its cap. A token that straddles this bound
-	// lies beyond every cap and is cut away with the rest.
+	// Text is gated before it is cut, so a field is first bounded to a size far above its cap (see boundBeforeGate for what the
+	// bound drops with it).
 	explainPreGate = 20 * explainMaxError // 60000
+	explainTailRun = 1000                 // the longest token-like run at the bound that is dropped with it
+	explainTailCut = 200                  // and the characters dropped after it
 )
 
 // The two time bounds on one model call. Each is enough on its own: the client gives up on a silent server, and the context ends
@@ -39,6 +42,10 @@ var (
 // explainGate is the one gate for the text Explain sends. A test replaces it with a counter to prove it runs exactly once on the
 // system prompt and once on each field of each failure.
 var explainGate = outbound
+
+// newExplainCompleter makes the completer for the provider the settings name. A test replaces it, to prove that a panic in a completer
+// is contained.
+var newExplainCompleter = ai.NewTextCompleter
 
 // Fixed texts for why an Explain stopped early. The provider's own error is never shown: it can carry an endpoint, a path or text
 // that was sent.
@@ -126,6 +133,8 @@ func withoutInvisible(s string, keepLines bool) string {
 			return ' '
 		case hiddenRune(r):
 			return -1
+		case r != ' ' && unicode.Is(unicode.Zs, r): // a no-break or wide space is a plain space
+			return ' '
 		}
 		return r
 	}, s)
@@ -140,13 +149,35 @@ func capRunes(s string, max int) string {
 	return string(r[:max-1]) + "…"
 }
 
+// boundBeforeGate bounds a field to explainPreGate characters before the gate reads it, so a very long error does not hand the
+// gate a whole megabyte. A field that is cut here ends in the middle of whatever was there, and the gate can shrink the text (a
+// private key block becomes one marker), which would move the cut end up into the part that is sent. So when it cuts, it also
+// drops the run of characters at the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then
+// explainTailCut more characters: nothing that was cut in two survives.
+func boundBeforeGate(s string) string {
+	r := []rune(strings.ToValidUTF8(s, "?"))
+	if len(r) <= explainPreGate {
+		return string(r)
+	}
+	r = r[:explainPreGate]
+	i := len(r)
+	for i > 0 && len(r)-i < explainTailRun && !unicode.IsSpace(r[i-1]) {
+		i--
+	}
+	r = r[:i]
+	if len(r) <= explainTailCut {
+		return ""
+	}
+	return string(r[:len(r)-explainTailCut])
+}
+
 // explainField makes one field of a failure fit to send, in this order: hidden characters are dropped, the field is bounded, the
 // exact key is removed, personal text is scrubbed, the gate runs, and the field is cut to its cap. Dropping comes first, so no
 // later step is read around a character that splits what it looks for: a token, the key, an email address or a home folder. The key
 // is dropped the same way, so a key that holds one still matches. Every field takes the same path, so no field reaches ai.Triage,
 // or the preview, in a form the gate has not seen. The gate runs exactly once.
 func explainField(s, key string, keepLines bool, max int) string {
-	s = capRunes(withoutInvisible(s, keepLines), explainPreGate)
+	s = boundBeforeGate(withoutInvisible(s, keepLines))
 	if key = withoutInvisible(key, false); key != "" {
 		s = strings.ReplaceAll(s, key, redactedMark)
 	}
@@ -252,7 +283,10 @@ func (a *App) PreviewExplain() (ExplainPreview, error) {
 		return ExplainPreview{}, err
 	}
 	rec := &recorder{}
-	ai.Triage(context.Background(), gatedCompleter{inner: rec}, in.failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainCallTimeout})
+	_, stopped := ai.Triage(context.Background(), gatedCompleter{inner: rec}, in.failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainCallTimeout})
+	if stoppedText(stopped, false, len(in.failures)) == explainStoppedOther {
+		return ExplainPreview{}, errors.New(explainStoppedOther) // the gate panicked on the system prompt: Triage recovered it
+	}
 	label, hosted := explainDestination(in.settings)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Sent to: %s\n\n", label)
@@ -278,7 +312,7 @@ func (a *App) ExplainLastRun() (ExplainResult, error) {
 		return ExplainResult{}, err
 	}
 	s := in.settings
-	c, err := ai.NewTextCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainClientTimeout)
+	c, err := newExplainCompleter(s.Provider, s.APIKey, s.Model, s.Endpoint, explainClientTimeout)
 	if err != nil {
 		return ExplainResult{}, errorFrom(err, s.APIKey)
 	}

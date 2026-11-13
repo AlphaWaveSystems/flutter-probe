@@ -115,3 +115,10 @@ func TestListModelsRefusesAnOversizeListing(t *testing.T) {
 		t.Fatalf("error = %v, want one that names the limit", err)
 	}
 }
+
+// The limit is pinned as a number: a change to it is a decision.
+func TestMaxResponseBytesIsOneMegabyte(t *testing.T) {
+	if MaxResponseBytes != 1048576 {
+		t.Fatalf("MaxResponseBytes = %d, want 1048576", MaxResponseBytes)
+	}
+}
