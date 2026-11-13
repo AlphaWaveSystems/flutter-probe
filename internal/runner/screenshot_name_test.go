@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
@@ -104,12 +105,36 @@ func TestCompareScreenshotKeepsBuiltinsLiteral(t *testing.T) {
 }
 
 func TestSafeShotPart(t *testing.T) {
-	for in, want := range map[string]string{"": "test", "ok-1.2_x": "ok-1.2_x", "a b/c": "a_b_c", "é": "_", "../x": ".._x"} {
+	for in, want := range map[string]string{
+		"": "test", "ok-1.2_x": "ok-1.2_x", "a b/c": "a_b_c", "../x": ".._x",
+		"Prüfung Größe": "Prüfung_Größe", "支付流程": "支付流程", "Привет мир": "Привет_мир", "قائمة": "قائمة", "नमस्ते": "नमस्ते", // letters and marks of other scripts stay
+		"e\u0301": "e\u0301", "٣٤": "٣٤", // a combining mark and non-ASCII digits stay
+		"pay 💳 ok": "pay___ok", "a\u200bb": "a_b", "a\u202eb": "a_b", "a\tb\nc": "a_b_c", "a:b?c*d": "a_b_c_d", // emoji, invisible and control characters, punctuation do not
+		"bad\xffbyte": "bad_byte", "\xc3": "_", "\ufffd": "_", // invalid UTF-8 and the replacement character
+	} {
 		if got := safeShotPart(in); got != want {
 			t.Errorf("safeShotPart(%q) = %q, want %q", in, got, want)
 		}
 	}
-	if strings.Contains(safeShotPart("a/b\\c:d"), "/") {
+	if strings.ContainsAny(safeShotPart("a/b\\c:d"), "/\\") {
 		t.Error("path separator kept")
+	}
+}
+
+func TestScreenshotNamesCarryUTF8Unchanged(t *testing.T) {
+	e, rec := shotExec(t)
+	e.SetStepContext("f.probe", "Zahlung Größe 支付", 1)
+	e.vars = map[string]string{"gerät": "Käse-Ü"}
+	takeShot(t, e, "Übersicht_<gerät>_支付_🙂_<test>")
+	if got, want := rec.names[0], "Übersicht_Käse-Ü_支付_🙂_Zahlung_Größe_支付"; got != want {
+		t.Fatalf("name = %q, want %q", got, want)
+	}
+	if !utf8.ValidString(rec.names[0]) {
+		t.Fatal("name is not valid UTF-8")
+	}
+	// names with no placeholder pass through byte for byte, including a decomposed é (not normalised)
+	takeShot(t, e, "caf\u00e9 cafe\u0301")
+	if rec.names[1] != "caf\u00e9 cafe\u0301" {
+		t.Fatalf("name changed: %q", rec.names[1])
 	}
 }

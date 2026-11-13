@@ -267,7 +267,7 @@ A screenshot is saved under the name you give it, so the same name in a later ru
 | --- | --- |
 | `<timestamp>` | the time of the step, `20261113-141502-123` (local time, to the millisecond) |
 | `<run>` | one stamp shared by every screenshot of this `probe test` run, `20261113-141502` |
-| `<test>` | the name of the running test, with every character other than letters, digits, `.`, `_` and `-` replaced by `_` |
+| `<test>` | the name of the running test, letters and digits of any script stay (UTF-8 is kept); spaces, `/`, emoji, punctuation and invalid bytes become `_` |
 
 ```
 take screenshot "F14_<test>_s02_<run>"
