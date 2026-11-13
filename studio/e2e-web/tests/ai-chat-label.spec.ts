@@ -131,6 +131,7 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
       await expect(header).toContainText("<b>bold</b>"); // the tag is text
       await expect(header).not.toContainText("ghp_"); // the token is not shown
       await expect(header.locator("b")).toHaveCount(0); // and no element was made from it
+      await expect(header).toHaveAttribute("title", /^<b>bold<\/b>.*, on this machine$/); // the title holds the same text, set as an attribute
     } finally {
       await f.close();
     }
@@ -190,5 +191,28 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
     } finally {
       await f.close();
     }
+  });
+
+  test("ai-h10 a very long model id is shortened with an ellipsis and the place stays in view", async ({ page }) => {
+    const longModel = "x".repeat(190);
+    fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: "${longModel}"\nstudio:\n  ai_allow_remote_endpoint: true\n`);
+    await openStudio(page);
+    await openPane(page);
+    const header = page.locator("#chat-provider");
+    await expect(header).toHaveText(`${longModel}, remote endpoint`); // the whole line is the text
+    await expect(header).toHaveAttribute("title", `${longModel}, remote endpoint`);
+    const model = header.locator(".chat-provider-model");
+    expect(await model.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true); // the model is cut with an ellipsis
+    expect(await model.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+    // The place after it is on screen: inside the pane and inside the window.
+    const place = header.locator(".chat-provider-place");
+    await expect(place).toBeVisible();
+    await expect(place).toHaveText(", remote endpoint");
+    const pane = (await page.locator("#chat-pane").boundingBox())!;
+    const box = (await place.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(box.x + box.width).toBeLessThanOrEqual(pane.x + pane.width + 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.x).toBeGreaterThanOrEqual(0);
   });
 });

@@ -6,6 +6,10 @@ export function AIChatLabel() {
   return window['go']['main']['App']['AIChatLabel']();
 }
 
+export function AIChatLabelParts() {
+  return window['go']['main']['App']['AIChatLabelParts']();
+}
+
 export function ApplyDeviceSetting(arg1, arg2, arg3) {
   return window['go']['main']['App']['ApplyDeviceSetting'](arg1, arg2, arg3);
 }
