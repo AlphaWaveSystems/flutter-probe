@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.27.0 - 2026-11-11
+
+- Fixed: the agent reports its package version at handshake. It reported 0.26.0 in 0.26.1, so the CLI warned of a version mismatch even when the versions matched. A test now fails when the two differ.
+
 ## 0.26.1 - 2026-10-26
 
 - Security: secret text in password and credential-named fields is no longer listed or read as text in warnings, widget summaries or recordings.
