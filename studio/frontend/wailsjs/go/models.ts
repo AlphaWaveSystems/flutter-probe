@@ -105,6 +105,22 @@ export namespace main {
 	        this.plainKeyInFile = source["plainKeyInFile"];
 	    }
 	}
+	export class ChatLabelParts {
+	    prefix: string;
+	    model: string;
+	    suffix: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatLabelParts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.prefix = source["prefix"];
+	        this.model = source["model"];
+	        this.suffix = source["suffix"];
+	    }
+	}
 	export class ChatMessage {
 	    role: string;
 	    content: string;

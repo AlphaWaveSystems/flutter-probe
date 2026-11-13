@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function AIChatLabel():Promise<string>;
 
+export function AIChatLabelParts():Promise<main.ChatLabelParts>;
+
 export function ApplyDeviceSetting(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CancelRun():Promise<void>;

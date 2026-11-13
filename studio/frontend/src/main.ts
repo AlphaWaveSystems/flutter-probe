@@ -1,6 +1,6 @@
 import "./style.css";
 import * as monaco from "monaco-editor";
-import { latestWins } from "./latest-wins";
+import { chatLabelRefresher, labelText, type ChatLabelParts } from "./chat-label";
 import { PROBESCRIPT_LANGUAGE_ID, registerProbeScript } from "./probescript";
 import { initDeviceStream, onElementSelected, startStream, stopStream } from "./device-stream";
 import { initDeviceSettings } from "./device-settings";
@@ -29,7 +29,7 @@ import {
   LoadWorkspaceSettings,
   PickWorkspace,
   PreviewAIChat,
-  AIChatLabel,
+  AIChatLabelParts,
   ReadFile,
   RunFileScoped,
   SaveAISettings,
@@ -416,15 +416,30 @@ function resetAIPreview(): void {
 // refreshChatLabel shows where the next message would go: the provider and the model id, or that AI is off. The text comes from
 // probe.yaml, so it is set with textContent, never as markup. The latest call wins: two refreshes that finish out of order cannot
 // leave an older label on screen.
-const refreshChatLabel = latestWins(
-  () => AIChatLabel(),
-  (text) => {
-    $("chat-provider").textContent = text;
-  },
-  () => {
-    $("chat-provider").textContent = "";
-  },
-);
+// The model is its own element, so a long id is shortened with an ellipsis while the place after it stays in view. The whole line is
+// the title, set as an attribute, never as markup.
+function showChatLabel(parts: ChatLabelParts | null): void {
+  const el = $("chat-provider");
+  el.replaceChildren();
+  el.removeAttribute("title");
+  if (parts === null) return; // a refresh that failed leaves the header blank
+  el.append(document.createTextNode(parts.prefix));
+  if (parts.model !== "") {
+    const model = document.createElement("span");
+    model.className = "chat-provider-model";
+    model.textContent = parts.model;
+    el.append(model);
+  }
+  if (parts.suffix !== "") {
+    const place = document.createElement("span");
+    place.className = "chat-provider-place";
+    place.textContent = parts.suffix;
+    el.append(place);
+  }
+  el.setAttribute("title", labelText(parts));
+}
+
+const refreshChatLabel = chatLabelRefresher(() => AIChatLabelParts(), showChatLabel);
 
 // previewLabel is the destination line PreviewAIChat puts first, such as "Sent to: local endpoint http://127.0.0.1:11434/v1, model m".
 function previewLabel(preview: string): string {

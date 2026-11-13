@@ -264,3 +264,89 @@ func TestOnThisMachineIsLoopbackOnly(t *testing.T) {
 		}
 	}
 }
+
+// More characters that look blank or hide text are shown as ?: braille blank and Hangul fillers, variation selectors, tag
+// characters, the soft hyphen, the Mongolian vowel separator, the combining grapheme joiner, the deprecated format controls and
+// the interlinear annotation marks. One case for each, and for both ends of each range.
+func TestChatLabelReplacesMoreInvisibleCharacters(t *testing.T) {
+	runes := []rune{0x2800, 0x3164, 0x115F, 0x1160, 0xFFA0, 0xFE00, 0xFE0F, 0xE0100, 0xE01EF, 0xE0000, 0xE007F, 0x00AD, 0x180E, 0x034F}
+	for r := rune(0x206A); r <= 0x206F; r++ {
+		runes = append(runes, r)
+	}
+	for r := rune(0xFFF9); r <= 0xFFFB; r++ {
+		runes = append(runes, r)
+	}
+	for _, r := range runes {
+		t.Run(fmt.Sprintf("U+%04X", r), func(t *testing.T) {
+			isolateProvider(t, "")
+			escape := fmt.Sprintf("\\u%04X", r)
+			if r > 0xFFFF {
+				escape = fmt.Sprintf("\\U%08X", r)
+			}
+			dir := writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: \"a"+escape+"b\"\n")
+			if got := appIn(dir).AIChatLabel(); got != "a?b, on this machine" {
+				t.Fatalf("label = %q, want the character shown as ?", got)
+			}
+		})
+	}
+}
+
+// The replacement runs after the gate. An exact key that holds a comma and a control character is removed first; replacing
+// the characters before the gate would turn the key into text that no longer matches it, and its pieces would be shown.
+func TestChatLabelReplacesAfterTheGate(t *testing.T) {
+	isolateProvider(t, "")
+	const key = "sec,ret\x01tail0000000075"
+	t.Setenv("PROBE_LABEL_KEY", key)
+	dir := writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: \"m-sec,ret\\x01tail0000000075-x\"\n  api_key: ${PROBE_LABEL_KEY}\n")
+	got := appIn(dir).AIChatLabel()
+	if strings.Contains(got, "sec") || strings.Contains(got, "tail0000") {
+		t.Fatalf("a piece of the key is shown: %q", got)
+	}
+	if got != "m-[redacted]-x, on this machine" {
+		t.Fatalf("label = %q", got)
+	}
+}
+
+// The wording when Anthropic is chosen without a key is pinned as text, not through the constant, so a change to it is a decision.
+func TestChatLabelKeyNeededWordingIsPinned(t *testing.T) {
+	if chatLabelKey != "Anthropic, key needed" {
+		t.Fatalf("chatLabelKey = %q", chatLabelKey)
+	}
+	isolateProvider(t, "")
+	if got := appIn(writeProbeYAML(t, "ai:\n  provider: anthropic\n")).AIChatLabel(); got != "Anthropic, key needed" {
+		t.Fatalf("label = %q", got)
+	}
+}
+
+// The three parts join to the whole line, and only the model part comes from probe.yaml: the page shortens it and keeps the rest.
+func TestChatLabelPartsJoinToTheLabel(t *testing.T) {
+	const savedKey = "sk" + "-ant-" + "label-probe-000000000068"
+	cases := []struct {
+		name   string
+		yaml   string
+		saved  string
+		prefix string
+		model  string
+		suffix string
+	}{
+		{"local on this machine", "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: qwen3-coder:30b\n", "", "", "qwen3-coder:30b", ", on this machine"},
+		{"local, remote confirmed", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\nstudio:\n  ai_allow_remote_endpoint: true\n", "", "", "m", ", remote endpoint"},
+		{"anthropic", "ai:\n  provider: anthropic\n  model: claude-x\n", savedKey, "Anthropic, ", "claude-x", ""},
+		{"ai off", "ai:\n  provider: none\n", "", chatLabelOff, "", ""},
+		{"a refused configuration", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\n", "", chatLabelFix, "", ""},
+		{"anthropic without a key", "ai:\n  provider: anthropic\n", "", "Anthropic, key needed", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			isolateProvider(t, c.saved)
+			app := appIn(writeProbeYAML(t, c.yaml))
+			got := app.AIChatLabelParts()
+			if got.Prefix != c.prefix || got.Model != c.model || got.Suffix != c.suffix {
+				t.Fatalf("parts = %+v, want %q %q %q", got, c.prefix, c.model, c.suffix)
+			}
+			if got.String() != app.AIChatLabel() {
+				t.Fatalf("the parts join to %q, the label is %q", got.String(), app.AIChatLabel())
+			}
+		})
+	}
+}
