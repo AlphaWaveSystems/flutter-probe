@@ -42,6 +42,12 @@ async function openSettings(page: Page) {
   await expect(page.locator("#settings-port")).toHaveValue(/^\d+$/);
 }
 
+/** Opens the chat pane. The header is filled when the pane opens and kept fresh while it is open, and not before. */
+async function openPane(page: Page) {
+  if (await page.locator("#chat-pane").isHidden()) await page.click("#btn-ai-toggle");
+  await expect(page.locator("#chat-pane")).toBeVisible();
+}
+
 test.describe("Chat header (fake provider on 127.0.0.1)", () => {
   test.skip(!workspace, "STUDIO_WORKSPACE is not set (run scripts/studio-e2e-web.sh)");
 
@@ -57,6 +63,7 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
   test("ai-h01 AI off says so", async ({ page }) => {
     fs.writeFileSync(yamlPath, `${original}ai:\n  provider: none\n`);
     await openStudio(page);
+    await openPane(page);
     await expect(page.locator("#chat-provider")).toHaveText("AI is off");
   });
 
@@ -65,10 +72,10 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
     try {
       fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: fake-model\n`);
       await openStudio(page);
+      await openPane(page);
       await expect(page.locator("#chat-provider")).toHaveText("fake-model, on this machine");
       await expect(page.locator("#chat-provider")).not.toContainText("127.0.0.1"); // never the endpoint
 
-      await page.click("#btn-ai-toggle");
       await page.fill("#chat-input", "hello");
       await page.press("#chat-input", "Enter");
       // The preview names the same destination the header does.
@@ -88,6 +95,7 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
     try {
       fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: fake-model\n`);
       await openStudio(page);
+      await openPane(page);
       await expect(page.locator("#chat-provider")).toHaveText("fake-model, on this machine");
       await openSettings(page);
       await page.selectOption("#settings-ai-provider", "none");
@@ -103,8 +111,8 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
     await openStudio(page);
     await app(page, "DeleteAPIKey").catch(() => undefined); // an earlier spec may have left a key in memory
     await page.reload();
+    await openPane(page);
     await expect(page.locator("#chat-provider")).toHaveText("AI is off");
-    await page.click("#btn-ai-toggle");
     await page.click("#btn-chat-key");
     await page.fill("#api-key-input", "sk" + "-ant-" + "e2e-label-keychain-000"); // kept in memory
     await page.click("#btn-api-key-save");
@@ -118,6 +126,7 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
       const token = "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789";
       fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: "<b>bold</b>-${token}"\n`);
       await openStudio(page);
+      await openPane(page);
       const header = page.locator("#chat-provider");
       await expect(header).toContainText("<b>bold</b>"); // the tag is text
       await expect(header).not.toContainText("ghp_"); // the token is not shown
@@ -130,9 +139,56 @@ test.describe("Chat header (fake provider on 127.0.0.1)", () => {
   test("ai-h06 a remote endpoint says so when it is confirmed, and the header asks for a fix when it is not", async ({ page }) => {
     fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: fake-model\nstudio:\n  ai_allow_remote_endpoint: true\n`);
     await openStudio(page);
+    await openPane(page);
     await expect(page.locator("#chat-provider")).toHaveText("fake-model, remote endpoint");
     fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: fake-model\n`);
     await page.reload();
+    await openPane(page);
     await expect(page.locator("#chat-provider")).toHaveText("AI needs a fix, see Settings");
+  });
+
+  test("ai-h07 a key removed through the dialog changes the header", async ({ page }) => {
+    await openStudio(page);
+    await app(page, "DeleteAPIKey").catch(() => undefined);
+    await page.reload();
+    await openPane(page);
+    await page.click("#btn-chat-key");
+    await page.fill("#api-key-input", "sk" + "-ant-" + "e2e-label-delete-000"); // kept in memory
+    await page.click("#btn-api-key-save");
+    await expect(page.locator("#chat-provider")).toHaveText(`Anthropic, ${chatModel}`);
+    await page.click("#btn-chat-key");
+    await page.click("#btn-api-key-delete");
+    await expect(page.locator("#toast-container")).toContainText("removed");
+    await expect(page.locator("#chat-provider")).toHaveText("AI is off");
+  });
+
+  test("ai-h08 the header is not asked for before the chat pane opens", async ({ page }) => {
+    const f = await fakeProvider();
+    try {
+      fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: fake-model\n`);
+      await openStudio(page);
+      await page.waitForTimeout(400); // long enough for an eager refresh at launch to fill it
+      await expect(page.locator("#chat-pane")).toBeHidden();
+      await expect(page.locator("#chat-provider")).toHaveText(""); // nothing was asked: no keychain read for a pane nobody opened
+      await openPane(page);
+      await expect(page.locator("#chat-provider")).toHaveText("fake-model, on this machine");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("ai-h09 a model id cannot spoof the header: direction marks are replaced and the header is isolated", async ({ page }) => {
+    const f = await fakeProvider();
+    try {
+      fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: "a\\u202Eb\\u200Bc, remote endpoint"\n`);
+      await openStudio(page);
+      await openPane(page);
+      const header = page.locator("#chat-provider");
+      await expect(header).toHaveText("a?b?c? remote endpoint, on this machine"); // the override, the zero-width character and the comma are shown as ?
+      expect(await header.evaluate((el) => el.textContent)).not.toMatch(/[\u202A-\u202E\u2066-\u2069\u200B-\u200F]/);
+      expect(await header.evaluate((el) => getComputedStyle(el).unicodeBidi)).toBe("isolate"); // whatever is left cannot reorder the page
+    } finally {
+      await f.close();
+    }
   });
 });

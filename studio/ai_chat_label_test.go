@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,8 @@ func TestChatLabelNamesTheProviderAndModelOnly(t *testing.T) {
 		{"anthropic with a saved key", "ai:\n  provider: anthropic\n", savedKey, "Anthropic, " + chatModel},
 		{"anthropic with a named model", "ai:\n  provider: anthropic\n  model: claude-x\n", savedKey, "Anthropic, claude-x"},
 		{"no provider with a saved key", "agent:\n  port: 9999\n", savedKey, "Anthropic, " + chatModel},
+		{"anthropic chosen without a key", "ai:\n  provider: anthropic\n", "", chatLabelKey},
+		{"openai with no model", "ai:\n  provider: openai\n  api_key: ${PROBE_LABEL_KEY}\n", "", "OpenAI"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -44,24 +47,120 @@ func TestChatLabelNamesTheProviderAndModelOnly(t *testing.T) {
 	}
 }
 
-// A model id from probe.yaml can hold anything, so the label gates it and cuts it like every provider string: a key-shaped
-// token is redacted, the exact key is removed, and an id of any length comes back at 200 bytes or less. An HTML tag stays as
-// text, because the header is set with textContent.
+// A model id from probe.yaml can hold anything, so the label gates it and cuts it like every provider string, on every path that
+// shows one: a key-shaped token is redacted, the exact key is removed, and an id of any length comes back at 200 bytes or less.
+// An HTML tag stays as text, because the header is set with textContent.
 func TestChatLabelGatesAndCutsTheModelID(t *testing.T) {
-	isolateProvider(t, "")
 	token := "gh" + "p_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+	const envKey = "plainLabelSecretValue0000000061"
+	savedKey := "sk" + "-ant-" + "label-probe-000000000067"
+	paths := []struct {
+		name   string
+		prefix string
+		yaml   func(model string) string
+		saved  string
+		key    string
+	}{
+		{"openai", "OpenAI, ", func(m string) string {
+			return "ai:\n  provider: openai\n  model: \"" + m + "\"\n  api_key: ${PROBE_LABEL_KEY}\n"
+		}, "", envKey},
+		{"local", "", func(m string) string {
+			return "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: \"" + m + "\"\n  api_key: ${PROBE_LABEL_KEY}\n"
+		}, "", envKey},
+		{"anthropic", "Anthropic, ", func(m string) string {
+			return "ai:\n  provider: anthropic\n  model: \"" + m + "\"\n"
+		}, savedKey, savedKey},
+	}
+	for _, p := range paths {
+		t.Run(p.name, func(t *testing.T) {
+			isolateProvider(t, p.saved)
+			t.Setenv("PROBE_LABEL_KEY", envKey)
+			model := "m-" + token + "-<b>bold</b>-" + p.key + "-" + strings.Repeat("z", 400)
+			got := appIn(writeProbeYAML(t, p.yaml(model))).AIChatLabel()
+			if strings.Contains(got, "ghp_") || strings.Contains(got, p.key[:12]) {
+				t.Fatalf("the label shows a token or the key: %q", got)
+			}
+			if !strings.Contains(got, "<b>bold</b>") {
+				t.Fatalf("the tag was changed instead of left as text: %q", got)
+			}
+			maxLen := len(p.prefix) + 200
+			if p.name == "local" {
+				maxLen += len(", on this machine")
+			}
+			if len(got) > maxLen {
+				t.Fatalf("the label is %d bytes, want at most %d", len(got), maxLen)
+			}
+		})
+	}
+}
+
+// A character that can scramble or spoof the label is shown as ?, for each range: control characters, line and paragraph
+// separators, bidirectional controls and zero-width characters. A comma too, so a model id cannot read as a place.
+func TestChatLabelReplacesCharactersThatSpoof(t *testing.T) {
+	var runes []rune
+	runes = append(runes, 0x01, 0x1F, 0x7F, 0x80, 0x85, 0x9F, 0x2028, 0x2029, 0x200E, 0x200F, 0x061C, 0x2060, 0xFEFF, ',')
+	for r := rune(0x202A); r <= 0x202E; r++ {
+		runes = append(runes, r)
+	}
+	for r := rune(0x2066); r <= 0x2069; r++ {
+		runes = append(runes, r)
+	}
+	for r := rune(0x200B); r <= 0x200D; r++ {
+		runes = append(runes, r)
+	}
+	for _, r := range runes {
+		t.Run(fmt.Sprintf("U+%04X", r), func(t *testing.T) {
+			isolateProvider(t, "")
+			dir := writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: \"a\\u"+fmt.Sprintf("%04X", r)+"b\"\n")
+			got := appIn(dir).AIChatLabel()
+			if got != "a?b, on this machine" {
+				t.Fatalf("label = %q, want the character shown as ?", got)
+			}
+		})
+	}
+}
+
+// A model id that reads like a place does not: on a confirmed remote endpoint "x, on this machine" is shown with its comma
+// replaced, so the only place named is the real one.
+func TestChatLabelModelCannotNameAPlace(t *testing.T) {
+	isolateProvider(t, "")
+	dir := writeProbeYAML(t, "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: \"x, on this machine\"\nstudio:\n  ai_allow_remote_endpoint: true\n")
+	if got := appIn(dir).AIChatLabel(); got != "x? on this machine, remote endpoint" {
+		t.Fatalf("label = %q", got)
+	}
+}
+
+// The label reads no secret unless the provider cannot be decided without one. For none, a local endpoint and OpenAI it makes no
+// keychain lookup at all, so showing the header never prompts for keychain access.
+func TestChatLabelReadsNoKeychainWhenTheProviderIsDecidedWithoutAKey(t *testing.T) {
 	t.Setenv("PROBE_LABEL_KEY", "plainLabelSecretValue0000000061")
-	model := "m-" + token + "-<b>bold</b>-plainLabelSecretValue0000000061-" + strings.Repeat("z", 400)
-	dir := writeProbeYAML(t, "ai:\n  provider: openai\n  model: \""+model+"\"\n  api_key: ${PROBE_LABEL_KEY}\n")
-	got := appIn(dir).AIChatLabel()
-	if strings.Contains(got, "ghp_") || strings.Contains(got, "plainLabelSecret") {
-		t.Fatalf("the label shows a token or the key: %q", got)
+	lookups := 0
+	cases := []struct {
+		name  string
+		yaml  string
+		reads bool // the provider cannot be decided without the keychain
+	}{
+		{"provider none", "ai:\n  provider: none\n", false},
+		{"local on this machine", "ai:\n  provider: local\n  endpoint: http://127.0.0.1:11434/v1\n  model: m\n", false},
+		{"local, remote confirmed", "ai:\n  provider: local\n  endpoint: http://example.test:11434/v1\n  model: m\nstudio:\n  ai_allow_remote_endpoint: true\n", false},
+		{"openai with a variable", "ai:\n  provider: openai\n  model: m\n  api_key: ${PROBE_LABEL_KEY}\n", false},
+		{"anthropic with a variable", "ai:\n  provider: anthropic\n  api_key: ${PROBE_LABEL_KEY}\n", false},
+		{"anthropic with no variable", "ai:\n  provider: anthropic\n", true},
+		{"no provider", "agent:\n  port: 9999\n", true},
 	}
-	if !strings.Contains(got, "<b>bold</b>") {
-		t.Fatalf("the tag was changed instead of left as text: %q", got)
-	}
-	if want := len("OpenAI, ") + 200; len(got) > want {
-		t.Fatalf("the label is %d bytes, want at most %d", len(got), want)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			isolateProvider(t, "")
+			apiKeyLookup = func() (string, error) { lookups++; return "", nil }
+			lookups = 0
+			appIn(writeProbeYAML(t, c.yaml)).AIChatLabel()
+			if c.reads && lookups == 0 {
+				t.Fatalf("the provider needs the keychain, yet it was not read, so this test cannot tell")
+			}
+			if !c.reads && lookups != 0 {
+				t.Fatalf("the label read the keychain %d time(s) for a provider decided without a key", lookups)
+			}
+		})
 	}
 }
 
@@ -98,8 +197,15 @@ func TestChatLabelAgreesWithThePreview(t *testing.T) {
 			}
 			if rerr != nil {
 				wantOff := errors.Is(rerr, errAIOff) || errors.Is(rerr, errNoAPIKey)
-				if wantOff && label != chatLabelOff || !wantOff && label != chatLabelFix {
-					t.Fatalf("the settings refuse (%v) and the label is %q", rerr, label)
+				want := chatLabelFix
+				if wantOff {
+					want = chatLabelOff
+				}
+				if errors.Is(rerr, errNoAPIKey) && app.configuredProvider() == "anthropic" {
+					want = chatLabelKey
+				}
+				if label != want {
+					t.Fatalf("the settings refuse (%v) and the label is %q, want %q", rerr, label, want)
 				}
 				return
 			}
