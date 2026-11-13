@@ -38,7 +38,7 @@ func TestSeededResultsIgnoresABadFileWithANote(t *testing.T) {
 		"not json":    writeSeed(t, "nope"),
 		"not a list":  writeSeed(t, `{"name":"a"}`),
 		"missing":     filepath.Join(t.TempDir(), "absent.json"),
-		"too large":   writeSeed(t, `["`+strings.Repeat("x", maxSeedBytes)+`"]`),
+		"too large":   writeSeed(t, `[{"name":"`+strings.Repeat("x", maxSeedBytes)+`"}]`),
 		"too many":    writeSeed(t, many),
 		"a directory": t.TempDir(),
 	}
