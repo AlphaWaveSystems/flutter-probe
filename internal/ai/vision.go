@@ -238,7 +238,7 @@ func (o *openAIVision) postChat(ctx context.Context, messages []map[string]any) 
 	}
 	defer resp.Body.Close()
 
-	respBytes, err := readResponse(resp.Body)
+	respBytes, err := ReadResponse(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("ai: reading response from %s: %w", o.baseURL, err)
 	}
@@ -348,7 +348,7 @@ func (a *anthropicVision) callAnthropic(ctx context.Context, system, user string
 	}
 	defer resp.Body.Close()
 
-	respBytes, err := readResponse(resp.Body)
+	respBytes, err := ReadResponse(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("ai: reading anthropic response: %w", err)
 	}

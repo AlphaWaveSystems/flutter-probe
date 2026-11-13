@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -338,7 +337,7 @@ func (a *App) ListAIModels() ([]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("the endpoint answered %d to the model listing", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := ai.ReadResponse(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading the model listing: %w", err)
 	}

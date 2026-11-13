@@ -5,10 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
 
 const (
@@ -205,7 +206,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := ai.ReadResponse(resp.Body)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("read response: %w", err)
 	}

@@ -8,21 +8,21 @@ import (
 	"sync/atomic"
 )
 
-// maxResponseBytes bounds what a provider's answer may be. An answer is a short text, so 1 MB is far above any real one, and a
+// MaxResponseBytes bounds what a provider's answer may be. An answer is a short text, so 1 MB is far above any real one, and a
 // server that streams without end cannot fill the memory of the program that asked.
-const maxResponseBytes = 1 << 20
+const MaxResponseBytes = 1 << 20
 
-// errResponseTooLarge is the error for an answer over the limit. It names the limit and repeats none of the answer.
-var errResponseTooLarge = errors.New("the provider's answer is larger than 1 MB")
+// ErrResponseTooLarge is the error for an answer over the limit. It names the limit and repeats none of the answer.
+var ErrResponseTooLarge = errors.New("the provider's answer is larger than 1 MB")
 
-// readResponse reads a provider's answer up to maxResponseBytes, and returns errResponseTooLarge for more.
-func readResponse(r io.Reader) ([]byte, error) {
-	b, err := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
+// ReadResponse reads a provider's answer up to MaxResponseBytes, and returns ErrResponseTooLarge for more.
+func ReadResponse(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, MaxResponseBytes+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(b) > maxResponseBytes {
-		return nil, errResponseTooLarge
+	if len(b) > MaxResponseBytes {
+		return nil, ErrResponseTooLarge
 	}
 	return b, nil
 }

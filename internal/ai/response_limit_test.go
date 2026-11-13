@@ -89,3 +89,29 @@ func TestAnAnswerUnderTheLimitIsRead(t *testing.T) {
 		t.Fatalf("got %d bytes, %v", len(out), err)
 	}
 }
+
+// The limit is exactly 1 MB: an answer of 1 MB is read whole and one byte more is refused, so the comparison is neither off by one
+// in either direction.
+func TestReadResponseLimitIsExactlyOneMegabyte(t *testing.T) {
+	at := strings.NewReader(strings.Repeat("a", MaxResponseBytes))
+	if b, err := ReadResponse(at); err != nil || len(b) != MaxResponseBytes {
+		t.Fatalf("1 MB: %d bytes, %v", len(b), err)
+	}
+	over := strings.NewReader(strings.Repeat("a", MaxResponseBytes+1))
+	if _, err := ReadResponse(over); err != ErrResponseTooLarge {
+		t.Fatalf("1 MB + 1: error = %v", err)
+	}
+}
+
+// The model listing the doctor reads is bounded the same way: an oversize listing is an error that names the limit, not a silently
+// truncated body that fails to parse.
+func TestListModelsRefusesAnOversizeListing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + strings.Repeat("m", MaxResponseBytes) + `"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	_, err := listModels(context.Background(), srv.URL+"/v1", "", 10*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "larger than 1 MB") {
+		t.Fatalf("error = %v, want one that names the limit", err)
+	}
+}
