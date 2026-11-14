@@ -247,6 +247,7 @@ See [Testing against backend data](/advanced/backend-data/).
 
 ```
 take screenshot "checkout_page"    # save PNG to screenshots folder
+take screenshot "checkout_<timestamp>"  # include the time in the screenshot name
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
@@ -257,6 +258,23 @@ shake                              # simulate device shake gesture
 log "checkpoint reached"           # print to test output
 pause                              # 1-second pause
 ```
+
+### Screenshot names
+
+The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in other steps, and three built-in placeholders add context. The agent also appends a millisecond timestamp to the saved filename. Timestamps are not guaranteed unique when captures occur in the same millisecond.
+
+| Placeholder | Value |
+| --- | --- |
+| `<timestamp>` | the time of the step, `20261113-141502-123` (local time, to the millisecond) |
+| `<run>` | one stamp shared by every screenshot of this `probe test` run, `20261113-141502` |
+| `<test>` | the name of the running test, letters and digits of any script stay (UTF-8 is kept); spaces, `/`, emoji, punctuation and invalid bytes become `_` |
+
+```
+take screenshot "F14_<test>_s02_<run>"
+```
+
+A variable with the same name as a built-in (`<run>`) wins. An unknown placeholder is left as written. `compare screenshot` keeps the name literal for both capture and baseline lookup.
+
 
 ## App Lifecycle
 

@@ -60,6 +60,8 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 
 The full workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` → `generate_report` — a complete AI-driven test authoring loop, including device bring-up and HTML reporting.
 
+For a named screenshot, call `write_test` with a step such as `take screenshot "checkout_<test>_<timestamp>"`, then call `run_tests`. The placeholders identify the test and capture time; `compare screenshot` keeps its baseline name literal.
+
 ## `run_tests` flags
 
 The `run_tests` tool has named parameters for common options (`paths`, `tag`, `device`, `composite_devices`) and a `flags` string for everything else. Key flags an agent should know:

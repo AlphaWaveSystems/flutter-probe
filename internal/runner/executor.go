@@ -804,7 +804,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.DeviceAction(ctx, "shake", "")
 
 	case parser.VerbTakeShot:
-		path, err := e.client.Screenshot(ctx, a.Name)
+		path, err := e.client.Screenshot(ctx, e.shotName(a.Name, true))
 		if err == nil && path != "" {
 			e.artifacts = append(e.artifacts, path)
 		}
