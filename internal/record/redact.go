@@ -84,6 +84,10 @@ func isCredentialName(name string) bool {
 	return false
 }
 
+// IsCredentialName reports whether a name, already percent-decoded, holds a credential by the token rule (see isCredentialName).
+// Studio's traffic monitor uses it so that there is one list of credential words, not two.
+func IsCredentialName(name string) bool { return isCredentialName(name) }
+
 // decodeName returns name with its percent escapes read, or name itself when the escapes do not decode.
 func decodeName(name string) string {
 	if decoded, err := url.QueryUnescape(name); err == nil {
@@ -115,7 +119,12 @@ var (
 	// credentialPairPattern matches a name, a separator and a value in plain or form text: name=value, name: value and
 	// name%3Dvalue, with quotes allowed around the separator and the value. The name may hold brackets and percent escapes
 	// (user[password] and user%5Bpassword%5D). A value needs four characters, so a short value is left as written.
-	credentialPairPattern = regexp.MustCompile(`((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?(?:\s*[=:]\s*|%3[Dd]|%3[Aa])["']?([^\s&,;"'<>]{4,})`)
+	credentialPairPattern = regexp.MustCompile(`((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?(?:[ \t]*[=:][ \t]*|%3[Dd]|%3[Aa])["']?([^\s&,;"'<>]{4,})`)
+	// blockPairPattern matches the YAML block form of an assignment: a name and a colon that end their line, and the value alone on the
+	// next line, indented. The value is one word with no colon or equals sign, so a nested mapping (the next line is another key) is not
+	// read as a value. credentialPairPattern does not cross a line break, for the same reason: a parent line such as "db:" must not take
+	// the next line's key as its value and hide the credential that follows.
+	blockPairPattern = regexp.MustCompile(`(?m)((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?:[ \t]*\r?\n[ \t]+["']?([^\s&,;"'<>:=]{4,})["']?[ \t]*$`)
 )
 
 // Copied from internal/hosted/scrub.go, without importing the hosted package. The assignment rule that used to be its
@@ -283,8 +292,15 @@ func redactMultipartParts(s string) string {
 }
 
 // redactAssignments replaces each assignment whose name is a credential with the placeholder. The whole assignment is
-// replaced, as before, so the name does not survive.
+// replaced, as before, so the name does not survive. A YAML block assignment, with the value on the next line, is replaced too.
 func redactAssignments(s string) string {
+	s = blockPairPattern.ReplaceAllStringFunc(s, func(m string) string {
+		sub := blockPairPattern.FindStringSubmatch(m)
+		if len(sub) == 3 && isCredentialName(decodeName(sub[1])) {
+			return Placeholder
+		}
+		return m
+	})
 	var out strings.Builder
 	last := 0
 	for _, loc := range credentialPairPattern.FindAllStringSubmatchIndex(s, -1) {
