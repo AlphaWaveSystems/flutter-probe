@@ -287,10 +287,17 @@ var namedAssignment = regexp.MustCompile(`((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]
 func redactNamedAssignments(s string, extra map[string]bool) string {
 	var out strings.Builder
 	last, pos := 0, 0
+	// Nested assignments can cause the same long value to be scanned repeatedly.
+	// Bound the total matched text; hide the field if parsing becomes expensive.
+	work := 0
 	for pos < len(s) {
 		loc := namedAssignment.FindStringSubmatchIndex(s[pos:])
 		if loc == nil {
 			break
+		}
+		work += loc[1]
+		if work > 4*len(s) {
+			return redactedMark
 		}
 		start, end := pos+loc[0], pos+loc[1]
 		name := s[pos+loc[2] : pos+loc[3]]
