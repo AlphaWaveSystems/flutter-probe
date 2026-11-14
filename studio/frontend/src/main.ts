@@ -5,6 +5,8 @@ import { PROBESCRIPT_LANGUAGE_ID, registerProbeScript } from "./probescript";
 import { initDeviceStream, onElementSelected, startStream, stopStream } from "./device-stream";
 import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
+import { latestWins } from "./latest-wins";
+import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
@@ -30,6 +32,9 @@ import {
   PickWorkspace,
   PreviewAIChat,
   AIChatLabelParts,
+  ExplainAvailability,
+  ExplainPreviewed,
+  PreviewExplain,
   FindLocalModels,
   ReadFile,
   RunFileScoped,
@@ -409,6 +414,9 @@ let aiPreviewConfirmed: string | null = null;
 
 function resetAIPreview(): void {
   aiPreviewConfirmed = null;
+  explainSession.reset(); // the same events change where an Explain goes, so its preview is shown again, and one in flight is dropped
+  dropExplainView();
+  void refreshExplainOffer();
   // The same events change where a message goes, so they change the header too, but only while the chat pane is open: the header is
   // not visible otherwise, and asking for it may read the keychain, which should not happen at launch for a pane nobody opened.
   if (!$("chat-pane").hidden) void refreshChatLabel();
@@ -595,6 +603,132 @@ $("btn-ai-test").addEventListener("click", async () => {
     out.replaceChildren(aiResultItem(`Cannot test: ${err}`, "fail"));
   }
 });
+
+// ---- Explain: advice on the failed tests of the last run ----------------
+
+const explainSession = new ExplainSession();
+
+// refreshExplainOffer shows the Explain button only while AI is on and the last run has a failed test with error text. The latest
+// answer wins, and a failure to ask hides the button.
+const refreshExplainOffer = latestWins(
+  () => ExplainAvailability(),
+  (offer) => {
+    $("explain-bar").hidden = offer.available !== true;
+    if (offer.available !== true) hideExplainCard();
+  },
+  () => {
+    $("explain-bar").hidden = true;
+    hideExplainCard();
+  },
+);
+
+// dropExplainView is what a new run, a change of workspace, settings or key does to an Explain on screen: the card of the old state
+// goes, an open preview is closed as if it were cancelled, the status is cleared, and the button can be used at once. The Explain
+// that was in flight is dropped by the session (see ExplainSession.invalidate), so its answer never shows.
+let dismissExplainConfirm: (() => void) | null = null;
+function dropExplainView(): void {
+  dismissExplainConfirm?.();
+  hideExplainCard();
+  ($("btn-explain") as HTMLButtonElement).disabled = false;
+  $("explain-status").textContent = "";
+}
+
+function hideExplainCard(): void {
+  const card = $("explain-card");
+  card.hidden = true;
+  card.replaceChildren();
+}
+
+function textEl(tag: string, className: string, text: string): HTMLElement {
+  const el = document.createElement(tag);
+  el.className = className;
+  el.textContent = text; // text only: advice and test names come from a model and a run, never markup
+  return el;
+}
+
+// showExplainCard writes the advisory card. It sits beside the results and never touches them: the pass and fail counts and the rows
+// stay as the run left them.
+function showExplainCard(r: ExplainResult): void {
+  const model = explainCardModel(r);
+  const card = $("explain-card");
+  card.replaceChildren();
+  const head = document.createElement("div");
+  head.className = "explain-card-head";
+  const close = textEl("button", "btn-mini explain-card-close", "✕");
+  close.setAttribute("type", "button");
+  close.setAttribute("title", "Close");
+  close.addEventListener("click", hideExplainCard);
+  head.append(textEl("span", "explain-card-title", model.title), textEl("span", "explain-card-dest", model.destination), textEl("span", `explain-place explain-place-${model.place}`, model.place), close);
+  card.append(head, textEl("p", "explain-disclaimer", model.disclaimer));
+  for (const row of model.rows) {
+    const div = document.createElement("div");
+    div.className = `explain-row explain-row-${row.kind}`;
+    if (row.label) div.append(textEl("div", "explain-row-label", row.label));
+    div.append(textEl("p", "explain-row-text", row.text));
+    card.append(div);
+  }
+  card.hidden = false;
+}
+
+// confirmExplainSend shows what Explain would send and waits for Send or Cancel. Nothing is sent before Send.
+function confirmExplainSend(p: ExplainPreview): Promise<boolean> {
+  const overlay = $("explain-preview-overlay");
+  const send = $("btn-explain-preview-send");
+  const cancel = $("btn-explain-preview-cancel");
+  $("explain-preview-note").textContent = previewNote(p.hosted);
+  $("explain-preview-text").textContent = p.text;
+  overlay.hidden = false;
+  return new Promise((resolve) => {
+    const finish = (ok: boolean) => {
+      overlay.hidden = true;
+      send.removeEventListener("click", onSend);
+      cancel.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey);
+      dismissExplainConfirm = null;
+      resolve(ok);
+    };
+    const onSend = () => finish(true);
+    const onCancel = () => finish(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
+    };
+    send.addEventListener("click", onSend);
+    cancel.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+    dismissExplainConfirm = () => finish(false);
+  });
+}
+
+$("btn-explain").addEventListener("click", async () => {
+  const btn = $("btn-explain") as HTMLButtonElement;
+  const status = $("explain-status");
+  btn.disabled = true;
+  status.textContent = "";
+  try {
+    // The preview comes first and the request only after Send; the request is given the destination the person saw.
+    const out = await explainSession.run({
+      preview: () => PreviewExplain(),
+      confirm: confirmExplainSend,
+      explain: (destination) => {
+        status.textContent = "Asking the model…";
+        return ExplainPreviewed(destination);
+      },
+    });
+    if (out?.kind === "result") showExplainCard(out.result); // a stale or cancelled Explain shows nothing
+  } catch (err) {
+    status.textContent = `Explain failed: ${err}`;
+    return;
+  } finally {
+    btn.disabled = explainSession.running; // a newer Explain that is in flight keeps its button disabled
+  }
+  if (!explainSession.running) status.textContent = "";
+});
+
+EventsOn("run:started", () => {
+  explainSession.invalidate(); // an Explain of the previous run must not show for this one
+  dropExplainView();
+});
+EventsOn("run:finished", () => void refreshExplainOffer());
 
 // confirmFirstChatSend shows what the next chat message carries and waits for Send or Cancel. Nothing is sent before Send.
 function confirmFirstChatSend(preview: string): Promise<boolean> {

@@ -22,6 +22,12 @@ export function DeleteAPIKey():Promise<void>;
 
 export function Disconnect():Promise<void>;
 
+export function ExplainAvailability():Promise<main.ExplainOffer>;
+
+export function ExplainLastRun():Promise<main.ExplainResult>;
+
+export function ExplainPreviewed(arg1:string):Promise<main.ExplainResult>;
+
 export function FindLocalModels(arg1:string):Promise<main.LocalModels>;
 
 export function ForgetWiFiToken(arg1:string):Promise<void>;
@@ -51,6 +57,8 @@ export function LoadWorkspaceSettings(arg1:string):Promise<main.WorkspaceSetting
 export function PickWorkspace():Promise<string>;
 
 export function PreviewAIChat(arg1:Array<main.ChatMessage>,arg2:string):Promise<string>;
+
+export function PreviewExplain():Promise<main.ExplainPreview>;
 
 export function ReadFile(arg1:string):Promise<string>;
 
