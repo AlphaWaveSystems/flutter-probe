@@ -7,14 +7,14 @@ import (
 	"unicode"
 )
 
-// The screenshot step names its file after the name in the script, so two runs (or two steps) that use the same name overwrite each other. The name is therefore expanded before it is
-// used: ordinary placeholders (<var>, ${ENV}, <random.*>) as in every other step, and for `take screenshot` these built-ins, so a name can carry what makes it unique:
+// Screenshot names expand ordinary placeholders (<var>, ${ENV}, <random.*>)
+// and these built-ins, so a name can carry context about the run:
 //
 //	<timestamp>  the time of the step, 20261113-141502-123 (local time, to the millisecond)
 //	<run>        one stamp shared by every screenshot of this `probe test` run, 20261113-141502
 //	<test>       the name of the test that is running, with every character that is not a letter, a digit or a combining mark (of any script) and is not "." "_" "-" replaced by "_"; UTF-8 is kept, invalid bytes become "_"
 //
-// `compare screenshot` expands the ordinary placeholders but NOT the built-ins: its name is the baseline's key, and a name that changes every run would never find its baseline.
+// `compare screenshot` keeps its literal name as the baseline key.
 // A placeholder that is neither a variable nor a built-in is left as written.
 
 // shotNow is the clock of the built-ins; a test replaces it.

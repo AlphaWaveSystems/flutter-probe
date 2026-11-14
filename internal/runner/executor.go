@@ -811,7 +811,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return err
 
 	case parser.VerbCompareShot:
-		path, err := e.client.Screenshot(ctx, e.shotName(a.Name, false))
+		path, err := e.client.Screenshot(ctx, a.Name)
 		if err != nil {
 			return fmt.Errorf("compare screenshot: take screenshot failed: %w", err)
 		}

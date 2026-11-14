@@ -247,7 +247,7 @@ See [Testing against backend data](/advanced/backend-data/).
 
 ```
 take screenshot "checkout_page"    # save PNG to screenshots folder
-take screenshot "checkout_<timestamp>"  # a name that carries the time, so a new run never overwrites the old image
+take screenshot "checkout_<timestamp>"  # include the time in the screenshot name
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
@@ -261,7 +261,7 @@ pause                              # 1-second pause
 
 ### Screenshot names
 
-A screenshot is saved under the name you give it, so the same name in a later run (or a second step) replaces the earlier image. The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in every other step, and three built-in placeholders make a name unique:
+The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in other steps, and three built-in placeholders add context. The agent also appends a millisecond timestamp to the saved filename. Timestamps are not guaranteed unique when captures occur in the same millisecond.
 
 | Placeholder | Value |
 | --- | --- |
@@ -273,7 +273,7 @@ A screenshot is saved under the name you give it, so the same name in a later ru
 take screenshot "F14_<test>_s02_<run>"
 ```
 
-A variable with the same name as a built-in (`<run>`) wins. A placeholder that is neither is left as written. `compare screenshot` expands variables but not the built-ins: its name is the key of the baseline, and a name that changes every run would never find it.
+A variable with the same name as a built-in (`<run>`) wins. An unknown placeholder is left as written. `compare screenshot` keeps the name literal for both capture and baseline lookup.
 
 
 ## App Lifecycle

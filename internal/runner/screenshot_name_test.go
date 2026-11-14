@@ -99,8 +99,8 @@ func TestCompareScreenshotKeepsBuiltinsLiteral(t *testing.T) {
 	if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbCompareShot, Name: "base_<device>_<timestamp>", Line: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := rec.names[0], "base_alice-ios_<timestamp>"; got != want {
-		t.Fatalf("compare name = %q, want %q (built-ins must not expand: the name is the baseline key)", got, want)
+	if got, want := rec.names[0], "base_<device>_<timestamp>"; got != want {
+		t.Fatalf("compare name = %q, want literal baseline key %q", got, want)
 	}
 }
 

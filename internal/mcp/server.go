@@ -185,6 +185,9 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
+  Screenshots:     take screenshot "checkout_<test>_<timestamp>" expands <test>, <run>,
+                     <timestamp>, variables and environment values. compare screenshot keeps
+                     its baseline name literal.
   Scrolling:       scroll down until "Text" appears (or until #key_id appears) keeps
                      scrolling until the target is on screen — use it for rows below
                      the fold instead of counting plain "scroll down" steps. Note
