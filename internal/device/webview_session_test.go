@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -160,7 +161,8 @@ func sessionFor(t *testing.T, p *pageFake, page string) (*WebViewSession, *sessA
 }
 
 func visibleAt(x, y float64, text string) map[string]any {
-	return map[string]any{"count": 1, "visible": true, "focused": true, "x": x, "y": y, "w": 112.0, "h": 21.0, "vw": 1000.0, "vh": 2000.0, "text": text}
+	return map[string]any{"count": 1, "visible": true, "focused": true, "x": x, "y": y, "w": 112.0, "h": 21.0, "vw": 1000.0, "vh": 2000.0, "text": text,
+		"tag": "input", "inputType": "text", "readOnly": false, "disabled": false, "editable": false}
 }
 
 func TestSessionTapsAnElementInsideTheWebView(t *testing.T) {
@@ -1199,6 +1201,151 @@ func TestDebuggerAddressesInOtherSpellingsAreRemoved(t *testing.T) {
 	} {
 		if got := scrubDebuggerAddresses(in); got != want {
 			t.Errorf("%q -> %q, want %q", in, got, want)
+		}
+	}
+}
+
+// elementWith is a lookup reply for a focused, visible element of the given kind.
+func elementWith(tag, inputType string, readOnly, disabled, editable bool) func(string) map[string]any {
+	return func(string) map[string]any {
+		m := visibleAt(10, 10, "field")
+		m["tag"], m["inputType"], m["readOnly"], m["disabled"], m["editable"] = tag, inputType, readOnly, disabled, editable
+		return m
+	}
+}
+
+// Input.insertText into an element that cannot take text does nothing and reports no error, so Type refuses it before sending anything.
+func TestTypeRefusesElementsThatCannotTakeTypedText(t *testing.T) {
+	cases := []struct {
+		name   string
+		lookup func(string) map[string]any
+		want   string // "" = typed
+	}{
+		{"text input", elementWith("input", "text", false, false, false), ""},
+		{"input with no type", elementWith("input", "", false, false, false), ""},
+		{"search, email, url, tel, password, number", elementWith("input", "password", false, false, false), ""},
+		{"number", elementWith("input", "number", false, false, false), ""},
+		{"textarea", elementWith("textarea", "", false, false, false), ""},
+		{"content editable div", elementWith("div", "", false, false, true), ""},
+		{"read-only input", elementWith("input", "text", true, false, false), "read-only"},
+		{"read-only textarea", elementWith("textarea", "", true, false, false), "read-only"},
+		{"disabled input", elementWith("input", "text", false, true, false), "disabled"},
+		{"disabled through a fieldset", elementWith("input", "email", false, true, false), "disabled"},
+		{"disabled and read-only", elementWith("input", "text", true, true, false), "disabled"},
+		{"checkbox", elementWith("input", "checkbox", false, false, false), `an input of type "checkbox"`},
+		{"radio", elementWith("input", "radio", false, false, false), `an input of type "radio"`},
+		{"file", elementWith("input", "file", false, false, false), `an input of type "file"`},
+		{"button input", elementWith("input", "button", false, false, false), `an input of type "button"`},
+		{"range", elementWith("input", "range", false, false, false), `an input of type "range"`},
+		{"color", elementWith("input", "color", false, false, false), `an input of type "color"`},
+		{"date", elementWith("input", "date", false, false, false), `an input of type "date"`},
+		{"datetime-local", elementWith("input", "datetime-local", false, false, false), `an input of type "datetime-local"`},
+		{"select", elementWith("select", "", false, false, false), "not a text field: select"},
+		{"button", elementWith("button", "", false, false, false), "not a text field: button"},
+		{"plain div", elementWith("div", "", false, false, false), "not a text field: div"},
+		{"read-only content editable", elementWith("div", "", true, false, true), "read-only"},
+	}
+	for _, c := range cases {
+		p := newPageFake(t)
+		p.lookup = c.lookup
+		s, _, err := sessionFor(t, p, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = s.Type(context.Background(), CSS("#f"), "hello")
+		inserted := len(p.of("Input.insertText"))
+		if c.want == "" {
+			if err != nil || inserted != 1 {
+				t.Errorf("%s: err = %v, inserted %d", c.name, err, inserted)
+			}
+			continue
+		}
+		var we *WebViewError
+		if !errors.As(err, &we) || we.Kind != "not editable" || !strings.Contains(err.Error(), "cannot be typed into ("+c.want+")") || !strings.Contains(err.Error(), "nothing was typed") || inserted != 0 {
+			t.Errorf("%s: err = %v, inserted %d", c.name, err, inserted)
+		}
+	}
+}
+
+// What the page reports about the kind of element is checked before it reaches a message.
+func TestElementKindsFromThePageCannotCarryPageText(t *testing.T) {
+	for _, bad := range []string{"INPUT", "in put", "input\nx", strings.Repeat("a", 21), "<img>", "secret-text!", "é"} {
+		p := newPageFake(t)
+		p.lookup = elementWith("div", bad, false, false, false)
+		s, _, err := sessionFor(t, p, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := s.Find(context.Background(), CSS("#f"))
+		if err != nil || info.InputType != "?" {
+			t.Errorf("%q: info.InputType = %q, err = %v", bad, info.InputType, err)
+		}
+		p.lookup = elementWith(bad, "", false, false, false)
+		info, _ = s.Find(context.Background(), CSS("#f"))
+		if info.Tag != "?" {
+			t.Errorf("%q: info.Tag = %q", bad, info.Tag)
+		}
+	}
+	for _, good := range []string{"input", "datetime-local", "x1", ""} {
+		if kindWord(good) != good {
+			t.Errorf("%q was changed", good)
+		}
+	}
+}
+
+// the reason is the whole message: the selector in it is capped and masked like the other messages
+func TestTheNotEditableMessageIsMaskedAndCapped(t *testing.T) {
+	p := newPageFake(t)
+	p.lookup = elementWith("input", "text", true, false, false)
+	fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(p.port) + "\n"), nil }}
+	ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
+	mask := func(s string) string { return strings.ReplaceAll(s, "msg-secret-Ab12", "****") }
+	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Redact: mask})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	long := "#msg-secret-Ab12" + strings.Repeat("x", 500)
+	err = s.Type(context.Background(), CSS(long), "hello")
+	if err == nil || strings.Contains(err.Error(), "msg-secret") || len(err.Error()) > 400 || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// The no-raw-JavaScript proof for the template as it is now (it was extended to report what kind of element was found): the text only reads the page,
+// calls a fixed list of methods, assigns to no property, and has no placeholder or concatenation that could take the script's text.
+func TestTheTemplateOnlyReadsThePageAndCallsAFixedListOfMethods(t *testing.T) {
+	allowed := map[string]bool{
+		"replace": true, "trim": true, "some": true, "call": true, "getBoundingClientRect": true, "getComputedStyle": true, "slice": true,
+		"querySelectorAll": true, "toLowerCase": true, "filter": true, "indexOf": true, "scrollIntoView": true, "focus": true, "matches": true,
+	}
+	for _, m := range regexp.MustCompile(`\.([A-Za-z_][A-Za-z0-9_]*)\(`).FindAllStringSubmatch(findFunction, -1) {
+		if !allowed[m[1]] {
+			t.Errorf("the template calls .%s(", m[1])
+		}
+	}
+	// no assignment to a property of anything (a write to the page)
+	if m := regexp.MustCompile(`\.[A-Za-z_][A-Za-z0-9_]*\s*(?:=|\+=|-=)[^=]`).FindString(findFunction); m != "" {
+		t.Errorf("the template assigns to a property: %q", m)
+	}
+	// every argument comes in as a parameter, and nothing is built from them as code
+	for _, bad := range []string{"eval(", "Function(", "new Function", "setTimeout(", "setInterval(", "import(", "fetch(", "XMLHttpRequest", "WebSocket", "innerHTML", "outerHTML",
+		"document.write", "document.cookie", "localStorage", "sessionStorage", "location", "dispatchEvent", "click(", "setAttribute", "removeAttribute", "`", "${", "+ query", "query +", "+ kind", "+ mode"} {
+		if strings.Contains(findFunction, bad) {
+			t.Errorf("the template contains %q", bad)
+		}
+	}
+	if !strings.HasPrefix(findFunction, "function (kind, query, maxText, mode) {") {
+		t.Errorf("the template's parameters changed")
+	}
+}
+
+// The fake pages in these tests do not run the template, so what it reads is pinned here as text (and checked against a real page by the opt-in device test).
+func TestTheTemplateReportsWhatTypeNeedsToKnow(t *testing.T) {
+	for _, want := range []string{"found.matches(':disabled')", "found.readOnly === true", "found.isContentEditable === true", "tag: tag.slice(0, 20)",
+		"inputType: tag === 'input' ? String(found.type || '').toLowerCase().slice(0, 20) : ''", "readOnly: found.readOnly === true", "disabled: disabled", "editable: found.isContentEditable === true"} {
+		if !strings.Contains(findFunction, want) {
+			t.Errorf("the template no longer contains %q", want)
 		}
 	}
 }
