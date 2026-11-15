@@ -24,6 +24,26 @@ import 'sync.dart';
 
 typedef SendFn = void Function(String message);
 
+/// The fraction of the element or the screen a swipe travels: [percent] when it is 1 to 100, and the default, 50 percent, when
+/// it is 0 (the step left the distance out). Anything above 100 is clamped, since the parser already refuses it.
+double swipeFraction(int percent) => (percent <= 0 ? 50 : percent.clamp(1, 100).toInt()) / 100;
+
+/// The pointer's total movement for a swipe in [direction] across [size] at [fraction] of it. Above 50 percent the finger
+/// ends outside the element or the screen: the swipe starts at the centre, so 50 percent ends at the edge.
+Offset swipeDelta(String direction, Size size, double fraction) {
+  switch (direction) {
+    case 'up':
+      return Offset(0, -size.height * fraction);
+    case 'down':
+      return Offset(0, size.height * fraction);
+    case 'left':
+      return Offset(-size.width * fraction, 0);
+    case 'right':
+    default:
+      return Offset(size.width * fraction, 0);
+  }
+}
+
 /// ProbeExecutor handles all JSON-RPC method calls from the CLI.
 class ProbeExecutor {
   SendFn _send;
@@ -1276,7 +1296,7 @@ class ProbeExecutor {
   /// [percent] is how far the swipe travels, as a percent of the element or the screen. 0 is the default, 50. The parser
   /// refuses anything outside 1 to 100; the agent clamps it again rather than trust the wire.
   Future<void> _swipe(String direction, Map<String, dynamic>? sel, {int percent = 0}) async {
-    final fraction = (percent <= 0 ? 50 : percent.clamp(1, 100).toInt()) / 100;
+    final fraction = swipeFraction(percent);
     Offset center;
     Size size;
 
@@ -1295,18 +1315,7 @@ class ProbeExecutor {
       size = viewSize;
     }
 
-    Offset delta;
-    switch (direction) {
-      case 'up':
-        delta = Offset(0, -size.height * fraction);
-      case 'down':
-        delta = Offset(0, size.height * fraction);
-      case 'left':
-        delta = Offset(-size.width * fraction, 0);
-      case 'right':
-      default:
-        delta = Offset(size.width * fraction, 0);
-    }
+    final delta = swipeDelta(direction, size, fraction);
 
     // PT-03: a single giant PointerMoveEvent covering the whole delta in one
     // jump can fail to register as a scroll at all — reproduced against a
