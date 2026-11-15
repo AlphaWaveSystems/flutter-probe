@@ -261,17 +261,39 @@ func errorBody(b []byte) string {
 	return strings.ToValidUTF8(string(b), "?")
 }
 
-// completeChat sends one turn to the provider the settings name. The system prompt and every message pass through the gate
+// chatFieldLimit bounds one field of a chat turn (the system prompt, or one message) before the gate reads it, and caps it after.
+const chatFieldLimit = 150000
+
+// chatField makes one field of a chat turn fit to send, in the order Explain uses for every field: hidden characters (and no-break
+// spaces) are dropped first, so nothing later is read around a character that splits a token, the key, an address or a home folder;
+// the field is bounded; the exact key is removed; personal text (emails, home folders) is scrubbed; the gate runs once; the field is cut
+// to its cap. Line breaks are kept, a tab is a space.
+func chatField(s, key string) string {
+	s = boundRunes(withoutInvisible(s, true), chatFieldLimit)
+	if key = withoutInvisible(key, false); key != "" {
+		s = strings.ReplaceAll(s, key, redactedMark)
+	}
+	return capRunes(outbound(scrubPersonal(s)), chatFieldLimit)
+}
+
+// gateTurn is what a chat turn sends, and what its preview shows: every field takes the chatField path. The preview and the request
+// both call it, so they cannot differ in how a field is cleaned.
+func gateTurn(s aiProviderSettings, system string, msgs []claudeMessage) (string, []claudeMessage) {
+	gated := make([]claudeMessage, len(msgs))
+	for i, m := range msgs {
+		gated[i] = claudeMessage{Role: m.Role, Content: chatField(m.Content, s.APIKey)}
+	}
+	return chatField(system, s.APIKey), gated
+}
+
+// completeChat sends one turn to the provider the settings name. The system prompt and every message take the chatField path
 // first, for every provider, and an error from a provider goes through the gate too, because its text can echo what it was
 // sent. Local and OpenAI-compatible replies report no token usage, so their cost stays zero.
 func completeChat(s aiProviderSettings, system string, msgs []claudeMessage) (ChatResponse, error) {
-	gated := make([]claudeMessage, len(msgs))
-	for i, m := range msgs {
-		gated[i] = claudeMessage{Role: m.Role, Content: outbound(m.Content)}
-	}
-	resp, err := sendTurn(s, outbound(system), gated)
+	system, gated := gateTurn(s, system, msgs)
+	resp, err := sendTurn(s, system, gated)
 	if err != nil {
-		return ChatResponse{}, errors.New(outbound(err.Error()))
+		return ChatResponse{}, errors.New(chatField(err.Error(), s.APIKey))
 	}
 	resp.Notice = s.Notice
 	return resp, nil

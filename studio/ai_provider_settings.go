@@ -290,13 +290,14 @@ func (a *App) PreviewAIChat(messages []ChatMessage, fileContent string) (string,
 		return "", err
 	}
 	system, msgs := a.chatTurn(messages, fileContent)
+	system, msgs = gateTurn(s, system, msgs) // the one path the request takes
 	var b strings.Builder
 	fmt.Fprintf(&b, "Sent to: %s\n\n", providerLabel(s))
 	b.WriteString("System prompt and context:\n")
-	b.WriteString(outbound(system))
+	b.WriteString(system)
 	b.WriteString("\n\nConversation:\n")
 	for _, m := range msgs {
-		fmt.Fprintf(&b, "[%s] %s\n", m.Role, outbound(m.Content))
+		fmt.Fprintf(&b, "[%s] %s\n", m.Role, m.Content)
 	}
 	return b.String(), nil
 }
