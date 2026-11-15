@@ -157,7 +157,7 @@ func TestSeededHostileErrorTextIsTreatedAsHostile(t *testing.T) {
 	if note != "" || len(results) != 1 {
 		t.Fatalf("results %d, note %q", len(results), note)
 	}
-	prov := newExplainProvider(t, 200, "ok <script>x</script>​", 0)
+	prov := newExplainProvider(t, 200, "ok <script>x</script>\u200b", 0)
 	a := &App{}
 	a.workspace = writeProbeYAML(t, localYAML(prov.srv.URL))
 	a.seedRun(results)
@@ -179,7 +179,7 @@ func TestSeededHostileErrorTextIsTreatedAsHostile(t *testing.T) {
 			}
 		}
 	}
-	if len(got.Notes) != 1 || strings.Contains(got.Notes[0].Advice, "​") || !strings.Contains(got.Notes[0].Advice, "<script>x</script>") {
+	if len(got.Notes) != 1 || strings.Contains(got.Notes[0].Advice, "\u200b") || !strings.Contains(got.Notes[0].Advice, "<script>x</script>") {
 		t.Fatalf("notes %+v: the answer is data, cleaned of hidden characters and not altered otherwise", got.Notes)
 	}
 }
