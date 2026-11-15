@@ -301,13 +301,13 @@ func TestWhatIsSentIsRedactedAndBounded(t *testing.T) {
 // The suggestion and its reason are cleaned like any text from a provider: hidden characters, the key and credentials are gone, and they
 // are cut.
 func TestTheSuggestionIsCleaned(t *testing.T) {
-	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"Sign\u200b in\"\n```\nUse the key sk-ant-key-for-the-test-0123456789 or ghp_abcdefghijklmnopqrstuvwxyz0123456789 ‮ "+strings.Repeat("long ", 400))
+	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"Sign\u200b in\"\n```\nUse the key sk-ant-key-for-the-test-0123456789 or ghp_abcdefghijklmnopqrstuvwxyz0123456789 \u202e "+strings.Repeat("long ", 400))
 	useProvider(t, f, "sk-ant-key-for-the-test-0123456789")
 	fix, err := suggestFix(failedRunApp(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fix.Suggestion != `tap "Sign in"` || strings.ContainsAny(fix.Rationale, "‮\u200b") || strings.Contains(fix.Rationale, "sk-ant-key") || strings.Contains(fix.Rationale, "ghp_abc") || len(fix.Rationale) > maxRationaleBytes+4 {
+	if fix.Suggestion != `tap "Sign in"` || strings.ContainsAny(fix.Rationale, "\u202e\u200b") || strings.Contains(fix.Rationale, "sk-ant-key") || strings.Contains(fix.Rationale, "ghp_abc") || len(fix.Rationale) > maxRationaleBytes+4 {
 		t.Errorf("%+v", fix)
 	}
 }

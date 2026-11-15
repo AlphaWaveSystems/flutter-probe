@@ -140,6 +140,7 @@ func (a *App) fixDependencies() (fixDeps, error) {
 func (a *App) buildSelectorFix(fileContent string) (req fixRequest, err error) {
 	defer func() {
 		if recover() != nil { // the gate is replaceable: a panic in it sends nothing
+			//lint:ignore ST1005 the text is a sentence shown to the person, not a Go error message
 			req, err = fixRequest{}, errors.New(explainStoppedOther)
 		}
 	}()
