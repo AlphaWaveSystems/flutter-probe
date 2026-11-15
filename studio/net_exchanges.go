@@ -16,7 +16,8 @@ import (
 // a log, and nothing it reads goes to an AI provider or anywhere else.
 
 const (
-	netMaxRows    = 500 // the newest exchanges that a listing returns
+	netMaxRows    = 500  // the newest exchanges that a listing returns
+	netMaxScan    = 5000 // the newest exchanges a filtered listing looks at
 	netLogTimeout = 10 * time.Second
 	netMaxFilter  = 200
 )
@@ -105,6 +106,11 @@ func filterNeedle(text string) string {
 	return t
 }
 
+// empty says whether the filter selects everything.
+func (f NetFilter) empty() bool {
+	return strings.TrimSpace(f.Method) == "" && strings.TrimSpace(f.Status) == "" && strings.TrimSpace(f.Text) == ""
+}
+
 func (f NetFilter) matches(r NetRow) bool {
 	if m := strings.TrimSpace(f.Method); m != "" && !strings.EqualFold(m, r.Method) {
 		return false
@@ -156,19 +162,44 @@ func (a *App) HTTPExchanges(f NetFilter) (NetList, error) {
 	if err != nil {
 		return NetList{}, err
 	}
-	rows := make([]NetRow, 0, len(res.Entries))
+	// Newest first, so the cut to the newest rows is made before any row is redacted: what a listing costs does not grow with the
+	// length of the log. With a filter, rows are redacted (the filter reads what is shown) newest first until netMaxRows match, and no
+	// more than netMaxScan entries are looked at.
+	entries := make([]probelink.HTTPEntry, 0, len(res.Entries))
 	for _, e := range res.Entries {
-		if e.Seq <= f.Since {
-			continue
-		}
-		if r := netRow(e); f.matches(r) {
-			rows = append(rows, r)
+		if e.Seq > f.Since {
+			entries = append(entries, e)
 		}
 	}
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Seq < rows[j].Seq })
-	total := len(rows)
-	if total > netMaxRows {
-		rows = rows[total-netMaxRows:]
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Seq > entries[j].Seq })
+	total := len(entries)
+	var rows []NetRow
+	if f.empty() {
+		if len(entries) > netMaxRows {
+			entries = entries[:netMaxRows]
+		}
+		for _, e := range entries {
+			rows = append(rows, netRow(e))
+		}
+	} else {
+		if len(entries) > netMaxScan {
+			entries = entries[:netMaxScan]
+		}
+		total = 0
+		for _, e := range entries {
+			if r := netRow(e); f.matches(r) {
+				total++
+				if len(rows) < netMaxRows {
+					rows = append(rows, r)
+				}
+			}
+		}
+	}
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 { // oldest first
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	if rows == nil {
+		rows = []NetRow{}
 	}
 	return NetList{Epoch: shortText(res.Epoch, 64), Latest: res.Latest, Total: total, Shown: len(rows), Rows: rows}, nil
 }

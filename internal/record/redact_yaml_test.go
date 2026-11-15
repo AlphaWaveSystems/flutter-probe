@@ -38,9 +38,10 @@ func TestRedactBodyYAMLBlockValue(t *testing.T) {
 	if strings.Contains(got, secret) || !strings.Contains(got, "user: bob") {
 		t.Errorf("block value: %q", got)
 	}
-	// A credential name followed by a mapping is a parent, not a value: its children are read on their own.
+	// A credential name followed by a mapping: the rule as it was takes the first key as its value (it stays as a floor), and the
+	// credential after it is read on its own, so the secret goes and the rest of the text stays.
 	got = RedactBody("credentials:\n  user: bob\n  password: " + secret + "\n")
-	if strings.Contains(got, secret) || !strings.Contains(got, "user") {
+	if strings.Contains(got, secret) || !strings.Contains(got, "bob") {
 		t.Errorf("a credential parent: %q", got)
 	}
 	// A name that is not a credential is left alone, with its next line.

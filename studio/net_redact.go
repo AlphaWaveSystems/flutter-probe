@@ -120,7 +120,11 @@ func secretNormalized(n string) bool {
 // isSecretName says whether a header, query, JSON or form name is in a secret family: by this file's families, or by the token rule of
 // the recorder's redactor (pass, sid, passphrase, otp, pin, session and the rest).
 func isSecretName(name string) bool {
-	name = boundRunes(name, netRawHeaderName)
+	// A name too long to be one is not read at all: it is treated as a secret, so its value is never shown. (Reading only its start would
+	// judge the rest by a cut, and a cut that falls in a word turns a secret name into an ordinary one.)
+	if len(name) > 4*netRawHeaderName || utf8.RuneCountInString(name) > netRawHeaderName {
+		return true
+	}
 	plain := withoutInvisible(strings.ToValidUTF8(name, "?"), false)
 	folded := foldName(name)
 	return secretNormalized(normalizeName(plain)) || secretNormalized(normalizeName(folded)) || record.IsCredentialName(folded) || endsInKey(folded)
@@ -255,12 +259,12 @@ func redactURL(raw string) string {
 }
 
 // redactErrorText makes an error text from the app fit to show: it is bounded first, every URL in it goes through redactURL, and the
-// rest through the recorder's body redactor (which reads a YAML block value), the named assignments and cleanText.
+// rest through the same pass as a body (redactStructuredDepth), then cleanText.
 func redactErrorText(s string, max int) string {
 	s = dropHiddenKeepSpace(strings.ToValidUTF8(boundRunes(s, netRawError), "?")) // line breaks stay until the end: a parent line is not a value
 	s = urlInText.ReplaceAllStringFunc(s, redactURL)
-	s = strings.ReplaceAll(record.RedactBody(s), record.Placeholder, redactedMark)
-	s = redactNamedAssignments(s, nil)
+	// The text goes through the same pass as a body, so JSON, XML, HTML, YAML and assignments in it are read as they are in one.
+	s = redactStructuredDepth(s, "", 1)
 	return strings.TrimSpace(capRunes(cleanText(s, false), max))
 }
 
@@ -270,45 +274,106 @@ var valueNames = map[string]bool{"response": true, "cnonce": true}
 // redactHeaderValue makes the value of a header whose name is not a secret fit to show: bounded, then the recorder's body redactor (an
 // assignment such as sid=... or session=...), the named assignments and the Digest fields, then shapes.
 func redactHeaderValue(v string, max int) string {
-	s := dropHiddenKeepSpace(strings.ToValidUTF8(boundRunes(v, netRawHeaderValue), "?")) // line breaks stay until the end
+	s := hideLongNames(dropHiddenKeepSpace(strings.ToValidUTF8(boundRunes(v, netRawHeaderValue), "?"))) // line breaks stay until the end
 	s = strings.ReplaceAll(record.RedactBody(s), record.Placeholder, redactedMark)
 	s = redactNamedAssignments(s, valueNames)
+	s = authScheme.ReplaceAllString(s, "${1} "+redactedMark)
 	return strings.TrimSpace(capRunes(cleanText(s, false), max))
 }
 
+// authScheme matches a credential that follows its scheme word, in a header whose name does not say so: "Basic x", "NTLM x".
+var authScheme = regexp.MustCompile(`(?i)\b(basic|bearer|ntlm|negotiate|digest|token|apikey|api-key|hawk|aws4-hmac-sha256|oauth|dpop|mac)[ \t]+[^\s,;]{6,}`)
+
 // namedAssignment matches name=value, name: value and name%3Dvalue in text, with quotes allowed around the separator and the value.
 // The separator stays on the line: a name that ends its line is a parent, and the next line is not its value.
-var namedAssignment = regexp.MustCompile(`((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?(?:[ \t]*[=:][ \t]*|%3[Dd]|%3[Aa])["']?([^\s&,;"'<>]{4,})`)
+var namedAssignment = regexp.MustCompile(`((?:[\p{L}\p{N}_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?(?:[ \t]*[=:][ \t]*|%3[Dd]|%3[Aa])["']?([^\s&,;"'<>]{4,})`)
+
+// netMaxNestedSeparators is the most colons and equals signs one value may hold before the field is hidden whole. A value that holds a
+// chain of assignments ("a: b=c: d=...", a colon list, key=value pairs joined by bars) is read name by name; one with more than this is
+// more likely an attack on the reading than text, and fail-closed is the safe answer. An IPv6 address has 7, a PATH a few dozen.
+const netMaxNestedSeparators = 256
+
+var (
+	longNameAssignment = regexp.MustCompile(`[\p{L}\p{N}_.\-\[\]%]{257,}["']?[ \t]*[=:][ \t]*["']?[^\s&,;"'<>]{1,}`)
+	longNameElement    = regexp.MustCompile(`<[\p{L}_][\p{L}\p{N}_.:\-]{256,}(?:\s[^<>]*)?>[^<]*</[\p{L}_][\p{L}\p{N}_.:\-]{256,}\s*>`)
+)
+
+// hideLongNames hides an assignment or an element whose name is too long to be one (over netRawHeaderName characters): such a name is
+// treated as a secret, whatever it says, and this runs first because a later rule may read the long run as a token and take the
+// separator with it, leaving the value behind.
+func hideLongNames(s string) string {
+	if len(s) <= netRawHeaderName {
+		return s
+	}
+	return longNameElement.ReplaceAllString(longNameAssignment.ReplaceAllString(s, redactedMark), redactedMark)
+}
+
+// nameByte says whether a byte can be part of a name in namedAssignment.
+func nameByte(b byte) bool {
+	return b >= 0x80 || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b == '_' || b == '.' || b == '-' || b == '[' || b == ']' || b == '%'
+}
+
+// secretInChain finds a credential assignment inside a value that holds a colon or an equals sign: the first name before a separator
+// that is in a secret family, and a value of at least four characters after it. It reads each name once, so the cost is the length of
+// the value, however many separators it holds. It returns where the name starts.
+func secretInChain(v string, extra map[string]bool) (at int, found bool, open bool) {
+	runStart := 0
+	for i := 0; i < len(v); i++ {
+		switch {
+		case v[i] == ':' || v[i] == '=':
+			name := v[runStart:i]
+			if name != "" && (isSecretName(name) || extra[normalizeName(foldName(name))]) {
+				if len(v)-(i+1) >= 4 {
+					return runStart, true, false
+				}
+				if i == len(v)-1 {
+					return runStart, false, true // the chain ends in a secret name: its value is the next word, outside this match
+				}
+			}
+			runStart = i + 1
+		case !nameByte(v[i]):
+			runStart = i + 1
+		}
+	}
+	return 0, false, false
+}
 
 // redactNamedAssignments replaces each assignment whose name is in a secret family by this file's rule (which includes the recorder's),
 // or is in extra, with the placeholder. The whole assignment goes, so the name does not stay. A match whose value holds a colon or an
-// equals sign ("db: licenseKey: x", "a: xsrf=x") is not consumed: the search goes on from that value, so the credential in it is read as
-// an assignment of its own.
+// equals sign ("db: licenseKey: x", "a: xsrf=x") is read as a chain, name by name, so the credential in it is found without reading the
+// text again for each one; a chain of more than netMaxNestedSeparators separators hides the whole field.
 func redactNamedAssignments(s string, extra map[string]bool) string {
 	var out strings.Builder
 	last, pos := 0, 0
-	// Nested assignments can cause the same long value to be scanned repeatedly.
-	// Bound the total matched text; hide the field if parsing becomes expensive.
-	work := 0
 	for pos < len(s) {
 		loc := namedAssignment.FindStringSubmatchIndex(s[pos:])
 		if loc == nil {
 			break
 		}
-		work += loc[1]
-		if work > 4*len(s) {
-			return redactedMark
-		}
 		start, end := pos+loc[0], pos+loc[1]
 		name := s[pos+loc[2] : pos+loc[3]]
-		value := s[pos+loc[4] : pos+loc[5]]
+		valueStart := pos + loc[4]
+		value := s[valueStart:end]
 		switch {
 		case isSecretName(name) || extra[normalizeName(foldName(name))]:
 			out.WriteString(s[last:start])
 			out.WriteString(redactedMark)
 			last, pos = end, end
 		case strings.ContainsAny(value, ":="):
-			pos += loc[4] // the value holds another assignment: read from it, so the credential in it is read on its own
+			if strings.Count(value, ":")+strings.Count(value, "=") > netMaxNestedSeparators {
+				return redactedMark
+			}
+			at, found, open := secretInChain(value, extra)
+			switch {
+			case found:
+				out.WriteString(s[last : valueStart+at])
+				out.WriteString(redactedMark)
+				last, pos = end, end
+			case open:
+				pos = valueStart + at // read again from the secret name, whose value follows
+			default:
+				pos = end
+			}
 		default:
 			pos = end
 		}
@@ -344,8 +409,8 @@ func redactHeadersBudget(h map[string]string, budget *netBudget) (out []NetHeade
 			more++
 			continue
 		}
-		name := boundRunes(n, netRawHeaderName)
-		hdr := NetHeader{Name: shortText(name, netMaxHeaderName)}
+		name := boundRunes(n, netRawHeaderName) // for display and cost only: the decision below reads the whole name
+		hdr := NetHeader{Name: shortText(n, netMaxHeaderName)}
 		cost := len(name)
 		if v := h[n]; len(v) > netRawHeaderValue {
 			cost += netRawHeaderValue
@@ -353,7 +418,7 @@ func redactHeadersBudget(h map[string]string, budget *netBudget) (out []NetHeade
 			cost += len(v)
 		}
 		switch {
-		case isSecretName(name):
+		case isSecretName(n):
 			hdr.Value = redactedMark
 		case !budget.take(cost):
 			hdr.Value = netNotShown
@@ -477,7 +542,7 @@ func redactStructured(text, contentType string) string {
 	return redactStructuredDepth(text, contentType, 0)
 }
 
-const netMaxNesting = 3 // a form value that holds JSON that holds a form...
+const netMaxNesting = 6 // a form value that holds JSON that holds a form...
 
 func redactStructuredDepth(text, contentType string, depth int) string {
 	if depth > netMaxNesting {
@@ -493,29 +558,78 @@ func redactStructuredDepth(text, contentType string, depth int) string {
 	jsonLike := strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") || strings.Contains(lower, "json")
 	if jsonLike {
 		text = stripJSONComments(text)
+		// A complete JSON value is read as JSON before anything rewrites its text: a rule that replaced a key in the text (a 32-digit
+		// hex key is a token to the recorder's redactor) would make two keys the same and the parse would keep one.
+		if out, ok := jsonOutput(strings.TrimSpace(text)); ok {
+			return out
+		}
 	}
+	text = hideLongNames(redactYAMLBlocks(text)) // YAML first: a tag or a block under a key hides the value from the rules after it
 	// The recorder's redactor: it reads JSON that is cut or has one value per line, XML elements (a WS-Security UsernameToken),
 	// multipart parts, GraphQL arguments and YAML, which the structure rules below do not parse.
 	text = strings.ReplaceAll(record.RedactBody(text), record.Placeholder, redactedMark)
-	trimmed = strings.TrimSpace(text)
-	if jsonLike {
-		dec := json.NewDecoder(strings.NewReader(trimmed))
-		dec.UseNumber()
-		var v any
-		if err := dec.Decode(&v); err == nil {
-			if _, err := dec.Token(); err != nil { // nothing may follow the value
-				var buf bytes.Buffer
-				enc := json.NewEncoder(&buf)
-				enc.SetEscapeHTML(false) // markup in a value is shown as it is, not as \u003c
-				enc.SetIndent("", "  ")
-				if err := enc.Encode(redactJSON(v, 0)); err == nil {
-					return strings.TrimSuffix(buf.String(), "\n")
-				}
-			}
-		}
-	}
 	text = redactHTML(redactXML(text))
 	return cleanText(redactNamedAssignments(text, nil), true)
+}
+
+// jsonOutput reads text as one complete JSON value, with nothing after it, and returns it redacted and indented.
+func jsonOutput(text string) (string, bool) {
+	dec := json.NewDecoder(strings.NewReader(text))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return "", false
+	}
+	if _, err := dec.Token(); err == nil { // nothing may follow the value
+		return "", false
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false) // markup in a value is shown as it is, not as \u003c
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(redactJSON(v, 0)); err != nil {
+		return "", false
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), true
+}
+
+var (
+	yamlTagAnchor = regexp.MustCompile(`(:[ \t]*)(?:!!?[A-Za-z]*|&[A-Za-z0-9_-]+)[ \t]+`)
+	yamlKeyLine   = regexp.MustCompile(`^([ \t]*)(?:-[ \t]+)?((?:[\p{L}\p{N}_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?[ \t]*:[ \t]*(?:[|>][-+0-9]*|#.*)?[ \t]*$`)
+)
+
+// redactYAMLBlocks hides the lines under a key whose name is a secret when the value is not on the key's line: a block scalar
+// ("password: |"), a list ("password:" and "  - item" lines), or a comment before the value ("password: # c"). The lines that are
+// indented deeper than the key, and blank lines among them, are replaced by one marker. A tag or an anchor before a value on the
+// key's line ("password: !!str x", "password: &p x") is removed first, so the value is read as one.
+func redactYAMLBlocks(s string) string {
+	s = yamlTagAnchor.ReplaceAllString(s, "$1")
+	if !strings.Contains(s, ":") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); i++ {
+		out = append(out, lines[i])
+		m := yamlKeyLine.FindStringSubmatch(strings.TrimRight(lines[i], "\r"))
+		if m == nil || !isSecretName(m[2]) {
+			continue
+		}
+		indent := len(m[1])
+		j := i + 1
+		for j < len(lines) {
+			t := strings.TrimRight(lines[j], "\r")
+			if strings.TrimSpace(t) != "" && len(t)-len(strings.TrimLeft(t, " \t")) <= indent {
+				break
+			}
+			j++
+		}
+		if j > i+1 {
+			out = append(out, strings.Repeat(" ", indent+2)+redactedMark)
+			i = j - 1
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // stripJSONComments removes /* */ and // comments from text that is meant to be JSON, outside strings, so the rules that read it do
@@ -559,10 +673,13 @@ func stripJSONComments(s string) string {
 }
 
 var (
-	xmlElement = regexp.MustCompile(`<([A-Za-z_][A-Za-z0-9_.:\-]*)(\s[^<>]*)?>([^<]*)</([A-Za-z_][A-Za-z0-9_.:\-]*)\s*>`)
-	xmlCDATA   = regexp.MustCompile(`(?s)<([A-Za-z_][A-Za-z0-9_.:\-]*)(\s[^<>]*)?>\s*<!\[CDATA\[.*?\]\]>\s*</([A-Za-z_][A-Za-z0-9_.:\-]*)\s*>`)
-	htmlTag    = regexp.MustCompile(`(?i)<(input|meta|textarea|select|option)\b[^>]*>`)
-	htmlAttr   = regexp.MustCompile(`(?i)\b([a-z][a-z0-9:_-]*)\s*=\s*("[^"]*"|'[^']*'|[^\s>"']+)`)
+	xmlElement  = regexp.MustCompile(`<([\p{L}_][\p{L}\p{N}_.:\-]*)(\s[^<>]*)?>([^<]*)</([\p{L}_][\p{L}\p{N}_.:\-]*)\s*>`)
+	xmlCDATA    = regexp.MustCompile(`(?s)<([\p{L}_][\p{L}\p{N}_.:\-]*)(\s[^<>]*)?>\s*<!\[CDATA\[.*?\]\]>\s*</([\p{L}_][\p{L}\p{N}_.:\-]*)\s*>`)
+	htmlTag     = regexp.MustCompile(`(?i)<(input|meta|textarea|select|option)\b(?:[^>"']|"[^"]*"|'[^']*')*>`)
+	selectBlock = regexp.MustCompile(`(?is)<select\b(?:[^>"']|"[^"]*"|'[^']*')*>.*?</select>`)
+	optionValue = regexp.MustCompile(`(?i)\b(value)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+)`)
+	anyTag      = regexp.MustCompile(`<[\p{L}_][\p{L}\p{N}_.:\-]*(?:[^>"']|"[^"]*"|'[^']*')*>`)
+	htmlAttr    = regexp.MustCompile(`(?i)\b([a-z][a-z0-9:_-]*)\s*=\s*("[^"]*"|'[^']*'|[^\s>"']+)`)
 )
 
 // redactXML replaces the text of an element whose name is in a secret family, plain or as CDATA, as in <licenseKey>x</licenseKey> and
@@ -570,17 +687,53 @@ var (
 func redactXML(s string) string {
 	s = xmlCDATA.ReplaceAllStringFunc(s, func(m string) string {
 		sub := xmlCDATA.FindStringSubmatch(m)
-		if sub[1] == sub[3] && isSecretName(sub[1]) {
+		if sub[1] == sub[3] && (isSecretName(sub[1]) || attrsNameASecret(sub[2])) {
 			return "<" + sub[1] + sub[2] + ">" + redactedMark + "</" + sub[3] + ">"
 		}
 		return m
 	})
-	return xmlElement.ReplaceAllStringFunc(s, func(m string) string {
+	s = xmlElement.ReplaceAllStringFunc(s, func(m string) string {
 		sub := xmlElement.FindStringSubmatch(m)
-		if sub[1] == sub[4] && isSecretName(sub[1]) {
+		if sub[1] == sub[4] && (isSecretName(sub[1]) || attrsNameASecret(sub[2])) {
 			return "<" + sub[1] + sub[2] + ">" + redactedMark + "</" + sub[4] + ">"
 		}
 		return m
+	})
+	return redactXMLPairs(s)
+}
+
+// attrNames are the attributes that name what an element holds: <entry key="password">x</entry>, <parameter name="token">x</parameter>.
+var attrNames = []string{"name", "key", "id", "param", "property", "field", "label"}
+
+// attrValues are the attributes that hold the value of such an element: <add key="licenseKey" value="x"/>.
+var attrValues = map[string]bool{"value": true, "content": true, "val": true, "data": true, "placeholder": true}
+
+// attrsNameASecret says whether the attributes of an element name a secret, as in <entry key="password">.
+func attrsNameASecret(attrs string) bool {
+	for _, m := range htmlAttr.FindAllStringSubmatch(attrs, -1) {
+		for _, n := range attrNames {
+			if strings.EqualFold(m[1], n) && isSecretName(strings.Trim(m[2], `"'`)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// redactXMLPairs replaces the value attribute of an element whose name or key attribute is a secret, in any tag, empty or not:
+// <item name="password" value="x"/>, <add key="licenseKey" value="x"/>.
+func redactXMLPairs(s string) string {
+	return anyTag.ReplaceAllStringFunc(s, func(tag string) string {
+		if !attrsNameASecret(tag) {
+			return tag
+		}
+		return htmlAttr.ReplaceAllStringFunc(tag, func(a string) string {
+			m := htmlAttr.FindStringSubmatch(a)
+			if attrValues[strings.ToLower(m[1])] {
+				return m[1] + `="` + redactedMark + `"`
+			}
+			return a
+		})
 	})
 }
 
@@ -588,6 +741,13 @@ func redactXML(s string) string {
 // meta tag whose name is: <input name="authenticity_token" value="x">, <input type="password" value="x">, <meta name="csrf-token"
 // content="x">.
 func redactHTML(s string) string {
+	s = selectBlock.ReplaceAllStringFunc(s, func(block string) string {
+		open := block[:strings.IndexByte(block, '>')+1]
+		if !attrsNameASecret(open) {
+			return block
+		}
+		return optionValue.ReplaceAllString(block, `${1}="`+redactedMark+`"`)
+	})
 	return htmlTag.ReplaceAllStringFunc(s, func(tag string) string {
 		attrs := map[string]string{}
 		for _, m := range htmlAttr.FindAllStringSubmatch(tag, -1) {
@@ -605,8 +765,12 @@ func redactHTML(s string) string {
 		return htmlAttr.ReplaceAllStringFunc(tag, func(a string) string {
 			m := htmlAttr.FindStringSubmatch(a)
 			switch strings.ToLower(m[1]) {
-			case "value", "content":
+			case "value", "content", "placeholder":
 				return m[1] + `="` + redactedMark + `"`
+			default:
+				if strings.HasPrefix(strings.ToLower(m[1]), "data-") {
+					return m[1] + `="` + redactedMark + `"`
+				}
 			}
 			return a
 		})
@@ -687,7 +851,7 @@ func redactJSON(v any, depth int) any {
 		}
 		return out
 	case string:
-		return cleanText(redactXML(redactNamedAssignments(record.RedactBody(t), nil)), true)
+		return cleanText(redactXML(redactNamedAssignments(strings.ReplaceAll(record.RedactBody(hideLongNames(t)), record.Placeholder, redactedMark), nil)), true)
 	}
 	return v
 }
@@ -695,8 +859,8 @@ func redactJSON(v any, depth int) any {
 // pairNameMembers and pairValueMembers are the members of a {"name": "api_key", "value": "..."} object: when a name member names a
 // secret, the value member is one.
 var (
-	pairNameMembers  = map[string]bool{"name": true, "key": true, "field": true, "param": true, "id": true, "label": true}
-	pairValueMembers = map[string]bool{"value": true, "val": true, "data": true, "content": true, "text": true, "newvalue": true}
+	pairNameMembers  = map[string]bool{"name": true, "key": true, "field": true, "param": true, "id": true, "label": true, "k": true, "n": true, "prop": true, "property": true, "attr": true, "attribute": true}
+	pairValueMembers = map[string]bool{"value": true, "val": true, "data": true, "content": true, "text": true, "newvalue": true, "v": true, "values": true}
 )
 
 // namesASecret says whether an object has a pair name member, as a string or an array of strings, that is in a secret family.

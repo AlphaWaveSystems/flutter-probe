@@ -120,11 +120,15 @@ var (
 	// name%3Dvalue, with quotes allowed around the separator and the value. The name may hold brackets and percent escapes
 	// (user[password] and user%5Bpassword%5D). A value needs four characters, so a short value is left as written.
 	credentialPairPattern = regexp.MustCompile(`((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?(?:[ \t]*[=:][ \t]*|%3[Dd]|%3[Aa])["']?([^\s&,;"'<>]{4,})`)
+	// legacyPairPattern is credentialPairPattern as it was before the same-line fix: its separator crosses line breaks, so a value on a
+	// later line, after a blank line or after "name=" and a line break is read as the value. It stays as a floor: a recorder bundle is
+	// never weaker than it was, and the rules that follow only add.
+	legacyPairPattern = regexp.MustCompile(`((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?(?:\s*[=:]\s*|%3[Dd]|%3[Aa])["']?([^\s&,;"'<>]{4,})`)
 	// blockPairPattern matches the YAML block form of an assignment: a name and a colon that end their line, and the value alone on the
-	// next line, indented. The value is one word with no colon or equals sign, so a nested mapping (the next line is another key) is not
-	// read as a value. credentialPairPattern does not cross a line break, for the same reason: a parent line such as "db:" must not take
-	// the next line's key as its value and hide the credential that follows.
-	blockPairPattern = regexp.MustCompile(`(?m)((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?:[ \t]*\r?\n[ \t]+["']?([^\s&,;"'<>:=]{4,})["']?[ \t]*$`)
+	// next line, indented. The value is one word, which may hold a colon or an equals sign (a base64 padding, ab=cd:ef12); a line that
+	// is itself a key (it ends in a colon) is a nested mapping, not a value, and a value with a space after a colon ("user: bob") is not
+	// one word, so a credential parent keeps its children, which are read on their own.
+	blockPairPattern = regexp.MustCompile(`(?m)((?:[A-Za-z0-9_.\-]|\[|\]|%[0-9A-Fa-f]{2})+)["']?:[ \t]*\r?\n[ \t]+["']?([^\s"'<>]{4,})["']?[ \t]*$`)
 )
 
 // Copied from internal/hosted/scrub.go, without importing the hosted package. The assignment rule that used to be its
@@ -292,25 +296,42 @@ func redactMultipartParts(s string) string {
 }
 
 // redactAssignments replaces each assignment whose name is a credential with the placeholder. The whole assignment is
-// replaced, as before, so the name does not survive. A YAML block assignment, with the value on the next line, is replaced too.
+// replaced, as before, so the name does not survive. Three passes, each only adding to what the one before hid: the rule as it
+// was (a floor), the YAML block form, and the same-line rule, which does not cross a line break and reads from the value on when
+// the value itself holds an assignment ("svc: password: x"), so a parent line does not take the credential that follows it.
 func redactAssignments(s string) string {
+	s = replaceAssignments(s, legacyPairPattern, false)
 	s = blockPairPattern.ReplaceAllStringFunc(s, func(m string) string {
 		sub := blockPairPattern.FindStringSubmatch(m)
-		if len(sub) == 3 && isCredentialName(decodeName(sub[1])) {
+		if len(sub) == 3 && !strings.HasSuffix(sub[2], ":") && isCredentialName(decodeName(sub[1])) {
 			return Placeholder
 		}
 		return m
 	})
+	return replaceAssignments(s, credentialPairPattern, true)
+}
+
+// replaceAssignments replaces the credential assignments that pattern finds. With rewind set, a match whose value holds a colon or an
+// equals sign and whose name is not a credential is not consumed: the search goes on from the value.
+func replaceAssignments(s string, pattern *regexp.Regexp, rewind bool) string {
 	var out strings.Builder
-	last := 0
-	for _, loc := range credentialPairPattern.FindAllStringSubmatchIndex(s, -1) {
-		out.WriteString(s[last:loc[0]])
-		if isCredentialName(decodeName(s[loc[2]:loc[3]])) {
-			out.WriteString(Placeholder)
-		} else {
-			out.WriteString(s[loc[0]:loc[1]])
+	last, pos := 0, 0
+	for pos < len(s) {
+		loc := pattern.FindStringSubmatchIndex(s[pos:])
+		if loc == nil {
+			break
 		}
-		last = loc[1]
+		start, end := pos+loc[0], pos+loc[1]
+		switch {
+		case isCredentialName(decodeName(s[pos+loc[2] : pos+loc[3]])):
+			out.WriteString(s[last:start])
+			out.WriteString(Placeholder)
+			last, pos = end, end
+		case rewind && strings.ContainsAny(s[pos+loc[4]:pos+loc[5]], ":="):
+			pos += loc[4]
+		default:
+			pos = end
+		}
 	}
 	out.WriteString(s[last:])
 	return out.String()
