@@ -32,6 +32,9 @@ type Server struct {
 	in  *bufio.Reader
 	out io.Writer
 
+	// inlineRunner runs an inline ProbeScript; nil means runInlineScript. A test replaces it.
+	inlineRunner func(script, flags, deviceID string) (string, error)
+
 	// Background test runs (jobs.go). Created on first use.
 	jobsOnce sync.Once
 	jobs     *jobRegistry
@@ -955,16 +958,22 @@ func (s *Server) generateTest(id any, prompt, output string) *mcpResponse {
 
 func (s *Server) takeScreenshot(id any, rawName, deviceID string) *mcpResponse {
 	name := mcpShotName(rawName)
-	cmdOut, _ := s.runInlineScript(mcpShotScript(name), "", deviceID)
+	run := s.inlineRunner
+	if run == nil {
+		run = s.runInlineScript
+	}
+	started := time.Now()
+	cmdOut, _ := run(mcpShotScript(name), "", deviceID)
 
-	latestPath, err := findMCPScreenshot(filepath.Join("reports", "screenshots"), name)
+	f, latestPath, err := findMCPScreenshot(filepath.Join("reports", "screenshots"), name, started)
 	if err != nil {
 		return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"content": []map[string]any{{"type": "text", "text": "Screenshot not found.\n" + cmdOut}},
 			"isError": true,
 		}}
 	}
-	imgData, note, err := boundedScreenshot(latestPath)
+	defer f.Close()
+	imgData, note, err := boundedScreenshot(f)
 	if err != nil {
 		return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"content": []map[string]any{{"type": "text", "text": "Screenshot captured but not sent: " + err.Error()}},

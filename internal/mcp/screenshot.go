@@ -9,8 +9,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/shotname"
 )
@@ -27,8 +29,12 @@ const (
 	maxScreenshotSourceBytes = 64 << 20
 )
 
-// maxScreenshotSourcePixels is a variable only so that a test can lower it.
-var maxScreenshotSourcePixels = 100_000_000
+// Variables only so that a test can lower them. maxScreenshotSourcePixels bounds what is decoded at all; maxScreenshotDecodedBytes bounds the memory a decode may take, estimated from the header before anything
+// is decoded (width x height x bytes per pixel).
+var (
+	maxScreenshotSourcePixels = 25_000_000
+	maxScreenshotDecodedBytes = int64(256 << 20)
+)
 
 // mcpShotName turns the client's name into a plain file-name fragment: the runner's cleaning (separators, control and direction characters, "..", length), and then every character that has a meaning in a
 // ProbeScript string or in a file glob ( " ' ` $ < > { } * ? [ ] ) becomes "_". An empty name is the default. A name that needs none of this is returned unchanged.
@@ -49,24 +55,43 @@ func mcpShotScript(name string) string {
 	return fmt.Sprintf("test \"mcp screenshot\"\n  take screenshot \"%s\"\n", name)
 }
 
-// findMCPScreenshot returns the newest picture of that name in dir. Only regular files whose real path is inside dir count: a symbolic link, or a match that resolves outside dir, is skipped.
-func findMCPScreenshot(dir, name string) (string, error) {
+// findMCPScreenshot returns the newest picture of that name in dir, opened once. A picture is a regular file called exactly <name>_<digits>.png (so another name that starts with <name>_ does not match), not a
+// symbolic link, whose real path is inside dir, and not older than since (the moment the capture step started, so a failed capture does not return a stale file). The newest is the one with the largest number in its
+// name, which is the app's millisecond stamp. The folder itself must not be a symbolic link. The file is opened once and checked on the open handle (same file as the one listed, a regular file), and read from it.
+func findMCPScreenshot(dir, name string, since time.Time) (*os.File, string, error) {
+	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
+		return nil, "", fmt.Errorf("the screenshot folder is missing or is not a plain folder")
+	}
 	realDir, err := filepath.EvalSymlinks(dir)
 	if err != nil {
-		return "", fmt.Errorf("screenshot folder: %w", err)
+		return nil, "", fmt.Errorf("screenshot folder: %w", err)
 	}
-	matches, err := filepath.Glob(filepath.Join(dir, name+"_*.png"))
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	sort.Strings(matches)
-	for i := len(matches) - 1; i >= 0; i-- {
-		m := matches[i]
-		fi, err := os.Lstat(m)
-		if err != nil || !fi.Mode().IsRegular() {
+	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `_([0-9]{1,20})\.png$`)
+	type cand struct {
+		path  string
+		stamp uint64
+		info  os.FileInfo
+	}
+	var best *cand
+	for _, e := range entries {
+		m := pattern.FindStringSubmatch(e.Name())
+		if m == nil {
 			continue
 		}
-		real, err := filepath.EvalSymlinks(m)
+		stamp, err := strconv.ParseUint(m[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		fi, err := os.Lstat(path)
+		if err != nil || !fi.Mode().IsRegular() || fi.ModTime().Before(since) {
+			continue
+		}
+		real, err := filepath.EvalSymlinks(path)
 		if err != nil {
 			continue
 		}
@@ -74,19 +99,28 @@ func findMCPScreenshot(dir, name string) (string, error) {
 		if err != nil || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 			continue
 		}
-		return m, nil
+		if best == nil || stamp > best.stamp {
+			best = &cand{path: path, stamp: stamp, info: fi}
+		}
 	}
-	return "", fmt.Errorf("no picture named %q was found", name)
+	if best == nil {
+		return nil, "", fmt.Errorf("no picture named %q was found", name)
+	}
+	f, err := os.Open(best.path)
+	if err != nil {
+		return nil, "", err
+	}
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() || !os.SameFile(fi, best.info) {
+		f.Close()
+		return nil, "", fmt.Errorf("the picture changed while it was being opened")
+	}
+	return f, best.path, nil
 }
 
 // boundedScreenshot reads a PNG for the client. A picture within maxScreenshotBytes and maxScreenshotDim is returned as the file has it. A bigger one is scaled down (area average, standard library only) until
 // both limits hold; the note says so. A file that is too large to read, or too many pixels to decode, is refused.
-func boundedScreenshot(path string) (data []byte, note string, err error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, "", err
-	}
-	defer f.Close()
+func boundedScreenshot(f *os.File) (data []byte, note string, err error) {
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, "", err
@@ -105,7 +139,7 @@ func boundedScreenshot(path string) (data []byte, note string, err error) {
 	if len(raw) <= maxScreenshotBytes && cfg.Width <= maxScreenshotDim && cfg.Height <= maxScreenshotDim {
 		return raw, "", nil
 	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > maxScreenshotSourcePixels {
+	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > maxScreenshotSourcePixels || decodedBytes(cfg) > maxScreenshotDecodedBytes {
 		return nil, "", fmt.Errorf("the picture is %dx%d, too large to scale down, and was not sent", cfg.Width, cfg.Height)
 	}
 	img, err := png.Decode(bytes.NewReader(raw))
@@ -156,4 +190,14 @@ func scaleToFit(img image.Image, dim int) *image.RGBA {
 		}
 	}
 	return out
+}
+
+// decodedBytes estimates the memory a decode of the picture takes, from its header: 8 bytes a pixel for 16-bit colour, 4 for the rest.
+func decodedBytes(cfg image.Config) int64 {
+	per := int64(4)
+	switch cfg.ColorModel {
+	case color.RGBA64Model, color.NRGBA64Model, color.Gray16Model:
+		per = 8
+	}
+	return int64(cfg.Width) * int64(cfg.Height) * per
 }
