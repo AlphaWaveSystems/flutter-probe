@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/websocket"
 )
@@ -93,7 +94,7 @@ func TestListTargetsFailures(t *testing.T) {
 		}, "larger than"},
 		{"redirect to another host", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "http://127.0.0.2:1/json/list", http.StatusFound)
-		}, "could not list"},
+		}, "answered 302"},
 	}
 	for _, c := range cases {
 		f := newFakeCDP(t)
@@ -248,5 +249,89 @@ func TestErrorsDoNotRepeatTheDebuggerURL(t *testing.T) {
 	_, err := c.Call(context.Background(), "Runtime.evaluate", nil)
 	if err == nil || strings.Contains(err.Error(), "/devtools/page/") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestListTargetsDoesNotEchoARedirectAddress(t *testing.T) {
+	f := newFakeCDP(t)
+	for _, loc := range []string{"http://[::1", "http://secret-host.invalid/path?token=abc123", "%zz"} {
+		f.list = func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Location", loc)
+			w.WriteHeader(http.StatusFound)
+		}
+		_, err := ListTargets(context.Background(), f.port)
+		if err == nil || strings.Contains(err.Error(), "secret-host") || strings.Contains(err.Error(), "abc123") || strings.Contains(err.Error(), "[::1") || strings.Contains(err.Error(), "%zz") || strings.Contains(err.Error(), "%!") {
+			t.Errorf("Location %q: err = %v", loc, err)
+		}
+	}
+}
+
+func TestDialTargetRefusedHandshakeSaysTheStatus(t *testing.T) {
+	f := newFakeCDP(t)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden page-secret-xyz", http.StatusForbidden)
+	}))
+	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Listener.Close()
+	srv.Listener = l
+	srv.Start()
+	defer srv.Close()
+	port := l.Addr().(*net.TCPAddr).Port
+	_ = f
+	_, err = DialTarget(context.Background(), port, Target{WebSocketDebuggerURL: "ws://127.0.0.1:" + strconv.Itoa(port) + "/devtools/page/SECRET-ID"})
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+		t.Fatalf("err = %v", err)
+	}
+	for _, bad := range []string{"SECRET-ID", "page-secret-xyz", "%!w", "/devtools/"} {
+		if strings.Contains(err.Error(), bad) {
+			t.Fatalf("the error repeats %q: %v", bad, err)
+		}
+	}
+	// a refused connection says why, without a formatting artefact
+	_, err = DialTarget(context.Background(), 1, Target{WebSocketDebuggerURL: "ws://127.0.0.1:1/devtools/page/X"})
+	if err == nil || strings.Contains(err.Error(), "%!") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCDPErrorMessageIsCappedAndPrintable(t *testing.T) {
+	f := newFakeCDP(t)
+	hostile := "line1\nline2\x00\x1b[31m" + strings.Repeat("A", 5000) + "\u202e"
+	f.handle = func(c *websocket.Conn, req map[string]any) {
+		_ = c.WriteJSON(map[string]any{"id": req["id"], "error": map[string]any{"code": -32000, "message": hostile}})
+	}
+	c := dial(t, f)
+	_, err := c.Call(context.Background(), "Runtime.evaluate", nil)
+	var ce *CDPError
+	if !errors.As(err, &ce) {
+		t.Fatalf("err = %v", err)
+	}
+	if n := len([]rune(ce.Message)); n > maxCDPErrorChars+1 {
+		t.Fatalf("message has %d characters", n)
+	}
+	for _, r := range ce.Message {
+		if !unicode.IsPrint(r) {
+			t.Fatalf("a character that is not printable (%U) is in %q", r, ce.Message)
+		}
+	}
+	if strings.ContainsAny(ce.Message, "\n\x00\x1b") {
+		t.Fatalf("control characters in %q", ce.Message)
+	}
+}
+
+func TestCallWithoutADeadlineGetsADefaultOne(t *testing.T) {
+	old := defaultCallTimeout
+	defaultCallTimeout = 150 * time.Millisecond
+	defer func() { defaultCallTimeout = old }()
+	f := newFakeCDP(t)
+	f.handle = func(c *websocket.Conn, req map[string]any) { time.Sleep(3 * time.Second) } // never answers in time
+	c := dial(t, f)
+	start := time.Now()
+	_, err := c.Call(context.Background(), "Runtime.evaluate", nil) // a context with no deadline
+	if err == nil || time.Since(start) > 2*time.Second {
+		t.Fatalf("the call did not end by itself: err = %v after %v", err, time.Since(start))
 	}
 }
