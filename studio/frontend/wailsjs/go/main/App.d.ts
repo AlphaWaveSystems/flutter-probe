@@ -10,6 +10,8 @@ export function AllowHost(arg1:string):Promise<void>;
 
 export function ApplyDeviceSetting(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function BuildCallStep(arg1:main.SaveStepInput):Promise<main.SavedStep>;
+
 export function CancelRun():Promise<void>;
 
 export function Chat(arg1:Array<main.ChatMessage>,arg2:string):Promise<main.ChatResponse>;

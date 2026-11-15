@@ -321,4 +321,37 @@ test.describe("Send request (fake backends on 127.0.0.1)", () => {
       await b.close();
     }
   });
+
+  test("sr-10 Save as step inserts a call line into the open file: placeholders for what must not be written, no headers, no request", async ({ page }) => {
+    const b = await backend();
+    try {
+      await openSend(page);
+      await expect(page.locator("#send-save-note")).toContainText("Headers are not saved");
+      await fill(page, `${b.url}/v1/reset/${netSecret}?token=${netSecret}&id=7`, { method: "POST", headers: `Authorization: Bearer ${netSecret}\nX-Note: hello`, body: JSON.stringify({ name: "Jane", password: netSecret, email: netEmail }) });
+      await page.click("#btn-send-save");
+      await expect(page.locator("#send-status")).toContainText("Inserted into the open file");
+      await expect(page.locator("#send-status")).toContainText("2 headers were not saved");
+      await expect(page.locator("#send-status")).toContainText("TOKEN");
+      const editor = page.locator("#editor .view-lines");
+      await expect(editor).toContainText("call POST");
+      await expect(editor).toContainText("${TOKEN}");
+      await expect(editor).toContainText("${PASSWORD}");
+      const text = await editor.innerText();
+      for (const bad of [netSecret, netEmail, "jane.doe", "Authorization", "Bearer", "X-Note", "hunter2"]) expect(text, bad).not.toContain(bad);
+      expect(b.hits()).toBe(0); // saving asks nobody: no request, and no dialog
+      await expect(overlay(page)).toBeHidden();
+      // What the call step cannot say is not saved, and the editor does not change.
+      const before = await editor.innerText();
+      await fill(page, `${b.url}/ok`, { method: "PATCH", body: "{}" });
+      await page.click("#btn-send-save");
+      await expect(page.locator("#send-status")).toContainText("PATCH");
+      await expect(page.locator("#send-status")).toContainText("cannot be saved as a step");
+      expect(await editor.innerText()).toBe(before);
+      // Nothing is stored in the browser.
+      const stored = await page.evaluate(() => JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage } }));
+      expect(stored).not.toContain("call POST");
+    } finally {
+      await b.close();
+    }
+  });
 });

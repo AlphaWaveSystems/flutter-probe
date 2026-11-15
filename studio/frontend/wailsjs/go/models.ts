@@ -777,6 +777,36 @@ export namespace main {
 		}
 	}
 	
+	export class SaveStepInput {
+	    method: string;
+	    url: string;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveStepInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.body = source["body"];
+	    }
+	}
+	export class SavedStep {
+	    lines: string[];
+	    fill: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SavedStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.lines = source["lines"];
+	        this.fill = source["fill"];
+	    }
+	}
 	export class SelectorFix {
 	    suggestion: string;
 	    rationale: string;

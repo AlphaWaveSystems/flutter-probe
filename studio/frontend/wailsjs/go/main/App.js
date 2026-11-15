@@ -18,6 +18,10 @@ export function ApplyDeviceSetting(arg1, arg2, arg3) {
   return window['go']['main']['App']['ApplyDeviceSetting'](arg1, arg2, arg3);
 }
 
+export function BuildCallStep(arg1) {
+  return window['go']['main']['App']['BuildCallStep'](arg1);
+}
+
 export function CancelRun() {
   return window['go']['main']['App']['CancelRun']();
 }

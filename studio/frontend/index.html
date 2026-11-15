@@ -139,12 +139,14 @@
               <select id="send-method" aria-label="Method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select>
               <input id="send-url" type="text" placeholder="https://host/path" aria-label="Address" autocomplete="off" spellcheck="false" />
               <button type="button" id="btn-send" class="btn btn-primary">Send</button>
+              <button type="button" id="btn-send-save" class="btn-mini" title="Insert this request as a call step in the open file">Save as step</button>
               <button type="button" id="btn-send-back" class="btn-mini">Back to the log</button>
             </div>
             <div class="send-fields">
               <textarea id="send-headers" rows="3" placeholder="Name: value (one per line). These headers are for this request only; they are not saved to a test step." aria-label="Headers" spellcheck="false"></textarea>
               <textarea id="send-body" rows="3" placeholder="Body (POST, PUT, PATCH, DELETE)" aria-label="Body" spellcheck="false"></textarea>
             </div>
+            <p id="send-save-note" class="dim">Save as step inserts <code>call METHOD "address" with body "..."</code> into the open file. Headers are not saved, and <code>probe test</code> sends a body as application/json. Query values and anything that looks like a credential or an email address become <code>${NAME}</code> for you to set; nothing typed here is written to the file.</p>
             <div id="send-status" class="dim" role="status"></div>
             <div id="send-result" class="send-result"></div>
           </section>

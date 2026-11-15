@@ -84,6 +84,13 @@ export function summarize(r: SendResultLike): ResultSummary {
   };
 }
 
+/** What the status line says after a step was inserted. */
+export function savedSummary(fill: string[], headerLines: number): string {
+  const set = fill.length ? ` Set ${fill.length === 1 ? "this environment variable" : "these environment variables"} before you run it: ${fill.join(", ")}.` : "";
+  const headers = headerLines > 0 ? ` ${headerLines === 1 ? "The header was" : `${headerLines} headers were`} not saved.` : "";
+  return `Inserted into the open file.${set}${headers} Save the file to keep it.`;
+}
+
 /** The error text for the status line: Studio's sentence, without the wrapper the bridge puts around it. */
 export function errorText(err: unknown): string {
   return String(err).replace(/^Error:\s*/, "");

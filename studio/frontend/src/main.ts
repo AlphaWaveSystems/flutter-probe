@@ -1289,7 +1289,19 @@ if (inspectorSearch) {
 
 initResults();
 initNetworkPanel();
-initSendPanel();
+// Save as step puts lines under the cursor of the open file, at the indent of the line it is on (two spaces under a test header). The
+// file is written by the editor's own save, not here.
+initSendPanel({
+  insertLines: (lines) => {
+    const pos = editor.getPosition() ?? new monaco.Position(model.getLineCount(), 1);
+    const lead = model.getLineContent(pos.lineNumber).match(/^\s*/)?.[0] ?? "";
+    const indent = lead.length > 0 ? lead : "  ";
+    const col = model.getLineMaxColumn(pos.lineNumber);
+    editor.executeEdits("send-save", [{ range: new monaco.Range(pos.lineNumber, col, pos.lineNumber, col), text: "\n" + lines.map((l) => indent + l).join("\n"), forceMoveMarkers: true }]);
+    editor.revealLine(pos.lineNumber + lines.length);
+    return true;
+  },
+});
 
 // The scope control next to Run picks what runs: the whole file (the default), the test at the cursor, the tests with a
 // tag, or the tests that failed last time. The tag field shows only for the tag scope.

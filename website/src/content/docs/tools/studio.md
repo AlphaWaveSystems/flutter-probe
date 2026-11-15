@@ -39,7 +39,14 @@ The first request to a host in a session asks first. The dialog names the host a
 
 Limits: only `http` and `https`, no user name or password in the address, no `Host`, `Content-Length`, `User-Agent`, `Accept-Encoding` or connection headers (Studio sets them; the User-Agent is `FlutterProbe-Studio`), at most 50 headers, a 256 KB request, 30 seconds, a 1 MB response (a longer one is marked cut), at most 5 redirects on the same host, one request at a time and ten a minute. A response that ends early (a body shorter than it said, a broken or cut stream) is an error and none of it is shown. A redirect to another host is shown and not followed; send it as a new request to be asked about that host. Cloud metadata addresses and the unspecified and multicast addresses (all of them, also 224.0.0.1 and ff02::1) are never called, also when written as an IPv6 address that routes to one (NAT64, 6to4); reserved ranges get the same stronger warning as this machine. A name that answers with several addresses is called only when all of them pass. Nothing is kept: no cookies, no connection is reused, and the certificate is always checked. In the browser-driven (headless) build, an address on this machine or its network is refused unless it is named by the test allow-list (`PROBE_STUDIO_TEST_ALLOW_LOCAL`).
 
-Saving a request as a `.probe` step is not part of this panel yet.
+### Save as step
+
+**Save as step** inserts the typed request into the open file, under the cursor, as a [`call` step](/probescript/grammar/#http-calls): `call POST "https://host/path?id=${ID}" with body "{...}"`. It uses only what the grammar has: the methods GET, POST, PUT and DELETE (a PATCH, HEAD or OPTIONS request cannot be saved, and Studio says so), and a body of text. It sends nothing and asks nothing, and the file is saved with the editor's own save.
+
+- **Headers are not saved.** The step has no way to carry them, and `probe test` sends a body as `application/json`.
+- **Nothing typed is written as a secret.** Every query value, every path segment or JSON, form or text value that looks like a credential, is under a credential name or is an email address, is written as `${NAME}`, which `probe test` fills from the environment variable `NAME` and masks in its output. A comment line above the step names the variables to set. The address typed in a request is checked the same way as the answers in the panel.
+- **What a step cannot say exactly is not saved:** an address with a user name or password, a body with an invisible or control character, a query name that looks like a credential, or anything the ProbeScript parser does not read back as the same request.
+
 
 ## Automation (no window, no cursor)
 
