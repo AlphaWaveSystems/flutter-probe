@@ -162,7 +162,7 @@ func (a *App) chatTurn(messages []ChatMessage, fileContent string) (string, []cl
 	system := chatBasePrompt + chatContext(fileContent, lastRun, tree)
 	msgs := make([]claudeMessage, len(messages))
 	for i, m := range messages {
-		msgs[i] = claudeMessage{Role: m.Role, Content: m.Content}
+		msgs[i] = claudeMessage(m)
 	}
 	return system, msgs
 }

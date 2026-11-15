@@ -416,6 +416,7 @@ func (l *Lexer) tryCompound(first string) TokenType {
 		{[]string{"deny", "permission"}, TOKEN_DENY},
 		{[]string{"set", "location"}, TOKEN_SET_LOCATION},
 		{[]string{"set", "language"}, TOKEN_SET_LANGUAGE},
+		{[]string{"set", "appearance"}, TOKEN_SET_APPEARANCE},
 		{[]string{"verify", "external", "browser"}, TOKEN_VERIFY_BROWSER},
 		{[]string{"add", "media"}, TOKEN_ADD_MEDIA},
 	}

@@ -15,13 +15,17 @@ import (
 )
 
 // A fake `probe` earlier on PATH stands in for the real CLI. Its behavior is
-// chosen by the flags the test passes through start_tests.
+// chosen by the flags the test passes through start_tests. A --slow run lasts
+// until the test releases it (releaseSlowJobs), so how long the machine takes
+// cannot make it finish early; the tests that use it cancel it or stop it. The
+// loop gives up after about 120 seconds (2400 polls of 0.05 s), so a run whose
+// test never reached its release cannot outlive the test binary for long.
 const fakeProbe = `#!/bin/sh
 echo "pid $$"
 echo "args: $*"
 case "$*" in
   *--fail*)       echo "boom" >&2; exit 3 ;;
-  *--slow*)       echo started; sleep 30; echo finished ;;
+  *--slow*)       echo started; i=0; until [ -e "$PROBE_FAKE_RELEASE" ] || [ "$i" -ge 2400 ]; do sleep 0.05; i=$((i+1)); done; echo finished ;;
   *--ignoreterm*) trap '' TERM; echo started; while true; do sleep 1; done ;;
   *--quick*)      echo done ;;
 esac
@@ -34,6 +38,19 @@ func useFakeProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	release := filepath.Join(dir, "release")
+	t.Setenv("PROBE_FAKE_RELEASE", release)
+	// Runs last-in first-out: a --slow run still waiting when the test ends, even one left by a failure or a panic
+	// before releaseSlowJobs, is released here, and TempDir is removed only after this.
+	t.Cleanup(func() { _ = os.WriteFile(release, nil, 0o600) })
+}
+
+// releaseSlowJobs lets every --slow run that useFakeProbe started finish.
+func releaseSlowJobs(t *testing.T) {
+	t.Helper()
+	if err := os.WriteFile(os.Getenv("PROBE_FAKE_RELEASE"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // call invokes a tool on s and returns the first text block, whether the
@@ -358,6 +375,8 @@ func TestFinishedJobsArePrunedButRunningOnesAreNot(t *testing.T) {
 	if _, ok := reg.get(last); !ok {
 		t.Error("the newest job was pruned")
 	}
+	// The held job can only finish when released, so it is still running for every check above.
+	releaseSlowJobs(t)
 }
 
 func TestCappedBufferKeepsTheTail(t *testing.T) {

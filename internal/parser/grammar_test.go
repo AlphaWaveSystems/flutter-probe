@@ -528,6 +528,21 @@ func TestGrammarPage_KeywordTablesMatchLexer(t *testing.T) {
 	}
 }
 
+// TestGrammarPage_SetStepsAreLineSteps: each set statement is a line step, so line-step must name it. set language was
+// left out of line-step until the appearance step was added.
+func TestGrammarPage_SetStepsAreLineSteps(t *testing.T) {
+	prods := grammarProductions(t, readFile(t, grammarPagePath(t)))
+	members := map[string]bool{}
+	for _, alt := range strings.Split(prods["line-step"], "|") {
+		members[strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(alt), ";"))] = true
+	}
+	for _, name := range []string{"set-location-step", "set-language-step", "set-appearance-step"} {
+		if !members[name] {
+			t.Errorf("%s is a set statement but line-step does not name it", name)
+		}
+	}
+}
+
 // ---- (b) one example per production ----
 
 type productionExample struct {
@@ -770,6 +785,17 @@ var grammarProductionExamples = []productionExample{
 			}
 			if strings.Join(got, ",") != "de,pt-BR,system" {
 				t.Errorf("language tags = %v", got)
+			}
+		}},
+	{production: "set-appearance-step", src: testBody(`set appearance dark`, `set appearance to light`, `set appearance "auto"`),
+		want: repeat("action:set_appearance", 3),
+		check: func(t *testing.T, p *parser.Program) {
+			var got []string
+			for _, s := range p.Tests[0].Body {
+				got = append(got, s.(parser.ActionStep).Name)
+			}
+			if strings.Join(got, ",") != "dark,light,auto" {
+				t.Errorf("appearance modes = %v", got)
 			}
 		}},
 	{production: "set-location-step", src: testBody(`set location 37.7749, -122.4194`, `set location -33.8, 151.2`, `set location 37 122`),

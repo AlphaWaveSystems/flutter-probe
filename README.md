@@ -458,6 +458,8 @@ Use your Flutter ARB files for labels: set `l10n: {dir: lib/l10n, default: en}` 
 
 Change the app language from a test or per run: `set language "de"`, `probe test --locale de`, or the whole suite once per language with `probe test --locales de,ja,ar -o reports/r.json` (reports `r.de.json`, `r.ja.json`, ...). Android 13+ and iOS simulators; right-to-left languages work (`ar`, `he`, `fa`).
 
+Set the device's light or dark mode from a test with `set appearance dark` (or `light`; `auto` on Android). The app is not relaunched; an app whose theme follows the system setting (`ThemeMode.system` in Flutter) changes with it.
+
 One suite for every language. Select by `#key` (language-independent); use `--match-loose` (or `defaults.match: loose`) to fold
 case, accents, typographic apostrophes and whitespace in text selectors (`anderungen SPEICHERN` matches `Änderungen speichern`);
 list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**. On iOS,

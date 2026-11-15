@@ -167,6 +167,7 @@ const (
 	VerbPasteClipboard  ActionVerb = "paste_clipboard"
 	VerbSetLocation     ActionVerb = "set_location"
 	VerbSetLanguage     ActionVerb = "set_language"
+	VerbSetAppearance   ActionVerb = "set_appearance" // set appearance light|dark|auto
 	VerbVerifyBrowser   ActionVerb = "verify_browser"
 	VerbOpenLink        ActionVerb = "open_link"   // open link "url"
 	VerbStore           ActionVerb = "store"        // store "value" as varName
