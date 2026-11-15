@@ -645,6 +645,13 @@ func (p *Parser) parseActionTap() (Step, error) {
 		p.consumeNewline()
 		return ActionStep{Verb: VerbTapNative, Name: query, Line: line}, nil
 	}
+	// tap "text" in webview / tap css:"..." in webview ["page"]
+	if t, err := p.tryWebViewTarget(false, line); err != nil {
+		return nil, err
+	} else if t != nil {
+		p.consumeNewline()
+		return ActionStep{Verb: VerbTapWebView, WebView: t, Line: line}, nil
+	}
 	p.skipFillers()
 	sel := p.parseSelector()
 	ifVis := p.checkIfVisible()
@@ -667,6 +674,13 @@ func (p *Parser) parseActionType() (Step, error) {
 	}
 	text := p.expectString("text to type")
 	p.skipFillers()
+	// type "x" into "text" in webview / type "x" into css:"..." in webview ["page"]
+	if t, err := p.tryWebViewTarget(false, line); err != nil {
+		return nil, err
+	} else if t != nil {
+		p.consumeNewline()
+		return ActionStep{Verb: VerbTypeWebView, Text: text, WebView: t, Line: line}, nil
+	}
 	var sel *Selector
 	// "into the 'Field' field"
 	if p.peek().Type == TOKEN_STRING || p.peek().Type == TOKEN_ID {
@@ -1022,6 +1036,14 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 		return AssertStep{Negated: negated, Native: true, Sel: Selector{Kind: SelectorText, Text: query}, Line: line}, nil
 	}
 
+	// see "text" in webview / don't see css:"..." in webview ["page"]
+	if t, err := p.tryWebViewTarget(false, line); err != nil {
+		return nil, err
+	} else if t != nil {
+		p.consumeNewline()
+		return AssertStep{Negated: negated, WebView: t, Line: line}, nil
+	}
+
 	p.skipFillers()
 
 	// "see any of "A", "B"" / "don't see any of "A", "B""
@@ -1204,6 +1226,13 @@ func (p *Parser) parseWait() (Step, error) {
 			p.advance()
 			p.consumeNewline()
 			return WaitStep{Kind: WaitIdle, Line: line}, nil
+		}
+		// wait until "text" appears in webview / wait until css:"..." appears in webview ["page"]
+		if t, err := p.tryWebViewTarget(true, line); err != nil {
+			return nil, err
+		} else if t != nil {
+			p.consumeNewline()
+			return WaitStep{Kind: WaitWebView, WebView: t, Line: line}, nil
 		}
 		// "wait until any of "A", "B", "C" appears" — also what a Maestro
 		// regex alternation ("A|B|C") migrates to.
@@ -2753,4 +2782,48 @@ func (p *Parser) parseSeeRequests(line int) (Step, error) {
 	step := HTTPStep{Kind: HTTPSeeRequests, Count: count, Ref: p.parseResponseRef(), Line: line}
 	p.consumeNewline()
 	return step, nil
+}
+
+// tryWebViewTarget reads the operand of a WebView step at the current position: a quoted text or css:"..." (and, when wantAppears, the word "appears"), then `in webview` and an optional quoted page name, which
+// must end the step. It consumes nothing and returns nil when the tokens are not that form, so every other line, including `tap "x" in "Container"` and a line that merely mentions webview, parses as it always has.
+// Once `in webview` has been recognised, anything else after it (a modifier, a stray word) is an error: the step would otherwise be cut short and the rest would parse as a different step.
+func (p *Parser) tryWebViewTarget(wantAppears bool, line int) (*WebViewTarget, error) {
+	saved := p.pos
+	p.skipFillers()
+	kind := WebViewText
+	if t := p.peek(); t.Type == TOKEN_IDENT && strings.EqualFold(t.Literal, "css") && p.peekAt(1).Type == TOKEN_COLON && p.peekAt(2).Type == TOKEN_STRING {
+		kind = WebViewCSS
+		p.advance() // css
+		p.advance() // :
+	}
+	if p.peek().Type != TOKEN_STRING {
+		p.pos = saved
+		return nil, nil
+	}
+	value := p.advance().Literal
+	if wantAppears {
+		if p.peek().Type != TOKEN_APPEARS {
+			p.pos = saved
+			return nil, nil
+		}
+		p.advance()
+	}
+	if p.peek().Type != TOKEN_IN {
+		p.pos = saved
+		return nil, nil
+	}
+	p.advance()
+	if w := p.peek(); w.Type != TOKEN_IDENT || !strings.EqualFold(w.Literal, "webview") {
+		p.pos = saved
+		return nil, nil
+	}
+	p.advance()
+	page := ""
+	if p.peek().Type == TOKEN_STRING {
+		page = p.advance().Literal
+	}
+	if t := p.peek().Type; t != TOKEN_NEWLINE && t != TOKEN_EOF {
+		return nil, fmt.Errorf("line %d: after \"in webview\" only a quoted page name may follow (no \"if visible\", \"optional\" or other words)", line)
+	}
+	return &WebViewTarget{Kind: kind, Value: value, Page: page}, nil
 }
