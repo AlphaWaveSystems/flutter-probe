@@ -26,12 +26,13 @@ const (
 	// maxScreenshotDim is the longest side of a picture sent to the client.
 	maxScreenshotDim = 2000
 	// maxScreenshotSourceBytes and maxScreenshotSourcePixels bound what is read and decoded at all.
-	maxScreenshotSourceBytes = 64 << 20
 )
 
 // Variables only so that a test can lower them. maxScreenshotSourcePixels bounds what is decoded at all; maxScreenshotDecodedBytes bounds the memory a decode may take, estimated from the header before anything
 // is decoded (width x height x bytes per pixel).
 var (
+	// maxScreenshotSourceBytes bounds what is read of a picture file.
+	maxScreenshotSourceBytes  = int64(64 << 20)
 	maxScreenshotSourcePixels = 25_000_000
 	maxScreenshotDecodedBytes = int64(256 << 20)
 )
@@ -88,7 +89,7 @@ func findMCPScreenshot(dir, name string, since time.Time) (*os.File, string, err
 		}
 		path := filepath.Join(dir, e.Name())
 		fi, err := os.Lstat(path)
-		if err != nil || !fi.Mode().IsRegular() || fi.ModTime().Before(since) {
+		if err != nil || !fi.Mode().IsRegular() || fi.ModTime().Before(since.Add(-captureSlack)) {
 			continue
 		}
 		real, err := filepath.EvalSymlinks(path)
@@ -106,7 +107,7 @@ func findMCPScreenshot(dir, name string, since time.Time) (*os.File, string, err
 	if best == nil {
 		return nil, "", fmt.Errorf("no picture named %q was found", name)
 	}
-	f, err := os.Open(best.path)
+	f, err := openPicture(best.path)
 	if err != nil {
 		return nil, "", err
 	}
@@ -116,6 +117,25 @@ func findMCPScreenshot(dir, name string, since time.Time) (*os.File, string, err
 		return nil, "", fmt.Errorf("the picture changed while it was being opened")
 	}
 	return f, best.path, nil
+}
+
+// openPicture opens a picture file; a variable only so that a test can see it is the non-blocking open that is used.
+var openPicture = openNoBlock
+
+// captureSlack is how much older than the start of the capture a picture's modification time may be and still count as the capture's: some file systems keep time to one or two seconds, and a fresh file must not be
+// reported as not found. A stale picture inside this window could be returned; the file name's stamp and the exact-name match keep that to a picture of the same name taken in the last two seconds.
+const captureSlack = 2 * time.Second
+
+// readAtMost reads all of r, and fails when r holds more than limit bytes (a file that grew after it was measured).
+func readAtMost(r io.Reader, limit int64) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > limit {
+		return nil, fmt.Errorf("the picture grew past %d MB while it was being read and was not sent", limit>>20)
+	}
+	return raw, nil
 }
 
 // boundedScreenshot reads a PNG for the client. A picture within maxScreenshotBytes and maxScreenshotDim is returned as the file has it. A bigger one is scaled down (area average, standard library only) until
@@ -128,7 +148,7 @@ func boundedScreenshot(f *os.File) (data []byte, note string, err error) {
 	if fi.Size() > maxScreenshotSourceBytes {
 		return nil, "", fmt.Errorf("the picture is larger than %d MB and was not sent", maxScreenshotSourceBytes>>20)
 	}
-	raw, err := io.ReadAll(io.LimitReader(f, maxScreenshotSourceBytes+1))
+	raw, err := readAtMost(f, maxScreenshotSourceBytes)
 	if err != nil {
 		return nil, "", err
 	}

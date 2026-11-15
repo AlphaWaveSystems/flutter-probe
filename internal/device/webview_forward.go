@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,11 +32,18 @@ type WebViewForward struct {
 	runner AdbRunner
 	serial string
 	port   int
-	closed bool
+
+	mu      sync.Mutex
+	removed bool // set only when the removal succeeded, so a failed removal can be tried again
 }
 
-// ForwardWebView creates `adb -s <serial> forward tcp:0 localabstract:<socket>`. adb prints the port it allocated (adb 1.0.41 does); when it prints nothing usable, probe picks a free loopback port
-// itself, checks it is free, and forwards that one. The port is recorded either way. socket must be a webview_devtools_remote_<pid> name.
+// maxForwardAttempts is how many probe-chosen ports are tried when adb says the port is already in use.
+const maxForwardAttempts = 5
+
+// ForwardWebView creates `adb -s <serial> forward tcp:0 localabstract:<socket>`. adb prints the port it allocated (adb 1.0.41 does). When it prints nothing usable, the forward it created exists all the same,
+// so the device's forward list is read before and after: if exactly one new rule points at this socket, that rule is ours and its port is used (nothing is created twice); if it cannot be told which one is ours,
+// probe forwards a free loopback port chosen and checked here with --no-rebind (a port taken in between is refused by adb, never silently rebound over another tool's rule), trying another port when adb says the first is in use (adb 1.0.41 says "cannot bind listener: Address already in use"), and leaves the rules it cannot identify alone. The port is recorded either way.
+// socket must be a webview_devtools_remote_<pid> name.
 func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket WebViewSocket) (*WebViewForward, error) {
 	if strings.TrimSpace(serial) == "" {
 		return nil, fmt.Errorf("webview forward: a device serial is required")
@@ -44,6 +52,7 @@ func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket
 		return nil, fmt.Errorf("webview forward: not a WebView DevTools socket name")
 	}
 	target := "localabstract:" + socket.Name
+	before := listForwardPorts(ctx, runner, serial, socket.Name)
 	out, err := runner.RunArgs(ctx, "-s", serial, "forward", "tcp:0", target)
 	if err != nil {
 		return nil, fmt.Errorf("adb forward for the WebView socket failed on %s: %w", serial, err)
@@ -52,31 +61,90 @@ func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket
 	if perr == nil && port > 0 && port < 65536 {
 		return &WebViewForward{runner: runner, serial: serial, port: port}, nil
 	}
+	// adb printed no usable port: find the rule it created
+	if before != nil {
+		after := listForwardPorts(ctx, runner, serial, socket.Name)
+		var created []int
+		for p := range after {
+			if !before[p] {
+				created = append(created, p)
+			}
+		}
+		if len(created) == 1 {
+			return &WebViewForward{runner: runner, serial: serial, port: created[0]}, nil
+		}
+	}
 	// the fallback: a port chosen here and checked free
-	free, err := freeLoopbackPort()
+	var last error
+	for attempt := 0; attempt < maxForwardAttempts; attempt++ {
+		free, err := freeLoopbackPort()
+		if err != nil {
+			return nil, fmt.Errorf("adb did not print the forwarded port and no free local port was found: %w", err)
+		}
+		if _, err := runner.RunArgs(ctx, "-s", serial, "forward", "--no-rebind", "tcp:"+strconv.Itoa(free), target); err != nil {
+			last = err
+			if strings.Contains(strings.ToLower(err.Error()), "address already in use") {
+				continue
+			}
+			return nil, fmt.Errorf("adb forward tcp:%d for the WebView socket failed on %s: %w", free, serial, err)
+		}
+		return &WebViewForward{runner: runner, serial: serial, port: free}, nil
+	}
+	return nil, fmt.Errorf("adb forward for the WebView socket failed on %s after %d ports were in use: %w", serial, maxForwardAttempts, last)
+}
+
+// ParseForwardList reads the output of `adb forward --list` ("<serial> tcp:<port> localabstract:<name>" per line) and returns the host ports of the rules of that serial that point at that socket. Other
+// lines, other serials, other targets and ports that are not plain decimal numbers are ignored.
+func ParseForwardList(out, serial, socketName string) []int {
+	var ports []int
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 || f[0] != serial || f[2] != "localabstract:"+socketName || !strings.HasPrefix(f[1], "tcp:") {
+			continue
+		}
+		digits := strings.TrimPrefix(f[1], "tcp:")
+		p, err := strconv.Atoi(digits)
+		if err != nil || p <= 0 || p >= 65536 || strconv.Itoa(p) != digits {
+			continue
+		}
+		ports = append(ports, p)
+	}
+	return ports
+}
+
+// listForwardPorts returns the set of host ports of the rules that point at the socket on this device, or nil when the list could not be read (an empty, readable list is an empty non-nil set).
+func listForwardPorts(ctx context.Context, runner AdbRunner, serial, socketName string) map[int]bool {
+	out, err := runner.RunArgs(ctx, "-s", serial, "forward", "--list")
 	if err != nil {
-		return nil, fmt.Errorf("adb did not print the forwarded port and no free local port was found: %w", err)
+		return nil
 	}
-	if _, err := runner.RunArgs(ctx, "-s", serial, "forward", "tcp:"+strconv.Itoa(free), target); err != nil {
-		return nil, fmt.Errorf("adb forward tcp:%d for the WebView socket failed on %s: %w", free, serial, err)
+	set := map[int]bool{}
+	for _, p := range ParseForwardList(string(out), serial, socketName) {
+		set[p] = true
 	}
-	return &WebViewForward{runner: runner, serial: serial, port: free}, nil
+	return set
 }
 
 // Port is the loopback port the forward listens on (127.0.0.1).
 func (f *WebViewForward) Port() int { return f.port }
 
-// Close removes the forward this value created. It is safe to call more than once. It uses its own short deadline, so it still runs after the caller's context was cancelled or timed out.
+// Close removes the forward this value created. It is safe to call from several goroutines and more than once: the removal runs until it has succeeded, so a removal that failed is tried again by the next
+// Close, and a removal that succeeded is not repeated. It uses its own short deadline, so it still runs after the caller's context was cancelled or timed out.
 func (f *WebViewForward) Close() error {
-	if f == nil || f.closed {
+	if f == nil {
 		return nil
 	}
-	f.closed = true
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.removed {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), removeTimeout)
 	defer cancel()
 	if _, err := f.runner.RunArgs(ctx, "-s", f.serial, "forward", "--remove", "tcp:"+strconv.Itoa(f.port)); err != nil {
 		return fmt.Errorf("adb forward --remove tcp:%d failed on %s: %w", f.port, f.serial, err)
 	}
+	f.removed = true
 	return nil
 }
 

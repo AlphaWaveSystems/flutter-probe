@@ -495,10 +495,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 
 /* Explain: the bar under the Results title, the advisory card and the preview that comes before it. */
-#explain-preview-overlay .overlay-card { width: min(720px, 92vw); }
+#explain-preview-overlay .overlay-card, #fix-preview-overlay .overlay-card { width: min(720px, 92vw); }
 .explain-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 4px 10px; border-bottom: 1px solid var(--border); }
 .explain-card { margin: 6px 10px; padding: 8px 10px; background: var(--bg-2, var(--bg-1)); border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; max-height: min(40vh, 130px); overflow: auto; flex-shrink: 0; }
-.explain-bar[hidden], .explain-card[hidden] { display: none; } /* display: flex and block would otherwise win over the hidden attribute */
+.explain-bar[hidden], .explain-card[hidden], #fix-card[hidden] { display: none; } /* display: flex and block would otherwise win over the hidden attribute */
 .explain-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .explain-card-title { font-weight: 600; }
 .explain-card-dest { color: var(--fg-muted); overflow-wrap: anywhere; }
