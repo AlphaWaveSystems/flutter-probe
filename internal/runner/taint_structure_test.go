@@ -120,37 +120,6 @@ func callsIn(n ast.Node) map[string]int {
 	return calls
 }
 
-// bodyOf finds the code of a handler: the whole function, or the case of runAction for a verb.
-func bodyOf(t *testing.T, files map[string]*ast.File, name, fn string) ast.Node {
-	t.Helper()
-	for _, f := range files {
-		for _, d := range f.Decls {
-			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Name.Name != fn {
-				continue
-			}
-			if fn != "runAction" {
-				return fd
-			}
-			var found ast.Node
-			ast.Inspect(fd, func(x ast.Node) bool {
-				cc, ok := x.(*ast.CaseClause)
-				if !ok || found != nil {
-					return true
-				}
-				for _, ex := range cc.List {
-					if sel, ok := ex.(*ast.SelectorExpr); ok && sel.Sel.Name == name {
-						found = cc
-					}
-				}
-				return true
-			})
-			return found
-		}
-	}
-	return nil
-}
-
 var plainResolvers = []string{"resolve", "resolveVars", "resolveSelector", "expandEnv", "expandVars", "expandT"}
 
 // allowedInSink lists the plain resolvers a sink handler may also call, with the reason: `compare screenshot ... of <selector>` resolves the selector it
@@ -202,7 +171,7 @@ var stopAtFuncs = map[string]bool{"resolveT": true, "expandT": true, "setVar": t
 
 // sinkProblems lists what is wrong with the handler of a sink: no guard, or a plain resolver reached directly or through a helper.
 func sinkProblems(files map[string]*ast.File, name, fn string, allowed string) []string {
-	body := bodyOf2(files, name, fn)
+	body := bodyOf(files, name, fn)
 	if body == nil {
 		return []string{name + ": the handler " + fn + " was not found"}
 	}
@@ -221,7 +190,7 @@ func sinkProblems(files map[string]*ast.File, name, fn string, allowed string) [
 }
 
 func literalProblems(files map[string]*ast.File, name, fn string) []string {
-	body := bodyOf2(files, name, fn)
+	body := bodyOf(files, name, fn)
 	if body == nil {
 		return []string{name + ": the handler " + fn + " was not found"}
 	}
@@ -236,8 +205,8 @@ func literalProblems(files map[string]*ast.File, name, fn string) []string {
 	return out
 }
 
-// bodyOf2 is bodyOf for a files map.
-func bodyOf2(files map[string]*ast.File, name, fn string) ast.Node {
+// bodyOf finds the code of a handler: the whole function, or the case of runAction for a verb.
+func bodyOf(files map[string]*ast.File, name, fn string) ast.Node {
 	for _, f := range files {
 		for _, d := range f.Decls {
 			fd, ok := d.(*ast.FuncDecl)
@@ -288,7 +257,7 @@ func TestSinkHandlersTakeTheirStringsThroughTheGuard(t *testing.T) {
 		}
 	}
 	// shotName is the shared helper of the two screenshot sinks: it must use the guard itself
-	if sn := bodyOf2(files, "", "shotName"); sn == nil || callsIn(sn)["forSink"] == 0 {
+	if sn := bodyOf(files, "", "shotName"); sn == nil || callsIn(sn)["forSink"] == 0 {
 		t.Errorf("shotName does not use forSink")
 	}
 }
