@@ -341,6 +341,9 @@ func TestHeaderListsAreNeverNil(t *testing.T) {
 	empty := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e"}})
 	if l, _ := empty.HTTPExchanges(NetFilter{}); l.Rows == nil {
 		t.Error("rows of an empty log are nil")
+	}
+}
+
 // Ordinary text with many colons and equals signs stays visible, and a pathological chain is hidden whole, cheaply. The threshold is
 // pinned on both sides.
 func TestOrdinaryChainsStayVisibleAndPathologicalOnesAreHidden(t *testing.T) {
