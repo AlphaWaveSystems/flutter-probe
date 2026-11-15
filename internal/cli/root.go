@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -38,6 +39,22 @@ Examples:
 }
 
 // Execute is the entry point called by main().
+// UsageError is a command line the command refuses before it does anything (a bad --property, say). The process exits 2 for
+// it, not 1, so a script can tell "not run" from "ran and failed".
+type UsageError struct{ Err error }
+
+func (e UsageError) Error() string { return e.Err.Error() }
+func (e UsageError) Unwrap() error { return e.Err }
+
+// ExitCode is the process exit code for an error returned by Execute: 2 for a UsageError, 1 for everything else.
+func ExitCode(err error) int {
+	var u UsageError
+	if errors.As(err, &u) {
+		return 2
+	}
+	return 1
+}
+
 func Execute() error {
 	return rootCmd.Execute()
 }

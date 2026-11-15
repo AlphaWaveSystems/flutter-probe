@@ -45,6 +45,7 @@ type Reporter struct {
 	verbose   bool
 	outputDir string // directory of the output file, used to relativize artifact paths
 	metadata  *RunMetadata
+	properties map[string]string // --property key=value, written by the JSON and JUnit reports
 	streaming bool // when true, StreamResult emits one JSON line per result as tests complete
 	junit     JUnitOptions
 }
@@ -66,6 +67,9 @@ func NewFileReporter(format Format, path string, verbose bool) (*Reporter, error
 	absDir, _ := filepath.Abs(filepath.Dir(path))
 	return &Reporter{format: format, out: f, verbose: verbose, outputDir: absDir}, nil
 }
+
+// SetProperties attaches the run properties (see ParseProperties). The reports mask and clean them when they write.
+func (r *Reporter) SetProperties(p map[string]string) { r.properties = p }
 
 // SetMetadata attaches run metadata that will be included in JSON reports.
 func (r *Reporter) SetMetadata(m RunMetadata) {
@@ -205,6 +209,7 @@ type jsonResult struct {
 	Duration   float64  `json:"duration_ms"`
 	Error      string   `json:"error,omitempty"`
 	Row        int      `json:"row,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 	Artifacts  []string `json:"artifacts,omitempty"`
 	DeviceID   string   `json:"device_id,omitempty"`
 	DeviceName string   `json:"device_name,omitempty"`
@@ -216,6 +221,7 @@ type jsonResult struct {
 type jsonReport struct {
 	GeneratedAt string       `json:"generated_at"`
 	Metadata    *RunMetadata `json:"metadata,omitempty"`
+	Properties  map[string]string `json:"properties,omitempty"` // --property entries
 	TotalTests  int          `json:"total_tests"`
 	Passed      int          `json:"passed"`
 	Failed      int          `json:"failed"`
@@ -246,6 +252,12 @@ func (r *Reporter) buildJSONReport(results []TestResult) jsonReport {
 		Metadata:    r.metadata,
 		TotalTests:  len(results),
 	}
+	if props := ReportProperties(r.properties); len(props) > 0 {
+		report.Properties = make(map[string]string, len(props))
+		for _, kv := range props {
+			report.Properties[kv.Name] = kv.Value
+		}
+	}
 	for _, res := range results {
 		jr := jsonResult{
 			Name:       res.TestName,
@@ -254,6 +266,7 @@ func (r *Reporter) buildJSONReport(results []TestResult) jsonReport {
 			Skipped:    res.Skipped,
 			Duration:   float64(res.Duration.Milliseconds()),
 			Row:        res.Row,
+			Tags:       ReportTags(res.Tags),
 			DeviceID:   res.DeviceID,
 			DeviceName: res.DeviceName,
 			Perf:       res.Perf,
