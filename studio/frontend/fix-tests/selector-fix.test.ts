@@ -61,13 +61,15 @@ describe("FixSession", () => {
     for (const where of ["preview", "confirm", "send"] as const) {
       const s = new FixSession();
       const sent: string[] = [];
+      const asked: string[] = [];
       const out = await s.run({
         preview: async () => (where === "preview" && s.invalidate(), preview()),
-        confirm: async () => (where === "confirm" && s.invalidate(), true),
+        confirm: async () => (asked.push("confirm"), where === "confirm" && s.invalidate(), true),
         send: async (id) => (sent.push(id), where === "send" && s.invalidate(), answer),
       });
       assert.deepEqual(out, { kind: "stale" }, where);
       assert.equal(sent.length, where === "send" ? 1 : 0, `${where}: nothing is sent once it is stale`);
+      assert.equal(asked.length, where === "preview" ? 0 : 1, `${where}: a dialog is not shown for a suggestion that was dropped`);
     }
   });
   it("passes an error on, unless the suggestion was dropped, and is free again", async () => {
