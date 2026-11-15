@@ -296,6 +296,9 @@ func (a *App) PreviewAIChat(messages []ChatMessage, fileContent string) (string,
 	b.WriteString("System prompt and context:\n")
 	b.WriteString(system)
 	b.WriteString("\n\nConversation:\n")
+	if omitted := len(messages) - len(msgs); omitted > 0 {
+		fmt.Fprintf(&b, "(the %d oldest messages are not sent: a turn carries the newest %d)\n", omitted, maxChatMessages)
+	}
 	for _, m := range msgs {
 		fmt.Fprintf(&b, "[%s] %s\n", m.Role, m.Content)
 	}

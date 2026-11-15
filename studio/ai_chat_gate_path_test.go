@@ -74,8 +74,8 @@ func TestChatFieldLeavesOrdinaryTextAndIsStable(t *testing.T) {
 		t.Errorf("not stable: %q then %q", once, twice)
 	}
 	// The field is bounded before the gate reads it: the cut leaves the room that a token cut in two is dropped from.
-	if out := chatField(strings.Repeat("a ", chatFieldLimit), ""); len([]rune(out)) > chatFieldLimit-explainTailCut {
-		t.Errorf("a field of %d characters was not bounded before the gate", len([]rune(out)))
+	if out := chatField(strings.Repeat("a ", chatFieldLimit), ""); len([]rune(out)) > chatFieldLimit-explainTailCut+60 || !strings.Contains(out, "[truncated: ") {
+		t.Errorf("a field of %d characters was not bounded before the gate and marked", len([]rune(out)))
 	}
 	// A scrub can make a field longer ("a@b.co" is six characters, "[email]" is seven), so the cap holds after the gate too.
 	if out := chatField(strings.Repeat("a@b.co ", chatFieldLimit/7), ""); len([]rune(out)) > chatFieldLimit {

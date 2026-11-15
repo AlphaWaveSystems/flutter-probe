@@ -9,9 +9,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -264,26 +267,77 @@ func errorBody(b []byte) string {
 // chatFieldLimit bounds one field of a chat turn (the system prompt, or one message) before the gate reads it, and caps it after.
 const chatFieldLimit = 150000
 
+// maxChatMessages is how many messages of the conversation a turn sends, the newest ones; older ones are not sent, and the preview says so.
+const maxChatMessages = 40
+
+// hiddenEscape matches a JSON-style \uXXXX escape, which an error body can use to write a hidden character as plain ASCII.
+var hiddenEscape = regexp.MustCompile(`\\u([0-9a-fA-F]{4})`)
+
+// decodeHiddenEscapes turns the \uXXXX escapes that spell a hidden character into the character, so the drop that follows sees it.
+func decodeHiddenEscapes(s string) string {
+	return hiddenEscape.ReplaceAllStringFunc(s, func(m string) string {
+		n, err := strconv.ParseUint(m[2:], 16, 32)
+		if err == nil && hiddenRune(rune(n)) {
+			return string(rune(n))
+		}
+		return m
+	})
+}
+
+// foldDigits turns full-width digits into ASCII ones, so a card written with them is read as a card.
+func foldDigits(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 0xff10 && r <= 0xff19 {
+			return '0' + (r - 0xff10)
+		}
+		return r
+	}, s)
+}
+
 // chatField makes one field of a chat turn fit to send, in the order Explain uses for every field: hidden characters (and no-break
 // spaces) are dropped first, so nothing later is read around a character that splits a token, the key, an address or a home folder;
 // the field is bounded; the exact key is removed; personal text (emails, home folders) is scrubbed; the gate runs once; the field is cut
 // to its cap. Line breaks are kept, a tab is a space.
 func chatField(s, key string) string {
-	s = boundRunes(withoutInvisible(s, true), chatFieldLimit)
+	s = foldDigits(withoutInvisible(s, true))
+	total := utf8.RuneCountInString(s)
+	s = boundRunes(s, chatFieldLimit)
+	cut := total - utf8.RuneCountInString(s)
 	if key = withoutInvisible(key, false); key != "" {
 		s = strings.ReplaceAll(s, key, redactedMark)
 	}
-	return capRunes(outbound(scrubPersonal(s)), chatFieldLimit)
+	// Two passes: a replacement can put two pieces side by side that form a new match (`[email]4111 1111...`, `/home//Users/x`).
+	for i := 0; i < 2; i++ {
+		s = outbound(scrubPersonalText(s))
+	}
+	s = capRunes(s, chatFieldLimit)
+	if cut > 0 {
+		s += fmt.Sprintf("\n[truncated: %d more characters not sent]", cut)
+	}
+	return s
 }
 
 // gateTurn is what a chat turn sends, and what its preview shows: every field takes the chatField path. The preview and the request
 // both call it, so they cannot differ in how a field is cleaned.
 func gateTurn(s aiProviderSettings, system string, msgs []claudeMessage) (string, []claudeMessage) {
+	msgs = newestMessages(msgs)
 	gated := make([]claudeMessage, len(msgs))
 	for i, m := range msgs {
 		gated[i] = claudeMessage{Role: m.Role, Content: chatField(m.Content, s.APIKey)}
 	}
 	return chatField(system, s.APIKey), gated
+}
+
+// newestMessages is the conversation a turn sends: the newest maxChatMessages, starting at a message of the user's.
+func newestMessages(msgs []claudeMessage) []claudeMessage {
+	if len(msgs) <= maxChatMessages {
+		return msgs
+	}
+	msgs = msgs[len(msgs)-maxChatMessages:]
+	for len(msgs) > 1 && msgs[0].Role != "user" {
+		msgs = msgs[1:]
+	}
+	return msgs
 }
 
 // completeChat sends one turn to the provider the settings name. The system prompt and every message take the chatField path
@@ -293,12 +347,17 @@ func completeChat(s aiProviderSettings, system string, msgs []claudeMessage) (Ch
 	system, gated := gateTurn(s, system, msgs)
 	resp, err := sendTurn(s, system, gated)
 	if err != nil {
-		return ChatResponse{}, errors.New(chatField(err.Error(), s.APIKey))
+		return ChatResponse{}, errors.New(chatField(decodeHiddenEscapes(err.Error()), s.APIKey))
 	}
 	// The reply is cleaned the way an Explain's is: hidden characters dropped, the exact key removed, the families redacted, personal text
 	// scrubbed, so a provider that echoes what it was sent shows none of it back.
-	resp.Content = scrubPersonal(fromProvider(withoutInvisible(resp.Content, true), withoutInvisible(s.APIKey, false)))
+	raw := withoutInvisible(resp.Content, true)
+	resp.Content = scrubPersonalText(fromProvider(raw, withoutInvisible(s.APIKey, false)))
 	resp.Notice = s.Notice
+	if resp.Content != raw {
+		// Text was removed or replaced: an address or a path in a suggestion may not be what the model meant.
+		resp.Notice = strings.TrimSpace(resp.Notice + "\nPersonal text or a credential was removed from this reply, so a line in it may not say what the model meant.")
+	}
 	return resp, nil
 }
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -122,22 +124,101 @@ func scrubPersonal(s string) string {
 	return homePathPattern.ReplaceAllString(s, "~")
 }
 
+// scrubPersonalText is scrubPersonal for text a person writes or reads as code (a chat turn and its reply, which hold test files with
+// routes and URLs in them): an email address is replaced, and a home folder only where it is one (see scrubHomes).
+func scrubPersonalText(s string) string {
+	return scrubHomes(emailPattern.ReplaceAllString(s, "[email]"))
+}
+
+// homeHead finds the start of a home folder: /Users/x and /home/x (any case), C:\Users\x and C:/Users/x, /root and /var/root.
+var homeHead = regexp.MustCompile(`(?i)(/(?:users|home)/[^/\s"'<>]+|[a-z]:[\\/]users[\\/][^\\/\s"'<>]+|/(?:var/)?root\b)`)
+
+// urlBefore says whether what comes before a path ends in a URL's scheme and host (`https://app.test`), so the path is part of a
+// URL and is not a folder. `file://` and `file://localhost` are folders.
+var urlBefore = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*)://([^/\s"'<>]*)$`)
+
+// scrubHomes replaces the user-name part of a home folder with ~, and nothing else: a route or a URL that looks like one (`/home/settings`,
+// `https://app.test/home/list`) is kept. /Users/x and C:\Users\x are always folders. /home/x is one when x is this account's name or the
+// path goes on (`/home/x/app`), and /root when the path goes on or it is /var/root, and none of them when they follow a quote, which is
+// how a route is written in a test. Anything after a URL's host is never touched.
+func scrubHomes(s string) string {
+	locs := homeHead.FindAllStringIndex(s, -1)
+	if len(locs) == 0 {
+		return s
+	}
+	me := currentUserName()
+	var b strings.Builder
+	at := 0
+	for _, loc := range locs {
+		start, end := loc[0], loc[1]
+		if start < at {
+			continue
+		}
+		head := s[start:end]
+		if m := urlBefore.FindStringSubmatch(s[:start]); m != nil && !(strings.EqualFold(m[1], "file") && (m[2] == "" || strings.EqualFold(m[2], "localhost"))) {
+			continue // a path inside a URL
+		}
+		lower := strings.ToLower(head)
+		goesOn := end+1 < len(s) && s[end] == '/' && !strings.ContainsRune(" \t\n\"'<>", rune(s[end+1]))
+		quoted := start > 0 && strings.ContainsRune("'\"`", rune(s[start-1]))
+		switch {
+		case strings.HasPrefix(lower, "/home/"):
+			name := head[len("/home/"):]
+			if quoted || !(goesOn || (me != "" && strings.EqualFold(name, me))) {
+				continue
+			}
+		case strings.HasSuffix(lower, "root"):
+			if !strings.HasPrefix(lower, "/var/") && (quoted || !goesOn) {
+				continue
+			}
+		}
+		b.WriteString(s[at:start])
+		b.WriteString("~")
+		at = end
+	}
+	b.WriteString(s[at:])
+	return b.String()
+}
+
+// currentUserName is this account's login name, or "".
+func currentUserName() string {
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return os.Getenv("USER")
+}
+
 // withoutInvisible drops hidden characters (hiddenRune, the one list shared with the chat label), so a token split by one is
 // whole again before the gate reads it. A line break is kept when keepLines is set and is a space otherwise, and a tab is a space.
+//
+// A zero-width non-joiner or joiner (U+200C, U+200D) is kept when it sits between two characters that are not ASCII and are letters,
+// marks or symbols: it is part of Persian and Indic words and of emoji sequences. A token, a key or an address is ASCII, so a joiner
+// inside one (or between runs of joiners) is dropped as every other hidden character is.
 func withoutInvisible(s string, keepLines bool) string {
-	return strings.Map(func(r rune) rune {
+	rs := []rune(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for i, r := range rs {
 		switch {
 		case r == '\n' && keepLines:
-			return r
+			b.WriteRune(r)
 		case r == '\n' || r == '\t' || r == '\r':
-			return ' '
+			b.WriteByte(' ')
+		case (r == 0x200c || r == 0x200d) && i > 0 && i+1 < len(rs) && joinerNeighbour(rs[i-1]) && joinerNeighbour(rs[i+1]):
+			b.WriteRune(r)
 		case hiddenRune(r):
-			return -1
 		case r != ' ' && unicode.Is(unicode.Zs, r): // a no-break or wide space is a plain space
-			return ' '
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
 		}
-		return r
-	}, s)
+	}
+	return b.String()
+}
+
+// joinerNeighbour says whether r may sit next to a kept joiner: a non-ASCII letter, mark or symbol.
+func joinerNeighbour(r rune) bool {
+	return r > 0x7f && (unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsSymbol(r))
 }
 
 // capRunes cuts s to max characters, marking the cut with an ellipsis that counts within max.
