@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -111,15 +112,28 @@ func (r *recorder) Complete(_ context.Context, system, user string) (string, err
 }
 
 var (
-	emailPattern    = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}`)
-	homePathPattern = regexp.MustCompile(`(?:/Users/|/home/)[^/\s"'<>]+|[A-Za-z]:\\Users\\[^\\\s"'<>]+`)
+	emailPattern = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}`)
+	// A home folder: /Users/x, /home/x (any case), C:\Users\x and C:/Users/x (any case), /root and /var/root, (also behind file:// or file://localhost, which stay), and the same with its slashes percent-encoded (%2FUsers%2Fx). A name with a space in it ends at the space.
+	homePathPattern = regexp.MustCompile(`(?i:(?:/(?:users|home)/[^/\s"'<>]+|/(?:var/)?root\b|[a-z]:[\\/]users[\\/][^\\/\s"'<>]+|%2f(?:users|home)%2f(?:[^%\s"'<>/]|%(?:[013-9a-f][0-9a-f]|2[0-9a-e]))+))`)
 )
 
 // scrubPersonal replaces an email address and the home-directory part of a path, because a failure text can hold the name of the
 // person who ran the test. The gate does not do this: for chat, an email or a path is ordinary text the person typed.
 func scrubPersonal(s string) string {
 	s = emailPattern.ReplaceAllString(s, "[email]")
-	return homePathPattern.ReplaceAllString(s, "~")
+	s = homePathPattern.ReplaceAllString(s, "~")
+	// The real home folder of this machine, wherever it is (/srv/people/alice, /Volumes/data/alice).
+	if h, err := os.UserHomeDir(); err == nil && len(h) > 4 && strings.Count(h, "/")+strings.Count(h, "\\") >= 2 {
+		s = strings.ReplaceAll(s, h, "~")
+	}
+	return s
+}
+
+// cleanProviderText is how text that came back from a provider is cleaned before Studio shows or returns it: hidden characters are
+// dropped, the text is bounded, the exact key is removed, the families are redacted and personal text is scrubbed, in that order. A cut
+// comes after, never before, so a cut cannot leave the start of an address or a token that was not scrubbed.
+func cleanProviderText(s, key string, keepLines bool) string {
+	return scrubPersonal(fromProvider(boundBeforeGate(withoutInvisible(s, keepLines)), withoutInvisible(key, false)))
 }
 
 // withoutInvisible drops hidden characters (hiddenRune, the one list shared with the chat label), so a token split by one is
@@ -386,7 +400,7 @@ func (a *App) explainRun(in explainInput) (ExplainResult, error) {
 
 // errorFrom is an error whose text is cleaned like any text from a provider: the key is removed and the gate runs.
 func errorFrom(err error, key string) error {
-	return fmt.Errorf("%s", errorBody([]byte(fromProvider(err.Error(), key))))
+	return fmt.Errorf("%s", errorBody([]byte(cleanProviderText(err.Error(), key, false))))
 }
 
 // stoppedText turns why ai.Triage stopped into a fixed text. ai.Triage's own message carries the provider's error, which can
@@ -411,7 +425,7 @@ func stoppedText(stopped string, providerFailed bool, total int) string {
 // a tag in it stays text. An answer can repeat what it was sent, or invent it, so personal text is scrubbed from it as it is from the
 // fields that were sent: an email address becomes [email] and the home-directory part of a path becomes ~.
 func cleanAdvice(s, key string) string {
-	s = scrubPersonal(fromProvider(withoutInvisible(s, true), withoutInvisible(key, false)))
+	s = cleanProviderText(s, key, true)
 	for strings.Contains(s, "\n\n\n") {
 		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
 	}

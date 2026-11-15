@@ -359,4 +359,33 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await f.close();
     }
   });
+
+  test("sf-12 a suggestion that cleaning changed carries a Changed row, and an unchanged one does not", async ({ page }) => {
+    const changed = await fakeProvider('```probe\ntype "jane.doe@example.com" into "Email"\n```\nThe field was empty.');
+    try {
+      useProvider(changed);
+      await openStudio(page);
+      await page.click("#btn-fix");
+      await expect(overlay(page)).toBeVisible();
+      await page.click("#btn-fix-preview-send");
+      await expect(card(page)).toBeVisible();
+      await expect(card(page).locator(".explain-row-changed")).toHaveCount(1);
+      await expect(card(page)).toContainText("[email]");
+      await expect(card(page)).not.toContainText("jane.doe");
+    } finally {
+      await changed.close();
+    }
+    const plain = await fakeProvider('```probe\ntap "Sign in now"\n```\nThe label changed.');
+    try {
+      useProvider(plain);
+      await page.reload();
+      await page.click("#btn-fix");
+      await expect(overlay(page)).toBeVisible();
+      await page.click("#btn-fix-preview-send");
+      await expect(card(page)).toBeVisible();
+      await expect(card(page).locator(".explain-row-changed")).toHaveCount(0);
+    } finally {
+      await plain.close();
+    }
+  });
 });

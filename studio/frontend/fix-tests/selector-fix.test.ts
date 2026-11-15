@@ -130,3 +130,14 @@ describe("fail closed and invalidate", () => {
   assert.equal((await first)?.kind, "stale");
 });
 });
+
+describe("a suggestion that Studio changed", () => {
+  it("shows a Changed row above the line, and none when nothing was removed", () => {
+    const changed = fixCardModel({ ...answer, suggestion: 'type "[email]" into "Email"', changed: true }, "step");
+    assert.deepEqual(changed.rows.map((r) => r.kind), ["step", "changed", "line", "why"]);
+    assert.match(changed.rows[1].text, /removed from this suggestion/);
+    for (const a of [answer, { ...answer, changed: false }]) {
+      assert.deepEqual(fixCardModel(a, "step").rows.map((r) => r.kind), ["step", "line", "why"]);
+    }
+  });
+});

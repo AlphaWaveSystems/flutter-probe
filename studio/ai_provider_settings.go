@@ -275,7 +275,7 @@ func (a *App) TestAIConnection() (AIConnectionReport, error) {
 	// A server can echo the request in an error body, so what the doctor reports passes the same gate as everything else that
 	// comes back from a provider.
 	for _, c := range r.Checks {
-		out.Checks = append(out.Checks, AIConnectionCheck{Name: c.Name, OK: c.OK, Detail: fromProvider(c.Detail, s.APIKey)})
+		out.Checks = append(out.Checks, AIConnectionCheck{Name: c.Name, OK: c.OK, Detail: cleanProviderText(c.Detail, s.APIKey, false)})
 	}
 	return out, nil
 }
