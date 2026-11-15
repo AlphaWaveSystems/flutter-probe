@@ -25,7 +25,20 @@ type JUnitOptions struct {
 	Label string
 	// Base is the directory paths are made relative to (default: the working directory).
 	Base string
+	// Artifacts writes the artifacts of each test (screenshots, the diff image of a failed `compare screenshot`, videos) as lines of the testcase's
+	// <system-out>: "artifact: <path>", one per artifact, at most maxJUnitArtifacts per testcase, a path at most maxJUnitArtifactPath characters. A path inside
+	// ArtifactBase is written relative to it; a path outside it is written as its file name only, so no absolute path of the machine that ran the tests
+	// reaches a report that CI uploads. A testcase with no artifact gets no <system-out>. Off by default: an existing report stays byte-identical.
+	Artifacts bool
+	// ArtifactBase is the directory the artifact paths are made relative to: the directory of the report file when it is written to one, else Base.
+	ArtifactBase string
 }
+
+// Limits of the artifact lines of one testcase.
+const (
+	maxJUnitArtifacts    = 50
+	maxJUnitArtifactPath = 300
+)
 
 // SetJUnitOptions configures the JUnit writer.
 func (r *Reporter) SetJUnitOptions(o JUnitOptions) { r.junit = o }
@@ -65,6 +78,7 @@ type junitCase struct {
 	Failure    *junitFail  `xml:"failure,omitempty"`
 	Error      *junitFail  `xml:"error,omitempty"`
 	Skipped    *junitSkip  `xml:"skipped,omitempty"`
+	SystemOut  string      `xml:"system-out,omitempty"`
 }
 
 type junitProps struct {
@@ -230,13 +244,71 @@ func (r *Reporter) junitCases(res TestResult, path string) []timedCase {
 			}
 			out = append(out, mk(passed, skipped, a.Error, a.Duration, junitProp{"attempt", fmt.Sprintf("%d/%d", i+1, len(res.AttemptLog))}))
 		}
+		// the artifacts of all attempts belong to the case that carries the final outcome
+		out[len(out)-1].c.SystemOut = o.artifactLines(res.Artifacts)
 		return out
 	}
 	var extra []junitProp
 	if res.Attempts > 1 {
 		extra = append(extra, junitProp{"attempts", fmt.Sprint(res.Attempts)})
 	}
-	return []timedCase{mk(res.Passed, res.Skipped, res.Error, res.Duration, extra...)}
+	one := mk(res.Passed, res.Skipped, res.Error, res.Duration, extra...)
+	one.c.SystemOut = o.artifactLines(res.Artifacts)
+	return []timedCase{one}
+}
+
+// artifactLines is the <system-out> text for the artifacts of one test, or "" when none is to be written (the option is off, or there are none).
+func (o JUnitOptions) artifactLines(artifacts []string) string {
+	if !o.Artifacts || len(artifacts) == 0 {
+		return ""
+	}
+	base := o.ArtifactBase
+	if base == "" {
+		base = o.Base
+	}
+	var lines []string
+	seen := map[string]bool{}
+	listed, extra := 0, 0
+	for _, a := range artifacts {
+		p := artifactPath(base, a)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		if listed == maxJUnitArtifacts {
+			extra++
+			continue
+		}
+		listed++
+		lines = append(lines, "artifact: "+p)
+	}
+	if extra > 0 {
+		lines = append(lines, fmt.Sprintf("artifacts: %d more not listed", extra))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n" + strings.Join(lines, "\n") + "\n"
+}
+
+// artifactPath is the path of an artifact as a report shows it: relative to base when it is inside it, otherwise the file name alone (never an absolute
+// path, and never a path that climbs out with ".."), masked for the secrets the run knows, made safe to write, and cut at maxJUnitArtifactPath characters.
+func artifactPath(base, p string) string {
+	if strings.TrimSpace(p) == "" {
+		return ""
+	}
+	q := junitPath(base, p)
+	windowsAbs := len(q) > 2 && q[1] == ':' && (q[2] == '\\' || q[2] == '/') || strings.HasPrefix(q, `\\`)
+	if q == ".." || strings.HasPrefix(q, "../") || strings.HasPrefix(q, "/") || windowsAbs {
+		if i := strings.LastIndexAny(q, `/\`); i >= 0 {
+			q = q[i+1:] // the file name alone, whichever separator the machine that wrote the path used
+		}
+	}
+	q = reportText(q)
+	if r := []rune(q); len(r) > maxJUnitArtifactPath {
+		q = string(r[:maxJUnitArtifactPath])
+	}
+	return strings.TrimSpace(q)
 }
 
 func (r *Reporter) junitSuiteProps() *junitProps {

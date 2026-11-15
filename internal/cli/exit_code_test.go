@@ -87,3 +87,25 @@ func TestOnlyAPropertyUsageErrorExitsTwo(t *testing.T) {
 		}
 	}
 }
+
+// --junit-artifacts makes the artifact paths relative to the directory of the report file when it is written with -o.
+func TestJunitOptionsFromFlagsArtifacts(t *testing.T) {
+	cmd := testCmd
+	defer cmd.Flags().Set("junit-artifacts", "false")
+	defer cmd.Flags().Set("output", "")
+	cmd.Flags().Set("junit-artifacts", "false")
+	cmd.Flags().Set("output", "")
+	if o := junitOptionsFromFlags(cmd); o.Artifacts || o.ArtifactBase != "" {
+		t.Fatalf("defaults: %+v", o)
+	}
+	cmd.Flags().Set("junit-artifacts", "true")
+	cmd.Flags().Set("output", "reports/out/junit.xml")
+	o := junitOptionsFromFlags(cmd)
+	if !o.Artifacts || !strings.HasSuffix(filepath.ToSlash(o.ArtifactBase), "/reports/out") || !filepath.IsAbs(o.ArtifactBase) {
+		t.Fatalf("with -o: %+v", o)
+	}
+	cmd.Flags().Set("output", "")
+	if o := junitOptionsFromFlags(cmd); !o.Artifacts || o.ArtifactBase != "" {
+		t.Fatalf("to stdout: %+v", o)
+	}
+}

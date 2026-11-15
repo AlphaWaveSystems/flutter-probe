@@ -354,7 +354,7 @@ Key flags for the flags parameter:
                                notifications: a watcher taps Allow when the alert appears)
   --locale de                 run the app in this language (BCP-47; Android 13+, iOS simulator)
   --locales de,ja,ar          run the whole suite once per language (reports get the tag in the name)
-  --format junit              JUnit XML (add --junit-attempts to list every attempt of a re-run test, --junit-suffix/--junit-label to tell devices apart; --property key=value, repeatable, adds a suite property)
+  --format junit              JUnit XML (add --junit-attempts to list every attempt of a re-run test, --junit-suffix/--junit-label to tell devices apart; --junit-artifacts to list each test's artifacts as relative "artifact:" lines; --property key=value, repeatable, adds a suite property)
   --measure-all               measure every test (a window per test) with no script edits
   --record                    record each step locally (screenshots, widget trees and app-client HTTP exchanges); recordings are never uploaded
   --record-dir DIR            recording base directory (default: reports_folder/recordings)
