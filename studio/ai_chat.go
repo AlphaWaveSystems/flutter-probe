@@ -268,45 +268,10 @@ type SelectorFix struct {
 	InputTokens  int     `json:"inputTokens"`
 	OutputTokens int     `json:"outputTokens"`
 	CostUSD      float64 `json:"costUSD"`
+	Destination  string  `json:"destination"` // the provider and model that answered, never an endpoint
+	Hosted       bool    `json:"hosted"`
 }
 
 const selectorFixPrompt = `You repair ProbeScript selectors. A step of a test failed because its selector does not match what is on the screen.
 
 Reply with one fenced probe block that holds exactly one ProbeScript line replacing the failed step, then one sentence of rationale. Prefer a text selector that matches a label shown in the widget tree; use #key only when the tree shows that key. Change nothing else.`
-
-// SuggestSelectorFix asks the model for a ProbeScript line that would find the element the last failed step meant. It
-// sends the failed step and its error, the last run, the open file and the connected device's widget tree. The key comes
-// from the keychain and is never returned.
-func (a *App) SuggestSelectorFix(fileContent string) (SelectorFix, error) {
-	s, err := a.aiProvider()
-	if err != nil {
-		return SelectorFix{}, err
-	}
-	sw := contextSwitches(a)
-	if !sw.RunResults {
-		return SelectorFix{}, fmt.Errorf("suggesting a selector fix needs the last run: turn on 'Include run results and the screen in AI chat context' in the workspace settings")
-	}
-	st := a.track.snapshot()
-	step, ok := lastFailedStep(st)
-	if !ok {
-		return SelectorFix{}, fmt.Errorf("the last run has no failed step: run the test first")
-	}
-	prompt := fmt.Sprintf("The step below failed.\n\nTest %q, line %d: %s\nError: %s", step.Test, step.Line, step.Description, redactCredentials(step.Error))
-	lastRun, tree := a.contextPieces(sw, st)
-	system := selectorFixPrompt + chatContext(fileContent, lastRun, tree)
-	resp, err := completeChat(s, system, []claudeMessage{{Role: "user", Content: prompt}})
-	if err != nil {
-		return SelectorFix{}, err
-	}
-	line, rationale, ok := parseSelectorFix(resp.Content)
-	if !ok {
-		return SelectorFix{}, fmt.Errorf("the reply did not hold exactly one ProbeScript line, so there is no suggestion")
-	}
-	return SelectorFix{
-		Suggestion:   line,
-		Rationale:    rationale,
-		InputTokens:  resp.InputTokens,
-		OutputTokens: resp.OutputTokens,
-		CostUSD:      resp.CostUSD,
-	}, nil
-}

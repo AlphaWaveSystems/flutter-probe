@@ -70,6 +70,8 @@ export function PreviewAIChat(arg1:Array<main.ChatMessage>,arg2:string):Promise<
 
 export function PreviewExplain():Promise<main.ExplainPreview>;
 
+export function PreviewSelectorFix(arg1:string):Promise<main.SelectorFixPreview>;
+
 export function ReadFile(arg1:string):Promise<string>;
 
 export function RunFile(arg1:string):Promise<Array<main.RunResult>>;
@@ -86,6 +88,8 @@ export function SaveWiFiToken(arg1:string,arg2:string):Promise<void>;
 
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
+export function SelectorFixPreviewed(arg1:string):Promise<main.SelectorFix>;
+
 export function SendRequest(arg1:main.SendInput):Promise<main.SendResult>;
 
 export function SetAPIKey(arg1:string):Promise<void>;
@@ -101,8 +105,6 @@ export function Status():Promise<main.ConnectionStatus>;
 export function StopRecording():Promise<string>;
 
 export function StopWiFiDiscovery():Promise<void>;
-
-export function SuggestSelectorFix(arg1:string):Promise<main.SelectorFix>;
 
 export function TakeScreenshot():Promise<string>;
 
