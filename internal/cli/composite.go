@@ -82,6 +82,25 @@ func setupCompositeDevices(
 	return devices, cleanup, nil
 }
 
+// compositeAndroidContext is the device context of one Android device of a composite run. Whether the device is physical
+// is asked of the device, the same check a single-device run makes, so a physical device is never taken for an emulator.
+func compositeAndroidContext(ctx context.Context, cfg *config.Config, dm *device.Manager, spec string) *runner.DeviceContext {
+	return &runner.DeviceContext{
+		Manager:          dm,
+		Serial:           spec,
+		Platform:         device.PlatformAndroid,
+		AppID:            cfg.Project.App,
+		Port:             cfg.Agent.Port,
+		DevicePort:       cfg.Agent.AgentDevicePort(),
+		IsPhysical:       dm.IsPhysicalAndroid(ctx, spec),
+		ReconnectDelay:   cfg.Agent.ReconnectDelay,
+		RestartDelay:     cfg.Device.RestartDelay,
+		TokenReadTimeout: cfg.Agent.TokenReadTimeout,
+		DialTimeout:      cfg.Agent.DialTimeout,
+		CLIVersion:       cfg.CLIVersion,
+	}
+}
+
 // connectCompositeDevice connects to a single composite device by spec and
 // returns a CompositeDevice along with the underlying client (for cleanup).
 func connectCompositeDevice(
@@ -230,19 +249,7 @@ func connectCompositeDevice(
 		if err != nil {
 			return runner.CompositeDevice{}, nil, fmt.Errorf("dial: %w", err)
 		}
-		devCtx = &runner.DeviceContext{
-			Manager:          dm,
-			Serial:           spec,
-			Platform:         platform,
-			AppID:            cfg.Project.App,
-			Port:             cfg.Agent.Port,
-			DevicePort:       cfg.Agent.AgentDevicePort(),
-			ReconnectDelay:   cfg.Agent.ReconnectDelay,
-			RestartDelay:     cfg.Device.RestartDelay,
-			TokenReadTimeout: cfg.Agent.TokenReadTimeout,
-			DialTimeout:      cfg.Agent.DialTimeout,
-			CLIVersion:       cfg.CLIVersion,
-		}
+		devCtx = compositeAndroidContext(ctx, cfg, dm, spec)
 	}
 
 	warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
