@@ -528,6 +528,21 @@ func TestGrammarPage_KeywordTablesMatchLexer(t *testing.T) {
 	}
 }
 
+// TestGrammarPage_SetStepsAreLineSteps: each set statement is a line step, so line-step must name it. set language was
+// left out of line-step until the appearance step was added.
+func TestGrammarPage_SetStepsAreLineSteps(t *testing.T) {
+	prods := grammarProductions(t, readFile(t, grammarPagePath(t)))
+	members := map[string]bool{}
+	for _, alt := range strings.Split(prods["line-step"], "|") {
+		members[strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(alt), ";"))] = true
+	}
+	for _, name := range []string{"set-location-step", "set-language-step", "set-appearance-step"} {
+		if !members[name] {
+			t.Errorf("%s is a set statement but line-step does not name it", name)
+		}
+	}
+}
+
 // ---- (b) one example per production ----
 
 type productionExample struct {

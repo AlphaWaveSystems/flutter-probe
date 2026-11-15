@@ -1800,6 +1800,17 @@ func TestParser_SetAppearance(t *testing.T) {
 	}
 }
 
+// TestParser_SetAppearanceTrailingTextIsAStepOfItsOwn pins what text after the value does: it is not rejected, the
+// line ends after the value, and the rest is read as the next statement, the same as after set language.
+func TestParser_SetAppearanceTrailingTextIsAStepOfItsOwn(t *testing.T) {
+	prog := mustParse(t, "test \"t\"\n  set appearance dark extra words\n")
+	assertStepCount(t, prog.Tests[0].Body, 2)
+	a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+	if !ok || a.Verb != parser.VerbSetAppearance || a.Name != "dark" {
+		t.Errorf("first step = %+v, want set_appearance dark", prog.Tests[0].Body[0])
+	}
+}
+
 // TestParser_Travel covers the FP-6 `travel to ... over N seconds` block:
 // an indented list of waypoints followed by a sibling duration clause at the
 // same indent level as "travel to" (the same trailing-clause shape as `test

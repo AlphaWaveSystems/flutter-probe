@@ -48,6 +48,9 @@ type DeviceContext struct {
 
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
+
+	// appearanceRun runs the commands of `set appearance`. nil runs the real adb and xcrun; tests set a fake.
+	appearanceRun devsettings.Runner
 }
 
 // SystemDriver returns the run's shared system-dialog driver, creating it on
@@ -353,7 +356,7 @@ func (dc *DeviceContext) SetAppearance(ctx context.Context, mode string) error {
 	if err != nil {
 		return fmt.Errorf("set appearance: %w", err)
 	}
-	if err := devsettings.Apply(ctx, nil, req); err != nil {
+	if err := devsettings.Apply(ctx, dc.appearanceRun, req); err != nil {
 		return fmt.Errorf("set appearance: %w", err)
 	}
 	return nil

@@ -329,6 +329,8 @@ The device's own light or dark mode, not one app's. The app is not relaunched; a
 `light` or `dark`; `auto` is refused there when the step runs. A physical iOS device is refused: change its appearance in
 Settings. See [Android](/platform/android/#appearance) and [iOS](/platform/ios/).
 
+Text after the value is not rejected. The line ends after the value, and the rest is read as the next statement, the same as after `set language`.
+
 ## Device Location
 
 ```
