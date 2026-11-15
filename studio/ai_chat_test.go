@@ -117,7 +117,7 @@ func TestSuggestSelectorFixReturnsOneProbeLine(t *testing.T) {
 	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"Sign in\"\n```\nThe label on the button is Sign in.")
 	useProvider(t, f, "test-key")
 
-	fix, err := failedRunApp().SuggestSelectorFix("test \"sign in\"\n  tap \"Sign in\"\n")
+	fix, err := suggestFix(failedRunApp(), "test \"sign in\"\n  tap \"Sign in\"\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestSuggestSelectorFixNeedsAFailedStep(t *testing.T) {
 	a.track.begin("tests/login.probe", RunPlan{})
 	a.track.finish(nil, nil)
 
-	_, err := a.SuggestSelectorFix("")
+	_, err := suggestFix(a, "")
 	if err == nil || !strings.Contains(err.Error(), "no failed step") {
 		t.Fatalf("err = %v, want a message that the last run has no failed step", err)
 	}
@@ -165,7 +165,7 @@ func TestSuggestSelectorFixRefusesAnythingButOneLine(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newFakeProvider(t, http.StatusOK, reply)
 			useProvider(t, f, "test-key")
-			_, err := failedRunApp().SuggestSelectorFix("")
+			_, err := suggestFix(failedRunApp(), "")
 			if err == nil || !strings.Contains(err.Error(), "exactly one ProbeScript line") {
 				t.Fatalf("err = %v, want no suggestion", err)
 			}
@@ -197,7 +197,7 @@ func TestProviderErrorsAreReadable(t *testing.T) {
 func TestTheKeyNeverAppearsInWhatTheAppReturns(t *testing.T) {
 	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"Sign in\"\n```\nDone.")
 	useProvider(t, f, "test-key")
-	fix, err := failedRunApp().SuggestSelectorFix("")
+	fix, err := suggestFix(failedRunApp(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

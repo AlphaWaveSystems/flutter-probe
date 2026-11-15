@@ -138,6 +138,10 @@ export function PreviewExplain() {
   return window['go']['main']['App']['PreviewExplain']();
 }
 
+export function PreviewSelectorFix(arg1) {
+  return window['go']['main']['App']['PreviewSelectorFix'](arg1);
+}
+
 export function ReadFile(arg1) {
   return window['go']['main']['App']['ReadFile'](arg1);
 }
@@ -170,6 +174,10 @@ export function SaveWorkspaceSettings(arg1, arg2) {
   return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
 }
 
+export function SelectorFixPreviewed(arg1) {
+  return window['go']['main']['App']['SelectorFixPreviewed'](arg1);
+}
+
 export function SendRequest(arg1) {
   return window['go']['main']['App']['SendRequest'](arg1);
 }
@@ -200,10 +208,6 @@ export function StopRecording() {
 
 export function StopWiFiDiscovery() {
   return window['go']['main']['App']['StopWiFiDiscovery']();
-}
-
-export function SuggestSelectorFix(arg1) {
-  return window['go']['main']['App']['SuggestSelectorFix'](arg1);
 }
 
 export function TakeScreenshot() {

@@ -813,6 +813,8 @@ export namespace main {
 	    inputTokens: number;
 	    outputTokens: number;
 	    costUSD: number;
+	    destination: string;
+	    hosted: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SelectorFix(source);
@@ -825,6 +827,30 @@ export namespace main {
 	        this.inputTokens = source["inputTokens"];
 	        this.outputTokens = source["outputTokens"];
 	        this.costUSD = source["costUSD"];
+	        this.destination = source["destination"];
+	        this.hosted = source["hosted"];
+	    }
+	}
+	export class SelectorFixPreview {
+	    id: string;
+	    destination: string;
+	    hosted: boolean;
+	    needsConfirm: boolean;
+	    step: string;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectorFixPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.destination = source["destination"];
+	        this.hosted = source["hosted"];
+	        this.needsConfirm = source["needsConfirm"];
+	        this.step = source["step"];
+	        this.text = source["text"];
 	    }
 	}
 	export class SendHeader {
