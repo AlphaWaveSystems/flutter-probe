@@ -288,6 +288,16 @@ func kindWord(s string) string {
 // textInputTypes are the input types Input.insertText can fill with text.
 var textInputTypes = map[string]bool{"": true, "text": true, "search": true, "email": true, "url": true, "tel": true, "password": true, "number": true}
 
+// notEditable is the refusal of a step that would type into an element that takes no text. Input.insertText into such an element does nothing and reports no
+// error, so the step refuses instead of passing with nothing typed.
+func (s *WebViewSession) notEditable(sel Selector, why string) error {
+	return &WebViewError{Kind: "not editable", Message: fmt.Sprintf("The element %q in the WebView page %q cannot be typed into (%s), so nothing was typed", shown(s.redact(sel.Value)), s.title, why)}
+}
+
+// formControls are elements that take no typed text whatever their surroundings: inside a content-editable host they report isContentEditable too, but typing
+// into them types nothing.
+var formControls = map[string]bool{"select": true, "button": true, "option": true, "optgroup": true, "meter": true, "progress": true, "output": true, "fieldset": true}
+
 // typeRefusal says why text cannot be typed into the element, or "" when it can: a disabled or read-only field, an input of a type that takes no typed text (a checkbox, a date, a file picker...),
 // or an element that is not a text field at all. A content-editable element and a textarea take text.
 func typeRefusal(info ElementInfo) string {
@@ -296,13 +306,18 @@ func typeRefusal(info ElementInfo) string {
 		return "disabled"
 	case info.ReadOnly:
 		return "read-only"
-	case info.Editable, info.Tag == "textarea":
-		return ""
 	case info.Tag == "input":
+		// before the content-editable test: a checkbox inside an editing host is still a checkbox
 		if textInputTypes[info.InputType] {
 			return ""
 		}
 		return fmt.Sprintf("an input of type %q", info.InputType)
+	case info.Tag == "textarea":
+		return ""
+	case formControls[info.Tag]:
+		// a select or a button inside an editing host is still not a text field
+	case info.Editable:
+		return ""
 	}
 	return fmt.Sprintf("not a text field: %s", info.Tag)
 }
@@ -326,13 +341,21 @@ func (s *WebViewSession) Type(ctx context.Context, sel Selector, text string) er
 	if len([]rune(text)) > maxTypedChars {
 		return &WebViewError{Kind: "too long", Message: fmt.Sprintf("the text to type is longer than %d characters", maxTypedChars)}
 	}
-	info, err := s.locate(ctx, sel, "focus")
+	// A first lookup, which does not focus anything, decides whether the element can take text at all: a refused element is never focused.
+	// (It is still scrolled into view, like any found element.) The second lookup focuses it and checks that it holds the focus.
+	info, err := s.locate(ctx, sel, "find")
 	if err != nil {
 		return err
 	}
 	if why := typeRefusal(info); why != "" {
-		// Input.insertText into such an element does nothing and reports no error, so the step refuses instead of passing with nothing typed
-		return &WebViewError{Kind: "not editable", Message: fmt.Sprintf("The element %q in the WebView page %q cannot be typed into (%s), so nothing was typed", shown(s.redact(sel.Value)), s.title, why)}
+		return s.notEditable(sel, why)
+	}
+	info, err = s.locate(ctx, sel, "focus")
+	if err != nil {
+		return err
+	}
+	if why := typeRefusal(info); why != "" { // the page changed between the two lookups
+		return s.notEditable(sel, why)
 	}
 	if !info.Focused {
 		// typing into whatever else has the focus would put the text in the wrong place
