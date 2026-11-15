@@ -2365,6 +2365,9 @@ func (p *Parser) parseStore() (Step, error) {
 	if p.atResponseWord("response") {
 		return p.parseStoreResponse(line)
 	}
+	if step, err := p.tryStoreWebView(line); step != nil || err != nil {
+		return step, err
+	}
 	value := p.expectString("value to store")
 	p.skipFillers()
 	if p.peek().Type == TOKEN_AS {
@@ -2869,4 +2872,61 @@ func (p *Parser) tryWebViewTarget(wantAppears bool, line int) (*WebViewTarget, e
 		return nil, fmt.Errorf("line %d: after \"in webview\" only a quoted page name may follow (no \"if visible\", \"optional\" or other words)", line)
 	}
 	return &WebViewTarget{Kind: kind, Value: value, Page: page}, nil
+}
+
+// tryStoreWebView reads `store text of css:"..." in webview ["page"] as name` after the word store. The element is read by a CSS selector only: with a quoted text
+// the stored value would be the operand itself, so that form is an error that says so. It consumes nothing and returns nil when the tokens are not this form (so
+// `store text as x`, `store "text of" as y` and every other store line parse as they always have); once the form is recognised (`text of css:"..."` or `text of "..."`
+// followed by `in webview`) a missing or extra part is an error, so the line is never cut short and the rest read as another step.
+func (p *Parser) tryStoreWebView(line int) (Step, error) {
+	saved := p.pos
+	restore := func() (Step, error) { p.pos = saved; return nil, nil }
+	if t := p.peek(); t.Type != TOKEN_IDENT || !strings.EqualFold(t.Literal, "text") {
+		return restore()
+	}
+	p.advance()
+	p.skipFillers() // "of"
+	if p.peek().Type == TOKEN_OF {
+		p.advance()
+	}
+	p.skipFillers()
+	isCSS := false
+	if t := p.peek(); t.Type == TOKEN_IDENT && strings.EqualFold(t.Literal, "css") && p.peekAt(1).Type == TOKEN_COLON && p.peekAt(2).Type == TOKEN_STRING {
+		isCSS = true
+		p.advance() // css
+		p.advance() // :
+	} else if p.peek().Type != TOKEN_STRING {
+		return restore()
+	}
+	value := p.advance().Literal
+	if p.peek().Type != TOKEN_IN {
+		return restore()
+	}
+	p.advance()
+	if w := p.peek(); w.Type != TOKEN_IDENT || !strings.EqualFold(w.Literal, "webview") {
+		return restore()
+	}
+	p.advance()
+	if !isCSS {
+		return nil, fmt.Errorf("line %d: store text of ... in webview reads an element by css:\"...\"; a quoted text would only give back itself", line)
+	}
+	page := ""
+	if p.peek().Type == TOKEN_STRING {
+		page = p.advance().Literal
+	}
+	if p.peek().Type != TOKEN_AS {
+		return nil, fmt.Errorf("line %d: store text of css:\"...\" in webview needs \"as <name>\" for the variable", line)
+	}
+	p.advance()
+	p.skipFillers()
+	t := p.peek()
+	if t.Type != TOKEN_IDENT && t.Type != TOKEN_STRING {
+		return nil, fmt.Errorf("line %d: store text of css:\"...\" in webview as ... needs a variable name", line)
+	}
+	name := p.advance().Literal
+	if t := p.peek().Type; t != TOKEN_NEWLINE && t != TOKEN_EOF {
+		return nil, fmt.Errorf("line %d: after \"as %s\" nothing may follow on a store text of ... in webview line", line, name)
+	}
+	p.consumeNewline()
+	return ActionStep{Verb: VerbStoreWebView, Name: name, WebView: &WebViewTarget{Kind: WebViewCSS, Value: value, Page: page}, Line: line}, nil
 }

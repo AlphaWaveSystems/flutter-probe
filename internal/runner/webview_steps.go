@@ -182,3 +182,6 @@ func capShown(s string) string {
 	}
 	return string(r[:maxShownTarget]) + "…"
 }
+
+// errStoreWebViewNotImplemented is what `store text of css:"..." in webview as name` reports until its runner part exists: the step parses, it does not run yet.
+var errStoreWebViewNotImplemented = errors.New("store text of ... in webview is not implemented yet in this version of probe")

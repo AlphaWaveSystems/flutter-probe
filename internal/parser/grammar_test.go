@@ -703,6 +703,8 @@ var grammarProductionExamples = []productionExample{
 		want: []string{"assert:webview", "assert:webview:negated", "assert:webview:negated", "assert"}},
 	{production: "wait-webview-step", src: testBody(`wait until "Message sent" appears in webview`, `wait until css:"#result" appears in webview "help"`, `wait until "A" appears`),
 		want: []string{"wait:webview", "wait:webview", "wait:appears"}},
+	{production: "store-webview-step", src: testBody(`store text of css:"#total" in webview as total`, `store text of css:"#total" in webview "checkout" as "order total"`, `store text css:"#a" in webview as amount`, `store "x" as y`),
+		want: []string{"action:store_webview", "action:store_webview", "action:store_webview", "action:store"}},
 	{production: "see-native-step", src: testBody(`see native "IMG"`, `don't see native "Err"`),
 		want: []string{"assert:native", "assert:native:negated"}},
 	{production: "assert-defects-step", src: testBody(`assert no visual defects with ai`, `assert no defects with ai`),

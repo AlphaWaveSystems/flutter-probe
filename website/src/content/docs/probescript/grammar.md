@@ -413,7 +413,7 @@ line-step  = tap-webview-step | tap-native-step | tap-step | type-webview-step |
            | copy-step | paste-step | set-location-step | set-language-step | set-appearance-step | set-airplane-step
            | verify-browser-step | add-media-step
            | take-screenshot-step | compare-screenshot-step | dump-tree-step | save-logs-step
-           | store-step | read-ai-step | deliver-signal-step
+           | store-webview-step | store-step | read-ai-step | deliver-signal-step
            | biometric-step | enroll-biometric-step
            | http-call-step | wait-response-step | see-response-step | store-response-step
            | see-requests-step | clear-requests-step
@@ -457,6 +457,7 @@ The first matching row wins.
 | `grant`, `revoke`, `grant all permissions`, `revoke all permissions` | `grant-revoke-step` |
 | `copy`, `paste`, `set location`, `set language`, `set appearance`, `set airplane mode`, `verify external browser`, `add media` | the step of the same name |
 | `take`, `compare`, `dump`, `save` | `take-screenshot-step`, `compare-screenshot-step`, `dump-tree-step`, `save-logs-step` |
+| `store` followed by `text` and a `css:"..."` (or a quoted text) and `in webview` | `store-webview-step` (checked before `store-step`) |
 | `store`, `read`, `deliver` | `store-step`, `read-ai-step`, `deliver-signal-step` |
 | `biometric`, `enroll` | `biometric-step`, `enroll-biometric-step` |
 | `call` | `http-call-step` |
@@ -654,6 +655,7 @@ tap-webview-step  = "tap" , fillers , webview-operand , webview-target ;
 type-webview-step = "type" , STRING , fillers , webview-operand , webview-target ;
 see-webview-step  = ( "see" | "don't see" | "dont see" ) , fillers , webview-operand , webview-target ;
 wait-webview-step = "wait" , fillers , "until" , fillers , webview-operand , "appears" , webview-target ;
+store-webview-step = "store" , fillers , "text" , fillers , [ "of" ] , fillers , "css" , ":" , STRING , "in" , "webview" , [ STRING ] , "as" , fillers , ( WORD | STRING ) ;   (* reads the visible text of one element into a variable; a quoted text instead of css:"..." is an error, because the stored value would be the operand itself *)
 ```
 
 These steps reach content inside an app's WebView (Android). The kind of the operand comes from the
@@ -664,7 +666,7 @@ name is a part of the page's title or URL, for an app with more than one page. N
 the line except a trailing `within N seconds`, which wraps the step like any other timed step: `if visible`,
 `optional`, a second string or any other word are errors there, not ignored. The words `in`, `webview` and
 `css` are matched without regard to case (`In Webview`, `CSS:"x"`), and spaces around the colon of
-`css : "x"` are allowed. A quoted string follows the lexer's rules for every STRING: `\"` is a quote, `\\` a
+`css : "x"` are allowed. `store text of css:"#total" in webview as total` reads the visible text of one element into a variable. The operand is a CSS selector only (a quoted text would only give back itself, and is an error that says so); the optional page name comes after `in webview` as in the other forms, and `as <name>` ends the step: nothing may follow it, not even `if visible` or `optional`, though a trailing `within N seconds` is accepted as on the other steps. In this version the step parses and the runner reports that it is not implemented yet. A quoted string follows the lexer's rules for every STRING: `\"` is a quote, `\\` a
 backslash, `\n` and `\t` a new line and a tab, and any other `\x` is the character `x` (so `\:` is `:`; a CSS
 id such as `#a\:b` is written `"#a\\:b"`); a raw new line inside a string is a parse error. A text that
 starts with `css:` stays text when it is quoted (`tap "css:x" in webview`). On Android the runner runs
@@ -682,6 +684,8 @@ test "webview steps"
   don't see css:".error" in webview
   wait until "Message sent" appears in webview
   wait until css:"#result" appears in webview "help"
+  store text of css:"#total" in webview as total
+  store text of css:"#total" in webview "checkout" as "order total"
 ```
 
 ### AI-assisted steps

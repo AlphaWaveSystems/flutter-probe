@@ -280,3 +280,19 @@ func TestWebViewWaitWithoutAStepTimeoutUsesTheDefaultTotal(t *testing.T) {
 		t.Errorf("wait total = %v", r.page.waits[0])
 	}
 }
+
+// Until the runner part exists the step reports one clear error, sets no variable and shows no value in its line.
+func TestStoreTextOfAnElementReportsNotImplementedAndSetsNothing(t *testing.T) {
+	r := newWebViewRig()
+	step := parser.ActionStep{Verb: parser.VerbStoreWebView, Name: "total", WebView: &parser.WebViewTarget{Kind: parser.WebViewCSS, Value: "#total", Page: "checkout"}}
+	err := r.e.runStep(context.Background(), step)
+	if err == nil || !strings.Contains(err.Error(), "not implemented yet") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, set := r.e.vars["total"]; set || len(r.opens) != 0 {
+		t.Errorf("the step set a variable or opened a page: vars=%v opens=%d", r.e.vars, len(r.opens))
+	}
+	if got := r.e.stepDescription(step); got != `store text of css:"#total" in webview "checkout" as total` {
+		t.Errorf("line = %q", got)
+	}
+}

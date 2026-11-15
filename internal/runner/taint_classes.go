@@ -69,6 +69,7 @@ var taintClasses = map[string]taintClass{
 
 	// ---- propagates
 	"VerbStore":          classPropagates,
+	"VerbStoreWebView":   classPropagates, // the value it will read is the first tainted one (T2b); until then the step is not implemented
 	"VerbCopyClipboard":  classPropagates,
 	"VerbPasteClipboard": classPropagates,
 	"RecipeCall":         classPropagates,
