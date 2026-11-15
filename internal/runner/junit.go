@@ -193,6 +193,9 @@ func (r *Reporter) junitCases(res TestResult, path string) []timedCase {
 	if res.DeviceName != "" {
 		props = append(props, junitProp{"device", res.DeviceName})
 	}
+	if tags := ReportTags(res.Tags); len(tags) > 0 {
+		props = append(props, junitProp{"tags", strings.Join(tags, ",")})
+	}
 
 	mk := func(passed, skipped bool, err error, d time.Duration, extra ...junitProp) timedCase {
 		c := base
@@ -256,6 +259,9 @@ func (r *Reporter) junitSuiteProps() *junitProps {
 		add("locale", m.Locale)
 	}
 	add("run_label", r.junit.Label)
+	for _, kv := range ReportProperties(r.properties) {
+		p = append(p, junitProp(kv))
+	}
 	if len(p) == 0 {
 		return nil
 	}

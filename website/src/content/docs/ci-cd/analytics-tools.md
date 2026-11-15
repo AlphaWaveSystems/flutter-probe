@@ -36,7 +36,8 @@ the file, what three services document about the fields they need, and what has 
 - **`<failure>` is a failed assertion; `<error>` is an infrastructure problem** (the agent connection dropped, a `before all`/`before each`
   hook failed). The suite and root `errors` attributes count them.
 - **`<properties>`** on each suite: the probe version, platform, OS version, app id and version, device name and class
-  (`emulator`, `simulator`, `physical`, `cloud`), provider, locale and, with `--junit-label`, a `run_label`.
+  (`emulator`, `simulator`, `physical`, `cloud`), provider, locale and, with `--junit-label`, a `run_label`, then every `--property key=value` of the run (sorted by key).
+- **A test with tags** (`test "x" @smoke @critical`) gets a `tags` property on its `<testcase>`, the tags joined by commas; a test without tags has none. At most 32 tags are written per test, each cut to 64 characters, masked like other printed text. The JSON report has the same `tags` and `properties`, and the HTML report shows them as chips and a line.
 - A data-driven test is one case per row, named `name [row N]`, with a `row` property. **Inserting or reordering rows renames the tests**, which
   starts a new history in any tool that keys on the name; append new rows at the end.
 - A re-run test (`retry_failed_tests`) has an `attempts` property on its case.
