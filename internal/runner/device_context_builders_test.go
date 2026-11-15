@@ -33,13 +33,10 @@ var builderFuncs = []struct{ dir, file, fn string }{
 }
 
 // legacyLiterals are the functions that still build a DeviceContext outside the helper, named as deviceContextSites
-// reports them: the path from the repository root, then the function. Each entry is removed by the change that moves its
-// function to NewDeviceContext. The test fails if an entry is left after its construction has gone, so the list cannot
-// go stale.
-var legacyLiterals = []string{
-	"studio/app.go:ConnectWiFi",
-	"studio/app.go:Connect",
-}
+// reports them: the path from the repository root, then the function. The list is empty, because every builder in the
+// tree calls NewDeviceContext. An entry is removed by the change that moves its function to NewDeviceContext, and the test
+// fails if an entry is left after its construction has gone, so the list cannot go stale.
+var legacyLiterals = []string{}
 
 // newDeviceContextSite is the one place a DeviceContext is constructed: the helper itself.
 const newDeviceContextSite = "internal/runner/device_context.go:NewDeviceContext"
