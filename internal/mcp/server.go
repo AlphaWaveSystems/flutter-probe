@@ -188,6 +188,7 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
+  Swiping:         swipe up on "Card" over 40 percent travels 40 percent of the card or screen instead of the default 50; the number is a whole number from 1 to 100 and ends the line.
   Scrolling:       scroll down until "Text" appears (or until #key_id appears) keeps
                      scrolling until the target is on screen — use it for rows below
                      the fold instead of counting plain "scroll down" steps. Note
@@ -245,6 +246,7 @@ Supports the full ProbeScript syntax:
                      turns it back, so a test that turns it on must turn it off. Only an emulator (serial
                      emulator-NNNN) takes it; iOS simulators, physical and network devices are refused.
   Keyboard:        press enter — the keyboard action key on the focused text field.
+  Keys:            press tab, escape, backspace, space, up, down, left or right acts on the focused field or moves the focus (press enter stays separate). Not on iOS yet: the step is refused there.
   See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first
                      (an optional consent dialog, a login or home screen).

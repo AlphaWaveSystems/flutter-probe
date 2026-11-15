@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode"
@@ -22,6 +23,7 @@ type fakeCDP struct {
 	port   int
 	list   func(w http.ResponseWriter, r *http.Request)
 	handle func(c *websocket.Conn, req map[string]any)
+	active atomic.Int32 // WebSocket connections currently open on the server side
 }
 
 func newFakeCDP(t *testing.T) *fakeCDP {
@@ -44,6 +46,8 @@ func newFakeCDP(t *testing.T) *fakeCDP {
 		if err != nil {
 			return
 		}
+		f.active.Add(1)
+		defer f.active.Add(-1)
 		defer c.Close()
 		for {
 			var req map[string]any

@@ -24,6 +24,26 @@ import 'sync.dart';
 
 typedef SendFn = void Function(String message);
 
+/// The fraction of the element or the screen a swipe travels: [percent] when it is 1 to 100, and the default, 50 percent, when
+/// it is 0 (the step left the distance out). Anything above 100 is clamped, since the parser already refuses it.
+double swipeFraction(int percent) => (percent <= 0 ? 50 : percent.clamp(1, 100).toInt()) / 100;
+
+/// The pointer's total movement for a swipe in [direction] across [size] at [fraction] of it. Above 50 percent the finger
+/// ends outside the element or the screen: the swipe starts at the centre, so 50 percent ends at the edge.
+Offset swipeDelta(String direction, Size size, double fraction) {
+  switch (direction) {
+    case 'up':
+      return Offset(0, -size.height * fraction);
+    case 'down':
+      return Offset(0, size.height * fraction);
+    case 'left':
+      return Offset(-size.width * fraction, 0);
+    case 'right':
+    default:
+      return Offset(size.width * fraction, 0);
+  }
+}
+
 /// ProbeExecutor handles all JSON-RPC method calls from the CLI.
 class ProbeExecutor {
   SendFn _send;
@@ -93,7 +113,7 @@ class ProbeExecutor {
         if (clientVersion != null && clientVersion.isNotEmpty) {
           stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
         }
-        return {'ok': true, 'agent_version': probeAgentVersion};
+        return {'ok': true, 'agent_version': probeAgentVersion, 'capabilities': probeAgentCapabilities};
 
       case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;
@@ -173,7 +193,8 @@ class ProbeExecutor {
       case ProbeMethods.swipe:
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
-        await _swipe(dir, sel);
+        final percent = (req.params['percent'] as num?)?.toInt() ?? 0;
+        await _swipe(dir, sel, percent: percent);
         await _sync.waitForSettled();
         _lastScrollAt = DateTime.now();
         return {'ok': true};
@@ -890,6 +911,87 @@ class ProbeExecutor {
     }
   }
 
+  /// Presses one of the keys `press <key>` takes. Tab and the arrow keys move the focus the way the focus system does; escape
+  /// leaves the focused field; backspace and space edit the focused text field. A key with nothing to act on warns, as press
+  /// enter does, so a step is not silently ignored. A key the agent does not know is an error.
+  void _pressKey(String key) {
+    final focus = FocusManager.instance.primaryFocus;
+    final target = _findFocusedEditableTarget();
+    switch (key) {
+      case 'tab':
+        (focus ?? FocusManager.instance.rootScope).nextFocus();
+        break;
+      case 'escape':
+        focus?.unfocus();
+        break;
+      case 'up':
+      case 'down':
+      case 'left':
+      case 'right':
+        const directions = {
+          'up': TraversalDirection.up,
+          'down': TraversalDirection.down,
+          'left': TraversalDirection.left,
+          'right': TraversalDirection.right,
+        };
+        if (!(focus?.focusInDirection(directions[key]!) ?? false)) {
+          _tapWarning = 'press $key: nothing to move the focus to in that direction';
+        }
+        break;
+      case 'backspace':
+        if (target == null) {
+          _tapWarning = 'press backspace: no text field has focus, nothing was deleted';
+        } else {
+          _deleteBeforeCaret(target);
+        }
+        break;
+      case 'space':
+        if (target == null) {
+          _tapWarning = 'press space: no text field has focus, nothing was typed';
+        } else {
+          _insertText(target, ' ');
+        }
+        break;
+      default:
+        throw ProbeError(ProbeError.invalidParams,
+            'press $key: not a key the agent presses (use tab, escape, backspace, space, up, down, left or right)');
+    }
+  }
+
+  /// Deletes what Backspace deletes: the selection, or the character before the caret. At the start of the field it does
+  /// nothing. The update goes through the field's own state, as [_insertText] does, so the change reaches onChanged.
+  void _deleteBeforeCaret(_EditableTarget target) {
+    final value = target.controller.value;
+    final sel = value.selection;
+    if (!sel.isValid) return;
+    var start = sel.start;
+    final end = sel.end;
+    if (sel.isCollapsed) {
+      if (start == 0) return;
+      start -= 1;
+      // A character outside the Basic Multilingual Plane is two code units: remove both, not half of one.
+      if (start > 0 &&
+          _isLowSurrogate(value.text.codeUnitAt(start)) &&
+          _isHighSurrogate(value.text.codeUnitAt(start - 1))) {
+        start -= 1;
+      }
+    }
+    final newValue = TextEditingValue(
+      text: value.text.replaceRange(start, end, ''),
+      selection: TextSelection.collapsed(offset: start),
+    );
+    final state = target.state;
+    if (state != null && state.mounted) {
+      state.userUpdateTextEditingValue(newValue, SelectionChangedCause.keyboard);
+    } else {
+      target.controller.value = newValue;
+    }
+  }
+
+  static bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;
+
+  static bool _isLowSurrogate(int unit) => unit >= 0xDC00 && unit <= 0xDFFF;
+
   /// Lets the frame an injected input caused run; a screen that animates
   /// forever must not stall a live-view interaction, so this never throws.
   Future<void> _settleBriefly() async {
@@ -1272,7 +1374,10 @@ class ProbeExecutor {
 
   // ---- Gesture helpers ----
 
-  Future<void> _swipe(String direction, Map<String, dynamic>? sel) async {
+  /// [percent] is how far the swipe travels, as a percent of the element or the screen. 0 is the default, 50. The parser
+  /// refuses anything outside 1 to 100; the agent clamps it again rather than trust the wire.
+  Future<void> _swipe(String direction, Map<String, dynamic>? sel, {int percent = 0}) async {
+    final fraction = swipeFraction(percent);
     Offset center;
     Size size;
 
@@ -1291,18 +1396,7 @@ class ProbeExecutor {
       size = viewSize;
     }
 
-    Offset delta;
-    switch (direction) {
-      case 'up':
-        delta = Offset(0, -size.height * 0.5);
-      case 'down':
-        delta = Offset(0, size.height * 0.5);
-      case 'left':
-        delta = Offset(-size.width * 0.5, 0);
-      case 'right':
-      default:
-        delta = Offset(size.width * 0.5, 0);
-    }
+    final delta = swipeDelta(direction, size, fraction);
 
     // PT-03: a single giant PointerMoveEvent covering the whole delta in one
     // jump can fail to register as a scroll at all — reproduced against a
@@ -1510,6 +1604,9 @@ class ProbeExecutor {
 
   Future<void> _deviceAction(String action, String value) async {
     switch (action) {
+      case 'press_key':
+        _pressKey(value);
+        break;
       case 'go_back':
         final nav = _navigator;
         if (nav != null && nav.canPop()) {
@@ -1563,6 +1660,11 @@ class ProbeExecutor {
         break;
       case 'shake':
         break;
+      default:
+        // An action this agent does not know is an error, not a pass: the CLI would otherwise report the step done
+        // without anything having happened. The CLI only sends actions listed above, so this is not reached by one.
+        throw ProbeError(ProbeError.invalidParams,
+            'unknown device action "$action": this probe_agent does not support it; update probe_agent');
     }
   }
 

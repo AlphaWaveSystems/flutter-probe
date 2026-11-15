@@ -342,6 +342,8 @@ don't see "Hidden text"      # "dont see" works too
 wait until "Element" appears
 wait 3 seconds
 swipe up / down / left / right
+swipe up over 40 percent
+press tab
 scroll down until "Item" appears
 wait for idle
 tap "Allow" in system dialog       # OS permission alerts / sign-in sheets

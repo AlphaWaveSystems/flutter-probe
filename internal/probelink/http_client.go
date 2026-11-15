@@ -27,6 +27,8 @@ type HTTPClient struct {
 	closed     bool
 	addr       string // safe address for logging (no token)
 	OnNotify   func(method string, params json.RawMessage) // no-op in HTTP mode
+	// handshake is what the agent reported at connect; DeviceAction checks it before a press_key. Guarded by mu.
+	handshake *HandshakeResult
 }
 
 // DialHTTP creates an HTTPClient and verifies connectivity with a Ping.
@@ -156,7 +158,11 @@ func (c *HTTPClient) Handshake(ctx context.Context, clientVersion string) (*Hand
 	if err := json.Unmarshal(raw, &res); err != nil {
 		return nil, fmt.Errorf("handshake: decoding ping result: %w", err)
 	}
-	return &HandshakeResult{AgentVersion: res.AgentVersion}, nil
+	result := &HandshakeResult{AgentVersion: res.AgentVersion, Capabilities: res.Capabilities}
+	c.mu.Lock()
+	c.handshake = result
+	c.mu.Unlock()
+	return result, nil
 }
 
 // Close marks the client as closed.
@@ -211,8 +217,8 @@ func (c *HTTPClient) Wait(ctx context.Context, params WaitParams) error {
 	return err
 }
 
-func (c *HTTPClient) Swipe(ctx context.Context, direction string, sel *SelectorParam) error {
-	_, err := c.Call(ctx, MethodSwipe, SwipeParams{Direction: direction, Selector: sel})
+func (c *HTTPClient) Swipe(ctx context.Context, direction string, sel *SelectorParam, percent int) error {
+	_, err := c.Call(ctx, MethodSwipe, SwipeParams{Direction: direction, Selector: sel, Percent: percent})
 	return err
 }
 
@@ -378,6 +384,14 @@ func (c *HTTPClient) RegisterMock(ctx context.Context, m MockParam) error {
 }
 
 func (c *HTTPClient) DeviceAction(ctx context.Context, action, value string) error {
+	if action == "press_key" {
+		c.mu.Lock()
+		h := c.handshake
+		c.mu.Unlock()
+		if err := checkPressKey(h); err != nil {
+			return err
+		}
+	}
 	raw, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
 	if err == nil {
 		return reportWarning(raw)

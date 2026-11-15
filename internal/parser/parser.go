@@ -1,10 +1,10 @@
 package parser
 
 import (
-	"time"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Parser converts a token stream into a Program AST.
@@ -409,6 +409,11 @@ func (p *Parser) parseStepInner() (Step, error) {
 		p.advance()
 		p.consumeNewline()
 		return ActionStep{Verb: VerbGoBack, Line: tok.Line}, nil
+	case TOKEN_PRESS:
+		if p.pressKeyLine() {
+			return p.parseActionPressKey()
+		}
+		return p.parseRecipeCall()
 	case TOKEN_PRESS_ENTER:
 		p.advance()
 		p.consumeNewline()
@@ -687,6 +692,16 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 	line := p.peek().Line
 	p.advance() // swipe
 	p.skipFillers()
+	// A bare word where the direction goes is not one of the four: parseDirection runs the swipe down and leaves the word
+	// unread, so it parses as the next step. Record it here, without consuming it, so lint can say so.
+	dirWord := ""
+	if w := p.peek(); w.Type == TOKEN_IDENT {
+		switch strings.ToLower(w.Literal) {
+		case "up", "down", "left", "right":
+		default:
+			dirWord = w.Literal
+		}
+	}
 	dir := p.parseDirection()
 	p.skipFillers()
 	var sel *Selector
@@ -694,8 +709,30 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		s := p.parseSelector()
 		sel = &s
 	}
+	// "over N percent" sets how far the swipe travels, as a percent of the element or the screen. It is a whole number
+	// from 1 to 100, and it ends the line; without it the swipe travels 50 percent.
+	percent := 0
+	if p.peek().Type == TOKEN_OVER {
+		p.advance() // over
+		if p.peek().Type != TOKEN_INT {
+			return nil, fmt.Errorf("line %d: swipe over needs a whole percentage from 1 to 100, for example: swipe up over 40 percent", line)
+		}
+		lit := p.advance().Literal
+		n, err := strconv.Atoi(lit)
+		if err != nil || n < 1 || n > 100 {
+			return nil, fmt.Errorf("line %d: swipe over %s percent is out of range: use a whole percentage from 1 to 100", line, lit)
+		}
+		if !p.peekLiteral("percent") {
+			return nil, fmt.Errorf("line %d: swipe over %s needs the word percent after the number", line, lit)
+		}
+		p.advance() // percent
+		if t := p.peek().Type; t != TOKEN_NEWLINE && t != TOKEN_DEDENT && t != TOKEN_EOF {
+			return nil, fmt.Errorf("line %d: swipe over %d percent must end the line; %q is not part of a swipe", line, n, p.peek().Literal)
+		}
+		percent = n
+	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Line: line}, nil
+	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, DirectionWord: dirWord, Line: line}, nil
 }
 
 func (p *Parser) parseActionScroll() (Step, error) {
@@ -751,6 +788,44 @@ func (p *Parser) parseActionDoubleTap() (Step, error) {
 	opt := p.checkOptional()
 	p.consumeNewline()
 	return ActionStep{Verb: VerbDoubleTap, Sel: &sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
+}
+
+// pressKeys are the keys `press <key>` takes. The agent presses each one through the focus system or the focused text field;
+// `press enter` is a step of its own.
+var pressKeys = []string{"tab", "escape", "backspace", "space", "up", "down", "left", "right"}
+
+// PressKeys returns the keys `press <key>` takes, for the lint that suggests them.
+func PressKeys() []string { return append([]string(nil), pressKeys...) }
+
+func isPressKey(word string) bool {
+	for _, k := range pressKeys {
+		if k == word {
+			return true
+		}
+	}
+	return false
+}
+
+// pressKeyLine reports whether the line at the cursor is `press <key>` and nothing else: press directly followed by one of
+// pressKeys, then the end of the line. Every other line that starts with press is a recipe call, as it always was, so a
+// recipe named "press the tab" or "press tba" keeps working. Only a recipe named exactly one of the keys loses to the step.
+// It consumes nothing.
+func (p *Parser) pressKeyLine() bool {
+	key := p.peekAt(1)
+	if key.Type == TOKEN_STRING || !isPressKey(strings.ToLower(key.Literal)) {
+		return false
+	}
+	end := p.peekAt(2).Type
+	return end == TOKEN_NEWLINE || end == TOKEN_DEDENT || end == TOKEN_EOF
+}
+
+// parseActionPressKey handles `press <key>` once pressKeyLine has said the line is one: it consumes the two words and the line.
+func (p *Parser) parseActionPressKey() (Step, error) {
+	line := p.peek().Line
+	p.advance() // press
+	word := strings.ToLower(p.advance().Literal)
+	p.consumeNewline()
+	return ActionStep{Verb: VerbPressKey, Name: word, Line: line}, nil
 }
 
 func (p *Parser) parseActionClear() (Step, error) {
@@ -2379,7 +2454,6 @@ func (p *Parser) parseEnrollBiometric() (Step, error) {
 	p.consumeNewline()
 	return ActionStep{Verb: VerbEnrollBiometric, Line: line}, nil
 }
-
 
 // ---- System dialogs (FP-16) ----
 

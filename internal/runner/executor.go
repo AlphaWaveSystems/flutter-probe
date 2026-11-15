@@ -509,6 +509,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "go back"
 		case parser.VerbPressEnter:
 			return "press enter"
+		case parser.VerbPressKey:
+			return "press " + s.Name
 		case parser.VerbTakeShot:
 			return fmt.Sprintf("screenshot %q", s.Name)
 		case parser.VerbCompareShot:
@@ -751,7 +753,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			sp := toSelectorParam(e.resolveSelector(*a.Sel))
 			sel = &sp
 		}
-		return e.client.Swipe(ctx, string(a.Direction), sel)
+		return e.client.Swipe(ctx, string(a.Direction), sel, a.Percent)
 
 	case parser.VerbScroll:
 		var sel *probelink.SelectorParam
@@ -769,6 +771,12 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 
 	case parser.VerbPressEnter:
 		return e.client.DeviceAction(ctx, "press_enter", "")
+
+	case parser.VerbPressKey:
+		if e.deviceCtx != nil && e.deviceCtx.Platform == device.PlatformIOS {
+			return fmt.Errorf("press %s is not supported on iOS yet: only press enter works there (not verified on a simulator)", a.Name)
+		}
+		return e.client.DeviceAction(ctx, "press_key", a.Name)
 
 	case parser.VerbClose:
 		return e.client.DeviceAction(ctx, "close", a.Name)
