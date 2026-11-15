@@ -103,7 +103,9 @@ func TestHostileWordsReachARealShellAsOneWord(t *testing.T) {
 	}
 	for _, in := range base {
 		for _, quote := range []func(string) string{Quote, Arg} {
-			out, err := exec.Command("sh", "-c", "printf '[%s]' "+quote(in)).Output()
+			cmd := exec.Command("sh", "-c", "printf '[%s]' "+quote(in))
+			cmd.Dir = dir
+			out, err := cmd.Output()
 			if err != nil {
 				t.Fatalf("%q: sh: %v", in, err)
 			}

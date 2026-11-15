@@ -48,7 +48,9 @@ func deviceWords(t *testing.T, args []string) []string {
 		t.Fatalf("not an adb shell call: %q", args)
 	}
 	line := strings.Join(args[3:], " ")
-	out, err := exec.Command("sh", "-c", "printf '%s\\0' "+line).Output()
+	cmd := exec.Command("sh", "-c", "printf '%s\\0' "+line)
+	cmd.Dir = t.TempDir() // a word that were read as shell syntax must not write into the repository
+	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("sh could not read %q: %v", line, err)
 	}
