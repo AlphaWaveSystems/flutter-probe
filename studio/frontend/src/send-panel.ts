@@ -2,9 +2,9 @@
 // called for the first time in a session the person is shown where it leads and has to allow it. Everything is set with textContent,
 // nothing is stored in the browser, and the only calls are Studio's own CheckTarget, AllowHost and SendRequest.
 
-import { AllowHost, CheckTarget, SendRequest } from "../wailsjs/go/main/App";
+import { AllowHost, BuildCallStep, CheckTarget, SendRequest } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
-import { allowText, errorText, parseHeaders, summarize, type SendResultLike, type TargetInfo } from "./send";
+import { allowText, errorText, parseHeaders, savedSummary, summarize, type SendResultLike, type TargetInfo } from "./send";
 import { bodyView, type NetBody, type NetHeader } from "./network";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -121,7 +121,31 @@ async function send(): Promise<void> {
   }
 }
 
-export function initSendPanel(): void {
+/** Saves the typed request as a call step in the open file. Headers are not part of it; Go builds the lines from the method, address and body. */
+let saving = false;
+
+async function saveStep(insertLines: (lines: string[]) => Promise<{ ok: boolean; message?: string }>): Promise<void> {
+  if (saving) return; // a second click or key press while the first is being checked inserts nothing
+  saving = true;
+  ($("btn-send-save") as HTMLButtonElement).disabled = true;
+  const headerLines = $<HTMLTextAreaElement>("send-headers").value.split("\n").filter((l) => l.trim() !== "").length;
+  try {
+    const step = await BuildCallStep(main.SaveStepInput.createFrom({ method: $<HTMLSelectElement>("send-method").value, url: $<HTMLInputElement>("send-url").value.trim(), body: $<HTMLTextAreaElement>("send-body").value }));
+    const done = await insertLines(step.lines);
+    if (!done.ok) {
+      status(done.message || "Nothing was inserted.");
+      return;
+    }
+    status(savedSummary(step.fill, headerLines));
+  } catch (err) {
+    status(errorText(err));
+  } finally {
+    saving = false;
+    ($("btn-send-save") as HTMLButtonElement).disabled = false;
+  }
+}
+
+export function initSendPanel(editor: { insertLines: (lines: string[]) => Promise<{ ok: boolean; message?: string }> }): void {
   const showSend = (on: boolean) => {
     $("send-panel").hidden = !on;
     $("net-body").hidden = on;
@@ -129,6 +153,7 @@ export function initSendPanel(): void {
   $("btn-net-send").addEventListener("click", () => showSend(true));
   $("btn-send-back").addEventListener("click", () => showSend(false));
   $("btn-send").addEventListener("click", () => void send());
+  $("btn-send-save").addEventListener("click", () => void saveStep(editor.insertLines));
   $("send-url").addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") void send();
   });

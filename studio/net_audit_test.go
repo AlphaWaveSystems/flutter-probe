@@ -430,7 +430,10 @@ func TestSeedNamesAreMentionedOnlyWhereTheyBelong(t *testing.T) {
 var sendNames = map[string]bool{
 	"SendRequest": true, "CheckTarget": true, "AllowHost": true, "SendInput": true, "SendResult": true, "sendState": true, "SendHeader": true,
 	"TargetInfo": true, "SendHop": true, "typedValues": true, "collectTyped": true, "asciiHost": true, "parseKey": true, "levelOf": true,
-	"parseTestAllowLocal": true, "parseTestSendRate": true, "MethodByName": true,
+	"parseTestAllowLocal": true, "parseTestSendRate": true, "MethodByName": true, "BuildCallStep": true, "SaveStepInput": true, "SavedStep": true,
+	"buildCallStep": true, "safeURL": true, "safeBody": true, "safeText": true, "probeString": true, "verifyCall": true,
+	"copyJSON": true, "placeholders": true, "leftover": true, "stepEmail": true, "bodyToken": true, "nameBase": true, "savedPrefix": true, "interpolatedForm": true, "cardRuns": true,
+	"checkSavedLine": true, "corruptLineForTest": true, "isAuthName": true, "envForm": true, "varForm": true, "stepXMLElement": true, "stepAuthLine": true, "stepNameLine": true,
 }
 
 // sendMembers are the fields through which the panel's state is reached: every use of its methods is a.send.method, so a selector on
@@ -438,12 +441,12 @@ var sendNames = map[string]bool{
 var sendMembers = map[string]bool{"send": true, "testAllowLocal": true, "maxPerMinute": true}
 
 // sendLiterals are words that, inside a string, name a panel method for a reflective call.
-var sendLiterals = []string{"SendRequest", "CheckTarget", "AllowHost"}
+var sendLiterals = []string{"SendRequest", "CheckTarget", "AllowHost", "BuildCallStep"}
 
 // sendOwn are the files that may use the panel's names, and the few other files with the names they may use.
 func sendOwn(filename string) map[string]bool {
 	switch filename {
-	case "send_policy.go", "send_request.go", "send_host.go", "send_echo.go":
+	case "send_policy.go", "send_request.go", "send_host.go", "send_echo.go", "send_step.go":
 		return nil // everything
 	case "app.go":
 		return map[string]bool{"sendState": true, "send": true}
@@ -559,6 +562,14 @@ func TestTheSendPanelIsReachedByNoOtherCode(t *testing.T) {
 		"the parse of a key from the chat":   {"ai_chat.go", `package main; var _, _, _ = parseKey("x")`},
 		"the monitor takes the allow level":  {"net_exchanges.go", `package main; var _ = levelOf`},
 		"a panel method in the seed":         {"seed_run.go", `package main; func f(a *App) { a.AllowHost("x:1") }`},
+		"the chat builds a step":             {"ai_chat.go", `package main; func f(a *App) { a.BuildCallStep(SaveStepInput{}) }`},
+		"Explain saves a step":               {"ai_explain.go", `package main; var _ = buildCallStep`},
+		"the monitor saves a step":           {"net_exchanges.go", `package main; var _ = SavedStep{}`},
+		"the chat names a helper":            {"ai_chat.go", `package main; var _ = copyJSON`},
+		"Explain uses the placeholders":      {"ai_explain.go", `package main; var _ placeholders`},
+		"the monitor reads the email regexp": {"net_exchanges.go", `package main; var _ = stepEmail`},
+		"a seed file reads the checks":       {"seed_run.go", `package main; var _ = checkSavedLine`},
+		"a string that names the save":       {"ai_chat.go", `package main; func f() { call(a, "BuildCallStep", nil) }`},
 	} {
 		if bad := sendFileMisuse(c.file, c.src); len(bad) == 0 {
 			t.Errorf("%s: accepted", name)

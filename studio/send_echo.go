@@ -78,6 +78,11 @@ func (t *typedValues) addFromJSON(v any, secret bool) {
 		if secret || looksSecret(x) {
 			t.add(x)
 		}
+		for _, tok := range tokenSplit.Split(x, -1) {
+			if looksSecret(tok) {
+				t.add(tok)
+			}
+		}
 	case float64:
 		if secret {
 			t.add(strconv.FormatFloat(x, 'f', -1, 64))
@@ -120,7 +125,10 @@ func collectTyped(rawURL string, headers map[string]string, body string) *typedV
 	}
 	var doc any
 	if json.Unmarshal([]byte(body), &doc) == nil {
-		t.addFromJSON(doc, false) // whole values, spaces and all
+		// Whole values, spaces and all, and the tokens inside each string. The raw text is not read: its escapes (\u2028) are not what the
+		// server echoes, and a token made of one would be a false find.
+		t.addFromJSON(doc, false)
+		return t
 	} else if form, err := url.ParseQuery(body); err == nil && strings.Contains(body, "=") {
 		for name, vals := range form {
 			for _, v := range vals {
@@ -131,7 +139,7 @@ func collectTyped(rawURL string, headers map[string]string, body string) *typedV
 		}
 	}
 	for _, m := range assignment.FindAllStringSubmatch(body, -1) {
-		if isSecretName(m[1]) {
+		if isSecretName(m[1]) && !schemeWords[strings.ToLower(m[2])] {
 			t.add(m[2])
 		}
 	}

@@ -9,6 +9,7 @@ import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
+import { placeStep } from "./send-insert";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
@@ -1289,7 +1290,30 @@ if (inspectorSearch) {
 
 initResults();
 initNetworkPanel();
-initSendPanel();
+// Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
+// Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
+// parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.
+initSendPanel({
+  insertLines: async (lines) => {
+    if (!currentPath) return { ok: false, message: "Nothing was inserted: no file is open. Open a .probe file and put the cursor inside a test." };
+    if (editor.getOption(monaco.editor.EditorOption.readOnly)) return { ok: false, message: "Nothing was inserted: the file is read-only." };
+    const pos = editor.getPosition() ?? new monaco.Position(1, 1);
+    const before = model.getValue();
+    const placed = placeStep(before.split("\n"), pos.lineNumber);
+    if ("reason" in placed) return { ok: false, message: `Nothing was inserted. ${placed.reason}` };
+    const col = model.getLineMaxColumn(placed.after);
+    const text = "\n" + lines.map((l) => placed.indent + l).join("\n");
+    const offset = model.getOffsetAt({ lineNumber: placed.after, column: col });
+    const next = before.slice(0, offset) + text + before.slice(offset);
+    const errors = (ds: { severity: number }[] | null) => (ds ?? []).filter((d) => d.severity === 1).length; // Lint answers null when there is nothing to report
+    if (errors(await Lint(next)) > errors(await Lint(before))) return { ok: false, message: "Nothing was inserted: the step would not parse there. Put the cursor on a step inside a test." };
+    if (model.getValue() !== before) return { ok: false, message: "Nothing was inserted: the file changed while it was checked. Try again." };
+    const applied = editor.executeEdits("send-save", [{ range: new monaco.Range(placed.after, col, placed.after, col), text, forceMoveMarkers: true }]);
+    if (!applied) return { ok: false, message: "Nothing was inserted: the editor did not accept the edit." };
+    editor.revealLine(placed.after + lines.length);
+    return { ok: true };
+  },
+});
 
 // The scope control next to Run picks what runs: the whole file (the default), the test at the cursor, the tests with a
 // tag, or the tests that failed last time. The tag field shows only for the tag scope.

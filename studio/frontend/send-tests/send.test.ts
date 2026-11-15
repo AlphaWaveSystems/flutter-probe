@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_SEND_HEADERS, allowText, errorText, parseHeaders, summarize, type TargetInfo } from "../src/send.ts";
+import { MAX_SEND_HEADERS, allowText, errorText, parseHeaders, savedSummary, summarize, type TargetInfo } from "../src/send.ts";
 
 const target = (extra: Partial<TargetInfo> = {}): TargetInfo => ({ host: "api.example.test", port: "443", key: "api.example.test:443", allowed: false, addresses: ["93.184.216.34"], classes: ["the internet"], local: false, ...extra });
 
@@ -77,5 +77,13 @@ describe("errorText", () => {
   it("drops the Error prefix and keeps the sentence", () => {
     assert.equal(errorText(new Error("only http and https can be called")), "only http and https can be called");
     assert.equal(errorText("plain"), "plain");
+  });
+});
+
+describe("savedSummary", () => {
+  it("says what to set and what was not saved", () => {
+    assert.equal(savedSummary([], 0), "Inserted into the open file. Read the step: values the save could not recognise are written as typed. Save the file to keep it.");
+    assert.match(savedSummary(["TOKEN"], 1), /this environment variable before you run it: TOKEN\. The header was not saved\./);
+    assert.match(savedSummary(["A", "B"], 3), /these environment variables before you run it: A, B\. 3 headers were not saved\./);
   });
 });
