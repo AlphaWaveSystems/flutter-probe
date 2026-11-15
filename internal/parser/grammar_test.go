@@ -178,6 +178,7 @@ var waitKindNames = map[parser.WaitKind]string{
 	parser.WaitAnimations:  "animations",
 	parser.WaitIdle:        "idle",
 	parser.WaitAny:         "any",
+	parser.WaitWebView:     "webview",
 }
 
 // describe renders a step as a short, stable label such as "action:tap".
@@ -188,6 +189,8 @@ func describe(s parser.Step) string {
 	case parser.AssertStep:
 		kind := "assert"
 		switch {
+		case v.WebView != nil:
+			kind = "assert:webview"
 		case v.Native:
 			kind = "assert:native"
 		case v.WithAI:
@@ -692,6 +695,14 @@ var grammarProductionExamples = []productionExample{
 		want: repeat("assert:negated", 4)},
 	{production: "see-any-tail", src: testBody(`see any of "A", "B"`, `see any of "A" or "B" or "C" optional`, `don't see any of "A", "B"`),
 		want: []string{"assert:any", "assert:any", "assert:any:negated"}},
+	{production: "tap-webview-step", src: testBody(`tap "Contact support" in webview`, `tap css:"#submit" in webview`, `tap "Pay" in webview "checkout"`, `tap "x" in "Container"`),
+		want: []string{"action:tap_webview", "action:tap_webview", "action:tap_webview", "action:tap"}},
+	{production: "type-webview-step", src: testBody(`type "hello" into css:"#message" in webview`, `type "42" into "Quantity" in webview "order form"`, `type "x" into "Field"`),
+		want: []string{"action:type_webview", "action:type_webview", "action:type"}},
+	{production: "see-webview-step", src: testBody(`see "Getting Started" in webview`, `don't see css:".error" in webview`, `dont see "Oops" in webview "help"`, `see "Total" in "Cart"`),
+		want: []string{"assert:webview", "assert:webview:negated", "assert:webview:negated", "assert"}},
+	{production: "wait-webview-step", src: testBody(`wait until "Message sent" appears in webview`, `wait until css:"#result" appears in webview "help"`, `wait until "A" appears`),
+		want: []string{"wait:webview", "wait:webview", "wait:appears"}},
 	{production: "see-native-step", src: testBody(`see native "IMG"`, `don't see native "Err"`),
 		want: []string{"assert:native", "assert:native:negated"}},
 	{production: "assert-defects-step", src: testBody(`assert no visual defects with ai`, `assert no defects with ai`),
