@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/grandcat/zeroconf"
@@ -14,6 +17,14 @@ import (
 // for this name to discover physical devices on the LAN. The token is
 // deliberately not advertised in TXT records — the user enters it manually.
 const mdnsServiceType = "_flutterprobe._tcp"
+
+// Limits on what a browse reads and lists: an announcement is untrusted text from any machine on the network.
+const (
+	wifiMaxName    = 64  // characters of a device name shown in the list
+	wifiMaxDevices = 256 // devices one browse lists; more are ignored
+	wifiMaxTXT     = 32  // TXT records read from one announcement
+	wifiMaxTXTLen  = 255 // bytes of one TXT record: the most a TXT string can hold
+)
 
 // WiFiDevice is the JSON shape the frontend renders for a discovered agent.
 type WiFiDevice struct {
@@ -58,21 +69,9 @@ func (d *wifiDiscovery) Start(ctx context.Context) error {
 	entries := make(chan *zeroconf.ServiceEntry)
 	go func() {
 		for entry := range entries {
-			dev := entryToDevice(entry)
-			if dev.Host == "" {
-				continue // skip entries with no IPv4 we can dial
+			if dev, ok := d.admit(entry); ok {
+				wailsruntime.EventsEmit(ctx, "wifi:device-found", dev)
 			}
-			key := fmt.Sprintf("%s:%d", dev.Host, dev.Port)
-			d.mu.Lock()
-			_, dup := d.seen[key]
-			if !dup {
-				d.seen[key] = dev
-			}
-			d.mu.Unlock()
-			if dup {
-				continue
-			}
-			wailsruntime.EventsEmit(ctx, "wifi:device-found", dev)
 		}
 	}()
 
@@ -82,6 +81,26 @@ func (d *wifiDiscovery) Start(ctx context.Context) error {
 		return fmt.Errorf("zeroconf browse: %w", err)
 	}
 	return nil
+}
+
+// admit turns an announcement into a device and says whether it is new: an announcement that cannot be dialed, one whose address and
+// port were listed already (under any name), and anything past the limit are not.
+func (d *wifiDiscovery) admit(entry *zeroconf.ServiceEntry) (WiFiDevice, bool) {
+	dev := entryToDevice(entry)
+	if dev.Host == "" {
+		return WiFiDevice{}, false // no IPv4 address we can dial
+	}
+	key := fmt.Sprintf("%s:%d", dev.Host, dev.Port)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, dup := d.seen[key]; dup {
+		return WiFiDevice{}, false
+	}
+	if len(d.seen) >= wifiMaxDevices {
+		return WiFiDevice{}, false
+	}
+	d.seen[key] = dev
+	return dev, true
 }
 
 // Stop cancels the active browse, if any. Safe to call when nothing is
@@ -95,28 +114,48 @@ func (d *wifiDiscovery) Stop() {
 	}
 }
 
-// entryToDevice condenses a zeroconf entry into the JSON shape the UI wants.
-// IPv4 is preferred since the agent listens on InternetAddress.anyIPv4;
-// IPv6-only environments aren't on the supported matrix yet.
+// entryToDevice condenses a zeroconf entry into the JSON shape the UI wants. Everything in an announcement is untrusted text from any
+// machine on the network, so what comes out is bounded and plain:
+//
+//   - the name has no control, invisible or direction-changing character, is at most wifiMaxName characters, and is the address when
+//     nothing is left of it;
+//   - the version is one short word of letters, digits and . + _ -, the first `version` TXT value (RFC 6763), read from the first
+//     wifiMaxTXT records of at most wifiMaxTXTLen bytes each, or nothing;
+//   - the host is the first IPv4 address that is a place on the network (not 0.0.0.0, multicast, broadcast or loopback), and an
+//     announcement with no such address or with a port outside 1 to 65535 has no host, so it is not listed.
+//
+// IPv4 is preferred since the agent listens on InternetAddress.anyIPv4; IPv6-only environments aren't on the supported matrix yet.
 func entryToDevice(e *zeroconf.ServiceEntry) WiFiDevice {
-	dev := WiFiDevice{
-		Name: e.Instance,
-		Port: e.Port,
-	}
-	if len(e.AddrIPv4) > 0 {
-		dev.Host = e.AddrIPv4[0].String()
-	}
-	for _, txt := range e.Text {
-		// TXT records arrive as "key=value" strings.
-		for i := 0; i < len(txt); i++ {
-			if txt[i] == '=' {
-				k, v := txt[:i], txt[i+1:]
-				if k == "version" {
-					dev.Version = v
-				}
+	dev := WiFiDevice{Port: e.Port}
+	if e.Port >= 1 && e.Port <= 65535 {
+		for _, ip := range e.AddrIPv4 {
+			if v4 := ip.To4(); v4 != nil && !v4.IsUnspecified() && !v4.IsMulticast() && !v4.IsLoopback() && !v4.Equal(net.IPv4bcast) {
+				dev.Host = v4.String()
 				break
 			}
 		}
 	}
+	dev.Name = strings.TrimSpace(capRunes(withoutInvisible(capRunes(e.Instance, wifiMaxName*8), false), wifiMaxName))
+	if dev.Name == "" || strings.Trim(dev.Name, "?…") == "" {
+		dev.Name = dev.Host
+	}
+	for i, txt := range e.Text {
+		if i >= wifiMaxTXT {
+			break
+		}
+		if len(txt) > wifiMaxTXTLen {
+			continue // not a TXT string: they hold at most 255 bytes
+		}
+		// TXT records arrive as "key=value" strings.
+		k, v, ok := strings.Cut(txt, "=")
+		if ok && k == "version" {
+			if wifiVersion.MatchString(v) {
+				dev.Version = v
+			}
+			break // the first one counts, whatever it holds
+		}
+	}
 	return dev
 }
+
+var wifiVersion = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+_\-]{0,31}$`)

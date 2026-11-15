@@ -215,6 +215,8 @@ The full list of conditions on the phone and the network is in [Physical iPhone 
 
 ## WiFi auto-discovery
 
+Studio treats an announcement as untrusted text from any machine on the network: a device name is cleaned of control, invisible and direction-changing characters and shown at most 64 characters long, the version must be one short word, an address that is not a place on the network (0.0.0.0, multicast, broadcast, loopback) or a port outside 1 to 65535 is not listed, at most 256 devices are listed per search, and you still enter the token yourself; the token is never announced.
+
 The core agent has **no native dependency**: a native plugin in your app's dependencies is linked into every
 build of that app, release included. mDNS advertising needs one (Bonjour/NSD), so the agent only defines a hook,
 `ProbeAdvertiser`, and you implement it in the build you test on devices. No extra FlutterProbe package is needed.

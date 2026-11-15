@@ -78,6 +78,9 @@ jobs:
       - name: Triage tests
         working-directory: studio/frontend
         run: npm run test:triage
+      - name: Wi-Fi device tests
+        working-directory: studio/frontend
+        run: npm run test:wifi
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
