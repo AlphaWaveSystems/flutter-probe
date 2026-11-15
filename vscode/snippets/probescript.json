@@ -205,6 +205,14 @@
     ],
     "description": "Set the device's light or dark mode (auto is Android only)"
   },
+  "Set airplane mode": {
+    "prefix": "setairplane",
+    "body": [
+      "set airplane mode ${1|on,off|}",
+      "$0"
+    ],
+    "description": "Turn an Android emulator's airplane mode on or off; nothing restores it"
+  },
   "ARB label": {
     "prefix": "l10n",
     "body": [

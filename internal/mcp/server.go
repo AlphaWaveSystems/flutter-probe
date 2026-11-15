@@ -241,6 +241,9 @@ Supports the full ProbeScript syntax:
                      to any language.
   Appearance:      set appearance dark (or light; auto on Android) sets the device's light or
                      dark mode. The app is not relaunched. A physical iOS device is refused.
+  Airplane mode:   set airplane mode on|off turns an Android emulator's airplane mode on or off. Nothing
+                     turns it back, so a test that turns it on must turn it off. Only an emulator (serial
+                     emulator-NNNN) takes it; iOS simulators, physical and network devices are refused.
   Keyboard:        press enter — the keyboard action key on the focused text field.
   See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first

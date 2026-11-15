@@ -172,7 +172,7 @@ compound-keyword = "don't see" | "dont see" | "go back" | "press enter" | "long 
                  | "before all tests" | "after all tests" | "before all" | "after all"
                  | "before each test" | "after each test" | "before each" | "after each" | "on failure" | "with examples"
                  | "clear app data" | "grant all permissions" | "revoke all permissions"
-                 | "allow permission" | "deny permission" | "set location" | "set language" | "set appearance"
+                 | "allow permission" | "deny permission" | "set location" | "set language" | "set appearance" | "set airplane mode"
                  | "verify external browser" | "add media" ;
 ```
 
@@ -410,7 +410,7 @@ line-step  = tap-native-step | tap-step | type-native-step | type-step
            | open-app-step | open-link-step | close-step | restart-step | kill-step | clear-data-step
            | go-back-step | press-enter-step | shake-step | pause-step | log-step | rotate-step
            | permission-step | grant-revoke-step
-           | copy-step | paste-step | set-location-step | set-language-step | set-appearance-step
+           | copy-step | paste-step | set-location-step | set-language-step | set-appearance-step | set-airplane-step
            | verify-browser-step | add-media-step
            | take-screenshot-step | compare-screenshot-step | dump-tree-step | save-logs-step
            | store-step | read-ai-step | deliver-signal-step
@@ -454,7 +454,7 @@ The first matching row wins.
 | `close`, `restart`, `kill`, `go back`, `press enter`, `shake`, `pause`, `log`, `rotate` | the step of the same name |
 | `allow`, `deny`, `allow permission`, `deny permission` | `permission-step` |
 | `grant`, `revoke`, `grant all permissions`, `revoke all permissions` | `grant-revoke-step` |
-| `copy`, `paste`, `set location`, `set language`, `set appearance`, `verify external browser`, `add media` | the step of the same name |
+| `copy`, `paste`, `set location`, `set language`, `set appearance`, `set airplane mode`, `verify external browser`, `add media` | the step of the same name |
 | `take`, `compare`, `dump`, `save` | `take-screenshot-step`, `compare-screenshot-step`, `dump-tree-step`, `save-logs-step` |
 | `store`, `read`, `deliver` | `store-step`, `read-ai-step`, `deliver-signal-step` |
 | `biometric`, `enroll` | `biometric-step`, `enroll-biometric-step` |
@@ -778,6 +778,7 @@ paste-step           = "paste" , rest-of-line ;                         (* "from
 set-location-step    = "set location" , fillers , coordinate ;
 set-language-step    = "set language" , fillers , STRING ;               (* "de", "pt-BR", "system" *)
 set-appearance-step  = "set appearance" , fillers , ( "light" | "dark" | "auto" | STRING ) ;   (* the STRING must be one of those three; "auto" is refused on iOS when the step runs *)
+set-airplane-step    = "set airplane mode" , [ "to" ] , ( "on" | "off" | STRING ) ;   (* the STRING must be "on" or "off"; a state is not restored at the end of the test *)
 verify-browser-step  = "verify external browser" , rest-of-line ;       (* "opened" is swallowed *)
 add-media-step       = "add media" , fillers , text-operand ;
 
