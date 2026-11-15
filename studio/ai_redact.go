@@ -10,7 +10,8 @@ const redactedMark = "[redacted]"
 
 // Credential-looking text. The families are the token shapes of the common providers, an Authorization header, a PEM private
 // key, an assignment whose name says it is a secret, and a secret query parameter. Every piece of text that Studio sends to
-// a provider passes through redactCredentials. Emails and file paths are not redacted: they are ordinary test text.
+// a provider passes through redactCredentials. Emails and file paths are not redacted: they are ordinary test text. A JWT of any
+// length and a card number are (see redactCardsAndJWTs).
 var (
 	apiKeyPattern      = regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{8,}`)
 	githubTokenPattern = regexp.MustCompile(`\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}`)
@@ -28,6 +29,28 @@ var (
 	longBase64Pattern  = regexp.MustCompile(`[A-Za-z0-9+/]{40,}={0,2}`)
 )
 
+// redactCardsAndJWTs replaces a JWT of any length (three dot-separated segments that start with eyJ: the long ones are caught by the
+// base64 rule, a short one is not) and a card number written solid or with single spaces or hyphens between its digits (13 to 19
+// digits that pass the Luhn check, the same rule the request monitor applies). About one 13-to-19 digit number in ten passes the check
+// by chance, so a long number in a prompt, such as a timestamp in milliseconds, is sometimes redacted: that is the cost of not sending a
+// card number.
+func redactCardsAndJWTs(s string) string {
+	s = jwtPattern.ReplaceAllString(s, redactedMark)
+	return cardPattern.ReplaceAllStringFunc(s, func(run string) string {
+		digits := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, run)
+		// cardPattern already limits the run to 13 to 19 digits.
+		if luhn(digits) {
+			return redactedMark
+		}
+		return run
+	})
+}
+
 // redactCredentials replaces credential-looking text in s with redactedMark. An assignment keeps its name, and a query
 // parameter keeps its name, so the text still says what was there. A long base64 run is redacted only when it holds a digit
 // or a base64 symbol, so a long identifier made of letters alone is kept.
@@ -44,6 +67,7 @@ func redactCredentials(s string) string {
 		}
 		return m[:len(m)-len(run)] + redactedMark
 	})
+	s = redactCardsAndJWTs(s)
 	s = secretQueryParam.ReplaceAllString(s, "${1}"+redactedMark)
 	s = assignedSecret.ReplaceAllString(s, "${1}"+redactedMark)
 	return longBase64Pattern.ReplaceAllStringFunc(s, func(run string) string {

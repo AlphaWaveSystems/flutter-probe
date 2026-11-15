@@ -15,6 +15,7 @@ import (
 const (
 	maxSeedBytes     = 1 << 20
 	maxSeedResults   = 50
+	maxSeedSteps     = 200
 	maxSeedExchanges = 1000
 )
 
@@ -71,28 +72,49 @@ func strictJSON(b []byte, v any) bool {
 
 // seededResults reads the finished tests a headless build starts with, so a browser spec can show the screens that need a failed
 // run without a device. See readSeedFile for what is accepted. The file is a JSON list of tests in the shape RunState.results has, read
-// strictly (no unknown field, nothing after the list), at most 50 tests.
+// strictly (no unknown field, nothing after the list), at most 50 tests. It may instead be an object {"results": [...], "steps": [...]}
+// with the same rules, when a spec needs the failed step of the run too (seededRun).
 func seededResults(headless bool, path, workspace string) (results []RunResult, note string) {
+	results, _, note = seededRun(headless, path, workspace)
+	return results, note
+}
+
+// seededRun is seededResults with the steps of the run: at most 200, in the shape RunState.steps has.
+func seededRun(headless bool, path, workspace string) (results []RunResult, steps []RunStep, note string) {
 	if path == "" {
-		return nil, ""
+		return nil, nil, ""
 	}
 	const env = "PROBE_STUDIO_SEED_RUN"
 	b, note := readSeedFile(env, headless, path, workspace)
 	if note != "" {
-		return nil, note
+		return nil, nil, note
 	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&results); err != nil {
-		return nil, env + " was ignored: the file is not a JSON list of tests"
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, env + " was ignored: the file has more after the list"
+	if t := bytes.TrimLeft(b, " \t\r\n"); len(t) > 0 && t[0] == '{' {
+		var doc struct {
+			Results []RunResult `json:"results"`
+			Steps   []RunStep   `json:"steps"`
+		}
+		if !strictJSON(b, &doc) {
+			return nil, nil, env + " was ignored: the file is not a JSON list of tests or an object with results and steps"
+		}
+		results, steps = doc.Results, doc.Steps
+	} else {
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&results); err != nil {
+			return nil, nil, env + " was ignored: the file is not a JSON list of tests"
+		}
+		if _, err := dec.Token(); err != io.EOF {
+			return nil, nil, env + " was ignored: the file has more after the list"
+		}
 	}
 	if len(results) > maxSeedResults {
-		return nil, fmt.Sprintf("%s was ignored: more than %d tests", env, maxSeedResults)
+		return nil, nil, fmt.Sprintf("%s was ignored: more than %d tests", env, maxSeedResults)
 	}
-	return results, ""
+	if len(steps) > maxSeedSteps {
+		return nil, nil, fmt.Sprintf("%s was ignored: more than %d steps", env, maxSeedSteps)
+	}
+	return results, steps, ""
 }
 
 // seededExchanges reads the request log a headless build answers with when no app is connected, for the browser specs of the network
@@ -117,7 +139,10 @@ func seededExchanges(headless bool, path, workspace string) (res probelink.HTTPL
 }
 
 // seedRun makes results the last finished run, as if a run had just ended.
-func (a *App) seedRun(results []RunResult) {
+func (a *App) seedRun(results []RunResult, steps ...RunStep) {
 	a.track.begin("", RunPlan{})
+	for _, s := range steps {
+		a.track.step(s)
+	}
 	a.track.finish(results, nil)
 }

@@ -30,6 +30,16 @@ export function seedRun() {
   ];
 }
 
+/** The seeded run with the failed step of the first failed test, for the Suggest a fix specs (the failed step is what a selector fix is about). */
+export function seedRunWithSteps() {
+  return {
+    results: seedRun(),
+    steps: [
+      { file: "probe-tests/login.probe", test: "sign in", line: 4, description: 'tap "Sign in"', status: "failed", durationMs: 12, attempt: 0, depth: 0, error: seedRun()[0].error },
+    ],
+  };
+}
+
 // The request log the browser suite starts with (PROBE_STUDIO_SEED_EXCHANGES, headless only): a secret in every position the agent
 // records, hostile text, a binary body, a body over 1 MB, a failed request and ten thousand headers on one. The values are built from
 // pieces. A marker, netSecret, is the value that must never be on the page.

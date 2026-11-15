@@ -116,9 +116,11 @@
         <div id="results-panel" class="pane-panel">
         <div id="explain-bar" class="explain-bar" hidden>
           <button type="button" id="btn-explain" class="btn-mini" title="Ask the AI provider for advice on the failed tests of the last run. You see what is sent first.">Explain failures</button>
+          <button type="button" id="btn-fix" class="btn-mini" title="Ask the AI provider for one ProbeScript line to replace the failed step. You see what is sent first.">Suggest a fix</button>
           <span id="explain-status" class="dim" role="status"></span>
         </div>
         <section id="explain-card" class="explain-card" aria-label="Advisory" hidden></section>
+        <section id="fix-card" class="explain-card" aria-label="Suggested fix" hidden></section>
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
         </div>
         <div id="network-panel" class="pane-panel" hidden>
@@ -290,6 +292,20 @@
         <div class="settings-actions">
           <button type="button" id="btn-ai-preview-cancel" class="btn">Cancel</button>
           <button type="button" id="btn-ai-preview-send" class="btn btn-primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="fix-preview-overlay" class="overlay" hidden>
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="fix-preview-title">
+        <div class="overlay-header">
+          <h2 id="fix-preview-title">Before Suggest a fix</h2>
+        </div>
+        <p id="fix-preview-note" class="dim"></p>
+        <pre id="fix-preview-text" class="ai-preview-text"></pre>
+        <div class="settings-actions">
+          <button type="button" id="btn-fix-preview-cancel" class="btn">Cancel</button>
+          <button type="button" id="btn-fix-preview-send" class="btn btn-primary">Send</button>
         </div>
       </div>
     </div>

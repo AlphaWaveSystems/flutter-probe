@@ -215,6 +215,36 @@ func resolveDeviceAppID(written string, platform device.Platform, installed func
 	return written
 }
 
+// singleDeviceContext builds the device context of a single-device run, which the platform-level operations (restart,
+// clear data, permissions) and the settings steps read. NewDeviceContext asks whether the device is physical, and a physical
+// device takes the HTTP fallback. A platform the run does not know counts as physical, so no emulator-only step runs on it.
+func singleDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Config, platform device.Platform, serial, agentHost string, autoYes, noGrantOnClear bool, confirm runner.ConfirmFunc) *runner.DeviceContext {
+	dc := runner.NewDeviceContext(ctx, dm, platform, serial)
+	dc.UseHTTP = dc.IsPhysical // physical devices use HTTP fallback
+	dc.DriverPort = cfg.Agent.DriverPort
+	dc.AppID = cfg.Project.App
+	dc.Port = cfg.Agent.Port
+	dc.DevicePort = cfg.Agent.AgentDevicePort()
+	dc.AgentHost = agentHost // device IP for WiFi mode
+	dc.AllowClearData = autoYes
+	dc.Confirm = confirm
+	dc.GrantPermissionsOnClear = (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear
+	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
+	dc.RestartDelay = cfg.Device.RestartDelay
+	dc.TokenReadTimeout = cfg.Agent.TokenReadTimeout
+	dc.DialTimeout = cfg.Agent.DialTimeout
+	return dc
+}
+
+// localeDeviceContext builds the device context of the --locale step: the app's language is set through it, and the app is
+// relaunched through it. NewDeviceContext asks whether the device is physical, so SetLanguage refuses a physical iPhone.
+func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Config, platform device.Platform, serial string) *runner.DeviceContext {
+	lc := runner.NewDeviceContext(ctx, dm, platform, serial)
+	lc.AppID = cfg.Project.App
+	lc.RestartDelay = cfg.Device.RestartDelay
+	return lc
+}
+
 func runTests(cmd *cobra.Command, args []string) error {
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
@@ -925,9 +955,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if cfg.Project.App == "" {
 					return fmt.Errorf("--locale: project.app must be set in probe.yaml")
 				}
-				lc := runner.NewDeviceContext(ctx, dm, platform, deviceSerial)
-				lc.AppID = cfg.Project.App
-				lc.RestartDelay = cfg.Device.RestartDelay
+				lc := localeDeviceContext(ctx, dm, cfg, platform, deviceSerial)
 				if err := lc.SetLanguage(ctx, lang); err != nil {
 					return fmt.Errorf("--locale: %w", err)
 				}
@@ -1199,26 +1227,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
-		// The device context asks whether the device is physical (vs emulator/simulator), once, for every builder.
-		devCtx = runner.NewDeviceContext(ctx, dm, platform, deviceSerial)
-		isPhysical := devCtx.IsPhysical
-		if isPhysical {
+		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear, confirmFunc())
+		if devCtx.IsPhysical {
 			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
 		}
-
-		devCtx.DriverPort = cfg.Agent.DriverPort
-		devCtx.AppID = cfg.Project.App
-		devCtx.Port = cfg.Agent.Port
-		devCtx.DevicePort = cfg.Agent.AgentDevicePort()
-		devCtx.UseHTTP = isPhysical  // physical devices use HTTP fallback
-		devCtx.AgentHost = agentHost // device IP for WiFi mode
-		devCtx.AllowClearData = autoYes
-		devCtx.Confirm = confirmFunc()
-		devCtx.GrantPermissionsOnClear = (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear
-		devCtx.ReconnectDelay = cfg.Agent.ReconnectDelay
-		devCtx.RestartDelay = cfg.Device.RestartDelay
-		devCtx.TokenReadTimeout = cfg.Agent.TokenReadTimeout
-		devCtx.DialTimeout = cfg.Agent.DialTimeout
 	}
 
 	// The device class (emulator, simulator, physical, cloud) is only known now; add it to the report metadata.
