@@ -99,7 +99,7 @@ Available permissions: `notifications`, `camera`, `location`, `microphone`, `sto
 over the WebView's own debugging socket (Chrome DevTools Protocol), through `adb forward` to a loopback port that probe
 removes after every step. The app must have `WebView.setWebContentsDebuggingEnabled(true)`. Only the app under test's own
 socket is used. See [WebView content](/probescript/syntax/#webview-content-android) for the syntax, the limits (top document
-only, no shadow DOM or iframes, a disabled input refuses typing, a read-only one silently ignores it) and an example.
+only, no shadow DOM or iframes, an element that cannot take typed text, such as a read-only or disabled field or a checkbox, is refused) and an example.
 
 ```
 tap "Contact support" in webview

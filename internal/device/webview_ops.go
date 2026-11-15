@@ -50,8 +50,13 @@ const findFunction = `function (kind, query, maxText, mode) {
     if (typeof found.focus === 'function') { found.focus(); }
     focused = document.activeElement === found;
   }
+  var tag = String(found.tagName || '').toLowerCase();
+  var disabled = false;
+  try { disabled = found.matches(':disabled'); } catch (err) { disabled = false; }
   var r = found.getBoundingClientRect();
-  return { count: list.length, visible: true, focused: focused, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight, text: label(found).slice(0, maxText) };
+  return { count: list.length, visible: true, focused: focused,
+    tag: tag.slice(0, 20), inputType: tag === 'input' ? String(found.type || '').toLowerCase().slice(0, 20) : '',
+    readOnly: found.readOnly === true, disabled: disabled, editable: found.isContentEditable === true, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight, text: label(found).slice(0, maxText) };
 }`
 
 const (
@@ -95,10 +100,14 @@ func CSS(v string) Selector { return Selector{Kind: SelectCSS, Value: v} }
 type ElementInfo struct {
 	Count   int
 	Visible bool
-	Focused bool    // only set by a focusing lookup: the element holds the focus afterwards
-	X, Y    float64 // the centre, in CSS pixels of the page's viewport
-	W, H    float64
-	Text    string // at most maxElementText printable characters
+	Focused bool // only set by a focusing lookup: the element holds the focus afterwards
+	// What kind of element it is, as the page reports it (checked before use): the lower-case tag name, the type of an input, and whether it is read-only,
+	// disabled (itself or through a disabled fieldset) or content-editable.
+	Tag, InputType               string
+	ReadOnly, Disabled, Editable bool
+	X, Y                         float64 // the centre, in CSS pixels of the page's viewport
+	W, H                         float64
+	Text                         string // at most maxElementText printable characters
 }
 
 // WebViewError is a failure with a stable kind, for the runner to turn into a step result.
@@ -172,17 +181,22 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mod
 	var out struct {
 		Result struct {
 			Value struct {
-				Invalid bool    `json:"invalid"`
-				Count   int     `json:"count"`
-				Visible bool    `json:"visible"`
-				Focused bool    `json:"focused"`
-				X       float64 `json:"x"`
-				Y       float64 `json:"y"`
-				W       float64 `json:"w"`
-				H       float64 `json:"h"`
-				VW      float64 `json:"vw"`
-				VH      float64 `json:"vh"`
-				Text    string  `json:"text"`
+				Invalid  bool    `json:"invalid"`
+				Count    int     `json:"count"`
+				Visible  bool    `json:"visible"`
+				Focused  bool    `json:"focused"`
+				X        float64 `json:"x"`
+				Y        float64 `json:"y"`
+				W        float64 `json:"w"`
+				H        float64 `json:"h"`
+				VW       float64 `json:"vw"`
+				VH       float64 `json:"vh"`
+				Text     string  `json:"text"`
+				Tag      string  `json:"tag"`
+				Type     string  `json:"inputType"`
+				ReadOnly bool    `json:"readOnly"`
+				Disabled bool    `json:"disabled"`
+				Editable bool    `json:"editable"`
 			} `json:"value"`
 		} `json:"result"`
 		ExceptionDetails json.RawMessage `json:"exceptionDetails"`
@@ -202,7 +216,8 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mod
 	if v.Visible && !sane(v.X, v.Y, v.W, v.H, v.VW, v.VH) {
 		return ElementInfo{}, &WebViewError{Kind: "page error", Message: "the WebView page reported a position outside its viewport"}
 	}
-	return ElementInfo{Count: v.Count, Visible: v.Visible, Focused: v.Focused, X: v.X, Y: v.Y, W: v.W, H: v.H, Text: shown(s.redact(v.Text))}, nil
+	return ElementInfo{Count: v.Count, Visible: v.Visible, Focused: v.Focused, X: v.X, Y: v.Y, W: v.W, H: v.H, Text: shown(s.redact(v.Text)),
+		Tag: kindWord(v.Tag), InputType: kindWord(v.Type), ReadOnly: v.ReadOnly, Disabled: v.Disabled, Editable: v.Editable}, nil
 }
 
 // sane reports whether a position and size reported by the page are finite, within bounds, and inside the viewport the page reported.
@@ -257,6 +272,41 @@ func (s *WebViewSession) See(ctx context.Context, sel Selector) error {
 	return err
 }
 
+// kindWord accepts a tag name or an input type from the page only in the shape those have (lower case letters, digits and hyphens, at most 20); anything else is "?" so it can never carry page text into a message.
+func kindWord(s string) string {
+	if len(s) > 20 {
+		return "?"
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			return "?"
+		}
+	}
+	return s
+}
+
+// textInputTypes are the input types Input.insertText can fill with text.
+var textInputTypes = map[string]bool{"": true, "text": true, "search": true, "email": true, "url": true, "tel": true, "password": true, "number": true}
+
+// typeRefusal says why text cannot be typed into the element, or "" when it can: a disabled or read-only field, an input of a type that takes no typed text (a checkbox, a date, a file picker...),
+// or an element that is not a text field at all. A content-editable element and a textarea take text.
+func typeRefusal(info ElementInfo) string {
+	switch {
+	case info.Disabled:
+		return "disabled"
+	case info.ReadOnly:
+		return "read-only"
+	case info.Editable, info.Tag == "textarea":
+		return ""
+	case info.Tag == "input":
+		if textInputTypes[info.InputType] {
+			return ""
+		}
+		return fmt.Sprintf("an input of type %q", info.InputType)
+	}
+	return fmt.Sprintf("not a text field: %s", info.Tag)
+}
+
 // Tap taps the first visible element that matches query, at its centre, with a mouse press and release.
 func (s *WebViewSession) Tap(ctx context.Context, sel Selector) error {
 	info, err := s.locate(ctx, sel, "find")
@@ -279,6 +329,10 @@ func (s *WebViewSession) Type(ctx context.Context, sel Selector, text string) er
 	info, err := s.locate(ctx, sel, "focus")
 	if err != nil {
 		return err
+	}
+	if why := typeRefusal(info); why != "" {
+		// Input.insertText into such an element does nothing and reports no error, so the step refuses instead of passing with nothing typed
+		return &WebViewError{Kind: "not editable", Message: fmt.Sprintf("The element %q in the WebView page %q cannot be typed into (%s), so nothing was typed", shown(s.redact(sel.Value)), s.title, why)}
 	}
 	if !info.Focused {
 		// typing into whatever else has the focus would put the text in the wrong place

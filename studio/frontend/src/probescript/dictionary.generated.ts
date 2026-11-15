@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "d5569d262b658da1747b8f2d4b802a7001eeba61fdd348bee1aa1ec40e38dedd";
+export const SOURCE_SHA256 = "b7a1514a9e89df037716f029cb7a418324f3d4cfc070cf909cd3f75c2b47072f";
 
 export const COMMANDS = [
   {
@@ -164,7 +164,7 @@ export const COMMANDS = [
   {
     "command": "type ... in webview",
     "syntax": "type \"hello\" into css:\"#message\" in webview",
-    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element does not take the focus (a disabled input, or any element that cannot be focused); a read-only input does take the focus and ignores the text without an error. Android only",
+    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element cannot take typed text: a disabled or read-only field, an input of a type that takes no text (checkbox, radio, file, button, range, color, date and time types), an element that is not a text field (a select, a button, a plain element), or one that does not take the focus. Text and number inputs, textareas and content-editable elements are typed into. Android only",
     "category": "Actions"
   },
   {

@@ -438,7 +438,10 @@ tap "Pay" in webview "checkout"          # name the page when the app has more t
   matches no page, or more than one, is an error that lists the pages (use a longer part of the title or address).
 - The step acts on the first **visible** element that matches, scrolled into view. `tap` presses and releases at its
   centre. `type` focuses the element, checks that it holds the focus and then inserts the text; if it did not take the
-  focus (a disabled input, or any element that cannot be focused) nothing is typed and the step fails. A text or selector
+  focus, or cannot take typed text, nothing is typed and the step fails with the reason: `(disabled)`, `(read-only)`, `(an input of
+  type "checkbox")` and so on, or `(not a text field: select)`. Text, search, email, url, tel, password and number inputs, textareas
+  and content-editable elements are typed into; checkbox, radio, file, button, range, color and the date and time inputs are not.
+  A text or selector
   longer than 2048 characters, or a text to type longer than 8192, is refused before anything is sent. `don't see` passes when no element matches or
   the match is hidden, and fails when the WebView itself cannot be reached.
 - There is no step that runs JavaScript, and none can be written: the lookup is a fixed piece of probe's own code, and your
@@ -470,9 +473,9 @@ test "contact support from the help page"
 - **Android only.** On iOS the steps fail with a message that says so; in a cloud run (no adb) they are skipped like the other
   device-only steps.
 - **Only the top document of a page is searched.** Content inside a shadow DOM or an iframe is not found.
-- **A disabled input cannot take the focus, so the step refuses it. A read-only input can take the focus and ignores typed
-  text, and the step does not notice**: it passes and nothing is typed (see the value with `see css:"..."` afterwards if it
-  matters). The focus is checked once: a page that moves
+- **A field that cannot take typed text is refused, with the reason, and nothing is typed**: a disabled or read-only field, a
+  checkbox, a date input and the like, a select, a button. (The page is asked what kind of element it is, so a custom widget
+  that is not an input, a textarea or content-editable is refused too.) The focus is checked once: a page that moves
   the focus away right after can still receive the text elsewhere. The text is inserted as text, not as key presses, so a
   page that only reacts to key events may not notice it.
 - **Positions are in CSS pixels**, tested at a device pixel ratio of 1; other ratios, scrolled pages and iframes are not yet
