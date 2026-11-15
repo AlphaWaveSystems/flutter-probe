@@ -635,6 +635,34 @@ func TestParser_Swipe(t *testing.T) {
 	}
 }
 
+// TestParser_PressKey checks `press <key>`: each key in pressKeys is a press_key step with the key as its name, `press enter`
+// stays its own step, and a word that is not a key is a parse error that names the keys.
+func TestParser_PressKey(t *testing.T) {
+	for _, key := range []string{"tab", "escape", "backspace", "space", "up", "down", "left", "right"} {
+		a := firstAction(t, mustParse(t, testBody("press "+key)).Tests[0].Body)
+		if a.Verb != parser.VerbPressKey || a.Name != key {
+			t.Errorf("press %s: verb %q, name %q; want press_key %s", key, a.Verb, a.Name, key)
+		}
+	}
+	if a := firstAction(t, mustParse(t, testBody("press Tab")).Tests[0].Body); a.Verb != parser.VerbPressKey || a.Name != "tab" {
+		t.Errorf("press Tab: verb %q, name %q; want the key in lower case", a.Verb, a.Name)
+	}
+	if a := firstAction(t, mustParse(t, testBody("press enter")).Tests[0].Body); a.Verb != parser.VerbPressEnter {
+		t.Errorf("press enter: verb %q, want press_enter", a.Verb)
+	}
+	// Anything else that starts with press is a recipe call, as it always was: a word that is not a key, a string, a key
+	// with more words after it, or no word at all.
+	for _, src := range []string{"press home", "press", `press "Tab"`, "press tab now", "press the tab"} {
+		prog := mustParse(t, testBody(src))
+		if _, ok := prog.Tests[0].Body[0].(parser.RecipeCall); !ok {
+			t.Errorf("%q: got %#v, want a recipe call", src, prog.Tests[0].Body[0])
+		}
+	}
+	if _, err := parser.ParseFile(testBody("press home")); err != nil {
+		t.Errorf("press home: %v, want it parsed as a recipe call", err)
+	}
+}
+
 // TestParser_SwipeOverPercent checks the distance of a swipe: "over N percent" is a whole number from 1 to 100 that ends the
 // line, and a swipe without it keeps the default (0 in the AST, which the agent runs as 50 percent).
 func TestParser_SwipeOverPercent(t *testing.T) {

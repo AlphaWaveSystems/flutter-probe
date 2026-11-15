@@ -766,7 +766,7 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			default:
 				// ProbeScript has no other key steps; a made-up step would fail as an
 				// unknown recipe call at runtime.
-				return fmt.Sprintf("# TODO: pressKey %s has no ProbeScript equivalent (only `go back` and `press enter` exist)", key),
+				return fmt.Sprintf("# TODO: pressKey %s has no ProbeScript equivalent (ProbeScript has `go back`, `press enter`, and `press` with tab, escape, backspace, space, up, down, left or right)", key),
 					fmt.Sprintf("pressKey %s was not converted", key)
 			}
 

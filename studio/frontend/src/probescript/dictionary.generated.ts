@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "4e195edcd8dce0008f99cfafc6ccb1d629c52b8945c7358977b4963f8ccff4a2";
+export const SOURCE_SHA256 = "d93fcd6ff4e383c892150da6d5eba0b658c8879773360b05928b5637c2a86796";
 
 export const COMMANDS = [
   {
@@ -57,6 +57,12 @@ export const COMMANDS = [
     "command": "drag",
     "syntax": "drag #source to #target",
     "description": "Drag one widget to another",
+    "category": "Actions"
+  },
+  {
+    "command": "press <key>",
+    "syntax": "press tab",
+    "description": "Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Not on iOS yet. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
     "category": "Actions"
   },
   {

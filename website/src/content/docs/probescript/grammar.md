@@ -158,9 +158,9 @@ listed-word = "verify" | "set" | "location" | "language" | "clipboard" ;
 `"else"` is an alias of `"otherwise"`, `"animation"` of `"animations"`, `"permissions"` of `"permission"`.
 Because every `keyword` is reserved, a keyword cannot be used where a plain `WORD` is required (a recipe
 parameter, a `store ... as` variable, a type selector); quote it or choose another word. Keywords are
-fine inside recipe-call names and inside strings. A number of keywords (`press`, `pinch`, `between`,
+fine inside recipe-call names and inside strings. A number of keywords (`pinch`, `between`,
 `home`, `back`, `load`, `widget`, ...) have no built-in statement of their own; a line starting with
-one is a [recipe call](#recipe-calls).
+one is a [recipe call](#recipe-calls). `press` is the exception only for a line that is exactly `press <key>` with one of the eight keys (see `press-key-step`). Every other line that starts with `press` is a recipe call, as before, so a recipe named `press <word>` still works unless its name is exactly one of the keys.
 
 ### Compound keywords
 
@@ -408,7 +408,7 @@ line-step  = tap-native-step | tap-step | type-native-step | type-step
            | see-native-step | see-step | dont-see-step | assert-defects-step
            | wait-step
            | open-app-step | open-link-step | close-step | restart-step | kill-step | clear-data-step
-           | go-back-step | press-enter-step | shake-step | pause-step | log-step | rotate-step
+           | go-back-step | press-enter-step | press-key-step | shake-step | pause-step | log-step | rotate-step
            | permission-step | grant-revoke-step
            | copy-step | paste-step | set-location-step | set-language-step | set-appearance-step | set-airplane-step
            | verify-browser-step | add-media-step
@@ -467,7 +467,8 @@ The first matching row wins.
 | `see` followed by a performance phrase (`memory below`, `cpu below`, `slow frames below`, ...) and a number | `see-metric-step` (before the other `see` forms) |
 | `if`, `repeat`, `retry`, `run`, `when`, `travel` | `if-step`, `repeat-step`, `retry-step`, `dart-step`, `mock-step`, `travel-step` |
 | an empty line (NEWLINE) | nothing (ignored) |
-| anything else, including `press`, `pinch`, `sync` outside composite tests, unknown words | `recipe-call-step` |
+| `press <key>`: `press` directly followed by one of the eight keys and then the end of the line | `press-key-step` (`press enter` is above); any other line that starts with `press` is a recipe call, as before |
+| anything else, including `pinch`, `sync` outside composite tests, unknown words | `recipe-call-step` |
 
 Inside `wait-step` the order is: `until` (then `any`, then `network`, `idle`, otherwise a text target),
 `idle`, `animations`, `network`, `page`, a number, an `#id`, and finally the catch-all `wait-page-step`.
@@ -763,6 +764,8 @@ restart-step    = "restart" , fillers , [ "app" ] ;
 kill-step       = "kill" , fillers , [ "app" ] ;
 clear-data-step = "clear app data" ;
 go-back-step    = "go back" ;   (* takes no arguments: words after it on the same line are a separate step *)
+press-key-step = "press" , fillers , key-name ;   (* a key the agent presses, ending the line: the list below *)
+key-name = "tab" | "escape" | "backspace" | "space" | "up" | "down" | "left" | "right" ;   (* the eight keys; a line that is press and another word is a recipe call *)
 press-enter-step = "press enter" ;                  (* the keyboard action key on the focused text field *)
 shake-step      = "shake" ;
 pause-step      = "pause" ;
@@ -1374,7 +1377,7 @@ The grammar above follows the parser.
 | `wait until network is idle`, `wait for the app to be idle` (parser comments) | the first leaves a stray `idle` recipe call; the second is the page-load catch-all | `wait for network idle`, `wait for idle` |
 | filler words list lacks `to` (Dictionary) | `to` is a filler (needed by `drag A to B`, `travel to`) | n/a |
 | recipe args "matched using connecting words like and, with, or into" (Recipes) | the run-time lookup ignores `and`, `with`, `the`, `then` only | use `and` / `with` |
-| `Press` and `Pinch` DSL steps (Annotations) | `press` and `pinch` are reserved words with no statement; a line starting with them is a recipe call | `go back` |
+| `Press` and `Pinch` DSL steps (Annotations) | `press <key>` is a step for tab, escape, backspace, space, up, down, left and right on a line of its own (a recipe named exactly one of those keys is shadowed); other `press` lines are recipe calls; `pinch` is a reserved word with no statement | `go back` |
 | a `Dart` block "executes arbitrary Dart" (Syntax) | code is re-assembled from tokens; characters such as `=`, `;`, `.` and braces never reach the agent | keep Dart snippets to token-safe code |
 | `ordinal ... in "Container"` (Annotations: `Ordinal(2, 'Item', container: 'List')`) | the container is parsed but dropped | use a positional selector |
 | `rotate landscape` / `rotate portrait` (Dictionary) | any word or string is accepted; unknown values are only rejected at run time | `landscape` or `portrait` |
