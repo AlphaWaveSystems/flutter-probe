@@ -23,8 +23,8 @@ type WebViewOptions struct {
 	Page   string
 	// CallTimeout ends a command whose context has no deadline; zero means 30 s. Set it higher for a step that may take long.
 	CallTimeout time.Duration
-	// Redact is applied to every piece of text that came from the page (the page's error messages, titles and element text) before it is put in a message. The runner passes its secret masking here;
-	// nil leaves the text as it is (already cleaned of control characters and shortened).
+	// Redact is applied to every piece of text that came from the page or the script (the page's error messages, titles, element text, the selector) before it is put in a message. The runner MUST pass its
+	// secret masking here: with a nil Redact the text is not masked (it is only cleaned of control characters and shortened), and a secret typed into a selector or shown by a page can reach a message and a report.
 	Redact func(string) string
 }
 
@@ -42,7 +42,7 @@ type WebViewSession struct {
 
 // OpenWebView finds the DevTools socket of the app's own process (never another process's), forwards it to a loopback port, lists the pages, picks one and connects to it. The messages follow
 // docs/proposals/webview-content-automation.md and never contain the debugger address or page content beyond the matched title.
-func OpenWebView(ctx context.Context, o WebViewOptions) (*WebViewSession, error) {
+func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, err error) {
 	if o.Runner == nil || strings.TrimSpace(o.Serial) == "" {
 		return nil, fmt.Errorf("webview: a device serial and an adb runner are required")
 	}
@@ -79,36 +79,40 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (*WebViewSession, error)
 	if err != nil {
 		return nil, err
 	}
+	// From here on the forward exists. Whatever way this function ends (an error, or a panic in the redaction hook or anywhere below), the connection and the forward are removed.
+	var conn *CDPConn
+	opened := false
+	defer func() {
+		if opened {
+			return
+		}
+		if conn != nil {
+			_ = conn.Close()
+		}
+		if cerr := fwd.Close(); cerr != nil && err != nil {
+			err = fmt.Errorf("%w; also: %v", err, cerr)
+		}
+	}()
 	redact := o.Redact
 	if redact == nil {
 		redact = func(s string) string { return s }
 	}
-	s, err := openForwarded(ctx, fwd, o.Page, redact, o.CallTimeout)
-	if err != nil {
-		// fail closed: the forward made for this attempt is removed; a failed removal is added to the error
-		if cerr := fwd.Close(); cerr != nil {
-			err = fmt.Errorf("%w; also: %v", err, cerr)
-		}
-		return nil, err
-	}
-	return s, nil
-}
-
-func openForwarded(ctx context.Context, fwd *WebViewForward, page string, redact func(string) string, callTimeout time.Duration) (*WebViewSession, error) {
 	pages, err := ListTargets(ctx, fwd.Port())
 	if err != nil {
 		return nil, err
 	}
-	target, err := pickPage(pages, page, redact)
+	target, err := pickPage(pages, o.Page, redact)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := DialTarget(ctx, fwd.Port(), target)
+	conn, err = DialTarget(ctx, fwd.Port(), target)
 	if err != nil {
 		return nil, err
 	}
-	conn.Timeout = callTimeout
-	return &WebViewSession{conn: conn, fwd: fwd, title: shown(redact(target.Title)), redact: redact}, nil
+	conn.Timeout = o.CallTimeout
+	title := shown(redact(target.Title))
+	opened = true
+	return &WebViewSession{conn: conn, fwd: fwd, title: title, redact: redact}, nil
 }
 
 // pickPage chooses the page to use: the only one, or the one whose title or URL contains page (case-insensitive).
