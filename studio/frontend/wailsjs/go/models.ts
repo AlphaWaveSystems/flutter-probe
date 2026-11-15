@@ -281,6 +281,90 @@ export namespace main {
 	        this.endColumn = source["endColumn"];
 	    }
 	}
+	export class ExplainNote {
+	    test: string;
+	    advice: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExplainNote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.test = source["test"];
+	        this.advice = source["advice"];
+	    }
+	}
+	export class ExplainOffer {
+	    available: boolean;
+	    failures: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExplainOffer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.failures = source["failures"];
+	    }
+	}
+	export class ExplainPreview {
+	    destination: string;
+	    hosted: boolean;
+	    failures: number;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExplainPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.destination = source["destination"];
+	        this.hosted = source["hosted"];
+	        this.failures = source["failures"];
+	        this.text = source["text"];
+	    }
+	}
+	export class ExplainResult {
+	    destination: string;
+	    hosted: boolean;
+	    notes: ExplainNote[];
+	    stopped?: string;
+	    omitted?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExplainResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.destination = source["destination"];
+	        this.hosted = source["hosted"];
+	        this.notes = this.convertValues(source["notes"], ExplainNote);
+	        this.stopped = source["stopped"];
+	        this.omitted = source["omitted"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class FileEntry {
 	    name: string;
 	    path: string;

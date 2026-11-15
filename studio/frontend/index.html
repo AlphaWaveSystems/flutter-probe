@@ -110,6 +110,11 @@
           <span>Results</span>
           <span id="results-summary" class="dim"></span>
         </div>
+        <div id="explain-bar" class="explain-bar" hidden>
+          <button type="button" id="btn-explain" class="btn-mini" title="Ask the AI provider for advice on the failed tests of the last run. You see what is sent first.">Explain failures</button>
+          <span id="explain-status" class="dim" role="status"></span>
+        </div>
+        <section id="explain-card" class="explain-card" aria-label="Advisory" hidden></section>
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
       </section>
     </main>
@@ -246,6 +251,20 @@
         <div class="settings-actions">
           <button type="button" id="btn-ai-preview-cancel" class="btn">Cancel</button>
           <button type="button" id="btn-ai-preview-send" class="btn btn-primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="explain-preview-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2>Before Explain</h2>
+        </div>
+        <p id="explain-preview-note" class="dim"></p>
+        <pre id="explain-preview-text" class="ai-preview-text"></pre>
+        <div class="settings-actions">
+          <button type="button" id="btn-explain-preview-cancel" class="btn">Cancel</button>
+          <button type="button" id="btn-explain-preview-send" class="btn btn-primary">Send</button>
         </div>
       </div>
     </div>

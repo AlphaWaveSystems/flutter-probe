@@ -15,7 +15,8 @@
     "check:probescript": "node scripts/gen-probescript-dictionary.mjs --check",
     "test:probescript": "node --test probescript-tests/",
     "test:run-scope": "node --test run-scope-tests/",
-    "test:chat-label": "node --test chat-label-tests/"
+    "test:chat-label": "node --test chat-label-tests/",
+    "test:explain": "node --test explain-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.57.0"

@@ -42,6 +42,18 @@ export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }
 
+export function ExplainAvailability() {
+  return window['go']['main']['App']['ExplainAvailability']();
+}
+
+export function ExplainLastRun() {
+  return window['go']['main']['App']['ExplainLastRun']();
+}
+
+export function ExplainPreviewed(arg1) {
+  return window['go']['main']['App']['ExplainPreviewed'](arg1);
+}
+
 export function FindLocalModels(arg1) {
   return window['go']['main']['App']['FindLocalModels'](arg1);
 }
@@ -100,6 +112,10 @@ export function PickWorkspace() {
 
 export function PreviewAIChat(arg1, arg2) {
   return window['go']['main']['App']['PreviewAIChat'](arg1, arg2);
+}
+
+export function PreviewExplain() {
+  return window['go']['main']['App']['PreviewExplain']();
 }
 
 export function ReadFile(arg1) {
