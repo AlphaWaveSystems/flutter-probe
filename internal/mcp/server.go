@@ -32,6 +32,9 @@ type Server struct {
 	in  *bufio.Reader
 	out io.Writer
 
+	// inlineRunner runs an inline ProbeScript; nil means runInlineScript. A test replaces it.
+	inlineRunner func(script, flags, deviceID string) (string, error)
+
 	// Background test runs (jobs.go). Created on first use.
 	jobsOnce sync.Once
 	jobs     *jobRegistry
@@ -956,33 +959,41 @@ func (s *Server) generateTest(id any, prompt, output string) *mcpResponse {
 	return textResp(id, string(out), err)
 }
 
-func (s *Server) takeScreenshot(id any, name, deviceID string) *mcpResponse {
-	if name == "" {
-		name = "mcp_capture"
+func (s *Server) takeScreenshot(id any, rawName, deviceID string) *mcpResponse {
+	name := mcpShotName(rawName)
+	run := s.inlineRunner
+	if run == nil {
+		run = s.runInlineScript
 	}
-	script := fmt.Sprintf("test \"mcp screenshot\"\n  take screenshot \"%s\"\n", name)
-	cmdOut, _ := s.runInlineScript(script, "", deviceID)
+	started := time.Now()
+	cmdOut, _ := run(mcpShotScript(name), "", deviceID)
 
-	pattern := filepath.Join("reports", "screenshots", name+"_*.png")
-	matches, err := filepath.Glob(pattern)
-	if err != nil || len(matches) == 0 {
+	f, latestPath, err := findMCPScreenshot(filepath.Join("reports", "screenshots"), name, started)
+	if err != nil {
 		return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
 			"content": []map[string]any{{"type": "text", "text": "Screenshot not found.\n" + cmdOut}},
 			"isError": true,
 		}}
 	}
-	latestPath := matches[len(matches)-1]
-	imgData, err := os.ReadFile(latestPath)
+	defer f.Close()
+	imgData, note, err := boundedScreenshot(f)
 	if err != nil {
-		return errResp(id, -32603, "read screenshot: "+err.Error())
+		return &mcpResponse{JSONRPC: "2.0", ID: id, Result: map[string]any{
+			"content": []map[string]any{{"type": "text", "text": "Screenshot captured but not sent: " + err.Error()}},
+			"isError": true,
+		}}
 	}
 	b64 := base64.StdEncoding.EncodeToString(imgData)
+	caption := fmt.Sprintf("Screenshot captured: %s", filepath.Base(latestPath))
+	if note != "" {
+		caption += " (" + note + ")"
+	}
 	return &mcpResponse{
 		JSONRPC: "2.0",
 		ID:      id,
 		Result: map[string]any{
 			"content": []map[string]any{
-				{"type": "text", "text": fmt.Sprintf("Screenshot captured: %s", filepath.Base(latestPath))},
+				{"type": "text", "text": caption},
 				{"type": "image", "data": b64, "mimeType": "image/png"},
 			},
 		},
