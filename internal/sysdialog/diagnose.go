@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 // Diagnoser is implemented by drivers that can say why an awaited dialog never showed up. A wait that
@@ -140,7 +142,7 @@ func (a *AndroidDriver) Diagnose(ctx context.Context, appID, title string) strin
 	win, _ := a.adb.Shell(ctx, a.serial, "dumpsys", "window")
 	var pkgDump []byte
 	if appID != "" {
-		pkgDump, _ = a.adb.Shell(ctx, a.serial, "dumpsys", "package", appID)
+		pkgDump, _ = a.adb.Shell(ctx, a.serial, "dumpsys", "package", shellquote.Arg(appID))
 	}
 	return explain(appID, title, string(win), string(pkgDump))
 }

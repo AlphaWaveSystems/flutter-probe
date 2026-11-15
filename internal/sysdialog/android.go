@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 // ADB is the part of device.ADB the Android driver needs. An interface so the
@@ -287,8 +290,8 @@ func (a *AndroidDriver) Type(ctx context.Context, field, text, title string) err
 	// The remote shell would interpret metacharacters in a password
 	// (&, ;, $, quotes...), so the text goes in single-quoted. Space is
 	// `input text`'s own token separator and is written %s.
-	if _, err := a.adb.Shell(ctx, a.serial, "input", "text", ShellQuote(strings.ReplaceAll(text, " ", "%s"))); err != nil {
-		return fmt.Errorf("input text failed: %s", Scrub(err.Error(), text))
+	if _, err := a.adb.Shell(ctx, a.serial, "input", "text", shellquote.Quote(strings.ReplaceAll(text, " ", "%s"))); err != nil {
+		return fmt.Errorf("input text failed: %s", Scrub(device.MaskTypedText(err, text).Error(), text))
 	}
 	return nil
 }
@@ -307,11 +310,6 @@ func (a *AndroidDriver) Dismiss(ctx context.Context, title string) (bool, error)
 }
 
 func (a *AndroidDriver) Close() error { return nil }
-
-// ShellQuote single-quotes s for a POSIX shell.
-func ShellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
 
 func noDialogErr(title string) error {
 	if title == "" {

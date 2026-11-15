@@ -154,14 +154,14 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
+		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"am", "force-stop", dc.AppID); err != nil {
 			return fmt.Errorf("restart: force-stop: %w", err)
 		}
 		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
 		// Launch via am start with the standard Flutter MainActivity
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
+		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("restart: launch: %w", err)
 		}
@@ -218,7 +218,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		// pm clear force-stops and wipes all data — this is the official Android mechanism
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
+		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"pm", "clear", dc.AppID); err != nil {
 			return fmt.Errorf("clear data: %w", err)
 		}
@@ -230,7 +230,7 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		}
 		time.Sleep(dc.restartDelay())
 		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
+		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("clear data: relaunch: %w", err)
 		}
@@ -518,7 +518,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	case device.PlatformAndroid:
 		// Delete stale token files so we pick up the fresh one after relaunch
 		if dc.AppID != "" {
-			dc.Manager.ADB().Shell(ctx, dc.Serial, "run-as", dc.AppID, "rm", "-f", "cache/probe/token")
+			dc.Manager.ADB().ShellQ(ctx, dc.Serial, "run-as", dc.AppID, "rm", "-f", "cache/probe/token")
 		}
 		dc.Manager.ADB().Shell(ctx, dc.Serial, "rm", "-f", "/data/local/tmp/probe/token")
 		// Also clear logcat as fallback
@@ -691,7 +691,7 @@ func (dc *DeviceContext) KillApp(ctx context.Context) error {
 	fmt.Printf("    \033[31m⏹\033[0m  Killing %s on %s\n", dc.AppID, dc.Serial)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial, "am", "force-stop", dc.AppID); err != nil {
+		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial, "am", "force-stop", dc.AppID); err != nil {
 			return fmt.Errorf("kill app: %w", err)
 		}
 	case device.PlatformIOS:
@@ -709,7 +709,7 @@ func (dc *DeviceContext) LaunchApp(ctx context.Context) error {
 	fmt.Printf("    \033[32m▶\033[0m  Launching %s on %s\n", dc.AppID, dc.Serial)
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		if _, err := dc.Manager.ADB().Shell(ctx, dc.Serial,
+		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("launch app: %w", err)
 		}
@@ -981,7 +981,8 @@ func (dc *DeviceContext) TypeNative(ctx context.Context, query, text string) err
 	}
 	time.Sleep(500 * time.Millisecond)
 	if err := dc.Manager.ADB().InputText(ctx, dc.Serial, text); err != nil {
-		return fmt.Errorf("type native: %w", err)
+		// the text can be a password: the error is masked like any printed line
+		return fmt.Errorf("type native: %s", sysdialog.ScrubKnown(err.Error()))
 	}
 	return nil
 }

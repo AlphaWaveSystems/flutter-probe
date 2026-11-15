@@ -574,7 +574,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbTapNative:
 			return fmt.Sprintf("tap native %q", s.Name)
 		case parser.VerbTypeNative:
-			return fmt.Sprintf("type native %q into %q", s.Text, s.Name)
+			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
+			return fmt.Sprintf("type native %q into %q", sysdialog.ScrubKnown(e.resolveVars(s.Text)), s.Name)
 		default:
 			return string(s.Verb)
 		}
