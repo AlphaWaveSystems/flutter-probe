@@ -333,16 +333,38 @@ func safeURL(u *url.URL, ph *placeholders) (string, error) {
 	var b strings.Builder
 	b.WriteString(strings.ToLower(u.Scheme) + "://" + u.Host)
 	segs := strings.Split(u.EscapedPath(), "/")
+	// A card number can be split by real slashes (`/4412/6082/6097/70/`), so the segments are searched as one text, and every segment a
+	// card run touches is replaced.
+	plains := make([]string, len(segs))
+	starts := make([]int, len(segs))
+	var joined strings.Builder
+	for i, seg := range segs {
+		plain, err := url.PathUnescape(seg)
+		if err != nil {
+			plain = seg
+		}
+		plains[i] = plain
+		starts[i] = joined.Len()
+		joined.WriteString(plain)
+		joined.WriteByte('/')
+	}
+	spans := cardRuns(joined.String())
+	touchesCard := func(i int) bool {
+		a, z := starts[i], starts[i]+len(plains[i])
+		for _, sp := range spans {
+			if sp[0] < z && sp[1] > a {
+				return true
+			}
+		}
+		return false
+	}
 	for i, seg := range segs {
 		if i == 0 && seg == "" {
 			continue
 		}
 		b.WriteByte('/')
-		plain, err := url.PathUnescape(seg)
-		if err != nil {
-			plain = seg
-		}
-		if looksSecret(plain) || stepEmail.MatchString(plain) || len(cardRuns(plain)) > 0 {
+		plain := plains[i]
+		if looksSecret(plain) || stepEmail.MatchString(plain) || touchesCard(i) {
 			b.WriteString(ph.next(fmt.Sprintf("path_%d", i)))
 		} else {
 			b.WriteString(seg)
