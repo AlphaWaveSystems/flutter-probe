@@ -75,6 +75,9 @@ jobs:
       - name: Send request tests
         working-directory: studio/frontend
         run: npm run test:send
+      - name: Triage tests
+        working-directory: studio/frontend
+        run: npm run test:triage
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript

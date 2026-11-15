@@ -201,6 +201,7 @@ fi'
   step frontend studio/frontend 'npm run test:explain'
   step frontend studio/frontend 'npm run test:network'
   step frontend studio/frontend 'npm run test:send'
+  step frontend studio/frontend 'npm run test:triage'
   step frontend studio/frontend 'npm run check:probescript'
 
   job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.10" "studio-ci.yml:studio-go"
