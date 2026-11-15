@@ -489,3 +489,76 @@ func TestTheStopListWordsAreNotInTheResolverList(t *testing.T) {
 		}
 	}
 }
+
+// A copy that fails leaves the clipboard as it was: the flag must not go down (and a failed tainted copy marks it up, since we do not know what is there now).
+type failingClip struct {
+	clipRec
+	fail bool
+}
+
+func (c *failingClip) CopyToClipboard(ctx context.Context, text string) error {
+	if c.fail {
+		return context.DeadlineExceeded
+	}
+	return c.clipRec.CopyToClipboard(ctx, text)
+}
+
+func TestAFailedCopyNeverClearsTheClipboardTaint(t *testing.T) {
+	ctx := context.Background()
+	clip := &failingClip{}
+	dc := &DeviceContext{}
+	exec := func() *Executor {
+		return &Executor{vars: map[string]string{}, client: clip, deviceCtx: dc, timeout: time.Second}
+	}
+	e := exec()
+	tainted(e, "t", pageValue)
+	if err := e.runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "<t>"}); err != nil {
+		t.Fatal(err)
+	}
+	// the clean copy fails: the device still holds the page value
+	clip.fail = true
+	if err := exec().runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "clean text"}); err == nil {
+		t.Fatal("the copy was meant to fail")
+	}
+	clip.fail = false
+	later := exec()
+	if err := later.runStep(ctx, parser.ActionStep{Verb: parser.VerbPasteClipboard}); err != nil {
+		t.Fatal(err)
+	}
+	if clip.clip != pageValue {
+		t.Fatalf("the test needs the page value still on the clipboard: %q", clip.clip)
+	}
+	if err := later.runStep(ctx, parser.ActionStep{Verb: parser.VerbOpenLink, Name: "<clipboard>"}); err == nil || clip.n.Load() != 0 {
+		t.Errorf("FAILED CLEAN COPY: the page value was opened (err = %v, agent calls %d)", err, clip.n.Load())
+	}
+	// a failed tainted copy onto a clean clipboard marks it tainted: it is not known what it holds
+	clip2 := &failingClip{}
+	dc2 := &DeviceContext{}
+	e2 := &Executor{vars: map[string]string{}, client: clip2, deviceCtx: dc2, timeout: time.Second}
+	tainted(e2, "t", pageValue)
+	clip2.fail = true
+	_ = e2.runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "<t>"})
+	if !dc2.clip.get() {
+		t.Errorf("a failed tainted copy left the flag clean")
+	}
+	// a failed clean copy onto a clean clipboard stays clean, and a successful clean copy clears it
+	dc3 := &DeviceContext{}
+	e3 := &Executor{vars: map[string]string{}, client: &failingClip{fail: true}, deviceCtx: dc3, timeout: time.Second}
+	_ = e3.runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "plain"})
+	if dc3.clip.get() {
+		t.Errorf("a failed clean copy marked the flag")
+	}
+}
+
+// Composite devices that have no device context keep one flag per device alias across the tests of the run.
+func TestACompositeDeviceWithoutADeviceContextKeepsOneClipboardFlag(t *testing.T) {
+	cr := &CompositeRunner{}
+	a1, a2, b := cr.clipFor("alice"), cr.clipFor("alice"), cr.clipFor("bob")
+	if a1 != a2 || a1 == b {
+		t.Fatalf("flags: alice %p %p, bob %p", a1, a2, b)
+	}
+	a1.afterCopy(true, nil)
+	if !cr.clipFor("alice").get() || cr.clipFor("bob").get() {
+		t.Errorf("the flag did not stay with its device")
+	}
+}

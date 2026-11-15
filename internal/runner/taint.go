@@ -126,6 +126,18 @@ func (c *clipboardTaint) set(v bool) {
 	c.mu.Unlock()
 }
 
+// afterCopy records the outcome of a copy. A copy that worked sets the flag to whether its text was tainted. A copy that failed leaves the clipboard as it
+// was, so the flag only ever goes up: a failed tainted copy marks it too, because we do not know what the clipboard now holds.
+func (c *clipboardTaint) afterCopy(taintedText bool, copyErr error) {
+	if copyErr != nil {
+		if taintedText {
+			c.set(true)
+		}
+		return
+	}
+	c.set(taintedText)
+}
+
 func (c *clipboardTaint) get() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

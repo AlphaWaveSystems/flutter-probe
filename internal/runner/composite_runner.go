@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
@@ -79,6 +80,22 @@ type CompositeRunner struct {
 	recipes   map[string]parser.RecipeDef
 	opts      RunOptions
 	onStep    func(StepEvent) // optional per-step observer, set by Runner.OnStep
+
+	clipMu sync.Mutex
+	clips  map[string]*clipboardTaint // per device alias: the clipboard taint of a device that has no DeviceContext, shared by its tests
+}
+
+// clipFor is the clipboard flag of the device with this alias, for the executors of its tests (see clipboardTaint).
+func (cr *CompositeRunner) clipFor(alias string) *clipboardTaint {
+	cr.clipMu.Lock()
+	defer cr.clipMu.Unlock()
+	if cr.clips == nil {
+		cr.clips = map[string]*clipboardTaint{}
+	}
+	if cr.clips[alias] == nil {
+		cr.clips[alias] = &clipboardTaint{}
+	}
+	return cr.clips[alias]
 }
 
 // NewCompositeRunner creates a CompositeRunner with the given devices.
@@ -180,8 +197,10 @@ func (cr *CompositeRunner) RunCompositeTest(ctx context.Context, test parser.Com
 		if cr.recorders != nil {
 			recorder = cr.recorders[i]
 		}
+		clip := cr.clipFor(dev.Alias)
 		go func(d CompositeDevice, steps []parser.Step) {
 			exec := NewExecutor(d.Client, d.DeviceCtx, nil, cr.opts.Timeout, cr.opts.Verbose)
+			exec.clip = clip
 			exec.SetReconnectPolicy(cr.cfg.Agent.ReconnectAttempts, cr.cfg.Agent.ReconnectBackoff)
 			exec.SetLaunchTimeout(cr.cfg.Agent.LaunchTimeout)
 			exec.SetAI(cr.cfg.AI)

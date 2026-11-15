@@ -1025,8 +1025,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 	case parser.VerbCopyClipboard:
 		// the clipboard carries the taint of what was copied: a later paste hands it on (see VerbPasteClipboard)
 		text, by := e.resolveT(a.Text)
-		e.clipboard().set(len(by) > 0)
-		return e.client.CopyToClipboard(ctx, text)
+		err := e.client.CopyToClipboard(ctx, text)
+		e.clipboard().afterCopy(len(by) > 0, err) // after the copy: a copy that failed must not clear what the clipboard still holds
+		return err
 
 	case parser.VerbPasteClipboard:
 		text, err := e.client.PasteFromClipboard(ctx)

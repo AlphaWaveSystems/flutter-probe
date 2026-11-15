@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"sort"
@@ -680,5 +681,203 @@ func TestTheTaintFieldChecksReportTheirNegativeCases(t *testing.T) {
 	fset, f := parseSnippet(t, `_ = c.holdsTaint`)
 	if len(flagWrites(fset, f, "holdsTaint", nil)) != 0 {
 		t.Errorf("a read of the flag was reported")
+	}
+}
+
+// qualifiedFuncs walks the functions of a file with their qualified names.
+func eachFunc(f *ast.File, fn func(q string, fd *ast.FuncDecl)) {
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok {
+			fn(qualified(fd), fd)
+		}
+	}
+}
+
+// clipboardMisuses reports the ways to change the clipboard flag other than the copy handler: a call of the setter outside afterCopy, a call of afterCopy outside
+// runAction, an assignment to a field named clip (a struct holding the flag) outside the places that hand it to an executor, and a new flag made anywhere else.
+func clipboardMisuses(fset *token.FileSet, f *ast.File, allowedAssign, allowedLiteral map[string]bool) []string {
+	var out []string
+	eachFunc(f, func(q string, fd *ast.FuncDecl) {
+		ast.Inspect(fd, func(n ast.Node) bool {
+			switch v := n.(type) {
+			case *ast.CallExpr:
+				if sel, ok := v.Fun.(*ast.SelectorExpr); ok {
+					recv := types.ExprString(sel.X)
+					switch {
+					case sel.Sel.Name == "set" && strings.Contains(recv, "clip") && q != "clipboardTaint.afterCopy":
+						out = append(out, fset.Position(sel.Pos()).String()+" in "+q+": the clipboard flag is set outside afterCopy")
+					case sel.Sel.Name == "afterCopy" && q != "Executor.runAction":
+						out = append(out, fset.Position(sel.Pos()).String()+" in "+q+": afterCopy is called outside the copy handler")
+					}
+				}
+			case *ast.AssignStmt:
+				for _, l := range v.Lhs {
+					if sel, ok := l.(*ast.SelectorExpr); ok && sel.Sel.Name == "clip" && !allowedAssign[q] {
+						out = append(out, fset.Position(sel.Pos()).String()+" in "+q+": the clipboard flag holder is assigned")
+					}
+				}
+			case *ast.CompositeLit:
+				if id, ok := v.Type.(*ast.Ident); ok && id.Name == "clipboardTaint" && !allowedLiteral[q] {
+					out = append(out, fset.Position(v.Pos()).String()+" in "+q+": a new clipboard flag is made")
+				}
+			}
+			return true
+		})
+	})
+	return out
+}
+
+// resolverValues reports every use of a resolver as a value (stored in a field, a table, a variable, a composite literal, passed on) anywhere in the package:
+// only a call, or the declaration itself, is fine. So a sink cannot reach an expansion through a field or a table filled somewhere the scans do not look.
+func resolverValues(fset *token.FileSet, f *ast.File) []string {
+	plain := map[string]bool{}
+	for _, r := range plainResolvers {
+		plain[r] = true
+	}
+	var out []string
+	var stack []ast.Node
+	ast.Inspect(f, func(n ast.Node) bool {
+		if n == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		var name string
+		var pos token.Pos
+		switch v := n.(type) {
+		case *ast.SelectorExpr:
+			name, pos = v.Sel.Name, v.Sel.Pos()
+		case *ast.Ident:
+			name, pos = v.Name, v.Pos()
+		}
+		if plain[name] && len(stack) > 0 {
+			parent := stack[len(stack)-1]
+			isCall := false
+			isDecl := false
+			switch p := parent.(type) {
+			case *ast.CallExpr:
+				switch fun := p.Fun.(type) {
+				case *ast.SelectorExpr:
+					isCall = fun == n || fun.Sel == n
+				case *ast.Ident:
+					isCall = fun == n
+				}
+			case *ast.SelectorExpr: // the name inside `x.resolve`: judged at the selector
+				isCall = p.Sel == n
+				if isCall && len(stack) > 1 {
+					if call, ok := stack[len(stack)-2].(*ast.CallExpr); ok {
+						isCall = call.Fun == ast.Expr(p)
+					} else {
+						isCall = false
+					}
+				}
+			case *ast.FuncDecl:
+				isDecl = p.Name == n
+			}
+			if _, isSel := n.(*ast.SelectorExpr); isSel {
+				isCall = false // judged through its Sel ident, above
+				isDecl = true
+			}
+			if !isCall && !isDecl {
+				out = append(out, fset.Position(pos).String()+": "+name+" is used as a value")
+			}
+		}
+		stack = append(stack, n)
+		return true
+	})
+	return out
+}
+
+func TestClipboardFlagAndResolversHaveNoSideDoors(t *testing.T) {
+	fset := token.NewFileSet()
+	entries, _ := os.ReadDir(".")
+	assign := map[string]bool{"Runner.newExecutor": true, "Executor.clipboard": true, "CompositeRunner.RunCompositeTest": true}
+	literal := map[string]bool{"Executor.clipboard": true, "CompositeRunner.clipFor": true}
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, n, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range clipboardMisuses(fset, f, assign, literal) {
+			t.Error(m)
+		}
+		for _, m := range resolverValues(fset, f) {
+			t.Error(m)
+		}
+	}
+}
+
+func TestTheSideDoorChecksReportTheirNegativeCases(t *testing.T) {
+	for _, bad := range []string{
+		`e.clipboard().set(false)`, `e.deviceCtx.clip.set(true)`, `c.clip.set(true)`, `e.deviceCtx.clip = clipboardTaint{}`, `e.clip = &clipboardTaint{}`, `e.clip = nil`,
+		`x := clipboardTaint{}; _ = x`, `e.clipboard().afterCopy(false, nil)`,
+	} {
+		fset, f := parseSnippet(t, bad)
+		if len(clipboardMisuses(fset, f, nil, nil)) == 0 {
+			t.Errorf("not reported: %s", bad)
+		}
+	}
+	if fset, f := parseSnippet(t, `_ = e.clipboard().get()`); len(clipboardMisuses(fset, f, nil, nil)) != 0 {
+		t.Errorf("a read of the flag was reported")
+	}
+	for _, bad := range []string{
+		`exec.zzf = exec.resolve`, `table["x"] = e.resolveT`, `_ = T{f: e.resolve}`, `g := resolveSelector; _ = g`, `consume(e.expandEnv)`, `_ = []func(string) string{e.resolveVars}`,
+		`exec.zzf = e.finishResolve`, `x := expandVars; _ = x`,
+	} {
+		fset, f := parseSnippet(t, bad)
+		if len(resolverValues(fset, f)) == 0 {
+			t.Errorf("not reported: %s", bad)
+		}
+	}
+	for _, ok := range []string{`_ = e.resolve("x")`, `_ = resolveSelector(nil)`, `s := e.expandEnv(e.resolveVars("x")); _ = s`, `go e.resolve("x")`} {
+		fset, f := parseSnippet(t, ok)
+		if m := resolverValues(fset, f); len(m) != 0 {
+			t.Errorf("reported although it is a call: %s: %v", ok, m)
+		}
+	}
+}
+
+// The two places that build executors for tests hand them the shared clipboard flag: a missing assignment would give every test a fresh, clean flag.
+func TestEveryExecutorBuilderSharesTheClipboardFlag(t *testing.T) {
+	files := parsePkgFiles(t)
+	for _, q := range []string{"Runner.newExecutor", "CompositeRunner.RunCompositeTest"} {
+		found, assigns := false, false
+		for _, f := range files {
+			eachFunc(f, func(name string, fd *ast.FuncDecl) {
+				if name != q {
+					return
+				}
+				found = true
+				ast.Inspect(fd, func(n ast.Node) bool {
+					if as, ok := n.(*ast.AssignStmt); ok {
+						for _, l := range as.Lhs {
+							if sel, ok := l.(*ast.SelectorExpr); ok && sel.Sel.Name == "clip" {
+								assigns = true
+							}
+						}
+					}
+					return true
+				})
+			})
+		}
+		if !found || !assigns {
+			t.Errorf("%s: found = %v, assigns the clipboard flag = %v", q, found, assigns)
+		}
+	}
+	// and nothing else builds an Executor for a run
+	for name, f := range files {
+		eachFunc(f, func(q string, fd *ast.FuncDecl) {
+			ast.Inspect(fd, func(n ast.Node) bool {
+				if c, ok := n.(*ast.CallExpr); ok {
+					if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "NewExecutor" && q != "Runner.newExecutor" && q != "CompositeRunner.RunCompositeTest" {
+						t.Errorf("%s: %s builds an Executor itself; it must share the clipboard flag too", name, q)
+					}
+				}
+				return true
+			})
+		})
 	}
 }
