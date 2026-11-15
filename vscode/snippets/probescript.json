@@ -250,5 +250,17 @@
       "$0"
     ],
     "description": "Measure memory, frames, CPU and network of some steps and assert on them"
+  },
+  "WebView steps": {
+    "prefix": "webview",
+    "body": [
+      "tap \"${1:Contact support}\" in webview",
+      "type \"${2:hello}\" into css:\"${3:#message}\" in webview",
+      "wait until \"${4:Message sent}\" appears in webview",
+      "see css:\"${5:#result}\" in webview",
+      "don't see css:\"${6:.error}\" in webview",
+      "$0"
+    ],
+    "description": "Tap, type, wait and see inside the app's WebView (Android; the app needs WebView debugging on)"
   }
 }

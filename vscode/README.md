@@ -344,6 +344,11 @@ wait 3 seconds
 swipe up / down / left / right
 swipe up over 40 percent
 press tab
+tap "Contact support" in webview
+type "hi" into css:"#message" in webview
+see "Getting Started" in webview
+don't see css:".error" in webview
+wait until "Message sent" appears in webview
 scroll down until "Item" appears
 wait for idle
 tap "Allow" in system dialog       # OS permission alerts / sign-in sheets

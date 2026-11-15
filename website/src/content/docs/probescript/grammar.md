@@ -1395,7 +1395,7 @@ run around every test; `on failure` runs after a failed test.
 **Examples.** `with examples` repeats the preceding test once per row; `"<column>"` placeholders in the
 body are replaced by that row's cells. Row width is not validated against the header.
 
-**Platform notes.** Native UI steps (`tap native`, `type native`, `see native`) are Android only.
+**Platform notes.** Native UI steps (`tap native`, `type native`, `see native`) and the WebView steps (`in webview`) are Android only.
 Location, travel, media, biometric and permission steps apply to simulators and emulators.
 
 ## Where the docs and the parser disagree

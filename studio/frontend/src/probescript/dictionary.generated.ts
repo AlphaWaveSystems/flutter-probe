@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "f14086d8ed2ace6c522f32e2d11bd0ac9effc724db5540130230d70cde95b659";
+export const SOURCE_SHA256 = "d5569d262b658da1747b8f2d4b802a7001eeba61fdd348bee1aa1ec40e38dedd";
 
 export const COMMANDS = [
   {
@@ -156,6 +156,18 @@ export const COMMANDS = [
     "category": "Actions"
   },
   {
+    "command": "tap ... in webview",
+    "syntax": "tap \"Contact support\" in webview or tap css:\"#submit\" in webview \"checkout\"",
+    "description": "Tap an element inside the app's own WebView: a quoted string is the element's visible text, `css:\"...\"` is a CSS selector, and an optional quoted page name picks one page when the app has several. Android only, and the app must have WebView debugging on (see [WebView content](/probescript/syntax/#webview-content-android)); errors clearly on iOS, skipped in cloud mode",
+    "category": "Actions"
+  },
+  {
+    "command": "type ... in webview",
+    "syntax": "type \"hello\" into css:\"#message\" in webview",
+    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element does not take the focus (a disabled input, or any element that cannot be focused); a read-only input does take the focus and ignores the text without an error. Android only",
+    "category": "Actions"
+  },
+  {
     "command": "type native",
     "syntax": "type native \"text\" into \"query\"",
     "description": "Focus a native text field matched by query, then type into it. Android only. If the field is reached via a screen transition (not already visible), add a `wait` step first — the same idiom used for Flutter navigation",
@@ -231,6 +243,18 @@ export const COMMANDS = [
     "command": "see matching",
     "syntax": "see \"Email\" matching \".*@.*\"",
     "description": "Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: `see \"0 ml\" matching \"^0 ml$\"`. `probe lint` warns, without failing, about such a check that has no anchored pattern",
+    "category": "Assertions"
+  },
+  {
+    "command": "see ... in webview",
+    "syntax": "see \"Getting Started\" in webview",
+    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only",
+    "category": "Assertions"
+  },
+  {
+    "command": "don't see ... in webview",
+    "syntax": "don't see css:\".error\" in webview",
+    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only",
     "category": "Assertions"
   },
   {
@@ -321,6 +345,12 @@ export const COMMANDS = [
     "command": "wait for animations to end",
     "syntax": "wait for animations to end",
     "description": "Wait until no scheduled animation frames remain",
+    "category": "Wait"
+  },
+  {
+    "command": "wait until ... appears in webview",
+    "syntax": "wait until \"Message sent\" appears in webview",
+    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only",
     "category": "Wait"
   },
   {

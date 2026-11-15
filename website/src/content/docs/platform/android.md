@@ -93,6 +93,20 @@ grant all permissions              # grants all known runtime permissions
 
 Available permissions: `notifications`, `camera`, `location`, `microphone`, `storage`, `contacts`, `phone`, `calendar`, `sms`, `bluetooth`.
 
+## WebView content
+
+`tap`, `type`, `see`, `don't see` and `wait until ... appears` with `in webview` reach the page inside an app's WebView
+over the WebView's own debugging socket (Chrome DevTools Protocol), through `adb forward` to a loopback port that probe
+removes after every step. The app must have `WebView.setWebContentsDebuggingEnabled(true)`. Only the app under test's own
+socket is used. See [WebView content](/probescript/syntax/#webview-content-android) for the syntax, the limits (top document
+only, no shadow DOM or iframes, a disabled input refuses typing, a read-only one silently ignores it) and an example.
+
+```
+tap "Contact support" in webview
+type "hello" into css:"#message" in webview
+wait until "Message sent" appears in webview
+```
+
 ## Native UI Automation
 
 Android is currently the only platform where probe can reach **outside the Flutter widget tree**
