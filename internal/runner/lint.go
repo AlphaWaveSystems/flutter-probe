@@ -125,6 +125,9 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 	for _, body := range own {
 		walkSteps(body, func(s parser.Step) {
 			line := stepLine(s)
+			if a, ok := s.(parser.ActionStep); ok && a.DirectionWord != "" {
+				findings = append(findings, LintFinding{Line: line, Warning: true, Message: fmt.Sprintf("swipe: %q is not up, down, left or right, so the swipe runs down", a.DirectionWord)})
+			}
 			if rc, ok := s.(parser.RecipeCall); ok {
 				if _, _, _, found := resolveCall(r.recipes, rc); !found {
 					msg := fmt.Sprintf("unknown step %q: not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)", rc.Name)

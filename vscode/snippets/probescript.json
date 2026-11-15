@@ -158,6 +158,11 @@
     "body": "swipe ${1|up,down,left,right|}",
     "description": "Swipe gesture"
   },
+  "Swipe over percent": {
+    "prefix": "swipe over",
+    "body": "swipe ${1|up,down,left,right|} over ${2:40} percent",
+    "description": "Swipe that travels a percent of the element or screen"
+  },
   "Scroll until visible": {
     "prefix": "scroll",
     "body": "scroll down until \"${1:element}\" appears",

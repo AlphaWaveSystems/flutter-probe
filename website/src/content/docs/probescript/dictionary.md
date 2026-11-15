@@ -16,7 +16,7 @@ Commands that interact with the app's UI.
 | `long press` | `long press "Label"` | Long-press a widget (triggers context menus) |
 | `type` | `type "text" into "Field"` | Enter text into a text field |
 | `clear` | `clear "Field"` | Clear the contents of a text field |
-| `swipe` | `swipe up/down/left/right` | Swipe gesture on screen or widget |
+| `swipe` | `swipe up/down/left/right [over N percent]` | Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50) |
 | `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
 | `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |

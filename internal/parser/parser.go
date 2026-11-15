@@ -1,10 +1,10 @@
 package parser
 
 import (
-	"time"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Parser converts a token stream into a Program AST.
@@ -687,6 +687,16 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 	line := p.peek().Line
 	p.advance() // swipe
 	p.skipFillers()
+	// A bare word where the direction goes is not one of the four: parseDirection runs the swipe down and leaves the word
+	// unread, so it parses as the next step. Record it here, without consuming it, so lint can say so.
+	dirWord := ""
+	if w := p.peek(); w.Type == TOKEN_IDENT {
+		switch strings.ToLower(w.Literal) {
+		case "up", "down", "left", "right":
+		default:
+			dirWord = w.Literal
+		}
+	}
 	dir := p.parseDirection()
 	p.skipFillers()
 	var sel *Selector
@@ -694,8 +704,30 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		s := p.parseSelector()
 		sel = &s
 	}
+	// "over N percent" sets how far the swipe travels, as a percent of the element or the screen. It is a whole number
+	// from 1 to 100, and it ends the line; without it the swipe travels 50 percent.
+	percent := 0
+	if p.peek().Type == TOKEN_OVER {
+		p.advance() // over
+		if p.peek().Type != TOKEN_INT {
+			return nil, fmt.Errorf("line %d: swipe over needs a whole percentage from 1 to 100, for example: swipe up over 40 percent", line)
+		}
+		lit := p.advance().Literal
+		n, err := strconv.Atoi(lit)
+		if err != nil || n < 1 || n > 100 {
+			return nil, fmt.Errorf("line %d: swipe over %s percent is out of range: use a whole percentage from 1 to 100", line, lit)
+		}
+		if !p.peekLiteral("percent") {
+			return nil, fmt.Errorf("line %d: swipe over %s needs the word percent after the number", line, lit)
+		}
+		p.advance() // percent
+		if t := p.peek().Type; t != TOKEN_NEWLINE && t != TOKEN_DEDENT && t != TOKEN_EOF {
+			return nil, fmt.Errorf("line %d: swipe over %d percent must end the line; %q is not part of a swipe", line, n, p.peek().Literal)
+		}
+		percent = n
+	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Line: line}, nil
+	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, DirectionWord: dirWord, Line: line}, nil
 }
 
 func (p *Parser) parseActionScroll() (Step, error) {
@@ -2379,7 +2411,6 @@ func (p *Parser) parseEnrollBiometric() (Step, error) {
 	p.consumeNewline()
 	return ActionStep{Verb: VerbEnrollBiometric, Line: line}, nil
 }
-
 
 // ---- System dialogs (FP-16) ----
 

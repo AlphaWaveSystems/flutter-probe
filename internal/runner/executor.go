@@ -750,7 +750,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			sp := toSelectorParam(e.resolveSelector(*a.Sel))
 			sel = &sp
 		}
-		return e.client.Swipe(ctx, string(a.Direction), sel)
+		return e.client.Swipe(ctx, string(a.Direction), sel, a.Percent)
 
 	case parser.VerbScroll:
 		var sel *probelink.SelectorParam

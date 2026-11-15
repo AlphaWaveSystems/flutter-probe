@@ -103,6 +103,7 @@ type WaitParams struct {
 type SwipeParams struct {
 	Direction string        `json:"direction"` // up | down | left | right
 	Selector  *SelectorParam `json:"selector,omitempty"`
+	Percent   int            `json:"percent,omitempty"` // how far to travel, percent of the element or screen; 0 = the agent's default (50)
 }
 
 // ScrollParams controls a scroll action.

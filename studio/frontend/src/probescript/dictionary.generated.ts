@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "16286173ba5d6b58549a6fe7bf035f11cbba33ba336ccaeec99e6fe313bab78a";
+export const SOURCE_SHA256 = "4e195edcd8dce0008f99cfafc6ccb1d629c52b8945c7358977b4963f8ccff4a2";
 
 export const COMMANDS = [
   {
@@ -37,8 +37,8 @@ export const COMMANDS = [
   },
   {
     "command": "swipe",
-    "syntax": "swipe up/down/left/right",
-    "description": "Swipe gesture on screen or widget",
+    "syntax": "swipe up/down/left/right [over N percent]",
+    "description": "Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50)",
     "category": "Actions"
   },
   {

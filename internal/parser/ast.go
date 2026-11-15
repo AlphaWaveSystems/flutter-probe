@@ -214,6 +214,10 @@ type ActionStep struct {
 	Sel       *Selector   // target selector (may be nil for directionless actions)
 	Text      string      // for "type" — the text to enter
 	Direction SwipeDirection // for swipe / scroll
+	Percent   int            // for swipe: how far it travels, as a percent of the element or screen; 0 means the default, 50
+	// for swipe: a word where a direction was expected that is not up, down, left or right. The swipe runs down, and the
+	// word is left to parse as the next step, as it always has; lint warns about it.
+	DirectionWord string
 	Name      string      // for screenshot name, rotate direction, locale, etc.
 	To        *Selector   // for drag: destination
 	Until     *Selector   // for scroll: keep scrolling until this target is visible

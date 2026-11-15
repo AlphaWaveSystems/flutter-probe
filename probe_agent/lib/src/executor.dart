@@ -173,7 +173,8 @@ class ProbeExecutor {
       case ProbeMethods.swipe:
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
-        await _swipe(dir, sel);
+        final percent = (req.params['percent'] as num?)?.toInt() ?? 0;
+        await _swipe(dir, sel, percent: percent);
         await _sync.waitForSettled();
         _lastScrollAt = DateTime.now();
         return {'ok': true};
@@ -1272,7 +1273,10 @@ class ProbeExecutor {
 
   // ---- Gesture helpers ----
 
-  Future<void> _swipe(String direction, Map<String, dynamic>? sel) async {
+  /// [percent] is how far the swipe travels, as a percent of the element or the screen. 0 is the default, 50. The parser
+  /// refuses anything outside 1 to 100; the agent clamps it again rather than trust the wire.
+  Future<void> _swipe(String direction, Map<String, dynamic>? sel, {int percent = 0}) async {
+    final fraction = (percent <= 0 ? 50 : percent.clamp(1, 100).toInt()) / 100;
     Offset center;
     Size size;
 
@@ -1294,14 +1298,14 @@ class ProbeExecutor {
     Offset delta;
     switch (direction) {
       case 'up':
-        delta = Offset(0, -size.height * 0.5);
+        delta = Offset(0, -size.height * fraction);
       case 'down':
-        delta = Offset(0, size.height * 0.5);
+        delta = Offset(0, size.height * fraction);
       case 'left':
-        delta = Offset(-size.width * 0.5, 0);
+        delta = Offset(-size.width * fraction, 0);
       case 'right':
       default:
-        delta = Offset(size.width * 0.5, 0);
+        delta = Offset(size.width * fraction, 0);
     }
 
     // PT-03: a single giant PointerMoveEvent covering the whole delta in one

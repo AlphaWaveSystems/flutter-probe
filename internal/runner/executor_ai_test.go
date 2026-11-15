@@ -48,7 +48,7 @@ func (f *fakeAIClient) TypeText(ctx context.Context, sel probelink.SelectorParam
 }
 func (f *fakeAIClient) See(ctx context.Context, params probelink.SeeParams) error { return nil }
 func (f *fakeAIClient) Wait(ctx context.Context, params probelink.WaitParams) error { return nil }
-func (f *fakeAIClient) Swipe(ctx context.Context, direction string, sel *probelink.SelectorParam) error {
+func (f *fakeAIClient) Swipe(ctx context.Context, direction string, sel *probelink.SelectorParam, percent int) error {
 	return nil
 }
 func (f *fakeAIClient) Scroll(ctx context.Context, direction string, sel *probelink.SelectorParam) error {
