@@ -267,3 +267,41 @@ func TestCheckSavedLineEachCheckAlone(t *testing.T) {
 		t.Errorf("a variable left in the line: %v", err)
 	}
 }
+
+// A card number is found next to other digits, in any run of digits, and an object key that is a credential in a shape no ordinary key
+// has is refused (found by the fuzz test: "0 4111111111111111 0" and {"<hex>":true} were saved as typed).
+func TestSaveStepFindsCardsNextToDigitsAndRefusesCredentialKeys(t *testing.T) {
+	for _, body := range []string{"0 4111111111111111 0", "12 4111 1111 1111 1111 345", "x4111111111111111y", "99-4111-1111-1111-1111-99", "1234567890123 4111111111111111"} {
+		s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
+		if err != nil {
+			t.Errorf("%q: %v", body, err)
+			continue
+		}
+		if got := stepOf(t, s).Body; strings.Contains(strings.ReplaceAll(strings.ReplaceAll(got, " ", ""), "-", ""), "4111111111111111") {
+			t.Errorf("%q: the card is in %q", body, got)
+		}
+	}
+	// Digits that are not a card are kept.
+	for _, body := range []string{"1234567890123", "0 1234567890123 0", "1111 1111 1111 1112"} {
+		s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
+		if err != nil || stepOf(t, s).Body != body {
+			t.Errorf("%q: %v %+v", body, err, s)
+		}
+	}
+	if got := len(cardRuns("a 4111111111111111 b 5500000000000004 c")); got != 2 {
+		t.Errorf("two cards in one text: %d runs", got)
+	}
+	for _, key := range []string{"9f86d081884c7d659a2feaa0c55ad015", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxw", "dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA=="} {
+		_, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":true}`})
+		if err == nil || strings.Contains(err.Error(), key) || !strings.Contains(err.Error(), "object key") {
+			t.Errorf("a key %q: %v", key[:12], err)
+		}
+	}
+	// Ordinary keys are kept, however many letters and digits they have.
+	for _, key := range []string{"address1_line", "shippingAddressLine1", "field_2024", "user-id-12345678", "ABCDEF0123456789"[:15], "a1b2c3d4"} {
+		s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`})
+		if err != nil || stepOf(t, s).Body != `{"`+key+`":1}` {
+			t.Errorf("the key %q: %v %+v", key, err, s.Lines)
+		}
+	}
+}

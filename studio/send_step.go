@@ -127,18 +127,58 @@ func interpolatedForm(s string) string {
 	return ""
 }
 
-// cardRuns are the spans of s that are runs of 13 to 19 digits passing the card number check.
+var digitRun = regexp.MustCompile(`\d(?:[ -]?\d)*`)
+
+// cardRuns are the spans of s that are 13 to 19 digits, in whole groups of digits (separated by a single space or hyphen, or one
+// solid group), that pass the card number check. Every run of digit groups is searched in every span of groups, so a card number next
+// to other digits ("0 4111 1111 1111 1111 0") is found, and a window that starts or ends inside a group is not tried: that would take
+// one in ten long numbers for a card.
 func cardRuns(s string) [][2]int {
 	var out [][2]int
-	for _, m := range cardPattern.FindAllStringIndex(s, -1) {
-		digits := strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return r
+	for _, m := range digitRun.FindAllStringIndex(s, -1) {
+		run := s[m[0]:m[1]]
+		type group struct{ a, b int } // offsets in run
+		var groups []group
+		for i := 0; i < len(run); {
+			if run[i] < '0' || run[i] > '9' {
+				i++
+				continue
 			}
-			return -1
-		}, s[m[0]:m[1]])
-		if len(digits) >= 13 && len(digits) <= 19 && luhn(digits) {
-			out = append(out, [2]int{m[0], m[1]})
+			j := i
+			for j < len(run) && run[j] >= '0' && run[j] <= '9' {
+				j++
+			}
+			groups = append(groups, group{i, j})
+			i = j
+		}
+		if len(groups) > 2000 {
+			continue
+		}
+		for a := 0; a < len(groups); {
+			found := false
+			digits := 0
+			for z := a; z < len(groups); z++ {
+				digits += groups[z].b - groups[z].a
+				if digits > 19 {
+					break
+				}
+				if digits < 13 {
+					continue
+				}
+				var d strings.Builder
+				for k := a; k <= z; k++ {
+					d.WriteString(run[groups[k].a:groups[k].b])
+				}
+				if luhn(d.String()) {
+					out = append(out, [2]int{m[0] + groups[a].a, m[0] + groups[z].b})
+					a = z + 1
+					found = true
+					break
+				}
+			}
+			if !found {
+				a++
+			}
 		}
 	}
 	return out
@@ -323,6 +363,9 @@ func safeBody(body string, ph *placeholders) (string, error) {
 		dec := json.NewDecoder(strings.NewReader(trimmed))
 		dec.UseNumber()
 		if err := copyJSON(dec, &out, "body", false, ph); err != nil {
+			if errors.Is(err, errKeyLooksSecret) {
+				return "", err
+			}
 			return "", errors.New("the JSON body could not be read, so nothing was saved")
 		}
 		return out.String(), nil
@@ -419,6 +462,19 @@ func safeText(s string, ph *placeholders) string {
 	return b.String()
 }
 
+var (
+	hexRun            = regexp.MustCompile(`^[0-9A-Fa-f]{16,}$`)
+	jwtShape          = regexp.MustCompile(`^eyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.`)
+	paddedBase64      = regexp.MustCompile(`^[A-Za-z0-9+/_\-]{14,}={1,2}$`)
+	errKeyLooksSecret = errors.New("an object key in the body looks like a credential, so nothing was saved")
+)
+
+// strongSecretShape says whether a name is a hex string of 16 or more digits, a JWT, or base64 with padding: shapes an ordinary key
+// does not have, so a name of one of them is a value written where a name goes.
+func strongSecretShape(name string) bool {
+	return hexRun.MatchString(name) || jwtShape.MatchString(name) || paddedBase64.MatchString(name)
+}
+
 // copyJSON copies one JSON value, replacing a string or number that is under a credential name, a string that looks like a
 // credential, and an email address. Keys are kept; they are names, not values.
 func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph *placeholders) error {
@@ -449,6 +505,9 @@ func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph 
 					out.WriteByte(',')
 				}
 				first = false
+				if strongSecretShape(name) {
+					return errKeyLooksSecret // a name that is a hex string, a JWT or padded base64 is a value written as a name
+				}
 				if stepEmail.MatchString(name) || len(cardRuns(name)) > 0 {
 					out.WriteString(enc(ph.next("key")) + ":") // a name that carries an address or a card number is a value too
 				} else {
