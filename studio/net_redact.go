@@ -143,7 +143,8 @@ func endsInKey(name string) bool {
 }
 
 var (
-	jwtPattern       = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*`)
+	// The third part is optional: a JWT cut inside its payload is `header.partial-payload`, and that is a leak of the header and part of the claims.
+	jwtPattern       = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}(?:\.[A-Za-z0-9_-]*)?`)
 	base64urlPattern = regexp.MustCompile(`[A-Za-z0-9_-]{24,}`)
 	uuidPattern      = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
 	cardPattern      = regexp.MustCompile(`\b\d(?:[ -]?\d){12,18}\b`)
