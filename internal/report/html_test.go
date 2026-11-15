@@ -9,6 +9,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/report"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 func TestNewHTMLReport(t *testing.T) {
@@ -232,5 +233,14 @@ func TestHTMLReport_TagReachesThePageData(t *testing.T) {
 	page := writeHTML(t, []runner.TestResult{{TestName: "t", File: "a.probe", Passed: true, Row: -1, Tags: []string{"smoke"}}}, nil)
 	if !strings.Contains(page, `"tags":["smoke"]`) {
 		t.Fatalf("tag missing from the page data")
+	}
+}
+
+// A tag that holds a known secret is masked on the page like any other printed text.
+func TestHTMLReport_TagsAreMasked(t *testing.T) {
+	sysdialog.NoteSecret("html-tag-secret-Vm2q")
+	page := writeHTML(t, []runner.TestResult{{TestName: "t", File: "a.probe", Passed: true, Row: -1, Tags: []string{"release html-tag-secret-Vm2q"}}}, nil)
+	if strings.Contains(page, "html-tag-secret-Vm2q") || !strings.Contains(page, `"tags":["release `) {
+		t.Fatalf("tag secret on the page, or the tag is gone")
 	}
 }

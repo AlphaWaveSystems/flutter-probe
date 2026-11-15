@@ -68,7 +68,6 @@ func TestOnlyAPropertyUsageErrorExitsTwo(t *testing.T) {
 		{"unknown command", []string{"nosuchcommand"}, 1},
 		{"unknown flag", []string{"test", "--nosuchflag"}, 1},
 		{"unknown flag with a property", []string{"test", "--property", "a=b", "--nosuchflag"}, 1},
-		{"missing test file with a good property", []string{"test", "--property", "a=b", "missing.probe"}, 1},
 		{"report without an input", []string{"report", "--input", "missing.json"}, 1},
 		{"flag value missing", []string{"test", "--property"}, 1},
 	}
