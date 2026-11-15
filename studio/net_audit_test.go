@@ -344,3 +344,80 @@ func TestMonitorAuditFindsFilesByWhatTheyMention(t *testing.T) {
 		t.Error("an unrelated file is a monitor file")
 	}
 }
+
+// The seed holds the exchanges unredacted, so what can name it is a short list of files: a mention anywhere else (an assignment, a
+// read, `var _ = netSeed`) is refused, and so is any mention in the files that build what a provider is sent. The rule reads the syntax
+// tree, so `netSeed=nil` and a read are caught as well as the assignment with spaces.
+var seedFiles = map[string][]string{
+	"netSeed":         {"net_seed.go"},
+	"setNetSeed":      {"net_seed.go", "main.go"},
+	"seededLog":       {"net_seed.go", "net_exchanges.go"},
+	"seededExchanges": {"seed_run.go", "main.go"},
+}
+
+// seedMisuse returns the seed names a file mentions that it may not.
+func seedMisuse(filename, src string) []string {
+	f, err := parser.ParseFile(token.NewFileSet(), filename, src, 0)
+	if err != nil {
+		return []string{"does not parse: " + err.Error()}
+	}
+	var bad []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		files, isSeed := seedFiles[id.Name]
+		if !isSeed {
+			return true
+		}
+		for _, allowed := range files {
+			if filename == allowed {
+				return true
+			}
+		}
+		bad = append(bad, filename+" mentions "+id.Name)
+		return true
+	})
+	sort.Strings(bad)
+	return dedupe(bad)
+}
+
+func TestSeedNamesAreMentionedOnlyWhereTheyBelong(t *testing.T) {
+	// Each way around the rule is a fixture.
+	for name, c := range map[string]struct{ file, src string }{
+		"a blank read in the chat code":      {"ai_chat.go", `package main; var _ = netSeed`},
+		"a blank read in the Explain code":   {"ai_explain.go", `package main; var _ = seededLog`},
+		"an assignment with no spaces":       {"other.go", `package main; func f() { netSeed=nil }`},
+		"an assignment with spaces":          {"other.go", `package main; func f() { netSeed = nil }`},
+		"a call that sets it":                {"other.go", `package main; func f() { setNetSeed(x) }`},
+		"a call that reads the seed file":    {"app.go", `package main; func f() { seededExchanges(true, "", "") }`},
+		"a read of a field":                  {"ai_chat.go", `package main; func f() { _ = netSeed.Entries }`},
+		"setNetSeed outside main":            {"net_exchanges.go", `package main; func f() { setNetSeed(x) }`},
+		"seededExchanges from the exchanges": {"net_exchanges.go", `package main; func f() { seededExchanges(true, "", "") }`},
+	} {
+		if bad := seedMisuse(c.file, c.src); len(bad) == 0 {
+			t.Errorf("%s: accepted %q in %s", name, c.src, c.file)
+		}
+	}
+	for name, c := range map[string]struct{ file, src string }{
+		"the seed file":              {"net_seed.go", `package main; var netSeed *int; func setNetSeed() { netSeed = nil }; func seededLog() { _ = netSeed }`},
+		"the exchanges read the log": {"net_exchanges.go", `package main; func f() { seededLog() }`},
+		"main starts it":             {"main.go", `package main; func f() { seededExchanges(); setNetSeed() }`},
+	} {
+		if bad := seedMisuse(c.file, c.src); len(bad) != 0 {
+			t.Errorf("%s: refused: %v", name, bad)
+		}
+	}
+	// The real files.
+	paths, _ := filepath.Glob("*.go")
+	for _, p := range paths {
+		if strings.HasSuffix(p, "_test.go") {
+			continue
+		}
+		b, _ := os.ReadFile(p)
+		if bad := seedMisuse(p, string(b)); len(bad) != 0 {
+			t.Errorf("%v", bad)
+		}
+	}
+}

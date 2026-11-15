@@ -107,15 +107,37 @@
 
       <section id="results-pane">
         <div class="pane-title">
-          <span>Results</span>
+          <span class="pane-tabs" role="tablist">
+            <button type="button" id="tab-results" class="pane-tab active" role="tab" aria-selected="true">Results</button>
+            <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" title="The requests and responses the app made, with credentials hidden">Network</button>
+          </span>
           <span id="results-summary" class="dim"></span>
         </div>
+        <div id="results-panel" class="pane-panel">
         <div id="explain-bar" class="explain-bar" hidden>
           <button type="button" id="btn-explain" class="btn-mini" title="Ask the AI provider for advice on the failed tests of the last run. You see what is sent first.">Explain failures</button>
           <span id="explain-status" class="dim" role="status"></span>
         </div>
         <section id="explain-card" class="explain-card" aria-label="Advisory" hidden></section>
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
+        </div>
+        <div id="network-panel" class="pane-panel" hidden>
+          <div class="net-toolbar">
+            <select id="net-method" aria-label="Method">
+              <option value="">Any method</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+            </select>
+            <select id="net-status" aria-label="Status">
+              <option value="">Any status</option><option value="2xx">2xx</option><option value="3xx">3xx</option><option value="4xx">4xx</option><option value="5xx">5xx</option><option value="error">Error</option>
+            </select>
+            <input id="net-text" type="search" placeholder="Filter" aria-label="Filter the shown text" autocomplete="off" spellcheck="false" maxlength="200" />
+            <button type="button" id="btn-net-refresh" class="btn-mini" title="Read the request log again">Refresh</button>
+            <span id="net-info" class="dim" role="status"></span>
+          </div>
+          <div class="net-body">
+            <ul id="net-list" class="net-list" aria-label="Requests"></ul>
+            <section id="net-detail" class="net-detail" aria-label="Request detail"><p class="dim">Select a request.</p></section>
+          </div>
+        </div>
       </section>
     </main>
 

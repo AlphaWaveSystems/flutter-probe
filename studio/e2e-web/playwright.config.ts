@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { seedRun } from "./tests/explain-seed";
+import { seedExchanges, seedRun } from "./tests/explain-seed";
 
 // Studio runs in headless mode (PROBE_STUDIO_HEADLESS=1): the real frontend and Go bindings over HTTP,
 // no native window. scripts/studio-e2e-web.sh builds Studio, prepares a workspace copy (and, for the
@@ -16,6 +16,11 @@ const seedPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WOR
 if (seedPath) {
   fs.mkdirSync(path.dirname(seedPath), { recursive: true });
   fs.writeFileSync(seedPath, JSON.stringify(seedRun()));
+}
+const seedExchangesPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WORKSPACE, ".e2e-seed", "exchanges.json") : "";
+if (seedExchangesPath) {
+  fs.mkdirSync(path.dirname(seedExchangesPath), { recursive: true });
+  fs.writeFileSync(seedExchangesPath, JSON.stringify(seedExchanges()));
 }
 const out = process.env.STUDIO_E2E_OUT ?? path.resolve(__dirname, "../../reports/studio-e2e-web");
 
@@ -46,6 +51,7 @@ export default defineConfig({
       PROBE_STUDIO_HEADLESS_PORT: port,
       PROBE_STUDIO_WORKSPACE: process.env.STUDIO_WORKSPACE ?? "",
       PROBE_STUDIO_DEVICE_VIEW: process.env.STUDIO_E2E_DEVICE_VIEW ?? "", // "1" runs Studio with the shared device view
+      PROBE_STUDIO_SEED_EXCHANGES: seedExchangesPath, // the Network tab has a request log to show without a device
       PROBE_STUDIO_SEED_RUN: seedPath, // the failed-run screens (Explain) show without a device
       PROBE_STUDIO_KEYCHAIN: "memory", // keys live in memory, so no spec reads or writes the real keychain
       PROBE_STUDIO_LOCAL_ENDPOINT: "http://127.0.0.1:1/v1", // Find local models never asks a real Ollama: this default refuses at once

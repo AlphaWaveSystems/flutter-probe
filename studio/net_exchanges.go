@@ -61,11 +61,14 @@ type NetList struct {
 	Total  int      `json:"total"` // exchanges that matched, before the cap
 	Shown  int      `json:"shown"` // rows returned
 	Rows   []NetRow `json:"rows"`
+	// Seeded is true when the rows come from the test seed of a headless build and not from an app: the window marks them.
+	Seeded bool `json:"seeded,omitempty"`
 }
 
 // NetDetail is one exchange with its headers and bodies, all redacted.
 type NetDetail struct {
-	Epoch string `json:"epoch"`
+	Epoch  string `json:"epoch"`
+	Seeded bool   `json:"seeded,omitempty"`
 	NetRow
 	RequestHeaders      []NetHeader `json:"requestHeaders"`
 	ResponseHeaders     []NetHeader `json:"responseHeaders"`
@@ -144,6 +147,9 @@ func (a *App) netLog(p probelink.HTTPLogParams) (probelink.HTTPLogResult, error)
 	conn := a.conn
 	a.mu.Unlock()
 	if conn == nil || conn.client == nil {
+		if res, ok := seededLog(p); ok {
+			return res, nil // a headless build that was started with a request log, and no app connected
+		}
 		return probelink.HTTPLogResult{}, errNetNotConnected
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), netLogTimeout)
@@ -201,7 +207,7 @@ func (a *App) HTTPExchanges(f NetFilter) (NetList, error) {
 	if rows == nil {
 		rows = []NetRow{}
 	}
-	return NetList{Epoch: shortText(res.Epoch, 64), Latest: res.Latest, Total: total, Shown: len(rows), Rows: rows}, nil
+	return NetList{Epoch: shortText(res.Epoch, 64), Latest: res.Latest, Total: total, Shown: len(rows), Rows: rows, Seeded: a.netSeeded()}, nil
 }
 
 // HTTPExchange returns one recorded exchange with its headers and bodies, redacted and cut. epoch is the one the listing returned: a
@@ -226,7 +232,7 @@ func (a *App) HTTPExchange(epoch string, seq int) (NetDetail, error) {
 			continue
 		}
 		budget := newNetBudget() // what one exchange may have processed in all
-		d := NetDetail{Epoch: epoch, NetRow: netRow(e)}
+		d := NetDetail{Epoch: epoch, NetRow: netRow(e), Seeded: a.netSeeded()}
 		d.RequestHeaders, d.MoreRequestHeaders = redactHeadersBudget(e.RequestHeaders, budget)
 		d.ResponseHeaders, d.MoreResponseHeaders = redactHeadersBudget(e.ResponseHeaders, budget)
 		d.RequestBody = redactBodyBudget(e.RequestBody, e.RequestBytes, headerValue(e.RequestHeaders, "content-type"), budget)

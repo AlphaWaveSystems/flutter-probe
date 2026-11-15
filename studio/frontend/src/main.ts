@@ -7,6 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
+import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
@@ -275,6 +276,7 @@ async function pickWorkspace() {
     await SetWorkspace(path);
     resetAIPreview();
     workspaceRoot = path;
+    resetNetworkPanel();
     refreshFiles(path);
     toast(`Workspace: ${path}`, "success", 1800);
   } catch (err) {
@@ -1227,6 +1229,7 @@ $("btn-connect").addEventListener("click", async () => {
 });
 
 EventsOn("connection:changed", (status: ConnectionStatus) => {
+  resetNetworkPanel(); // another app, or none: the request log on screen is not its own
   if (status.connected) {
     setStatus("connected", `${status.deviceName}  ·  ${status.platform}`);
   } else {
@@ -1284,6 +1287,7 @@ if (inspectorSearch) {
 // ---- Run ----------------------------------------------------------------
 
 initResults();
+initNetworkPanel();
 
 // The scope control next to Run picks what runs: the whole file (the default), the test at the cursor, the tests with a
 // tag, or the tests that failed last time. The tag field shows only for the tag scope.
@@ -1520,6 +1524,7 @@ initDeviceSettings();
     await SetWorkspace(ws);
     resetAIPreview();
     workspaceRoot = ws;
+    resetNetworkPanel();
     refreshFiles(ws);
   } else {
     refreshFiles();
