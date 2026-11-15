@@ -60,6 +60,24 @@ jobs:
       - name: ProbeScript tests
         working-directory: studio/frontend
         run: npm run test:probescript
+      - name: Run scope tests
+        working-directory: studio/frontend
+        run: npm run test:run-scope
+      - name: Chat label tests
+        working-directory: studio/frontend
+        run: npm run test:chat-label
+      - name: Explain tests
+        working-directory: studio/frontend
+        run: npm run test:explain
+      - name: Network tab tests
+        working-directory: studio/frontend
+        run: npm run test:network
+      - name: Send request tests
+        working-directory: studio/frontend
+        run: npm run test:send
+      - name: Triage tests
+        working-directory: studio/frontend
+        run: npm run test:triage
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
