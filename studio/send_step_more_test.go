@@ -593,7 +593,7 @@ func TestSaveStepReadsTheWholeKey(t *testing.T) {
 
 // Behaviours the reviews' mutants found: a hyphen next to hex does not hide it, and a JWT that is one word of a key is seen.
 func TestSaveStepKeyShapesNextToText(t *testing.T) {
-	for _, key := range []string{"ke"+"y-9f86d081884c7d659a2feaa0c55ad015", "9f86d081884c7d659a2feaa0c55ad015-key", "x eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxw", "name dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA=="} {
+	for _, key := range []string{"ke" + "y-9f86d081884c7d659a2feaa0c55ad015", "9f86d081884c7d659a2feaa0c55ad015-key", "x eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxw", "name dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA=="} {
 		if _, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`}); err == nil {
 			t.Errorf("the key %q was saved", key)
 		}
