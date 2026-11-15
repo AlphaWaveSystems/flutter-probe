@@ -25,7 +25,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | Tool | Description |
 |---|---|
 | `get_widget_tree` | Dump the live Flutter widget tree from the running app |
-| `take_screenshot` | Capture the current screen and return it as an image |
+| `take_screenshot` | Capture the current screen and return it as an image. The `name` is cleaned to a plain file-name fragment (separators, control characters, `..` and characters with a meaning in a script or a file pattern become `_` or are dropped; at most 120 bytes; empty means `mcp_capture`). A picture over 2 MB or 2000 px on a side is scaled down. |
 | `read_test` | Read the contents of a `.probe` file |
 | `write_test` | Create or overwrite a `.probe` file — content is validated before writing; syntax errors are returned without creating the file |
 | `run_script` | Execute inline ProbeScript without creating a file |
