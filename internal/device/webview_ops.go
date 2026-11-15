@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"unicode"
@@ -14,9 +15,10 @@ import (
 // `arguments` of Runtime.callFunctionOn, so the page's JavaScript engine never parses it as code, whatever it contains. The functions only read the page (and scroll the found element into view, focus it when
 // asked); they return small objects, never HTML.
 
-// findFunction finds the elements that match query and describes the first visible one. A query that starts with "#", "." or "[" is a CSS selector; any other query matches the visible text of an element
-// (an exact match first, then a text that contains the query), innermost element first. mode "focus" also focuses the element. The text it returns is capped at maxText characters.
-const findFunction = `function (query, maxText, mode) {
+// findFunction finds the elements that match query and describes the first visible one. kind says what query is: "css" (a CSS selector) or anything else (the visible text of an element: an exact match first,
+// then a text that contains the query, innermost element first). The caller chooses the kind; the function never guesses it from the characters of the query. mode "focus" also focuses the element and reports
+// whether it holds the focus afterwards. The text it returns is capped at maxText characters; vw and vh are the viewport, so the caller can check the position it gets back.
+const findFunction = `function (kind, query, maxText, mode) {
   function label(e) { return String(e.innerText || e.value || '').replace(/\s+/g, ' ').trim(); }
   function innermost(e) {
     var mine = label(e);
@@ -28,9 +30,8 @@ const findFunction = `function (query, maxText, mode) {
     var s = window.getComputedStyle(e);
     return s.visibility !== 'hidden' && s.display !== 'none';
   }
-  var first = query.charAt(0);
   var list;
-  if (first === '#' || first === '.' || first === '[') {
+  if (kind === 'css') {
     try { list = Array.prototype.slice.call(document.querySelectorAll(query)); }
     catch (err) { return { invalid: true }; }
   } else {
@@ -44,9 +45,13 @@ const findFunction = `function (query, maxText, mode) {
   for (var i = 0; i < list.length; i++) { if (visible(list[i])) { found = list[i]; break; } }
   if (found === null) { return { count: list.length, visible: false }; }
   found.scrollIntoView({ block: 'center', inline: 'center' });
-  if (mode === 'focus' && typeof found.focus === 'function') { found.focus(); }
+  var focused = false;
+  if (mode === 'focus') {
+    if (typeof found.focus === 'function') { found.focus(); }
+    focused = document.activeElement === found;
+  }
   var r = found.getBoundingClientRect();
-  return { count: list.length, visible: true, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, text: label(found).slice(0, maxText) };
+  return { count: list.length, visible: true, focused: focused, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight, text: label(found).slice(0, maxText) };
 }`
 
 const (
@@ -58,12 +63,39 @@ const (
 	maxTypedChars = 8192
 	// maxShownChars is the longest piece of page or script text repeated in an error message.
 	maxShownChars = 60
+	// maxMatchCount and maxPixels bound the numbers a page may report: a count of matches, and a size or position in CSS pixels.
+	maxMatchCount = 100_000
+	maxPixels     = 1_000_000
 )
+
+// SelectorKind says how a Selector is read.
+type SelectorKind string
+
+const (
+	// SelectText matches the visible text of an element: an exact match first, then a text that contains the value, innermost element first.
+	SelectText SelectorKind = "text"
+	// SelectCSS is a CSS selector for document.querySelectorAll.
+	SelectCSS SelectorKind = "css"
+)
+
+// Selector says what to find in the page. The caller chooses the kind; it is never guessed from the characters of the value, so a text such as "#1 Item" or ".5 off" is text and a selector is a selector.
+// The runner decides the kind from the syntax of the step (for example a quoted text against css:"...").
+type Selector struct {
+	Kind  SelectorKind
+	Value string
+}
+
+// Text is a Selector for the visible text of an element.
+func Text(v string) Selector { return Selector{Kind: SelectText, Value: v} }
+
+// CSS is a Selector for a CSS selector.
+func CSS(v string) Selector { return Selector{Kind: SelectCSS, Value: v} }
 
 // ElementInfo describes the first visible element a query matched. Count is how many elements matched in all.
 type ElementInfo struct {
 	Count   int
 	Visible bool
+	Focused bool    // only set by a focusing lookup: the element holds the focus afterwards
 	X, Y    float64 // the centre, in CSS pixels of the page's viewport
 	W, H    float64
 	Text    string // at most maxElementText printable characters
@@ -95,7 +127,11 @@ func shown(s string) string {
 	return b.String()
 }
 
-func checkQuery(q string) error {
+func checkQuery(sel Selector) error {
+	q := sel.Value
+	if sel.Kind != SelectText && sel.Kind != SelectCSS {
+		return &WebViewError{Kind: "invalid selector", Message: "the selector kind must be text or css"}
+	}
 	if q == "" {
 		return &WebViewError{Kind: "invalid selector", Message: "the selector is empty"}
 	}
@@ -106,8 +142,9 @@ func checkQuery(q string) error {
 }
 
 // callFindFunction runs findFunction on the page with the query as a JSON argument.
-func (s *WebViewSession) callFindFunction(ctx context.Context, query, mode string) (ElementInfo, error) {
-	if err := checkQuery(query); err != nil {
+func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mode string) (ElementInfo, error) {
+	query := sel.Value
+	if err := checkQuery(sel); err != nil {
 		return ElementInfo{}, err
 	}
 	win, err := s.conn.Call(ctx, "Runtime.evaluate", map[string]any{"expression": "window", "returnByValue": false})
@@ -125,7 +162,7 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, query, mode strin
 	res, err := s.conn.Call(ctx, "Runtime.callFunctionOn", map[string]any{
 		"objectId":            w.Result.ObjectID,
 		"functionDeclaration": findFunction,
-		"arguments":           []map[string]any{{"value": query}, {"value": maxElementText}, {"value": mode}},
+		"arguments":           []map[string]any{{"value": string(sel.Kind)}, {"value": query}, {"value": maxElementText}, {"value": mode}},
 		"returnByValue":       true,
 		"awaitPromise":        false,
 	})
@@ -138,10 +175,13 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, query, mode strin
 				Invalid bool    `json:"invalid"`
 				Count   int     `json:"count"`
 				Visible bool    `json:"visible"`
+				Focused bool    `json:"focused"`
 				X       float64 `json:"x"`
 				Y       float64 `json:"y"`
 				W       float64 `json:"w"`
 				H       float64 `json:"h"`
+				VW      float64 `json:"vw"`
+				VH      float64 `json:"vh"`
 				Text    string  `json:"text"`
 			} `json:"value"`
 		} `json:"result"`
@@ -155,13 +195,33 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, query, mode strin
 	if v.Invalid {
 		return ElementInfo{}, &WebViewError{Kind: "invalid selector", Message: fmt.Sprintf("%q is not a valid selector for the WebView page", shown(s.redact(query)))}
 	}
-	return ElementInfo{Count: v.Count, Visible: v.Visible, X: v.X, Y: v.Y, W: v.W, H: v.H, Text: shown(s.redact(v.Text))}, nil
+	// the numbers come from the page: they are checked before anything is done with them
+	if v.Count < 0 || v.Count > maxMatchCount {
+		return ElementInfo{}, &WebViewError{Kind: "page error", Message: "the WebView page reported an impossible number of matches"}
+	}
+	if v.Visible && !sane(v.X, v.Y, v.W, v.H, v.VW, v.VH) {
+		return ElementInfo{}, &WebViewError{Kind: "page error", Message: "the WebView page reported a position outside its viewport"}
+	}
+	return ElementInfo{Count: v.Count, Visible: v.Visible, Focused: v.Focused, X: v.X, Y: v.Y, W: v.W, H: v.H, Text: shown(s.redact(v.Text))}, nil
+}
+
+// sane reports whether a position and size reported by the page are finite, within bounds, and inside the viewport the page reported.
+func sane(x, y, w, h, vw, vh float64) bool {
+	for _, n := range []float64{x, y, w, h, vw, vh} {
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return false
+		}
+	}
+	return vw > 0 && vh > 0 && vw <= maxPixels && vh <= maxPixels && w >= 0 && h >= 0 && w <= maxPixels && h <= maxPixels && x >= 0 && y >= 0 && x <= vw && y <= vh
 }
 
 // callError turns a failed Call into the error a step reports: the context's own error, or a lost connection.
 func (s *WebViewSession) callError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if errors.Is(err, ErrMalformedReply) {
+		return &WebViewError{Kind: "page error", Message: ErrMalformedReply.Error()}
 	}
 	var ce *CDPError
 	if errors.As(err, &ce) {
@@ -171,13 +231,14 @@ func (s *WebViewSession) callError(ctx context.Context, err error) error {
 }
 
 // Find reports the elements that match query. A query with no match is not an error: Count is 0.
-func (s *WebViewSession) Find(ctx context.Context, query string) (ElementInfo, error) {
-	return s.callFindFunction(ctx, query, "find")
+func (s *WebViewSession) Find(ctx context.Context, sel Selector) (ElementInfo, error) {
+	return s.callFindFunction(ctx, sel, "find")
 }
 
 // locate finds the first visible element or says why there is none, in the words of the proposal's failure table.
-func (s *WebViewSession) locate(ctx context.Context, query, mode string) (ElementInfo, error) {
-	info, err := s.callFindFunction(ctx, query, mode)
+func (s *WebViewSession) locate(ctx context.Context, sel Selector, mode string) (ElementInfo, error) {
+	query := sel.Value
+	info, err := s.callFindFunction(ctx, sel, mode)
 	if err != nil {
 		return ElementInfo{}, err
 	}
@@ -191,8 +252,8 @@ func (s *WebViewSession) locate(ctx context.Context, query, mode string) (Elemen
 }
 
 // Tap taps the first visible element that matches query, at its centre, with a mouse press and release.
-func (s *WebViewSession) Tap(ctx context.Context, query string) error {
-	info, err := s.locate(ctx, query, "find")
+func (s *WebViewSession) Tap(ctx context.Context, sel Selector) error {
+	info, err := s.locate(ctx, sel, "find")
 	if err != nil {
 		return err
 	}
@@ -204,13 +265,18 @@ func (s *WebViewSession) Tap(ctx context.Context, query string) error {
 	return nil
 }
 
-// Type focuses the first visible element that matches query and inserts text. The text is never written to a log or an error.
-func (s *WebViewSession) Type(ctx context.Context, query, text string) error {
+// Type focuses the first visible element that matches sel, checks that it holds the focus, and inserts text. If the element did not take the focus nothing is typed. The text is never written to a log or an error.
+func (s *WebViewSession) Type(ctx context.Context, sel Selector, text string) error {
 	if len([]rune(text)) > maxTypedChars {
 		return &WebViewError{Kind: "too long", Message: fmt.Sprintf("the text to type is longer than %d characters", maxTypedChars)}
 	}
-	if _, err := s.locate(ctx, query, "focus"); err != nil {
+	info, err := s.locate(ctx, sel, "focus")
+	if err != nil {
 		return err
+	}
+	if !info.Focused {
+		// typing into whatever else has the focus would put the text in the wrong place
+		return &WebViewError{Kind: "not focusable", Message: fmt.Sprintf("The element %q in the WebView page %q cannot take the focus, so nothing was typed", shown(s.redact(sel.Value)), s.title)}
 	}
 	if _, err := s.conn.Call(ctx, "Input.insertText", map[string]any{"text": text}); err != nil {
 		return s.callError(ctx, redactText(err, text))
@@ -230,23 +296,31 @@ func redactText(err error, text string) error {
 	return fmt.Errorf("%s", strings.ReplaceAll(err.Error(), text, "<typed text>"))
 }
 
-// WaitFor waits until a visible element matches query, polling every 250 ms, and fails when timeout passes.
-func (s *WebViewSession) WaitFor(ctx context.Context, query string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+// WaitFor waits until a visible element matches sel, polling every 250 ms. The total time is limited to timeout (and to the caller's own deadline, whichever is shorter) over the whole loop, including a poll
+// that hangs: a page that stops answering ends the wait at the limit.
+func (s *WebViewSession) WaitFor(ctx context.Context, sel Selector, timeout time.Duration) error {
+	wctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	timedOut := func() error {
+		return &WebViewError{Kind: "not found", Message: fmt.Sprintf("Timed out waiting for %q in the WebView page %q", shown(s.redact(sel.Value)), s.title)}
+	}
 	for {
-		info, err := s.Find(ctx, query)
+		info, err := s.Find(wctx, sel)
 		if err != nil {
+			if ctx.Err() == nil && wctx.Err() != nil {
+				return timedOut() // our own limit ended the poll
+			}
 			return err
 		}
 		if info.Count > 0 && info.Visible {
 			return nil
 		}
-		if time.Now().After(deadline) {
-			return &WebViewError{Kind: "not found", Message: fmt.Sprintf("Timed out waiting for %q in the WebView page %q", shown(s.redact(query)), s.title)}
-		}
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-wctx.Done():
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return timedOut()
 		case <-time.After(250 * time.Millisecond):
 		}
 	}

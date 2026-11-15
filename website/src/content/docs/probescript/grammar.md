@@ -1338,7 +1338,7 @@ with the same stripping applied to definition names; a call containing a bare nu
 number as part of the name first and as an argument second. No match is a run-time error. Arguments are
 bound to parameter names by position into a flat variable map; there is no per-recipe scope.
 
-**Swipe distance.** The range (a whole number from 1 to 100) and the line end of `over N percent` are checked by the parser, which the EBNF cannot express; anything else after `over` is a parse error. The agent travels the distance from the element the swipe starts on, or from the screen, and runs 50 percent when the step leaves it out.
+**Swipe distance.** The range (a whole number from 1 to 100) and the line end of `over N percent` are checked by the parser, which the EBNF cannot express; anything else after `over` is a parse error. The agent travels the distance from the element the swipe starts on, or from the screen, and runs 50 percent when the step leaves it out. The swipe starts at the centre of that element or screen, so above 50 percent the finger ends outside it: 50 percent ends at the edge and 100 percent ends one half-size past it. The travelled distance has not been measured on a device yet.
 
 **Silent leniency.** The parser prefers to accept and default over reporting an error. These are accepted
 without complaint and yield empty values: `use`, `recipe`, `test` or `composite` without a name; `if`

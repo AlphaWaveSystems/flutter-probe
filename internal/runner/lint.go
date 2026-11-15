@@ -126,7 +126,10 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 		walkSteps(body, func(s parser.Step) {
 			line := stepLine(s)
 			if a, ok := s.(parser.ActionStep); ok && a.DirectionWord != "" {
-				findings = append(findings, LintFinding{Line: line, Warning: true, Message: fmt.Sprintf("swipe: %q is not up, down, left or right, so the swipe runs down", a.DirectionWord)})
+				// A word that names a recipe is a recipe call, not a mistyped direction: no warning.
+				if _, _, _, isRecipe := resolveCall(r.recipes, parser.RecipeCall{Name: a.DirectionWord}); !isRecipe {
+					findings = append(findings, LintFinding{Line: line, Warning: true, Message: fmt.Sprintf("swipe: %q is not up, down, left or right, so the swipe runs down", a.DirectionWord)})
+				}
 			}
 			if rc, ok := s.(parser.RecipeCall); ok {
 				if _, _, _, found := resolveCall(r.recipes, rc); !found {
