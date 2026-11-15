@@ -294,3 +294,73 @@ func (b blockingTap) Tap(ctx context.Context, s device.Selector) error {
 	<-ctx.Done()
 	return ctx.Err()
 }
+
+// The wrappers (a recipe, `retry`, `repeat`) are steps too: a WebView step that times out inside one is not annotated with the Flutter screen either.
+func TestAWebViewTimeoutInsideAWrapperIsNotAnnotatedWithTheFlutterScreen(t *testing.T) {
+	tap := parser.ActionStep{Verb: parser.VerbTapWebView, Line: 4, WebView: &parser.WebViewTarget{Kind: parser.WebViewText, Value: "Pay"}}
+	wrap := map[string]parser.Step{
+		"retry":           parser.RetryStep{Count: 1, Body: []parser.Step{tap}},
+		"repeat":          parser.LoopStep{Count: 1, Body: []parser.Step{tap}},
+		"recipe":          parser.RecipeCall{Name: "pay it"},
+		"timed":           parser.TimedStep{Inner: tap, Within: 60 * time.Millisecond},
+		"retry in repeat": parser.LoopStep{Count: 1, Body: []parser.Step{parser.RetryStep{Count: 1, Body: []parser.Step{tap}}}},
+	}
+	for name, st := range wrap {
+		r := newWebViewRig()
+		r.e.timeout = 60 * time.Millisecond
+		agent := &agentClient{}
+		r.e.client = agent
+		r.e.recipes = map[string]parser.RecipeDef{"pay it": {Name: "pay it", Body: []parser.Step{tap}}}
+		r.e.deviceCtx.WebViewOpen = func(ctx context.Context, o device.WebViewOptions, fn func(WebViewPage) error) error {
+			return fn(blockingTap{r.page})
+		}
+		err := r.e.runStep(context.Background(), st)
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("%s: err = %v", name, err)
+			continue
+		}
+		if agent.calls.Load() != 0 || agent.closes.Load() != 0 {
+			t.Errorf("%s: the agent was touched (calls %d, closes %d)", name, agent.calls.Load(), agent.closes.Load())
+		}
+		var ste *stepTimeoutError
+		if errors.As(err, &ste) || strings.Contains(err.Error(), "visible texts") {
+			t.Errorf("%s: annotated with the Flutter screen: %v", name, err)
+		}
+	}
+}
+
+// A secret that sits across the 200-character cut is masked before the cut: no piece of it is left in the line.
+func TestAKnownSecretAcrossTheCutIsMaskedBeforeTheTextIsCut(t *testing.T) {
+	sysdialog.NoteSecret("cut-secret-Qw7d")
+	r := newWebViewRig()
+	r.e.vars["v"] = strings.Repeat("a", 195) + "cut-secret-Qw7d" + strings.Repeat("b", 50)
+	tgt := &parser.WebViewTarget{Kind: parser.WebViewText, Value: "<v>", Page: "<v>"}
+	for _, st := range []parser.Step{
+		parser.ActionStep{Verb: parser.VerbTapWebView, WebView: tgt},
+		parser.ActionStep{Verb: parser.VerbTypeWebView, Text: "<v>", WebView: tgt},
+		parser.AssertStep{WebView: tgt},
+		parser.WaitStep{Kind: parser.WaitWebView, WebView: tgt},
+	} {
+		l := r.e.stepDescription(st)
+		if strings.Contains(l, "cut-s") || !strings.Contains(l, "****") {
+			t.Errorf("%T: a piece of the secret is in the line or the mask is missing", st)
+		}
+	}
+}
+
+// The messages that name the target show it masked.
+func TestWaitAndPresentMessagesShowTheTargetMasked(t *testing.T) {
+	sysdialog.NoteSecret("msg-secret-Yt52")
+	r := newWebViewRig()
+	r.e.vars["s"] = "msg-secret-Yt52"
+	tgt := &parser.WebViewTarget{Kind: parser.WebViewText, Value: "<s>"}
+	r.page.waitErr = context.DeadlineExceeded
+	err := r.e.runWebViewWait(context.Background(), parser.WaitStep{Kind: parser.WaitWebView, WebView: tgt})
+	if err == nil || strings.Contains(err.Error(), "msg-secret-Yt52") || !strings.Contains(err.Error(), "Timed out waiting") {
+		t.Errorf("wait: %v", err)
+	}
+	err = r.e.runWebViewSee(context.Background(), parser.AssertStep{Negated: true, WebView: tgt})
+	if err == nil || strings.Contains(err.Error(), "msg-secret-Yt52") || !strings.Contains(err.Error(), "expected not to see") {
+		t.Errorf("present: %v", err)
+	}
+}

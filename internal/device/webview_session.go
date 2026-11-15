@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -117,12 +118,36 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, e
 	return &WebViewSession{conn: conn, fwd: fwd, title: title, redact: redact}, nil
 }
 
-// debuggerAddress matches the addresses a page's error text can carry back: the loopback DevTools URLs (which hold a page identifier) and
-// any /devtools/ path.
-var debuggerAddress = regexp.MustCompile(`(?i)(?:wss?|https?)://(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]+)?[^\s"']*|/devtools/[A-Za-z0-9/_.:-]*`)
+// A loopback host in the forms an address can take: 127.x.y.z (also 127.1), 0.0.0.0, localhost, [::1], an IPv4-mapped IPv6 address.
+const loopbackHost = `(?:127(?:\.[0-9]{1,3}){1,3}|0\.0\.0\.0|localhost|\[(?:::1|::ffff:[0-9a-f.:]+|0:0:0:0:0:0:0:1)\])`
 
-// scrubDebuggerAddresses removes DevTools addresses from text the page supplied; the messages never show the debugger address.
-func scrubDebuggerAddresses(s string) string { return debuggerAddress.ReplaceAllString(s, "<debugger address>") }
+// debuggerAddress matches what a page's error text can carry back about the DevTools connection: a loopback host with a port (with or without a
+// scheme, with spaces around the scheme's colon and slashes), a scheme and a loopback host, and any /devtools/ path (which holds the page identifier)
+// with everything that follows it up to the end of the line or a quote, because an identifier can be split by spaces.
+var debuggerAddress = regexp.MustCompile(`(?i)(?:(?:wss?|https?)\s*:\s*//\s*)?` + loopbackHost + `:[0-9]{1,5}[^\s"']*` +
+	`|(?:wss?|https?)\s*:\s*//\s*` + loopbackHost + `[^\s"']*` +
+	`|/devtools/[^"'\r\n]*`)
+
+// scrubDebuggerAddresses removes DevTools addresses from text the page supplied; the messages never show the debugger address. A text that
+// holds percent-encoded characters is also read decoded (up to three layers), and when an address is found in the decoded form the decoded text is the one returned, scrubbed.
+func scrubDebuggerAddresses(s string) string {
+	const tag = "<debugger address>"
+	out := debuggerAddress.ReplaceAllString(s, tag)
+	if strings.Contains(s, "%") {
+		d := s
+		for i := 0; i < 3; i++ {
+			u, err := url.PathUnescape(d)
+			if err != nil || u == d {
+				break
+			}
+			d = u
+		}
+		if d != s && debuggerAddress.MatchString(d) {
+			out = debuggerAddress.ReplaceAllString(d, tag)
+		}
+	}
+	return out
+}
 
 // pickPage chooses the page to use: the only one, or the one whose title or URL contains page (case-insensitive).
 func pickPage(pages []Target, page string, redact func(string) string) (Target, error) {

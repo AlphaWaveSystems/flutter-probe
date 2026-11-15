@@ -355,7 +355,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// FP-13: a deadline error names nothing by itself — add the step line, the
 	// step and what the screen showed. Skipped for lifecycle actions (restart/
 	// kill/clear), where the agent is intentionally gone and can't be asked.
-	if !isLifecycleAction && !isWebViewStep(step) { // the Flutter screen says nothing about a page in a WebView
+	if !isLifecycleAction {
 		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
 	}
 	err = annotateStepError(step, desc, err)

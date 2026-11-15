@@ -1151,7 +1151,7 @@ func TestDebuggerAddressesAreRemovedFromPageSuppliedText(t *testing.T) {
 		"http://127.0.0.1:1/devtools/page/9":                  "<debugger address>",
 		"HTTP://LOCALHOST:62395/json/list now":                "<debugger address> now",
 		"at http://[::1]:5/devtools/inspector.html?ws=x done": "at <debugger address> done",
-		"/devtools/page/9F3A and more":                        "<debugger address> and more",
+		"/devtools/page/9F3A and more":                        "<debugger address>",
 		"plain text, https://shop.example/cart stays":         "plain text, https://shop.example/cart stays",
 		"port 127.0.0.1 alone":                                "port 127.0.0.1 alone",
 	} {
@@ -1173,5 +1173,32 @@ func TestAPageThatEchoesItsDebuggerAddressDoesNotShowIt(t *testing.T) {
 	err = s.Type(context.Background(), Text("x"), "hello")
 	if err == nil || strings.Contains(err.Error(), "127.0.0.1") || strings.Contains(err.Error(), "devtools") || strings.Contains(err.Error(), "localhost") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestDebuggerAddressesInOtherSpellingsAreRemoved(t *testing.T) {
+	for in, want := range map[string]string{
+		"http%3A%2F%2F127.0.0.1%3A9222%2Fdevtools%2Fpage%2FABC":  "<debugger address>",
+		"see http%253A%252F%252Flocalhost%253A9222%252Fjson now": "see <debugger address> now",
+		"localhost:9222/json/list":                               "<debugger address>",
+		"try 127.0.0.1:62395 again":                              "try <debugger address> again",
+		"ws:// 127.0.0.1:9222/devtools/page/ABC":                 "<debugger address>",
+		"ws : // localhost:9222/x":                               "<debugger address>",
+		"/devtools/page/AB CD EF 12":                             "<debugger address>",
+		"0.0.0.0:9222/json":                                      "<debugger address>",
+		"127.1:9222":                                             "<debugger address>",
+		"http://127.0.0.2:80/a":                                  "<debugger address>",
+		"http://[::ffff:127.0.0.1]:9222/x":                       "<debugger address>",
+		"ws://0.0.0.0/devtools/page/1":                           "<debugger address>",
+		"ws://[::1]/anything":                                    "<debugger address>",
+		"WS://LOCALHOST/Other":                                   "<debugger address>",
+		"a localhost mention":                                    "a localhost mention",
+		"time 12:30 and 127.0.0.1 alone":                         "time 12:30 and 127.0.0.1 alone",
+		"100%25 sure, https://shop.example/a%20b":                "100%25 sure, https://shop.example/a%20b",
+		"discount 50% off, bad escape %zz":                       "discount 50% off, bad escape %zz",
+	} {
+		if got := scrubDebuggerAddresses(in); got != want {
+			t.Errorf("%q -> %q, want %q", in, got, want)
+		}
 	}
 }

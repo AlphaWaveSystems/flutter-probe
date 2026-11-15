@@ -53,6 +53,10 @@ func annotateStepTimeout(client probelink.ProbeClient, step parser.Step, desc st
 	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
+	if isWebViewStepError(err) {
+		// the Flutter screen says nothing about a page in a WebView, whether the step ran directly or inside a recipe, retry or repeat
+		return err
+	}
 	var already *stepTimeoutError
 	if errors.As(err, &already) {
 		return err
