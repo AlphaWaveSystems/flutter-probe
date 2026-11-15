@@ -200,49 +200,6 @@ func TestChatReplacesOnlyTheOwnHomeFolder(t *testing.T) {
 	}
 }
 
-func TestOwnHomeFolderIsReplacedInEveryForm(t *testing.T) {
-	t.Setenv("HOME", "/srv/people/dana")
-	me := currentUserName()
-	in := []string{
-		"at /srv/people/dana/app/x.go", "'/srv/people/dana'", "{\"p\":\"/srv/people/dana/x\"}", "`/SRV/People/Dana/x`", "(/srv/people/dana)", "end /srv/people/dana.",
-		`{"p":"\/srv\/people\/dana\/x"}`,
-	}
-	if me != "" {
-		in = append(in, "`/home/"+me+"/x`", "\"/HOME/"+strings.ToUpper(me)+"/x\"", "{\"p\":\"/Users/"+me+"\"}", "https://x.test/home/"+me+"/y", `{"p":"\/Users\/`+me+`\/x"}`, `{"p":"C:\\Users\\`+me+`\\dev"}`)
-	}
-	for _, text := range in {
-		for name, out := range map[string]string{"chatField": chatField(text, ""), "scrubPersonalText": scrubPersonalText(text)} {
-			if !strings.Contains(out, "~") || strings.Contains(strings.ToLower(out), "dana") || (me != "" && strings.Contains(strings.ToLower(out), strings.ToLower(me))) {
-				t.Errorf("%s: %q -> %q", name, text, out)
-			}
-		}
-	}
-}
-
-// The home folder needs a boundary on both sides: another name that starts with it, and a path that merely holds it, are kept.
-func TestOwnHomeFolderNeedsBoundaries(t *testing.T) {
-	t.Setenv("HOME", "/home/user")
-	for _, in := range []string{"/home/users/42", "/home/username", "/home/user2/x", "/home/user_x", "/home/user-x", "/tmp/home/user/x", "a/home/user", "~/home/user", "x.home/user"} {
-		if out := scrubOwnHome(in); strings.HasPrefix(out, "~") && !strings.Contains(in, "/tmp") && false {
-			t.Errorf("%q -> %q", in, out)
-		}
-	}
-	for _, in := range []string{"/home/users/42", "/home/username", "/home/user2/x", "/home/user_x", "/home/user-x", "/tmp/home/user/x", "a/home/user"} {
-		if out := scrubOwnHome(in); out != in && !(currentUserName() != "" && strings.Contains(in, "/home/"+currentUserName())) {
-			t.Errorf("%q changed: %q", in, out)
-		}
-	}
-	for in, want := range map[string]string{"/home/user": "~", "/home/user/x": "~/x", "see /home/user, ok": "see ~, ok", "(/home/user)": "(~)", "/home/user\nnext": "~\nnext"} {
-		if out := scrubOwnHome(in); out != want {
-			t.Errorf("%q -> %q, want %q", in, out, want)
-		}
-	}
-	// a large text of near misses is scanned in one pass
-	if out := scrubOwnHome(strings.Repeat("/home/users;", 1<<17)); len(out) != len(strings.Repeat("/home/users;", 1<<17)) {
-		t.Error("near misses were changed")
-	}
-}
-
 // 1 MB of path-looking text is scanned in well under a second.
 func TestChatFieldIsFastOnPathLookingText(t *testing.T) {
 	for _, unit := range []string{"/home/a;", "/Users/ab:", "/home/a|", "'/home/a/b'", "/home/a/b/", "x=/home/a "} {
@@ -328,15 +285,125 @@ func TestConsecutivePercentEncodedHiddenCharacters(t *testing.T) {
 	}
 }
 
-// A path deep inside a URL is a route, even when it looks like this account's folder; only the path right after the host is replaced.
-func TestOwnHomeInsideADeepURLPathIsKept(t *testing.T) {
-	me := currentUserName()
-	if me == "" {
-		t.Skip("no account name")
+// This account's own folder is replaced wherever it is: in every form HOME gives, behind a mount prefix, in a URL, in JSON escapes.
+func TestOwnHomeFolderIsReplacedInEveryForm(t *testing.T) {
+	t.Setenv("HOME", "/Users/alice")
+	for in, want := range map[string]string{
+		"at /Users/alice/app/x.go":                    "at ~/app/x.go",
+		"'/Users/alice'":                              "'~'",
+		`{"p":"/USERS/Alice/x"}`:                      `{"p":"~/x"}`,
+		"(/Users/alice)":                              "(~)",
+		"end /Users/alice.":                           "end ~.",
+		"/host_mnt/Users/alice":                       "/host_mnt/~",
+		"/mnt/c/Users/alice/x":                        "/mnt/c/~/x",
+		"/Volumes/Macintosh HD/Users/alice/Documents": "/Volumes/Macintosh HD/~/Documents",
+		"https://h.test/Users/alice/x":                "https://h.test/~/x",
+		"file:///Users/alice/p":                       "file:///~/p",
+		`{"p":"\/Users\/alice\/x"}`:                   `{"p":"~\/x"}`,
+		`"file:\/\/\/Users\/alice"`:                   `"file:\/\/\/~"`,
+		`"https:\/\/h\/Users\/alice\/x"`:              `"https:\/\/h\/~\/x"`,
+	} {
+		for name, out := range map[string]string{"scrubOwnHome": scrubOwnHome(in), "scrubPersonalText": scrubPersonalText(in), "chatField": chatField(in, "")} {
+			if out != want {
+				t.Errorf("%s: %q -> %q, want %q", name, in, out, want)
+			}
+		}
 	}
-	for _, in := range []string{"https://x.test/tmp/home/" + me + "/y", "https://x.test/a/home/" + me, "https://x.test/p?next=/a/home/" + me + "/z"} {
+}
+
+// The forms come from HOME, not from the account's name: a Windows home gives the backslash, the slash and the JSON forms.
+func TestWindowsHomeFormsComeFromHOME(t *testing.T) {
+	t.Setenv("HOME", `C:\Users\carol`)
+	t.Setenv("USERPROFILE", `C:\Users\carol`)
+	for in, want := range map[string]string{
+		`C:\Users\carol\x`:              `~\x`,
+		`C:/Users/carol/x`:              `~/x`,
+		`{"p":"C:\\Users\\carol\\dev"}`: `{"p":"~\\dev"}`,
+		`/mnt/c/Users/carol/x`:          `/mnt/c/~/x`,
+		`c:\users\CAROL\x`:              `~\x`,
+	} {
+		if out := scrubOwnHome(in); out != want {
+			t.Errorf("%q -> %q, want %q", in, out, want)
+		}
+	}
+	t.Setenv("HOME", "/Users/alice/") // a trailing slash
+	if out := scrubOwnHome("/Users/alice/Documents"); out != "~/Documents" {
+		t.Errorf("a trailing slash: %q", out)
+	}
+}
+
+// What comes after the name must end it, in any script; a folder that merely starts the same is kept.
+func TestOwnHomeFolderNeedsAnEnd(t *testing.T) {
+	t.Setenv("HOME", "/home/user")
+	for _, in := range []string{"/home/users/42", "/home/username", "/home/user2/x", "/home/user_x", "/home/user-x", "/home/user\u00e1", "/home/user\u4e2d", "xUsers/user", "/Xhome/user2"} {
 		if out := scrubOwnHome(in); out != in {
 			t.Errorf("%q changed: %q", in, out)
 		}
+	}
+	for in, want := range map[string]string{"/home/user": "~", "/home/user/x": "~/x", "see /home/user, ok": "see ~, ok", "(/home/user)": "(~)", "/home/user\nnext": "~\nnext", "/home/user/\u00e1": "~/\u00e1"} {
+		if out := scrubOwnHome(in); out != want {
+			t.Errorf("%q -> %q, want %q", in, out, want)
+		}
+	}
+	// a large text of near misses is scanned in one pass
+	text := strings.Repeat("/home/users;", 1<<17)
+	if out := scrubOwnHome(text); out != text {
+		t.Error("near misses were changed")
+	}
+}
+
+// A HOME that names no real folder replaces nothing.
+func TestAnEmptyOrShortHomeReplacesNothing(t *testing.T) {
+	text := "see /a/b/c and /home and /h/x and a/b and / and \\ and ~/x"
+	for _, h := range []string{"", "/", "/h", "/home", "/a", `\`} {
+		t.Setenv("HOME", h)
+		t.Setenv("USERPROFILE", h)
+		if out := scrubOwnHome(text); out != text {
+			t.Errorf("HOME=%q changed the text: %q", h, out)
+		}
+	}
+}
+
+// Every character that ends a token is a place to cut a file at, so a cut before a token keeps the text up to it.
+func TestClipBoundaryClasses(t *testing.T) {
+	token := "ghp_" + strings.Repeat("a1B2", 9)
+	for _, c := range " \n\t\r\"'`,;:=(){}[]<>|&" {
+		doc := strings.Repeat("a", 50) + string(c) + token + " tail"
+		got := clipContext(doc, strings.Index(doc, token)+10)
+		if !strings.HasPrefix(got, strings.Repeat("a", 50)+string(c)) || strings.Contains(got, "ghp_") {
+			t.Errorf("boundary %q: %q", c, got)
+		}
+	}
+	// characters inside tokens are not places to cut at
+	for _, c := range "-_./+" {
+		doc := strings.Repeat("a", 50) + string(c) + strings.Repeat("b", 30)
+		if got := clipContext(doc, 60); strings.Contains(got, "bbb") && !strings.HasPrefix(got, doc[:60]) {
+			t.Errorf("%q: %q", c, got)
+		}
+	}
+	// with no boundary at all (one long line of CJK text, or a data URI) only the marker is sent
+	if got := clipContext(strings.Repeat("\u4e2d", 40000), 64*1024); !strings.HasPrefix(got, "\n[truncated:") && len(got) > 100 {
+		t.Errorf("no boundary: %d bytes", len(got))
+	}
+}
+
+// A login name that carries a domain gives the folder of the name; a drive form is not looked for inside a longer word; a HOME of four
+// characters is too short to replace.
+func TestLoginDomainDriveWordAndShortHome(t *testing.T) {
+	saved := currentUserName
+	t.Cleanup(func() { currentUserName = saved })
+	currentUserName = func() string { return `CORP\carol` }
+	t.Setenv("HOME", "/nowhere/else/entirely")
+	if out := scrubOwnHome("/Users/carol/x and C:/Users/carol/y"); out != "~/x and C:~/y" {
+		t.Errorf("domain login: %q", out)
+	}
+	currentUserName = func() string { return "" }
+	t.Setenv("HOME", `C:\Users\carol`)
+	if out := scrubOwnHome(`xC:/Users/carol/x and C:/Users/carol/y`); out != "xC:~/x and ~/y" {
+		t.Errorf("a drive form inside a word: %q", out)
+	}
+	t.Setenv("HOME", "/a/b")
+	if out := scrubOwnHome("/a/b/c and x/a/b"); out != "/a/b/c and x/a/b" {
+		t.Errorf("a short HOME: %q", out)
 	}
 }

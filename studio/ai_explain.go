@@ -8,11 +8,13 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
@@ -131,32 +133,62 @@ func scrubPersonalText(s string) string {
 	return scrubOwnHome(emailPattern.ReplaceAllString(s, "[email]"))
 }
 
-// scrubOwnHome replaces this account's own home folder with ~: the folder os.UserHomeDir names, and /Users/<name> and /home/<name> for
-// this account's name (any case), also written with its slashes escaped for JSON (`\/Users\/me`, `C:\\Users\\me`). A match needs a
-// boundary on both sides, so `/home/users/42` is not the home folder `/home/user`. One pass per form, linear in the text.
+// scrubOwnHome replaces this account's own home folder with ~: the folder os.UserHomeDir names (also written with `/` for `\`, and with
+// its slashes escaped for JSON), and `/Users/<name>`, `/home/<name>` and `\Users\<name>` for the account's name, found wherever they
+// are, also behind a mount prefix (`/host_mnt/Users/me`, `/mnt/c/Users/me`, `/Volumes/Macintosh HD/Users/me`) and in a URL: the account's
+// own name is the point, so no rule about what comes before it applies. Only the folder part is replaced, so the slash before it stays
+// (`https://h/Users/me/x` is `https://h/~/x`). What comes after the name must end it (`/home/users/42` is not `/home/user`).
 func scrubOwnHome(s string) string {
+	home, _ := os.UserHomeDir()
+	for len(home) > 1 && (strings.HasSuffix(home, "/") || strings.HasSuffix(home, `\`)) {
+		home = home[:len(home)-1]
+	}
 	var forms []string
-	if h, err := os.UserHomeDir(); err == nil && len(h) > 4 && strings.Count(h, "/")+strings.Count(h, "\\") >= 2 {
-		forms = append(forms, h)
+	add := func(f string) {
+		forms = append(forms, f, strings.ReplaceAll(f, "/", `\/`), strings.ReplaceAll(f, `\`, `\\`))
 	}
+	if len(home) > 4 && strings.Count(home, "/")+strings.Count(home, `\`) >= 2 {
+		add(home)
+		add(strings.ReplaceAll(home, `\`, "/"))
+	}
+	names := map[string]bool{}
 	if me := currentUserName(); me != "" {
-		forms = append(forms, "/Users/"+me, "/home/"+me, `C:\Users\`+me, "C:/Users/"+me)
+		names[me[strings.LastIndexAny(me, `\/`)+1:]] = true // a Windows login can be DOMAIN\name
 	}
-	n := len(forms)
-	for i := 0; i < n; i++ {
-		forms = append(forms, strings.ReplaceAll(forms[i], "/", `\/`), strings.ReplaceAll(forms[i], `\`, `\\`))
+	if cut := strings.LastIndexAny(home, `/\`); cut > 0 {
+		parent := home[:cut]
+		if parent = parent[strings.LastIndexAny(parent, `/\`)+1:]; strings.EqualFold(parent, "Users") || strings.EqualFold(parent, "home") {
+			names[home[cut+1:]] = true
+		}
 	}
+	for n := range names {
+		if n != "" {
+			add("/Users/" + n)
+			add("/home/" + n)
+			add(`\Users\` + n)
+		}
+	}
+	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) }) // the longest form first (`C:/Users/me` before `/Users/me`)
 	for _, f := range forms {
 		s = replaceFolder(s, f)
 	}
 	return s
 }
 
-// replaceFolder replaces each occurrence of the folder f (compared without regard to ASCII case) in s with ~, where it starts a path
-// (the start of the text, or a character that cannot be part of one) and ends one (the end, or a character that cannot continue a name).
+// replaceFolder replaces each occurrence of the folder f (compared without regard to ASCII case) in s with ~, where what follows ends a
+// name (the end, or a character that is not a letter, a digit, `_` or `-`). A folder that starts with a separator keeps it when something
+// comes right before it (`https://h/Users/me` is `https://h/~`), so only the folder part is replaced; one that starts with a drive letter
+// is not looked for inside a longer word.
 func replaceFolder(s, f string) string {
 	if f == "" || len(s) < len(f) {
 		return s
+	}
+	lead := 0 // the separator the folder starts with (`/`, `\` or the two characters of `\/`)
+	switch {
+	case strings.HasPrefix(f, `\/`), strings.HasPrefix(f, `\\`):
+		lead = 2
+	case f[0] == '/' || f[0] == '\\':
+		lead = 1
 	}
 	var b strings.Builder
 	at := 0
@@ -166,13 +198,21 @@ func replaceFolder(s, f string) string {
 			continue
 		}
 		end := i + len(f)
-		beforeOK := i == 0 || !strings.ContainsRune("/\\.~-_", rune(s[i-1])) && !isAlnum(s[i-1]) || (f[0] == '/' && afterHostOfURL(s, i))
-		afterOK := end == len(s) || !(isAlnum(s[end]) || s[end] == '_' || s[end] == '-')
-		if !beforeOK || !afterOK {
+		if end < len(s) {
+			r, _ := utf8.DecodeRuneInString(s[end:])
+			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
+				i++
+				continue
+			}
+		}
+		if lead == 0 && i > 0 && isAlnum(s[i-1]) {
 			i++
 			continue
 		}
 		b.WriteString(s[at:i])
+		if lead > 0 && i > 0 && !strings.ContainsRune(" \t\r\n\"'`(<[{,;=:|", rune(s[i-1])) {
+			b.WriteString(s[i : i+lead]) // keep the separator that joins it to what comes before
+		}
 		b.WriteString("~")
 		at, i = end, end
 	}
@@ -183,24 +223,12 @@ func replaceFolder(s, f string) string {
 	return b.String()
 }
 
-// afterHostOfURL says whether the path at s[i] directly follows the host of a URL (`https://x.test` + `/home/me`): the run of characters
-// before it, at most 2,000 bytes, has a scheme and `://` in it and no `/` after the host.
-func afterHostOfURL(s string, i int) bool {
-	lo := max(i-2000, 0)
-	run := s[lo:i]
-	k := strings.LastIndex(run, "://")
-	if k < 0 || strings.ContainsAny(run[k+3:], "/ \t\r\n\"'`<>()[]{},;") {
-		return false
-	}
-	return true
-}
-
 func isAlnum(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
-// currentUserName is this account's login name, or "".
-func currentUserName() string {
+// currentUserName is this account's login name (on Windows possibly DOMAIN\name), or "". A variable so a test can name an account.
+var currentUserName = func() string {
 	if u, err := user.Current(); err == nil {
 		return u.Username
 	}
