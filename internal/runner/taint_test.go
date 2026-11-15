@@ -15,6 +15,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
 // recClient counts every call a sink could make through the agent connection.
@@ -276,5 +277,126 @@ func TestExampleScriptsExpandAsBefore(t *testing.T) {
 	}
 	if checked < 500 {
 		t.Fatalf("only %d strings were compared", checked)
+	}
+}
+
+// ---- the review of the first version: system dialogs, the clipboard, cloud mode
+
+// dialogRec is a system dialog driver that records everything it is asked to tap or type.
+type dialogRec struct {
+	sysdialog.Driver // unused methods stay nil
+	taps             []string
+	typed            [][2]string
+}
+
+func (d *dialogRec) Tap(ctx context.Context, button, title string) (string, error) {
+	d.taps = append(d.taps, button)
+	return button, nil
+}
+func (d *dialogRec) Type(ctx context.Context, field, text, title string) error {
+	d.typed = append(d.typed, [2]string{field, text})
+	return nil
+}
+
+// A value read from a page must not choose which environment variable a system dialog types: "$NAME" is read by ResolveSecret.
+func TestASystemDialogRefusesATaintedTextAndNeverReadsTheEnvironmentForIt(t *testing.T) {
+	t.Setenv("PROBE_TAINT_DIALOG_SECRET", "TOPSECRET-VALUE")
+	for name, page := range map[string]string{"an env reference": "$PROBE_TAINT_DIALOG_SECRET", "a braced reference": "${PROBE_TAINT_DIALOG_SECRET}", "a literal": "typed-by-the-page"} {
+		rec := &dialogRec{}
+		e := &Executor{vars: map[string]string{}, deviceCtx: &DeviceContext{sysDriver: rec}, timeout: time.Second}
+		tainted(e, "t", page)
+		for stepName, step := range map[string]parser.SystemDialogStep{
+			"type text":  {Op: parser.SysType, Text: "<t>", Field: "Password"},
+			"type field": {Op: parser.SysType, Text: "ok", Field: "<t>"},
+			"tap":        {Op: parser.SysTap, Button: "<t>"},
+		} {
+			err := e.runStep(context.Background(), step)
+			if err == nil || !strings.Contains(err.Error(), "<t> holds text read from a page") {
+				t.Errorf("%s / %s: err = %v", name, stepName, err)
+			}
+			if err != nil && strings.Contains(err.Error(), "TOPSECRET-VALUE") {
+				t.Errorf("%s / %s: the error shows the secret", name, stepName)
+			}
+		}
+		if len(rec.typed) != 0 || len(rec.taps) != 0 {
+			t.Errorf("%s: the dialog was driven: %v %v", name, rec.typed, rec.taps)
+		}
+	}
+	// a script's own "$NAME" still works, and so does a clean tap
+	rec := &dialogRec{}
+	e := &Executor{vars: map[string]string{}, deviceCtx: &DeviceContext{sysDriver: rec}, timeout: time.Second}
+	if err := e.runStep(context.Background(), parser.SystemDialogStep{Op: parser.SysType, Text: "$PROBE_TAINT_DIALOG_SECRET", Field: "Password"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.runStep(context.Background(), parser.SystemDialogStep{Op: parser.SysTap, Button: "Allow"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.typed) != 1 || rec.typed[0] != [2]string{"Password", "TOPSECRET-VALUE"} || len(rec.taps) != 1 || rec.taps[0] != "Allow" {
+		t.Errorf("clean steps: typed %v, taps %v", rec.typed, rec.taps)
+	}
+}
+
+// clipRec is an agent client with a clipboard.
+type clipRec struct {
+	recClient
+	clip string
+}
+
+func (c *clipRec) CopyToClipboard(ctx context.Context, text string) error { c.clip = text; return nil }
+func (c *clipRec) PasteFromClipboard(ctx context.Context) (string, error) { return c.clip, nil }
+
+// copy and paste are a propagation: a page value that goes through the clipboard comes back as a page value.
+func TestTheClipboardCarriesTheTaintOfWhatWasCopied(t *testing.T) {
+	clip := &clipRec{}
+	e := &Executor{vars: map[string]string{}, client: clip, deviceCtx: &DeviceContext{}, timeout: time.Second}
+	ctx := context.Background()
+	run := func(step parser.Step) {
+		t.Helper()
+		if err := e.runStep(ctx, step); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tainted(e, "t", pageValue)
+	run(parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "<t>"})
+	run(parser.ActionStep{Verb: parser.VerbPasteClipboard})
+	if clip.clip != pageValue || e.vars["clipboard"] != pageValue {
+		t.Fatalf("the clipboard did not carry the text: %q %q", clip.clip, e.vars["clipboard"])
+	}
+	if err := e.runStep(ctx, parser.ActionStep{Verb: parser.VerbOpenLink, Name: "<clipboard>"}); err == nil || !strings.Contains(err.Error(), "<clipboard> holds text read from a page") || clip.n.Load() != 0 {
+		t.Fatalf("a link built from the pasted clipboard: err = %v, calls %d", err, clip.n.Load())
+	}
+	// a copy of clean text makes the next paste clean again
+	run(parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "http://example.test/ok"})
+	run(parser.ActionStep{Verb: parser.VerbPasteClipboard})
+	if err := e.runStep(ctx, parser.ActionStep{Verb: parser.VerbOpenLink, Name: "<clipboard>"}); err != nil {
+		t.Errorf("a clean clipboard was refused: %v", err)
+	}
+	// a copy of a text that merely mentions the tainted variable is tainted too
+	run(parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "go to <t>"})
+	run(parser.ActionStep{Verb: parser.VerbPasteClipboard})
+	if _, err := e.forSink("open link", "<clipboard>"); err == nil {
+		t.Errorf("a composed copy was clean after the paste")
+	}
+}
+
+// In cloud mode (no device context) a tainted value is still refused: the guard comes before the skip.
+func TestTheGuardComesBeforeTheCloudModeSkip(t *testing.T) {
+	for name, step := range map[string]parser.Step{
+		"add media":              parser.ActionStep{Verb: parser.VerbAddMedia, Name: "<t>"},
+		"open link into the app": parser.ActionStep{Verb: parser.VerbOpenLink, Name: "myapp://<t>", DeepLink: true},
+		"set language":           parser.ActionStep{Verb: parser.VerbSetLanguage, Name: "<t>"},
+		"type native":            parser.ActionStep{Verb: parser.VerbTypeNative, Name: "q", Text: "<t>"},
+	} {
+		rc := &recClient{}
+		e := &Executor{vars: map[string]string{}, client: rc, timeout: time.Second} // no deviceCtx: cloud mode
+		tainted(e, "t", pageValue)
+		if err := e.runStep(context.Background(), step); err == nil || !strings.Contains(err.Error(), "holds text read from a page") {
+			t.Errorf("%s in cloud mode: err = %v", name, err)
+		}
+	}
+	// clean values are skipped there as before
+	e := &Executor{vars: map[string]string{"t": "ok"}, client: &recClient{}, timeout: time.Second}
+	if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbAddMedia, Name: "<t>"}); err != nil {
+		t.Errorf("a clean add media in cloud mode: %v", err)
 	}
 }

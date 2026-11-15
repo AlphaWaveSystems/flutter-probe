@@ -46,6 +46,7 @@ type Executor struct {
 	envWarned            map[string]bool
 	useNote              string            // appended to "unknown recipe call" (missing `use` targets)
 	vars                 map[string]string // variable scope for data-driven tests
+	clipboardTainted     bool              // the last text this run copied held a tainted value, so the clipboard variable of a paste is tainted too
 	tainted              map[string]bool   // names of variables whose value came from a page (see taint.go); nothing in production code sets one yet
 	verbose              bool
 	depth                int                // indentation depth for verbose logging
@@ -1022,14 +1023,17 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.deviceCtx.KillApp(ctx)
 
 	case parser.VerbCopyClipboard:
-		return e.client.CopyToClipboard(ctx, e.resolve(a.Text))
+		// the clipboard carries the taint of what was copied: a later paste hands it on (see VerbPasteClipboard)
+		text, by := e.resolveT(a.Text)
+		e.clipboardTainted = len(by) > 0
+		return e.client.CopyToClipboard(ctx, text)
 
 	case parser.VerbPasteClipboard:
 		text, err := e.client.PasteFromClipboard(ctx)
 		if err != nil {
 			return err
 		}
-		e.setVar("clipboard", text, false)
+		e.setVar("clipboard", text, e.clipboardTainted)
 		return nil
 
 	case parser.VerbSetLanguage:

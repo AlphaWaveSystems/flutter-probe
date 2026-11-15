@@ -22,15 +22,16 @@ const (
 // fails when one is missing, twice listed or unknown, so a new verb or step cannot be added without deciding this. ActionStep is classified through its verbs.
 var taintClasses = map[string]taintClass{
 	// ---- sinks
-	"VerbOpenLink":    classSink,
-	"VerbAddMedia":    classSink,
-	"VerbSetLanguage": classSink,
-	"VerbTypeNative":  classSink,
-	"VerbTakeShot":    classSink,
-	"VerbCompareShot": classSink,
-	"HTTPCallStep":    classSink,
-	"MockBlock":       classSink,
-	"PerfStep":        classSink,
+	"VerbOpenLink":     classSink,
+	"VerbAddMedia":     classSink,
+	"VerbSetLanguage":  classSink,
+	"VerbTypeNative":   classSink,
+	"VerbTakeShot":     classSink,
+	"VerbCompareShot":  classSink,
+	"HTTPCallStep":     classSink,
+	"MockBlock":        classSink,
+	"PerfStep":         classSink,
+	"SystemDialogStep": classSink,
 
 	// ---- literal only
 	"VerbLog":             classLiteral,
@@ -42,43 +43,42 @@ var taintClasses = map[string]taintClass{
 	"VerbDeliverSignal":   classLiteral,
 	"DartBlock":           classLiteral,
 	"TravelStep":          classLiteral,
+	"VerbOpen":            classLiteral,
+	"VerbClose":           classLiteral,
+	"VerbRotate":          classLiteral,
+	"VerbPressKey":        classLiteral,
 
 	// ---- UI only
-	"VerbType":           classUI,
-	"VerbTap":            classUI,
-	"VerbLongPress":      classUI,
-	"VerbDoubleTap":      classUI,
-	"VerbClear":          classUI,
-	"VerbDrag":           classUI,
-	"VerbSwipe":          classUI,
-	"VerbScroll":         classUI,
-	"VerbToggle":         classUI,
-	"VerbTapNative":      classUI,
-	"VerbTapWebView":     classUI,
-	"VerbTypeWebView":    classUI,
-	"VerbCopyClipboard":  classUI,
-	"VerbPasteClipboard": classUI,
-	"VerbReadWithAI":     classUI,
-	"AssertStep":         classUI,
-	"WaitStep":           classUI,
-	"SystemDialogStep":   classUI,
-	"HTTPStep":           classUI,
-	"ConditionalStep":    classUI,
+	"VerbType":        classUI,
+	"VerbTap":         classUI,
+	"VerbLongPress":   classUI,
+	"VerbDoubleTap":   classUI,
+	"VerbClear":       classUI,
+	"VerbDrag":        classUI,
+	"VerbSwipe":       classUI,
+	"VerbScroll":      classUI,
+	"VerbToggle":      classUI,
+	"VerbTapNative":   classUI,
+	"VerbTapWebView":  classUI,
+	"VerbTypeWebView": classUI,
+	"VerbReadWithAI":  classUI,
+	"AssertStep":      classUI,
+	"WaitStep":        classUI,
+	"HTTPStep":        classUI,
+	"ConditionalStep": classUI, // `if ... appears` is matched as written, but `if response ...` expands its reference and check (evalResponseCond): matching only
 
 	// ---- propagates
-	"VerbStore":  classPropagates,
-	"RecipeCall": classPropagates,
+	"VerbStore":          classPropagates,
+	"VerbCopyClipboard":  classPropagates,
+	"VerbPasteClipboard": classPropagates,
+	"RecipeCall":         classPropagates,
 
 	// ---- no string
-	"VerbOpen":             classNoString,
 	"VerbGoBack":           classNoString,
 	"VerbPressEnter":       classNoString,
-	"VerbClose":            classNoString,
 	"VerbPinch":            classNoString,
-	"VerbRotate":           classNoString,
 	"VerbShake":            classNoString,
 	"VerbPress":            classNoString,
-	"VerbPressKey":         classNoString,
 	"VerbDumpTree":         classNoString,
 	"VerbSaveLogs":         classNoString,
 	"VerbPause":            classNoString,
@@ -101,7 +101,7 @@ var taintClasses = map[string]taintClass{
 
 // sinkHandlers says where the strings of each sink are taken: a case of runAction (verbs) or a function (step types). The test requires the guard there.
 var sinkHandlers = map[string]struct{ fn string }{
-	"HTTPCallStep": {"runHTTPCall"},
+	"HTTPCallStep": {"runHTTPCall"}, "SystemDialogStep": {"runSystemDialog"},
 	"MockBlock":    {"runMock"},
 	"PerfStep":     {"runPerf"},
 	"VerbTakeShot": {"runAction"}, "VerbCompareShot": {"runAction"}, "VerbOpenLink": {"runAction"}, "VerbAddMedia": {"runAction"},
@@ -111,6 +111,7 @@ var sinkHandlers = map[string]struct{ fn string }{
 // literalHandlers is the same for the literal-only steps.
 var literalHandlers = map[string]struct{ fn string }{
 	"DartBlock": {"runDart"}, "TravelStep": {"runTravel"},
+	"VerbOpen": {"runAction"}, "VerbClose": {"runAction"}, "VerbRotate": {"runAction"}, "VerbPressKey": {"runAction"},
 	"VerbLog": {"runAction"}, "VerbSetLocation": {"runAction"}, "VerbSetAppearance": {"runAction"}, "VerbSetAirplaneMode": {"runAction"},
 	"VerbAllowPermission": {"runAction"}, "VerbDenyPermission": {"runAction"}, "VerbDeliverSignal": {"runAction"},
 }
