@@ -555,6 +555,8 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("set language %q", s.Name)
 		case parser.VerbSetAppearance:
 			return fmt.Sprintf("set appearance %s", s.Name)
+		case parser.VerbSetAirplaneMode:
+			return fmt.Sprintf("set airplane mode %s", s.Name)
 		case parser.VerbVerifyBrowser:
 			return "verify external browser opened"
 		case parser.VerbEnrollBiometric:
@@ -1006,6 +1008,13 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return nil
 		}
 		return e.deviceCtx.SetAppearance(ctx, a.Name)
+
+	case parser.VerbSetAirplaneMode:
+		if e.deviceCtx == nil {
+			fmt.Println("    \033[33m⚠\033[0m  Skipping set airplane mode (cloud mode)")
+			return nil
+		}
+		return e.deviceCtx.SetAirplaneMode(ctx, a.Name == "on")
 
 	case parser.VerbSetLocation:
 		if e.deviceCtx == nil {

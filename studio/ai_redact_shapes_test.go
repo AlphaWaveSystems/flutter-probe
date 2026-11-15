@@ -64,3 +64,17 @@ func TestGateCardLengthBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestGateShortJWTWithUrlSafeCharacters(t *testing.T) {
+	for _, in := range []string{"t eyJab-_cd.ef-_gh.ij-_ end", "t eyJab_cd.ef_gh. end", "t eyJab-cd.ef-gh.- end"} {
+		if out := redactCredentials(in); out != "t "+redactedMark+" end" {
+			t.Errorf("%q -> %q", in, out)
+		}
+	}
+	// Too short to be a JWT shape: kept.
+	for _, in := range []string{"eyJab.cd.ef", "eyJabcd.ef.gh"} {
+		if out := redactCredentials(in); out != in {
+			t.Errorf("%q changed: %q", in, out)
+		}
+	}
+}

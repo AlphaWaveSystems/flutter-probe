@@ -347,13 +347,53 @@ func (a *ADB) Tap(ctx context.Context, serial string, x, y int) error {
 	return err
 }
 
-// InputText types text into whatever native element currently has focus via
-// `input text`. Android's shell tool treats a literal space as a token
-// separator, so spaces are escaped as %s per its own documented convention.
+// InputText types text into whatever native element currently has focus via `input text`.
+//
+// adb joins the words after "shell" into one line and the device's shell reads it, so text that reaches it unquoted is a command line: "a;reboot" would run reboot. The text is therefore checked by
+// ValidateInputText and then passed as ONE single-quoted word (a single quote inside is closed, written as an escaped quote, and reopened), with each space written as %s, which is how `input text` takes a space. Text that cannot be passed
+// this way safely is refused, not guessed at: see ValidateInputText. The empty text types nothing and does not call adb.
 func (a *ADB) InputText(ctx context.Context, serial, text string) error {
-	escaped := strings.ReplaceAll(text, " ", "%s")
-	_, err := a.Shell(ctx, serial, "input", "text", escaped)
+	args, err := InputTextArgs(text)
+	if err != nil {
+		return err
+	}
+	if args == nil {
+		return nil
+	}
+	_, err = a.Shell(ctx, serial, args...)
 	return err
+}
+
+// ValidateInputText says whether text can be typed through `adb shell input text`. It refuses: control characters (new line, tab, NUL and the rest), because `input text` cannot type them and a new
+// line would end the shell command; any character outside ASCII, because `input text` does not support them (use another path for such text; there is none for native fields yet); "%", because
+// `input text` reads "%s" as a space and has no way to type a literal "%"; and a text that starts with "-", because it can be read as an option and what `input` does with it was not verified.
+func ValidateInputText(text string) error {
+	for i, r := range text {
+		switch {
+		case r < 0x20 || r == 0x7f:
+			return fmt.Errorf("type native: the text has a control character at position %d; control characters cannot be typed through adb", i)
+		case r > 0x7e:
+			return fmt.Errorf("type native: the text has a character outside ASCII at position %d; non-ASCII text is not supported on this path", i)
+		case r == '%':
+			return fmt.Errorf("type native: the text has a %% character at position %d; adb's input text reads %%s as a space and cannot type a %%", i)
+		}
+	}
+	if strings.HasPrefix(text, "-") {
+		return fmt.Errorf("type native: text that starts with \"-\" is not supported on this path")
+	}
+	return nil
+}
+
+// InputTextArgs returns the arguments after "shell" for typing text: input, text and the text as one single-quoted word. It returns nil for the empty text.
+func InputTextArgs(text string) ([]string, error) {
+	if err := ValidateInputText(text); err != nil {
+		return nil, err
+	}
+	if text == "" {
+		return nil, nil
+	}
+	word := strings.ReplaceAll(text, " ", "%s")
+	return []string{"input", "text", "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"}, nil
 }
 
 // run executes an adb command and returns combined stdout.

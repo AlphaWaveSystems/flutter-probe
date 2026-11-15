@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/migrate"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -318,6 +319,83 @@ func TestConvertYAML_SetLocation(t *testing.T) {
 	}
 	assertContains(t, probe, "set location 37.7749, -122.4194")
 	mustParseProbe(t, probe)
+}
+
+// TestConvertYAML_SetAirplaneMode checks that Maestro's enabled and disabled become the step, and that the probe parses.
+// Any other value stays a TODO comment with a warning, and is never turned into a state.
+func TestConvertYAML_SetAirplaneMode(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		yaml    string
+		want    string // a line the probe must contain
+		warning bool   // whether the conversion must warn
+	}{
+		{name: "enabled turns it on", yaml: "- setAirplaneMode: enabled\n", want: "set airplane mode on"},
+		{name: "disabled turns it off", yaml: "- setAirplaneMode: disabled\n", want: "set airplane mode off"},
+		{name: "another value stays a TODO", yaml: "- setAirplaneMode: true\n", want: "# TODO: setAirplaneMode", warning: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probe, warnings, err := migrate.ConvertYAML("---\n" + tc.yaml)
+			if err != nil {
+				t.Fatalf("convert: %v", err)
+			}
+			assertContains(t, probe, tc.want)
+			if (len(warnings) > 0) != tc.warning {
+				t.Errorf("warnings = %q, want a warning: %v", warnings, tc.warning)
+			}
+			if !tc.warning {
+				mustParseProbe(t, probe)
+			}
+		})
+	}
+}
+
+// TestConvertYAML_AirplaneTODOStaysOneLine checks that a value with a line break in it keeps its TODO comment on one line,
+// so the value cannot put a live step into the migrated file.
+func TestConvertYAML_AirplaneTODOStaysOneLine(t *testing.T) {
+	yaml := "---\n- setAirplaneMode: \"enabled\\nset airplane mode on\"\n"
+	probe, warnings, err := migrate.ConvertYAML(yaml)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	for _, line := range strings.Split(probe, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "set airplane mode") {
+			t.Errorf("a live step came from a multi-line value: %q", line)
+		}
+	}
+	if len(warnings) == 0 {
+		t.Error("want a warning for a value that is not enabled or disabled")
+	}
+}
+
+// TestConvertYAML_AirplaneTODOIsCapped checks that a long setAirplaneMode value keeps its TODO comment within 200
+// characters, and that the cut is marked with an ellipsis.
+func TestConvertYAML_AirplaneTODOIsCapped(t *testing.T) {
+	yaml := "---\n- setAirplaneMode: \"" + strings.Repeat("x", 500) + "\"\n"
+	probe, warnings, err := migrate.ConvertYAML(yaml)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Error("want a warning for a value that is not enabled or disabled")
+	}
+	found := false
+	for _, line := range strings.Split(probe, "\n") {
+		comment := strings.TrimSpace(line)
+		if !strings.HasPrefix(comment, "# TODO: setAirplaneMode") {
+			continue
+		}
+		found = true
+		if n := utf8.RuneCountInString(comment); n > 200 {
+			t.Errorf("the TODO comment is %d characters, want at most 200", n)
+		}
+		if !strings.HasSuffix(comment, "…") {
+			t.Errorf("the cut comment does not end with an ellipsis: %q", comment)
+		}
+	}
+	if !found {
+		t.Error("no TODO comment for the value")
+	}
 }
 
 // ---- Self-healer tests ----

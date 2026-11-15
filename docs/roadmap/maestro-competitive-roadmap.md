@@ -56,7 +56,7 @@ speculative — every item has a documented repro or root cause already.
   deliberate app backgrounding conflated an expected lifecycle disconnect with the actual bug and
   wasn't a real test of the hypothesis. Rules out "background SDK chatter alone, ~100s" as
   sufficient; next attempt should try longer duration (10+ min), genuine network-condition changes
-  (needs `toggle airplane mode`, tracked as Phase 1 E-6), or a physical device instead of an
+  (needs `set airplane mode`, tracked as Phase 1 E-6), or a physical device instead of an
   emulator. See `docs/evidence/r2-pt25-ws-drop-2026-08-14/` for full writeup and reusable repro
   scripts.
   PR: —

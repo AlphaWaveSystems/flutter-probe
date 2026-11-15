@@ -49,8 +49,25 @@ type DeviceContext struct {
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
 
-	// appearanceRun runs the commands of `set appearance`. nil runs the real adb and xcrun; tests set a fake.
-	appearanceRun devsettings.Runner
+	// SettingsRun runs the host commands of the settings steps (`set appearance`, `set airplane mode`). nil runs the real
+	// adb and xcrun; tests set a fake.
+	SettingsRun devsettings.Runner
+}
+
+// NewDeviceContext builds the device context of one device. Every builder of a DeviceContext calls it, so the physical
+// question is asked once, here, and no builder can leave IsPhysical unset. The builder fills in its own fields after it.
+// A nil manager cannot answer, so the device counts as physical.
+func NewDeviceContext(ctx context.Context, m *device.Manager, platform device.Platform, serial string) *DeviceContext {
+	isPhysical := true
+	if m != nil {
+		isPhysical = m.IsPhysical(ctx, platform, serial)
+	}
+	return &DeviceContext{
+		Manager:    m,
+		Serial:     serial,
+		Platform:   platform,
+		IsPhysical: isPhysical,
+	}
 }
 
 // SystemDriver returns the run's shared system-dialog driver, creating it on
@@ -356,7 +373,7 @@ func (dc *DeviceContext) SetAppearance(ctx context.Context, mode string) error {
 	if err != nil {
 		return fmt.Errorf("set appearance: %w", err)
 	}
-	if err := devsettings.Apply(ctx, dc.appearanceRun, req); err != nil {
+	if err := devsettings.Apply(ctx, dc.SettingsRun, req); err != nil {
 		return fmt.Errorf("set appearance: %w", err)
 	}
 	return nil
@@ -375,6 +392,38 @@ func appearanceRequest(p device.Platform, serial string, physical bool, mode str
 		return devsettings.Request{Platform: devsettings.IOS, Device: serial, Setting: devsettings.Appearance, Value: mode}, nil
 	}
 	return devsettings.Request{}, fmt.Errorf("the platform %q has no appearance setting", p)
+}
+
+// SetAirplaneMode turns the airplane mode of the device on or off, through adb on an Android emulator. It is refused on a
+// physical device (not verified on one), on an iOS simulator (it has no such command) and on a network adb address. The
+// state is not restored afterwards: a test that turns it on must turn it off.
+func (dc *DeviceContext) SetAirplaneMode(ctx context.Context, on bool) error {
+	if dc.IsPhysical {
+		return fmt.Errorf("set airplane mode: runs on an emulator only; a physical device is not supported, so change its airplane mode in the device's settings")
+	}
+	p, err := settingsPlatform(dc.Platform)
+	if err != nil {
+		return fmt.Errorf("set airplane mode: %w", err)
+	}
+	cmds, err := devsettings.PlanAirplaneMode(p, dc.Serial, on)
+	if err != nil {
+		return fmt.Errorf("set airplane mode: %w", err)
+	}
+	if err := devsettings.ApplyCommands(ctx, dc.SettingsRun, p, cmds); err != nil {
+		return fmt.Errorf("set airplane mode: %w", err)
+	}
+	return nil
+}
+
+// settingsPlatform maps a device platform to the one devsettings names.
+func settingsPlatform(p device.Platform) (devsettings.Platform, error) {
+	switch p {
+	case device.PlatformAndroid:
+		return devsettings.Android, nil
+	case device.PlatformIOS:
+		return devsettings.IOS, nil
+	}
+	return "", fmt.Errorf("the platform %q has no settings", p)
 }
 
 // DenyPermission revokes a named permission from the app at the OS level.
@@ -923,6 +972,10 @@ func (dc *DeviceContext) SeeNative(ctx context.Context, query string) (bool, err
 // delay between the two fixes it reliably; 500ms matches this codebase's
 // existing default for other tap-then-settle sequences (see restartDelay).
 func (dc *DeviceContext) TypeNative(ctx context.Context, query, text string) error {
+	// refuse text that cannot be typed before the tap changes the screen
+	if err := device.ValidateInputText(text); err != nil {
+		return err
+	}
 	if err := dc.TapNative(ctx, query); err != nil {
 		return fmt.Errorf("type native: %w", err)
 	}

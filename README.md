@@ -460,6 +460,8 @@ Change the app language from a test or per run: `set language "de"`, `probe test
 
 Set the device's light or dark mode from a test with `set appearance dark` (or `light`; `auto` on Android). The app is not relaunched; an app whose theme follows the system setting (`ThemeMode.system` in Flutter) changes with it.
 
+Turn the airplane mode of an Android emulator on or off with `set airplane mode on` (or `off`). Nothing restores the state, so a test that turns it on must turn it off.
+
 One suite for every language. Select by `#key` (language-independent); use `--match-loose` (or `defaults.match: loose`) to fold
 case, accents, typographic apostrophes and whitespace in text selectors (`anderungen SPEICHERN` matches `Änderungen speichern`);
 list alternatives with `see any of "Save", "Speichern"`. System dialogs are resolved by button **role**. On iOS,
