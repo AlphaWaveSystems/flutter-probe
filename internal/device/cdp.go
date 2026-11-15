@@ -142,6 +142,8 @@ func (e *CDPError) Error() string {
 type CDPConn struct {
 	ws   *websocket.Conn
 	next atomic.Int64
+	// Timeout ends a Call whose context has no deadline; zero means defaultCallTimeout. A step that may take long (a navigation, a slow evaluation) sets it higher.
+	Timeout time.Duration
 }
 
 // DialTarget connects to a page target through the forwarded port. The address checks here and the dialer's loopback rule overlap on purpose: either one alone already refuses another host. The debugger URL must be a ws:// address on 127.0.0.1 and exactly that port, with a /devtools/ path; anything else is refused.
@@ -184,8 +186,12 @@ type cdpResponse struct {
 // with no deadline gets defaultCallTimeout.
 func (c *CDPConn) Call(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if _, ok := ctx.Deadline(); !ok {
+		limit := c.Timeout
+		if limit <= 0 {
+			limit = defaultCallTimeout
+		}
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultCallTimeout)
+		ctx, cancel = context.WithTimeout(ctx, limit)
 		defer cancel()
 	}
 	id := c.next.Add(1)

@@ -42,7 +42,7 @@ const maxForwardAttempts = 5
 
 // ForwardWebView creates `adb -s <serial> forward tcp:0 localabstract:<socket>`. adb prints the port it allocated (adb 1.0.41 does). When it prints nothing usable, the forward it created exists all the same,
 // so the device's forward list is read before and after: if exactly one new rule points at this socket, that rule is ours and its port is used (nothing is created twice); if it cannot be told which one is ours,
-// probe forwards a free loopback port chosen and checked here, trying another port when adb says the first is in use, and leaves the rules it cannot identify alone. The port is recorded either way.
+// probe forwards a free loopback port chosen and checked here with --no-rebind (a port taken in between is refused by adb, never silently rebound over another tool's rule), trying another port when adb says the first is in use (adb 1.0.41 says "cannot bind listener: Address already in use"), and leaves the rules it cannot identify alone. The port is recorded either way.
 // socket must be a webview_devtools_remote_<pid> name.
 func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket WebViewSocket) (*WebViewForward, error) {
 	if strings.TrimSpace(serial) == "" {
@@ -81,7 +81,7 @@ func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket
 		if err != nil {
 			return nil, fmt.Errorf("adb did not print the forwarded port and no free local port was found: %w", err)
 		}
-		if _, err := runner.RunArgs(ctx, "-s", serial, "forward", "tcp:"+strconv.Itoa(free), target); err != nil {
+		if _, err := runner.RunArgs(ctx, "-s", serial, "forward", "--no-rebind", "tcp:"+strconv.Itoa(free), target); err != nil {
 			last = err
 			if strings.Contains(strings.ToLower(err.Error()), "address already in use") {
 				continue
