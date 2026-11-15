@@ -23,8 +23,8 @@ type WebViewOptions struct {
 	Page   string
 	// CallTimeout ends a command whose context has no deadline; zero means 30 s. Set it higher for a step that may take long.
 	CallTimeout time.Duration
-	// Redact is applied to every piece of text that came from the page or the script (the page's error messages, titles, element text, the selector) before it is put in a message. The runner MUST pass its
-	// secret masking here: with a nil Redact the text is not masked (it is only cleaned of control characters and shortened), and a secret typed into a selector or shown by a page can reach a message and a report.
+	// Redact is applied to every piece of text that came from the page or the script (the page's error messages, titles, element text, the selector) before it is put in a message. It is REQUIRED: OpenWebView
+	// refuses a nil Redact, because a secret typed into a selector or shown by a page could otherwise reach a message and a report. The runner passes its secret masking here. Pass an identity function to opt out.
 	Redact func(string) string
 }
 
@@ -45,6 +45,10 @@ type WebViewSession struct {
 func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, err error) {
 	if o.Runner == nil || strings.TrimSpace(o.Serial) == "" {
 		return nil, fmt.Errorf("webview: a device serial and an adb runner are required")
+	}
+	if o.Redact == nil {
+		// a session that cannot mask what the page shows could put a secret in a message or a report
+		return nil, fmt.Errorf("webview: a Redact function is required")
 	}
 	pid := o.PID
 	if pid == 0 {
@@ -94,9 +98,6 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, e
 		}
 	}()
 	redact := o.Redact
-	if redact == nil {
-		redact = func(s string) string { return s }
-	}
 	pages, err := ListTargets(ctx, fwd.Port())
 	if err != nil {
 		return nil, err

@@ -144,11 +144,20 @@ func substringCountWarnings(owner string, steps []parser.Step) []string {
 	for _, s := range steps {
 		switch st := s.(type) {
 		case parser.AssertStep:
+			if st.WebView != nil {
+				if !st.Negated && st.WebView.Kind == parser.WebViewText {
+					warns = appendWebViewCountWarning(warns, owner, st.Line, st.WebView.Value)
+				}
+				continue
+			}
 			if st.Negated || st.Native || st.WithAI || anchoredPattern(st.Pattern) || len(st.Any) > 0 || st.Sel.Kind != parser.SelectorText {
 				continue
 			}
 			warns = appendSubstringCountWarning(warns, owner, st.Line, st.Sel.Text)
 		case parser.WaitStep:
+			if st.Kind == parser.WaitWebView && st.WebView.Kind == parser.WebViewText {
+				warns = appendWebViewCountWarning(warns, owner, st.Line, st.WebView.Value)
+			}
 			if st.Kind == parser.WaitAppears && !anchoredPattern(st.Pattern) {
 				warns = appendSubstringCountWarning(warns, owner, st.Line, st.Target)
 			}
@@ -169,6 +178,18 @@ func substringCountWarnings(owner string, steps []parser.Step) []string {
 // anchoredPattern reports whether a matching pattern is anchored at both ends, so it compares the whole text.
 func anchoredPattern(pattern string) bool {
 	return strings.HasPrefix(pattern, "^") && strings.HasSuffix(pattern, "$")
+}
+
+// appendWebViewCountWarning is appendSubstringCountWarning for a text in a WebView. The text is matched exactly first, then as a part of
+// an element's text, and a WebView step has no `matching` form to anchor it, so the warning says what to do instead.
+func appendWebViewCountWarning(warns []string, owner string, line int, text string) []string {
+	text = strings.TrimSpace(text)
+	if !countOrZeroText.MatchString(text) && !zeroStateText.MatchString(text) {
+		return warns
+	}
+	return append(warns, fmt.Sprintf(
+		"%s, line %d: %q in a WebView can match any longer element text that contains it; check the element with css:\"...\" instead of its count text",
+		owner, line, text))
 }
 
 func appendSubstringCountWarning(warns []string, owner string, line int, text string) []string {

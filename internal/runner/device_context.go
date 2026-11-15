@@ -49,6 +49,11 @@ type DeviceContext struct {
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
 
+	// WebViewADB runs the adb commands of the WebView steps; nil uses Manager's adb. WebViewOpen opens the page of one WebView step; nil
+	// opens the real one over adb and the DevTools socket. Tests set fakes.
+	WebViewADB  device.AdbRunner
+	WebViewOpen WebViewOpener
+
 	// SettingsRun runs the host commands of the settings steps (`set appearance`, `set airplane mode`). nil runs the real
 	// adb and xcrun; tests set a fake.
 	SettingsRun devsettings.Runner

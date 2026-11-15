@@ -19,6 +19,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// identityRedact is the Redact of a test that does not look at masking.
+func identityRedact(s string) string { return s }
+
 // sessAdb answers the shell commands the session sends and delegates adb forward commands to the recording fakeAdb.
 type sessAdb struct {
 	*fakeAdb
@@ -149,7 +152,7 @@ func sessionFor(t *testing.T, p *pageFake, page string) (*WebViewSession, *sessA
 	t.Helper()
 	fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(p.port) + "\n"), nil }}
 	ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
-	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Page: page})
+	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Page: page, Redact: identityRedact})
 	if err == nil {
 		t.Cleanup(func() { _ = s.Close() })
 	}
@@ -458,7 +461,7 @@ func TestOpenFailuresUseTheProposalWordingAndRemoveTheForward(t *testing.T) {
 		fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(p.port) + "\n"), nil }}
 		ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
 		c.setup(p, ad)
-		s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Page: c.page})
+		s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Page: c.page, Redact: identityRedact})
 		if err == nil {
 			_ = s.Close()
 			t.Fatalf("%s: no error", c.name)
@@ -514,7 +517,7 @@ func TestPageIsChosenByAPartOfTheTitleOrTheURL(t *testing.T) {
 func TestAppIDIsCheckedBeforeItReachesTheDevice(t *testing.T) {
 	for _, bad := range []string{"a b;c'd", "com.example.app; reboot", "$(id)", "", "x", "com..", "com.example.app\n"} {
 		ad := &sessAdb{fakeAdb: &fakeAdb{}, table: unixTableFor, pidof: "1\n"}
-		_, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: bad})
+		_, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: bad, Redact: identityRedact})
 		if err == nil {
 			t.Errorf("app id %q accepted", bad)
 		}
@@ -526,13 +529,13 @@ func TestAppIDIsCheckedBeforeItReachesTheDevice(t *testing.T) {
 	p := newPageFake(t)
 	fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(p.port) + "\n"), nil }}
 	ad := &sessAdb{fakeAdb: fa, table: unixTableFor}
-	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", PID: 2783})
+	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", PID: 2783, Redact: identityRedact})
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = s.Close()
 	// the other process's socket is never used for this pid
-	if _, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", PID: 555}); err == nil {
+	if _, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", PID: 555, Redact: identityRedact}); err == nil {
 		t.Fatal("a pid with no socket opened a session")
 	}
 }
@@ -572,7 +575,7 @@ func TestWithWebViewClosesWhateverTheStepDoes(t *testing.T) {
 		p := newPageFake(t)
 		fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(p.port) + "\n"), nil }}
 		ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
-		err := WithWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app"}, fn)
+		err := WithWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Redact: identityRedact}, fn)
 		if (name == "failure") != errors.Is(err, boom) {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -700,7 +703,7 @@ func TestCallTimeoutIsAnOptionOfTheSession(t *testing.T) {
 	fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(p.port) + "\n"), nil }}
 	ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
 	// a short timeout ends a slow command without a deadline of its own
-	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", CallTimeout: 150 * time.Millisecond})
+	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", CallTimeout: 150 * time.Millisecond, Redact: identityRedact})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +713,7 @@ func TestCallTimeoutIsAnOptionOfTheSession(t *testing.T) {
 	_ = s.Close()
 	// a long one lets the same command finish
 	ad2 := &sessAdb{fakeAdb: &fakeAdb{forward: fa.forward}, table: unixTableFor, pidof: "2783\n"}
-	s2, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad2, Serial: "emulator-5600", AppID: "com.example.app", CallTimeout: 5 * time.Second})
+	s2, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad2, Serial: "emulator-5600", AppID: "com.example.app", CallTimeout: 5 * time.Second, Redact: identityRedact})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1009,7 +1012,7 @@ func TestAWindowLookupWithoutAnObjectIDIsAPageError(t *testing.T) {
 	}
 	fa := &fakeAdb{forward: func(args []string) ([]byte, error) { return []byte(strconv.Itoa(f.port) + "\n"), nil }}
 	ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
-	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app"})
+	s, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app", Redact: identityRedact})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1128,4 +1131,16 @@ func TestDialTargetMessagesNeverContainThePort(t *testing.T) {
 	check("host that is not loopback", p2, Target{WebSocketDebuggerURL: "ws://example.invalid:" + strconv.Itoa(p2) + "/devtools/page/1"})
 	check("other port", p2, Target{WebSocketDebuggerURL: "ws://127.0.0.1:" + strconv.Itoa(p2+1) + "/devtools/page/1"})
 	check("empty address", p2, Target{})
+}
+
+func TestOpenWebViewRefusesANilRedactBeforeTouchingTheDevice(t *testing.T) {
+	fa := &fakeAdb{}
+	ad := &sessAdb{fakeAdb: fa, table: unixTableFor, pidof: "2783\n"}
+	_, err := OpenWebView(context.Background(), WebViewOptions{Runner: ad, Serial: "emulator-5600", AppID: "com.example.app"})
+	if err == nil || !strings.Contains(err.Error(), "Redact") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(ad.calls) != 0 {
+		t.Fatalf("the device was touched before the refusal: %v", ad.calls)
+	}
 }

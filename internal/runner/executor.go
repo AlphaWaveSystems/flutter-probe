@@ -576,10 +576,10 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbTapNative:
 			return fmt.Sprintf("tap native %q", s.Name)
 		case parser.VerbTapWebView:
-			return "tap " + s.WebView.String()
+			return "tap " + e.webViewShown(s.WebView).String()
 		case parser.VerbTypeWebView:
 			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
-			return fmt.Sprintf("type %q into %s", sysdialog.ScrubKnown(e.resolveVars(s.Text)), s.WebView.String())
+			return fmt.Sprintf("type %q into %s", sysdialog.ScrubKnown(e.resolveVars(s.Text)), e.webViewShown(s.WebView).String())
 		case parser.VerbTypeNative:
 			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
 			return fmt.Sprintf("type native %q into %q", sysdialog.ScrubKnown(e.resolveVars(s.Text)), s.Name)
@@ -595,7 +595,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("%ssee any of %q", neg, s.Any)
 		}
 		if s.WebView != nil {
-			return fmt.Sprintf("%ssee %s", neg, s.WebView.String())
+			return fmt.Sprintf("%ssee %s", neg, e.webViewShown(s.WebView).String())
 		}
 		if s.Native {
 			return fmt.Sprintf("%ssee native %q", neg, s.Sel.Text)
@@ -617,7 +617,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.WaitAny:
 			return fmt.Sprintf("wait until any of %q appears", s.Any)
 		case parser.WaitWebView:
-			t := *s.WebView
+			t := e.webViewShown(s.WebView)
 			// the target's own string form ends in "in webview": the word "appears" goes before it
 			v := strconv.Quote(t.Value)
 			if t.Kind == parser.WebViewCSS {
@@ -1083,8 +1083,11 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		return e.deviceCtx.AddMedia(ctx, e.resolve(a.Name))
 
-	case parser.VerbTapWebView, parser.VerbTypeWebView:
-		return errWebViewNotImplemented
+	case parser.VerbTapWebView:
+		return e.runWebViewTap(ctx, a)
+
+	case parser.VerbTypeWebView:
+		return e.runWebViewType(ctx, a)
 
 	case parser.VerbTapNative:
 		if e.deviceCtx == nil {
@@ -1248,12 +1251,9 @@ func (e *Executor) runAssertAny(ctx context.Context, a parser.AssertStep) error 
 	return nil
 }
 
-// errWebViewNotImplemented is what a WebView step (tap, type, see, wait until ... in webview) reports until the runner glue exists: the steps parse, they do not run yet.
-var errWebViewNotImplemented = errors.New("webview steps are not implemented yet in this version of probe")
-
 func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 	if a.WebView != nil {
-		return errWebViewNotImplemented
+		return e.runWebViewSee(ctx, a)
 	}
 	if len(a.Any) > 0 {
 		return e.runAssertAny(ctx, a)
@@ -1485,7 +1485,7 @@ func (e *Executor) waitAny(ctx context.Context, alts []string) error {
 
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	if w.Kind == parser.WaitWebView {
-		return errWebViewNotImplemented
+		return e.runWebViewWait(ctx, w)
 	}
 	// Campaign finding: a plain `wait N seconds` used to round-trip through
 	// the agent as an RPC — so `kill the app` followed by `wait 2 seconds`
