@@ -34,6 +34,7 @@ func init() {
 type jsonResultFile struct {
 	GeneratedAt string              `json:"generated_at"`
 	Metadata    *runner.RunMetadata `json:"metadata,omitempty"`
+	Properties  map[string]string   `json:"properties,omitempty"`
 	TotalTests  int                 `json:"total_tests"`
 	Passed      int                 `json:"passed"`
 	Failed      int                 `json:"failed"`
@@ -46,6 +47,7 @@ type jsonResultFile struct {
 		Duration  float64  `json:"duration_ms"`
 		Error     string   `json:"error,omitempty"`
 		Row       int      `json:"row,omitempty"`
+		Tags      []string `json:"tags,omitempty"`
 		Artifacts []string `json:"artifacts,omitempty"`
 	} `json:"results"`
 }
@@ -87,6 +89,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 			Skipped:   r.Skipped,
 			Duration:  time.Duration(r.Duration) * time.Millisecond,
 			Row:       r.Row,
+			Tags:      r.Tags,
 			Artifacts: r.Artifacts,
 		}
 		if r.Error != "" {
@@ -108,6 +111,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 	if jrf.Metadata != nil {
 		rep.Metadata = jrf.Metadata
 	}
+	rep.Properties = jrf.Properties
 	if err := rep.Write(results, artifacts); err != nil {
 		return fmt.Errorf("generating report: %w", err)
 	}

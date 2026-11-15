@@ -30,6 +30,7 @@ type TestResult struct {
 	Duration   time.Duration
 	Error      error
 	Row        int // data-driven row index, -1 = not data-driven
+	Tags       []string // the test's tags, as the file writes them (the reports clean them: ReportTags)
 	Artifacts  []string
 	VideoURL   string // cloud provider video URL (session-level)
 	DeviceID   string // device serial/UDID that ran this test
@@ -259,7 +260,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 		// reported here instead of at runtime.
 		var results []TestResult
 		for _, t := range tests {
-			res := TestResult{TestName: t.Name, File: path, Passed: true, Row: -1}
+			res := TestResult{TestName: t.Name, File: path, Passed: true, Row: -1, Tags: t.Tags}
 			if err := r.unresolvedCalls(prog, t); err != nil {
 				res.Passed = false
 				res.Error = err
@@ -287,6 +288,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 						Passed:   false,
 						Error:    fmt.Errorf("before all: %w", err),
 						Row:      -1,
+						Tags:     t.Tags,
 					})
 				}
 				return results, nil
@@ -324,6 +326,7 @@ func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error)
 				File:     path,
 				Skipped:  true,
 				Row:      -1,
+				Tags:     ct.Tags,
 			}
 			fmt.Printf("  \033[33m⟳\033[0m  %s \033[2m(skipped: no composite devices configured — use --composite-device)\033[0m\n", ct.Name)
 		} else {
@@ -551,6 +554,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		Error:      runErr,
 		FailedSelector: exec.FailedSelector(runErr),
 		Row:        row,
+		Tags:       t.Tags,
 		Artifacts:  exec.Artifacts(),
 		DeviceID:   r.opts.DeviceID,
 		DeviceName: r.opts.DeviceName,

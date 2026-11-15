@@ -53,6 +53,7 @@ probe test [path] [flags]
 | `--junit-attempts` | `false` | With `--format junit`: one `<testcase>` per attempt of a test that was re-run (failed attempts as `<failure>`/`<error>`), so flaky tests are visible to tools that track them. See [Results in other tools](/ci-cd/analytics-tools/) |
 | `--junit-suffix <text>` | — | With `--format junit`: appended to every `classname` (for example `-ios`) so the same test on several devices has distinct identities |
 | `--junit-label <name>` | — | With `--format junit`: written as the `run_label` property of every suite |
+| `--property <key=value>` | — | Repeatable. Written to the report of the run: a suite `<property>` with `--format junit`, `properties` with `--format json` and the line under the filters in the HTML report. The key is 1 to 64 letters, digits, `_`, `.` or `-` and is not a name the report writes itself (`run_label`, `tags`, `platform`, ...); at most 32 properties, a value of at most 1 KB, no key twice. Values are masked like other printed text and control characters become spaces. A bad entry stops the run before it starts, exit code 2, and the message never repeats the value |
 | `-o, --output <path>` | — | Output file path for reports |
 | `-v, --verbose` | `false` | Verbose output |
 | `--locale <tag>` | — | Run the app in this language (`de`, `pt-BR`, `ar`, `system`) from the start: sets the per-app language and relaunches before the agent connects. Android 13+ and iOS simulators; the device language and system dialogs are unchanged. The tag is recorded in the JSON/HTML report |

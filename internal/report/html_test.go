@@ -160,3 +160,77 @@ func TestHTMLReport_Write_WithArtifacts(t *testing.T) {
 type testErr string
 
 func (e testErr) Error() string { return string(e) }
+
+// bs is a backslash, so the JSON escapes below read plainly
+const bs = "\\"
+
+func writeHTML(t *testing.T, results []runner.TestResult, props map[string]string) string {
+	t.Helper()
+	out := filepath.Join(t.TempDir(), "report.html")
+	r := report.NewHTMLReport(out, "P")
+	r.Properties = props
+	if err := r.Write(results, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// The tags and properties reach the page as JSON data and are put on it as text nodes: the markup in a value is never markup.
+func TestHTMLReport_TagsAndPropertiesAreDataNotMarkup(t *testing.T) {
+	payload := `<img src=x onerror=alert(1)></script><script>alert(2)</script>`
+	page := writeHTML(t,
+		[]runner.TestResult{{TestName: "t", File: "a.probe", Passed: true, Row: -1, Tags: []string{"smoke", payload}}},
+		map[string]string{"build": payload})
+	if strings.Contains(page, "<img src=x") || strings.Contains(page, "<script>alert") || strings.Contains(page, "</script><script") {
+		t.Fatalf("a tag or property value was written as markup")
+	}
+	if !strings.Contains(page, bs+"u003cimg src=x onerror=alert(1)"+bs+"u003e") {
+		t.Fatalf("the value is not in the page data in escaped form")
+	}
+	// the code that puts them on the page uses text nodes; innerHTML never receives a tag or a property
+	for _, fn := range []string{"function renderProps()", "// Tags are filled as text nodes"} {
+		i := strings.Index(page, fn)
+		if i < 0 {
+			t.Fatalf("%q missing from the page script", fn)
+		}
+		body := page[i:]
+		if j := strings.Index(body[len(fn):], "\n}\n"); j >= 0 {
+			body = body[:len(fn)+j]
+		} else if j := strings.Index(body, "// Pass bar"); j >= 0 {
+			body = body[:j]
+		}
+		if strings.Contains(body, "innerHTML") || !strings.Contains(body, "textContent") {
+			t.Errorf("%q: must use textContent only:\n%s", fn, body)
+		}
+	}
+}
+
+func TestHTMLReport_NoTagsNoProperties(t *testing.T) {
+	page := writeHTML(t, []runner.TestResult{{TestName: "t", File: "a.probe", Passed: true, Row: -1}}, nil)
+	if !strings.Contains(page, "const PROPS = [];") || strings.Contains(page, `"tags":`) {
+		t.Fatalf("empty report carries tags or properties data")
+	}
+}
+
+func TestHTMLReport_PropertiesAreBoundedAndCleaned(t *testing.T) {
+	props := map[string]string{"ok": "v\x00\x07w", "bad key": "x", "run_label": "reserved"}
+	page := writeHTML(t, []runner.TestResult{{TestName: "t", File: "a.probe", Passed: true, Row: -1}}, props)
+	if strings.Contains(page, "bad key") || strings.Contains(page, "reserved") || strings.Contains(page, bs+"u0000") || strings.Contains(page, bs+"u0007") {
+		t.Fatalf("hand-made properties were not cleaned: %s", page[strings.Index(page, "const PROPS"):][:200])
+	}
+	if !strings.Contains(page, `{"name":"ok","value":"v  w"}`) {
+		t.Fatalf("clean property missing")
+	}
+}
+
+// A tag alone (no property) must reach the page data.
+func TestHTMLReport_TagReachesThePageData(t *testing.T) {
+	page := writeHTML(t, []runner.TestResult{{TestName: "t", File: "a.probe", Passed: true, Row: -1, Tags: []string{"smoke"}}}, nil)
+	if !strings.Contains(page, `"tags":["smoke"]`) {
+		t.Fatalf("tag missing from the page data")
+	}
+}

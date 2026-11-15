@@ -24,6 +24,7 @@ type HTMLReport struct {
 	OutputPath  string
 	ProjectName string
 	Metadata    *ReportMetadata
+	Properties  map[string]string // --property entries of the run; masked and cleaned when the page is written
 }
 
 // NewHTMLReport creates an HTMLReport.
@@ -50,6 +51,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		DurMs    int64    `json:"dur_ms"`
 		Error    string   `json:"error,omitempty"`
 		Shots    []string `json:"shots,omitempty"`
+		Tags     []string `json:"tags,omitempty"`
 		Perf     []perf.Metrics `json:"perf,omitempty"`
 	}
 	var rows []resultJSON
@@ -70,6 +72,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 			Skipped: r.Skipped,
 			DurMs:   r.Duration.Milliseconds(),
 			Perf:    r.Perf,
+			Tags:    runner.ReportTags(r.Tags),
 		}
 		if r.Error != nil {
 			rj.Error = r.Error.Error()
@@ -91,6 +94,19 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 	}
 
 	resultsJSON, err := json.Marshal(rows)
+	if err != nil {
+		return err
+	}
+	// The run properties go to the page as data too; json.Marshal escapes <, > and & so the value cannot close the script.
+	type propJSON struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+	props := []propJSON{}
+	for _, kv := range runner.ReportProperties(h.Properties) {
+		props = append(props, propJSON{kv.Name, kv.Value})
+	}
+	propsJSON, err := json.Marshal(props)
 	if err != nil {
 		return err
 	}
@@ -127,6 +143,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Skipped      int
 		Total        int
 		ResultsJSON  string
+		PropsJSON    string
 		MetaDevice   string
 		MetaLocale   string
 		MetaPlatform string
@@ -141,6 +158,7 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Skipped:      skipped,
 		Total:        len(results),
 		ResultsJSON:  string(resultsJSON),
+		PropsJSON:    string(propsJSON),
 		MetaDevice:   metaDevice,
 		MetaLocale:   metaLocale,
 		MetaPlatform: metaPlatform,
@@ -223,6 +241,8 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
 .test-detail.open{display:block}
 .error-msg{background:#1a0808;border:1px solid #3a1818;border-radius:6px;padding:12px;font-family:monospace;font-size:13px;color:#f88;margin-top:10px;white-space:pre-wrap}
 .shots{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tags{margin-left:8px}.tag{display:inline-block;font-size:11px;padding:1px 8px;margin-right:4px;border-radius:10px;background:#2a2f3a;color:#9db4d6}
+#run-props{margin:0 0 12px;font-size:12px;color:#888}.prop{display:inline-block;margin-right:14px}
 .shots img{max-height:160px;border-radius:6px;border:1px solid #333}
 .shots video{max-height:160px;border-radius:6px;border:1px solid #333}
 .perf{margin-top:10px;border:1px solid #2a2a2a;border-radius:6px;padding:10px 12px;font-size:13px}
@@ -265,11 +285,13 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
     <input class="search" id="search" placeholder="Search tests..." oninput="search(this.value)">
   </div>
 
+  <div id="run-props"></div>
   <div id="test-list"></div>
 </div>
 
 <script>
 const RESULTS = {{.ResultsJSON}};
+const PROPS = {{.PropsJSON}};
 let currentFilter = 'all';
 
 function render(results) {
@@ -305,6 +327,7 @@ function render(results) {
       '<div class="test-header" onclick="toggle('+i+')">' +
         '<span class="status-dot '+dot+'"></span>' +
         '<span class="test-name">'+escHtml(r.name)+'</span>' +
+        '<span class="tags" id="tags-'+i+'"></span>' +
         '<span class="test-file">'+escHtml(r.file)+'</span>' +
         '<span class="test-dur">'+r.dur_ms+'ms</span>' +
       '</div>' +
@@ -314,10 +337,37 @@ function render(results) {
     '</div>';
   }).join('');
 
+  // Tags are filled as text nodes, never as markup
+  results.forEach((r, i) => {
+    const holder = document.getElementById('tags-'+i);
+    (r.tags||[]).forEach(t => {
+      const chip = document.createElement('span');
+      chip.className = 'tag';
+      chip.textContent = t;
+      holder.appendChild(chip);
+    });
+  });
+
   // Pass bar
   const pct = RESULTS.length ? (RESULTS.filter(r=>r.passed).length / RESULTS.length * 100) : 0;
   document.getElementById('bar-pass').style.width = pct + '%';
 }
+
+function renderProps() {
+  const holder = document.getElementById('run-props');
+  PROPS.forEach(p => {
+    const item = document.createElement('span');
+    item.className = 'prop';
+    const k = document.createElement('b');
+    k.textContent = p.name;
+    const v = document.createElement('span');
+    v.textContent = ' ' + p.value;
+    item.appendChild(k);
+    item.appendChild(v);
+    holder.appendChild(item);
+  });
+}
+renderProps();
 
 function toggle(i) {
   const el = document.getElementById('detail-'+i);
