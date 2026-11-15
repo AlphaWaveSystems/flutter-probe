@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
@@ -270,25 +271,49 @@ const chatFieldLimit = 150000
 // maxChatMessages is how many messages of the conversation a turn sends, the newest ones; older ones are not sent, and the preview says so.
 const maxChatMessages = 40
 
-// hiddenEscape matches a JSON-style \uXXXX escape, which an error body can use to write a hidden character as plain ASCII.
-var hiddenEscape = regexp.MustCompile(`\\u([0-9a-fA-F]{4})`)
+// hiddenEscape matches the ways an error body can write a character as plain ASCII: \uXXXX, \x{XXXX}, &#N; and &#xN; and a
+// percent-encoded UTF-8 sequence.
+var hiddenEscape = regexp.MustCompile(`\\u([0-9a-fA-F]{4})|\\x\{([0-9a-fA-F]{1,6})\}|&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|((?:%[0-9a-fA-F]{2}){2,4})`)
 
-// decodeHiddenEscapes turns the \uXXXX escapes that spell a hidden character into the character, so the drop that follows sees it.
+// decodeHiddenEscapes turns the escapes that spell a hidden character into the character, so the drop that follows sees it. An
+// escape of any other character is left as it was.
 func decodeHiddenEscapes(s string) string {
 	return hiddenEscape.ReplaceAllStringFunc(s, func(m string) string {
-		n, err := strconv.ParseUint(m[2:], 16, 32)
-		if err == nil && hiddenRune(rune(n)) {
+		sub := hiddenEscape.FindStringSubmatch(m)
+		var n uint64
+		var err error
+		switch {
+		case sub[1] != "":
+			n, err = strconv.ParseUint(sub[1], 16, 32)
+		case sub[2] != "":
+			n, err = strconv.ParseUint(sub[2], 16, 32)
+		case sub[3] != "":
+			n, err = strconv.ParseUint(sub[3], 10, 32)
+		case sub[4] != "":
+			n, err = strconv.ParseUint(sub[4], 16, 32)
+		default:
+			dec, derr := url.PathUnescape(sub[5])
+			if r, size := utf8.DecodeRuneInString(dec); derr == nil && size == len(dec) && hiddenRune(r) {
+				return dec
+			}
+			return m
+		}
+		if err == nil && n <= unicode.MaxRune && hiddenRune(rune(n)) {
 			return string(rune(n))
 		}
 		return m
 	})
 }
 
-// foldDigits turns full-width digits into ASCII ones, so a card written with them is read as a card.
+// foldDigits turns full-width digits and the dash characters (a full-width hyphen, a minus sign, the typographic dashes) into ASCII
+// ones, so a card written with them is read as a card.
 func foldDigits(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r >= 0xff10 && r <= 0xff19 {
+		switch {
+		case r >= 0xff10 && r <= 0xff19:
 			return '0' + (r - 0xff10)
+		case r == 0xff0d || r == 0x2212 || (r >= 0x2010 && r <= 0x2015):
+			return '-'
 		}
 		return r
 	}, s)
@@ -345,6 +370,7 @@ func newestMessages(msgs []claudeMessage) []claudeMessage {
 // sent. Local and OpenAI-compatible replies report no token usage, so their cost stays zero.
 func completeChat(s aiProviderSettings, system string, msgs []claudeMessage) (ChatResponse, error) {
 	system, gated := gateTurn(s, system, msgs)
+	omitted := len(msgs) - len(gated)
 	resp, err := sendTurn(s, system, gated)
 	if err != nil {
 		return ChatResponse{}, errors.New(chatField(decodeHiddenEscapes(err.Error()), s.APIKey))
@@ -354,6 +380,9 @@ func completeChat(s aiProviderSettings, system string, msgs []claudeMessage) (Ch
 	raw := withoutInvisible(resp.Content, true)
 	resp.Content = scrubPersonalText(fromProvider(raw, withoutInvisible(s.APIKey, false)))
 	resp.Notice = s.Notice
+	if omitted > 0 {
+		resp.Notice = strings.TrimSpace(resp.Notice + fmt.Sprintf("\nOnly the newest %d messages of this conversation were sent; the %d oldest were not.", len(gated), omitted))
+	}
 	if resp.Content != raw {
 		// Text was removed or replaced: an address or a path in a suggestion may not be what the model meant.
 		resp.Notice = strings.TrimSpace(resp.Notice + "\nPersonal text or a credential was removed from this reply, so a line in it may not say what the model meant.")

@@ -24,13 +24,16 @@ func clipContext(s string, limit int) string {
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
-	// A token that the cut splits is dropped whole (back to the last space or line break, at most explainTailRun bytes), so its first
-	// part is never sent on its own: the gate cannot see a token that is not all there.
-	for back := cut; back > 0 && cut-back < explainTailRun; back-- {
-		if c := s[back-1]; c == ' ' || c == '\n' || c == '\t' {
-			cut = back
-			break
-		}
+	// A token that the cut splits is dropped, as boundRunes drops it: back over the run of characters with no space in it (at most
+	// explainTailRun bytes), then explainTailCut more, so the first part of a token is never sent on its own: the gate cannot see a token
+	// that is not all there. A text with no space near the cut (minified JSON) loses explainTailRun + explainTailCut bytes there.
+	floor := max(cut-explainTailRun, 0)
+	for cut > floor && s[cut-1] != ' ' && s[cut-1] != '\n' && s[cut-1] != '\t' && s[cut-1] != '\r' {
+		cut--
+	}
+	cut = max(cut-explainTailCut, 0)
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
 	}
 	return s[:cut] + fmt.Sprintf("\n[truncated: %d more bytes not sent]", len(s)-cut)
 }

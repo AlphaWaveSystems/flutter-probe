@@ -179,3 +179,123 @@ func TestFullWidthDigitsAndAdjacency(t *testing.T) {
 		}
 	}
 }
+
+// Routes, URLs and longer paths that hold a home-folder-looking piece are kept.
+func TestHomeLookingPiecesInRoutesAndURLsAreKept(t *testing.T) {
+	for _, in := range []string{
+		"https://app.test/api/home/other/x", "myapp://home/x/y", "//host/home/x/y", "GET https://api.test/v1/users/42", "/api/users/42/orders",
+		"tap \"/users/42\"", "GoRoute(path: '/users/:id')", "tap \"/Users/list\"", "/tmp/home/other/x", "see /srv/Users/bob/y", "https://x.test/Users/alice/Documents/a",
+		"a-/home/alice/x", "~/home/alice/x",
+		"GET /users/42/orders", "tap \"/users/42/orders/7\"",
+		"https://app.test/login?next=/home/other/dev/app", "http://h.test:8080/x?p=/Users/alice/Documents/y",
+	} {
+		if out := chatField(in, ""); out != in {
+			t.Errorf("%q changed: %q", in, out)
+		}
+	}
+}
+
+// A real home folder is replaced behind a quote or a backtick, in a JSON field and with a usual subfolder; the current account's own
+// folder is replaced everywhere, in any case, also in a URL.
+func TestRealHomeFoldersAreReplacedQuotedToo(t *testing.T) {
+	for in, want := range map[string]string{
+		"`/home/janedoe/dev/app`":                "`~/dev/app`",
+		`"/home/other/dev/app"`:                  `"~/dev/app"`,
+		`tap "/home/janedoe/dev/app"`:            `tap "~/dev/app"`,
+		`{"path":"/Users/alice/Documents/x"}`:    `{"path":"~/Documents/x"}`,
+		`{"path":"/home/other/Downloads/x.zip"}`: `{"path":"~/Downloads/x.zip"}`,
+		"'/Users/alice/Desktop'":                 "'~/Desktop'",
+		`"/home/other/foo/bar"`:                  `"~/foo/bar"`,
+		`"/root/foo/bar"`:                        `"~/foo/bar"`,
+		`"/Users/alice/foo/bar"`:                 `"~/foo/bar"`,
+	} {
+		if out := chatField(in, ""); out != want {
+			t.Errorf("%q -> %q, want %q", in, out, want)
+		}
+	}
+	if me := currentUserName(); me != "" {
+		for _, in := range []string{"`/home/" + me + "/x`", "\"/home/" + strings.ToUpper(me) + "/x\"", "{\"p\":\"/Users/" + me + "\"}", "https://x.test/home/" + me + "/y", "/HOME/" + me + "/y", "'/home/" + me + "'"} {
+			if out := chatField(in, ""); strings.Contains(strings.ToLower(out), strings.ToLower(me)) {
+				t.Errorf("this account's folder is in %q -> %q", in, out)
+			}
+		}
+		// the same in an error and in a reply
+		if out := scrubPersonalText("at '/home/" + me + "/x' and `/Users/" + me + "`"); strings.Contains(out, me) {
+			t.Errorf("scrubPersonalText: %q", out)
+		}
+	}
+}
+
+// A 64 KB file with no space near the cut and a token at the cut sends no part of the token; a newline or a tab is a place to cut at.
+func TestClipDropsATokenThatStraddlesTheCutInMinifiedText(t *testing.T) {
+	token := "ghp_" + strings.Repeat("a1B2", 9)
+	for _, back := range []int{1, 5, 20, 39} {
+		doc := `{"a":"` + strings.Repeat("x", maxContextFileBytes-back-6) + token + `"}`
+		got := clipContext(doc, maxContextFileBytes)
+		if strings.Contains(got, "ghp_") || strings.Contains(got, "a1B2a1B2") {
+			t.Errorf("token %d bytes before the cut: part of it is sent", back)
+		}
+	}
+	for _, sep := range []string{"\n", "\t", " "} {
+		doc := strings.Repeat("a"+sep, 300) + token
+		got := clipContext(doc, 600+10)
+		if strings.Contains(got, "ghp_") {
+			t.Errorf("separator %q: %q", sep, got)
+		}
+	}
+	// text with a line break right before the cut keeps everything up to that point, less the tail that is always dropped
+	if got := clipContext(strings.Repeat("a\n", 1000), 1501); !strings.HasPrefix(got, "a\na\n") || len(got) < 1000 {
+		t.Errorf("a clip at a line break lost too much: %d bytes", len(got))
+	}
+}
+
+// The other ways an error can spell a hidden character are decoded before the drop, and an escape of a visible one is left alone.
+func TestEveryEscapeOfAHiddenCharacterIsDecoded(t *testing.T) {
+	for _, in := range []string{`​`, `​`, `\x{200b}`, `\x{200B}`, `&#8203;`, `&#x200B;`, `&#X200b;`, `%E2%80%8B`, `%e2%80%8b`} {
+		if got := decodeHiddenEscapes("g" + in + "h"); got != "g​h" {
+			t.Errorf("%q -> %q", in, got)
+		}
+	}
+	for _, in := range []string{`A`, `\x{41}`, `&#65;`, `%41`, `%E2%82%AC`, `&#99999999;`} {
+		if got := decodeHiddenEscapes(in); got != in {
+			t.Errorf("a visible escape %q changed: %q", in, got)
+		}
+	}
+}
+
+// Full-width digits and dashes between card groups, and the nine, are folded.
+func TestFullWidthCardsWithDashes(t *testing.T) {
+	for _, in := range []string{"4111－1111－1111－1111", "4111‐1111‑1111‒1111", "4111−1111−1111−1111", "４１１１－１１１１－１１１１－１１１１"} {
+		if out := chatField("card "+in, ""); strings.Contains(out, "4111") || strings.Contains(out, "４") {
+			t.Errorf("%q -> %q", in, out)
+		}
+	}
+	if got := foldDigits("０９－"); got != "09-" {
+		t.Errorf("fold: %q", got)
+	}
+}
+
+// A turn that left out old messages says so when it is sent, next to any notice the settings carry, and an unchanged short one does not.
+func TestTheCapIsAnnouncedOnSend(t *testing.T) {
+	f := newLocalFake(t, "ok")
+	var msgs []claudeMessage
+	for i := 0; i < 43; i++ {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		msgs = append(msgs, claudeMessage{Role: role, Content: fmt.Sprintf("m%d", i)})
+	}
+	s := aiProviderSettings{Provider: "local", Endpoint: f.srv.URL + "/v1", Model: "m", Notice: "a plain key was not used"}
+	resp, err := completeChat(s, "sys", msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(resp.Notice, "a plain key was not used") || !strings.Contains(resp.Notice, "Only the newest 39 messages") || !strings.Contains(resp.Notice, "the 4 oldest were not") {
+		t.Errorf("notice: %q", resp.Notice)
+	}
+	resp, err = completeChat(s, "sys", msgs[:3])
+	if err != nil || resp.Notice != "a plain key was not used" {
+		t.Errorf("%v %q", err, resp.Notice)
+	}
+}

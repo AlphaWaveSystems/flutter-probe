@@ -256,12 +256,12 @@ func TestSummarizeRunNamesTheFailures(t *testing.T) {
 }
 
 func TestClipContextKeepsCharactersWhole(t *testing.T) {
-	s := strings.Repeat("é", 10) // two bytes each
-	got := clipContext(s, 5)     // the limit falls inside a character
+	s := strings.Repeat("é ", 2000) // two bytes each, and a space
+	got := clipContext(s, 2001)     // the limit falls inside a character
 	if !utf8.ValidString(got) {
 		t.Fatalf("the cut split a character: %q", got)
 	}
-	if !strings.HasPrefix(got, "éé") || !strings.Contains(got, "[truncated:") {
+	if !strings.HasPrefix(got, "é é") || !strings.Contains(got, "[truncated:") {
 		t.Fatalf("clipped = %q", got)
 	}
 }
