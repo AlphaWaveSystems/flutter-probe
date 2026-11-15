@@ -297,9 +297,9 @@
     </div>
 
     <div id="fix-preview-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="fix-preview-title">
         <div class="overlay-header">
-          <h2>Before Suggest a fix</h2>
+          <h2 id="fix-preview-title">Before Suggest a fix</h2>
         </div>
         <p id="fix-preview-note" class="dim"></p>
         <pre id="fix-preview-text" class="ai-preview-text"></pre>

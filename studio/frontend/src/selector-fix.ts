@@ -62,7 +62,8 @@ export class FixSession {
     try {
       const p = await deps.preview();
       if (mine !== this.generation) return { kind: "stale" };
-      if (p.needsConfirm) {
+      // Fail closed: a hosted destination is always confirmed, and so is any answer that does not say needsConfirm is false.
+      if (p.hosted || p.needsConfirm !== false) {
         const sent = await deps.confirm(p);
         if (mine !== this.generation) return { kind: "stale" };
         if (!sent) return { kind: "cancelled" };

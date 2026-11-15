@@ -16,7 +16,7 @@ interface Fake {
   close: () => Promise<void>;
 }
 
-async function fakeProvider(reply: string): Promise<Fake> {
+async function fakeProvider(reply: string, delayMs = 0): Promise<Fake> {
   const bodies: string[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -25,7 +25,7 @@ async function fakeProvider(reply: string): Promise<Fake> {
       res.setHeader("Content-Type", "application/json");
       if (req.method === "POST" && (req.url ?? "").endsWith("/chat/completions")) {
         bodies.push(Buffer.concat(chunks).toString("utf8"));
-        res.end(JSON.stringify({ choices: [{ message: { content: reply } }] }));
+        setTimeout(() => res.end(JSON.stringify({ choices: [{ message: { content: reply } }] })), delayMs);
         return;
       }
       res.end(JSON.stringify({ data: [{ id: "fake-model" }] }));
@@ -42,6 +42,26 @@ let original = "";
 /** probe.yaml with the fake as the local provider, and the switch that lets a suggestion read the last run. */
 function useProvider(f: Fake, model = "fake-model") {
   fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: ${model}\nstudio:\n  ai_context:\n    run_results: true\n`);
+}
+
+async function captureRunStarted(page: Page) {
+  await page.addInitScript(() => {
+    const handlers: Record<string, Array<(...a: unknown[]) => void>> = {};
+    (window as any).__handlers = handlers;
+    let rt: any;
+    Object.defineProperty(window, "runtime", {
+      configurable: true,
+      get: () => rt,
+      set: (v) => {
+        rt = v;
+        const orig = v.EventsOnMultiple.bind(v);
+        v.EventsOnMultiple = (name: string, cb: (...a: unknown[]) => void, max: number) => {
+          (handlers[name] = handlers[name] || []).push(cb);
+          return orig(name, cb, max);
+        };
+      },
+    });
+  });
 }
 
 const overlay = (page: Page) => page.locator("#fix-preview-overlay");
@@ -95,9 +115,12 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       expect(f.requests()).toBe(0);
       expect(calls.PreviewSelectorFix).toBe(1);
       expect(calls.SelectorFixPreviewed ?? 0).toBe(0); // nothing asks Studio to send before Send
+      await expect(page.locator("#btn-fix-preview-cancel")).toBeFocused(); // the safe choice has the focus
+      await expect(page.locator("#fix-preview-overlay [role=dialog]")).toHaveAttribute("aria-modal", "true");
       await page.click("#btn-fix-preview-cancel");
       await expect(overlay(page)).toBeHidden();
       await expect(card(page)).toBeHidden();
+      await expect(page.locator("#btn-fix")).toBeEnabled(); // settled: the click has been handled to its end
       expect(f.requests()).toBe(0);
       expect(calls.SelectorFixPreviewed ?? 0).toBe(0);
 
@@ -105,6 +128,7 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await expect(overlay(page)).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(overlay(page)).toBeHidden();
+      await expect(page.locator("#btn-fix")).toBeEnabled();
       expect(f.requests()).toBe(0);
       expect(calls.SelectorFixPreviewed ?? 0).toBe(0);
     } finally {
@@ -282,6 +306,55 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await page.click("#btn-fix-preview-send");
       await expect(card(page)).toBeVisible();
       expect(f.bodies().join("\n")).toContain("counter increments and resets");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-10 a new run drops an open preview and a card on screen, and a new suggestion works", async ({ page }) => {
+    const f = await fakeProvider(hostileReply);
+    try {
+      useProvider(f);
+      await captureRunStarted(page);
+      const runStarted = () => page.evaluate(() => (((window as any).__handlers["run:started"]) || []).forEach((cb: (p: string) => void) => cb("x.probe")));
+      const calls = countCalls(page);
+      await openStudio(page);
+      // An open preview is closed by a new run, and nothing is sent.
+      await page.click("#btn-fix");
+      await expect(overlay(page)).toBeVisible();
+      await runStarted();
+      await expect(overlay(page)).toBeHidden();
+      await expect(page.locator("#btn-fix")).toBeEnabled(); // not stuck disabled
+      expect(f.requests()).toBe(0);
+      expect(calls.SelectorFixPreviewed ?? 0).toBe(0);
+      // A card on screen is removed by a new run.
+      await page.click("#btn-fix");
+      await expect(overlay(page)).toBeVisible();
+      await page.click("#btn-fix-preview-send");
+      await expect(card(page)).toBeVisible();
+      await runStarted();
+      await expect(card(page)).toBeHidden();
+      expect(f.requests()).toBe(1);
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-11 a new run while the provider is answering drops the answer, and the next suggestion works", async ({ page }) => {
+    const f = await fakeProvider(hostileReply, 700);
+    try {
+      useProvider(f);
+      await captureRunStarted(page);
+      const runStarted = () => page.evaluate(() => (((window as any).__handlers["run:started"]) || []).forEach((cb: (p: string) => void) => cb("x.probe")));
+      await openStudio(page);
+      await page.click("#btn-fix");
+      await expect(overlay(page)).toBeVisible();
+      await page.click("#btn-fix-preview-send");
+      await expect.poll(() => f.requests()).toBe(1); // the request is on its way
+      await runStarted();
+      await expect(page.locator("#btn-fix")).toBeEnabled(); // the session is free at once
+      await page.waitForTimeout(1200); // the late answer arrives and is dropped
+      await expect(card(page)).toBeHidden();
     } finally {
       await f.close();
     }

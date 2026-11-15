@@ -706,6 +706,11 @@ function confirmExplainSend(p: ExplainPreview): Promise<boolean> {
     const onCancel = () => finish(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
+      if (e.key === "Tab") {
+        // the dialog is modal: Tab stays between its two buttons
+        e.preventDefault();
+        (document.activeElement === cancel ? send : cancel).focus();
+      }
     };
     send.addEventListener("click", onSend);
     cancel.addEventListener("click", onCancel);
@@ -799,10 +804,13 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   const cancel = $("btn-fix-preview-cancel");
   $("fix-preview-note").textContent = fixPreviewNote(p.hosted);
   $("fix-preview-text").textContent = p.text;
+  const opener = document.activeElement as HTMLElement | null;
   overlay.hidden = false;
+  cancel.focus(); // the safe choice has the focus: Enter does not send
   return new Promise((resolve) => {
     const finish = (ok: boolean) => {
       overlay.hidden = true;
+      opener?.focus?.(); // the focus goes back to where it was
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
       document.removeEventListener("keydown", onKey);

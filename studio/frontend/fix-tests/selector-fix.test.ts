@@ -102,3 +102,31 @@ describe("the card", () => {
     assert.match(fixPreviewNote(false), /Nothing is sent until you press Send/);
   });
 });
+
+describe("fail closed and invalidate", () => {
+  it("a preview that does not say needsConfirm is confirmed, and a hosted one always is", async () => {
+  for (const p of [{ ...preview(), needsConfirm: undefined as unknown as boolean }, { ...preview(), hosted: true, needsConfirm: false }]) {
+    const asked: string[] = [];
+    const out = await new FixSession().run({ preview: async () => p, confirm: async () => (asked.push("confirm"), false), send: async () => answer });
+    assert.deepEqual(asked, ["confirm"]);
+    assert.equal(out?.kind, "cancelled");
+  }
+  const asked: string[] = [];
+  const out = await new FixSession().run({ preview: async () => ({ ...preview(), hosted: false, needsConfirm: false }), confirm: async () => (asked.push("confirm"), true), send: async () => answer });
+  assert.deepEqual(asked, []);
+  assert.equal(out?.kind, "answer");
+});
+
+  it("invalidate frees the session at once: running is false and a new suggestion starts while the old one is still waiting", async () => {
+  const t = new FixSession();
+  let release!: () => void;
+  const first = t.run({ preview: () => new Promise<FixPreview>((r) => (release = () => r(preview()))), confirm: async () => true, send: async () => answer });
+  assert.equal(t.running, true);
+  t.invalidate();
+  assert.equal(t.running, false);
+  const second = await t.run({ preview: async () => preview(), confirm: async () => true, send: async () => answer });
+  assert.equal(second?.kind, "answer");
+  release();
+  assert.equal((await first)?.kind, "stale");
+});
+});
