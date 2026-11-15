@@ -1,11 +1,13 @@
 package runner
 
 import (
-	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -21,23 +23,23 @@ import (
 
 // TestResult captures the outcome of a single test run.
 type TestResult struct {
-	TestName   string
-	File       string
-	Passed     bool
-	Skipped    bool
-	Duration   time.Duration
-	Error      error
-	Row        int // data-driven row index, -1 = not data-driven
-	Artifacts  []string
-	VideoURL   string // cloud provider video URL (session-level)
-	DeviceID   string // device serial/UDID that ran this test
-	DeviceName string // human-readable device name
-	Perf       []perf.Metrics // measurements the test took (`start measuring` ... `stop measuring`)
-	PerfNew    []string       // measurements with no entry in the baseline (not compared)
-	PerfSkipped int           // measurements not compared: the window spans an app restart or has no memory/frame data
-	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
-	StartedAt  time.Time        // when the (last) attempt started
-	AttemptLog []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
+	TestName    string
+	File        string
+	Passed      bool
+	Skipped     bool
+	Duration    time.Duration
+	Error       error
+	Row         int // data-driven row index, -1 = not data-driven
+	Artifacts   []string
+	VideoURL    string           // cloud provider video URL (session-level)
+	DeviceID    string           // device serial/UDID that ran this test
+	DeviceName  string           // human-readable device name
+	Perf        []perf.Metrics   // measurements the test took (`start measuring` ... `stop measuring`)
+	PerfNew     []string         // measurements with no entry in the baseline (not compared)
+	PerfSkipped int              // measurements not compared: the window spans an app restart or has no memory/frame data
+	Attempts    int              // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
+	StartedAt   time.Time        // when the (last) attempt started
+	AttemptLog  []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
 	// FailedSelector is the selector step the test failed on, nil when it failed elsewhere or passed.
 	FailedSelector *FailedSelector
 	// Proposal is advisory report text set after the run by `probe test --ai-heal`. It never changes Passed or Error.
@@ -71,17 +73,17 @@ type AttemptOutcome struct {
 type Runner struct {
 	cfg             *config.Config
 	client          probelink.ProbeClient
-	deviceCtx       *DeviceContext  // nil in dry-run mode
+	deviceCtx       *DeviceContext // nil in dry-run mode
 	opts            RunOptions
 	recipes         map[string]parser.RecipeDef
 	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
-	missingUses     []string                     // `use` targets that do not exist, for error messages
-	visual          *visual.Comparator  // nil if visual regression is not configured
-	onResult        func(TestResult)    // optional per-result callback for streaming
+	missingUses     []string                    // `use` targets that do not exist, for error messages
+	visual          *visual.Comparator          // nil if visual regression is not configured
+	onResult        func(TestResult)            // optional per-result callback for streaming
 	recorder        StepRecorder
-	onStep          func(StepEvent)     // optional per-step callback (live highlight)
-	compositeRunner *CompositeRunner    // nil if composite tests are not configured
-	curFile         string              // attribution for StepEvents from newExecutor
+	onStep          func(StepEvent)  // optional per-step callback (live highlight)
+	compositeRunner *CompositeRunner // nil if composite tests are not configured
+	curFile         string           // attribution for StepEvents from newExecutor
 	curTest         string
 	curAttempt      int
 }
@@ -99,12 +101,12 @@ type RunOptions struct {
 	TestNames    []string // run only the tests with these names (composite tests too); nil runs every test
 	Watch        bool     // re-run on file change
 	Timeout      time.Duration
-	DryRun       bool   // parse only
+	DryRun       bool // parse only
 	Verbose      bool
-	VideoEnabled bool   // record device screen during tests
-	VideoDir     string // directory to store video recordings
-	DeviceID     string // device serial/UDID (for tagging results)
-	DeviceName   string // human-readable device name
+	VideoEnabled bool     // record device screen during tests
+	VideoDir     string   // directory to store video recordings
+	DeviceID     string   // device serial/UDID (for tagging results)
+	DeviceName   string   // human-readable device name
 	Grant        []string // permissions to pre-grant before the first test (--grant)
 
 	MeasureAll    bool           // open a measuring window around every test that does not measure itself
@@ -541,18 +543,18 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	exec.closePerf(ctx)
 
 	return TestResult{
-		Perf:       nameUnnamed(exec.PerfResults()),
-		TestName:   name,
-		File:       file,
-		Passed:     runErr == nil,
-		Duration:   time.Since(start),
-		Error:      runErr,
+		Perf:           nameUnnamed(exec.PerfResults()),
+		TestName:       name,
+		File:           file,
+		Passed:         runErr == nil,
+		Duration:       time.Since(start),
+		Error:          runErr,
 		FailedSelector: exec.FailedSelector(runErr),
-		Row:        row,
-		Artifacts:  exec.Artifacts(),
-		DeviceID:   r.opts.DeviceID,
-		DeviceName: r.opts.DeviceName,
-		StartedAt:  start,
+		Row:            row,
+		Artifacts:      exec.Artifacts(),
+		DeviceID:       r.opts.DeviceID,
+		DeviceName:     r.opts.DeviceName,
+		StartedAt:      start,
 	}
 }
 
@@ -742,8 +744,14 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			default:
 				// Android: screenshots are in the app's private cache dir,
 				// use run-as to read them since adb pull can't access private dirs
-				data, err := dc.Manager.ADB().Run(ctx, dc.Serial,
-					"exec-out", "run-as", dc.AppID, "cat", remotePath)
+				var data []byte
+				var err error
+				if !appPrivateFile(dc.AppID, remotePath) {
+					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.AppID)
+				} else {
+					data, err = dc.Manager.ADB().Run(ctx, dc.Serial,
+						"exec-out", "run-as", shellquote.Arg(dc.AppID), "cat", shellquote.Arg(remotePath))
+				}
 				switch {
 				case err != nil:
 					pullErr = err
@@ -961,4 +969,25 @@ func nameUnnamed(ms []perf.Metrics) []perf.Metrics {
 		}
 	}
 	return ms
+}
+
+// appPrivateFile reports whether remotePath is a file inside the private storage of the app: an absolute path under /data/user/<n>/<appID>/ or /data/data/<appID>/, with no "." or ".." part and no repeated separator.
+// The path comes from the agent's reply and is read with run-as, so anything else is refused.
+func appPrivateFile(appID, remotePath string) bool {
+	if appID == "" || !strings.HasPrefix(remotePath, "/") || path.Clean(remotePath) != remotePath {
+		return false
+	}
+	// path.Clean has removed any trailing separator, so a path that is a prefix plus nothing cannot get here
+	if strings.HasPrefix(remotePath, "/data/data/"+appID+"/") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(remotePath, "/data/user/")
+	if !ok {
+		return false
+	}
+	user, rest, ok := strings.Cut(rest, "/")
+	if !ok || user == "" || strings.Trim(user, "0123456789") != "" {
+		return false
+	}
+	return strings.HasPrefix(rest, appID+"/")
 }

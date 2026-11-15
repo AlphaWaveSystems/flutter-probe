@@ -44,7 +44,7 @@ func (dc *DeviceContext) cpuReader(ctx context.Context) perf.CPUReader {
 	case device.PlatformAndroid:
 		adb := dc.Manager.ADB()
 		return perf.AndroidCPU(func(c context.Context, args ...string) ([]byte, error) {
-			return adb.Shell(c, dc.Serial, args...)
+			return adb.ShellQ(c, dc.Serial, args...)
 		}, dc.AppID)
 	case device.PlatformIOS:
 		if dc.IsPhysical {

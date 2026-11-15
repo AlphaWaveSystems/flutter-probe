@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
@@ -195,5 +196,70 @@ func TestFailedInputTextErrorDoesNotCarryTheText(t *testing.T) {
 		if !strings.Contains(msg, "device offline") || !strings.Contains(msg, "<typed text>") {
 			t.Errorf("the error lost its meaning: %s", msg)
 		}
+	}
+}
+
+func TestTokenReadQuotesTheAppID(t *testing.T) {
+	a, calls := standInADB(t, "", "", 0)
+	m := NewManagerWithPaths(ToolPaths{ADB: a.Bin()})
+	_, _ = m.ReadTokenAndroid(context.Background(), "emulator-5554", 700*time.Millisecond, "a b;c'd", nil)
+	var runAs, pidof bool
+	for _, c := range calls() {
+		if len(c) < 4 || c[2] != "shell" {
+			continue
+		}
+		w := deviceWords(t, c)
+		switch w[0] {
+		case "run-as":
+			assertWords(t, "run-as", w, []string{"run-as", "a b;c'd", "cat", "cache/probe/token"})
+			runAs = true
+		case "pidof":
+			assertWords(t, "pidof", w, []string{"pidof", "a b;c'd"})
+			pidof = true
+		}
+	}
+	if !runAs || !pidof {
+		t.Fatalf("run-as seen: %v, pidof seen: %v", runAs, pidof)
+	}
+}
+
+// echoingADB is a stand-in whose failure message repeats what it was asked to type, in the forms a device or a shell can show: the whole command line, and the last word without its outer quotes.
+func echoingADB(t *testing.T) *ADB {
+	t.Helper()
+	fake := filepath.Join(t.TempDir(), "adb")
+	script := "#!/bin/sh\nfor a; do last=$a; done\ninner=${last#?}\ninner=${inner%?}\necho \"device said: $* | $inner\" >&2\nexit 1\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return NewADBWithPath(fake)
+}
+
+func TestFailedInputTextMasksTheEchoedFormsToo(t *testing.T) {
+	for _, secret := range []string{"p@ss'w;rd", "it's a secret", "Sup3r'S3cret'", "plain-secret-9"} {
+		err := echoingADB(t).InputText(context.Background(), "emulator-5554", secret)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		inner := strings.ReplaceAll(secret, " ", "%s")
+		forms := []string{secret, inner, strings.ReplaceAll(inner, "'", `'\''`), shellquote.Quote(inner)}
+		for _, f := range forms {
+			if strings.Contains(err.Error(), f) {
+				t.Errorf("the error carries %q: %s", f, err)
+			}
+		}
+		if !strings.Contains(err.Error(), "device said") {
+			t.Errorf("the error lost the device's own words: %s", err)
+		}
+	}
+}
+
+func TestShortTypedTextDoesNotMaskUnrelatedWords(t *testing.T) {
+	// "e" must not turn "device said" into "d<typed text>vic<typed text>"; the quoted form is still masked
+	err := echoingADB(t).InputText(context.Background(), "emulator-5554", "e")
+	if err == nil || !strings.Contains(err.Error(), "device said") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), "'e'") {
+		t.Errorf("the quoted form of the typed text is in the error: %s", err)
 	}
 }

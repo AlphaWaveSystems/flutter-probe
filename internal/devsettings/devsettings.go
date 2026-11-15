@@ -10,6 +10,7 @@ package devsettings
 import (
 	"context"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -156,10 +157,10 @@ func planAndroid(r Request) ([]Command, error) {
 		if err := checkURL(r.Value); err != nil {
 			return nil, err
 		}
-		quoted := "'" + strings.ReplaceAll(r.Value, "'", `'\''`) + "'"
+		quoted := shellquote.Quote(r.Value)
 		args := []string{"am", "start", "-a", "android.intent.action.VIEW", "-d", quoted}
 		if r.App != "" {
-			args = append(args, "-p", r.App)
+			args = append(args, "-p", shellquote.Arg(r.App))
 		}
 		return []Command{adb(r.Device, args...)}, nil
 	}

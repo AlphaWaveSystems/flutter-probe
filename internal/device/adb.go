@@ -379,13 +379,25 @@ func (a *ADB) InputText(ctx context.Context, serial, text string) error {
 	return nil
 }
 
-// maskTypedText returns err with the typed text, in every form it appears in the failed command line (as typed, with %s for spaces, and quoted), replaced by a marker. The error of a failed adb call
-// quotes the whole command line, and the typed text can be a password.
+// minMaskedTextLen is the shortest typed text whose bare forms are masked: a text of one to three characters would mask every occurrence of those characters in the rest of the message ("e" would turn "device" into
+// "d<typed text>vic<typed text>"). Its quoted form, which contains the quotes, is always masked.
+const minMaskedTextLen = 4
+
+// maskTypedText returns err with the typed text, in every form it appears in the failed command line or in what a device echoes back, replaced by a marker: the quoted word as sent, the text with %s for spaces and its
+// quotes escaped for the shell (what a shell shows when it echoes the word without the outer quotes), the text with %s for spaces, and the text as typed. The error of a failed adb call quotes the whole command line,
+// and the typed text can be a password.
 func maskTypedText(err error, text, quotedWord string) error {
 	const marker = "<typed text>"
 	inner := strings.ReplaceAll(text, " ", "%s")
-	r := strings.NewReplacer(quotedWord, marker, inner, marker, text, marker)
-	return fmt.Errorf("%s", r.Replace(err.Error()))
+	forms := []string{quotedWord}
+	if len(text) >= minMaskedTextLen {
+		forms = append(forms, strings.ReplaceAll(inner, "'", `'\''`), inner, text)
+	}
+	var pairs []string
+	for _, f := range forms {
+		pairs = append(pairs, f, marker)
+	}
+	return fmt.Errorf("%s", strings.NewReplacer(pairs...).Replace(err.Error()))
 }
 
 // ValidateInputText says whether text can be typed through `adb shell input text`. It refuses: control characters (new line, tab, NUL and the rest), because `input text` cannot type them and a new
