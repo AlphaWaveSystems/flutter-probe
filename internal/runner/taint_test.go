@@ -259,9 +259,7 @@ func TestExampleScriptsExpandAsBefore(t *testing.T) {
 		}
 		var lits []string
 		for _, line := range strings.Split(string(src), "\n") {
-			for _, part := range strings.Split(line, `"`)[1:] {
-				lits = append(lits, part)
-			}
+			lits = append(lits, strings.Split(line, `"`)[1:]...)
 		}
 		e := newTestExecutor()
 		e.vars["x"] = "VX"
