@@ -50,7 +50,7 @@ Parser and grammar: `internal/parser` (`token.go`, `lexer.go`, `ast.go`, `parser
 - **V1. Grammar and parser:** the five forms, the kind from the syntax, the page name, the EBNF and its conformance test, hostile-input tests for the parser. No runner change: the steps parse and the runner reports "not implemented" until V2.
 - **V2. Runner glue:** the steps over the session, `Redact` required, per-step open and close, the messages, the masked step line, tests with the fake DevTools server and a recording adb. One real run against a fixture app recorded in the PR.
 - **V3. Dictionary and docs surfaces:** every file above, in one PR, with the user docs of the previous section.
-- **V4. Fixture:** the one-WebView test app as an end-to-end fixture in the right place (probe-business decides where), with a run that taps, types and reads back.
+- **V4. Fixture:** the one-WebView test app as an end-to-end fixture in the right place (the maintainers decide where it lives), with a run that taps, types and reads back.
 
 ## Not in this slice
 
