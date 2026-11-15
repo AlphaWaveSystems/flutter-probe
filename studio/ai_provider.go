@@ -228,7 +228,8 @@ func outbound(s string) string {
 // modelID cleans and bounds a model id from a server's listing: the exact key is removed, the gate runs, and then the id is
 // cut to 200 bytes, in that order, so a key that straddles the cut leaves nothing behind.
 func modelID(id, key string) string {
-	return errorBody([]byte(cleanProviderText(id, key, false)))
+	// Hidden characters are kept here: the chat label shows each one as a ? so a spoofed id is visible, which dropping would hide.
+	return errorBody([]byte(scrubPersonal(fromProvider(boundBeforeGate(id), key))))
 }
 
 // fromProvider cleans text a provider returned before Studio shows it: the exact key sent in the request is removed, and the
