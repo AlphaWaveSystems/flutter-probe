@@ -31,13 +31,16 @@ var plantedSecrets = []string{
 }
 
 func init() {
-	// A card number in the layouts a search of whole groups of three digits or more once missed, spaced and hyphenated.
+	// A card number in the layouts a search of whole groups of three digits or more once missed (any group size), spaced and hyphenated.
 	for _, l := range []struct {
 		digits int
 		sizes  []int
 	}{{13, []int{4, 4, 4, 1}}, {14, []int{4, 4, 4, 2}}, {17, []int{1, 4, 4, 4, 4}}, {17, []int{2, 4, 4, 4, 3}}, {17, []int{4, 4, 4, 4, 1}}, {18, []int{4, 4, 4, 4, 2}}, {19, []int{6, 6, 6, 1}}} {
 		spaced := groupBy(luhnNumber(l.digits), l.sizes...)
 		plantedSecrets = append(plantedSecrets, spaced, strings.ReplaceAll(spaced, " ", "-"))
+		for _, sep := range []string{"/", "_", ".", "  "} {
+			plantedSecrets = append(plantedSecrets, strings.ReplaceAll(spaced, " ", sep))
+		}
 	}
 }
 

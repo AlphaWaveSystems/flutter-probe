@@ -563,3 +563,58 @@ func TestCredentialKeysAreRefusedAndCardKeysReplaced(t *testing.T) {
 		}
 	}
 }
+
+// A credential deep inside a long key is found: the whole key is read, and a key over maxKeyBytes is refused, never cut.
+func TestSaveStepReadsTheWholeKey(t *testing.T) {
+	const hex = "9f86d081884c7d659a2feaa0c55ad015"
+	const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxw"
+	for _, pad := range []int{0, 300, 380, 385, 400, 401, 900} {
+		for _, tail := range []string{" " + hex, " " + jwt, "-" + hex} {
+			key := strings.Repeat("k", pad) + tail
+			_, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`})
+			if err == nil {
+				t.Errorf("a key of %d bytes with a credential at its end was saved", len(key))
+			}
+		}
+	}
+	for _, size := range []int{1025, 5000} {
+		_, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + strings.Repeat("k", size) + `":1}`})
+		if err == nil || !strings.Contains(err.Error(), "too long") {
+			t.Errorf("a key of %d bytes: %v", size, err)
+		}
+	}
+	// A long key with no credential, up to the limit, is kept.
+	key := strings.Repeat("k", maxKeyBytes)
+	// (its value is replaced: a name over 256 characters is treated as a secret name)
+	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`}); err != nil || !strings.Contains(stepOf(t, s).Body, key) {
+		t.Errorf("a plain key of %d bytes: %v", len(key), err)
+	}
+}
+
+// Behaviours the reviews' mutants found: a hyphen next to hex does not hide it, and a JWT that is one word of a key is seen.
+func TestSaveStepKeyShapesNextToText(t *testing.T) {
+	for _, key := range []string{"ke"+"y-9f86d081884c7d659a2feaa0c55ad015", "9f86d081884c7d659a2feaa0c55ad015-key", "x eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxw", "name dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA=="} {
+		if _, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`}); err == nil {
+			t.Errorf("the key %q was saved", key)
+		}
+	}
+}
+
+// A card with other separators (a slash, an underscore, a dot, two spaces) is found, and so is one among them.
+func TestSaveStepCardSeparators(t *testing.T) {
+	for _, body := range []string{"4111/1111/1111/1111", "4111_1111_1111_1111", "4111.1111.1111.1111", "4111  1111  1111  1111", "x 4111-1111.1111_1111 y"} {
+		s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
+		if err != nil {
+			continue
+		}
+		if got := stepOf(t, s).Body; strings.Contains(digitsOf(got), "4111") {
+			t.Errorf("%q: the card is in %q", body, got)
+		}
+	}
+	// Dotted numbers that are not a card are kept.
+	for _, body := range []string{"10.0.0.1", "version 1.2.3", "2026/11/15"} {
+		if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body}); err != nil || stepOf(t, s).Body != body {
+			t.Errorf("%q: %v", body, err)
+		}
+	}
+}

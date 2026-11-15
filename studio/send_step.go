@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -150,9 +151,11 @@ func interpolatedForm(s string) string {
 	return ""
 }
 
-var digitRun = regexp.MustCompile(`\d(?:[ -]?\d)*`)
+// digitRun is digits with a separator of one or two characters (a space, a hyphen, a slash, an underscore or a dot) between groups.
+var digitRun = regexp.MustCompile(`\d(?:[ \-/_.]{0,2}\d)*`)
 
-// cardRuns are the spans of s that hold a card number: a run of digit groups separated by single spaces or hyphens (or one solid group) in
+// cardRuns are the spans of s that hold a card number: a run of digit groups separated by one or two spaces, hyphens, slashes, underscores
+// or dots (or one solid group) in
 // which some window of consecutive groups has 13 to 19 digits that pass the card number check, in any layout (4-4-4-4, 4-6-5, 4-4-4-1,
 // 1-4-4-4-4 and the rest). The whole run is the span, because where the card ends inside a run is not known: the groups next to a valid
 // window may be the rest of the number, and a replacement that stopped at the window could leave the last four digits of a real card in the
@@ -387,7 +390,7 @@ func safeBody(body string, ph *placeholders) (string, error) {
 		dec := json.NewDecoder(strings.NewReader(trimmed))
 		dec.UseNumber()
 		if err := copyJSON(dec, &out, "body", false, ph); err != nil {
-			if errors.Is(err, errKeyLooksSecret) {
+			if errors.Is(err, errKeyLooksSecret) || errors.Is(err, errKeyTooLong) {
 				return "", err
 			}
 			return "", errors.New("the JSON body could not be read, so nothing was saved")
@@ -491,7 +494,11 @@ var (
 	jwtShape          = regexp.MustCompile(`^eyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.`)
 	paddedBase64      = regexp.MustCompile(`^[A-Za-z0-9+/_\-]{14,}={1,2}$`)
 	errKeyLooksSecret = errors.New("an object key in the body looks like a credential, so nothing was saved")
+	errKeyTooLong     = errors.New("an object key in the body is longer than " + strconv.Itoa(maxKeyBytes) + " bytes, too long to check for a credential, so nothing was saved")
 )
+
+// maxKeyBytes is the longest object key a step is saved with: the whole key is read for a credential, never a part of it.
+const maxKeyBytes = 1024
 
 var hexBounded = regexp.MustCompile(`(?:^|[^0-9A-Fa-f])([0-9A-Fa-f]{16,})(?:[^0-9A-Fa-f]|$)`)
 
@@ -500,7 +507,6 @@ var hexBounded = regexp.MustCompile(`(?:^|[^0-9A-Fa-f])([0-9A-Fa-f]{16,})(?:[^0-
 // padded base64, as the whole key, as a word of it, or after any of `= : ; , | /`. What is not refused: hex written in short groups
 // (`9f86d081-884c7d65-...`: a UUID-like id is an ordinary key), unpadded base64 that is not hex, and a credential with no shape.
 func keyHoldsCredential(name string) bool {
-	name = boundText(name)
 	for _, m := range hexBounded.FindAllStringSubmatch(name, -1) {
 		if strings.ContainsAny(m[1], "abcdefABCDEF") { // digits only is an id or a card number, handled as a value
 			return true
@@ -559,6 +565,9 @@ func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph 
 					out.WriteByte(',')
 				}
 				first = false
+				if len(name) > maxKeyBytes {
+					return errKeyTooLong
+				}
 				if keyHoldsCredential(name) {
 					return errKeyLooksSecret // a name that is a hex string, a JWT or padded base64 is a value written as a name
 				}
