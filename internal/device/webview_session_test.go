@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
@@ -1034,4 +1037,95 @@ func TestAMalformedReplyIsAPageErrorNotALostConnection(t *testing.T) {
 	if time.Since(start) > 3*time.Second {
 		t.Fatalf("it took %v", time.Since(start))
 	}
+}
+
+func TestSaneRefusesAZeroViewportAndEachOtherBoundOnItsOwn(t *testing.T) {
+	// each case breaks exactly one rule, so each guard in sane is proven alone
+	cases := []struct {
+		name               string
+		x, y, w, h, vw, vh float64
+		ok                 bool
+	}{
+		{"the base case", 10, 10, 20, 20, 100, 200, true},
+		{"on the viewport edge", 100, 200, 0, 0, 100, 200, true},
+		{"on the origin", 0, 0, 0, 0, 100, 200, true},
+		{"zero viewport width with the point at the origin", 0, 10, 20, 20, 0, 200, false},
+		{"zero viewport height with the point at the origin", 10, 0, 20, 20, 100, 0, false},
+		{"negative viewport width", 10, 10, 20, 20, -1, 200, false},
+		{"viewport width over the bound", 10, 10, 20, 20, maxPixels + 1, 200, false},
+		{"viewport height over the bound", 10, 10, 20, 20, 100, maxPixels + 1, false},
+		{"viewport width at the bound", 10, 10, 20, 20, maxPixels, 200, true},
+		{"negative width", 10, 10, -1, 20, 100, 200, false},
+		{"negative height", 10, 10, 20, -1, 100, 200, false},
+		{"width over the bound", 10, 10, maxPixels + 1, 20, 100, 200, false},
+		{"height over the bound", 10, 10, 20, maxPixels + 1, 100, 200, false},
+		{"negative x", -0.001, 10, 20, 20, 100, 200, false},
+		{"negative y", 10, -0.001, 20, 20, 100, 200, false},
+		{"x just past the viewport", 100.001, 10, 20, 20, 100, 200, false},
+		{"y just past the viewport", 10, 200.001, 20, 20, 100, 200, false},
+		{"x is not a number", math.NaN(), 10, 20, 20, 100, 200, false},
+		{"y is infinite", 10, math.Inf(1), 20, 20, 100, 200, false},
+		{"w is infinite", 10, 10, math.Inf(-1), 20, 100, 200, false},
+		{"viewport height is not a number", 10, 10, 20, 20, 100, math.NaN(), false},
+	}
+	for _, c := range cases {
+		if got := sane(c.x, c.y, c.w, c.h, c.vw, c.vh); got != c.ok {
+			t.Errorf("%s: sane = %v, want %v", c.name, got, c.ok)
+		}
+	}
+}
+
+func TestTheMatchCountBoundIsExact(t *testing.T) {
+	for _, c := range []struct {
+		count int
+		ok    bool
+	}{{0, true}, {1, true}, {maxMatchCount - 1, true}, {maxMatchCount, true}, {maxMatchCount + 1, false}, {-1, false}} {
+		p := newPageFake(t)
+		count := c.count
+		p.lookup = func(string) map[string]any { return map[string]any{"count": count, "visible": false} }
+		s, _, err := sessionFor(t, p, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = s.Find(context.Background(), Text("x"))
+		if (err == nil) != c.ok {
+			t.Errorf("count %d: err = %v, want ok=%v", c.count, err, c.ok)
+		}
+	}
+}
+
+func TestDialTargetMessagesNeverContainThePort(t *testing.T) {
+	// a refused connection: nothing listens on the port
+	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedPort := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	check := func(what string, port int, tgt Target) {
+		_, err := DialTarget(context.Background(), port, tgt)
+		if err == nil {
+			t.Fatalf("%s: no error", what)
+		}
+		if strings.Contains(err.Error(), strconv.Itoa(port)) || strings.Contains(err.Error(), "127.0.0.1") {
+			t.Errorf("%s: the error contains the address: %v", what, err)
+		}
+	}
+	check("connection refused", closedPort, Target{WebSocketDebuggerURL: "ws://127.0.0.1:" + strconv.Itoa(closedPort) + "/devtools/page/1"})
+	// a handshake the page refuses
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "no", http.StatusForbidden) }))
+	l2, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Listener.Close()
+	srv.Listener = l2
+	srv.Start()
+	defer srv.Close()
+	p2 := l2.Addr().(*net.TCPAddr).Port
+	check("handshake refused", p2, Target{WebSocketDebuggerURL: "ws://127.0.0.1:" + strconv.Itoa(p2) + "/devtools/page/1"})
+	// addresses that are refused before any connection is made
+	check("host that is not loopback", p2, Target{WebSocketDebuggerURL: "ws://example.invalid:" + strconv.Itoa(p2) + "/devtools/page/1"})
+	check("other port", p2, Target{WebSocketDebuggerURL: "ws://127.0.0.1:" + strconv.Itoa(p2+1) + "/devtools/page/1"})
+	check("empty address", p2, Target{})
 }
