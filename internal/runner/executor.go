@@ -876,12 +876,14 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			if cmpErr != nil {
 				return fmt.Errorf("compare screenshot %q: %w", a.Name, cmpErr)
 			}
-			if !result.Passed {
-				return fmt.Errorf("visual regression: %q differs by %.2f%% (threshold %.2f%%), diff: %s",
-					a.Name, result.DiffPercent, result.Threshold, result.DiffPath)
-			}
+			// The diff image goes to the artifacts of the test whether the comparison passed or failed, so the reports can show it:
+			// before, a failed comparison named it only in the error text. DiffPath is empty when no file was written.
 			if result.DiffPath != "" {
 				e.artifacts = append(e.artifacts, result.DiffPath)
+			}
+			if !result.Passed {
+				return fmt.Errorf("visual regression: %q differs by %.2f%% (threshold %.2f%%), diff: %s",
+					a.Name, result.DiffPercent, result.Threshold, shownDiff(result.DiffPath))
 			}
 		}
 		return nil
@@ -2084,4 +2086,12 @@ func toSelectorParam(s parser.Selector) probelink.SelectorParam {
 		Anchor:    s.Anchor,
 		Loose:     LooseMatching() && s.Kind != parser.SelectorID,
 	}
+}
+
+// shownDiff is the diff image path for an error message, or a plain "none" when no file was written.
+func shownDiff(path string) string {
+	if path == "" {
+		return "none (no pixel differs)"
+	}
+	return path
 }

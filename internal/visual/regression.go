@@ -18,7 +18,7 @@ import (
 type DiffResult struct {
 	BaselinePath  string
 	ActualPath    string
-	DiffPath      string
+	DiffPath      string // the diff image; empty when no pixel differed, because then no file was written
 	DiffPercent   float64 // 0.0 – 100.0
 	DiffPixels    int
 	TotalPixels   int
@@ -105,11 +105,13 @@ func (c *Comparator) Compare(name string, actualPath string) (*DiffResult, error
 		diffPct = float64(diffPixels) / float64(totalPixels) * 100.0
 	}
 
-	// Write diff image
+	// Write the diff image. DiffPath names it only when it was written: with no differing pixel there is no file.
 	if diffPixels > 0 {
 		if err := savePNG(diffImg, diffPath); err != nil {
 			return nil, fmt.Errorf("visual: save diff: %w", err)
 		}
+	} else {
+		diffPath = ""
 	}
 
 	result := &DiffResult{

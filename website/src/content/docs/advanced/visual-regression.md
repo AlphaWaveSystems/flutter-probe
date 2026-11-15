@@ -51,8 +51,10 @@ compare screenshot "total_price" of "Total"
 compare screenshot "avatar" of #profile_avatar
 ```
 
-Failed comparisons write a diff image to `reports/visual-diff/` showing exactly which pixels
-changed.
+Any comparison in which a pixel differs writes a diff image to `reports/visual-diff/` showing exactly which pixels
+changed (a comparison with no differing pixel writes none). The image is listed with the test's screenshots, so the HTML
+report shows it next to them, for a failed comparison and for one that passed under the threshold; the failure message
+still names its path.
 
 ## Configuration
 
