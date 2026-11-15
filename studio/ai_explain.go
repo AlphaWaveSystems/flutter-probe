@@ -408,9 +408,10 @@ func stoppedText(stopped string, providerFailed bool, total int) string {
 // cleanAdvice makes a model's answer fit for the card, in the order the fields of a failure take: hidden characters are dropped
 // first, so one cannot split a token or the key past the steps after it; then the exact key is removed and the gate runs, because an
 // answer can repeat what it was sent; runs of blank lines are shortened, and the text is cut. The card sets it with textContent, so
-// a tag in it stays text.
+// a tag in it stays text. An answer can repeat what it was sent, or invent it, so personal text is scrubbed from it as it is from the
+// fields that were sent: an email address becomes [email] and the home-directory part of a path becomes ~.
 func cleanAdvice(s, key string) string {
-	s = fromProvider(withoutInvisible(s, true), withoutInvisible(key, false))
+	s = scrubPersonal(fromProvider(withoutInvisible(s, true), withoutInvisible(key, false)))
 	for strings.Contains(s, "\n\n\n") {
 		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
 	}
