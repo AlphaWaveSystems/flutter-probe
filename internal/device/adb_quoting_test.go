@@ -60,15 +60,15 @@ func deviceWords(t *testing.T, args []string) []string {
 }
 
 var hostileWords = []string{
-	"x;touch /tmp/INJECTED",
-	"x&touch /tmp/INJECTED",
-	"x|touch /tmp/INJECTED",
-	"$(touch /tmp/INJECTED)",
-	"`touch /tmp/INJECTED`",
-	"it's;touch /tmp/INJECTED",
-	`q"; touch /tmp/INJECTED; "`,
+	"x;touch INJECTED",
+	"x&touch INJECTED",
+	"x|touch INJECTED",
+	"$(touch INJECTED)",
+	"`touch INJECTED`",
+	"it's;touch INJECTED",
+	`q"; touch INJECTED; "`,
 	"a b",
-	"a\ntouch /tmp/INJECTED",
+	"a\ntouch INJECTED",
 	"*",
 	"-n",
 }
@@ -262,4 +262,23 @@ func TestShortTypedTextDoesNotMaskUnrelatedWords(t *testing.T) {
 	if strings.Contains(err.Error(), "'e'") {
 		t.Errorf("the quoted form of the typed text is in the error: %s", err)
 	}
+}
+
+func TestLaunchAppQuotesTheActivityWord(t *testing.T) {
+	const app = "a b;c'd"
+	a, calls := standInADB(t, "", "", 0)
+	if err := a.LaunchApp(context.Background(), "emulator-5554", app); err != nil {
+		t.Fatal(err)
+	}
+	var start []string
+	for _, c := range calls() {
+		if len(c) > 4 && c[2] == "shell" && c[3] == "am" {
+			start = c
+		}
+	}
+	if start == nil {
+		t.Fatalf("no am start call in %q", calls())
+	}
+	// the stand-in reports no launcher activity, so the fallback <app id>/.MainActivity is used
+	assertWords(t, "am start", deviceWords(t, start), []string{"am", "start", "-n", app + "/.MainActivity"})
 }

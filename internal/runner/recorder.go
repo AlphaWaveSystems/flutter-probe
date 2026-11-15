@@ -3,7 +3,6 @@ package runner
 import (
 	"context"
 	"fmt"
-	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 // VideoRecorder captures device screen recordings at the OS level.

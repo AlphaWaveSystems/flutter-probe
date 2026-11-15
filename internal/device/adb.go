@@ -383,6 +383,12 @@ func (a *ADB) InputText(ctx context.Context, serial, text string) error {
 // "d<typed text>vic<typed text>"). Its quoted form, which contains the quotes, is always masked.
 const minMaskedTextLen = 4
 
+// MaskTypedText returns err with the typed text removed in every form a failed `input text` call can show it (the quoted word as this package sends it, its escaped-quote form, the %s form, and the text as typed).
+// A caller that types text by another route through the same command (the system-dialog driver) uses it for its own errors.
+func MaskTypedText(err error, text string) error {
+	return maskTypedText(err, text, shellquote.Quote(strings.ReplaceAll(text, " ", "%s")))
+}
+
 // maskTypedText returns err with the typed text, in every form it appears in the failed command line or in what a device echoes back, replaced by a marker: the quoted word as sent, the text with %s for spaces and its
 // quotes escaped for the shell (what a shell shows when it echoes the word without the outer quotes), the text with %s for spaces, and the text as typed. The error of a failed adb call quotes the whole command line,
 // and the typed text can be a password.

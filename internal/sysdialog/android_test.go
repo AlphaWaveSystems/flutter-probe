@@ -3,6 +3,8 @@ package sysdialog
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"image"
 	"strings"
 	"testing"
@@ -64,7 +66,7 @@ func (f *fakeADB) Shell(_ context.Context, _ string, args ...string) ([]byte, er
 	return nil, nil
 }
 
-func newTestDriver(f *fakeADB) *AndroidDriver {
+func newTestDriver(f ADB) *AndroidDriver {
 	d := NewAndroid(f, "emulator-5554")
 	d.settle = time.Millisecond
 	return d
@@ -216,7 +218,6 @@ func TestAndroidDumpErrorPropagates(t *testing.T) {
 	}
 }
 
-
 func TestParseBoundsAndCenter(t *testing.T) {
 	r, err := parseBounds("[10,20][30,60]")
 	if err != nil || r != image.Rect(10, 20, 30, 60) {
@@ -224,5 +225,34 @@ func TestParseBoundsAndCenter(t *testing.T) {
 	}
 	if x, y := center(r); x != 20 || y != 40 {
 		t.Errorf("center = %d,%d", x, y)
+	}
+}
+
+// failingTypeADB fails the `input text` command the way a failed adb call does: the error carries the whole command line, and the device also echoes the word without its outer quotes.
+type failingTypeADB struct{ *fakeADB }
+
+func (f failingTypeADB) Shell(ctx context.Context, serial string, args ...string) ([]byte, error) {
+	f.fakeADB.shell = append(f.fakeADB.shell, args)
+	word := args[len(args)-1]
+	inner := strings.TrimSuffix(strings.TrimPrefix(word, "'"), "'")
+	return nil, fmt.Errorf("adb -s %s shell %s: device said %s", serial, strings.Join(args, " "), inner)
+}
+
+func TestAndroidType_FailureErrorCarriesTheSecretInNoForm(t *testing.T) {
+	for _, secret := range []string{"my pass word", "it's;secret", "Sup3r'S3cret'", "plain-secret-9", `p@ss w&rd';$(id)`} {
+		f := failingTypeADB{&fakeADB{dump: signInDump}}
+		err := newTestDriver(f).Type(context.Background(), "Password", secret, "")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		inner := strings.ReplaceAll(secret, " ", "%s")
+		for _, form := range []string{secret, inner, strings.ReplaceAll(inner, "'", `'\''`), shellquote.Quote(inner)} {
+			if strings.Contains(err.Error(), form) {
+				t.Errorf("secret %q: the error carries the form %q: %s", secret, form, err)
+			}
+		}
+		if !strings.Contains(err.Error(), "device said") {
+			t.Errorf("the error lost the device's own words: %s", err)
+		}
 	}
 }

@@ -10,11 +10,12 @@ package devsettings
 import (
 	"context"
 	"fmt"
-	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 type Platform string

@@ -113,12 +113,14 @@ func TestAppIDReachesTheDeviceShellAsOneWordInEveryLifecycleCommand(t *testing.T
 		assertDeviceWords(t, "force-stop", findCall(t, calls(), "am", "force-stop"), "am", "force-stop", hostileApp)
 		// the launch asks the device for the launcher activity of the same app id
 		assertDeviceWords(t, "resolve", findCall(t, calls(), "cmd", "package", "resolve-activity"), "cmd", "package", "resolve-activity", "--brief", hostileApp)
+		assertDeviceWords(t, "am start", findCall(t, calls(), "am", "start", "-n"), "am", "start", "-n", hostileApp+"/.MainActivity")
 	})
 	t.Run("clear data", func(t *testing.T) {
 		dc, calls := recordingDevice(t, "")
 		_ = dc.ClearAppData(ctx)
 		assertDeviceWords(t, "pm clear", findCall(t, calls(), "pm", "clear"), "pm", "clear", hostileApp)
 		assertDeviceWords(t, "resolve", findCall(t, calls(), "cmd", "package", "resolve-activity"), "cmd", "package", "resolve-activity", "--brief", hostileApp)
+		assertDeviceWords(t, "am start", findCall(t, calls(), "am", "start", "-n"), "am", "start", "-n", hostileApp+"/.MainActivity")
 	})
 	t.Run("kill", func(t *testing.T) {
 		dc, calls := recordingDevice(t, "")
@@ -129,6 +131,7 @@ func TestAppIDReachesTheDeviceShellAsOneWordInEveryLifecycleCommand(t *testing.T
 		dc, calls := recordingDevice(t, "")
 		_ = dc.LaunchApp(ctx)
 		assertDeviceWords(t, "resolve", findCall(t, calls(), "cmd", "package", "resolve-activity"), "cmd", "package", "resolve-activity", "--brief", hostileApp)
+		assertDeviceWords(t, "am start", findCall(t, calls(), "am", "start", "-n"), "am", "start", "-n", hostileApp+"/.MainActivity")
 	})
 	t.Run("reconnect deletes the stale token with run-as", func(t *testing.T) {
 		dc, calls := recordingDevice(t, "")
