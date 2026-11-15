@@ -111,8 +111,8 @@ func FuzzSaveStep(f *testing.F) {
 		{"POST", "https://api.example.test/x", `{"email":"<random.email>"}`},
 		{"POST", "https://api.example.test/x", "<response.body> and <clipboard> and <name>"},
 		{"POST", "https://api.example.test/x", "$5 and ${1} and < a > and %24%7BHOME%7D"},
-		{"POST", "https://api.example.test/x", "a­b  ‮"},
-		{"POST", "https://api.example.test/x", "line\r\nbreak and\u0085more"},
+		{"POST", "https://api.example.test/x", "a\u00adb \ue000 \u202e"},
+		{"POST", "https://api.example.test/x", "line\r\nbreak\u2028and\u0085more"},
 		{"POST", "https://api.example.test/x", "a\x00b\x07"},
 		{"PATCH", "https://api.example.test/x", "{}"},
 		{"GET", "https://user:pass@api.example.test/x", ""},
@@ -149,7 +149,7 @@ func FuzzSaveStep(f *testing.F) {
 		}
 		line := step.Lines[len(step.Lines)-1]
 		for _, l := range step.Lines {
-			if strings.ContainsAny(l, "\n\r  \u0085") {
+			if strings.ContainsAny(l, "\n\r\u2028\u2029\u0085") {
 				t.Fatalf("a saved line is not a single line: %q", l)
 			}
 		}
