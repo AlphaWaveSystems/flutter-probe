@@ -66,7 +66,7 @@ func TestHostileNamesBecomeInertLabels(t *testing.T) {
 		t.Errorf("a name of nothing: %q", d.Name)
 	}
 	// Ordinary names, including ones with spaces, apostrophes and non-ASCII letters, are kept as they are.
-	for _, n := range []string{"Pixel 8", "Patrick's iPhone", "Büro-Tablet", "電話", "Galaxy S24 Ultra (work)"} {
+	for _, n := range []string{"Pixel 8", "Sam's phone", "Büro-Tablet", "電話", "Galaxy S24 Ultra (work)"} {
 		if d := entryToDevice(announce(n, 48686, []string{"10.0.0.7"}, nil)); d.Name != n {
 			t.Errorf("%q became %q", n, d.Name)
 		}
@@ -99,6 +99,29 @@ func TestHostileVersionsAndText(t *testing.T) {
 	if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, "version=1.0", "version=2.0")); d.Version != "1.0" {
 		t.Errorf("the first version wins: %q", d.Version)
 	}
+	// The key is matched without case (RFC 6763: keys are case-insensitive), and the first one counts whatever its case.
+	for _, k := range []string{"Version", "VERSION", "vErSiOn"} {
+		if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, k+"=1.2.3")); d.Version != "1.2.3" {
+			t.Errorf("key %q: version %q", k, d.Version)
+		}
+	}
+	if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, "VERSION=1.0", "version=2.0")); d.Version != "1.0" {
+		t.Errorf("the first version wins whatever its case: %q", d.Version)
+	}
+	// Exactly wifiMaxTXT records are read: the version in record 32 is used, the one in record 33 is not.
+	for _, c := range []struct {
+		at   int
+		want string
+	}{{wifiMaxTXT, "7.7.7"}, {wifiMaxTXT + 1, ""}} {
+		recs := make([]string, 0, c.at)
+		for i := 1; i < c.at; i++ {
+			recs = append(recs, fmt.Sprintf("k%d=v", i))
+		}
+		recs = append(recs, "version=7.7.7")
+		if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, recs...)); d.Version != c.want {
+			t.Errorf("the version in record %d: %q, want %q", c.at, d.Version, c.want)
+		}
+	}
 	// 10,000 text records, the version in the last one: not read.
 	flood := make([]string, 0, 10001)
 	for i := 0; i < 10000; i++ {
@@ -129,6 +152,19 @@ func TestHostilePortsAndAddresses(t *testing.T) {
 	for name, ip := range map[string]string{"unspecified": "0.0.0.0", "multicast": "224.0.0.251", "broadcast": "255.255.255.255", "loopback": "127.0.0.1"} {
 		if d := entryToDevice(announce("x", 48686, []string{ip}, nil)); d.Host != "" {
 			t.Errorf("%s: host %q", name, d.Host)
+		}
+	}
+	// An IPv4 address written as IPv4-mapped IPv6 in the IPv4 list is the IPv4 address; one in the IPv6 list only is no device (IPv6 is not
+	// dialed), and a mapped loopback or unspecified address is still not a place.
+	if d := entryToDevice(announce("x", 48686, []string{"::ffff:10.0.0.7"}, nil)); d.Host != "10.0.0.7" {
+		t.Errorf("a mapped address in the IPv4 list: %q", d.Host)
+	}
+	if d := entryToDevice(announce("x", 48686, nil, []string{"::ffff:10.0.0.7"})); d.Host != "" {
+		t.Errorf("a mapped address in the IPv6 list only: %q", d.Host)
+	}
+	for _, ip := range []string{"::ffff:127.0.0.1", "::ffff:0.0.0.0", "::ffff:224.0.0.251"} {
+		if d := entryToDevice(announce("x", 48686, []string{ip}, nil)); d.Host != "" {
+			t.Errorf("%s: host %q", ip, d.Host)
 		}
 	}
 	// The first address that is a place is used, not just the first one announced.

@@ -119,7 +119,8 @@ func (d *wifiDiscovery) Stop() {
 //
 //   - the name has no control, invisible or direction-changing character, is at most wifiMaxName characters, and is the address when
 //     nothing is left of it;
-//   - the version is one short word of letters, digits and . + _ -, the first `version` TXT value (RFC 6763), read from the first
+//   - the version is one short word of letters, digits and . + _ -, the first `version` TXT value (RFC 6763; the key is matched
+//     without case), read from the first
 //     wifiMaxTXT records of at most wifiMaxTXTLen bytes each, or nothing;
 //   - the host is the first IPv4 address that is a place on the network (not 0.0.0.0, multicast, broadcast or loopback), and an
 //     announcement with no such address or with a port outside 1 to 65535 has no host, so it is not listed.
@@ -148,7 +149,7 @@ func entryToDevice(e *zeroconf.ServiceEntry) WiFiDevice {
 		}
 		// TXT records arrive as "key=value" strings.
 		k, v, ok := strings.Cut(txt, "=")
-		if ok && k == "version" {
+		if ok && strings.EqualFold(k, "version") { // RFC 6763: keys are not case-sensitive
 			if wifiVersion.MatchString(v) {
 				dev.Version = v
 			}
