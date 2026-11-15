@@ -196,6 +196,12 @@ fi'
   step frontend studio/frontend 'npm run typecheck:device-view'
   step frontend studio/frontend 'npm run test:device-view'
   step frontend studio/frontend 'npm run test:probescript'
+  step frontend studio/frontend 'npm run test:run-scope'
+  step frontend studio/frontend 'npm run test:chat-label'
+  step frontend studio/frontend 'npm run test:explain'
+  step frontend studio/frontend 'npm run test:network'
+  step frontend studio/frontend 'npm run test:send'
+  step frontend studio/frontend 'npm run test:triage'
   step frontend studio/frontend 'npm run check:probescript'
 
   job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.10" "studio-ci.yml:studio-go"
