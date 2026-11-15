@@ -341,5 +341,138 @@ func TestHeaderListsAreNeverNil(t *testing.T) {
 	empty := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e"}})
 	if l, _ := empty.HTTPExchanges(NetFilter{}); l.Rows == nil {
 		t.Error("rows of an empty log are nil")
+// Ordinary text with many colons and equals signs stays visible, and a pathological chain is hidden whole, cheaply. The threshold is
+// pinned on both sides.
+func TestOrdinaryChainsStayVisibleAndPathologicalOnesAreHidden(t *testing.T) {
+	ordinary := []string{
+		"2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+		"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
+		strings.Repeat("host=example|", 100),
+		strings.Repeat("/a=1", 100),
+		strings.Repeat("alpha:beta,", 100),
+		strings.Repeat("a:", netMaxNestedSeparators-2),
+		"aa:bb:cc:dd:ee:ff",
+	}
+	for _, v := range ordinary {
+		for where, got := range map[string]string{
+			"a header value": func() string { hs, _ := redactHeaders(map[string]string{"X-Value": v}); return hs[0].Value }(),
+			"a JSON value":   redactBody(`{"v":`+jsonString(v)+`}`, 0, "application/json").Text,
+			"an error text":  redactErrorText(v, 5000),
+			"a text body":    redactBody(v, 0, "text/plain").Text,
+		} {
+			if got == redactedMark || strings.Contains(got, "[redacted]") {
+				t.Errorf("%.40q was hidden in %s: %q", v, where, got)
+			}
+		}
+		if got := redactNamedAssignments(v, nil); got == redactedMark {
+			t.Errorf("%.40q was hidden whole", v)
+		}
+	}
+	// A chain with more separators than the limit is hidden whole, and a credential inside a short chain is found.
+	over := strings.Repeat("a:", netMaxNestedSeparators/2+1) + strings.Repeat("b=", netMaxNestedSeparators/2+1) + "end"
+	if got := redactNamedAssignments(over, nil); got != redactedMark {
+		t.Errorf("a chain over the limit: %.60q", got)
+	}
+	atLimit := "x:" + strings.Repeat("a:", netMaxNestedSeparators-1) + "end"
+	if got := redactNamedAssignments(atLimit, nil); got == redactedMark {
+		t.Error("a chain at the limit was hidden")
+	}
+	if got := redactNamedAssignments("svc: a:b:c:password=hunter2-Xk9pq tail", nil); strings.Contains(got, "hunter2") || !strings.Contains(got, "tail") {
+		t.Errorf("a credential in a chain: %q", got)
+	}
+	// Cheap however long: an attack with a hundred thousand separators is hidden in well under a second.
+	start := time.Now()
+	if got := redactNamedAssignments(strings.Repeat("a:b=", 25000)+"password=hunter2-Xk9pq", nil); got != redactedMark {
+		t.Error("a pathological chain was not hidden")
+	}
+	if time.Since(start) > time.Second {
+		t.Errorf("took %v", time.Since(start))
+	}
+}
+
+// A name too long to be one is a secret: its value is never shown, in every place a name is read.
+func TestAnOverLongNameIsASecret(t *testing.T) {
+	long := strings.Repeat("x", netRawHeaderName+1)
+	family := "password" + strings.Repeat("a", 250) // over 256 characters, and a family word in the middle of the cut
+	for _, name := range []string{long, family, strings.Repeat("é", netRawHeaderName+1), strings.Repeat("x", 4*netRawHeaderName+1)} {
+		if !isSecretName(name) {
+			t.Errorf("a name of %d characters is not a secret", len([]rune(name)))
+		}
+		hs, _ := redactHeaders(map[string]string{name: netPlain})
+		if hs[0].Value != redactedMark {
+			t.Errorf("header of %d characters: %q", len([]rune(name)), hs[0].Value)
+		}
+		for where, got := range map[string]string{
+			"a JSON key":    redactBody(`{"`+name+`":"`+netPlain+`"}`, 0, "application/json").Text,
+			"a form name":   redactBody(name+"="+netPlain+"&a=1", 0, "application/x-www-form-urlencoded").Text,
+			"a text line":   redactBody(name+": "+netPlain, 0, "text/plain").Text,
+			"an error text": redactErrorText(name+"="+netPlain, 1000),
+			"a header value": func() string {
+				h, _ := redactHeaders(map[string]string{"X-V": name + "=" + netPlain})
+				return h[0].Value
+			}(),
+			"an XML element": redactBody("<"+name+">"+netPlain+"</"+name+">", 0, "text/xml").Text,
+		} {
+			if strings.Contains(got, netPlain) {
+				t.Errorf("%d characters in %s: %q", len([]rune(name)), where, got)
+			}
+		}
+	}
+	// A name at the limit is read as it is.
+	if isSecretName(strings.Repeat("x", netRawHeaderName)) {
+		t.Error("a name at the limit was treated as a secret")
+	}
+}
+
+// Two keys that are 32-digit hex numbers, which a token rule would replace in the text, stay two members.
+func TestHexKeysDoNotMerge(t *testing.T) {
+	k1, k2 := strings.Repeat("a", 32)+"01", strings.Repeat("b", 32)+"02"
+	b := redactBody(`{"`+k1+`":"first-value","`+k2+`":"second-value","c3":"third"}`, 0, "application/json").Text
+	for _, v := range []string{"first-value", "second-value", "third"} {
+		if !strings.Contains(b, v) {
+			t.Errorf("%q was lost: %s", v, b)
+		}
+	}
+	if strings.Contains(b, k1) || strings.Contains(b, k2) {
+		t.Errorf("a hex key is shown: %s", b)
+	}
+	// Also nested, in an array, and with a secret key next to them.
+	n := redactBody(`[{"x":{"`+k1+`":1,"`+k2+`":2,"password":"`+netPlain+`"}}]`, 0, "application/json").Text
+	if !strings.Contains(n, `: 1`) || !strings.Contains(n, `: 2`) || strings.Contains(n, netPlain) {
+		t.Errorf("nested: %s", n)
+	}
+}
+
+// A listing costs what its newest 500 rows cost, not what the whole log costs: the cut is made before any row is redacted.
+func TestListingCutsBeforeItRedacts(t *testing.T) {
+	big := strings.Repeat("ab=cd; ", 2400) // about 16 KB
+	var entries []probelink.HTTPEntry
+	for i := 1; i <= 4000; i++ {
+		entries = append(entries, probelink.HTTPEntry{Seq: i, Method: "GET", URL: "https://h.example.test/p?" + big, Error: big, Status: 200})
+	}
+	a := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e", Latest: 4000, Entries: entries}})
+	start := time.Now()
+	l, err := a.HTTPExchanges(NetFilter{})
+	took := time.Since(start)
+	if err != nil || l.Total != 4000 || l.Shown != netMaxRows || l.Rows[0].Seq != 3501 || l.Rows[netMaxRows-1].Seq != 4000 {
+		t.Fatalf("total %d shown %d: %v", l.Total, l.Shown, err)
+	}
+	t.Logf("a listing of 4,000 entries of 16 KB: %v", took)
+	if !raceEnabled && took > 3*time.Second {
+		t.Errorf("the listing took %v: the log is redacted before the cut", took)
+	}
+	// With a filter the newest rows are read first and the scan has a limit.
+	var many []probelink.HTTPEntry
+	for i := 1; i <= netMaxScan+1000; i++ {
+		many = append(many, probelink.HTTPEntry{Seq: i, Method: "GET", URL: fmt.Sprintf("https://h.example.test/p%d", i), Status: 200})
+	}
+	f := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e", Entries: many}})
+	l, _ = f.HTTPExchanges(NetFilter{Text: "p"})
+	if l.Total != netMaxScan || l.Shown != netMaxRows || l.Rows[netMaxRows-1].Seq != netMaxScan+1000 {
+		t.Errorf("filtered: total %d shown %d last %d", l.Total, l.Shown, l.Rows[len(l.Rows)-1].Seq)
+	}
+	l, _ = f.HTTPExchanges(NetFilter{Text: "p9999"}) // older than the newest 5,000: not looked at
+	if l.Shown != 0 || l.Rows == nil {
+		t.Errorf("an entry beyond the scan limit matched: %+v", l)
 	}
 }
