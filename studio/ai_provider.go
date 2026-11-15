@@ -220,7 +220,7 @@ func checkLocalEndpoint(endpoint string, allowRemote bool) error {
 func init() {
 	// internal/ai cuts the text of a provider error. Install the gate there, so it runs before the cut and a token that straddles
 	// the cut leaves no start of itself on the OpenAI-compatible and local paths, as it does not on the Anthropic path.
-	ai.SetErrorTextFilter(redactCredentials)
+	ai.SetErrorTextFilter(func(s string) string { return cleanErrorText(s, "") })
 }
 
 // outbound is the one gate for text Studio sends to a provider. Every system prompt and every chat turn passes through it,
@@ -232,7 +232,8 @@ func outbound(s string) string {
 // modelID cleans and bounds a model id from a server's listing: the exact key is removed, the gate runs, and then the id is
 // cut to 200 bytes, in that order, so a key that straddles the cut leaves nothing behind.
 func modelID(id, key string) string {
-	return errorBody([]byte(fromProvider(id, key)))
+	// Hidden characters are kept here: the chat label shows each one as a ? so a spoofed id is visible, which dropping would hide.
+	return errorBody([]byte(scrubPersonalText(fromProvider(boundBeforeGate(id), key))))
 }
 
 // fromProvider cleans text a provider returned before Studio shows it: the exact key sent in the request is removed, and the
@@ -396,6 +397,7 @@ func completeChat(s aiProviderSettings, system string, msgs []claudeMessage) (Ch
 		resp.Notice = strings.TrimSpace(resp.Notice + fmt.Sprintf("\nOnly the newest %d messages of this conversation were sent; the %d oldest were not.", len(gated), omitted))
 	}
 	if resp.Content != raw {
+		resp.Changed = true
 		// Text was removed or replaced: an address or a path in a suggestion may not be what the model meant.
 		resp.Notice = strings.TrimSpace(resp.Notice + "\nPersonal text or a credential was removed from this reply, so a line in it may not say what the model meant.")
 	}

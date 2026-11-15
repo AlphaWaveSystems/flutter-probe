@@ -141,6 +141,7 @@ export namespace main {
 	    outputTokens: number;
 	    costUSD: number;
 	    notice?: string;
+	    changed?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatResponse(source);
@@ -153,6 +154,7 @@ export namespace main {
 	        this.outputTokens = source["outputTokens"];
 	        this.costUSD = source["costUSD"];
 	        this.notice = source["notice"];
+	        this.changed = source["changed"];
 	    }
 	}
 	export class ConnectionStatus {
@@ -815,6 +817,7 @@ export namespace main {
 	    costUSD: number;
 	    destination: string;
 	    hosted: boolean;
+	    changed: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SelectorFix(source);
@@ -829,6 +832,7 @@ export namespace main {
 	        this.costUSD = source["costUSD"];
 	        this.destination = source["destination"];
 	        this.hosted = source["hosted"];
+	        this.changed = source["changed"];
 	    }
 	}
 	export class SelectorFixPreview {

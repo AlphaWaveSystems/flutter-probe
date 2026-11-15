@@ -271,9 +271,11 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 	if !ok {
 		return SelectorFix{}, fmt.Errorf("the reply did not hold exactly one ProbeScript line, so there is no suggestion")
 	}
+	cleanLine, cleanWhy := fixAnswer(line, s.APIKey, fixMaxLine), fixAnswer(rationale, s.APIKey, maxRationaleBytes)
 	return SelectorFix{
-		Suggestion:   fixAnswer(line, s.APIKey, fixMaxLine),
-		Rationale:    fixAnswer(rationale, s.APIKey, maxRationaleBytes),
+		Suggestion:   cleanLine,
+		Rationale:    cleanWhy,
+		Changed:      resp.Changed || fixChanged(line, cleanLine),
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
 		CostUSD:      resp.CostUSD,
@@ -286,6 +288,12 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 // personal text is scrubbed (an email address becomes [email], the home-directory part of a path becomes ~, as in what was sent), and the
 // text is cut. A suggestion is one line, so a line break in it is a space.
 func fixAnswer(s, key string, max int) string {
-	s = scrubPersonal(fromProvider(withoutInvisible(s, false), withoutInvisible(key, false)))
+	s = cleanProviderText(s, key, false)
 	return strings.TrimSpace(capRunes(s, max))
+}
+
+// fixChanged says whether cleaning changed what the model wrote (an address, a home folder, a credential or the key was replaced), not
+// counting trimming or hidden characters: such a suggestion may not say what the model meant (`type "[email]" into "Email"`).
+func fixChanged(raw, cleaned string) bool {
+	return cleaned != strings.TrimSpace(withoutInvisible(raw, false))
 }

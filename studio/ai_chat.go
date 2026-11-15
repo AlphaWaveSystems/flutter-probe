@@ -50,6 +50,8 @@ type ChatResponse struct {
 	CostUSD      float64 `json:"costUSD"`
 	// Notice is a line to show with the reply, such as a plain key that Studio did not use. It is empty otherwise.
 	Notice string `json:"notice,omitempty"`
+	// Changed is set when cleaning removed or replaced text in the reply (an address, a path, a credential, the key).
+	Changed bool `json:"changed,omitempty"`
 }
 
 // claudeMessage is one turn of a request to the Messages API.
@@ -218,7 +220,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 		return ChatResponse{}, fmt.Errorf("rate limited — try again shortly")
 	}
 	if resp.StatusCode != 200 {
-		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, errorBody([]byte(redactCredentials(string(body)))))
+		return ChatResponse{}, fmt.Errorf("API error %d: %s", resp.StatusCode, errorBody([]byte(cleanErrorText(string(body), apiKey))))
 	}
 
 	var apiResp struct {
@@ -238,7 +240,7 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 		return ChatResponse{}, fmt.Errorf("parse response: %w", err)
 	}
 	if apiResp.Error != nil {
-		return ChatResponse{}, fmt.Errorf("API error: %s", errorBody([]byte(redactCredentials(apiResp.Error.Message))))
+		return ChatResponse{}, fmt.Errorf("API error: %s", errorBody([]byte(cleanErrorText(apiResp.Error.Message, apiKey))))
 	}
 
 	text := ""
@@ -270,6 +272,8 @@ type SelectorFix struct {
 	CostUSD      float64 `json:"costUSD"`
 	Destination  string  `json:"destination"` // the provider and model that answered, never an endpoint
 	Hosted       bool    `json:"hosted"`
+	// Changed is set when personal text or a credential was removed from the suggestion: it may not say what the model meant.
+	Changed bool `json:"changed"`
 }
 
 const selectorFixPrompt = `You repair ProbeScript selectors. A step of a test failed because its selector does not match what is on the screen.

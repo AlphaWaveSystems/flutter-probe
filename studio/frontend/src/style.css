@@ -509,6 +509,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .explain-row { margin: 6px 0; }
 .explain-row-label { font-weight: 600; overflow-wrap: anywhere; }
 .explain-row-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.explain-row-changed { border-left: 3px solid var(--warn, #d9a400); padding-left: 8px; }
+.explain-row-changed .explain-row-label { color: var(--warn, #d9a400); }
 .explain-row-stopped .explain-row-text, .explain-row-omitted .explain-row-text { color: var(--fg-muted); }
 /* Below the width at which the layout grid overflows the window (its columns and the toolbar need about 1150 px), the Results pane is
    narrower than the window and partly off screen. The card then leaves the pane and sits on the window itself, inside its edges, so

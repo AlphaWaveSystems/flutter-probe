@@ -119,5 +119,6 @@ func parseSelectorFix(reply string) (line, rationale string, ok bool) {
 	if len(lines) != 1 {
 		return "", "", false
 	}
-	return lines[0], clipContext(rest, maxRationaleBytes), true
+	// The rationale is not cut here: it is scrubbed first and cut last (fixAnswer), so a cut cannot leave half of an address.
+	return lines[0], boundBeforeGate(rest), true
 }

@@ -20,6 +20,7 @@ export interface FixAnswer {
   rationale: string;
   destination: string;
   hosted: boolean;
+  changed?: boolean; // Studio removed personal text or a credential from the suggestion
 }
 
 export type FixOutcome = { kind: "cancelled" } | { kind: "stale" } | { kind: "answer"; answer: FixAnswer; step: string };
@@ -84,7 +85,7 @@ export class FixSession {
 export const FIX_DISCLAIMER =
   "Proposed by a language model from the texts and keys that were on screen when the step failed. Not applied to the test file and not verified against the app. It does not change this result.";
 
-export type FixRow = { kind: "step" | "line" | "why"; label: string; text: string };
+export type FixRow = { kind: "step" | "line" | "why" | "changed"; label: string; text: string };
 
 export interface FixCardModel {
   title: string;
@@ -100,6 +101,10 @@ export function fixCardModel(answer: FixAnswer, step: string): FixCardModel {
     { kind: "step", label: "Failed step", text: step },
     { kind: "line", label: "Suggested line", text: answer.suggestion },
   ];
+  // A suggestion that cleaning changed (`type "[email]" into "Email"`) may not say what the model meant: say so, above the line.
+  if (answer.changed) {
+    rows.splice(1, 0, { kind: "changed", label: "Changed", text: "personal text or a credential was removed from this suggestion or its reason, so it may not say what the model meant. Check it before you run it." });
+  }
   if (answer.rationale) rows.push({ kind: "why", label: "Why", text: answer.rationale });
   return { title: "Suggested fix", destination: answer.destination, place: answer.hosted ? "hosted" : "local", disclaimer: FIX_DISCLAIMER, rows };
 }
