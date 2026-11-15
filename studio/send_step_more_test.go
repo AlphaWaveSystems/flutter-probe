@@ -618,3 +618,29 @@ func TestSaveStepCardSeparators(t *testing.T) {
 		}
 	}
 }
+
+// A card split by real slashes in the path is found: the segments are read as one text.
+func TestSaveStepCardSplitAcrossPathSegments(t *testing.T) {
+	for _, u := range []string{
+		"https://x.example.test/a/4111/1111/1111/1111/b",
+		"https://x.example.test/a/44%2060826/9770/7646/b",
+		"https://x.example.test/4111/1111/1111/1111",
+		"https://x.example.test/a/4111111111111111",
+		"https://x.example.test/a/4111-1111-1111-1111/b",
+	} {
+		s, err := buildCallStep(SaveStepInput{Method: "GET", URL: u})
+		if err != nil {
+			continue
+		}
+		if got := stepOf(t, s).URL; strings.Contains(digitsOf(got), "4111") || strings.Contains(digitsOf(got), "9770") {
+			t.Errorf("%q: the card is in %q", u, got)
+		}
+	}
+	// Paths that are not a card are kept.
+	for _, u := range []string{"https://x.example.test/v1/users/42/orders/7", "https://x.example.test/2026/11/15/post", "https://x.example.test/a/4111/1111/b"} {
+		s, err := buildCallStep(SaveStepInput{Method: "GET", URL: u})
+		if err != nil || stepOf(t, s).URL != u {
+			t.Errorf("%q: %v %+v", u, err, s.Lines)
+		}
+	}
+}
