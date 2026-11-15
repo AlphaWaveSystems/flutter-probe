@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Taint: a variable whose value came from a page (a WebView, once the read step exists) must not steer the runner. One mechanism carries it
@@ -108,4 +109,36 @@ func taintedError(step string, names []string) error {
 	list := "<" + strings.Join(names, ">, <") + ">"
 	return fmt.Errorf("%s: %s holds text read from a page, so it cannot be used to choose a link, a file, a command or an address; "+
 		"a value read from a page can be typed, looked for (see, wait until) and used in selectors", step, list)
+}
+
+// clipboardTaint says whether the text the script last copied held a tainted value. The clipboard belongs to the device, not to a test, and every test
+// attempt gets a new Executor, so the flag lives where the device's state lives: on the DeviceContext of the run (cloud runs, which have none, share one
+// per Runner). A copy of clean text clears it; a paste hands it on (see taint design, "propagates"). A clipboard that the app or the page writes
+// itself (a "copy link" button) is not seen by the script's copy and is clean by design.
+type clipboardTaint struct {
+	mu         sync.Mutex
+	holdsTaint bool
+}
+
+func (c *clipboardTaint) set(v bool) {
+	c.mu.Lock()
+	c.holdsTaint = v
+	c.mu.Unlock()
+}
+
+func (c *clipboardTaint) get() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.holdsTaint
+}
+
+// clipboard is the clipboard flag this executor uses: the device's when there is a device context, else the one its Runner gave it.
+func (e *Executor) clipboard() *clipboardTaint {
+	if e.deviceCtx != nil {
+		return &e.deviceCtx.clip
+	}
+	if e.clip == nil {
+		e.clip = &clipboardTaint{}
+	}
+	return e.clip
 }

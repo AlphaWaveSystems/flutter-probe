@@ -120,54 +120,153 @@ func callsIn(n ast.Node) map[string]int {
 	return calls
 }
 
-var plainResolvers = []string{"resolve", "resolveVars", "resolveSelector", "expandEnv", "expandVars", "expandT"}
+// plainResolvers are the names a sink or literal-only handler must not reach, by any reference: a call, a method value (`f := e.resolve`), or a bare name.
+var plainResolvers = []string{"resolve", "resolveT", "resolveVars", "resolveSelector", "expandEnv", "expandVars", "expandT", "finishResolve"}
 
 // allowedInSink lists the plain resolvers a sink handler may also call, with the reason: `compare screenshot ... of <selector>` resolves the selector it
 // crops to, which is matched on the screen (the name of the screenshot, the sink part, goes through shotName and forSink).
 var allowedInSink = map[string]string{"VerbCompareShot": "resolveSelector"}
 
-// handlerCalls returns the plain resolvers a handler reaches: it follows calls to functions and methods of this package by name (a small call graph, not
-// type-checked, so a name shared by two types is followed for both) and stops at the guard. A call to a resolver is reported with the path to it.
-func handlerCalls(files map[string]*ast.File, root ast.Node, stopAt map[string]bool) (resolvers []string, usesGuard bool) {
-	decls := map[string]*ast.FuncDecl{}
+// declsByName lists every function and method declared in the package files, by name (a name can belong to several types: all of them are followed).
+func declsByName(files map[string]*ast.File) map[string][]*ast.FuncDecl {
+	out := map[string][]*ast.FuncDecl{}
 	for _, f := range files {
 		for _, d := range f.Decls {
 			if fd, ok := d.(*ast.FuncDecl); ok {
-				decls[fd.Name.Name] = fd
+				out[fd.Name.Name] = append(out[fd.Name.Name], fd)
 			}
 		}
 	}
+	return out
+}
+
+// qualified is "Type.name" for a method and "name" for a function.
+func qualified(fd *ast.FuncDecl) string {
+	if fd.Recv == nil || len(fd.Recv.List) == 0 {
+		return fd.Name.Name
+	}
+	switch r := fd.Recv.List[0].Type.(type) {
+	case *ast.Ident:
+		return r.Name + "." + fd.Name.Name
+	case *ast.StarExpr:
+		if id, ok := r.X.(*ast.Ident); ok {
+			return id.Name + "." + fd.Name.Name
+		}
+	}
+	return fd.Name.Name
+}
+
+// varsReadAllowed are the helpers that may read the variable map: shotName only asks whether the script defined a variable with the name of a built-in.
+var varsReadAllowed = map[string]bool{"Executor.shotName": true}
+
+// scanHandler returns what a handler reaches that it must not: a reference to a plain resolver (a call, a method value or a bare name) and any read of the
+// variable map, in the handler or in any function of the package it calls (followed by name; a name shared by two types is followed for both, and a function
+// is stopped at only by its qualified name in stopAt). usesGuard says whether the handler calls e.forSink or e.shotName.
+func scanHandler(files map[string]*ast.File, root ast.Node, stopAt map[string]bool) (violations []string, usesGuard bool) {
+	decls := declsByName(files)
 	plain := map[string]bool{}
 	for _, r := range plainResolvers {
 		plain[r] = true
 	}
-	seen := map[string]bool{}
-	var visit func(n ast.Node, path string)
-	visit = func(n ast.Node, path string) {
-		for name := range callsIn(n) {
-			switch {
-			case name == "forSink" || name == "shotName":
-				usesGuard = true
-			case plain[name]:
-				resolvers = append(resolvers, path+name)
-			case stopAt[name] || seen[name]:
-			case decls[name] != nil:
-				seen[name] = true
-				visit(decls[name], path+name+" -> ")
+	// a package-level variable initialised from a resolver (`var expand = resolveSelector`) is a resolver by another name
+	for changed := true; changed; {
+		changed = false
+		for _, f := range files {
+			for _, d := range f.Decls {
+				gd, ok := d.(*ast.GenDecl)
+				if !ok || gd.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					vs := spec.(*ast.ValueSpec)
+					refs := false
+					for _, v := range vs.Values {
+						ast.Inspect(v, func(x ast.Node) bool {
+							switch n := x.(type) {
+							case *ast.Ident:
+								refs = refs || plain[n.Name]
+							case *ast.SelectorExpr:
+								refs = refs || plain[n.Sel.Name]
+							}
+							return true
+						})
+					}
+					if refs {
+						for _, n := range vs.Names {
+							if !plain[n.Name] {
+								plain[n.Name] = true
+								changed = true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
-	visit(root, "")
-	sort.Strings(resolvers)
-	return
+	seen := map[*ast.FuncDecl]bool{}
+	var visit func(n ast.Node, path string, owner string)
+	visit = func(n ast.Node, path string, owner string) {
+		var callees []string
+		ast.Inspect(n, func(x ast.Node) bool {
+			switch v := x.(type) {
+			case *ast.CallExpr:
+				switch f := v.Fun.(type) {
+				case *ast.SelectorExpr:
+					if id, ok := f.X.(*ast.Ident); ok && id.Name == "e" && (f.Sel.Name == "forSink" || f.Sel.Name == "shotName") {
+						usesGuard = true
+					}
+					callees = append(callees, f.Sel.Name)
+				case *ast.Ident:
+					callees = append(callees, f.Name)
+				}
+			case *ast.SelectorExpr:
+				if plain[v.Sel.Name] {
+					violations = append(violations, path+v.Sel.Name)
+				}
+				if v.Sel.Name == "vars" && !varsReadAllowed[owner] {
+					violations = append(violations, path+"vars (a read of the variable map)")
+				}
+			case *ast.Ident:
+				if plain[v.Name] {
+					if _, isDecl := decls[v.Name]; isDecl || true {
+						violations = append(violations, path+v.Name)
+					}
+				}
+			}
+			return true
+		})
+		for _, name := range callees {
+			for _, fd := range decls[name] {
+				if seen[fd] || stopAt[qualified(fd)] || plain[name] || name == "forSink" || name == "shotName" {
+					continue
+				}
+				seen[fd] = true
+				visit(fd, path+qualified(fd)+" -> ", qualified(fd))
+			}
+		}
+	}
+	visit(root, "", "")
+	sort.Strings(violations)
+	// a method call `e.resolve(x)` is seen both as a selector and as a callee; report each path once
+	out := violations[:0]
+	for i, v := range violations {
+		if i == 0 || v != violations[i-1] {
+			out = append(out, v)
+		}
+	}
+	return out, usesGuard
 }
 
-// stopAtFuncs are functions the scan does not descend into. The scan follows calls by name through this package, so it must not follow a nested step back
-// into the dispatcher (every handler would reach every other); the first part of the list is the guard and the expansion itself.
-var stopAtFuncs = map[string]bool{"resolveT": true, "expandT": true, "setVar": true, "forSink": true, "resolveVars": true,
-	// re-entry into the executor: running a nested step is that step's own handler, classified on its own; and the line shown for a step is display only
-	"runStep": true, "RunBody": true, "RunStep": true, "dispatchStep": true, "Run": true, "runAction": true, "runAssert": true, "runWait": true,
-	"stepDescription": true, "emitStep": true, "Reconnect": true}
+// stopAtFuncs are the functions the scan does not descend into, by qualified name. The scan follows calls by name through this package, so it must not follow
+// a nested step back into the dispatcher (every handler would reach every other): the nested step has its own handler, classified on its own. The line
+// shown for a step is display only. None of the resolvers may be here (a test checks), or a sink could hide behind one.
+var stopAtFuncs = map[string]bool{
+	"Executor.setVar": true, "Executor.forSink": true,
+	"Executor.runStep": true, "Executor.RunBody": true, "Executor.RunStep": true, "Executor.dispatchStep": true,
+	"Executor.runAction": true, "Executor.runAssert": true, "Executor.runWait": true,
+	"Executor.stepDescription": true, "Executor.emitStep": true,
+	"Runner.Run": true, "DeviceContext.Reconnect": true,
+}
 
 // sinkProblems lists what is wrong with the handler of a sink: no guard, or a plain resolver reached directly or through a helper.
 func sinkProblems(files map[string]*ast.File, name, fn string, allowed string) []string {
@@ -176,7 +275,7 @@ func sinkProblems(files map[string]*ast.File, name, fn string, allowed string) [
 		return []string{name + ": the handler " + fn + " was not found"}
 	}
 	var out []string
-	res, guard := handlerCalls(files, body, stopAtFuncs)
+	res, guard := scanHandler(files, body, stopAtFuncs)
 	if !guard {
 		out = append(out, name+": its handler does not take strings through forSink")
 	}
@@ -195,7 +294,7 @@ func literalProblems(files map[string]*ast.File, name, fn string) []string {
 		return []string{name + ": the handler " + fn + " was not found"}
 	}
 	var out []string
-	res, guard := handlerCalls(files, body, stopAtFuncs)
+	res, guard := scanHandler(files, body, stopAtFuncs)
 	if guard {
 		out = append(out, name+": a literal-only handler calls the guard")
 	}
@@ -317,7 +416,7 @@ func (e *Executor) helperLit(a A) error { _ = e.resolveVars(a.Name); return nil 
 func (e *Executor) runLitClean(a A) error { return nil }
 func (e *Executor) runSelf(a A) error { _ = e.runSelf; _ = e.forSink; return e.runSelf(a) }
 `})
-	if p := sinkProblems(files, "X", "runX", ""); len(p) == 0 || !strings.Contains(strings.Join(p, " "), "sendSecond -> viaDeeper -> resolve") {
+	if p := sinkProblems(files, "X", "runX", ""); len(p) == 0 || !strings.Contains(strings.Join(p, " "), "Executor.sendSecond -> Executor.viaDeeper -> resolve") {
 		t.Errorf("a second string through two helpers was not reported: %v", p)
 	}
 	if p := sinkProblems(files, "X", "runNoGuard", ""); len(p) == 0 {
@@ -329,7 +428,7 @@ func (e *Executor) runSelf(a A) error { _ = e.runSelf; _ = e.forSink; return e.r
 	if p := sinkProblems(files, "X", "runMissing", ""); len(p) == 0 {
 		t.Errorf("a missing handler was not reported")
 	}
-	if p := literalProblems(files, "L", "runLit"); len(p) == 0 || !strings.Contains(strings.Join(p, " "), "helperLit -> resolveVars") {
+	if p := literalProblems(files, "L", "runLit"); len(p) == 0 || !strings.Contains(strings.Join(p, " "), "Executor.helperLit -> resolveVars") {
 		t.Errorf("a literal handler that expands through a helper was not reported: %v", p)
 	}
 	if p := literalProblems(files, "L", "runLitClean"); len(p) != 0 {
@@ -342,10 +441,10 @@ func (e *Executor) runSelf(a A) error { _ = e.runSelf; _ = e.forSink; return e.r
 	_ = sinkProblems(files, "X", "runSelf", "")
 }
 
-// varsMisuses reports every use of the `vars` field outside the functions named in allowed, other than a plain read: an element read (not as the target of an
+// varsMisuses reports every use of the map field `field` (vars, tainted) outside the functions named in allowed, other than a plain read: an element read (not as the target of an
 // assignment, ++ or &), len(...), or ranging over it. An assignment, an alias (`v := e.vars`), delete, clear, maps.Copy, passing it to any function, returning
 // it and `e.vars = ...` are all reported, so the only way to change a variable is setVar.
-func varsMisuses(fset *token.FileSet, f *ast.File, allowed map[string]bool) []string {
+func varsMisuses(fset *token.FileSet, f *ast.File, field string, allowed map[string]bool) []string {
 	var out []string
 	for _, d := range f.Decls {
 		fd, ok := d.(*ast.FuncDecl)
@@ -358,7 +457,7 @@ func varsMisuses(fset *token.FileSet, f *ast.File, allowed map[string]bool) []st
 				stack = stack[:len(stack)-1]
 				return true
 			}
-			if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "vars" && len(stack) > 0 {
+			if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == field && len(stack) > 0 {
 				parent := stack[len(stack)-1]
 				var grand ast.Node
 				if len(stack) > 1 {
@@ -413,8 +512,15 @@ func TestEveryVariableWriteGoesThroughSetVar(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, m := range varsMisuses(fset, f, map[string]bool{"setVar": true}) {
+		for _, m := range varsMisuses(fset, f, "vars", map[string]bool{"setVar": true}) {
 			t.Errorf("%s uses the vars field in a way other than reading it; use setVar so the taint flag is kept right", m)
+		}
+		// the set of tainted names is changed by setVar alone, and the clipboard flag by its own two methods
+		for _, m := range varsMisuses(fset, f, "tainted", map[string]bool{"setVar": true}) {
+			t.Errorf("%s changes the tainted set outside setVar", m)
+		}
+		for _, m := range flagWrites(fset, f, "holdsTaint", map[string]bool{"set": true}) {
+			t.Errorf("%s writes the clipboard flag outside clipboardTaint.set", m)
 		}
 	}
 }
@@ -437,19 +543,19 @@ func TestTheVariableWriteCheckReportsEveryWayRoundSetVar(t *testing.T) {
 		`for k := range other { e.vars[k] = "x" }`, `other = e.vars`,
 	} {
 		fset, f := parseSnippet(t, bad)
-		if len(varsMisuses(fset, f, nil)) == 0 {
+		if len(varsMisuses(fset, f, "vars", nil)) == 0 {
 			t.Errorf("not reported: %s", bad)
 		}
 	}
 	for _, ok := range []string{`_ = e.vars[k]`, `v, found := e.vars[k]; _, _ = v, found`, `_ = len(e.vars)`, `for key, val := range e.vars { _, _ = key, val }`, `if e.vars[k] != "" { }`, `other[k] = e.vars[k]`} {
 		fset, f := parseSnippet(t, ok)
-		if m := varsMisuses(fset, f, nil); len(m) != 0 {
+		if m := varsMisuses(fset, f, "vars", nil); len(m) != 0 {
 			t.Errorf("reported although it only reads: %s: %v", ok, m)
 		}
 	}
 	// and the function that is allowed to write is the only one
 	fset, f := parseSnippet(t, `e.vars[k] = "x"`)
-	if len(varsMisuses(fset, f, map[string]bool{"f": true})) != 0 {
+	if len(varsMisuses(fset, f, "vars", map[string]bool{"f": true})) != 0 {
 		t.Errorf("the allowed function was reported")
 	}
 }
@@ -461,4 +567,118 @@ func TestTaintClassCounts(t *testing.T) {
 		counts[c]++
 	}
 	t.Logf("sink %d, literal only %d, UI only %d, propagates %d, no string %d (total %d)", counts[classSink], counts[classLiteral], counts[classUI], counts[classPropagates], counts[classNoString], len(taintClasses))
+}
+
+// More ways a handler could reach an expansion without a plain call: all reported. A same-named helper on two types is followed for both.
+func TestTheHandlerScansReportMethodValuesVariableReadsAndSharedNames(t *testing.T) {
+	files := parseFiles(t, map[string]string{"y.go": `package runner
+func (e *Executor) runValue(a A) error { f := e.resolve; _ = f(a.Name); s, _ := e.forSink("v", a.Text); _ = s; return nil }
+var expander = resolveSelector
+func (e *Executor) runBare(a A) error { _ = expander; s, _ := e.forSink("v", a.Text); _ = s; return nil }
+func (e *Executor) runReads(a A) error { _ = e.vars[a.Name]; s, _ := e.forSink("v", a.Text); _ = s; return nil }
+func (e *Executor) runTwoTypes(a A) error { s, _ := e.forSink("v", a.Text); _ = s; e.helper(a); return nil }
+func (e *Executor) helper(a A) {}
+func (o *Other) helper(a A) { _ = o.e.resolve(a.Name) }
+func (e *Executor) runFinish(a A) error { s, _ := e.forSink("v", a.Text); _ = e.finishResolve(s); return nil }
+func (e *Executor) runViaStopped(a A) error { s, _ := e.forSink("v", a.Text); _ = s; e.runStop(a); return nil }
+func (e *Executor) runStop(a A) { _ = e.resolve(a.Name) }
+func (e *Executor) runStep(a A) { _ = e.resolve(a.Name) }
+func (o *Other) runStep(a A) { _ = o.e.resolve(a.Name) }
+func (e *Executor) runOtherTypeStop(a A) error { s, _ := e.forSink("v", a.Text); _ = s; o.runStep(a); return nil }
+`})
+	for fn, want := range map[string]string{
+		"runValue": "resolve", "runBare": "expander", "runReads": "vars (a read of the variable map)", "runTwoTypes": "Other.helper -> resolve", "runFinish": "finishResolve",
+	} {
+		if p := sinkProblems(files, "X", fn, ""); len(p) == 0 || !strings.Contains(strings.Join(p, " "), want) {
+			t.Errorf("%s: not reported (want %q): %v", fn, want, p)
+		}
+	}
+	// a stop-listed name on the Executor stops the scan; the same name on another type does not
+	stop := map[string]bool{"Executor.runStep": true, "Executor.runStop": true}
+	if v, _ := scanHandler(files, bodyOf(files, "X", "runViaStopped"), stop); len(v) != 0 {
+		t.Errorf("a stop-listed method was followed: %v", v)
+	}
+	if v, _ := scanHandler(files, bodyOf(files, "X", "runOtherTypeStop"), stop); len(v) == 0 {
+		t.Errorf("a same-named method on another type was skipped")
+	}
+}
+
+// The stop list cannot hide a resolver or a guard bypass behind a name.
+func TestTheStopListNamesNoResolver(t *testing.T) {
+	for q := range stopAtFuncs {
+		name := q[strings.LastIndex(q, ".")+1:]
+		for _, r := range plainResolvers {
+			if name == r {
+				t.Errorf("%s is in the stop list and is a resolver", q)
+			}
+		}
+	}
+	// and every entry is a function or method that exists, so a rename cannot leave a stale stop
+	files := parsePkgFiles(t)
+	decls := declsByName(files)
+	for q := range stopAtFuncs {
+		name := q[strings.LastIndex(q, ".")+1:]
+		found := false
+		for _, fd := range decls[name] {
+			if qualified(fd) == q {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s is in the stop list but is not declared", q)
+		}
+	}
+}
+
+// flagWrites reports every assignment to the field (a plain bool) outside the functions in allowed.
+func flagWrites(fset *token.FileSet, f *ast.File, field string, allowed map[string]bool) []string {
+	var out []string
+	for _, d := range f.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || allowed[fd.Name.Name] {
+			continue
+		}
+		ast.Inspect(fd, func(n ast.Node) bool {
+			switch v := n.(type) {
+			case *ast.AssignStmt:
+				for _, l := range v.Lhs {
+					if sel, ok := l.(*ast.SelectorExpr); ok && sel.Sel.Name == field {
+						out = append(out, fset.Position(sel.Pos()).String()+" in "+fd.Name.Name)
+					}
+				}
+			case *ast.IncDecStmt:
+				if sel, ok := v.X.(*ast.SelectorExpr); ok && sel.Sel.Name == field {
+					out = append(out, fset.Position(sel.Pos()).String()+" in "+fd.Name.Name)
+				}
+			}
+			return true
+		})
+	}
+	return out
+}
+
+// The taint fields have their own writers: the other ways to change them are reported.
+func TestTheTaintFieldChecksReportTheirNegativeCases(t *testing.T) {
+	for _, bad := range []string{`e.tainted = nil`, `delete(e.tainted, k)`, `e.tainted[k] = true`, `clear(e.tainted)`, `t := e.tainted; t[k] = true`, `maps.Copy(e.tainted, other)`} {
+		fset, f := parseSnippet(t, bad)
+		if len(varsMisuses(fset, f, "tainted", nil)) == 0 {
+			t.Errorf("not reported: %s", bad)
+		}
+	}
+	for _, ok := range []string{`_ = e.tainted[k]`, `_ = len(e.tainted)`, `for n := range e.tainted { _ = n }`} {
+		fset, f := parseSnippet(t, ok)
+		if m := varsMisuses(fset, f, "tainted", nil); len(m) != 0 {
+			t.Errorf("reported although it only reads: %s: %v", ok, m)
+		}
+	}
+	for _, bad := range []string{`c.holdsTaint = false`, `c.holdsTaint = !c.holdsTaint`, `c.holdsTaint, k = true, "x"`} {
+		fset, f := parseSnippet(t, bad)
+		if len(flagWrites(fset, f, "holdsTaint", nil)) == 0 {
+			t.Errorf("not reported: %s", bad)
+		}
+	}
+	fset, f := parseSnippet(t, `_ = c.holdsTaint`)
+	if len(flagWrites(fset, f, "holdsTaint", nil)) != 0 {
+		t.Errorf("a read of the flag was reported")
+	}
 }

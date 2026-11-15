@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
@@ -398,5 +399,93 @@ func TestTheGuardComesBeforeTheCloudModeSkip(t *testing.T) {
 	e := &Executor{vars: map[string]string{"t": "ok"}, client: &recClient{}, timeout: time.Second}
 	if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbAddMedia, Name: "<t>"}); err != nil {
 		t.Errorf("a clean add media in cloud mode: %v", err)
+	}
+}
+
+// ---- the clipboard belongs to the device, not to a test
+
+func clipExecutor(clip *clipRec, dc *DeviceContext) *Executor {
+	return &Executor{vars: map[string]string{}, client: clip, deviceCtx: dc, timeout: time.Second}
+}
+
+// Every test attempt gets a new Executor, but the device clipboard outlives it: a page value copied in one test and pasted in the next is still a page value.
+func TestAClipboardTaintSurvivesTheExecutorThatSetIt(t *testing.T) {
+	ctx := context.Background()
+	clip := &clipRec{}
+	dc := &DeviceContext{}
+	copyTainted := clipExecutor(clip, dc)
+	tainted(copyTainted, "t", pageValue)
+	if err := copyTainted.runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "<t>"}); err != nil {
+		t.Fatal(err)
+	}
+	// a later test, or a retry attempt: a new executor on the same device
+	later := clipExecutor(clip, dc)
+	if err := later.runStep(ctx, parser.ActionStep{Verb: parser.VerbPasteClipboard}); err != nil {
+		t.Fatal(err)
+	}
+	if err := later.runStep(ctx, parser.ActionStep{Verb: parser.VerbOpenLink, Name: "<clipboard>"}); err == nil || !strings.Contains(err.Error(), "<clipboard> holds text read from a page") || clip.n.Load() != 0 {
+		t.Fatalf("CROSS-TEST: err = %v, agent calls %d", err, clip.n.Load())
+	}
+	// pasting again, in yet another executor, is still a page value (a paste does not clear it)
+	for i := 0; i < 2; i++ {
+		again := clipExecutor(clip, dc)
+		if err := again.runStep(ctx, parser.ActionStep{Verb: parser.VerbPasteClipboard}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := again.forSink("open link", "<clipboard>"); err == nil {
+			t.Fatalf("paste %d: the clipboard was clean", i+2)
+		}
+	}
+	// a clean copy, in any executor, clears it for all
+	if err := clipExecutor(clip, dc).runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "http://example.test/ok"}); err != nil {
+		t.Fatal(err)
+	}
+	last := clipExecutor(clip, dc)
+	if err := last.runStep(ctx, parser.ActionStep{Verb: parser.VerbPasteClipboard}); err != nil {
+		t.Fatal(err)
+	}
+	if err := last.runStep(ctx, parser.ActionStep{Verb: parser.VerbOpenLink, Name: "<clipboard>"}); err != nil {
+		t.Errorf("a clean clipboard was refused: %v", err)
+	}
+	// another device has its own clipboard
+	other := clipExecutor(&clipRec{clip: pageValue}, &DeviceContext{})
+	if err := other.runStep(ctx, parser.ActionStep{Verb: parser.VerbPasteClipboard}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.forSink("open link", "<clipboard>"); err != nil {
+		t.Errorf("a clipboard the script never copied to is clean by design: %v", err)
+	}
+}
+
+// A cloud run has no device context: the executors of one Runner share the flag.
+func TestAClipboardTaintSurvivesTheExecutorsOfOneRunnerWithNoDeviceContext(t *testing.T) {
+	ctx := context.Background()
+	clip := &clipRec{}
+	r := &Runner{cfg: &config.Config{}, client: clip}
+	first, second := r.newExecutor(), r.newExecutor()
+	if first == second {
+		t.Fatal("the runner returned one executor twice")
+	}
+	tainted(first, "t", pageValue)
+	if err := first.runStep(ctx, parser.ActionStep{Verb: parser.VerbCopyClipboard, Text: "<t>"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.runStep(ctx, parser.ActionStep{Verb: parser.VerbPasteClipboard}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.forSink("open link", "<clipboard>"); err == nil {
+		t.Errorf("CROSS-TEST without a device context: the pasted clipboard was clean")
+	}
+	// a second runner is a second run
+	if other := (&Runner{cfg: &config.Config{}, client: clip}).newExecutor(); other.clipboard().get() {
+		t.Errorf("a new runner started with a tainted clipboard")
+	}
+}
+
+func TestTheStopListWordsAreNotInTheResolverList(t *testing.T) {
+	for _, r := range plainResolvers {
+		if stopAtFuncs["Executor."+r] {
+			t.Errorf("%s is both a resolver and stop-listed", r)
+		}
 	}
 }
