@@ -428,14 +428,18 @@ wait until "Message sent" appears in webview
 tap "Pay" in webview "checkout"          # name the page when the app has more than one
 ```
 
-- A **quoted string is text**: the visible text of an element, matched whole first and then as a part of an element's
-  text, case-sensitively and with runs of whitespace collapsed, innermost element first. **`css:"..."` is a CSS selector** (`css:"#submit"`). The syntax decides,
-  so a text such as `#1 Item` or `.5 off` is always text.
+- A **quoted string is text**: the visible text of an element (for an input without text, its value), with runs of whitespace
+  collapsed. An element whose whole text equals yours is looked for first; if there is none, an element whose text contains
+  yours. The match is case-sensitive. An element is skipped when one of its children has exactly the same text, but for a
+  part of a text the first visible element in document order wins, which can be a container that holds the text.
+  **`css:"..."` is a CSS selector** (`css:"#submit"`). The syntax decides, so a text such as `#1 Item` or `.5 off` is always text.
 - The optional quoted name after `in webview` is a part of the page's title or its address, without regard to case. Without
-  a name the app must have exactly one page; with several, the step lists their titles and asks for a name.
+  a name the app must have exactly one page; with several, the step lists their titles and asks for a name. A name that
+  matches no page, or more than one, is an error that lists the pages (use a longer part of the title or address).
 - The step acts on the first **visible** element that matches, scrolled into view. `tap` presses and releases at its
   centre. `type` focuses the element, checks that it holds the focus and then inserts the text; if it did not take the
-  focus (a read-only or disabled input) nothing is typed and the step fails. `don't see` passes when no element matches or
+  focus (a disabled input, or any element that cannot be focused) nothing is typed and the step fails. A text or selector
+  longer than 2048 characters, or a text to type longer than 8192, is refused before anything is sent. `don't see` passes when no element matches or
   the match is hidden, and fails when the WebView itself cannot be reached.
 - There is no step that runs JavaScript, and none can be written: the lookup is a fixed piece of probe's own code, and your
   text only ever travels as data to it.
@@ -466,12 +470,14 @@ test "contact support from the help page"
 - **Android only.** On iOS the steps fail with a message that says so; in a cloud run (no adb) they are skipped like the other
   device-only steps.
 - **Only the top document of a page is searched.** Content inside a shadow DOM or an iframe is not found.
-- **A read-only or disabled input ignores typed text**, so the step refuses it. The focus is checked once: a page that moves
+- **A disabled input cannot take the focus, so the step refuses it. A read-only input can take the focus and ignores typed
+  text, and the step does not notice**: it passes and nothing is typed (see the value with `see css:"..."` afterwards if it
+  matters). The focus is checked once: a page that moves
   the focus away right after can still receive the text elsewhere. The text is inserted as text, not as key presses, so a
   page that only reacts to key events may not notice it.
 - **Positions are in CSS pixels**, tested at a device pixel ratio of 1; other ratios, scrolled pages and iframes are not yet
   tested.
-- A page is opened for each step (about 70 ms on an emulator) and closed again; a step never keeps a connection open.
+- A page is opened for each step and closed again; a step never keeps a connection open (one run on one emulator took about 70 ms per step).
 - There is no implicit waiting inside the step: use `wait until ... in webview` when the page is still loading.
 - `probe lint` warns about `see "0 items" in webview` and `wait until "3 items" appears in webview`: a count or
   zero-state text can match a longer element text, and these steps have no `matching` form, so check the element with

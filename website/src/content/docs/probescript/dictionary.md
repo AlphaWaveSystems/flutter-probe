@@ -37,10 +37,7 @@ Commands that interact with the app's UI.
 | `log` | `log "message"` | Emit a message into the run output |
 | `tap native` | `tap native "Choose from Gallery"` | Tap a native (non-Flutter) UI element — pickers, share sheets — matched by uiautomator's text or resource-id. Android only; errors clearly on other platforms. CLI-side only — skipped in cloud mode |
 | `tap ... in webview` | `tap "Contact support" in webview` or `tap css:"#submit" in webview "checkout"` | Tap an element inside the app's own WebView: a quoted string is the element's visible text, `css:"..."` is a CSS selector, and an optional quoted page name picks one page when the app has several. Android only, and the app must have WebView debugging on (see [WebView content](/probescript/syntax/#webview-content-android)); errors clearly on iOS, skipped in cloud mode |
-| `type ... in webview` | `type "hello" into css:"#message" in webview` | Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element does not take the focus (a read-only or disabled input). Android only |
-| `see ... in webview` | `see "Getting Started" in webview` | Assert that a visible element with this text (or matching this selector) is in the WebView. Android only |
-| `don't see ... in webview` | `don't see css:".error" in webview` | Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only |
-| `wait until ... appears in webview` | `wait until "Message sent" appears in webview` | Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only |
+| `type ... in webview` | `type "hello" into css:"#message" in webview` | Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element does not take the focus (a disabled input, or any element that cannot be focused); a read-only input does take the focus and ignores the text without an error. Android only |
 | `type native` | `type native "text" into "query"` | Focus a native text field matched by query, then type into it. Android only. If the field is reached via a screen transition (not already visible), add a `wait` step first — the same idiom used for Flutter navigation |
 
 ## Assertions
@@ -61,6 +58,8 @@ Commands that verify the state of the UI.
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
 | `see any of` | `see any of "Create Your Account", "Confirm Your Details"` | Assert that any one of the texts is on screen; `don't see any of "A", "B"` asserts none is |
 | `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: `see "0 ml" matching "^0 ml$"`. `probe lint` warns, without failing, about such a check that has no anchored pattern |
+| `see ... in webview` | `see "Getting Started" in webview` | Assert that a visible element with this text (or matching this selector) is in the WebView. Android only |
+| `don't see ... in webview` | `don't see css:".error" in webview` | Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only |
 
 State suffixes compose: `see "Field" is enabled contains "y" matching "z"` checks all three at once.
 
@@ -85,6 +84,7 @@ Commands that pause execution until a condition is met.
 | `wait for page to load` | `wait for page to load` | Wait for the UI to settle (triple-signal sync) |
 | `wait for network idle` | `wait for network idle` | Wait for pending HTTP requests to complete |
 | `wait for animations to end` | `wait for animations to end` | Wait until no scheduled animation frames remain |
+| `wait until ... appears in webview` | `wait until "Message sent" appears in webview` | Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only |
 
 ## App Lifecycle
 
