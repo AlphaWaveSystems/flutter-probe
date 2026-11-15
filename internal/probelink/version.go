@@ -3,6 +3,7 @@ package probelink
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -13,6 +14,30 @@ type HandshakeResult struct {
 	// AgentVersion is the agent's reported version, or "" if the agent
 	// predates handshake support and returned the old {"ok":true}-only shape.
 	AgentVersion string
+	// Capabilities are the optional features the agent reports, such as
+	// CapabilityPressKey. An agent that predates the field reports none.
+	Capabilities []string
+}
+
+// CapabilityPressKey is reported by an agent that presses the key of a `press <key>` step (the press_key device action).
+// An agent without it answers that action with ok and presses nothing, so the CLI refuses the step before it sends it.
+const CapabilityPressKey = "press_key"
+
+// checkPressKey returns the refusal for a `press <key>` step when the agent's handshake does not report CapabilityPressKey,
+// and nil when it does. Without a handshake, or from an agent that predates the field, the agent is unknown and is refused
+// too: such an agent cannot press keys.
+func checkPressKey(h *HandshakeResult) error {
+	if h != nil && slices.Contains(h.Capabilities, CapabilityPressKey) {
+		return nil
+	}
+	running := "an agent that did not complete the version handshake"
+	if h != nil && h.AgentVersion != "" {
+		running = "probe_agent v" + h.AgentVersion
+	} else if h != nil {
+		running = "a probe_agent that predates the version handshake"
+	}
+	return fmt.Errorf("press <key> needs a probe_agent that presses keys, and this app runs %s, which does not: "+
+		"update probe_agent to the release that adds press <key> and rebuild the app", running)
 }
 
 // majorVersion extracts the leading numeric major-version component from a

@@ -158,6 +158,11 @@
     "body": "swipe ${1|up,down,left,right|}",
     "description": "Swipe gesture"
   },
+  "Press key": {
+    "prefix": "press key",
+    "body": "press ${1|tab,escape,backspace,space,up,down,left,right|}",
+    "description": "Press a key on the focused field, or move the focus"
+  },
   "Swipe over percent": {
     "prefix": "swipe over",
     "body": "swipe ${1|up,down,left,right|} over ${2:40} percent",

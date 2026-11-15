@@ -153,6 +153,7 @@ const (
 	VerbToggle     ActionVerb = "toggle"
 	VerbShake      ActionVerb = "shake"
 	VerbPress      ActionVerb = "press"
+	VerbPressKey   ActionVerb = "press_key" // press tab|escape|backspace|space|up|down|left|right; Name = the key
 	VerbTakeShot    ActionVerb = "take_screenshot"
 	VerbCompareShot ActionVerb = "compare_screenshot"
 	VerbDumpTree   ActionVerb = "dump_widget_tree"

@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "6fa476ec2c9cfa78c4688705454e2ec126977956b0124fc4312ef50b702d51bc";
+export const SOURCE_SHA256 = "9acb765f6df68adde87de0be2312cace4eed4f5933a2d0f056407c1b8d4513a0";
 
 export const COMMANDS = [
   {
@@ -57,6 +57,12 @@ export const COMMANDS = [
     "command": "drag",
     "syntax": "drag #source to #target",
     "description": "Drag one widget to another",
+    "category": "Actions"
+  },
+  {
+    "command": "press <key>",
+    "syntax": "press tab",
+    "description": "Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Not on iOS yet. The agent must report the `press_key` capability: a probe_agent up to 0.27.0 does not, and the step fails with a message to update it. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
     "category": "Actions"
   },
   {
