@@ -167,6 +167,7 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
 
 ## Testing Studio
 
+- **Adding a method to `App` is a decision.** Every exported `App` method is callable from the window and, in the headless build, from any page script with the bridge token. `studio/bound_methods_test.go` keeps a table of every one with a category (pure, reads or writes the workspace, keychain, network, AI provider, device, run control) and fails when a method has no entry, an entry has no method, the generated Wails bindings differ, the headless bridge blocks a different set than the table says, or the automation endpoint reaches a different set of names or methods (and never one in a category that must not be reachable from it). Add your method to the table with its category in the same change.
 - `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
 - `make studio-e2e-native`: the real window, driven through macOS accessibility (smoke set; needs a second display named by `STUDIO_E2E_DISPLAY`, and focus). `make studio-e2e` is a deprecated alias for one release.
 - CI (`.github/workflows/studio-ci.yml`) runs on changes to `studio/` or `vscode/`: the Studio Go tests (after the frontend build that the binary embeds), the frontend build and its `node --test` suites, and the VS Code extension tests. The frontend suites run on Node 26: they pass a directory to `node --test`, which Node 22 does not accept.

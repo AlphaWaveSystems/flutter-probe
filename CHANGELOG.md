@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **Docs: the Studio pages describe the Network tab, Send request and Explain failures, and the variables the browser suite reads (`PROBE_STUDIO_SEED_RUN`, `PROBE_STUDIO_SEED_EXCHANGES`, `PROBE_STUDIO_LOCAL_ENDPOINT`, `PROBE_STUDIO_TEST_SEND_RATE`, `PROBE_STUDIO_TEST_ALLOW_LOCAL`).** No code change.
+- **Studio's exported `App` methods each need a recorded decision.** A test lists every method callable from the window and the headless bridge with a category, and fails for a new one without an entry, for a stale entry, for bindings that differ, and for any change to what the headless bridge blocks or what the automation endpoint can reach. No behaviour changed.
 
 ## [0.27.0] - 2026-11-11
 
