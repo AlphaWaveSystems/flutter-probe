@@ -32,7 +32,7 @@ var runStamp = time.Now().Format("20060102-150405")
 const maxShotName = shotname.Max
 
 // shotName is the name to hand to the screenshot call for the raw name written in the script.
-func (e *Executor) shotName(raw string, builtins bool) string {
+func (e *Executor) shotName(step, raw string, builtins bool) (string, error) {
 	if builtins && strings.Contains(raw, "<") {
 		t := shotNow()
 		var pairs []string
@@ -48,7 +48,11 @@ func (e *Executor) shotName(raw string, builtins bool) string {
 			raw = strings.NewReplacer(pairs...).Replace(raw)
 		}
 	}
-	return cleanShotName(e.resolve(raw))
+	name, err := e.forSink(step, raw)
+	if err != nil {
+		return "", err
+	}
+	return cleanShotName(name), nil
 }
 
 // cleanShotName makes a name safe to be a file name; the rules and their tests are in internal/shotname, which the MCP server uses too.

@@ -225,7 +225,7 @@ func TestScreenshotVariableValueIsNotExpandedAsBuiltin(t *testing.T) {
 func TestCompareScreenshotNameIsClean(t *testing.T) {
 	e, _ := shotExec(t)
 	e.vars = map[string]string{"v": "../../x"}
-	if got := e.shotName("a/<v>", false); got != "a___x" {
+	if got := mustShotName(t, e, "take screenshot", "a/<v>", false); got != "a___x" {
 		t.Errorf("compare name = %q, want a___x", got)
 	}
 }
@@ -255,4 +255,14 @@ func TestCompareStepSendsTheCleanedName(t *testing.T) {
 			t.Errorf("compare step name %d = %q, want %q", i, rec.names[i], w)
 		}
 	}
+}
+
+// mustShotName is shotName for tests that use clean values: an error fails the test.
+func mustShotName(t *testing.T, e *Executor, step, raw string, builtins bool) string {
+	t.Helper()
+	got, err := e.shotName(step, raw, builtins)
+	if err != nil {
+		t.Fatalf("shotName(%q): %v", raw, err)
+	}
+	return got
 }

@@ -46,6 +46,7 @@ type Executor struct {
 	envWarned            map[string]bool
 	useNote              string            // appended to "unknown recipe call" (missing `use` targets)
 	vars                 map[string]string // variable scope for data-driven tests
+	tainted              map[string]bool   // names of variables whose value came from a page (see taint.go); nothing in production code sets one yet
 	verbose              bool
 	depth                int                // indentation depth for verbose logging
 	artifacts            []string           // collected screenshot paths (on-device)
@@ -127,7 +128,7 @@ func (e *Executor) RegisterRecipe(r parser.RecipeDef) {
 
 // SetVar sets a variable (used for data-driven row substitution).
 func (e *Executor) SetVar(key, value string) {
-	e.vars[key] = value
+	e.setVar(key, value, false)
 }
 
 // SetVisual configures visual regression comparison for this executor.
@@ -837,14 +838,22 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.DeviceAction(ctx, "shake", "")
 
 	case parser.VerbTakeShot:
-		path, err := e.client.Screenshot(ctx, e.shotName(a.Name, true))
+		name, err := e.shotName("take screenshot", a.Name, true)
+		if err != nil {
+			return err
+		}
+		path, err := e.client.Screenshot(ctx, name)
 		if err == nil && path != "" {
 			e.artifacts = append(e.artifacts, path)
 		}
 		return err
 
 	case parser.VerbCompareShot:
-		path, err := e.client.Screenshot(ctx, e.shotName(a.Name, false))
+		name, err := e.shotName("compare screenshot", a.Name, false)
+		if err != nil {
+			return err
+		}
+		path, err := e.client.Screenshot(ctx, name)
 		if err != nil {
 			return fmt.Errorf("compare screenshot: take screenshot failed: %w", err)
 		}
@@ -1020,15 +1029,19 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		if err != nil {
 			return err
 		}
-		e.vars["clipboard"] = text
+		e.setVar("clipboard", text, false)
 		return nil
 
 	case parser.VerbSetLanguage:
+		language, err := e.forSink("set language", a.Name)
+		if err != nil {
+			return err
+		}
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping set language (cloud mode)")
 			return nil
 		}
-		if err := e.deviceCtx.SetLanguage(ctx, e.resolve(a.Name)); err != nil {
+		if err := e.deviceCtx.SetLanguage(ctx, language); err != nil {
 			return err
 		}
 		return e.relaunchApp(ctx, "language change")
@@ -1062,28 +1075,38 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.VerifyBrowser(ctx)
 
 	case parser.VerbOpenLink:
+		link, err := e.forSink("open link", a.Name)
+		if err != nil {
+			return err
+		}
 		if a.DeepLink {
 			if e.deviceCtx == nil {
 				fmt.Println("    \033[33m⚠\033[0m  Skipping open link into the app (cloud mode)")
 				return nil
 			}
-			return e.deviceCtx.OpenDeepLink(ctx, e.resolve(a.Name))
+			return e.deviceCtx.OpenDeepLink(ctx, link)
 		}
-		return e.client.OpenLink(ctx, e.resolve(a.Name))
+		return e.client.OpenLink(ctx, link)
 
 	case parser.VerbStore:
-		e.vars[a.Name] = e.resolve(a.Text)
+		// the stored text keeps the taint of what went into it: a copy of a page value is a page value
+		text, by := e.resolveT(a.Text)
+		e.setVar(a.Name, text, len(by) > 0)
 		return nil
 
 	case parser.VerbReadWithAI:
 		return e.runReadWithAI(ctx, a)
 
 	case parser.VerbAddMedia:
+		media, err := e.forSink("add media", a.Name)
+		if err != nil {
+			return err
+		}
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping add media (cloud mode)")
 			return nil
 		}
-		return e.deviceCtx.AddMedia(ctx, e.resolve(a.Name))
+		return e.deviceCtx.AddMedia(ctx, media)
 
 	case parser.VerbTapWebView:
 		return e.runWebViewTap(ctx, a)
@@ -1099,11 +1122,19 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.deviceCtx.TapNative(ctx, e.resolve(a.Name))
 
 	case parser.VerbTypeNative:
+		nativeQuery, err := e.forSink("type native", a.Name)
+		if err != nil {
+			return err
+		}
+		nativeText, err := e.forSink("type native", a.Text)
+		if err != nil {
+			return err
+		}
 		if e.deviceCtx == nil {
 			fmt.Println("    \033[33m⚠\033[0m  Skipping type native (cloud mode)")
 			return nil
 		}
-		return e.deviceCtx.TypeNative(ctx, e.resolve(a.Name), e.resolve(a.Text))
+		return e.deviceCtx.TypeNative(ctx, nativeQuery, nativeText)
 
 	case parser.VerbEnrollBiometric:
 		if e.deviceCtx == nil {
@@ -1385,7 +1416,7 @@ func (e *Executor) runReadWithAI(ctx context.Context, a parser.ActionStep) error
 	if err != nil {
 		return fmt.Errorf("read ... with ai: %w", err)
 	}
-	e.vars[a.Name] = text
+	e.setVar(a.Name, text, false)
 	return nil
 }
 
@@ -1653,11 +1684,19 @@ func (e *Executor) runDart(ctx context.Context, d parser.DartBlock) error {
 // ---- Mock block execution ----
 
 func (e *Executor) runMock(ctx context.Context, m parser.MockBlock) error {
+	mockPath, err := e.forSink("mock", m.Path)
+	if err != nil {
+		return err
+	}
+	mockBody, err := e.forSink("mock", m.Body)
+	if err != nil {
+		return err
+	}
 	mp := probelink.MockParam{
 		Method:  m.Method,
-		Path:    e.resolve(m.Path),
+		Path:    mockPath,
 		Status:  m.Status,
-		Body:    e.resolve(m.Body),
+		Body:    mockBody,
 		DelayMs: m.DelayMs,
 		Fail:    m.Fail,
 	}
@@ -1726,7 +1765,7 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 	// Bind arguments to parameter names
 	for i, param := range recipe.Params {
 		if i < len(args) {
-			e.vars[param] = args[i]
+			e.setVar(param, args[i], false) // the argument text is expanded where the parameter is used, and is tainted then if it mentions a tainted variable
 		}
 	}
 	e.depth++
@@ -1861,7 +1900,13 @@ func reconnectDelay(base time.Duration, attempt int) time.Duration {
 // resolve substitutes <variable> placeholders with values from the vars map
 // and expands <random.*> generators.
 func (e *Executor) resolve(s string) string {
-	s = e.expandEnv(e.resolveVars(s))
+	out, _ := e.resolveT(s)
+	return out
+}
+
+// finishResolve is what resolve does to text whose variables are already expanded: it expands ${ENV} values and l10n keys.
+func (e *Executor) finishResolve(s string) string {
+	s = e.expandEnv(s)
 	if strings.Contains(s, "\x1el10n:") {
 		lang := ""
 		if e.deviceCtx != nil {
@@ -1940,10 +1985,19 @@ func (e *scrubbedError) Error() string { return e.msg }
 func (e *scrubbedError) As(target any) bool { return errors.As(e.err, target) }
 
 func (e *Executor) resolveVars(s string) string {
+	out, _ := e.expandT(s, false)
+	return out
+}
+
+// expandVars substitutes variables, except those in skip. With a nil skip it is the expansion every step has always had.
+func (e *Executor) expandVars(s string, skip map[string]bool) string {
 	// First: expand random data generators
 	s = resolveRandomVars(s)
 	// Then: substitute data-driven and recipe variables
 	for k, v := range e.vars {
+		if skip[k] {
+			continue
+		}
 		old := "<" + k + ">"
 		// PT-02(c): a variable can end up bound to a value that itself
 		// contains its own placeholder marker — e.g. passing the unquoted
@@ -2013,11 +2067,16 @@ func replaceFirst(s, old, new string) string {
 // ---- HTTP call execution ----
 
 func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error {
-	url := e.resolve(h.URL)
-	body := e.resolve(h.Body)
+	url, err := e.forSink("call", h.URL)
+	if err != nil {
+		return err
+	}
+	body, err := e.forSink("call", h.Body)
+	if err != nil {
+		return err
+	}
 
 	var req *http.Request
-	var err error
 	if body != "" {
 		req, err = http.NewRequestWithContext(ctx, h.Method, url, strings.NewReader(body))
 		if err != nil {
@@ -2040,8 +2099,8 @@ func (e *Executor) runHTTPCall(ctx context.Context, h parser.HTTPCallStep) error
 	respBody, _ := io.ReadAll(resp.Body)
 
 	// Store response in variables accessible as <response.status> and <response.body>
-	e.vars["response.status"] = strconv.Itoa(resp.StatusCode)
-	e.vars["response.body"] = string(respBody)
+	e.setVar("response.status", strconv.Itoa(resp.StatusCode), false)
+	e.setVar("response.body", string(respBody), false)
 
 	return nil
 }
