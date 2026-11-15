@@ -236,6 +236,8 @@ Supports the full ProbeScript syntax:
                      per-language labels. System-dialog buttons resolve by role (allow, deny,
                      cancel, ...), so tap "Don't Allow" in system dialog works on a device set
                      to any language.
+  Appearance:      set appearance dark (or light; auto on Android) sets the device's light or
+                     dark mode. The app is not relaunched. A physical iOS device is refused.
   Keyboard:        press enter — the keyboard action key on the focused text field.
   See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first

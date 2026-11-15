@@ -693,7 +693,7 @@ func TestWhatWasTypedIsNotEchoedBack(t *testing.T) {
 		qv     = "urlquery4321abcd"
 		quirky = "weird value/with+chars9" // typed under a credential name, with characters a URL escapes
 	)
-	soft := func(s string) string { return strings.Join(strings.Split(s, ""), "­") }
+	soft := func(s string) string { return strings.Join(strings.Split(s, ""), "\u00ad") }
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/hop2" {
 			http.Redirect(w, r, "/echo/"+r.Header.Get("X-Api-Key"), http.StatusFound)

@@ -414,7 +414,7 @@ $("settings-overlay").addEventListener("click", (e) => {
 
 // aiPreviewConfirmed is the "Sent to:" line of the last preview the person confirmed with Send. A message whose preview names a
 // different destination is shown again, and so is the first one after the workspace, the provider settings or the saved key
-// change. The gate lives in the window: Chat and SuggestSelectorFix send without it, also through the headless bridge.
+// change. The gate lives in the window: Chat sends without it, also through the headless bridge. (A selector fix cannot: it takes PreviewSelectorFix and then SelectorFixPreviewed, and the second sends only what the first returned.)
 let aiPreviewConfirmed: string | null = null;
 
 function resetAIPreview(): void {

@@ -94,7 +94,7 @@ func TestLeakTableHeaders(t *testing.T) {
 	secretNames := []string{
 		"Ocp-Apim-Subscription-Key", "X-Functions-Key", "x-app-key", "X-Master-Key", "Fastly-Key", "X-Custom-Key", "Foo_Key", "My Key", "key",
 		"X-Sid", "X-Pass", "X-Code-Verifier", "X-Verification-Code", "X-Otp-Code", "X-Passphrase",
-		"ｘ-ａｐｉ-ｋｅｙ", "%58-Api-%4Bey", "X-Hidden​-Token",
+		"ｘ-ａｐｉ-ｋｅｙ", "%58-Api-%4Bey", "X-Hidden\u200b-Token",
 	}
 	for _, n := range secretNames {
 		hs, _ := redactHeaders(map[string]string{n: netPlain})

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/devsettings"
 	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
@@ -47,6 +48,9 @@ type DeviceContext struct {
 
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
+
+	// appearanceRun runs the commands of `set appearance`. nil runs the real adb and xcrun; tests set a fake.
+	appearanceRun devsettings.Runner
 }
 
 // SystemDriver returns the run's shared system-dialog driver, creating it on
@@ -343,6 +347,34 @@ func (dc *DeviceContext) SetLanguage(ctx context.Context, tag string) error {
 	}
 	dc.Language = t.BCP47
 	return nil
+}
+
+// SetAppearance sets the device's light or dark mode: "light", "dark", or "auto" (Android only). The app follows the
+// change while it runs, so it is not relaunched. The change stays on the device until a later step sets it back.
+func (dc *DeviceContext) SetAppearance(ctx context.Context, mode string) error {
+	req, err := appearanceRequest(dc.Platform, dc.Serial, dc.IsPhysical, mode)
+	if err != nil {
+		return fmt.Errorf("set appearance: %w", err)
+	}
+	if err := devsettings.Apply(ctx, dc.appearanceRun, req); err != nil {
+		return fmt.Errorf("set appearance: %w", err)
+	}
+	return nil
+}
+
+// appearanceRequest turns a `set appearance` step into the request devsettings checks and runs. A physical iOS device
+// is refused: its appearance is changed in Settings, and the command line only reaches simulators.
+func appearanceRequest(p device.Platform, serial string, physical bool, mode string) (devsettings.Request, error) {
+	switch p {
+	case device.PlatformAndroid:
+		return devsettings.Request{Platform: devsettings.Android, Device: serial, Setting: devsettings.Appearance, Value: mode}, nil
+	case device.PlatformIOS:
+		if physical {
+			return devsettings.Request{}, fmt.Errorf("set appearance is not supported on physical iOS devices: change the appearance in Settings > Display & Brightness")
+		}
+		return devsettings.Request{Platform: devsettings.IOS, Device: serial, Setting: devsettings.Appearance, Value: mode}, nil
+	}
+	return devsettings.Request{}, fmt.Errorf("the platform %q has no appearance setting", p)
 }
 
 // DenyPermission revokes a named permission from the app at the OS level.

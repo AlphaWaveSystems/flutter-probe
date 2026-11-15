@@ -149,6 +149,15 @@ set language "de"        # cmd locale set-app-locales (Android 13+ / API 33)
 Per-app language, then a relaunch. Older images fail with a clear error. `probe test --locale de` or `--locales de,ja,ar` do the
 same for a whole run. The emulator's own language and its permission dialogs are unchanged.
 
+## Appearance
+
+```
+set appearance dark      # cmd uimode night yes (also light, and auto, which Android decides itself)
+```
+
+Changes the device's light or dark mode for the device, not one app. The app is not relaunched; an app whose theme follows the system setting (`ThemeMode.system` in Flutter) changes with it.
+The change stays until a later step sets it back, so end a test that changes it with `set appearance light` (or `auto`).
+
 ## Location
 
 ```

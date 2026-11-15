@@ -147,6 +147,7 @@ const (
 	TOKEN_PASTE          // "paste"
 	TOKEN_SET_LOCATION   // compound: "set location"
 	TOKEN_SET_LANGUAGE   // compound: "set language"
+	TOKEN_SET_APPEARANCE // compound: "set appearance"
 	TOKEN_VERIFY_BROWSER // compound: "verify external browser"
 	TOKEN_CALL           // "call"
 

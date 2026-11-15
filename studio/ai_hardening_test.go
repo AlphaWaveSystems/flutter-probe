@@ -240,7 +240,7 @@ func TestSelectorFixPathRedactsCredentialsInTheFileTheStepAndTheTree(t *testing.
 		Error: `value ` + token + ` rejected`})
 	a.track.finish([]RunResult{{Name: "sign in", File: "tests/login.probe", Error: "value " + token + " rejected"}}, nil)
 	file := "test \"x\"\n  type \"" + token + "\" into \"Token\"\n"
-	_, _ = a.SuggestSelectorFix(file)
+	_, _ = suggestFix(a, file)
 	if f.requests.Load() == 0 {
 		t.Fatal("the selector fix sent no request, so nothing was checked")
 	}

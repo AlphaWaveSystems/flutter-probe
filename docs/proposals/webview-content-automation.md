@@ -1,6 +1,6 @@
 # Getting probe's hands on WebView content
 
-**Status:** Requested by the owner (2026-11-15); design for review, step 1 of 3; no implementation yet
+**Status:** Requested by the owner (2026-11-15); design for review; step 2 (spike) done, step 3 (implementation) in slices
 **Origin:** FP-8 (Jira), listed as an open gap in `docs/roadmap/gap-analysis-2026-08.md`. A concrete demand for WebView support now exists (the owner asked for it on 2026-11-15).
 **Touches:** `internal/device`, `internal/runner`, ProbeScript grammar, the dictionary surfaces
 (docs, MCP, VS Code extension, Studio). The Dart agent is not modified.
@@ -27,7 +27,9 @@ comes first.
 1. Find the app's WebView debug sockets: abstract Unix sockets named
    `webview_devtools_remote_<pid>`, where `<pid>` is the process id of the app under test. List
    them from the device (`/proc/net/unix`) and keep only the ones whose `<pid>` is the app's own
-   process. Never use sockets that belong to another process.
+   process. Never use sockets that belong to another process. (Confirmed by the spike: a second
+   process on the same device had its own `webview_devtools_remote_<pid>` socket, so this rule is
+   needed, not defensive.)
 2. Forward that one socket to a free loopback port chosen by adb
    (`adb -s <serial> forward tcp:0 localabstract:webview_devtools_remote_<pid>`; adb prints the
    port). Record the port; it is what we remove later. The spike must confirm that adb prints the
@@ -114,16 +116,40 @@ has shipped and a spike has real results.
 3. **Never `adb forward --remove-all`** (or any command that removes forwards probe did not
    create). Record the exact port that adb allocated and remove only that one, also on failure,
    timeout and Ctrl-C.
-4. **Do not touch anything that is not this run's:** other devices, other forwards, the agent port
+4. **Every forward and every removal takes `-s <serial>`.** The spike showed why: with two
+   emulators attached, `adb forward --remove tcp:<port>` without `-s` failed (exit 1) and left the
+   forward in place.
+5. **Do not touch anything that is not this run's:** other devices, other forwards, the agent port
    of an already-running probe session (`48686` by default), or an address that belongs to another
    tool. The implementation takes the device serial from the run and does nothing outside it.
-5. **No raw JavaScript from script text.** CDP lookup code is a fixed template inside probe. A
+6. **No raw JavaScript from script text.** CDP lookup code is a fixed template inside probe. A
    `.probe` file cannot send its own `Runtime.evaluate` text. See the owner question below.
-6. **Redaction:** typed values and page text follow the existing redaction rules for logs and
+7. **Redaction:** typed values and page text follow the existing redaction rules for logs and
    reports; the WebSocket debugger URL is not written to logs or reports.
-7. **Payment and login pages in a WebView** are the app owner's call; this feature does not add
+8. **Payment and login pages in a WebView** are the app owner's call; this feature does not add
    anything that tries to bypass page protections (no JS injection beyond the fixed lookup, no
    header or cookie handling).
+
+## Spike findings (step 2, 2026-11-15)
+
+A throwaway script (not part of probe) drove a standalone one-WebView test app on a named Android
+emulator (Android 15, system WebView 124, adb 1.0.41). It found the app's own debug socket, made one
+forward, listed the targets, selected an element by its text, tapped it with
+`Input.dispatchMouseEvent`, read the result back, and removed its own forward.
+
+- `adb forward tcp:0 localabstract:webview_devtools_remote_<pid>` prints the allocated port on
+  stdout (exit 0) on adb 1.0.41. Keep the fallback (a port chosen by probe and checked free first)
+  for adb versions that do not print it.
+- Removing the forward needs `-s <serial>` when more than one device is attached (rule 4).
+- The pid rule is necessary: the device had two `webview_devtools_remote_*` sockets, one from
+  another process.
+- `GET /json/list` returned one target of type `page` with the page title; a target is picked from
+  that list. The debugger URL was never printed.
+- Coordinates from `getBoundingClientRect()` (CSS pixels) were correct for `Input.dispatchMouseEvent`
+  with a device pixel ratio of 1.
+
+Not yet tested, each is an open item for the implementation slices: scrolled pages, iframes, a
+device pixel ratio other than 1, typing, and a release build with WebView debugging off.
 
 ## Owner question
 
@@ -135,7 +161,7 @@ owner wants it, it is a separate decision with its own review.
 ## Steps and gates
 
 1. **This document** (docs only). Merge after an independent verdict.
-2. **Spike**, after step 1 is accepted. A fixture with a real WebView that does not add or
+2. **Spike** (done, see "Spike findings"). A fixture with a real WebView that does not add or
    upgrade packages in the Flutter e2e test app: the native Kotlin twin app in
    `e2e-test-workspace` if it has or can get a WebView without new dependencies, otherwise a tiny
    standalone fixture. Run it on a **named** Android emulator that is not one already in use by
