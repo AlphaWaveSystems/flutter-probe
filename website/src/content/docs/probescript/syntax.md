@@ -247,6 +247,7 @@ See [Testing against backend data](/advanced/backend-data/).
 
 ```
 take screenshot "checkout_page"    # save PNG to screenshots folder
+take screenshot "checkout_<timestamp>"  # a name that carries the time of the step
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
@@ -257,6 +258,25 @@ shake                              # simulate device shake gesture
 log "checkpoint reached"           # print to test output
 pause                              # 1-second pause
 ```
+
+### Screenshot names
+
+The app saves a screenshot as the name you give it plus a millisecond stamp, so two screenshots with the same name do not replace each other; a placeholder lets the name itself say what the screenshot shows. The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in every other step, and three built-in placeholders are added:
+
+| Placeholder | Value |
+| --- | --- |
+| `<timestamp>` | the time of the step, `20261113-141502-123` (local time, to the millisecond) |
+| `<run>` | one stamp shared by every screenshot of this `probe test` run, `20261113-141502` |
+| `<test>` | the name of the running test, letters and digits of any script stay (UTF-8 is kept); spaces, `/`, emoji, punctuation and invalid bytes become `_` |
+
+```
+take screenshot "F14_<test>_s02_<run>"
+```
+
+A variable with the same name as a built-in (`<run>`) wins. A placeholder that is neither is left as written. The built-ins are expanded in the name as you wrote it, before variables are substituted, so a variable whose value contains `<test>` keeps that text. Two steps in the same millisecond get the same `<timestamp>`; the app's own stamp still keeps their files apart. `compare screenshot` expands variables but not the built-ins: its name is the key of the baseline, and a name that changes every run would never find it.
+
+The finished name is cleaned, whatever a variable, an environment value or `<random.*>` put in it: `/` and `\` become `_`; control characters (NUL included), direction-changing characters (such as U+202E), the byte order mark and line or paragraph separators are dropped; every `..` is removed; the name is cut at 120 bytes (at a whole character; a long name in a script like Chinese or Japanese can reach that at about 40 characters); and a name with nothing left becomes `screenshot`. Joiners (U+200C, U+200D) are kept, so Persian, Indic and emoji-sequence names stay as written. A name with none of these is used as it is; note that `checkout/step1` becomes `checkout_step1` and `loading...` becomes `loading.`. The cleaning above is all probe does: the app appends its millisecond stamp to the name and does not clean it further, so names that Windows does not accept (reserved names such as `CON`, characters like `:` `?` `*`, a trailing dot or space) are not handled. An `${ENV}` value that ends up in the name is part of the file name; unlike printed lines it is not masked. `compare screenshot` keys its baseline by the name as typed, not by the cleaned name.
+
 
 ## App Lifecycle
 
