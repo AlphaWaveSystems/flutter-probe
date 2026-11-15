@@ -8,6 +8,7 @@ import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
+import { initSendPanel } from "./send-panel";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
@@ -1288,6 +1289,7 @@ if (inspectorSearch) {
 
 initResults();
 initNetworkPanel();
+initSendPanel();
 
 // The scope control next to Run picks what runs: the whole file (the default), the test at the cursor, the tests with a
 // tag, or the tests that failed last time. The tag field shows only for the tag scope.

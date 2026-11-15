@@ -19,6 +19,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **Live step highlight** — while a file runs, the editor gutter follows the executing step (▶ while running, then ✓ / ✗ / – stays on the line; a failed line shows its error on hover). Step rows nest under each test in the results timeline with line number, duration and attempt; click one to jump to its line. The toolbar shows `step N of M` and a **Cancel** button stops the run.
 - **Run part of a file** — next to **Run**, the scope control picks the whole file (the default), the test at the cursor, the tests with one tag, or the tests that failed the last time the file ran in this session. A scope that matches no test is reported and nothing runs. The failed tests are remembered in memory only, so a restart starts with none. When a run has more than one outcome, the results list groups its tests under Failed, Passed and Skipped, failures first.
 - **Network tab** — the requests and responses the app made during a run, read from the agent's request log, with credentials hidden before anything reaches the window (see [The Network tab](#the-network-tab)).
+- **Send request** — one HTTP request from the Network tab, to check a backend by hand, with the answer redacted the same way (see [Send request](#send-request)).
 - **Toast notifications**, dark theme, draggable native title bar, About panel.
 - **Keyboard shortcuts**: ⌘R run, ⌘S save, ⌘B connect/disconnect, ⌘P open workspace, ⌘K refresh devices, `?` help, `Esc` close help.
 
@@ -28,7 +29,17 @@ The **Network** tab next to **Results** shows the requests and responses the app
 
 Credentials are hidden before anything reaches the window: the value of a header, query parameter, JSON key, form field or XML element whose name says it is a credential (authorization, cookie, token, password, API key, session, any name ending in `key`, and more) is replaced and only the name is shown; every query value, the user name and password in a URL, fragments, email addresses, home folders, tokens and card numbers are hidden too. Bodies show the first 4 KB as text; a binary body, or one over 1 MB, shows only its size. The filter searches the text that is shown, so it can find a parameter name and can never confirm a secret value by finding it.
 
-The tab only reads the log of the connected app. It makes no request of its own, stores nothing in the browser or on disk, and nothing in it is sent to an AI provider. Some things are not recognised by name or shape and are shown as they are: a short secret under an ordinary name, a token that is part of a path, UUIDs, IP addresses.
+The list only reads the log of the connected app. It makes no request of its own (the **Send request** panel below does, only when you press Send), stores nothing in the browser or on disk, and nothing in it is sent to an AI provider. Some things are not recognised by name or shape and are shown as they are: a short secret under an ordinary name, a token that is part of a path, UUIDs, IP addresses.
+
+## Send request
+
+**Send** in the Network tab opens a small form: a method, an address, headers (one `Name: value` per line, not saved anywhere) and a body. Studio makes the request from this machine and shows the answer: the status, the time, the redirects that were followed, the response headers and a text preview of the body. The answer goes through the same redactor as the Network tab, so credentials, tokens and personal text in it are hidden, and the address you typed is shown with its query values hidden. Nothing is shown as markup and nothing is stored in the browser, on disk or in a log; nothing goes to an AI provider.
+
+The first request to a host in a session asks first. The dialog names the host and port and says where the name leads (a public address, this machine, a private network); an address on this machine or a private network gets a stronger warning, because the request then comes from your machine into your own network. **Allow** lets Studio call that host and port for the rest of the session, **Cancel** (or Esc) sends nothing. The rules are enforced by Studio, not only by the window: an unallowed host is refused whatever calls it.
+
+Limits: only `http` and `https`, no user name or password in the address, no `Host`, `Content-Length` or connection headers (Studio sets them), at most 50 headers, a 256 KB request, 30 seconds, a 1 MB response (a longer one is marked cut), at most 5 redirects on the same host, one request at a time and ten a minute. A redirect to another host is shown and not followed; send it as a new request to be asked about that host. Cloud metadata addresses and the unspecified and multicast addresses are never called. In the browser-driven (headless) build, an address on this machine or its network is refused unless it is named by the test allow-list (`PROBE_STUDIO_TEST_ALLOW_LOCAL`).
+
+Saving a request as a `.probe` step is not part of this panel yet.
 
 ## Automation (no window, no cursor)
 
