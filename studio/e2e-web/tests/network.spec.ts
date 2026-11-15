@@ -63,6 +63,7 @@ test.describe("Network tab (seeded request log)", () => {
     await openNetwork(page);
     await rows(page).first().click();
     const detail = page.locator("#net-detail");
+    await expect(detail.locator(".net-hname", { hasText: /^X-Note$/ }).locator("xpath=following-sibling::span[1]")).not.toContainText("ghp_");
     await expect(detail).toContainText("Authorization");
     await expect(detail.locator(".net-hname", { hasText: /^Authorization$/ }).locator("xpath=following-sibling::span[1]")).toHaveText("[redacted]");
     await expect(detail.locator(".net-hname", { hasText: /^Cookie$/ }).locator("xpath=following-sibling::span[1]")).toHaveText("[redacted]");
@@ -82,6 +83,7 @@ test.describe("Network tab (seeded request log)", () => {
     await expect(page.locator("#net-detail img, #net-detail script")).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__netXss)).toBeUndefined();
     expect(await page.locator("#net-detail").innerText()).not.toContain(netToken.slice(0, 12));
+    for (const bad of [netToken.slice(4, 20), "jane.doe", "alice", "example.com"]) expect(await page.locator("#net-detail").innerText(), bad).not.toContain(bad); // split by hidden and glyphless characters
     await rows(page).nth(2).click();
     await expect(page.locator("#net-detail")).toContainText("binary, 4.0 KB, not shown");
     await expect(page.locator("#net-detail pre")).toHaveCount(0);

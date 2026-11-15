@@ -49,7 +49,7 @@ export function seedExchanges() {
     entries: [
       {
         seq: 1, method: "GET", url: `https://user:${netSecret}@api.example.test/v1/me?token=${netSecret}&id=7#access_token=${netSecret}`, status: 200, durationMs: 41,
-        requestHeaders: { Authorization: `Bearer ${netSecret}`, Cookie: `sid=${netSecret}`, "Content-Type": "application/json", "X_Api_Key": netSecret, Accept: "application/json" },
+        requestHeaders: { "X-Note": split(netToken, "\u00AD"), Authorization: `Bearer ${netSecret}`, Cookie: `sid=${netSecret}`, "Content-Type": "application/json", "X_Api_Key": netSecret, Accept: "application/json" },
         responseHeaders: { "Content-Type": "application/json", "Set-Cookie": `sid=${netSecret}; HttpOnly`, "X-Request-Id": "req-1" },
         requestBody: "", responseBody: JSON.stringify({ name: "Jane", email: netEmail, home: netHome, password: netSecret, nested: { apiKey: netSecret, items: [{ token: netSecret }, { ok: 1 }] } }),
         requestBytes: 0, responseBytes: 200,
@@ -58,7 +58,7 @@ export function seedExchanges() {
         seq: 2, method: "POST", url: "https://api.example.test/v1/login", status: 401, durationMs: 88,
         requestHeaders: { "Content-Type": "application/x-www-form-urlencoded" }, responseHeaders: { "Content-Type": "text/html" },
         requestBody: `user=jane&password=${netSecret}&next=%2Fhome%2Falice`,
-        responseBody: `<img src=x onerror="window.__netXss=1"><script>window.__netXss=2</script> ${netToken}`,
+        responseBody: `<img src=x onerror="window.__netXss=1"><script>window.__netXss=2</script> ${netToken} ${split(netToken, "\u2D7F")} ${split(netEmail, "\uE000")} ${split(netHome, "\u2065")}`,
         requestBytes: 60, responseBytes: 120,
       },
       {

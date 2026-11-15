@@ -89,7 +89,7 @@ describe("formatting", () => {
   it("says what an empty list means", () => {
     assert.equal(emptyMessage("Connect to a device first.", false), "Connect to a device first.");
     assert.match(emptyMessage(null, true), /filter/);
-    assert.match(emptyMessage(null, false), /Run a test/);
+    assert.match(emptyMessage(null, false), /Connect a device and run a test/);
   });
 });
 

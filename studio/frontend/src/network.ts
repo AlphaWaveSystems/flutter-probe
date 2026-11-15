@@ -145,7 +145,7 @@ export function bodyView(b: NetBody): { text: string; note: string } {
 /** What the list says when it has no rows. */
 export function emptyMessage(error: string | null, filtered: boolean): string {
   if (error) return error;
-  return filtered ? "No request matches the filter." : "No request was recorded yet. Run a test to see the app's requests.";
+  return filtered ? "No request matches the filter." : "No request was recorded yet. Connect a device and run a test to see the app's requests.";
 }
 
 /**
