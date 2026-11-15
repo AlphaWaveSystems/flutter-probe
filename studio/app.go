@@ -527,7 +527,9 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 	if err != nil {
 		return ConnectionStatus{}, fmt.Errorf("%s", redactToken(fmt.Sprintf("dial: %v. %s", err, wifiHint(host, port, err)), token))
 	}
-	if err := client.Ping(a.ctx); err != nil {
+	// The handshake is the ping plus the agent's capabilities, which a press_key step needs. Studio has no CLI version to
+	// compare, so there is no version warning to show.
+	if _, err := probelink.CheckHandshake(a.ctx, client, ""); err != nil {
 		_ = client.Close()
 		return ConnectionStatus{}, fmt.Errorf("%s", redactToken(fmt.Sprintf("ping: %v. %s", err, wifiHint(host, port, err)), token))
 	}
@@ -681,7 +683,9 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		return ConnectionStatus{}, fmt.Errorf("unsupported platform: %s", dev.Platform)
 	}
 
-	if err := client.Ping(a.ctx); err != nil {
+	// The handshake is the ping plus the agent's capabilities, which a press_key step needs. Studio has no CLI version to
+	// compare, so there is no version warning to show.
+	if _, err := probelink.CheckHandshake(a.ctx, client, ""); err != nil {
 		_ = client.Close()
 		if cleanup != nil {
 			cleanup()
