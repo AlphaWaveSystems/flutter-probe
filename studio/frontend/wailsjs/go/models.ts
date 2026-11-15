@@ -433,6 +433,7 @@ export namespace main {
 	}
 	export class NetDetail {
 	    epoch: string;
+	    seeded?: boolean;
 	    seq: number;
 	    method: string;
 	    url: string;
@@ -456,6 +457,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.epoch = source["epoch"];
+	        this.seeded = source["seeded"];
 	        this.seq = source["seq"];
 	        this.method = source["method"];
 	        this.url = source["url"];
@@ -544,6 +546,7 @@ export namespace main {
 	    total: number;
 	    shown: number;
 	    rows: NetRow[];
+	    seeded?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new NetList(source);
@@ -556,6 +559,7 @@ export namespace main {
 	        this.total = source["total"];
 	        this.shown = source["shown"];
 	        this.rows = this.convertValues(source["rows"], NetRow);
+	        this.seeded = source["seeded"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

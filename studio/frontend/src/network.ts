@@ -20,6 +20,7 @@ export interface NetList {
   total: number;
   shown: number;
   rows: NetRow[];
+  seeded?: boolean; // the rows are the test seed of a headless build, not an app's
 }
 
 export interface NetHeader {
@@ -36,6 +37,7 @@ export interface NetBody {
 
 export interface NetDetail extends NetRow {
   epoch: string;
+  seeded?: boolean;
   requestHeaders: NetHeader[];
   responseHeaders: NetHeader[];
   moreRequestHeaders?: number;
@@ -68,21 +70,24 @@ export class NetState {
   /**
    * Takes an answer. A full answer (the request was for everything) replaces the rows. An incremental one adds the rows after the
    * last one, unless the epoch changed, which means the app restarted and its numbers start over: then it replaces them.
-   * Returns true when what was on screen was replaced.
+   * Returns "replaced" when what was on screen was replaced, "added" when rows were appended, and "reread" when an incremental answer
+   * came from another epoch: the app restarted, and an answer that asked only for what is new may be missing the first rows of the new
+   * run, so nothing is taken from it and the caller must read everything again.
    */
-  apply(list: NetList, incremental: boolean): boolean {
+  apply(list: NetList, incremental: boolean): "replaced" | "added" | "reread" {
     const restarted = list.epoch !== this.epoch && this.epoch !== "";
-    if (!incremental || restarted || this.rows.length === 0) {
+    if (incremental && restarted) return "reread";
+    if (!incremental || this.rows.length === 0) {
       this.rows = list.rows.slice(-MAX_ROWS);
       this.epoch = list.epoch;
       this.latest = Math.max(list.latest, this.rows.length ? this.rows[this.rows.length - 1].seq : 0);
-      return true;
+      return "replaced";
     }
     const added = list.rows.filter((r) => r.seq > this.latest);
     this.rows = this.rows.concat(added).slice(-MAX_ROWS);
     this.epoch = list.epoch;
     this.latest = Math.max(this.latest, list.latest, added.length ? added[added.length - 1].seq : 0);
-    return false;
+    return "added";
   }
 }
 
@@ -90,13 +95,15 @@ export function formatSize(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "?";
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n < 1024 ** 4) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  return "over 1 TB";
 }
 
 export type StatusClass = "ok" | "redirect" | "client" | "server" | "error";
 
 export function statusClass(status: number, error?: string): StatusClass {
-  if (error || status === 0) return "error";
+  if (error || status <= 0 || !Number.isFinite(status)) return "error";
   if (status >= 500) return "server";
   if (status >= 400) return "client";
   if (status >= 300) return "redirect";
@@ -186,4 +193,149 @@ export class RunPoller {
     this.timer = null;
     this.refresh();
   }
+}
+
+export interface NetFilterArgs {
+  method: string;
+  status: string;
+  text: string;
+}
+
+/** What the controller needs from Studio and from the page. The page's side only draws what it is given. */
+export interface NetApi {
+  list(since: number, filter: NetFilterArgs): Promise<NetList>;
+  detail(epoch: string, seq: number): Promise<NetDetail>;
+}
+
+export interface NetView {
+  filters(): NetFilterArgs;
+  renderList(rows: NetRow[], selected: number, emptyText: string): void;
+  renderDetail(d: NetDetail | null, message?: string): void;
+  markSelected(seq: number): void;
+  setInfo(text: string): void;
+}
+
+/**
+ * The Network tab's behaviour without the page: what is read, when, and which answers may still be shown. Every reset (a new run, a
+ * connection or workspace change, a refused read) starts a new generation, and an answer that was asked in an earlier one is dropped,
+ * so a slow answer cannot put a row or a detail of the old run or the old app under what is shown now. A detail is also dropped when
+ * its epoch is not the list's or its row is no longer the selected one.
+ */
+export class NetController {
+  readonly state = new NetState();
+  selected = 0;
+  lastError: string | null = null;
+  active = false;
+  private generation = 0;
+  private listCalls = 0;
+  private detailCalls = 0;
+  private readonly poller: RunPoller;
+  private readonly api: NetApi;
+  private readonly view: NetView;
+
+  constructor(api: NetApi, view: NetView, schedule?: (fn: () => void, ms: number) => unknown, cancel?: (t: unknown) => void) {
+    this.api = api;
+    this.view = view;
+    this.poller = new RunPoller(
+      () => {
+        if (this.active) void this.refresh(true);
+      },
+      schedule,
+      cancel,
+    );
+  }
+
+  get polling(): boolean {
+    return this.poller.running;
+  }
+
+  private forget(): void {
+    this.generation++;
+    this.state.clear();
+    this.selected = 0;
+    this.view.renderDetail(null);
+  }
+
+  private draw(): void {
+    this.view.renderList(this.state.rows, this.selected, emptyMessage(this.lastError, filteredBy(this.view.filters())));
+  }
+
+  setActive(on: boolean): void {
+    this.active = on;
+    if (on) void this.refresh(false);
+  }
+
+  /** A new run starts a new log. */
+  runStarted(): void {
+    this.forget();
+    if (this.active) this.draw();
+    this.poller.start();
+  }
+
+  runFinished(): void {
+    this.poller.stop();
+  }
+
+  /** A workspace or connection change makes what is on screen stale. */
+  reset(): void {
+    this.forget();
+    this.draw();
+    if (this.active) void this.refresh(false);
+  }
+
+  /** A new filter or a click on Refresh reads all of the log; the poll during a run reads what is new. */
+  async refresh(incremental: boolean): Promise<void> {
+    const wantIncremental = incremental && this.state.since > 0;
+    const mine = ++this.listCalls;
+    const generation = this.generation;
+    let list: NetList;
+    try {
+      list = await this.api.list(wantIncremental ? this.state.since : 0, this.view.filters());
+    } catch (err) {
+      if (mine !== this.listCalls || generation !== this.generation) return;
+      // Studio said no (for example, there is no app connected): its sentence is the list's empty text.
+      this.lastError = String(err instanceof Error ? err.message : err).replace(/^Error: /, "");
+      this.forget();
+      this.view.setInfo("");
+      this.draw();
+      return;
+    }
+    if (mine !== this.listCalls || generation !== this.generation) return;
+    this.lastError = null;
+    const result = this.state.apply(list, wantIncremental);
+    if (result === "reread") {
+      this.forget(); // the app restarted: what is on screen is of the old run
+      this.draw();
+      await this.refresh(false);
+      return;
+    }
+    if (result === "replaced" && this.selected !== 0 && !this.state.rows.some((r) => r.seq === this.selected)) {
+      this.selected = 0;
+      this.generation++; // a detail that is still on its way was asked for a row that is gone
+      this.view.renderDetail(null);
+    }
+    const count = list.total > list.shown ? `${list.shown} of ${list.total} shown` : this.state.rows.length ? `${this.state.rows.length}` : "";
+    this.view.setInfo(list.seeded ? (count ? `seeded (test) · ${count}` : "seeded (test)") : count);
+    this.draw();
+  }
+
+  async select(seq: number): Promise<void> {
+    this.selected = seq;
+    this.view.markSelected(seq);
+    const mine = ++this.detailCalls;
+    const generation = this.generation;
+    const epoch = this.state.epoch;
+    try {
+      const d = await this.api.detail(epoch, seq);
+      if (mine !== this.detailCalls || generation !== this.generation || d.epoch !== this.state.epoch || this.selected !== seq || d.seq !== seq) return;
+      this.view.renderDetail(d);
+    } catch {
+      if (mine !== this.detailCalls || generation !== this.generation) return;
+      this.view.renderDetail(null, "That request cannot be shown now. Refresh the list.");
+    }
+  }
+}
+
+export function filteredBy(f: NetFilterArgs): boolean {
+  return f.method !== "" || f.status !== "" || f.text.trim() !== "";
 }

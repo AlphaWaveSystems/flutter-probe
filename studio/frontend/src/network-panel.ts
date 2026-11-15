@@ -4,19 +4,9 @@
 
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { HTTPExchange, HTTPExchanges } from "../wailsjs/go/main/App";
-import { latestWins } from "./latest-wins";
-import { NetState, RunPoller, bodyView, emptyMessage, formatRow, type NetBody, type NetDetail, type NetHeader, type NetList } from "./network";
+import { NetController, bodyView, emptyMessage, formatRow, type NetApi, type NetBody, type NetDetail, type NetHeader, type NetList, type NetRow, type NetView } from "./network";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
-
-const state = new NetState();
-let selected = 0; // the sequence number whose detail is shown
-let lastError: string | null = null;
-let active = false; // the Network tab is the one on show
-
-function filtered(): boolean {
-  return $<HTMLSelectElement>("net-method").value !== "" || $<HTMLSelectElement>("net-status").value !== "" || $<HTMLInputElement>("net-text").value.trim() !== "";
-}
 
 function text(tag: string, className: string, value: string): HTMLElement {
   const el = document.createElement(tag);
@@ -25,14 +15,14 @@ function text(tag: string, className: string, value: string): HTMLElement {
   return el;
 }
 
-function renderList(): void {
+function renderList(rows: NetRow[], selected: number, emptyText: string): void {
   const list = $("net-list");
   list.replaceChildren();
-  if (state.rows.length === 0) {
-    list.append(text("li", "empty", emptyMessage(lastError, filtered())));
+  if (rows.length === 0) {
+    list.append(text("li", "empty", emptyText));
     return;
   }
-  for (const r of state.rows) {
+  for (const r of rows) {
     const v = formatRow(r);
     const li = document.createElement("li");
     li.dataset.seq = String(r.seq);
@@ -42,7 +32,7 @@ function renderList(): void {
     if (v.mocked) url.append(" ", text("span", "net-mocked", "mocked"));
     url.title = v.url;
     li.append(url);
-    li.addEventListener("click", () => void select(r.seq));
+    li.addEventListener("click", () => void controller.select(r.seq));
     list.append(li);
   }
   list.scrollTop = list.scrollHeight;
@@ -74,7 +64,7 @@ function renderDetail(d: NetDetail | null, message = ""): void {
   const v = formatRow(d);
   el.append(
     text("div", "net-url-full", `${d.method} ${d.url}`),
-    text("div", "dim", `${v.status} · ${v.time} · ${v.size}${v.mocked ? " · mocked" : ""}${d.error ? " · " + d.error : ""}`),
+    text("div", "dim", `${v.status} · ${v.time} · ${v.size}${v.mocked ? " · mocked" : ""}${d.seeded ? " · seeded (test)" : ""}${d.error ? " · " + d.error : ""}`),
     ...headers("Request headers", d.requestHeaders, d.moreRequestHeaders),
     ...body("Request body", d.requestBody),
     ...headers("Response headers", d.responseHeaders, d.moreResponseHeaders),
@@ -82,104 +72,54 @@ function renderDetail(d: NetDetail | null, message = ""): void {
   );
 }
 
-// The latest detail wins: a slow answer for a row that is no longer selected is dropped.
-let wanted = 0;
-const loadDetail = latestWins<NetDetail>(
-  () => HTTPExchange(state.epoch, wanted) as Promise<NetDetail>,
-  (d) => renderDetail(d),
-  () => renderDetail(null, "That request cannot be shown now. Refresh the list."),
-);
+const api: NetApi = {
+  list: async (since, f) => (await HTTPExchanges({ since, method: f.method, status: f.status, text: f.text })) as NetList,
+  detail: async (epoch, seq) => (await HTTPExchange(epoch, seq)) as NetDetail,
+};
 
-async function select(seq: number): Promise<void> {
-  selected = seq;
-  wanted = seq;
-  for (const li of $("net-list").children) (li as HTMLElement).classList.toggle("selected", (li as HTMLElement).dataset.seq === String(seq));
-  await loadDetail();
-}
-
-let wantIncremental = false;
-let pendingError = "";
-const refreshOnce = latestWins<NetList>(
-  async () => {
-    try {
-      return (await HTTPExchanges({ since: wantIncremental ? state.since : 0, method: $<HTMLSelectElement>("net-method").value, status: $<HTMLSelectElement>("net-status").value, text: $<HTMLInputElement>("net-text").value })) as NetList;
-    } catch (err) {
-      pendingError = String(err).replace(/^Error: /, "");
-      throw err;
-    }
+const view: NetView = {
+  filters: () => ({ method: $<HTMLSelectElement>("net-method").value, status: $<HTMLSelectElement>("net-status").value, text: $<HTMLInputElement>("net-text").value }),
+  renderList,
+  renderDetail,
+  markSelected: (seq) => {
+    for (const li of $("net-list").children) (li as HTMLElement).classList.toggle("selected", (li as HTMLElement).dataset.seq === String(seq));
   },
-  (list) => {
-    lastError = null;
-    const replaced = state.apply(list, wantIncremental);
-    if (replaced && !state.rows.some((r) => r.seq === selected)) {
-      selected = 0;
-      renderDetail(null);
-    }
-    $("net-info").textContent = list.total > list.shown ? `${list.shown} of ${list.total} shown` : state.rows.length ? `${state.rows.length}` : "";
-    renderList();
+  setInfo: (t) => {
+    $("net-info").textContent = t;
   },
-  () => {
-    // Studio said no (for example, there is no app connected): its sentence is the list's empty text.
-    lastError = pendingError;
-    state.clear();
-    selected = 0;
-    renderDetail(null);
-    $("net-info").textContent = "";
-    renderList();
-  },
-);
+};
 
-// refresh reads the request log. A new filter or a click on Refresh reads all of it again; the poll during a run reads what is new.
-// The latest answer wins, so a slow answer cannot replace a newer one.
-async function refresh(incremental: boolean): Promise<void> {
-  wantIncremental = incremental && state.since > 0;
-  await refreshOnce();
-}
-
-const poller = new RunPoller(() => {
-  if (active) void refresh(true);
-});
+// What is shown and what may still be shown is decided in network.ts; this file only draws.
+const controller = new NetController(api, view);
 
 function show(network: boolean): void {
-  active = network;
+  controller.setActive(network);
   $("results-panel").hidden = network;
   $("network-panel").hidden = !network;
   for (const [id, on] of [["tab-results", !network], ["tab-network", network]] as const) {
     $(id).classList.toggle("active", on);
     $(id).setAttribute("aria-selected", String(on));
   }
-  if (network) void refresh(false);
 }
 
 let filterTimer: ReturnType<typeof setTimeout> | null = null;
 function filterChanged(): void {
   if (filterTimer) clearTimeout(filterTimer);
-  filterTimer = setTimeout(() => void refresh(false), 200);
+  filterTimer = setTimeout(() => void controller.refresh(false), 200);
 }
 
 export function initNetworkPanel(): void {
   $("tab-results").addEventListener("click", () => show(false));
   $("tab-network").addEventListener("click", () => show(true));
-  $("btn-net-refresh").addEventListener("click", () => void refresh(false));
+  $("btn-net-refresh").addEventListener("click", () => void controller.refresh(false));
   for (const id of ["net-method", "net-status"]) $(id).addEventListener("change", filterChanged);
   $("net-text").addEventListener("input", filterChanged);
-  EventsOn("run:started", () => {
-    state.clear(); // a new run starts a new log
-    selected = 0;
-    renderDetail(null);
-    if (active) renderList();
-    poller.start();
-  });
-  EventsOn("run:finished", () => poller.stop());
-  renderList();
+  EventsOn("run:started", () => controller.runStarted());
+  EventsOn("run:finished", () => controller.runFinished());
+  renderList([], 0, emptyMessage(null, false));
 }
 
 // A workspace or connection change makes what is on screen stale: it is forgotten, and read again if the tab is on show.
 export function resetNetworkPanel(): void {
-  state.clear();
-  selected = 0;
-  renderDetail(null);
-  renderList();
-  if (active) void refresh(false);
+  controller.reset();
 }
-
