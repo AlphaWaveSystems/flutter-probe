@@ -493,6 +493,8 @@ func (p *Parser) parseStepInner() (Step, error) {
 		return p.parseActionSetLocation()
 	case TOKEN_SET_LANGUAGE:
 		return p.parseActionSetLanguage()
+	case TOKEN_SET_APPEARANCE:
+		return p.parseActionSetAppearance()
 	case TOKEN_TRAVEL:
 		return p.parseTravel()
 	case TOKEN_VERIFY_BROWSER:
@@ -1969,6 +1971,24 @@ func (p *Parser) parseActionSetLanguage() (Step, error) {
 	p.advance()
 	p.consumeNewline()
 	return ActionStep{Verb: VerbSetLanguage, Name: tag, Line: line}, nil
+}
+
+// appearanceModes are the values `set appearance` takes. auto is accepted on every platform here; the run refuses it
+// on iOS, because the parser does not know which device the test runs on.
+var appearanceModes = map[string]bool{"light": true, "dark": true, "auto": true}
+
+// parseActionSetAppearance handles: set appearance dark / set appearance to light / set appearance "auto"
+func (p *Parser) parseActionSetAppearance() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compound "set appearance"
+	p.skipFillers()
+	tok := p.peek()
+	if (tok.Type != TOKEN_STRING && tok.Type != TOKEN_IDENT) || !appearanceModes[tok.Literal] {
+		return nil, fmt.Errorf("line %d: expected light, dark or auto after set appearance", line)
+	}
+	p.advance()
+	p.consumeNewline()
+	return ActionStep{Verb: VerbSetAppearance, Name: tok.Literal, Line: line}, nil
 }
 
 // parseCoordinateLine consumes all remaining tokens up to the next NEWLINE

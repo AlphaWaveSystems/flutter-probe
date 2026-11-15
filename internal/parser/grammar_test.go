@@ -772,6 +772,17 @@ var grammarProductionExamples = []productionExample{
 				t.Errorf("language tags = %v", got)
 			}
 		}},
+	{production: "set-appearance-step", src: testBody(`set appearance dark`, `set appearance to light`, `set appearance "auto"`),
+		want: repeat("action:set_appearance", 3),
+		check: func(t *testing.T, p *parser.Program) {
+			var got []string
+			for _, s := range p.Tests[0].Body {
+				got = append(got, s.(parser.ActionStep).Name)
+			}
+			if strings.Join(got, ",") != "dark,light,auto" {
+				t.Errorf("appearance modes = %v", got)
+			}
+		}},
 	{production: "set-location-step", src: testBody(`set location 37.7749, -122.4194`, `set location -33.8, 151.2`, `set location 37 122`),
 		want: repeat("action:set_location", 3),
 		check: func(t *testing.T, p *parser.Program) {

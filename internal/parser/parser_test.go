@@ -1765,6 +1765,41 @@ func TestParser_SetLocation(t *testing.T) {
 	}
 }
 
+// TestParser_SetAppearance covers `set appearance` with the filler word and both quote styles, and refuses any other
+// value when the file is parsed, so a typo fails before a device is touched.
+func TestParser_SetAppearance(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		step string
+		want string // the mode; "" means the line must not parse
+	}{
+		{name: "dark", step: "set appearance dark", want: "dark"},
+		{name: "light with the filler to", step: "set appearance to light", want: "light"},
+		{name: "auto quoted", step: `set appearance "auto"`, want: "auto"},
+		{name: "dark quoted", step: `set appearance "dark"`, want: "dark"},
+		{name: "unknown value", step: "set appearance blue", want: ""},
+		{name: "capital letter", step: "set appearance Dark", want: ""},
+		{name: "no value", step: "set appearance", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prog, err := parser.ParseFile("test \"t\"\n  " + tc.step + "\n")
+			if tc.want == "" {
+				if err == nil {
+					t.Fatalf("%q parsed, want a parse error", tc.step)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+			if !ok || a.Verb != parser.VerbSetAppearance || a.Name != tc.want {
+				t.Errorf("step = %+v, want set_appearance %q", prog.Tests[0].Body[0], tc.want)
+			}
+		})
+	}
+}
+
 // TestParser_Travel covers the FP-6 `travel to ... over N seconds` block:
 // an indented list of waypoints followed by a sibling duration clause at the
 // same indent level as "travel to" (the same trailing-clause shape as `test

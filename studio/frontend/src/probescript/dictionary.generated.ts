@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "1a60af252b02157b15d18b2d219cdb25061c466e3cc9e6fc5d0d2dfc5f437611";
+export const SOURCE_SHA256 = "fd1e888aa90814b2a44a833c95c39f140042f2652b6f486ab06dd1e8b311d34d";
 
 export const COMMANDS = [
   {
@@ -423,6 +423,12 @@ export const COMMANDS = [
     "command": "set language",
     "syntax": "set language \"de\" · \"pt-BR\" · \"ar\" · \"system\"",
     "description": "Run the app in another language and relaunch it (Android 13+, iOS simulator). `\"system\"` removes the override. The device language and system dialogs are unchanged",
+    "category": "Device"
+  },
+  {
+    "command": "set appearance",
+    "syntax": "set appearance dark · light · auto",
+    "description": "Set the device's light or dark mode (`auto`: Android only). The app is not relaunched. A physical iOS device is refused",
     "category": "Device"
   },
   {

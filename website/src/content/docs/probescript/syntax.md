@@ -297,6 +297,18 @@ The app is force-stopped and relaunched, so app state is lost (data on disk is k
 simulator gets the language as a launch argument. Right-to-left languages (`ar`, `he`, `fa`, `ur`) flip the layout because
 Flutter follows the locale. Not supported on physical iOS devices. See [Testing localized apps](/advanced/multi-language/).
 
+## Device Appearance
+
+```
+set appearance dark                # the device's dark mode (also light; auto on Android only)
+see "Settings"
+set appearance light               # back to light
+```
+
+The device's own light or dark mode, not one app's. The app is not relaunched; an app whose theme follows the system setting changes with it. An iOS simulator takes
+`light` or `dark`; `auto` is refused there when the step runs. A physical iOS device is refused: change its appearance in
+Settings. See [Android](/platform/android/#appearance) and [iOS](/platform/ios/).
+
 ## Device Location
 
 ```

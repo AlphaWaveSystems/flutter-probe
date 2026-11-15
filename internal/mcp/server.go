@@ -231,6 +231,8 @@ Supports the full ProbeScript syntax:
                      are validated before the run starts. tap l10n "save", see l10n "title".
   Languages:       set language "de" (or "pt-BR", "ar", "system") relaunches the app in that
                      language; probe test --locale de / --locales de,ja,ar do it per run.
+  Appearance:      set appearance dark (or light; auto on Android) sets the device's light or
+                     dark mode. The app is not relaunched. A physical iOS device is refused.
                      prefer #key selectors. Run with --match-loose to fold case, accents and
                      typographic apostrophes in text selectors; use see any of "A", "B" for
                      per-language labels. System-dialog buttons resolve by role (allow, deny,

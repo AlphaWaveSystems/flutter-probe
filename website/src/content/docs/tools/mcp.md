@@ -374,6 +374,26 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 3. `list_devices` — confirm it came online
 4. `run_tests` with `{tag: "smoke", device: "<udid>"}`
 
+### Dark mode check in a test
+
+> "Check that the settings screen still reads in dark mode on the Android emulator."
+
+1. `list_devices` — find the emulator's serial
+2. `write_test` — a test that sets the device to dark mode, checks the screen, and sets it back at the end (the step changes the device this run targets):
+
+   ```
+   test "settings in dark mode"
+     set appearance dark
+     open the app
+     tap "Settings"
+     see "Dark theme"
+     set appearance light
+   ```
+
+3. `run_tests` with `{device: "<serial>"}` — `auto` is Android only, and an iOS simulator takes `light` or `dark`
+
+To change the mode once without a test, use `set_device_setting` with `setting: "appearance"`.
+
 ### Composite (multi-device) test authoring
 
 > "Write a test that verifies push notifications are delivered between two simulators."
