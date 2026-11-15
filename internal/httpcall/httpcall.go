@@ -90,6 +90,10 @@ type Options struct {
 	// Resolver is used for names. The default is net.DefaultResolver. A name is resolved once per connection, and the answer is what is
 	// checked and dialed.
 	Resolver Resolver
+	// Dial connects to an address the policy has allowed. The default is a net.Dialer with a 10 second timeout. It is called only after the
+	// policy, with the checked address; a test uses it to answer without a real connection, and a caller must not use it to dial anything
+	// else.
+	Dial func(ctx context.Context, network, address string) (net.Conn, error)
 }
 
 func (o Options) normalized() Options {
@@ -351,6 +355,10 @@ var errFailed = errors.New("the request failed")
 // before it connects. The address that was dialed is written to remote.
 func newTransport(o Options, remote *string) *http.Transport {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	dial := o.Dial
+	if dial == nil {
+		dial = dialer.DialContext
+	}
 	return &http.Transport{
 		Proxy:                  nil, // never the environment's: a proxy would be asked the name instead of the policy being asked the address
 		DisableKeepAlives:      true,
@@ -386,7 +394,7 @@ func newTransport(o Options, remote *string) *http.Transport {
 				}
 			}
 			for _, ip := range ips {
-				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), portText))
+				conn, err := dial(ctx, network, net.JoinHostPort(ip.String(), portText))
 				if err != nil {
 					continue
 				}

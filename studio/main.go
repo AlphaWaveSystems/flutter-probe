@@ -27,6 +27,9 @@ func keychainMemoryRequested(headless bool, env string) bool {
 func main() {
 	app := NewApp()
 	headless := os.Getenv("PROBE_STUDIO_HEADLESS") == "1"
+	app.send.headless = headless
+	app.send.testAllowLocal = parseTestAllowLocal(headless, os.Getenv("PROBE_STUDIO_TEST_ALLOW_LOCAL"))
+	app.send.maxPerMinute = parseTestSendRate(headless, os.Getenv("PROBE_STUDIO_TEST_SEND_RATE"))
 	endpoint, note := localDiscoveryEndpoint(headless, os.Getenv("PROBE_STUDIO_LOCAL_ENDPOINT"))
 	localDiscoveryTarget = endpoint
 	if note != "" {

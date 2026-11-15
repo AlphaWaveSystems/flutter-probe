@@ -131,9 +131,24 @@
             </select>
             <input id="net-text" type="search" placeholder="Filter" aria-label="Filter the shown text" autocomplete="off" spellcheck="false" maxlength="200" />
             <button type="button" id="btn-net-refresh" class="btn-mini" title="Read the request log again">Refresh</button>
+            <button type="button" id="btn-net-send" class="btn-mini" title="Send one request from this machine and see the answer, with credentials hidden">Send request</button>
             <span id="net-info" class="dim" role="status"></span>
           </div>
-          <div class="net-body">
+          <section id="send-panel" class="send-panel" aria-label="Send request" hidden>
+            <div class="send-row">
+              <select id="send-method" aria-label="Method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select>
+              <input id="send-url" type="text" placeholder="https://host/path" aria-label="Address" autocomplete="off" spellcheck="false" />
+              <button type="button" id="btn-send" class="btn btn-primary">Send</button>
+              <button type="button" id="btn-send-back" class="btn-mini">Back to the log</button>
+            </div>
+            <div class="send-fields">
+              <textarea id="send-headers" rows="3" placeholder="Name: value (one per line). These headers are for this request only; they are not saved to a test step." aria-label="Headers" spellcheck="false"></textarea>
+              <textarea id="send-body" rows="3" placeholder="Body (POST, PUT, PATCH, DELETE)" aria-label="Body" spellcheck="false"></textarea>
+            </div>
+            <div id="send-status" class="dim" role="status"></div>
+            <div id="send-result" class="send-result"></div>
+          </section>
+          <div id="net-body" class="net-body">
             <ul id="net-list" class="net-list" aria-label="Requests"></ul>
             <section id="net-detail" class="net-detail" aria-label="Request detail"><p class="dim">Select a request.</p></section>
           </div>
@@ -287,6 +302,20 @@
         <div class="settings-actions">
           <button type="button" id="btn-explain-preview-cancel" class="btn">Cancel</button>
           <button type="button" id="btn-explain-preview-send" class="btn btn-primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="send-allow-overlay" class="overlay" hidden>
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2 id="send-allow-title">Send requests?</h2>
+        </div>
+        <p id="send-allow-lines" class="dim"></p>
+        <p id="send-allow-warning" class="send-warning" hidden></p>
+        <div class="settings-actions">
+          <button type="button" id="btn-send-allow-cancel" class="btn">Cancel</button>
+          <button type="button" id="btn-send-allow-ok" class="btn btn-primary">Allow and send</button>
         </div>
       </div>
     </div>

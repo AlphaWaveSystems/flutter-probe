@@ -797,7 +797,155 @@ export namespace main {
 	        this.costUSD = source["costUSD"];
 	    }
 	}
+	export class SendHeader {
+	    name: string;
+	    value: string;
 	
+	    static createFrom(source: any = {}) {
+	        return new SendHeader(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.value = source["value"];
+	    }
+	}
+	export class SendHop {
+	    from: string;
+	    to: string;
+	    status: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendHop(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.from = source["from"];
+	        this.to = source["to"];
+	        this.status = source["status"];
+	    }
+	}
+	export class SendInput {
+	    method: string;
+	    url: string;
+	    headers: SendHeader[];
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.headers = this.convertValues(source["headers"], SendHeader);
+	        this.body = source["body"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SendResult {
+	    sent: string;
+	    requestHeaders: NetHeader[];
+	    status: number;
+	    durationMs: number;
+	    url: string;
+	    hops: SendHop[];
+	    stopped?: SendHop;
+	    stoppedHost?: string;
+	    responseHeaders: NetHeader[];
+	    moreHeaders?: number;
+	    responseBody: NetBody;
+	    truncated?: boolean;
+	    remoteClass: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sent = source["sent"];
+	        this.requestHeaders = this.convertValues(source["requestHeaders"], NetHeader);
+	        this.status = source["status"];
+	        this.durationMs = source["durationMs"];
+	        this.url = source["url"];
+	        this.hops = this.convertValues(source["hops"], SendHop);
+	        this.stopped = this.convertValues(source["stopped"], SendHop);
+	        this.stoppedHost = source["stoppedHost"];
+	        this.responseHeaders = this.convertValues(source["responseHeaders"], NetHeader);
+	        this.moreHeaders = source["moreHeaders"];
+	        this.responseBody = this.convertValues(source["responseBody"], NetBody);
+	        this.truncated = source["truncated"];
+	        this.remoteClass = source["remoteClass"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class TargetInfo {
+	    host: string;
+	    label?: string;
+	    port: string;
+	    key: string;
+	    allowed: boolean;
+	    addresses: string[];
+	    classes: string[];
+	    local: boolean;
+	    refused?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TargetInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.label = source["label"];
+	        this.port = source["port"];
+	        this.key = source["key"];
+	        this.allowed = source["allowed"];
+	        this.addresses = source["addresses"];
+	        this.classes = source["classes"];
+	        this.local = source["local"];
+	        this.refused = source["refused"];
+	    }
+	}
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;

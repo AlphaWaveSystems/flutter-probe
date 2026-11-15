@@ -532,6 +532,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .net-toolbar select, .net-toolbar input { font-size: 11px; background: var(--bg-2); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1px 4px; }
 .net-toolbar input { flex: 1; min-width: 80px; max-width: 220px; }
 .net-body { display: flex; flex: 1; min-height: 0; }
+.net-body[hidden] { display: none; }
 .net-list { list-style: none; margin: 0; padding: 0; flex: 1 1 55%; min-width: 0; overflow: auto; font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; }
 .net-list li { display: grid; grid-template-columns: 52px 44px 56px 62px minmax(0, 1fr); gap: 6px; padding: 2px 10px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .net-list li:hover, .net-list li.selected { background: var(--hover); }
@@ -548,6 +549,23 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .net-detail .net-hvalue { overflow-wrap: anywhere; }
 .net-detail pre { margin: 2px 0; padding: 4px 6px; max-height: 90px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 11px; }
 .net-detail .net-url-full { overflow-wrap: anywhere; font-family: ui-monospace, SF Mono, Menlo, monospace; }
+
+/* The Send request panel replaces the log and its detail inside the Network tab. */
+.send-panel { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow: auto; padding: 4px 10px; font-size: 11px; }
+.send-panel[hidden] { display: none; }
+.send-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.send-row input { flex: 1; min-width: 120px; font-size: 11px; background: var(--bg-2); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 6px; }
+.send-row select { font-size: 11px; background: var(--bg-2); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1px 4px; }
+.send-fields { display: flex; gap: 6px; }
+.send-fields textarea { flex: 1; min-width: 0; font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; background: var(--bg-2); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); padding: 3px 6px; resize: vertical; }
+.send-result h4 { margin: 6px 0 2px; font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.send-result .net-headers { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 1px 8px; font-family: ui-monospace, SF Mono, Menlo, monospace; }
+.send-result .net-hname { color: var(--fg-muted); overflow-wrap: anywhere; }
+.send-result .net-hvalue, .send-result .send-line { overflow-wrap: anywhere; }
+.send-result pre { margin: 2px 0; padding: 4px 6px; max-height: 110px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); }
+.send-notice { color: #ffd98a; }
+.send-warning { color: #ffd98a; }
+#send-allow-overlay .overlay-card { width: min(560px, 92vw); }
 
 /* Inspector search */
 .inspector-search {

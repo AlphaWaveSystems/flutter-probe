@@ -17,7 +17,8 @@
     "test:run-scope": "node --test run-scope-tests/",
     "test:chat-label": "node --test chat-label-tests/",
     "test:explain": "node --test explain-tests/",
-    "test:network": "node --test network-tests/"
+    "test:network": "node --test network-tests/",
+    "test:send": "node --test send-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.57.0"

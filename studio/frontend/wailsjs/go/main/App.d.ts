@@ -6,11 +6,15 @@ export function AIChatLabel():Promise<string>;
 
 export function AIChatLabelParts():Promise<main.ChatLabelParts>;
 
+export function AllowHost(arg1:string):Promise<void>;
+
 export function ApplyDeviceSetting(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CancelRun():Promise<void>;
 
 export function Chat(arg1:Array<main.ChatMessage>,arg2:string):Promise<main.ChatResponse>;
+
+export function CheckTarget(arg1:string):Promise<main.TargetInfo>;
 
 export function Connect(arg1:string):Promise<main.ConnectionStatus>;
 
@@ -79,6 +83,8 @@ export function SaveAISettings(arg1:string,arg2:main.AISettings):Promise<void>;
 export function SaveWiFiToken(arg1:string,arg2:string):Promise<void>;
 
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
+
+export function SendRequest(arg1:main.SendInput):Promise<main.SendResult>;
 
 export function SetAPIKey(arg1:string):Promise<void>;
 

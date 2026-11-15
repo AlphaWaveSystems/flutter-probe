@@ -421,3 +421,182 @@ func TestSeedNamesAreMentionedOnlyWhereTheyBelong(t *testing.T) {
 		}
 	}
 }
+
+// The Send request panel is the one place Studio calls out on a person's say-so. Its names appear in no AI file, no monitor file and
+// no other file but its own, and only its two files import the call package, so nothing the panel sends or receives can reach the chat,
+// Explain or the request monitor, and nothing else can call out through it. Like the audit above this is a tripwire for accidents, not
+// a proof: it reads names, string literals and imports in the files of this package, so a name built at run time from pieces that are
+// not literals, or a call through another package, is not seen.
+var sendNames = map[string]bool{
+	"SendRequest": true, "CheckTarget": true, "AllowHost": true, "SendInput": true, "SendResult": true, "sendState": true, "SendHeader": true,
+	"TargetInfo": true, "SendHop": true, "typedValues": true, "collectTyped": true, "asciiHost": true, "parseKey": true, "levelOf": true,
+	"parseTestAllowLocal": true, "parseTestSendRate": true, "MethodByName": true,
+}
+
+// sendMembers are the fields through which the panel's state is reached: every use of its methods is a.send.method, so a selector on
+// send is what is looked for (the method names alone are too common to read).
+var sendMembers = map[string]bool{"send": true, "testAllowLocal": true, "maxPerMinute": true}
+
+// sendLiterals are words that, inside a string, name a panel method for a reflective call.
+var sendLiterals = []string{"SendRequest", "CheckTarget", "AllowHost"}
+
+// sendOwn are the files that may use the panel's names, and the few other files with the names they may use.
+func sendOwn(filename string) map[string]bool {
+	switch filename {
+	case "send_policy.go", "send_request.go", "send_host.go", "send_echo.go":
+		return nil // everything
+	case "app.go":
+		return map[string]bool{"sendState": true, "send": true}
+	case "headless.go":
+		return map[string]bool{"MethodByName": true} // the bridge calls a bound method by its name: that is how it reaches every method of App, the panel's too
+	case "main.go":
+		return map[string]bool{"send": true, "headless": true, "testAllowLocal": true, "maxPerMinute": true, "parseTestAllowLocal": true, "parseTestSendRate": true}
+	}
+	return map[string]bool{}
+}
+
+func sendFileMisuse(filename, src string) []string {
+	f, err := parser.ParseFile(token.NewFileSet(), filename, src, 0)
+	if err != nil {
+		return []string{"does not parse: " + err.Error()}
+	}
+	allowed := sendOwn(filename)
+	var bad []string
+	for _, spec := range f.Imports {
+		path, _ := strconv.Unquote(spec.Path.Value)
+		if strings.HasSuffix(path, "/internal/httpcall") && !strings.HasPrefix(filename, "send_") {
+			bad = append(bad, filename+" imports httpcall")
+		}
+	}
+	if allowed == nil {
+		return nil
+	}
+	mention := func(name string) { bad = append(bad, filename+" mentions "+name) }
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch t := n.(type) {
+		case *ast.Ident:
+			if sendNames[t.Name] && !allowed[t.Name] {
+				mention(t.Name)
+			}
+		case *ast.SelectorExpr:
+			if sendMembers[t.Sel.Name] && !allowed[t.Sel.Name] {
+				mention("." + t.Sel.Name)
+			}
+			// What a file that may hold the state does with it: main.go sets the test options, nothing else touches it.
+			if x, ok := t.X.(*ast.SelectorExpr); ok && x.Sel.Name == "send" && !allowed[t.Sel.Name] {
+				mention(".send." + t.Sel.Name)
+			}
+		case *ast.BasicLit:
+			if t.Kind == token.STRING {
+				lit, _ := strconv.Unquote(t.Value)
+				for _, w := range sendLiterals {
+					if strings.Contains(lit, w) {
+						mention("the string " + w)
+					}
+				}
+			}
+		case *ast.BinaryExpr:
+			// "Send" + "Request": the literals of a sum are joined and read as one.
+			if t.Op == token.ADD {
+				if joined, ok := joinedStrings(t); ok {
+					for _, w := range sendLiterals {
+						if strings.Contains(joined, w) {
+							mention("the joined string " + w)
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+	sort.Strings(bad)
+	return dedupe(bad)
+}
+
+// joinedStrings returns the text of a sum of string literals.
+func joinedStrings(e ast.Expr) (string, bool) {
+	switch t := e.(type) {
+	case *ast.BasicLit:
+		if t.Kind != token.STRING {
+			return "", false
+		}
+		s, err := strconv.Unquote(t.Value)
+		return s, err == nil
+	case *ast.BinaryExpr:
+		if t.Op != token.ADD {
+			return "", false
+		}
+		l, ok1 := joinedStrings(t.X)
+		r, ok2 := joinedStrings(t.Y)
+		return l + r, ok1 && ok2
+	case *ast.ParenExpr:
+		return joinedStrings(t.X)
+	}
+	return "", false
+}
+
+func TestTheSendPanelIsReachedByNoOtherCode(t *testing.T) {
+	for name, c := range map[string]struct{ file, src string }{
+		"the chat reads the panel":           {"ai_chat.go", `package main; func f(a *App) { a.SendRequest(SendInput{}) }`},
+		"Explain allows a host":              {"ai_explain.go", `package main; func f(a *App) { a.AllowHost("x:1") }`},
+		"the monitor calls out":              {"net_exchanges.go", `package main; var _ = sendState{}`},
+		"another file imports the call":      {"ai_chat.go", `package main; import "github.com/alphawavesystems/flutter-probe/internal/httpcall"; var _ = httpcall.Do`},
+		"a helper imports the call":          {"util.go", `package main; import hc "github.com/alphawavesystems/flutter-probe/internal/httpcall"; var _ = hc.Do`},
+		"reflection by a name":               {"ai_chat.go", `package main; func f(v any) { _ = MethodByName }`},
+		"a string that names a method":       {"ai_chat.go", `package main; func f() { call(a, "SendRequest", nil) }`},
+		"a name joined from two strings":     {"ai_explain.go", `package main; func f() { call(a, "Send"+"Request", nil) }`},
+		"three pieces":                       {"ai_explain.go", `package main; func f() { call(a, ("Allow"+"H")+"ost", nil) }`},
+		"the state's field":                  {"ai_chat.go", `package main; func f(a *App) { a.send.allowed = nil }`},
+		"the state's method":                 {"ai_explain.go", `package main; func f(a *App) { a.send.allow("x:1") }`},
+		"a bridge-like reflection elsewhere": {"ai_explain.go", `package main; func f(v any, n string) { _ = MethodByName }`},
+		"the field in the monitor":           {"net_seed.go", `package main; func f(a *App) { _ = a.send }`},
+		"main reaches the state's method":    {"main.go", `package main; func f(a *App) { a.send.allow("x:1") }`},
+		"app.go uses a panel method":         {"app.go", `package main; func f(a *App) { a.CheckTarget("") }`},
+		"app.go calls the state":             {"app.go", `package main; func f(a *App) { a.send.begin() }`},
+		"main builds the request":            {"main.go", `package main; var _ = SendInput{}`},
+		"a lookalike of the host form":       {"ai_chat.go", `package main; var _, _ = asciiHost("x")`},
+		"a lookalike of the typed values":    {"ai_chat.go", `package main; var _ = collectTyped`},
+		"the parse of a key from the chat":   {"ai_chat.go", `package main; var _, _, _ = parseKey("x")`},
+		"the monitor takes the allow level":  {"net_exchanges.go", `package main; var _ = levelOf`},
+		"a panel method in the seed":         {"seed_run.go", `package main; func f(a *App) { a.AllowHost("x:1") }`},
+	} {
+		if bad := sendFileMisuse(c.file, c.src); len(bad) == 0 {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	for name, c := range map[string]struct{ file, src string }{
+		"the panel's own file":        {"send_request.go", `package main; import "github.com/alphawavesystems/flutter-probe/internal/httpcall"; func f(a *App) { a.SendRequest(SendInput{}); _ = httpcall.Do; a.send.allow("x") }`},
+		"the state":                   {"send_policy.go", `package main; import "github.com/alphawavesystems/flutter-probe/internal/httpcall"; type sendState struct{}; var _ = httpcall.Do`},
+		"app.go declares the field":   {"app.go", `package main; type App struct { send sendState }`},
+		"main sets the test options":  {"main.go", `package main; func f(a *App, h bool) { a.send.headless = h; a.send.testAllowLocal = parseTestAllowLocal(h, ""); a.send.maxPerMinute = parseTestSendRate(h, "") }`},
+		"other code with other names": {"ai_chat.go", `package main; func f(x struct{ send int }) { _ = x.send }`},
+	} {
+		got := sendFileMisuse(c.file, c.src)
+		// An unrelated use of a common member name is flagged by design in the other files (the rule reads names, not types); the cases
+		// above that must pass are the panel's own files, app.go and main.go.
+		if name == "other code with other names" {
+			if len(got) == 0 {
+				t.Errorf("%s: a member of the panel's state was not flagged", name)
+			}
+			continue
+		}
+		if len(got) != 0 {
+			t.Errorf("%s: refused: %v", name, got)
+		}
+	}
+	paths, _ := filepath.Glob("*.go")
+	checked := 0
+	for _, p := range paths {
+		if strings.HasSuffix(p, "_test.go") {
+			continue
+		}
+		b, _ := os.ReadFile(p)
+		checked++
+		if bad := sendFileMisuse(p, string(b)); len(bad) != 0 {
+			t.Errorf("%v", bad)
+		}
+	}
+	if checked < 10 {
+		t.Fatalf("looked at %d files", checked)
+	}
+}
