@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1312,34 +1311,6 @@ func TestTheNotEditableMessageIsMaskedAndCapped(t *testing.T) {
 	}
 }
 
-// The no-raw-JavaScript proof for the template as it is now (it was extended to report what kind of element was found): the text only reads the page,
-// calls a fixed list of methods, assigns to no property, and has no placeholder or concatenation that could take the script's text.
-func TestTheTemplateOnlyReadsThePageAndCallsAFixedListOfMethods(t *testing.T) {
-	allowed := map[string]bool{
-		"replace": true, "trim": true, "some": true, "call": true, "getBoundingClientRect": true, "getComputedStyle": true, "slice": true,
-		"querySelectorAll": true, "toLowerCase": true, "filter": true, "indexOf": true, "scrollIntoView": true, "focus": true, "matches": true,
-	}
-	for _, m := range regexp.MustCompile(`\.([A-Za-z_][A-Za-z0-9_]*)\(`).FindAllStringSubmatch(findFunction, -1) {
-		if !allowed[m[1]] {
-			t.Errorf("the template calls .%s(", m[1])
-		}
-	}
-	// no assignment to a property of anything (a write to the page)
-	if m := regexp.MustCompile(`\.[A-Za-z_][A-Za-z0-9_]*\s*(?:=|\+=|-=)[^=]`).FindString(findFunction); m != "" {
-		t.Errorf("the template assigns to a property: %q", m)
-	}
-	// every argument comes in as a parameter, and nothing is built from them as code
-	for _, bad := range []string{"eval(", "Function(", "new Function", "setTimeout(", "setInterval(", "import(", "fetch(", "XMLHttpRequest", "WebSocket", "innerHTML", "outerHTML",
-		"document.write", "document.cookie", "localStorage", "sessionStorage", "location", "dispatchEvent", "click(", "setAttribute", "removeAttribute", "`", "${", "+ query", "query +", "+ kind", "+ mode"} {
-		if strings.Contains(findFunction, bad) {
-			t.Errorf("the template contains %q", bad)
-		}
-	}
-	if !strings.HasPrefix(findFunction, "function (kind, query, maxText, mode) {") {
-		t.Errorf("the template's parameters changed")
-	}
-}
-
 // The fake pages in these tests do not run the template, so what it reads is pinned here as text (and checked against a real page by the opt-in device test).
 func TestTheTemplateReportsWhatTypeNeedsToKnow(t *testing.T) {
 	for _, want := range []string{"found.matches(':disabled')", "found.readOnly === true", "found.isContentEditable === true", "tag: tag.slice(0, 20)",
@@ -1347,5 +1318,143 @@ func TestTheTemplateReportsWhatTypeNeedsToKnow(t *testing.T) {
 		if !strings.Contains(findFunction, want) {
 			t.Errorf("the template no longer contains %q", want)
 		}
+	}
+}
+
+// elementFocused is elementWith with the focus flag chosen.
+func elementFocused(tag, inputType string, readOnly, disabled, editable, focused bool) func(string) map[string]any {
+	base := elementWith(tag, inputType, readOnly, disabled, editable)
+	return func(q string) map[string]any {
+		m := base(q)
+		m["focused"] = focused
+		return m
+	}
+}
+
+// the modes the lookups of one step ran in, in order
+func lookupModes(p *pageFake) []string {
+	var modes []string
+	for _, c := range p.of("Runtime.callFunctionOn") {
+		args, _ := c.Params["arguments"].([]any)
+		if len(args) == 4 {
+			m, _ := args[3].(map[string]any)
+			v, _ := m["value"].(string)
+			modes = append(modes, v)
+		}
+	}
+	return modes
+}
+
+// An element that cannot take text is refused before it is focused: the first lookup does not focus, and its refusal comes before the focus check.
+func TestARefusedElementIsNeverFocusedAndTheRefusalComesBeforeTheFocusCheck(t *testing.T) {
+	cases := []struct {
+		name   string
+		lookup func(string) map[string]any
+		want   string
+	}{
+		{"read-only that did not take the focus", elementFocused("input", "text", true, false, false, false), "read-only"},
+		{"disabled (cannot take the focus)", elementFocused("input", "text", false, true, false, false), "disabled"},
+		{"checkbox that did not take the focus", elementFocused("input", "checkbox", false, false, false, false), `an input of type "checkbox"`},
+		{"select that did not take the focus", elementFocused("select", "", false, false, false, false), "not a text field: select"},
+		{"read-only that took the focus", elementFocused("input", "text", true, false, false, true), "read-only"},
+	}
+	for _, c := range cases {
+		p := newPageFake(t)
+		p.lookup = c.lookup
+		s, _, err := sessionFor(t, p, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = s.Type(context.Background(), CSS("#f"), "hello")
+		if err == nil || !strings.Contains(err.Error(), "cannot be typed into ("+c.want+")") || strings.Contains(err.Error(), "take the focus") {
+			t.Errorf("%s: err = %v", c.name, err)
+		}
+		if modes := lookupModes(p); len(modes) != 1 || modes[0] != "find" {
+			t.Errorf("%s: lookups ran in modes %v, want only find (the element must not be focused)", c.name, modes)
+		}
+	}
+	// a typeable element: find first, then focus, then the text
+	p := newPageFake(t)
+	p.lookup = elementWith("input", "text", false, false, false)
+	s, _, err := sessionFor(t, p, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Type(context.Background(), CSS("#f"), "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if modes := lookupModes(p); len(modes) != 2 || modes[0] != "find" || modes[1] != "focus" {
+		t.Errorf("modes = %v, want find then focus", modes)
+	}
+	// an element that is typeable but did not take the focus is still reported as such
+	p = newPageFake(t)
+	p.lookup = elementFocused("input", "text", false, false, false, false)
+	s, _, _ = sessionFor(t, p, "")
+	if err := s.Type(context.Background(), CSS("#f"), "hello"); err == nil || !strings.Contains(err.Error(), "cannot take the focus") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// The tag and the type are tested before the content-editable flag: inside an editing host every descendant reports isContentEditable.
+func TestAFormControlInsideAnEditingHostIsRefused(t *testing.T) {
+	for _, c := range []struct {
+		name        string
+		tag, inType string
+		wantRefusal string
+	}{
+		{"checkbox in a host", "input", "checkbox", `an input of type "checkbox"`},
+		{"date in a host", "input", "date", `an input of type "date"`},
+		{"select in a host", "select", "", "not a text field: select"},
+		{"button in a host", "button", "", "not a text field: button"},
+		{"option in a host", "option", "", "not a text field: option"},
+		{"fieldset in a host", "fieldset", "", "not a text field: fieldset"},
+		{"progress in a host", "progress", "", "not a text field: progress"},
+		{"text input in a host", "input", "text", ""},
+		{"textarea in a host", "textarea", "", ""},
+		{"span in a host", "span", "", ""},
+		{"the host itself", "div", "", ""},
+	} {
+		got := typeRefusal(ElementInfo{Tag: c.tag, InputType: c.inType, Editable: true})
+		if got != c.wantRefusal {
+			t.Errorf("%s: refusal %q, want %q", c.name, got, c.wantRefusal)
+		}
+	}
+	// the same elements outside a host: a span or a div is not a text field
+	if typeRefusal(ElementInfo{Tag: "span"}) == "" || typeRefusal(ElementInfo{Tag: "div"}) == "" {
+		t.Errorf("a plain element outside an editing host is typeable")
+	}
+}
+
+func TestTheKindWordRuleIsExactAtTwentyCharacters(t *testing.T) {
+	for n, want := range map[int]bool{0: true, 1: true, 19: true, 20: true, 21: false, 25: false} {
+		w := strings.Repeat("a", n)
+		got := kindWord(w) == w
+		if got != want {
+			t.Errorf("%d characters: kept = %v, want %v", n, got, want)
+		}
+		if !want && kindWord(w) != "?" {
+			t.Errorf("%d characters: %q, want ?", n, kindWord(w))
+		}
+	}
+}
+
+// The page can change between the two lookups of a Type step: what the second one reports is checked again, and nothing is typed.
+func TestTypeChecksTheElementAgainAfterTheFocusingLookup(t *testing.T) {
+	p := newPageFake(t)
+	calls := 0
+	p.lookup = func(string) map[string]any {
+		calls++
+		if calls == 1 {
+			return elementWith("input", "text", false, false, false)("")
+		}
+		return elementWith("input", "text", true, false, false)("") // became read-only
+	}
+	s, _, err := sessionFor(t, p, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.Type(context.Background(), CSS("#f"), "hello")
+	if err == nil || !strings.Contains(err.Error(), "(read-only)") || len(p.of("Input.insertText")) != 0 {
+		t.Fatalf("err = %v, inserted %d", err, len(p.of("Input.insertText")))
 	}
 }

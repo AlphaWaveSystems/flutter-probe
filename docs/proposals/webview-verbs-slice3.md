@@ -37,7 +37,7 @@ tap "Pay" in webview "checkout"          # pick one page when the app has severa
 
 - The app's WebView must have debugging on (`WebView.setWebContentsDebuggingEnabled(true)`, usually a debug or profile build); a release build with it off has nothing to reach, and the step says so.
 - Content inside **shadow DOM or an iframe is not searched.** Only the top document of a page is.
-- A **read-only or disabled input ignores typed text**; the step refuses when the element does not take the focus.
+- An element that cannot take typed text (a read-only or disabled field, a checkbox or date input, a select, a button) is **refused with the reason, and nothing is typed**; the step also refuses when the element does not take the focus. A refused element is scrolled into view but never focused.
 - The focus check happens once, so a page that steals the focus again right after can still receive the text.
 - Positions are in CSS pixels at a device pixel ratio of 1 in the tests so far; other ratios, scrolled pages and iframes are not yet tested.
 

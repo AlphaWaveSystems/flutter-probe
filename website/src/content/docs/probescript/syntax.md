@@ -440,7 +440,7 @@ tap "Pay" in webview "checkout"          # name the page when the app has more t
   centre. `type` focuses the element, checks that it holds the focus and then inserts the text; if it did not take the
   focus, or cannot take typed text, nothing is typed and the step fails with the reason: `(disabled)`, `(read-only)`, `(an input of
   type "checkbox")` and so on, or `(not a text field: select)`. Text, search, email, url, tel, password and number inputs, textareas
-  and content-editable elements are typed into; checkbox, radio, file, button, range, color and the date and time inputs are not.
+  and content-editable elements are typed into; checkbox, radio, file, button, range, color and the date and time inputs are not, also when they sit inside a content-editable element. The element is looked up first without touching the focus: a refused element is scrolled into view but never focused.
   A text or selector
   longer than 2048 characters, or a text to type longer than 8192, is refused before anything is sent. `don't see` passes when no element matches or
   the match is hidden, and fails when the WebView itself cannot be reached.
