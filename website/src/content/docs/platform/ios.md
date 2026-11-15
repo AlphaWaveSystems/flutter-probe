@@ -247,6 +247,13 @@ running (foreground or backgrounded); put a `restart the app` or equivalent warm
 deep-link step if the app might not be running. Android has no such caveat.
 :::
 
+## WebView content
+
+The `in webview` steps (`tap "..." in webview`, `type ... in webview`, `see`, `don't see`, `wait until ... appears in webview`)
+are **Android-only today**. A `WKWebView` is reached through Safari's Web Inspector protocol, not CDP, and nothing in probe
+speaks it yet: on iOS these steps fail with a message that says so, and nothing is tapped or typed. See the repo's
+`docs/proposals/webview-content-automation.md` for what is known.
+
 ## Native UI Automation
 
 The `tap native` / `see native` / `type native` verbs are **Android-only today** — iOS has no

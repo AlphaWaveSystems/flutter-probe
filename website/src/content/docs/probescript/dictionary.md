@@ -36,6 +36,11 @@ Commands that interact with the app's UI.
 | `store` | `store "value" as myVar` | Store a literal or `<var>` value for use in later steps |
 | `log` | `log "message"` | Emit a message into the run output |
 | `tap native` | `tap native "Choose from Gallery"` | Tap a native (non-Flutter) UI element — pickers, share sheets — matched by uiautomator's text or resource-id. Android only; errors clearly on other platforms. CLI-side only — skipped in cloud mode |
+| `tap ... in webview` | `tap "Contact support" in webview` or `tap css:"#submit" in webview "checkout"` | Tap an element inside the app's own WebView: a quoted string is the element's visible text, `css:"..."` is a CSS selector, and an optional quoted page name picks one page when the app has several. Android only, and the app must have WebView debugging on (see [WebView content](/probescript/syntax/#webview-content-android)); errors clearly on iOS, skipped in cloud mode |
+| `type ... in webview` | `type "hello" into css:"#message" in webview` | Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element does not take the focus (a read-only or disabled input). Android only |
+| `see ... in webview` | `see "Getting Started" in webview` | Assert that a visible element with this text (or matching this selector) is in the WebView. Android only |
+| `don't see ... in webview` | `don't see css:".error" in webview` | Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only |
+| `wait until ... appears in webview` | `wait until "Message sent" appears in webview` | Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only |
 | `type native` | `type native "text" into "query"` | Focus a native text field matched by query, then type into it. Android only. If the field is reached via a screen transition (not already visible), add a `wait` step first — the same idiom used for Flutter navigation |
 
 ## Assertions

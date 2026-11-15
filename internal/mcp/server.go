@@ -287,6 +287,12 @@ Supports the full ProbeScript syntax:
   Native UI:       tap native "…" / see native "…" / type native "…" into "…" —
                      drives native (non-Flutter) UI like pickers and share sheets
                      via uiautomator, matched by text or resource-id. Android only.
+  WebView:         tap "…" in webview / type "…" into css:"#id" in webview /
+                     see "…" in webview / don't see … in webview /
+                     wait until "…" appears in webview — act on the page inside the
+                     app's own WebView (Android; the app needs WebView debugging on).
+                     A quoted string is element text, css:"…" a CSS selector; an
+                     optional quoted page name after "in webview" picks one page.
   Device media:    add media "path/to/photo.jpg" — seeds a file into the camera
                      roll/gallery (Android + iOS simulator).
   GPS routes:      travel to — indented "lat, lng" waypoints followed by a sibling

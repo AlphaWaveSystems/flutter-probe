@@ -309,6 +309,17 @@ see native "IMG_0001.jpg"
 type native "wifi" into "Search settings"
 ```
 
+### WebView content (Android)
+
+Act on the page inside an app's WebView (the app needs WebView debugging on):
+
+```
+tap "Contact support" in webview
+type "hello" into css:"#message" in webview
+see "Getting Started" in webview
+wait until "Message sent" appears in webview
+```
+
 ### Visual regression
 
 ```

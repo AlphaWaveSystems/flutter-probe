@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "f14086d8ed2ace6c522f32e2d11bd0ac9effc724db5540130230d70cde95b659";
+export const SOURCE_SHA256 = "246825f1c78b16196b862c34b43f8e9df66d7b48afc4cb480f019756ca250970";
 
 export const COMMANDS = [
   {
@@ -153,6 +153,36 @@ export const COMMANDS = [
     "command": "tap native",
     "syntax": "tap native \"Choose from Gallery\"",
     "description": "Tap a native (non-Flutter) UI element — pickers, share sheets — matched by uiautomator's text or resource-id. Android only; errors clearly on other platforms. CLI-side only — skipped in cloud mode",
+    "category": "Actions"
+  },
+  {
+    "command": "tap ... in webview",
+    "syntax": "tap \"Contact support\" in webview or tap css:\"#submit\" in webview \"checkout\"",
+    "description": "Tap an element inside the app's own WebView: a quoted string is the element's visible text, `css:\"...\"` is a CSS selector, and an optional quoted page name picks one page when the app has several. Android only, and the app must have WebView debugging on (see [WebView content](/probescript/syntax/#webview-content-android)); errors clearly on iOS, skipped in cloud mode",
+    "category": "Actions"
+  },
+  {
+    "command": "type ... in webview",
+    "syntax": "type \"hello\" into css:\"#message\" in webview",
+    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element does not take the focus (a read-only or disabled input). Android only",
+    "category": "Actions"
+  },
+  {
+    "command": "see ... in webview",
+    "syntax": "see \"Getting Started\" in webview",
+    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only",
+    "category": "Actions"
+  },
+  {
+    "command": "don't see ... in webview",
+    "syntax": "don't see css:\".error\" in webview",
+    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only",
+    "category": "Actions"
+  },
+  {
+    "command": "wait until ... appears in webview",
+    "syntax": "wait until \"Message sent\" appears in webview",
+    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only",
     "category": "Actions"
   },
   {
