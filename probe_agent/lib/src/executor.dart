@@ -113,7 +113,7 @@ class ProbeExecutor {
         if (clientVersion != null && clientVersion.isNotEmpty) {
           stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
         }
-        return {'ok': true, 'agent_version': probeAgentVersion};
+        return {'ok': true, 'agent_version': probeAgentVersion, 'capabilities': probeAgentCapabilities};
 
       case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;
@@ -1660,6 +1660,11 @@ class ProbeExecutor {
         break;
       case 'shake':
         break;
+      default:
+        // An action this agent does not know is an error, not a pass: the CLI would otherwise report the step done
+        // without anything having happened. The CLI only sends actions listed above, so this is not reached by one.
+        throw ProbeError(ProbeError.invalidParams,
+            'unknown device action "$action": this probe_agent does not support it; update probe_agent');
     }
   }
 

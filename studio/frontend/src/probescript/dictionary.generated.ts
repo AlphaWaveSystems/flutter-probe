@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "bbe43e8b25d7f271ab9dcdf6945d18775350bcd91affb34f97969f232120270c";
+export const SOURCE_SHA256 = "5ad2dfb603d5a2c663111e3ab2110ddbc108e5fd3c7b8a57aa24b7e3fb387893";
 
 export const COMMANDS = [
   {
@@ -62,7 +62,7 @@ export const COMMANDS = [
   {
     "command": "press <key>",
     "syntax": "press tab",
-    "description": "Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Not on iOS yet. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
+    "description": "Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Not on iOS yet. The agent must report the `press_key` capability: a probe_agent up to 0.27.0 does not, and the step fails with a message to update it. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
     "category": "Actions"
   },
   {

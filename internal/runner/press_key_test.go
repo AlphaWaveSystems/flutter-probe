@@ -33,6 +33,16 @@ func TestPressKeyReachesTheAgent(t *testing.T) {
 		t.Errorf("sent %q %q (%d calls); want press_key backspace", rec.action, rec.value, rec.calls)
 	}
 
+	// `press enter` is its own step and keeps its own device action: it must not be sent as press_key.
+	enter := &keyRecorder{}
+	e = &Executor{client: enter, vars: map[string]string{}}
+	if err := e.runAction(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter}); err != nil {
+		t.Fatalf("press enter: %v", err)
+	}
+	if enter.calls != 1 || enter.action != "press_enter" {
+		t.Errorf("press enter sent %q (%d calls); want press_enter", enter.action, enter.calls)
+	}
+
 	ios := &keyRecorder{}
 	e = &Executor{client: ios, vars: map[string]string{}, deviceCtx: &DeviceContext{Platform: device.PlatformIOS}}
 	if err := e.runAction(context.Background(), parser.ActionStep{Verb: parser.VerbPressKey, Name: "tab"}); err == nil {

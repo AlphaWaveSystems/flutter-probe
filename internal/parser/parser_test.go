@@ -636,7 +636,7 @@ func TestParser_Swipe(t *testing.T) {
 }
 
 // TestParser_PressKey checks `press <key>`: each key in pressKeys is a press_key step with the key as its name, `press enter`
-// stays its own step, and a word that is not a key is a parse error that names the keys.
+// stays its own step, and any other line that starts with press is a recipe call, as it always was.
 func TestParser_PressKey(t *testing.T) {
 	for _, key := range []string{"tab", "escape", "backspace", "space", "up", "down", "left", "right"} {
 		a := firstAction(t, mustParse(t, testBody("press "+key)).Tests[0].Body)
