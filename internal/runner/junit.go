@@ -260,7 +260,7 @@ func (r *Reporter) junitSuiteProps() *junitProps {
 	}
 	add("run_label", r.junit.Label)
 	for _, kv := range ReportProperties(r.properties) {
-		p = append(p, junitProp{kv.Name, kv.Value})
+		p = append(p, junitProp(kv))
 	}
 	if len(p) == 0 {
 		return nil
