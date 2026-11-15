@@ -402,10 +402,10 @@ composite test "alice messages bob" @smoke
 statement  = fillers , ( system-dialog-step | line-step ) , NEWLINE
            | fillers , block-step ;
 
-line-step  = tap-native-step | tap-step | type-native-step | type-step
+line-step  = tap-webview-step | tap-native-step | tap-step | type-webview-step | type-native-step | type-step
            | long-press-step | double-tap-step | clear-step | toggle-step | drag-step
            | swipe-step | scroll-step
-           | see-native-step | see-step | dont-see-step | assert-defects-step
+           | see-webview-step | see-native-step | see-step | dont-see-step | assert-defects-step
            | wait-step
            | open-app-step | open-link-step | close-step | restart-step | kill-step | clear-data-step
            | go-back-step | press-enter-step | press-key-step | shake-step | pause-step | log-step | rotate-step
@@ -424,7 +424,7 @@ timed-step = line-step , "within" , ( INT | FLOAT ) , ( "seconds" | "second" | "
 
 block-step = if-step | repeat-step | retry-step | dart-step | mock-step | travel-step ;
 
-wait-step  = wait-until-step | wait-any-step | wait-idle-step | wait-animations-step
+wait-step  = wait-webview-step | wait-until-step | wait-any-step | wait-idle-step | wait-animations-step
            | wait-network-step | wait-duration-step | wait-id-step | wait-page-step ;
 
 any-token  = ? any token except NEWLINE and end of input ? ;
@@ -441,6 +441,7 @@ The first matching row wins.
 | line contains `system dialog`, `system field` or `sign in sandbox tester` (outside strings) | `system-dialog-step` |
 | `open` followed by `app` or `link` | `open-app-step`, `open-link-step` |
 | `open` followed by anything else | `recipe-call-step` (a recipe whose name starts with "open") |
+| `tap`, `type`, `see`, `don't see` or `wait until` whose operand is followed by `in webview` | `tap-webview-step`, `type-webview-step`, `see-webview-step`, `wait-webview-step` (checked before the rows below) |
 | `tap` followed by the word `native` | `tap-native-step`; otherwise `tap-step` |
 | `type` followed by the word `native` | `type-native-step`; otherwise `type-step` |
 | a line ending in `within N seconds` (or `s`, `ms`, `milliseconds`) | the step before it, as `timed-step` (not for recipe calls or block steps) |
@@ -642,6 +643,44 @@ test "negative assertions"
   don't see "Promo" optional
   see native "IMG_0001.jpg"
   don't see native "Error"
+```
+
+### WebView steps
+
+```ebnf
+webview-operand   = STRING | "css" , ":" , STRING ;      (* a quoted string is the visible text of an element; css:"..." is a CSS selector *)
+webview-target    = "in" , "webview" , [ STRING ] ;      (* ends the step: no modifier may follow; STRING names the page *)
+tap-webview-step  = "tap" , fillers , webview-operand , webview-target ;
+type-webview-step = "type" , STRING , fillers , webview-operand , webview-target ;
+see-webview-step  = ( "see" | "don't see" | "dont see" ) , fillers , webview-operand , webview-target ;
+wait-webview-step = "wait" , fillers , "until" , fillers , webview-operand , "appears" , webview-target ;
+```
+
+These steps reach content inside an app's WebView (Android). The kind of the operand comes from the
+syntax: a quoted string is **text**, `css:"..."` is a **CSS selector**, so a text such as `#1 Item` or
+`.5 off` is text. `in webview` is recognised only when the bare word `webview` follows `in`; with a
+quoted container (`tap "Item" in "List"`) the line is an ordinary `tap-step`. The optional quoted page
+name is a part of the page's title or URL, for an app with more than one page. Nothing may follow it on
+the line except a trailing `within N seconds`, which wraps the step like any other timed step: `if visible`,
+`optional`, a second string or any other word are errors there, not ignored. The words `in`, `webview` and
+`css` are matched without regard to case (`In Webview`, `CSS:"x"`), and spaces around the colon of
+`css : "x"` are allowed. A quoted string follows the lexer's rules for every STRING: `\"` is a quote, `\\` a
+backslash, `\n` and `\t` a new line and a tab, and any other `\x` is the character `x` (so `\:` is `:`; a CSS
+id such as `#a\:b` is written `"#a\\:b"`); a raw new line inside a string is a parse error. A text that
+starts with `css:` stays text when it is quoted (`tap "css:x" in webview`). In this version the steps
+parse and the runner reports that they are not implemented yet.
+
+```probe
+test "webview steps"
+  tap "Contact support" in webview
+  tap css:"#submit" in webview
+  tap "Pay" in webview "checkout"
+  type "hello" into css:"#message" in webview
+  type "42" into "Quantity" in webview "order form"
+  see "Getting Started" in webview
+  don't see css:".error" in webview
+  wait until "Message sent" appears in webview
+  wait until css:"#result" appears in webview "help"
 ```
 
 ### AI-assisted steps
