@@ -104,7 +104,7 @@ func TestSaveStepNeverWritesATypedSecret(t *testing.T) {
 		seg   = "reset4567abcdef"
 		mail  = "jane.doe@example.com"
 	)
-	soft := func(s string) string { return strings.Join(strings.Split(s, ""), "­") }
+	soft := func(s string) string { return strings.Join(strings.Split(s, ""), "\u00ad") }
 	glyph := func(s string) string { return strings.Join(strings.Split(s, ""), "") }
 	cases := map[string]SaveStepInput{
 		"query value":               {Method: "GET", URL: "https://a.example.test/x?q=" + qv + "&id=7"},
@@ -139,7 +139,7 @@ func TestSaveStepNeverWritesATypedSecret(t *testing.T) {
 			}
 		}
 		for _, r := range all {
-			if r == '­' || r == '' {
+			if r == '\u00ad' || r == '' {
 				t.Errorf("%s: a hidden character is in the step", name)
 				break
 			}

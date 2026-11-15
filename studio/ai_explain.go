@@ -249,6 +249,7 @@ func explainDestination(s aiProviderSettings) (label string, hosted bool) {
 func (a *App) explainSetup() (in explainInput, err error) {
 	defer func() {
 		if recover() != nil {
+			//lint:ignore ST1005 the text is a sentence shown to the person, not a Go error message
 			in, err = explainInput{}, errors.New(explainStoppedOther)
 		}
 	}()
@@ -313,6 +314,7 @@ func (a *App) PreviewExplain() (ExplainPreview, error) {
 	rec := &recorder{}
 	_, stopped := ai.Triage(context.Background(), gatedCompleter{inner: rec}, in.failures, ai.TriageOptions{MaxFailures: explainMaxFailures, PerCall: explainCallTimeout})
 	if stoppedText(stopped, false, len(in.failures)) == explainStoppedOther {
+		//lint:ignore ST1005 the text is a sentence shown to the person, not a Go error message
 		return ExplainPreview{}, errors.New(explainStoppedOther) // the gate panicked on the system prompt: Triage recovered it
 	}
 	label, hosted := explainDestination(in.settings)

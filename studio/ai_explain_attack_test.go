@@ -95,7 +95,7 @@ func TestExplainDropsEveryHiddenClassBeforeEveryStep(t *testing.T) {
 
 // A key that holds a hidden character matches the text that has none: the key is dropped the same way.
 func TestExplainRemovesAKeyThatHoldsAHiddenCharacter(t *testing.T) {
-	got := explainField("failed with "+attackKey+" now", "zq9-lmno​-pqrs-tuvw-xyz1", true, explainMaxError)
+	got := explainField("failed with "+attackKey+" now", "zq9-lmno\u200b-pqrs-tuvw-xyz1", true, explainMaxError)
 	if strings.Contains(got, "zq9") || !strings.Contains(got, redactedMark) {
 		t.Fatalf("got %q", got)
 	}
@@ -251,7 +251,8 @@ func TestExplainHoldsNoLockWhileTheProviderIsSlow(t *testing.T) {
 		a.track.begin("other", RunPlan{})
 		a.track.finish([]RunResult{{Name: "b", Passed: true}}, nil)
 		a.mu.Lock()
-		a.mu.Unlock() //nolint:staticcheck // the point is that it can be taken
+		//lint:ignore SA2001 the point is that the lock can be taken
+		a.mu.Unlock()
 		close(free)
 	}()
 	select {
@@ -267,7 +268,7 @@ func TestExplainHoldsNoLockWhileTheProviderIsSlow(t *testing.T) {
 
 // A key that holds a hidden character is removed from a model's answer that repeats it without the character.
 func TestExplainAdviceRemovesAKeyThatHoldsAHiddenCharacter(t *testing.T) {
-	got := cleanAdvice("the key is "+attackKey+" ok", "zq9-lmno​-pqrs-tuvw-xyz1")
+	got := cleanAdvice("the key is "+attackKey+" ok", "zq9-lmno\u200b-pqrs-tuvw-xyz1")
 	if strings.Contains(got, "zq9") || !strings.Contains(got, redactedMark) {
 		t.Fatalf("got %q", got)
 	}
