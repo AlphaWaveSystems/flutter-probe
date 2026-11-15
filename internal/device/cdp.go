@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,6 +25,9 @@ const (
 	maxCDPMessageBytes = 4 << 20
 	cdpHTTPTimeout     = 5 * time.Second
 )
+
+// defaultCallTimeout ends a Call whose context has no deadline of its own. The connection is closed when it ends, so it cannot be used for another call. A variable only so that a test can lower it.
+var defaultCallTimeout = 30 * time.Second
 
 // Target is one entry of /json/list.
 type Target struct {
@@ -53,6 +57,8 @@ func ListTargets(ctx context.Context, port int) ([]Target, error) {
 	client := &http.Client{
 		Timeout:   cdpHTTPTimeout,
 		Transport: &http.Transport{Proxy: nil, DialContext: loopbackDialer(port), DisableKeepAlives: true},
+		// a redirect is never followed: the answer to the page list is the answer, and a redirect's address (which the page could set to anything) is never read or repeated
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(port)+"/json/list", nil)
 	if err != nil {
@@ -60,7 +66,7 @@ func ListTargets(ctx context.Context, port int) ([]Target, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not list the WebView pages on port %d: %w", port, errors.Unwrap(err))
+		return nil, fmt.Errorf("could not list the WebView pages on port %d: %s", port, transportReason(ctx, err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -86,10 +92,46 @@ func ListTargets(ctx context.Context, port int) ([]Target, error) {
 	return pages, nil
 }
 
-// CDPError is an error answer from the page.
+// maxCDPErrorChars is the longest page-supplied error text kept in a CDPError.
+const maxCDPErrorChars = 200
+
+// transportReason says why a connection or request failed without repeating text that came from the network or the page: the context's reason, the system's reason for a refused or failed connection, or a
+// plain statement. The error of a malformed answer (which can quote what the page sent, a redirect address for example) is not repeated.
+func transportReason(ctx context.Context, err error) string {
+	if ctx.Err() != nil {
+		return ctx.Err().Error()
+	}
+	var op *net.OpError
+	if errors.As(err, &op) && op.Err != nil {
+		return op.Err.Error()
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timed out"
+	}
+	return "the debugger did not answer as expected"
+}
+
+// CDPError is an error answer from the page. The message is the page's own text, so it is cleaned when the error is made: only printable characters, at most maxCDPErrorChars of them.
 type CDPError struct {
 	Code    int
 	Message string
+}
+
+func cleanCDPMessage(s string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range s {
+		if !unicode.IsPrint(r) {
+			r = ' '
+		}
+		if n == maxCDPErrorChars {
+			b.WriteString("…")
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func (e *CDPError) Error() string {
@@ -109,9 +151,12 @@ func DialTarget(ctx context.Context, port int, t Target) (*CDPConn, error) {
 		return nil, fmt.Errorf("the WebView page has no usable debugger address on 127.0.0.1:%d", port)
 	}
 	d := websocket.Dialer{Proxy: nil, NetDialContext: loopbackDialer(port), HandshakeTimeout: cdpHTTPTimeout}
-	ws, _, err := d.DialContext(ctx, u.String(), nil)
+	ws, resp, err := d.DialContext(ctx, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("could not connect to the WebView page: %w", errors.Unwrap(err))
+		if resp != nil {
+			return nil, fmt.Errorf("the WebView page refused the debugger connection (HTTP %d)", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("could not connect to the WebView page: %s", transportReason(ctx, err))
 	}
 	ws.SetReadLimit(maxCDPMessageBytes)
 	return &CDPConn{ws: ws}, nil
@@ -135,8 +180,14 @@ type cdpResponse struct {
 	} `json:"error"`
 }
 
-// Call sends one command and waits for the answer with the same id; events and answers to other ids are skipped. When ctx ends the connection is closed, so a call never outlives its context.
+// Call sends one command and waits for the answer with the same id; events and answers to other ids are skipped. When ctx ends the connection is closed, so a call never outlives its context; a context
+// with no deadline gets defaultCallTimeout.
 func (c *CDPConn) Call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultCallTimeout)
+		defer cancel()
+	}
 	id := c.next.Add(1)
 	stop := context.AfterFunc(ctx, func() { c.ws.Close() })
 	defer stop()
@@ -153,7 +204,7 @@ func (c *CDPConn) Call(ctx context.Context, method string, params any) (json.Raw
 			continue
 		}
 		if r.Error != nil {
-			return nil, &CDPError{Code: r.Error.Code, Message: r.Error.Message}
+			return nil, &CDPError{Code: r.Error.Code, Message: cleanCDPMessage(r.Error.Message)}
 		}
 		return r.Result, nil
 	}

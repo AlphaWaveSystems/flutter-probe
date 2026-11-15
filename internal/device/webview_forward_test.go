@@ -18,12 +18,24 @@ type fakeAdb struct {
 	forward func(args []string) ([]byte, error)
 	remove  func(ctx context.Context, args []string) error
 	ctxDone []bool // whether the context of each call was already done
+
+	lists   []string // the answers to successive `forward --list` calls; "" after they run out
+	listErr error
 }
 
 func (f *fakeAdb) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, append([]string(nil), args...))
 	f.ctxDone = append(f.ctxDone, ctx.Err() != nil)
+	if len(args) >= 4 && args[2] == "forward" && args[3] == "--list" {
+		var out string
+		if len(f.lists) > 0 {
+			out, f.lists = f.lists[0], f.lists[1:]
+		}
+		err := f.listErr
+		f.mu.Unlock()
+		return []byte(out), err
+	}
 	f.mu.Unlock()
 	if len(args) >= 4 && args[2] == "forward" && args[3] == "--remove" {
 		if f.remove != nil {
@@ -63,8 +75,8 @@ func TestForwardWebViewUsesPortAdbPrinted(t *testing.T) {
 		t.Fatalf("port = %d, want 62395", fw.Port())
 	}
 	want := []string{"-s", "emulator-5600", "forward", "tcp:0", "localabstract:webview_devtools_remote_2783"}
-	if strings.Join(f.calls[0], " ") != strings.Join(want, " ") {
-		t.Fatalf("call = %v, want %v", f.calls[0], want)
+	if strings.Join(f.calls[1], " ") != strings.Join(want, " ") {
+		t.Fatalf("call = %v, want %v", f.calls[1], want)
 	}
 	if err := fw.Close(); err != nil {
 		t.Fatal(err)
@@ -72,12 +84,12 @@ func TestForwardWebViewUsesPortAdbPrinted(t *testing.T) {
 	if err := fw.Close(); err != nil { // second close does nothing
 		t.Fatal(err)
 	}
-	if len(f.calls) != 2 {
-		t.Fatalf("calls = %v, want one forward and one removal", f.calls)
+	if len(f.calls) != 3 {
+		t.Fatalf("calls = %v, want a list, one forward and one removal", f.calls)
 	}
 	wantRm := []string{"-s", "emulator-5600", "forward", "--remove", "tcp:62395"}
-	if strings.Join(f.calls[1], " ") != strings.Join(wantRm, " ") {
-		t.Fatalf("removal = %v, want %v", f.calls[1], wantRm)
+	if strings.Join(f.calls[2], " ") != strings.Join(wantRm, " ") {
+		t.Fatalf("removal = %v, want %v", f.calls[2], wantRm)
 	}
 	f.assertSafe(t)
 }
@@ -97,7 +109,7 @@ func TestForwardWebViewFallbackWhenAdbPrintsNoPort(t *testing.T) {
 		if fw.Port() <= 0 || fw.Port() >= 65536 {
 			t.Fatalf("%q: port %d", printed, fw.Port())
 		}
-		if len(f.calls) != 2 || f.calls[1][3] != "tcp:"+strconv.Itoa(fw.Port()) {
+		if len(f.calls) != 4 || f.calls[3][3] != "tcp:"+strconv.Itoa(fw.Port()) {
 			t.Fatalf("%q: fallback did not forward the chosen port: %v", printed, f.calls)
 		}
 		_ = fw.Close()
@@ -131,8 +143,8 @@ func TestForwardWebViewAdbFailureCreatesNothingToRemove(t *testing.T) {
 	if _, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket); err == nil {
 		t.Fatal("expected an error")
 	}
-	if len(f.calls) != 1 {
-		t.Fatalf("calls = %v", f.calls)
+	if len(f.calls) != 2 {
+		t.Fatalf("calls = %v, want a list and the failed forward", f.calls)
 	}
 }
 
@@ -160,11 +172,11 @@ func TestWithWebViewForwardRemovesOnEveryExit(t *testing.T) {
 		if !errors.Is(err, c.want) && !(c.want == nil && err == nil) {
 			t.Errorf("%s: err = %v, want %v", c.name, err, c.want)
 		}
-		if len(f.calls) != 2 || f.calls[1][3] != "--remove" || f.calls[1][4] != "tcp:62395" {
-			t.Errorf("%s: calls = %v, want a forward then the removal of tcp:62395", c.name, f.calls)
+		if len(f.calls) != 3 || f.calls[2][3] != "--remove" || f.calls[2][4] != "tcp:62395" {
+			t.Errorf("%s: calls = %v, want a list, a forward and the removal of tcp:62395", c.name, f.calls)
 		}
 		if c.name == "cancel" || c.name == "timeout" {
-			if f.ctxDone[1] {
+			if f.ctxDone[2] {
 				t.Errorf("%s: the removal ran with a finished context", c.name)
 			}
 		}
@@ -206,4 +218,206 @@ func TestFreeLoopbackPortIsFree(t *testing.T) {
 		t.Fatalf("port %d was not free: %v", p, err)
 	}
 	l.Close()
+}
+
+func TestParseForwardList(t *testing.T) {
+	const sock = "webview_devtools_remote_2783"
+	list := strings.Join([]string{
+		"emulator-5600 tcp:62395 localabstract:" + sock,
+		"emulator-5600 tcp:62396 localabstract:webview_devtools_remote_999",
+		"emulator-5554 tcp:62397 localabstract:" + sock,
+		"emulator-5600 tcp:48692 tcp:48686",
+		"emulator-5600 tcp:abc localabstract:" + sock,
+		"emulator-5600 tcp:0 localabstract:" + sock,
+		"emulator-5600 tcp:070 localabstract:" + sock,
+		"emulator-5600 tcp:99999 localabstract:" + sock,
+		"emulator-5600 tcp:-1 localabstract:" + sock,
+		"emulator-5600 udp:5 localabstract:" + sock,
+		"emulator-5600 tcp:62398 localabstract:" + sock + " extra",
+		"emulator-5600 tcp:62399 localabstract:" + sock,
+		"",
+		"garbage",
+	}, "\n")
+	got := ParseForwardList(list, "emulator-5600", sock)
+	if len(got) != 2 || got[0] != 62395 || got[1] != 62399 {
+		t.Fatalf("ports = %v, want [62395 62399]", got)
+	}
+	if len(ParseForwardList("", "emulator-5600", sock)) != 0 {
+		t.Fatal("an empty list gave ports")
+	}
+}
+
+func TestForwardWebViewAdoptsTheRuleAdbCreatedWhenItPrintsNoPort(t *testing.T) {
+	const rule = "emulator-5600 tcp:50001 localabstract:webview_devtools_remote_2783"
+	f := &fakeAdb{
+		forward: func(args []string) ([]byte, error) { return []byte("\n"), nil },
+		lists:   []string{"", rule},
+	}
+	fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fw.Port() != 50001 {
+		t.Fatalf("port = %d, want the created rule's 50001", fw.Port())
+	}
+	for _, c := range f.calls {
+		if len(c) > 3 && c[2] == "forward" && c[3] != "tcp:0" && c[3] != "--list" {
+			t.Fatalf("a second forward was created: %v", c)
+		}
+	}
+	if err := fw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	last := f.calls[len(f.calls)-1]
+	if strings.Join(last, " ") != "-s emulator-5600 forward --remove tcp:50001" {
+		t.Fatalf("removal = %v", last)
+	}
+	f.assertSafe(t)
+}
+
+func TestForwardWebViewAdoptsOnlyTheNewRuleNotAnExistingOne(t *testing.T) {
+	const other = "emulator-5600 tcp:40000 localabstract:webview_devtools_remote_2783" // someone else's rule to the same socket
+	const mine = "emulator-5600 tcp:50001 localabstract:webview_devtools_remote_2783"
+	f := &fakeAdb{
+		forward: func(args []string) ([]byte, error) { return nil, nil },
+		lists:   []string{other, other + "\n" + mine},
+	}
+	fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+	if err != nil || fw.Port() != 50001 {
+		t.Fatalf("port = %v, %v", fw, err)
+	}
+	_ = fw.Close()
+	for _, c := range f.calls {
+		if strings.Contains(strings.Join(c, " "), "tcp:40000") {
+			t.Fatalf("a rule that was not ours was touched: %v", c)
+		}
+	}
+}
+
+func TestForwardWebViewFallsBackWhenTheNewRuleCannotBeIdentified(t *testing.T) {
+	r := func(p int) string {
+		return "emulator-5600 tcp:" + strconv.Itoa(p) + " localabstract:webview_devtools_remote_2783"
+	}
+	cases := map[string]*fakeAdb{
+		"two new rules": {forward: func([]string) ([]byte, error) { return nil, nil }, lists: []string{"", r(50001) + "\n" + r(50002)}},
+		"no new rule":   {forward: func([]string) ([]byte, error) { return nil, nil }, lists: []string{"", ""}},
+		"list failed":   {forward: func([]string) ([]byte, error) { return nil, nil }, listErr: errors.New("adb gone")},
+	}
+	for name, f := range cases {
+		fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if fw.Port() == 50001 || fw.Port() == 50002 {
+			t.Fatalf("%s: a rule that could not be identified was adopted: %d", name, fw.Port())
+		}
+		_ = fw.Close()
+		// nothing but our own chosen port was ever removed
+		for _, c := range f.calls {
+			if len(c) > 4 && c[3] == "--remove" && c[4] != "tcp:"+strconv.Itoa(fw.Port()) {
+				t.Fatalf("%s: removed %v", name, c)
+			}
+		}
+		f.assertSafe(t)
+	}
+}
+
+func TestForwardWebViewRetriesWhenThePortIsInUse(t *testing.T) {
+	attempts := 0
+	f := &fakeAdb{forward: func(args []string) ([]byte, error) {
+		if args[3] == "tcp:0" {
+			return nil, nil // prints no port
+		}
+		attempts++
+		if attempts < 3 {
+			return nil, errors.New("adb: error: cannot bind listener: Address already in use")
+		}
+		return nil, nil
+	}}
+	fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+	if err != nil || attempts != 3 {
+		t.Fatalf("attempts = %d, err = %v", attempts, err)
+	}
+	_ = fw.Close()
+
+	// every port in use: a clear error after the limit
+	attempts = 0
+	f2 := &fakeAdb{forward: func(args []string) ([]byte, error) {
+		if args[3] == "tcp:0" {
+			return nil, nil
+		}
+		attempts++
+		return nil, errors.New("address already in use")
+	}}
+	if _, err := ForwardWebView(context.Background(), f2, "emulator-5600", ownSocket); err == nil || attempts != maxForwardAttempts {
+		t.Fatalf("attempts = %d, err = %v", attempts, err)
+	}
+	// another failure is not retried
+	attempts = 0
+	f3 := &fakeAdb{forward: func(args []string) ([]byte, error) {
+		if args[3] == "tcp:0" {
+			return nil, nil
+		}
+		attempts++
+		return nil, errors.New("device offline")
+	}}
+	if _, err := ForwardWebView(context.Background(), f3, "emulator-5600", ownSocket); err == nil || attempts != 1 {
+		t.Fatalf("attempts = %d, err = %v", attempts, err)
+	}
+}
+
+func TestCloseIsSafeFromSeveralGoroutinesAndRunsTheRemovalOnce(t *testing.T) {
+	f := &fakeAdb{}
+	fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); _ = fw.Close() }()
+	}
+	wg.Wait()
+	removals := 0
+	for _, c := range f.calls {
+		if len(c) > 3 && c[3] == "--remove" {
+			removals++
+		}
+	}
+	if removals != 1 {
+		t.Fatalf("the forward was removed %d times", removals)
+	}
+}
+
+func TestFailedRemovalIsRetriedByTheNextClose(t *testing.T) {
+	failures := 1
+	f := &fakeAdb{remove: func(context.Context, []string) error {
+		if failures > 0 {
+			failures--
+			return errors.New("adb busy")
+		}
+		return nil
+	}}
+	fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fw.Close(); err == nil {
+		t.Fatal("the first Close should report the failed removal")
+	}
+	if err := fw.Close(); err != nil {
+		t.Fatalf("the second Close did not retry: %v", err)
+	}
+	if err := fw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	removals := 0
+	for _, c := range f.calls {
+		if len(c) > 3 && c[3] == "--remove" {
+			removals++
+		}
+	}
+	if removals != 2 {
+		t.Fatalf("removals = %d, want the failed one and the retry", removals)
+	}
 }
