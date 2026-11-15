@@ -605,7 +605,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 
 `v0.6.0` ships **FlutterProbe Studio** — a cross-platform desktop app for visual ProbeScript test authoring with an embedded device view, live widget-tree inspector, and in-process test execution. Built with Wails 2.12; macOS / Windows / Linux.
 
-Studio's AI chat works with a local model and no API key. See [AI in Studio](https://flutterprobe.dev/tools/ai/#in-studio).
+Studio's AI chat works with a local model and no API key. See [AI in Studio](https://flutterprobe.dev/tools/ai/#in-studio). Studio also has a **Network** tab (the requests the app made during a run, with credentials hidden), a **Send request** panel and **Explain failures**, all described in the [Studio docs](https://flutterprobe.dev/tools/studio/).
 
 ```bash
 # From the repo
