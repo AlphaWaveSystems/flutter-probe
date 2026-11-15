@@ -96,6 +96,7 @@ func init() {
 	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.Bool("junit-attempts", false, "with --format junit: write one testcase per attempt of a test that was re-run (retry_failed_tests), failed attempts as failure/error, so flaky tests are visible to tools that track them; off by default because it adds failed cases to a run that finally passed")
+	f.Bool("junit-artifacts", false, "with --format junit: list the artifacts of each test (screenshots, the diff image of a failed compare screenshot, videos) as \"artifact: <path>\" lines in its <system-out>, relative to the report file's directory when it is written with -o, otherwise to the working directory; a path outside that directory is written as its file name only; at most 50 per test")
 	f.String("junit-suffix", "", "with --format junit: text appended to every classname (for example -ios), so the same test on several devices has distinct identities")
 	f.String("junit-label", "", "with --format junit: written as the run_label property of every suite")
 	f.StringArray("property", nil, "key=value written to the report of the run: a suite property in --format junit, \"properties\" in --format json (repeatable; key of letters, digits, _ . -; at most 32 properties, value up to 1 KB; values are masked like other printed text)")
@@ -1642,5 +1643,12 @@ func junitOptionsFromFlags(cmd *cobra.Command) runner.JUnitOptions {
 	attempts, _ := cmd.Flags().GetBool("junit-attempts")
 	suffix, _ := cmd.Flags().GetString("junit-suffix")
 	label, _ := cmd.Flags().GetString("junit-label")
-	return runner.JUnitOptions{Attempts: attempts, ClassSuffix: suffix, Label: label}
+	artifacts, _ := cmd.Flags().GetBool("junit-artifacts")
+	o := runner.JUnitOptions{Attempts: attempts, ClassSuffix: suffix, Label: label, Artifacts: artifacts}
+	if out, _ := cmd.Flags().GetString("output"); out != "" {
+		if abs, err := filepath.Abs(out); err == nil {
+			o.ArtifactBase = filepath.Dir(abs)
+		}
+	}
+	return o
 }
