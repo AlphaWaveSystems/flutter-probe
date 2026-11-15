@@ -108,11 +108,12 @@ func TestHostileVersionsAndText(t *testing.T) {
 	if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, "VERSION=1.0", "version=2.0")); d.Version != "1.0" {
 		t.Errorf("the first version wins whatever its case: %q", d.Version)
 	}
-	// Exactly wifiMaxTXT records are read: the version in record 32 is used, the one in record 33 is not.
+	// Exactly 32 records are read: the version in record 32 is used, the one in record 33 is not. The numbers are written out on purpose,
+	// not taken from wifiMaxTXT: 32 is the documented bound, and a change to the constant must fail here and be a decision.
 	for _, c := range []struct {
 		at   int
 		want string
-	}{{wifiMaxTXT, "7.7.7"}, {wifiMaxTXT + 1, ""}} {
+	}{{32, "7.7.7"}, {33, ""}} {
 		recs := make([]string, 0, c.at)
 		for i := 1; i < c.at; i++ {
 			recs = append(recs, fmt.Sprintf("k%d=v", i))
