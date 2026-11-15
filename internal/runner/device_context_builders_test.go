@@ -27,10 +27,7 @@ var builderFuncs = []struct{ dir, file, fn string }{
 // legacyLiterals are the functions that still build a DeviceContext as a literal, keyed as literalSites reports them.
 // Each entry is removed by the change that moves its function to NewDeviceContext. The test fails if an entry is left
 // after its literal has gone, so the list cannot go stale.
-var legacyLiterals = []string{
-	"studio/app.go:ConnectWiFi",
-	"studio/app.go:Connect",
-}
+var legacyLiterals = []string{}
 
 // newDeviceContextSite is the one place a DeviceContext literal is allowed: the helper itself.
 const newDeviceContextSite = "runner/device_context.go:NewDeviceContext"

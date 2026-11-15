@@ -38,6 +38,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Studio's run tracker has direct tests.** The bounded step history, a clean start for every run, `finish`, snapshot copies, JSON lists that are never null and concurrent events under `-race` are now checked in `studio/runtrack_test.go`. No behaviour changed.
 - **Save as step: a card number next to other digits, and a credential used as a JSON key, are no longer written as typed.** A fuzz test over random requests with a planted secret found `0 4111111111111111 0` and `{"<hex>":true}` saved unchanged. A card number is now searched for in every run of digit groups in any layout (4-4-4-4, 4-6-5, 4-4-4-1, 1-4-4-4-4 and the rest, separated by one or two spaces, hyphens, slashes, underscores or dots; there is no size limit: a card behind thousands of groups was once skipped) and the whole run that holds one is replaced, an object key that holds a run of 16 or more hex digits (with a letter among them) bounded by non-hex characters, a JWT or padded base64 stops the save (the whole key is read, and a key over 1,024 bytes stops the save as too long to check; a legitimate key with a 16-hex-digit run such as `id1700000000000abc` is refused too, where it was saved before), a generated placeholder name never carries a credential, and a step may replace at most 200 values. The fuzz test (`FuzzSaveStep`) runs its seed corpus with `go test`, so CI runs the seeds; exploratory fuzzing is not part of CI. Other separators, three or more characters between groups, and a card glued to letters are not covered.
 
+### Fixed
+- **Studio's device connections now ask whether the device is physical.** A connection made from Studio (a Wi-Fi iOS device or a listed device) built its device context without that answer, so a physical device was treated as an emulator or simulator by the steps that differ between the two. Both connections now use the same builder as `probe test`, and a test fails if any builder writes the context by hand.
+
+
 ## [0.27.0] - 2026-11-11
 
 ### Added
