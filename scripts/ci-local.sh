@@ -5,6 +5,7 @@
 #   scripts/ci-local.sh --all           also the other checks that can run locally
 #   scripts/ci-local.sh --job NAME      one check, by id or by check name (repeatable)
 #   scripts/ci-local.sh --list          the checks this script knows
+#   scripts/ci-local.sh --plan          the checks this run would select, then exit; runs nothing
 #   scripts/ci-local.sh --release-dry-run
 #                                       build the release binaries into a temporary
 #                                       directory; nothing is published or tagged
@@ -40,7 +41,15 @@
 #        five checks (a --job selection, a skip allowed with --allow-skip, a requested
 #        optional check that was skipped because its tool is missing, or GOFLAGS is set)
 #   130  FAIL (interrupted)
-# --list and --help run nothing and exit 0.
+# --list, --plan and --help run nothing and exit 0.
+#
+# The Studio frontend check (a hosted workflow that only runs for changes under studio/ and
+# vscode/) is added to a run with no --all and no --job when the change since the base
+# touches website/src/content/docs/probescript/*.md, studio/frontend/scripts/gen-probescript-dictionary.mjs
+# or studio/frontend/src/probescript/: those files feed the generated dictionary, and the
+# check (`npm run check:probescript` and `npm run test:probescript`, among others) fails when it
+# is out of date. It is an optional check: a failure is FAIL, a missing node or npm is PARTIAL
+# (exit 5), never a silent pass. The run says which file added it.
 #
 # Exit status of --release-dry-run. It runs no checks, never prints PASS, and cannot
 # be combined with --all, --job, --allow-skip, --base, --report or --pr-text:
@@ -301,7 +310,7 @@ tool_version() {
 }
 
 # ---- Arguments --------------------------------------------------------------------
-ALL=0; ALLOW_SKIP=0; RELEASE=0; BASE_REF="origin/main"; BASE_SET=0; REPORT=""
+ALL=0; PLAN=0; ALLOW_SKIP=0; RELEASE=0; BASE_REF="origin/main"; BASE_SET=0; REPORT=""
 WANTED=(); PR_TEXT=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -309,6 +318,7 @@ while [ "$#" -gt 0 ]; do
     --allow-skip) ALLOW_SKIP=1; shift ;;
     --release-dry-run) RELEASE=1; shift ;;
     --list) list_jobs; exit 0 ;;
+    --plan) PLAN=1; shift ;;
     --describe) describe_jobs; exit 0 ;;
     --job) [ "$#" -ge 2 ] || die_usage "--job needs a name"; WANTED+=("$2"); shift 2 ;;
     --base) [ "$#" -ge 2 ] || die_usage "--base needs a ref"
@@ -320,6 +330,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ "$RELEASE" -eq 1 ] && [ "$PLAN" -eq 1 ]; then die_usage "--release-dry-run runs no checks; it cannot be combined with --plan"; fi
 if [ "$RELEASE" -eq 1 ]; then
   if [ "$ALL" -eq 1 ] || [ "$ALLOW_SKIP" -eq 1 ] || [ "${#WANTED[@]}" -gt 0 ] || [ "$BASE_SET" -eq 1 ] || [ -n "$REPORT" ] || [ "${#PR_TEXT[@]}" -gt 0 ]; then
     die_usage "--release-dry-run runs no checks; it cannot be combined with --all, --job, --allow-skip, --base, --report or --pr-text"
@@ -364,10 +375,29 @@ unset BASH_ENV ENV
 HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || { echo "ci-local: not a git repository" >&2; exit 2; }
 BASE_SHA=$(git rev-parse --verify -q "${BASE_REF}^{commit}" 2>/dev/null || true)
 export CI_LOCAL_BASE_SHA="$BASE_SHA" CI_LOCAL_HEAD_SHA="$HEAD_SHA"
+# The Studio frontend check joins a default run when the change touches what the generated
+# dictionary is made from (see the header). Nothing is added to --all, --job or a release dry run.
+AUTO_NOTE=""
+if [ "$ALL" -eq 0 ] && [ "$RELEASE" -eq 0 ] && [ "${#WANTED[@]}" -eq 0 ] && [ -n "$BASE_SHA" ]; then
+  while IFS= read -r changed_path; do
+    case "$changed_path" in
+      website/src/content/docs/probescript/*.md|studio/frontend/scripts/gen-probescript-dictionary.mjs|studio/frontend/src/probescript/*)
+        AUTO_NOTE=$changed_path; break ;;
+    esac
+  done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA" 2>/dev/null)
+  if [ -n "$AUTO_NOTE" ]; then
+    SELECTED+=("$(job_index frontend)")
+  fi
+fi
 # The last line names a base that is not the default.
 BASE_NOTE=""
 if [ "$BASE_REF" != "origin/main" ]; then BASE_NOTE=" (base $BASE_REF)"; fi
 SELF="ci-local"
+if [ "$PLAN" -eq 1 ]; then
+  for i in "${SELECTED[@]}"; do printf '%s\n' "${JOB_NAME[$i]}"; done
+  if [ -n "$AUTO_NOTE" ]; then echo "(Studio frontend added: the change touches $AUTO_NOTE)"; fi
+  exit 0
+fi
 if [ "$RELEASE" -eq 1 ]; then SELF="release-dry-run"; fi
 
 # The tree, read before anything runs. A failing `git status` is not a clean tree.
@@ -574,6 +604,7 @@ fi
 R_STATUS=(); R_DETAIL=(); R_SECS=()
 GUARD_SCANNED=""
 echo "ci-local: $HEAD_SHA, ${#SELECTED[@]} check(s), logs in $LOG_DIR"
+if [ -n "$AUTO_NOTE" ]; then echo "ci-local: Studio frontend added: the change touches $AUTO_NOTE"; fi
 for i in "${SELECTED[@]}"; do
   id=${JOB_ID[$i]}; name=${JOB_NAME[$i]}; log="$LOG_DIR/$id.log"
   STATUS="PASS"; DETAIL=""

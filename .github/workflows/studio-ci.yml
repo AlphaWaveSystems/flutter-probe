@@ -18,12 +18,14 @@ on:
     paths:
       - "studio/**"
       - "vscode/**"
+      - "website/src/content/docs/probescript/**"
       - ".github/workflows/studio-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "studio/**"
       - "vscode/**"
+      - "website/src/content/docs/probescript/**"
       - ".github/workflows/studio-ci.yml"
 
 permissions:
