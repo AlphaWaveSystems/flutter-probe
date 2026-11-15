@@ -46,6 +46,7 @@ A command ("Send request") that collects method, address, headers and body in an
 2. The allow list: `probe.yaml` plus flags, or flags and environment only?
 3. The redactor: extract it (A), reuse the recorder's (B), or build into Studio (C)?
 4. May a loopback or private address be allowed by name in a repository file, or only by a flag on the command line?
+5. May Studio's automation endpoint (the loopback control endpoint scripts and MCP use) ever carry a network method? Today it does not, and a test fails if one is added (`studio/bound_methods_test.go`: no method in the network, AI provider, keychain or workspace-writing categories is reachable from it). The command in this note makes the question less pressing, because an extension or a script would call `probe call` directly, but the owner should say whether the answer is "never" or "only with a decision recorded in that test".
 
 ## Order of work if it is approved
 1. Move the redactors into a root-module package, tests unchanged (no behaviour change).
