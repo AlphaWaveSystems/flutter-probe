@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
 )
@@ -122,22 +126,146 @@ func scrubPersonal(s string) string {
 	return homePathPattern.ReplaceAllString(s, "~")
 }
 
+// scrubPersonalText is scrubPersonal for text a person writes or reads as code (a chat turn and its reply, which hold test files with
+// routes and URLs in them): an email address is replaced, and this account's own home folder, which can be told from a route, and
+// nothing else that looks like a path. (A path of another account is not guessed at here: `/home/settings` is a route.)
+func scrubPersonalText(s string) string {
+	return scrubOwnHome(emailPattern.ReplaceAllString(s, "[email]"))
+}
+
+// scrubOwnHome replaces this account's own home folder with ~: the folder os.UserHomeDir names (also written with `/` for `\`, and with
+// its slashes escaped for JSON), and `/Users/<name>`, `/home/<name>` and `\Users\<name>` for the account's name, found wherever they
+// are, also behind a mount prefix (`/host_mnt/Users/me`, `/mnt/c/Users/me`, `/Volumes/Macintosh HD/Users/me`) and in a URL: the account's
+// own name is the point, so no rule about what comes before it applies. Only the folder part is replaced, so the slash before it stays
+// (`https://h/Users/me/x` is `https://h/~/x`). What comes after the name must end it (`/home/users/42` is not `/home/user`).
+func scrubOwnHome(s string) string {
+	home, _ := os.UserHomeDir()
+	for len(home) > 1 && (strings.HasSuffix(home, "/") || strings.HasSuffix(home, `\`)) {
+		home = home[:len(home)-1]
+	}
+	var forms []string
+	add := func(f string) {
+		forms = append(forms, f, strings.ReplaceAll(f, "/", `\/`), strings.ReplaceAll(f, `\`, `\\`))
+	}
+	if len(home) > 4 && strings.Count(home, "/")+strings.Count(home, `\`) >= 2 {
+		add(home)
+		add(strings.ReplaceAll(home, `\`, "/"))
+	}
+	names := map[string]bool{}
+	if me := currentUserName(); me != "" {
+		names[me[strings.LastIndexAny(me, `\/`)+1:]] = true // a Windows login can be DOMAIN\name
+	}
+	if cut := strings.LastIndexAny(home, `/\`); cut > 0 {
+		parent := home[:cut]
+		if parent = parent[strings.LastIndexAny(parent, `/\`)+1:]; strings.EqualFold(parent, "Users") || strings.EqualFold(parent, "home") {
+			names[home[cut+1:]] = true
+		}
+	}
+	for n := range names {
+		if n != "" {
+			add("/Users/" + n)
+			add("/home/" + n)
+			add(`\Users\` + n)
+		}
+	}
+	sort.SliceStable(forms, func(i, j int) bool { return len(forms[i]) > len(forms[j]) }) // the longest form first (`C:/Users/me` before `/Users/me`)
+	for _, f := range forms {
+		s = replaceFolder(s, f)
+	}
+	return s
+}
+
+// replaceFolder replaces each occurrence of the folder f (compared without regard to ASCII case) in s with ~, where what follows ends a
+// name (the end, or a character that is not a letter, a digit, `_` or `-`). A folder that starts with a separator keeps it when something
+// comes right before it (`https://h/Users/me` is `https://h/~`), so only the folder part is replaced; one that starts with a drive letter
+// is not looked for inside a longer word.
+func replaceFolder(s, f string) string {
+	if f == "" || len(s) < len(f) {
+		return s
+	}
+	lead := 0 // the separator the folder starts with (`/`, `\` or the two characters of `\/`)
+	switch {
+	case strings.HasPrefix(f, `\/`), strings.HasPrefix(f, `\\`):
+		lead = 2
+	case f[0] == '/' || f[0] == '\\':
+		lead = 1
+	}
+	var b strings.Builder
+	at := 0
+	for i := 0; i+len(f) <= len(s); {
+		if !strings.EqualFold(s[i:i+len(f)], f) || len(s[i:i+len(f)]) != len(f) {
+			i++
+			continue
+		}
+		end := i + len(f)
+		if end < len(s) {
+			r, _ := utf8.DecodeRuneInString(s[end:])
+			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
+				i++
+				continue
+			}
+		}
+		if lead == 0 && i > 0 && isAlnum(s[i-1]) {
+			i++
+			continue
+		}
+		b.WriteString(s[at:i])
+		if lead > 0 && i > 0 && !strings.ContainsRune(" \t\r\n\"'`(<[{,;=:|", rune(s[i-1])) {
+			b.WriteString(s[i : i+lead]) // keep the separator that joins it to what comes before
+		}
+		b.WriteString("~")
+		at, i = end, end
+	}
+	if at == 0 {
+		return s
+	}
+	b.WriteString(s[at:])
+	return b.String()
+}
+
+func isAlnum(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// currentUserName is this account's login name (on Windows possibly DOMAIN\name), or "". A variable so a test can name an account.
+var currentUserName = func() string {
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return os.Getenv("USER")
+}
+
 // withoutInvisible drops hidden characters (hiddenRune, the one list shared with the chat label), so a token split by one is
 // whole again before the gate reads it. A line break is kept when keepLines is set and is a space otherwise, and a tab is a space.
+//
+// A zero-width non-joiner or joiner (U+200C, U+200D) is kept when it sits between two characters that are not ASCII and are letters,
+// marks or symbols: it is part of Persian and Indic words and of emoji sequences. A token, a key or an address is ASCII, so a joiner
+// inside one (or between runs of joiners) is dropped as every other hidden character is.
 func withoutInvisible(s string, keepLines bool) string {
-	return strings.Map(func(r rune) rune {
+	rs := []rune(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for i, r := range rs {
 		switch {
 		case r == '\n' && keepLines:
-			return r
+			b.WriteRune(r)
 		case r == '\n' || r == '\t' || r == '\r':
-			return ' '
+			b.WriteByte(' ')
+		case (r == 0x200c || r == 0x200d) && i > 0 && i+1 < len(rs) && joinerNeighbour(rs[i-1]) && joinerNeighbour(rs[i+1]):
+			b.WriteRune(r)
 		case hiddenRune(r):
-			return -1
 		case r != ' ' && unicode.Is(unicode.Zs, r): // a no-break or wide space is a plain space
-			return ' '
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
 		}
-		return r
-	}, s)
+	}
+	return b.String()
+}
+
+// joinerNeighbour says whether r may sit next to a kept joiner: a non-ASCII letter, mark or symbol.
+func joinerNeighbour(r rune) bool {
+	return r > 0x7f && (unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsSymbol(r))
 }
 
 // capRunes cuts s to max characters, marking the cut with an ellipsis that counts within max.
@@ -155,7 +283,7 @@ func boundBeforeGate(s string) string { return boundRunes(s, explainPreGate) }
 // boundRunes bounds a text to limit characters before a pattern reads it, so a very long text does not hand the pattern a megabyte.
 // A text that is cut here ends in the middle of whatever was there, and a redactor can shrink the text (a private key block becomes
 // one marker), which would move the cut end up into the part that is shown. So when it cuts, it also drops the run of characters at
-// the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then explainTailCut more characters:
+// the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then explainTailCut more characters, then the token that those characters may have cut in two:
 // nothing that was cut in two survives. A text that fits is returned as it is (with invalid UTF-8 replaced).
 func boundRunes(s string, limit int) string {
 	if len(s) <= limit { // fewer bytes than characters allowed: nothing to cut
@@ -174,7 +302,20 @@ func boundRunes(s string, limit int) string {
 	if len(r) <= explainTailCut {
 		return ""
 	}
-	return string(r[:len(r)-explainTailCut])
+	r = r[:len(r)-explainTailCut]
+	// The extra explainTailCut characters can end inside a token that began before them (a spaced text with a token in it), and a redactor
+	// does not see the first part of a token whose rest is gone. So the text ends where no token character is left at its end: the last
+	// token that began before the cut is dropped whole. A token longer than explainTailCut is cut anyway, and its first part is then long
+	// enough for the long-token rules.
+	for n := 0; len(r) > 0 && n < explainTailCut && tokenRune(r[len(r)-1]); n++ {
+		r = r[:len(r)-1]
+	}
+	return string(r)
+}
+
+// tokenRune says whether r can be part of a key, token, hash or identifier: an ASCII letter or digit, or one of `_ - . + / ~ %`.
+func tokenRune(r rune) bool {
+	return r < 128 && (r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || strings.ContainsRune("_-.+/~%", r))
 }
 
 // explainField makes one field of a failure fit to send, in this order: hidden characters are dropped, the field is bounded, the

@@ -98,6 +98,7 @@ func init() {
 	f.Bool("junit-attempts", false, "with --format junit: write one testcase per attempt of a test that was re-run (retry_failed_tests), failed attempts as failure/error, so flaky tests are visible to tools that track them; off by default because it adds failed cases to a run that finally passed")
 	f.String("junit-suffix", "", "with --format junit: text appended to every classname (for example -ios), so the same test on several devices has distinct identities")
 	f.String("junit-label", "", "with --format junit: written as the run_label property of every suite")
+	f.StringArray("property", nil, "key=value written to the report of the run: a suite property in --format junit, \"properties\" in --format json (repeatable; key of letters, digits, _ . -; at most 32 properties, value up to 1 KB; values are masked like other printed text)")
 	f.StringP("output", "o", "", "write report to file instead of stdout")
 	f.Bool("stream", false, "with --format json, emit one ndjson event per test as it completes (in addition to the final report)")
 	f.Bool("match-loose", false, "match text selectors loosely: fold case, accents, typographic apostrophes/dashes and whitespace (also defaults.match: loose in probe.yaml)")
@@ -253,6 +254,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if err := checkProbeVersion(pinCfg, Version); err != nil {
 		return err
+	}
+	// A bad --property is refused before anything starts; the message never repeats the value.
+	if _, err := runPropertiesFromFlags(cmd); err != nil {
+		return UsageError{err}
 	}
 	// The run line names the agent that answered the handshake, so it is printed once, after the first success.
 	var runAgentVersion string
@@ -601,6 +606,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 			report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 		}
 		report.SetJUnitOptions(junitOptionsFromFlags(cmd))
+		if props, err := runPropertiesFromFlags(cmd); err == nil {
+			report.SetProperties(props)
+		}
 		aiHeal, _ := cmd.Flags().GetBool("ai-heal")
 		healIfAsked(ctx, statusW, cfg, results, aiHeal)
 		if err := report.Report(results); err != nil {
@@ -1139,6 +1147,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 		report = runner.NewReporter(runner.Format(format), os.Stdout, verbose)
 	}
 	report.SetJUnitOptions(junitOptionsFromFlags(cmd))
+	if props, err := runPropertiesFromFlags(cmd); err == nil {
+		report.SetProperties(props)
+	}
 
 	// Streaming ndjson output during the run (JSON format only).
 	stream, _ := cmd.Flags().GetBool("stream")
@@ -1618,6 +1629,12 @@ func promptUserConfirm(message string) bool {
 	}
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	return answer == "y" || answer == "yes"
+}
+
+// runPropertiesFromFlags reads the --property flags of `probe test`.
+func runPropertiesFromFlags(cmd *cobra.Command) (map[string]string, error) {
+	pairs, _ := cmd.Flags().GetStringArray("property")
+	return runner.ParseProperties(pairs)
 }
 
 // junitOptionsFromFlags reads the --junit-* flags of `probe test`.
