@@ -1,42 +1,155 @@
 # Getting probe's hands on WebView content
 
-**Status:** Proposal — not yet implemented
-**Origin:** FP-8 (Jira). Flagged as an open gap in
-`docs/roadmap/gap-analysis-2026-08.md` ("WebView content (Chrome DevTools
-hierarchy mode) — no FlutterProbe equivalent yet"), but unlike every other
-item that gap analysis produced (native UI → PT-13/N-1/N-2), no design work
-had been done on this one before this proposal.
-**Touches:** `internal/device`, `internal/runner`, ProbeScript grammar,
-`probe_agent/lib/src/executor.dart` (read for context, not modified by this
-proposal)
+**Status:** Requested by the owner (2026-11-15); design for review, step 1 of 3; no implementation yet
+**Origin:** FP-8 (Jira), listed as an open gap in `docs/roadmap/gap-analysis-2026-08.md`. A concrete demand for WebView support now exists (the owner asked for it on 2026-11-15).
+**Touches:** `internal/device`, `internal/runner`, ProbeScript grammar, the dictionary surfaces
+(docs, MCP, VS Code extension, Studio). The Dart agent is not modified.
 
-Maestro's `androidWebViewHierarchy: devtools` flag attaches to a WebView's
-Chrome DevTools Protocol endpoint and folds its DOM into the same element
-tree Maestro already inspects, so a flow can select and tap into
-web-rendered content the same way it selects native views. FlutterProbe has
-no equivalent today. This proposes whether, and how, to build one.
+The earlier version of this proposal recommended not starting because no flow or adopter had asked
+for WebView content. That blocker is gone: a concrete demand now exists. This version records the
+plan, the design proposed for review, and the rules it must follow. The original analysis is kept
+below under "Findings from the first analysis (2026-08)" because it still explains why Android
+comes first.
 
-## TL;DR
+## Plan
 
-- **Ask:** Let ProbeScript select and interact with content rendered inside
-  an in-app WebView (`webview_flutter`, or any platform view backed by a
-  system WebView), matching what Maestro's devtools hierarchy mode does.
-- **Finding:** Two findings, and both cut against starting now. First,
-  probe's Dart agent has no WebView code path to extend — the only
-  WebView-related line in `executor.dart` is `_openLink`'s
-  `'useWebView': false` (line 974), which forces every `open link` call out
-  to the system browser instead of an in-app WebView. Second, and more
-  important: unlike N-2 (which opened with the social app's real, blocking
-  `image_picker` → `PHPickerViewController` flow), neither of this
-  project's reference apps has any documented in-app WebView content
-  anywhere in this repo's roadmap, gap-analysis, or evidence corpus. There
-  is no concrete flow to justify or size this work against.
-- **Recommendation:** Don't start implementation. The problem is fully
-  split by platform — Android has a real, standard debugging protocol; iOS
-  does not — so there isn't one project to scope, only two independent
-  ones, and neither has an adopter demand signal today. Revisit only once a
-  concrete flow surfaces, the same bar every other Phase 2/3 item in this
-  roadmap was held to.
+- **Android first**, through the Chrome DevTools Protocol (CDP) of the app's own WebView.
+- **iOS later.** It uses a different, undocumented mechanism; see "iOS" below for what is and is
+  not known.
+- Delivered in three steps, one at a time: (1) this document, (2) a spike with a real WebView
+  fixture and a recorded run, (3) implementation in small PRs. Each step starts only after the
+  previous one is accepted.
+
+## Android design
+
+### Reaching the WebView
+
+1. Find the app's WebView debug sockets: abstract Unix sockets named
+   `webview_devtools_remote_<pid>`, where `<pid>` is the process id of the app under test. List
+   them from the device (`/proc/net/unix`) and keep only the ones whose `<pid>` is the app's own
+   process. Never use sockets that belong to another process.
+2. Forward that one socket to a free loopback port chosen by adb
+   (`adb -s <serial> forward tcp:0 localabstract:webview_devtools_remote_<pid>`; adb prints the
+   port). Record the port; it is what we remove later. The spike must confirm that adb prints the
+   allocated port for `forward tcp:0 ...` on the adb version in use. If it does not, the fallback is a
+   port chosen by probe and checked free first, and that port is still removed individually.
+3. List the targets over HTTP (`GET http://127.0.0.1:<port>/json/list`). Each target is one page
+   in a WebView. Connect to its `webSocketDebuggerUrl`.
+4. Talk CDP over that WebSocket: `Runtime.evaluate` for lookup, `DOM` for structure,
+   `Input.dispatchMouseEvent` and `Input.dispatchKeyEvent`/`Input.insertText` for taps and typing.
+   The lookup code that `Runtime.evaluate` runs is fixed text written by probe, never text from a
+   script (see "Owner question").
+5. When the step ends, remove only the forward this run created
+   (`adb -s <serial> forward --remove tcp:<port>`).
+
+The app must have WebView debugging switched on
+(`WebView.setWebContentsDebuggingEnabled(true)`, which Flutter's `webview_flutter` sets through its
+debugging option). Whether a debug build always has it on has to be confirmed in the spike, and the
+answer goes into the user docs as a requirement. If debugging is off the step fails with a message
+that says so (see "Failure messages").
+
+### Minimal ProbeScript surface
+
+It reuses the selector syntax probe already has (text, `#id`-style, quoted strings) and adds one
+suffix, `in webview`. Nothing new to learn for the selector part.
+
+```
+see "Getting Started" in webview
+tap "Contact support" in webview
+type "hello" into "#message" in webview
+wait until "Message sent" appears in webview
+```
+
+- `see` / `tap` / `type` / `wait until ... appears` keep their meaning. `in webview` sends the step
+  to the WebView instead of the Flutter widget tree.
+- A text selector matches the visible text of a DOM element (exact, then contains, the same order
+  probe uses for widgets). A selector that starts with `#`, `.` or `[` is a CSS selector.
+- **Picking a WebView** when the app has more than one: `in webview "<part of the page title or
+  URL>"`, for example `tap "Pay" in webview "checkout"`. Without a name, exactly one target must
+  exist; if there is more than one, the step fails and lists them (see below).
+- The grammar (EBNF), a conformance test and all doc surfaces are part of step 3; this section only
+  fixes the shape.
+
+### Failure messages (what a user must be able to read)
+
+| Situation | Message must say |
+|---|---|
+| No `webview_devtools_remote_<pid>` socket for the app | No WebView debugging socket was found for the app. The app may have no WebView on this screen, or WebView debugging is off in this build (`setWebContentsDebuggingEnabled`). |
+| Several targets, no name given | Found N WebView pages (titles/URLs shown, truncated); name one with `in webview "<part of title or url>"`. |
+| Selector matches nothing | No element in the WebView page "<title>" matches "<selector>" (same wording as the widget case). |
+| Selector matches several | Matches N elements; tap would use the first visible one (or fail, to be decided in step 3 together with the widget behaviour). |
+| Element not visible or outside the viewport | The element exists but is not visible. |
+| CDP connection lost or page navigated mid-step | The WebView page changed while the step ran; retry rules follow the existing step retry. |
+| Forward could not be created or removed | The adb error, plus which port and serial. |
+
+Messages never include page content beyond the matched text, and never include the CDP
+debugger URL, which can carry a page identifier.
+
+## iOS (later; honest status)
+
+What is known:
+- `WKWebView` content can be inspected through Safari's Web Inspector protocol. It is not CDP and
+  Apple does not document it as a public interface.
+- The app has to make the page inspectable (`isInspectable = true` on iOS 16.4 and later, or
+  debug-build defaults on earlier versions).
+- Community tools translate that protocol into a CDP-like interface. None has been tried in this
+  project.
+
+What is not known, and is a spike of its own (after Android):
+- Whether it works against the Simulator the way probe uses it today, and against a physical
+  iPhone.
+- Whether any community relay is stable enough to depend on in CI.
+- What input events (tap, typing) it can deliver.
+
+We commit to Android only in this plan. iOS gets its own proposal update once the Android work
+has shipped and a spike has real results.
+
+## Security rules (binding on the spike and the implementation)
+
+1. **Loopback only.** Every forward and every connection is `127.0.0.1`. Never bind or connect
+   to another interface.
+2. **Only the app under test's own sockets.** Match `webview_devtools_remote_<pid>` against the
+   process id of the app's own process. Never attach to another app's WebView, to Chrome, or to a
+   system WebView of another process.
+3. **Never `adb forward --remove-all`** (or any command that removes forwards probe did not
+   create). Record the exact port that adb allocated and remove only that one, also on failure,
+   timeout and Ctrl-C.
+4. **Do not touch anything that is not this run's:** other devices, other forwards, the agent port
+   of an already-running probe session (`48686` by default), or an address that belongs to another
+   tool. The implementation takes the device serial from the run and does nothing outside it.
+5. **No raw JavaScript from script text.** CDP lookup code is a fixed template inside probe. A
+   `.probe` file cannot send its own `Runtime.evaluate` text. See the owner question below.
+6. **Redaction:** typed values and page text follow the existing redaction rules for logs and
+   reports; the WebSocket debugger URL is not written to logs or reports.
+7. **Payment and login pages in a WebView** are the app owner's call; this feature does not add
+   anything that tries to bypass page protections (no JS injection beyond the fixed lookup, no
+   header or cookie handling).
+
+## Owner question
+
+Do we ever allow raw JavaScript from a ProbeScript file (a verb like `run javascript "..." in
+webview`)? **Default and plan: no.** It gives scripts a way to run arbitrary code in the page, can
+leak data in logs, and is the main way a test could do something the rules above forbid. If the
+owner wants it, it is a separate decision with its own review.
+
+## Steps and gates
+
+1. **This document** (docs only). Merge after an independent verdict.
+2. **Spike**, after step 1 is accepted. A fixture with a real WebView that does not add or
+   upgrade packages in the Flutter e2e test app: the native Kotlin twin app in
+   `e2e-test-workspace` if it has or can get a WebView without new dependencies, otherwise a tiny
+   standalone fixture. Run it on a **named** Android emulator that is not one already in use by
+   another test. Evidence: a recorded run that selects and taps inside the WebView, with the
+   forward created and removed.
+3. **Implementation**, in small PRs after the spike is accepted: a CDP client in `internal/device`
+   with a loopback fake CDP server for tests, the runner verbs, the grammar EBNF with a conformance
+   test, all doc surfaces, and the MCP, VS Code and Studio dictionaries.
+
+## Findings from the first analysis (2026-08)
+
+The sections below are the original analysis, kept because they explain the platform split. The
+"no justifying flow" finding and the recommendation not to start are superseded by the Decision
+above.
 
 ## What "no WebView content" means today, concretely
 
@@ -128,7 +241,9 @@ investment in exactly this space hasn't shipped an iOS WebView-inspection
 story, that's independent evidence the iOS side is harder than "just build
 the iOS half too" — not only this proposal's own assessment of it.
 
-## What Android-only support would look like, if a flow justified it
+## The original Android sketch (superseded syntax)
+
+The sketch below used `see web` / `tap web`. The proposed surface is `... in webview`, defined in "Minimal ProbeScript surface" above; the implementation notes still apply.
 
 Sketched for completeness, not as a commitment — this shape should be
 re-derived against whatever real flow eventually justifies building this,
@@ -164,60 +279,5 @@ test "read a WebView-rendered help article"
   interleave in one step sequence) depends entirely on what the
   justifying flow actually needs — that question shouldn't be answered
   speculatively here.
-- iOS gets no implementation in this pass; see Options below.
+- iOS gets no implementation in this pass; see "iOS (later; honest status)" above.
 
-## Options considered
-
-### A — Build both Android CDP and iOS remote-inspector support now, regardless of demand
-
-**Not now.** No justifying flow on either platform, and the iOS mechanism
-is meaningfully less mature than WDA was for N-2 — this is a harder reject
-than N-2's own "Option A" (compiling XCTest into every adopter's project),
-because this proposal doesn't have N-2's offsetting factors (a real flow,
-a mature backend) to make the up-front cost worth paying.
-
-### B — Scope Android CDP only now, hold iOS for later
-
-**Plausible middle path, not recommended yet.** Mirrors PT-13/N-1's
-precedent of shipping the cheap platform first. But "cheap to build" isn't
-sufficient justification on its own — every other item this roadmap has
-shipped (N-1, N-2, E-1 through E-3) started from a concrete, documented
-flow, not a capability gap alone. Revisit this option specifically once
-one exists.
-
-### C — Do nothing further until a real flow appears
-
-**Recommended.** Matches this proposal's own key finding: unlike every
-other tracked gap in this roadmap, WebView content has zero grounding in
-either reference app today. The right next step is finding — or
-deliberately going and looking for, e.g. with a design partner or a third
-reference app — a concrete flow, not writing code against a hypothetical
-one.
-
-### D — Wait for the ecosystem to mature (Apple ships an official inspector, or `ios-webkit-debug-proxy` stabilizes)
-
-**Not now**, for the same reason N-2 rejected the equivalent option: no
-public indication this is coming, no timeline to plan against. Worth
-naming as a real alternative to "build the unofficial shim ourselves,"
-though, given how much less mature that shim is than WDA was — this
-proposal isn't confident enough in the iOS mechanism to recommend building
-against it even if a flow appeared tomorrow, without first spiking whether
-`ios-webkit-debug-proxy` (or an equivalent) is stable enough to run in CI.
-
-## Recommended next step
-
-Don't write any code yet. Before this proposal's status changes:
-
-1. Actively look for a concrete flow — check whether any current or
-   prospective adopter's app embeds WebView content in a screen that needs
-   test coverage (a help/FAQ page, a checkout or SSO redirect, a
-   CMS-driven onboarding screen). This is the same bar N-2 met with
-   the social app's photo picker; nothing here should be built without it.
-2. If and when one appears, scope Android-only first per Option C/B,
-   sized against that real flow rather than the hypothetical sketch above
-   — and separately validate whether an iOS mechanism is even viable
-   before promising iOS parity.
-3. Keep `docs/roadmap/gap-analysis-2026-08.md`'s existing WebView bullet
-   pointed at this proposal (done as part of this change) so this gap
-   stays visible and doesn't get silently rediscovered the next time a
-   Maestro-parity sweep happens.
