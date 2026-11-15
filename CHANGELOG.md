@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - **Studio's device connections now ask whether the device is physical.** A connection made from Studio (a Wi-Fi iOS device or a listed device) built its device context without that answer, so a physical device was treated as an emulator or simulator by the steps that differ between the two. Both connections now use the same builder as `probe test`, and a test fails if any builder writes the context by hand.
 
+- **Studio has a Suggest a fix button next to Explain failures.** One ProbeScript line from the AI provider for the failed step of the last run, on an advisory card. The window asks Studio for a preview first (`PreviewSelectorFix`), shows it when Studio says it must (a hosted or remote destination every time, one on this machine once per session and after a change of model, endpoint, key, workspace or settings) and only on **Send** asks Studio to send that preview (`SelectorFixPreviewed(id)`): Studio sends exactly what was shown and refuses when anything changed since. The card names the model and whether it is local or hosted, says in the CLI's `selector_proposal` wording that it is not applied or verified and does not change the result, and is set as text (markup in an answer stays text). A suggestion in flight is dropped by a new run or a change of workspace, settings or key, and a dialog is never shown for a dropped one. The seeded run of the browser suite may now carry the steps of the run.
 
 ## [0.27.0] - 2026-11-11
 

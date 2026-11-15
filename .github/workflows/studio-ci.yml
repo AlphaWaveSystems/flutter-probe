@@ -81,6 +81,9 @@ jobs:
       - name: Wi-Fi device tests
         working-directory: studio/frontend
         run: npm run test:wifi
+      - name: Suggest a fix tests
+        working-directory: studio/frontend
+        run: npm run test:fix
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript

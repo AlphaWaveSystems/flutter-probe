@@ -20,7 +20,8 @@
     "test:network": "node --test network-tests/",
     "test:send": "node --test send-tests/",
     "test:triage": "node --test triage-tests/",
-    "test:wifi": "node --test wifi-tests/"
+    "test:wifi": "node --test wifi-tests/",
+    "test:fix": "node --test fix-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.57.0"

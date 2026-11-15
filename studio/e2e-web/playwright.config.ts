@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { seedExchanges, seedRun } from "./tests/explain-seed";
+import { seedExchanges, seedRunWithSteps } from "./tests/explain-seed";
 
 // Studio runs in headless mode (PROBE_STUDIO_HEADLESS=1): the real frontend and Go bindings over HTTP,
 // no native window. scripts/studio-e2e-web.sh builds Studio, prepares a workspace copy (and, for the
@@ -15,7 +15,7 @@ const port = process.env.STUDIO_E2E_PORT ?? "34890";
 const seedPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WORKSPACE, ".e2e-seed", "run.json") : "";
 if (seedPath) {
   fs.mkdirSync(path.dirname(seedPath), { recursive: true });
-  fs.writeFileSync(seedPath, JSON.stringify(seedRun()));
+  fs.writeFileSync(seedPath, JSON.stringify(seedRunWithSteps()));
 }
 const seedExchangesPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WORKSPACE, ".e2e-seed", "exchanges.json") : "";
 if (seedExchangesPath) {
