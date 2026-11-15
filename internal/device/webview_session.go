@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -23,8 +24,8 @@ type WebViewOptions struct {
 	Page   string
 	// CallTimeout ends a command whose context has no deadline; zero means 30 s. Set it higher for a step that may take long.
 	CallTimeout time.Duration
-	// Redact is applied to every piece of text that came from the page or the script (the page's error messages, titles, element text, the selector) before it is put in a message. The runner MUST pass its
-	// secret masking here: with a nil Redact the text is not masked (it is only cleaned of control characters and shortened), and a secret typed into a selector or shown by a page can reach a message and a report.
+	// Redact is applied to every piece of text that came from the page or the script (the page's error messages, titles, element text, the selector) before it is put in a message. It is REQUIRED: OpenWebView
+	// refuses a nil Redact, because a secret typed into a selector or shown by a page could otherwise reach a message and a report. The runner passes its secret masking here. Pass an identity function to opt out.
 	Redact func(string) string
 }
 
@@ -45,6 +46,10 @@ type WebViewSession struct {
 func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, err error) {
 	if o.Runner == nil || strings.TrimSpace(o.Serial) == "" {
 		return nil, fmt.Errorf("webview: a device serial and an adb runner are required")
+	}
+	if o.Redact == nil {
+		// a session that cannot mask what the page shows could put a secret in a message or a report
+		return nil, fmt.Errorf("webview: a Redact function is required")
 	}
 	pid := o.PID
 	if pid == 0 {
@@ -93,10 +98,8 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, e
 			err = fmt.Errorf("%w; also: %v", err, cerr)
 		}
 	}()
-	redact := o.Redact
-	if redact == nil {
-		redact = func(s string) string { return s }
-	}
+	userRedact := o.Redact
+	redact := func(s string) string { return scrubDebuggerAddresses(userRedact(s)) }
 	pages, err := ListTargets(ctx, fwd.Port())
 	if err != nil {
 		return nil, err
@@ -113,6 +116,37 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, e
 	title := shown(redact(target.Title))
 	opened = true
 	return &WebViewSession{conn: conn, fwd: fwd, title: title, redact: redact}, nil
+}
+
+// A loopback host in the forms an address can take: 127.x.y.z (also 127.1), 0.0.0.0, localhost, [::1], an IPv4-mapped IPv6 address.
+const loopbackHost = `(?:127(?:\.[0-9]{1,3}){1,3}|0\.0\.0\.0|localhost|\[(?:::1|::ffff:[0-9a-f.:]+|0:0:0:0:0:0:0:1)\])`
+
+// debuggerAddress matches what a page's error text can carry back about the DevTools connection: a loopback host with a port (with or without a
+// scheme, with spaces around the scheme's colon and slashes), a scheme and a loopback host, and any /devtools/ path (which holds the page identifier)
+// with everything that follows it up to the end of the line or a quote, because an identifier can be split by spaces.
+var debuggerAddress = regexp.MustCompile(`(?i)(?:(?:wss?|https?)\s*:\s*//\s*)?` + loopbackHost + `:[0-9]{1,5}[^\s"']*` +
+	`|(?:wss?|https?)\s*:\s*//\s*` + loopbackHost + `[^\s"']*` +
+	`|/devtools/[^"'\r\n]*`)
+
+// scrubDebuggerAddresses removes DevTools addresses from text the page supplied; the messages never show the debugger address. A text that
+// holds percent-encoded characters is also read decoded (up to three layers), and when an address is found in the decoded form the decoded text is the one returned, scrubbed.
+func scrubDebuggerAddresses(s string) string {
+	const tag = "<debugger address>"
+	out := debuggerAddress.ReplaceAllString(s, tag)
+	if strings.Contains(s, "%") {
+		d := s
+		for i := 0; i < 3; i++ {
+			u, err := url.PathUnescape(d)
+			if err != nil || u == d {
+				break
+			}
+			d = u
+		}
+		if d != s && debuggerAddress.MatchString(d) {
+			out = debuggerAddress.ReplaceAllString(d, tag)
+		}
+	}
+	return out
 }
 
 // pickPage chooses the page to use: the only one, or the one whose title or URL contains page (case-insensitive).

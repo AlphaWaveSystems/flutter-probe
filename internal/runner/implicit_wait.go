@@ -9,7 +9,7 @@ import (
 // isNotFoundError reports whether err says the step's target was not on screen
 // (as opposed to being on screen in the wrong state, or a connection problem).
 func isNotFoundError(err error) bool {
-	if err == nil {
+	if err == nil || isWebViewStepError(err) {
 		return false
 	}
 	msg := err.Error()
@@ -22,7 +22,7 @@ func isNotFoundError(err error) bool {
 // mid-rebuild or mid-paint (an element with no render object yet, a boundary that needs
 // paint): the same step succeeds a frame later.
 func isTransientAssertion(err error) bool {
-	if err == nil {
+	if err == nil || isWebViewStepError(err) {
 		return false
 	}
 	msg := err.Error()
@@ -35,6 +35,9 @@ func isTransientAssertion(err error) bool {
 // Steps that already tolerate absence (`if visible`, `optional`) and explicit waits
 // are left alone.
 func implicitWaitable(step parser.Step) bool {
+	if isWebViewStep(step) {
+		return false // the WebView steps are not part of the widget implicit wait
+	}
 	switch s := step.(type) {
 	case parser.ActionStep:
 		if s.Sel == nil || s.IfVisible || s.Optional {

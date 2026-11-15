@@ -667,8 +667,9 @@ the line except a trailing `within N seconds`, which wraps the step like any oth
 `css : "x"` are allowed. A quoted string follows the lexer's rules for every STRING: `\"` is a quote, `\\` a
 backslash, `\n` and `\t` a new line and a tab, and any other `\x` is the character `x` (so `\:` is `:`; a CSS
 id such as `#a\:b` is written `"#a\\:b"`); a raw new line inside a string is a parse error. A text that
-starts with `css:` stays text when it is quoted (`tap "css:x" in webview`). In this version the steps
-parse and the runner reports that they are not implemented yet.
+starts with `css:` stays text when it is quoted (`tap "css:x" in webview`). On Android the runner runs
+these steps in the app's own WebView (the app must have WebView debugging on); on iOS they fail with a
+message that says so, and in a cloud run they are skipped like the other device-only steps.
 
 ```probe
 test "webview steps"

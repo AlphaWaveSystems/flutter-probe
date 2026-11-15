@@ -308,7 +308,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
 	// Uses exponential backoff with jitter — see tryReconnect for the formula.
-	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil {
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil {
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {
 			maxAttempts = 4
@@ -576,10 +576,10 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.VerbTapNative:
 			return fmt.Sprintf("tap native %q", s.Name)
 		case parser.VerbTapWebView:
-			return "tap " + s.WebView.String()
+			return "tap " + e.webViewShown(s.WebView).String()
 		case parser.VerbTypeWebView:
 			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
-			return fmt.Sprintf("type %q into %s", sysdialog.ScrubKnown(e.resolveVars(s.Text)), s.WebView.String())
+			return fmt.Sprintf("type %q into %s", capShown(sysdialog.ScrubKnown(e.resolveVars(s.Text))), e.webViewShown(s.WebView).String())
 		case parser.VerbTypeNative:
 			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
 			return fmt.Sprintf("type native %q into %q", sysdialog.ScrubKnown(e.resolveVars(s.Text)), s.Name)
@@ -595,7 +595,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("%ssee any of %q", neg, s.Any)
 		}
 		if s.WebView != nil {
-			return fmt.Sprintf("%ssee %s", neg, s.WebView.String())
+			return fmt.Sprintf("%ssee %s", neg, e.webViewShown(s.WebView).String())
 		}
 		if s.Native {
 			return fmt.Sprintf("%ssee native %q", neg, s.Sel.Text)
@@ -617,7 +617,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 		case parser.WaitAny:
 			return fmt.Sprintf("wait until any of %q appears", s.Any)
 		case parser.WaitWebView:
-			t := *s.WebView
+			t := e.webViewShown(s.WebView)
 			// the target's own string form ends in "in webview": the word "appears" goes before it
 			v := strconv.Quote(t.Value)
 			if t.Kind == parser.WebViewCSS {
@@ -1083,8 +1083,11 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		}
 		return e.deviceCtx.AddMedia(ctx, e.resolve(a.Name))
 
-	case parser.VerbTapWebView, parser.VerbTypeWebView:
-		return errWebViewNotImplemented
+	case parser.VerbTapWebView:
+		return e.runWebViewTap(ctx, a)
+
+	case parser.VerbTypeWebView:
+		return e.runWebViewType(ctx, a)
 
 	case parser.VerbTapNative:
 		if e.deviceCtx == nil {
@@ -1248,12 +1251,9 @@ func (e *Executor) runAssertAny(ctx context.Context, a parser.AssertStep) error 
 	return nil
 }
 
-// errWebViewNotImplemented is what a WebView step (tap, type, see, wait until ... in webview) reports until the runner glue exists: the steps parse, they do not run yet.
-var errWebViewNotImplemented = errors.New("webview steps are not implemented yet in this version of probe")
-
 func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 	if a.WebView != nil {
-		return errWebViewNotImplemented
+		return e.runWebViewSee(ctx, a)
 	}
 	if len(a.Any) > 0 {
 		return e.runAssertAny(ctx, a)
@@ -1485,7 +1485,7 @@ func (e *Executor) waitAny(ctx context.Context, alts []string) error {
 
 func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	if w.Kind == parser.WaitWebView {
-		return errWebViewNotImplemented
+		return e.runWebViewWait(ctx, w)
 	}
 	// Campaign finding: a plain `wait N seconds` used to round-trip through
 	// the agent as an RPC — so `kill the app` followed by `wait 2 seconds`
@@ -1737,7 +1737,8 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 
 // isConnectionError returns true if the error indicates a broken WebSocket connection.
 func isConnectionError(err error) bool {
-	if err == nil {
+	if err == nil || isWebViewStepError(err) {
+		// a WebView step's message holds text from the page and the script's selector; it never means the agent connection broke
 		return false
 	}
 	msg := err.Error()
@@ -1764,6 +1765,9 @@ func isConnectionError(err error) bool {
 func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	if e.deviceCtx == nil {
 		return fmt.Errorf("reconnect: no device context (cloud mode)")
+	}
+	if e.client == nil {
+		return fmt.Errorf("reconnect: there is no agent connection to re-establish")
 	}
 
 	// Capture the generation before locking. If somebody else reconnects while
@@ -1920,8 +1924,8 @@ func (e *Executor) scrubEnv(err error) error {
 	return &scrubbedError{msg: scrubbed, err: err}
 }
 
-// scrubbedError is err with its message masked. It does not unwrap, so errors.Is sees what it saw before; only As
-// can find a *stepTimeoutError, which carries the items the selector proposal reads (they are masked when recorded).
+// scrubbedError is err with its message masked. It does not unwrap, so errors.Is sees what it saw before; As finds the types
+// inside (the *stepTimeoutError that carries the items the selector proposal reads, a *webViewStepError).
 type scrubbedError struct {
 	msg string
 	err error
@@ -1929,16 +1933,9 @@ type scrubbedError struct {
 
 func (e *scrubbedError) Error() string { return e.msg }
 
-func (e *scrubbedError) As(target any) bool {
-	if t, ok := target.(**stepTimeoutError); ok {
-		var ste *stepTimeoutError
-		if errors.As(e.err, &ste) {
-			*t = ste
-			return true
-		}
-	}
-	return false
-}
+// As looks in the masked error for any type the caller asks for (a *stepTimeoutError, a *webViewStepError, a *device.WebViewError).
+// Is is deliberately not delegated: errors.Is sees what it saw before the masking was added.
+func (e *scrubbedError) As(target any) bool { return errors.As(e.err, target) }
 
 func (e *Executor) resolveVars(s string) string {
 	// First: expand random data generators

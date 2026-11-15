@@ -251,6 +251,12 @@ func (s *WebViewSession) locate(ctx context.Context, sel Selector, mode string) 
 	return info, nil
 }
 
+// See succeeds when a visible element matches sel. When none does it says why, in the words of the proposal's failure table ("not found" or "not visible" kinds).
+func (s *WebViewSession) See(ctx context.Context, sel Selector) error {
+	_, err := s.locate(ctx, sel, "find")
+	return err
+}
+
 // Tap taps the first visible element that matches query, at its centre, with a mouse press and release.
 func (s *WebViewSession) Tap(ctx context.Context, sel Selector) error {
 	info, err := s.locate(ctx, sel, "find")
