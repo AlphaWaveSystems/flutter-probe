@@ -1,18 +1,17 @@
 # Getting probe's hands on WebView content
 
-**Status:** Approved by the owner (2026-11-15) — design for step 1 of 3; no implementation yet
-**Origin:** FP-8 (Jira), listed as an open gap in `docs/roadmap/gap-analysis-2026-08.md`.
-The owner's demand signal on 2026-11-15: "currently we cannot use WebView, we need to fix that".
+**Status:** Requested by the owner (2026-11-15); design for review, step 1 of 3; no implementation yet
+**Origin:** FP-8 (Jira), listed as an open gap in `docs/roadmap/gap-analysis-2026-08.md`. A concrete demand for WebView support now exists (the owner asked for it on 2026-11-15).
 **Touches:** `internal/device`, `internal/runner`, ProbeScript grammar, the dictionary surfaces
 (docs, MCP, VS Code extension, Studio). The Dart agent is not modified.
 
 The earlier version of this proposal recommended not starting because no flow or adopter had asked
-for WebView content. That blocker is gone: the owner has asked for it. This version records the
-decision, the design we will build, and the rules it must follow. The original analysis is kept
+for WebView content. That blocker is gone: a concrete demand now exists. This version records the
+plan, the design proposed for review, and the rules it must follow. The original analysis is kept
 below under "Findings from the first analysis (2026-08)" because it still explains why Android
 comes first.
 
-## Decision
+## Plan
 
 - **Android first**, through the Chrome DevTools Protocol (CDP) of the app's own WebView.
 - **iOS later.** It uses a different, undocumented mechanism; see "iOS" below for what is and is
@@ -31,7 +30,9 @@ comes first.
    process. Never use sockets that belong to another process.
 2. Forward that one socket to a free loopback port chosen by adb
    (`adb -s <serial> forward tcp:0 localabstract:webview_devtools_remote_<pid>`; adb prints the
-   port). Record the port; it is what we remove later.
+   port). Record the port; it is what we remove later. The spike must confirm that adb prints the
+   allocated port for `forward tcp:0 ...` on the adb version in use. If it does not, the fallback is a
+   port chosen by probe and checked free first, and that port is still removed individually.
 3. List the targets over HTTP (`GET http://127.0.0.1:<port>/json/list`). Each target is one page
    in a WebView. Connect to its `webSocketDebuggerUrl`.
 4. Talk CDP over that WebSocket: `Runtime.evaluate` for lookup, `DOM` for structure,
@@ -242,7 +243,7 @@ the iOS half too" — not only this proposal's own assessment of it.
 
 ## The original Android sketch (superseded syntax)
 
-The sketch below used `see web` / `tap web`. The approved surface is `... in webview`, defined in "Minimal ProbeScript surface" above; the implementation notes still apply.
+The sketch below used `see web` / `tap web`. The proposed surface is `... in webview`, defined in "Minimal ProbeScript surface" above; the implementation notes still apply.
 
 Sketched for completeness, not as a commitment — this shape should be
 re-derived against whatever real flow eventually justifies building this,
