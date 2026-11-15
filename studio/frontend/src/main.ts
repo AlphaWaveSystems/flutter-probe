@@ -7,6 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
+import { FixSession, fixCardModel, fixPreviewNote, type FixAnswer, type FixPreview } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -39,6 +40,8 @@ import {
   ExplainAvailability,
   ExplainPreviewed,
   PreviewExplain,
+  PreviewSelectorFix,
+  SelectorFixPreviewed,
   FindLocalModels,
   ReadFile,
   RunFileScoped,
@@ -421,6 +424,8 @@ function resetAIPreview(): void {
   aiPreviewConfirmed = null;
   explainSession.reset(); // the same events change where an Explain goes, so its preview is shown again, and one in flight is dropped
   dropExplainView();
+  fixSession.invalidate(); // and where a suggested fix goes: Studio asks for a new preview, and one in flight is dropped
+  dropFixView();
   void refreshExplainOffer();
   // The same events change where a message goes, so they change the header too, but only while the chat pane is open: the header is
   // not visible otherwise, and asking for it may read the keychain, which should not happen at launch for a pane nobody opened.
@@ -619,11 +624,15 @@ const refreshExplainOffer = latestWins(
   () => ExplainAvailability(),
   (offer) => {
     $("explain-bar").hidden = offer.available !== true;
-    if (offer.available !== true) hideExplainCard();
+    if (offer.available !== true) {
+      hideExplainCard();
+      hideFixCard();
+    }
   },
   () => {
     $("explain-bar").hidden = true;
     hideExplainCard();
+    hideFixCard();
   },
 );
 
@@ -655,6 +664,7 @@ function textEl(tag: string, className: string, text: string): HTMLElement {
 // stay as the run left them.
 function showExplainCard(r: ExplainResult): void {
   const model = explainCardModel(r);
+  hideFixCard(); // one advisory card at a time
   const card = $("explain-card");
   card.replaceChildren();
   const head = document.createElement("div");
@@ -732,8 +742,109 @@ $("btn-explain").addEventListener("click", async () => {
 EventsOn("run:started", () => {
   explainSession.invalidate(); // an Explain of the previous run must not show for this one
   dropExplainView();
+  fixSession.invalidate(); // nor a suggested fix for a step of the previous run
+  dropFixView();
 });
 EventsOn("run:finished", () => void refreshExplainOffer());
+
+// ---- Suggest a fix: one ProbeScript line for the failed step of the last run ------------
+
+const fixSession = new FixSession();
+
+// dismissFixConfirm closes an open preview as if it were cancelled.
+let dismissFixConfirm: (() => void) | null = null;
+
+function hideFixCard(): void {
+  const card = $("fix-card");
+  card.hidden = true;
+  card.replaceChildren();
+}
+
+// dropFixView is what a new run, a change of workspace, settings or key does to a suggestion on screen: the card goes, an open preview
+// closes as if cancelled, the status is cleared and the button can be used at once.
+function dropFixView(): void {
+  dismissFixConfirm?.();
+  hideFixCard();
+  ($("btn-fix") as HTMLButtonElement).disabled = false;
+}
+
+// showFixCard writes the advisory card. It sits beside the results and never touches them: the pass and fail counts and the rows stay as
+// the run left them. Nothing in it is applied to the file.
+function showFixCard(answer: FixAnswer, step: string): void {
+  const model = fixCardModel(answer, step);
+  hideExplainCard(); // one advisory card at a time
+  const card = $("fix-card");
+  card.replaceChildren();
+  const head = document.createElement("div");
+  head.className = "explain-card-head";
+  const close = textEl("button", "btn-mini explain-card-close", "✕");
+  close.setAttribute("type", "button");
+  close.setAttribute("title", "Close");
+  close.addEventListener("click", hideFixCard);
+  head.append(textEl("span", "explain-card-title", model.title), textEl("span", "explain-card-dest", model.destination), textEl("span", `explain-place explain-place-${model.place}`, model.place), close);
+  card.append(head, textEl("p", "explain-disclaimer", model.disclaimer));
+  for (const row of model.rows) {
+    const div = document.createElement("div");
+    div.className = `explain-row explain-row-${row.kind}`;
+    div.append(textEl("div", "explain-row-label", row.label), textEl("p", "explain-row-text", row.text));
+    card.append(div);
+  }
+  card.hidden = false;
+}
+
+// confirmFixSend shows what the suggestion would send and waits for Send or Cancel. Nothing is sent before Send.
+function confirmFixSend(p: FixPreview): Promise<boolean> {
+  const overlay = $("fix-preview-overlay");
+  const send = $("btn-fix-preview-send");
+  const cancel = $("btn-fix-preview-cancel");
+  $("fix-preview-note").textContent = fixPreviewNote(p.hosted);
+  $("fix-preview-text").textContent = p.text;
+  overlay.hidden = false;
+  return new Promise((resolve) => {
+    const finish = (ok: boolean) => {
+      overlay.hidden = true;
+      send.removeEventListener("click", onSend);
+      cancel.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey);
+      dismissFixConfirm = null;
+      resolve(ok);
+    };
+    const onSend = () => finish(true);
+    const onCancel = () => finish(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
+    };
+    send.addEventListener("click", onSend);
+    cancel.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+    dismissFixConfirm = () => finish(false);
+  });
+}
+
+$("btn-fix").addEventListener("click", async () => {
+  const btn = $("btn-fix") as HTMLButtonElement;
+  const status = $("explain-status");
+  btn.disabled = true;
+  status.textContent = "";
+  try {
+    // The preview comes first. Studio says whether it must be shown; the request goes only after Send, and only the id of that preview.
+    const out = await fixSession.run({
+      preview: async () => (await PreviewSelectorFix(editor.getValue())) as FixPreview,
+      confirm: confirmFixSend,
+      send: async (id) => {
+        status.textContent = "Asking the model…";
+        return (await SelectorFixPreviewed(id)) as FixAnswer;
+      },
+    });
+    if (out?.kind === "answer") showFixCard(out.answer, out.step); // a stale or cancelled suggestion shows nothing
+  } catch (err) {
+    status.textContent = `Suggest a fix failed: ${String(err).replace(/^Error:\s*/, "")}`;
+    return;
+  } finally {
+    btn.disabled = fixSession.running; // a newer suggestion that is in flight keeps its button disabled
+  }
+  if (!fixSession.running) status.textContent = "";
+});
 
 // confirmFirstChatSend shows what the next chat message carries and waits for Send or Cancel. Nothing is sent before Send.
 function confirmFirstChatSend(preview: string): Promise<boolean> {
