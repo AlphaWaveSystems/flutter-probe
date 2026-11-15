@@ -88,6 +88,7 @@ func TestAnAddressAcrossTheCutIsNotKept(t *testing.T) {
 // Text from a provider's error is cleaned: the key, the families, an address and a home folder are gone, and hidden characters
 // do not hide them.
 func TestProviderErrorTextIsCleaned(t *testing.T) {
+	t.Setenv("HOME", "/Users/alice") // replies are scrubbed of this account's folder only
 	const key = "zorbleflux-quantum-seven"
 	raw := errors.New("400: bad request for jane@example.com at /Users/alice/x, key " + key + ", token " + "ghp_" + strings.Repeat("a1B2", 9) + " and j\u200bane.doe@example.com")
 	got := errorFrom(raw, key).Error()
@@ -110,6 +111,7 @@ func TestProviderErrorTextIsCleaned(t *testing.T) {
 
 // A suggestion that cleaning changed says so, and one it did not change does not.
 func TestChangedSuggestionIsFlagged(t *testing.T) {
+	t.Setenv("HOME", "/Users/alice") // replies are scrubbed of this account's folder only
 	reply := "```probe\ntype \"" + replyEmail + "\" into \"Email\"\n```\nWhy."
 	f := newFakeProvider(t, http.StatusOK, reply)
 	useProvider(t, f, "test-key")
@@ -137,6 +139,7 @@ func TestChangedSuggestionIsFlagged(t *testing.T) {
 
 // The doctor's details come back from the server, so an address and a home folder in them are scrubbed too.
 func TestDoctorDetailsAreScrubbed(t *testing.T) {
+	t.Setenv("HOME", "/Users/alice") // replies are scrubbed of this account's folder only
 	isolateProvider(t, "")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -156,6 +159,58 @@ func TestDoctorDetailsAreScrubbed(t *testing.T) {
 	for _, c := range rep.Checks {
 		if strings.Contains(c.Detail, "jane") || strings.Contains(c.Detail, "alice") {
 			t.Errorf("the %s check shows personal text: %q", c.Name, c.Detail)
+		}
+	}
+}
+
+// A reply is scrubbed of this account's own folder and of addresses, and of nothing that merely looks like a folder: routes and words are
+// shown as the model wrote them.
+func TestRepliesKeepRoutesAndWords(t *testing.T) {
+	for _, in := range []string{"/users/42", "/home/settings", "GoRoute(path: '/users/:id')", "/root-cause", "see /root.", "https://app.test/root/x", "tap \"/Users/list\"", "/api/users/42/orders"} {
+		for name, out := range map[string]string{"cleanAdvice": cleanAdvice(in, ""), "fixAnswer": fixAnswer(in, "", 300), "cleanProviderText": cleanProviderText(in, "", false)} {
+			if out != strings.TrimSpace(in) {
+				t.Errorf("%s: %q -> %q", name, in, out)
+			}
+		}
+	}
+}
+
+// A route suggestion is not flagged, a change in the reason alone is.
+func TestChangedIsFlaggedForTheReasonAloneAndNotForARoute(t *testing.T) {
+	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"/Users/list\"\n```\nThe link goes to /Users/list.")
+	useProvider(t, f, "test-key")
+	fix, err := suggestFix(failedRunApp(), "")
+	if err != nil || fix.Changed || fix.Suggestion != `tap "/Users/list"` {
+		t.Errorf("a route: %v %+v", err, fix)
+	}
+	f2 := newFakeProvider(t, http.StatusOK, "```probe\ntap \"Sign in now\"\n```\nAsk jane@example.com about it.")
+	useProvider(t, f2, "test-key")
+	fix, err = suggestFix(failedRunApp(), "")
+	if err != nil || !fix.Changed || fix.Suggestion != `tap "Sign in now"` || !strings.Contains(fix.Rationale, "[email]") {
+		t.Errorf("a reason change: %v %+v", err, fix)
+	}
+}
+
+// The own folder written percent-encoded (in a query value) is replaced, from HOME and from the account name.
+func TestOwnHomeFolderIsReplacedPercentEncoded(t *testing.T) {
+	t.Setenv("HOME", "/srv/people/dana")
+	for in, want := range map[string]string{
+		"https://x.test/p?path=%2Fsrv%2Fpeople%2Fdana%2Fx": "https://x.test/p?path=~%2Fx",
+		"%2fSRV%2fpeople%2fDANA":                           "~",
+	} {
+		if out := scrubOwnHome(in); out != want {
+			t.Errorf("%q -> %q, want %q", in, out, want)
+		}
+	}
+	t.Setenv("HOME", `C:\Users\carol`)
+	for in, want := range map[string]string{
+		"?p=%5CUsers%5Ccarol%5Cx":   "?p=~%5Cx",
+		"?p=C:%5CUsers%5Ccarol%5Cx": "?p=~%5Cx",
+		"?p=%2FUsers%2Fcarol%2Fx":   "?p=~%2Fx",
+		"?p=%5CUsers%5Ccarolyn%5Cx": "?p=%5CUsers%5Ccarolyn%5Cx",
+	} {
+		if out := scrubOwnHome(in); out != want {
+			t.Errorf("%q -> %q, want %q", in, out, want)
 		}
 	}
 }

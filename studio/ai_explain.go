@@ -134,7 +134,7 @@ func scrubPersonal(s string) string {
 // dropped, the text is bounded, the exact key is removed, the families are redacted and personal text is scrubbed, in that order. A cut
 // comes after, never before, so a cut cannot leave the start of an address or a token that was not scrubbed.
 func cleanProviderText(s, key string, keepLines bool) string {
-	return scrubPersonal(fromProvider(boundBeforeGate(withoutInvisible(s, keepLines)), withoutInvisible(key, false)))
+	return scrubPersonalText(fromProvider(boundBeforeGate(withoutInvisible(s, keepLines)), withoutInvisible(key, false)))
 }
 
 // scrubPersonalText is scrubPersonal for text a person writes or reads as code (a chat turn and its reply, which hold test files with
@@ -156,7 +156,8 @@ func scrubOwnHome(s string) string {
 	}
 	var forms []string
 	add := func(f string) {
-		forms = append(forms, f, strings.ReplaceAll(f, "/", `\/`), strings.ReplaceAll(f, `\`, `\\`))
+		forms = append(forms, f, strings.ReplaceAll(f, "/", `\/`), strings.ReplaceAll(f, `\`, `\\`),
+			strings.ReplaceAll(strings.ReplaceAll(f, "/", "%2F"), `\`, "%5C")) // and percent-encoded, as in a query value
 	}
 	if len(home) > 4 && strings.Count(home, "/")+strings.Count(home, `\`) >= 2 {
 		add(home)
@@ -536,9 +537,16 @@ func (a *App) explainRun(in explainInput) (ExplainResult, error) {
 	return out, nil
 }
 
+// cleanErrorText is cleanProviderText for the text of an error: an error body can spell a hidden character as an escape, which is
+// decoded before the drop. It is applied before the text is cut (errorBody), never after, so a cut cannot leave the start of an address,
+// a token or the key.
+func cleanErrorText(s, key string) string {
+	return cleanProviderText(decodeHiddenEscapes(s), key, false)
+}
+
 // errorFrom is an error whose text is cleaned like any text from a provider: the key is removed and the gate runs.
 func errorFrom(err error, key string) error {
-	return fmt.Errorf("%s", errorBody([]byte(cleanProviderText(err.Error(), key, false))))
+	return fmt.Errorf("%s", errorBody([]byte(cleanErrorText(err.Error(), key))))
 }
 
 // stoppedText turns why ai.Triage stopped into a fixed text. ai.Triage's own message carries the provider's error, which can

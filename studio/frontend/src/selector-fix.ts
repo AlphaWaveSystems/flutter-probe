@@ -103,7 +103,7 @@ export function fixCardModel(answer: FixAnswer, step: string): FixCardModel {
   ];
   // A suggestion that cleaning changed (`type "[email]" into "Email"`) may not say what the model meant: say so, above the line.
   if (answer.changed) {
-    rows.splice(1, 0, { kind: "changed", label: "Changed", text: "personal text or a credential was removed from this suggestion, so it may not say what the model meant. Check it before you run it." });
+    rows.splice(1, 0, { kind: "changed", label: "Changed", text: "personal text or a credential was removed from this suggestion or its reason, so it may not say what the model meant. Check it before you run it." });
   }
   if (answer.rationale) rows.push({ kind: "why", label: "Why", text: answer.rationale });
   return { title: "Suggested fix", destination: answer.destination, place: answer.hosted ? "hosted" : "local", disclaimer: FIX_DISCLAIMER, rows };

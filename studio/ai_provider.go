@@ -220,7 +220,7 @@ func checkLocalEndpoint(endpoint string, allowRemote bool) error {
 func init() {
 	// internal/ai cuts the text of a provider error. Install the gate there, so it runs before the cut and a token that straddles
 	// the cut leaves no start of itself on the OpenAI-compatible and local paths, as it does not on the Anthropic path.
-	ai.SetErrorTextFilter(redactCredentials)
+	ai.SetErrorTextFilter(func(s string) string { return cleanErrorText(s, "") })
 }
 
 // outbound is the one gate for text Studio sends to a provider. Every system prompt and every chat turn passes through it,
@@ -233,7 +233,7 @@ func outbound(s string) string {
 // cut to 200 bytes, in that order, so a key that straddles the cut leaves nothing behind.
 func modelID(id, key string) string {
 	// Hidden characters are kept here: the chat label shows each one as a ? so a spoofed id is visible, which dropping would hide.
-	return errorBody([]byte(scrubPersonal(fromProvider(boundBeforeGate(id), key))))
+	return errorBody([]byte(scrubPersonalText(fromProvider(boundBeforeGate(id), key))))
 }
 
 // fromProvider cleans text a provider returned before Studio shows it: the exact key sent in the request is removed, and the

@@ -141,6 +141,7 @@ export namespace main {
 	    outputTokens: number;
 	    costUSD: number;
 	    notice?: string;
+	    changed?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatResponse(source);
@@ -153,6 +154,7 @@ export namespace main {
 	        this.outputTokens = source["outputTokens"];
 	        this.costUSD = source["costUSD"];
 	        this.notice = source["notice"];
+	        this.changed = source["changed"];
 	    }
 	}
 	export class ConnectionStatus {
