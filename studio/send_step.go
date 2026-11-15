@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -41,18 +42,37 @@ func (a *App) BuildCallStep(in SaveStepInput) (SavedStep, error) { return buildC
 
 // placeholders hands out ${NAME}s: upper case, letters, digits and underscores, a name used once for one value.
 type placeholders struct {
-	used  map[string]bool
-	order []string
+	used     map[string]bool
+	order    []string
+	overflow bool // more values to replace than a step may name: the save stops
 }
+
+// maxPlaceholders is the most values one step may replace. More is not a request somebody typed to check a backend, and the comment
+// above the step would name every one of them.
+const maxPlaceholders = 200
 
 // savedPrefix is on every generated name, so a name can never be one the shell already has (USER, PATH, HOME) and so what to set is
 // plain in the comment.
 const savedPrefix = "PROBE_SAVED_"
 
+// boundText cuts a name before it is read: only its start matters.
+func boundText(s string) string {
+	if len(s) > 400 {
+		return s[:400]
+	}
+	return s
+}
+
 // nameBase turns what a value was called into letters, digits and underscores, at most 40 of them: every other character, of any kind
 // (a line break, a space, a quote, a brace, a letter that is not ASCII), is an underscore, so a name can neither end the comment line
 // nor open a placeholder of its own.
 func nameBase(base string) string {
+	// A name made from what a value was called must not carry a credential: a key such as "Bearer <hex>" has none of its text in the name.
+	for _, tok := range regexp.MustCompile(`[^A-Za-z0-9]+`).Split(boundText(base), -1) {
+		if looksSecret(tok) || hexRun.MatchString(tok) {
+			return "VALUE"
+		}
+	}
 	var b strings.Builder
 	for _, r := range strings.ToUpper(base) {
 		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
@@ -75,12 +95,16 @@ func nameBase(base string) string {
 }
 
 func (p *placeholders) next(base string) string {
+	if len(p.order) >= maxPlaceholders {
+		p.overflow = true
+		return "${" + savedPrefix + "MORE}"
+	}
 	name := savedPrefix + nameBase(base)
 	if p.used == nil {
 		p.used = map[string]bool{}
 	}
 	cand := name
-	for i := 2; p.used[cand]; i++ {
+	for i := 2; p.used[cand]; i++ { // at most maxPlaceholders names exist, so this is short
 		cand = fmt.Sprintf("%s_%d", name, i)
 	}
 	p.used[cand] = true
@@ -127,22 +151,62 @@ func interpolatedForm(s string) string {
 	return ""
 }
 
-// cardRuns are the spans of s that are runs of 13 to 19 digits passing the card number check.
+// digitRun is digits with a separator of one or two characters (a space, a hyphen, a slash, an underscore or a dot) between groups.
+var digitRun = regexp.MustCompile(`\d(?:[ \-/_.]{0,2}\d)*`)
+
+// cardRuns are the spans of s that hold a card number: a run of digit groups separated by one or two spaces, hyphens, slashes, underscores
+// or dots (or one solid group) in
+// which some window of consecutive groups has 13 to 19 digits that pass the card number check, in any layout (4-4-4-4, 4-6-5, 4-4-4-1,
+// 1-4-4-4-4 and the rest). The whole run is the span, because where the card ends inside a run is not known: the groups next to a valid
+// window may be the rest of the number, and a replacement that stopped at the window could leave the last four digits of a real card in the
+// text. So `6 4111 1111 1111 1111` is one span, and so is a list of short numbers in which some stretch of 13 to 19 digits happens to
+// pass the check (about one stretch in ten does). The search has no size limit and is linear: from each group it looks at most 19 digits
+// ahead, so at most 19 groups, and it stops at the first window that passes. A window starts and ends at a group, never inside one.
 func cardRuns(s string) [][2]int {
 	var out [][2]int
-	for _, m := range cardPattern.FindAllStringIndex(s, -1) {
-		digits := strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return r
+	for _, m := range digitRun.FindAllStringIndex(s, -1) {
+		run := s[m[0]:m[1]]
+		type group struct{ a, b int } // offsets in run
+		var groups []group
+		for i := 0; i < len(run); {
+			if run[i] < '0' || run[i] > '9' {
+				i++
+				continue
 			}
-			return -1
-		}, s[m[0]:m[1]])
-		if len(digits) >= 13 && len(digits) <= 19 && luhn(digits) {
+			j := i
+			for j < len(run) && run[j] >= '0' && run[j] <= '9' {
+				j++
+			}
+			groups = append(groups, group{i, j})
+			i = j
+		}
+		found := false
+		for a := 0; a < len(groups) && !found; a++ {
+			digits := 0
+			var d strings.Builder
+			for z := a; z < len(groups); z++ {
+				digits += groups[z].b - groups[z].a
+				if digits > cardMaxDigits {
+					break
+				}
+				d.WriteString(run[groups[z].a:groups[z].b])
+				if digits >= cardMinDigits && luhn(d.String()) {
+					found = true
+					break
+				}
+			}
+		}
+		if found {
 			out = append(out, [2]int{m[0], m[1]})
 		}
 	}
 	return out
 }
+
+const (
+	cardMinDigits = 13
+	cardMaxDigits = 19
+)
 
 func buildCallStep(in SaveStepInput) (SavedStep, error) {
 	method := strings.ToUpper(strings.TrimSpace(in.Method))
@@ -192,6 +256,9 @@ func buildCallStep(in SaveStepInput) (SavedStep, error) {
 	savedBody, err := safeBody(body, &ph)
 	if err != nil {
 		return SavedStep{}, err
+	}
+	if ph.overflow {
+		return SavedStep{}, fmt.Errorf("the request has more than %d values to replace, so nothing was saved", maxPlaceholders)
 	}
 	line := "call " + method + " " + probeString(savedURL)
 	if savedBody != "" {
@@ -266,16 +333,38 @@ func safeURL(u *url.URL, ph *placeholders) (string, error) {
 	var b strings.Builder
 	b.WriteString(strings.ToLower(u.Scheme) + "://" + u.Host)
 	segs := strings.Split(u.EscapedPath(), "/")
+	// A card number can be split by real slashes (`/4412/6082/6097/70/`), so the segments are searched as one text, and every segment a
+	// card run touches is replaced.
+	plains := make([]string, len(segs))
+	starts := make([]int, len(segs))
+	var joined strings.Builder
+	for i, seg := range segs {
+		plain, err := url.PathUnescape(seg)
+		if err != nil {
+			plain = seg
+		}
+		plains[i] = plain
+		starts[i] = joined.Len()
+		joined.WriteString(plain)
+		joined.WriteByte('/')
+	}
+	spans := cardRuns(joined.String())
+	touchesCard := func(i int) bool {
+		a, z := starts[i], starts[i]+len(plains[i])
+		for _, sp := range spans {
+			if sp[0] < z && sp[1] > a {
+				return true
+			}
+		}
+		return false
+	}
 	for i, seg := range segs {
 		if i == 0 && seg == "" {
 			continue
 		}
 		b.WriteByte('/')
-		plain, err := url.PathUnescape(seg)
-		if err != nil {
-			plain = seg
-		}
-		if looksSecret(plain) || stepEmail.MatchString(plain) || len(cardRuns(plain)) > 0 {
+		plain := plains[i]
+		if looksSecret(plain) || stepEmail.MatchString(plain) || touchesCard(i) {
 			b.WriteString(ph.next(fmt.Sprintf("path_%d", i)))
 		} else {
 			b.WriteString(seg)
@@ -323,6 +412,9 @@ func safeBody(body string, ph *placeholders) (string, error) {
 		dec := json.NewDecoder(strings.NewReader(trimmed))
 		dec.UseNumber()
 		if err := copyJSON(dec, &out, "body", false, ph); err != nil {
+			if errors.Is(err, errKeyLooksSecret) || errors.Is(err, errKeyTooLong) {
+				return "", err
+			}
 			return "", errors.New("the JSON body could not be read, so nothing was saved")
 		}
 		return out.String(), nil
@@ -419,6 +511,52 @@ func safeText(s string, ph *placeholders) string {
 	return b.String()
 }
 
+var (
+	hexRun            = regexp.MustCompile(`^[0-9A-Fa-f]{16,}$`)
+	jwtShape          = regexp.MustCompile(`^eyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.`)
+	paddedBase64      = regexp.MustCompile(`^[A-Za-z0-9+/_\-]{14,}={1,2}$`)
+	errKeyLooksSecret = errors.New("an object key in the body looks like a credential, so nothing was saved")
+	errKeyTooLong     = errors.New("an object key in the body is longer than " + strconv.Itoa(maxKeyBytes) + " bytes, too long to check for a credential, so nothing was saved")
+)
+
+// maxKeyBytes is the longest object key a step is saved with: the whole key is read for a credential, never a part of it.
+const maxKeyBytes = 1024
+
+var hexBounded = regexp.MustCompile(`(?:^|[^0-9A-Fa-f])([0-9A-Fa-f]{16,})(?:[^0-9A-Fa-f]|$)`)
+
+// keyHoldsCredential says whether an object key is, or contains, a credential in a shape no ordinary key has: a run of 16 or more hex
+// digits bounded by anything that is not a hex digit (`<hex>`, `password=<hex>`, `0x<hex>`, `x_<hex>`, `<hex>.pem`, ` <hex> `), a JWT, or
+// padded base64, as the whole key, as a word of it, or after any of `= : ; , | /`. What is not refused: hex written in short groups
+// (`9f86d081-884c7d65-...`: a UUID-like id is an ordinary key), unpadded base64 that is not hex, and a credential with no shape.
+func keyHoldsCredential(name string) bool {
+	for _, m := range hexBounded.FindAllStringSubmatch(name, -1) {
+		if strings.ContainsAny(m[1], "abcdefABCDEF") { // digits only is an id or a card number, handled as a value
+			return true
+		}
+	}
+	candidates := []string{name, strings.TrimSpace(name)}
+	for _, word := range strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '"' || r == '\'' }) {
+		candidates = append(candidates, word)
+		for i := 0; i < len(word); i++ {
+			if strings.IndexByte("=:;,|/", word[i]) >= 0 && i+1 < len(word) {
+				candidates = append(candidates, word[i+1:])
+			}
+		}
+	}
+	for _, c := range candidates {
+		if strongSecretShape(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// strongSecretShape says whether a name is a hex string of 16 or more digits, a JWT, or base64 with padding: shapes an ordinary key
+// does not have, so a name of one of them is a value written where a name goes.
+func strongSecretShape(name string) bool {
+	return (hexRun.MatchString(name) && strings.ContainsAny(name, "abcdefABCDEF")) || jwtShape.MatchString(name) || paddedBase64.MatchString(name)
+}
+
 // copyJSON copies one JSON value, replacing a string or number that is under a credential name, a string that looks like a
 // credential, and an email address. Keys are kept; they are names, not values.
 func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph *placeholders) error {
@@ -449,6 +587,12 @@ func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph 
 					out.WriteByte(',')
 				}
 				first = false
+				if len(name) > maxKeyBytes {
+					return errKeyTooLong
+				}
+				if keyHoldsCredential(name) {
+					return errKeyLooksSecret // a name that is a hex string, a JWT or padded base64 is a value written as a name
+				}
 				if stepEmail.MatchString(name) || len(cardRuns(name)) > 0 {
 					out.WriteString(enc(ph.next("key")) + ":") // a name that carries an address or a card number is a value too
 				} else {

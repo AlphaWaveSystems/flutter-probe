@@ -536,7 +536,7 @@ func TestGrammarPage_SetStepsAreLineSteps(t *testing.T) {
 	for _, alt := range strings.Split(prods["line-step"], "|") {
 		members[strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(alt), ";"))] = true
 	}
-	for _, name := range []string{"set-location-step", "set-language-step", "set-appearance-step"} {
+	for _, name := range []string{"set-location-step", "set-language-step", "set-appearance-step", "set-airplane-step"} {
 		if !members[name] {
 			t.Errorf("%s is a set statement but line-step does not name it", name)
 		}
@@ -796,6 +796,17 @@ var grammarProductionExamples = []productionExample{
 			}
 			if strings.Join(got, ",") != "dark,light,auto" {
 				t.Errorf("appearance modes = %v", got)
+			}
+		}},
+	{production: "set-airplane-step", src: testBody(`set airplane mode on`, `set airplane mode to off`, `set airplane mode "on"`),
+		want: repeat("action:set_airplane_mode", 3),
+		check: func(t *testing.T, p *parser.Program) {
+			var got []string
+			for _, s := range p.Tests[0].Body {
+				got = append(got, s.(parser.ActionStep).Name)
+			}
+			if strings.Join(got, ",") != "on,off,on" {
+				t.Errorf("airplane states = %v", got)
 			}
 		}},
 	{production: "set-location-step", src: testBody(`set location 37.7749, -122.4194`, `set location -33.8, 151.2`, `set location 37 122`),

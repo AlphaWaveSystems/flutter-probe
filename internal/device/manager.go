@@ -136,6 +136,19 @@ func (m *Manager) IsPhysicalAndroid(ctx context.Context, serial string) bool {
 	return hw != "ranchu" && hw != "goldfish"
 }
 
+// IsPhysical is the one question every DeviceContext builder asks: whether the device is physical, decided by the device
+// through the same checks a single-device run has always made. A platform it does not know counts as physical, so no
+// emulator-only step runs on it.
+func (m *Manager) IsPhysical(ctx context.Context, platform Platform, serial string) bool {
+	switch platform {
+	case PlatformAndroid:
+		return m.IsPhysicalAndroid(ctx, serial)
+	case PlatformIOS:
+		return m.IsPhysicalIOS(ctx, serial)
+	}
+	return true
+}
+
 // EnsureADB checks that the ADB binary is available and can communicate with
 // the specified device. It also cleans up any stale port forwards for the given port.
 func (m *Manager) EnsureADB(ctx context.Context, serial string, hostPort int) error {

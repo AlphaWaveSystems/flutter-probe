@@ -162,21 +162,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	fmt.Printf("  \033[32m✓\033[0m  [%s] Connected\n", po.shortID(dr.DeviceID))
 
 	// Create device context
-	devCtx := &DeviceContext{
-		Manager:                 po.manager,
-		Serial:                  dr.DeviceID,
-		Platform:                dr.Platform,
-		AppID:                   appID,
-		Port:                    dr.Port,
-		DevicePort:              po.cfg.Agent.AgentDevicePort(),
-		AllowClearData:          true,
-		GrantPermissionsOnClear: po.cfg.Defaults.GrantPermissionsOnClear,
-		ReconnectDelay:          po.cfg.Agent.ReconnectDelay,
-		RestartDelay:            po.cfg.Device.RestartDelay,
-		TokenReadTimeout:        tokenTimeout,
-		DialTimeout:             dialTimeout,
-		CLIVersion:              po.cfg.CLIVersion,
-	}
+	devCtx := po.deviceContext(ctx, dr, appID, tokenTimeout, dialTimeout)
 
 	// Create runner for this device
 	deviceOpts := po.opts
@@ -189,6 +175,23 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	r.SetVisual(vc)
 
 	return r.Run(ctx)
+}
+
+// deviceContext is the device context of one device of a parallel run. Whether the device is physical is asked of the
+// device, the same check a single-device run makes, so a physical device is never taken for an emulator.
+func (po *ParallelOrchestrator) deviceContext(ctx context.Context, dr *DeviceRun, appID string, tokenTimeout, dialTimeout time.Duration) *DeviceContext {
+	dc := NewDeviceContext(ctx, po.manager, dr.Platform, dr.DeviceID)
+	dc.AppID = appID
+	dc.Port = dr.Port
+	dc.DevicePort = po.cfg.Agent.AgentDevicePort()
+	dc.AllowClearData = true
+	dc.GrantPermissionsOnClear = po.cfg.Defaults.GrantPermissionsOnClear
+	dc.ReconnectDelay = po.cfg.Agent.ReconnectDelay
+	dc.RestartDelay = po.cfg.Device.RestartDelay
+	dc.TokenReadTimeout = tokenTimeout
+	dc.DialTimeout = dialTimeout
+	dc.CLIVersion = po.cfg.CLIVersion
+	return dc
 }
 
 // mergeResults combines results from all devices in file order.

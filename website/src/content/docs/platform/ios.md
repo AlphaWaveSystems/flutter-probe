@@ -214,6 +214,12 @@ The simulator's light or dark mode. The app is not relaunched (an app whose them
 a later step sets it back (`set appearance light`). `auto` is refused on iOS: the simulator has no automatic mode, so a test that
 uses it fails with a message that says so. A physical iOS device is refused; change its appearance in Settings > Display & Brightness.
 
+## Airplane mode
+
+Not supported. An iOS simulator has no airplane mode command (`simctl` cannot turn the network off), so `set airplane mode` fails
+on it with a message and changes nothing. A physical device is refused too. Use an Android emulator for this step, or change the
+network state from the harness.
+
 ## Device Media
 
 ```
