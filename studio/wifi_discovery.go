@@ -15,6 +15,12 @@ import (
 // deliberately not advertised in TXT records — the user enters it manually.
 const mdnsServiceType = "_flutterprobe._tcp"
 
+// Limits on what a browse reads and lists: an announcement is untrusted text from any machine on the network.
+const (
+	wifiMaxName    = 64  // characters of a device name shown in the list
+	wifiMaxDevices = 256 // devices one browse lists; more are ignored
+)
+
 // WiFiDevice is the JSON shape the frontend renders for a discovered agent.
 type WiFiDevice struct {
 	Name    string `json:"name"`    // Bonjour instance name (usually device hostname)
@@ -58,21 +64,9 @@ func (d *wifiDiscovery) Start(ctx context.Context) error {
 	entries := make(chan *zeroconf.ServiceEntry)
 	go func() {
 		for entry := range entries {
-			dev := entryToDevice(entry)
-			if dev.Host == "" {
-				continue // skip entries with no IPv4 we can dial
+			if dev, ok := d.admit(entry); ok {
+				wailsruntime.EventsEmit(ctx, "wifi:device-found", dev)
 			}
-			key := fmt.Sprintf("%s:%d", dev.Host, dev.Port)
-			d.mu.Lock()
-			_, dup := d.seen[key]
-			if !dup {
-				d.seen[key] = dev
-			}
-			d.mu.Unlock()
-			if dup {
-				continue
-			}
-			wailsruntime.EventsEmit(ctx, "wifi:device-found", dev)
 		}
 	}()
 
@@ -82,6 +76,23 @@ func (d *wifiDiscovery) Start(ctx context.Context) error {
 		return fmt.Errorf("zeroconf browse: %w", err)
 	}
 	return nil
+}
+
+// admit turns an announcement into a device and says whether it is new: an announcement that cannot be dialed, one whose address and
+// port were listed already (under any name), and anything past the limit are not.
+func (d *wifiDiscovery) admit(entry *zeroconf.ServiceEntry) (WiFiDevice, bool) {
+	dev := entryToDevice(entry)
+	if dev.Host == "" {
+		return WiFiDevice{}, false // no IPv4 address we can dial
+	}
+	key := fmt.Sprintf("%s:%d", dev.Host, dev.Port)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, dup := d.seen[key]; dup {
+		return WiFiDevice{}, false
+	}
+	d.seen[key] = dev
+	return dev, true
 }
 
 // Stop cancels the active browse, if any. Safe to call when nothing is
