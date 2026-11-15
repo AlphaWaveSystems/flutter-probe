@@ -16,11 +16,25 @@ const (
 )
 
 // clipContext cuts s to at most limit bytes, on a character boundary, and says how much was left out.
+// clipBoundary says whether c may end a clipped text: it cannot be inside a token.
+func clipBoundary(c byte) bool {
+	return c == ' ' || c == '\n' || c == '\t' || c == '\r' || strings.IndexByte(`"'`+"`"+`,;:=(){}[]<>|&`, c) >= 0
+}
+
 func clipContext(s string, limit int) string {
 	if len(s) <= limit {
 		return s
 	}
 	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	// A token that the cut splits is dropped whole: the cut moves back to the last space, line break, quote or punctuation mark, none of
+	// which is part of a key, a token or a hash, so the first part of one is never sent on its own (the gate cannot see a token that is not
+	// all there). One pass back, linear. A text with no such character at all is sent up to there only: nothing.
+	for cut > 0 && !clipBoundary(s[cut-1]) {
+		cut--
+	}
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
