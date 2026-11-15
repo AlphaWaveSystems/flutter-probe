@@ -2,6 +2,7 @@ package runner
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -103,13 +104,31 @@ func junitPath(base, p string) string {
 	return filepath.ToSlash(filepath.Clean(p))
 }
 
+// infraError marks an error of the test environment whatever its text, so that JUnit reports it as <error>.
+type infraError struct{ err error }
+
+func (e infraError) Error() string { return e.err.Error() }
+func (e infraError) Unwrap() error { return e.err }
+
 // isInfraError tells an error of the test environment (the agent connection, a setup hook) from an
 // assertion that failed: JUnit calls the first an <error> and the second a <failure>.
 func isInfraError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return isConnectionError(err) || strings.HasPrefix(err.Error(), "before all:") || strings.HasPrefix(err.Error(), "before each:")
+	var ie infraError
+	return errors.As(err, &ie) || isConnectionError(err) || strings.HasPrefix(err.Error(), "before all:") || strings.HasPrefix(err.Error(), "before each:")
+}
+
+// ReportConnectFailure writes a JUnit report for a run that failed before any test ran because the agent could
+// not be reached. It has one <error> testcase per planned test file, carrying the message of cause.
+func (r *Reporter) ReportConnectFailure(files []string, cause error) error {
+	results := make([]TestResult, 0, len(files))
+	for _, f := range files {
+		name := strings.TrimSuffix(filepath.Base(f), filepath.Ext(f))
+		results = append(results, TestResult{TestName: name, File: f, Row: -1, Error: infraError{cause}})
+	}
+	return r.writeJUnit(results)
 }
 
 func secs(d time.Duration) float64 { return d.Seconds() }

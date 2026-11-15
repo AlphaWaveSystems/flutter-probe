@@ -23,6 +23,10 @@ probe test tests/ --format junit -o reports/results.xml
 
 Use with `dorny/test-reporter` or similar actions to display results in pull request summaries.
 
+If the CLI cannot reach a local agent at startup (for example the port is closed), the file is still written: one `<error>` testcase per planned test file carries the connect error message. The exit code is unchanged.
+
+The JUnit file you write with `-o` is your own output and is not scrubbed. Only the payload that `--upload-report` sends to the hosted service is scrubbed.
+
 ## JSON
 
 Structured output with full test details, timings, and artifact references:
