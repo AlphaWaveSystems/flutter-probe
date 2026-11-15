@@ -405,6 +405,8 @@ don't see native "Error"
 type native "wifi" into "Search settings"
 ```
 
+The text of `type native` goes to the device through `adb shell input text`, which has limits: it cannot type control characters, characters outside ASCII (for example accented letters or Chinese text), a `%` (adb reads `%s` as a space) or a text that starts with `-`. Such text is refused with a message before anything is tapped. Everything else is passed to the device as one quoted word, so characters like `;`, `&`, `$` and quotes are typed as text and never run as commands. To type non-ASCII text into a Flutter field, use `type "..." into ...`, which does not use this path.
+
 Android only (dispatched via `uiautomator`, no new dependencies). On iOS, `tap native`/`type
 native` error clearly rather than silently no-op'ing; `see native` reports "not found". If the
 native field is reached via a screen transition, add a `wait` step first — the same idiom used

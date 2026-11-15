@@ -956,6 +956,10 @@ func (dc *DeviceContext) SeeNative(ctx context.Context, query string) (bool, err
 // delay between the two fixes it reliably; 500ms matches this codebase's
 // existing default for other tap-then-settle sequences (see restartDelay).
 func (dc *DeviceContext) TypeNative(ctx context.Context, query, text string) error {
+	// refuse text that cannot be typed before the tap changes the screen
+	if err := device.ValidateInputText(text); err != nil {
+		return err
+	}
 	if err := dc.TapNative(ctx, query); err != nil {
 		return fmt.Errorf("type native: %w", err)
 	}
