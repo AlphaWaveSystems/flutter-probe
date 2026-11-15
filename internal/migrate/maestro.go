@@ -838,7 +838,7 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 		case "setAirplaneMode":
 			state, ok := airplaneState(val)
 			if !ok {
-				return fmt.Sprintf("# TODO: setAirplaneMode %v — Maestro takes enabled or disabled", val),
+				return fmt.Sprintf("# TODO: setAirplaneMode %q — Maestro takes enabled or disabled", fmt.Sprint(val)),
 					"setAirplaneMode takes enabled or disabled; left as a TODO comment"
 			}
 			return fmt.Sprintf("set airplane mode %s", state), ""

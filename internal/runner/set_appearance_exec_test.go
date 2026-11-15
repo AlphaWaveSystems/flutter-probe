@@ -32,7 +32,7 @@ func TestSetAppearanceStepRunsItsValue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &commandRecorder{}
-			dc := &DeviceContext{Platform: device.PlatformAndroid, Serial: "emulator-5554", settingsRun: rec}
+			dc := &DeviceContext{Platform: device.PlatformAndroid, Serial: "emulator-5554", SettingsRun: rec}
 			e := NewExecutor(nil, dc, nil, time.Second, false)
 			step := parser.ActionStep{Verb: parser.VerbSetAppearance, Name: tc.mode}
 			if err := e.dispatchStep(context.Background(), context.Background(), step); err != nil {

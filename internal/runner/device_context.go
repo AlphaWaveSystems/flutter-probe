@@ -49,9 +49,9 @@ type DeviceContext struct {
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
 
-	// settingsRun runs the host commands of the settings steps (`set appearance`, `set airplane mode`). nil runs the real
+	// SettingsRun runs the host commands of the settings steps (`set appearance`, `set airplane mode`). nil runs the real
 	// adb and xcrun; tests set a fake.
-	settingsRun devsettings.Runner
+	SettingsRun devsettings.Runner
 }
 
 // SystemDriver returns the run's shared system-dialog driver, creating it on
@@ -357,7 +357,7 @@ func (dc *DeviceContext) SetAppearance(ctx context.Context, mode string) error {
 	if err != nil {
 		return fmt.Errorf("set appearance: %w", err)
 	}
-	if err := devsettings.Apply(ctx, dc.settingsRun, req); err != nil {
+	if err := devsettings.Apply(ctx, dc.SettingsRun, req); err != nil {
 		return fmt.Errorf("set appearance: %w", err)
 	}
 	return nil
@@ -393,7 +393,7 @@ func (dc *DeviceContext) SetAirplaneMode(ctx context.Context, on bool) error {
 	if err != nil {
 		return fmt.Errorf("set airplane mode: %w", err)
 	}
-	if err := devsettings.ApplyCommands(ctx, dc.settingsRun, p, cmds); err != nil {
+	if err := devsettings.ApplyCommands(ctx, dc.SettingsRun, p, cmds); err != nil {
 		return fmt.Errorf("set airplane mode: %w", err)
 	}
 	return nil

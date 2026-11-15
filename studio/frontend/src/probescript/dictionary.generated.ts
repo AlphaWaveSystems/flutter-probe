@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "0ce4f7744a19caae91e2ec056e5f83297d982657a87df78776d1e20e232b221a";
+export const SOURCE_SHA256 = "16286173ba5d6b58549a6fe7bf035f11cbba33ba336ccaeec99e6fe313bab78a";
 
 export const COMMANDS = [
   {
@@ -434,7 +434,7 @@ export const COMMANDS = [
   {
     "command": "set airplane mode",
     "syntax": "set airplane mode on · off",
-    "description": "Turn the airplane mode of an Android emulator on or off (`adb shell cmd connectivity airplane-mode`). The state stays until a later step changes it. An iOS simulator and a physical device are refused",
+    "description": "Turn the airplane mode of an Android emulator on or off (`adb shell cmd connectivity airplane-mode`). The state stays until a later step changes it. Only an Android emulator takes it (serial `emulator-NNNN`): an iOS simulator, a physical device and a network adb address are refused",
     "category": "Device"
   },
   {

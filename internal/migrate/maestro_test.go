@@ -349,6 +349,24 @@ func TestConvertYAML_SetAirplaneMode(t *testing.T) {
 	}
 }
 
+// TestConvertYAML_AirplaneTODOStaysOneLine checks that a value with a line break in it keeps its TODO comment on one line,
+// so the value cannot put a live step into the migrated file.
+func TestConvertYAML_AirplaneTODOStaysOneLine(t *testing.T) {
+	yaml := "---\n- setAirplaneMode: \"enabled\\nset airplane mode on\"\n"
+	probe, warnings, err := migrate.ConvertYAML(yaml)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	for _, line := range strings.Split(probe, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "set airplane mode") {
+			t.Errorf("a live step came from a multi-line value: %q", line)
+		}
+	}
+	if len(warnings) == 0 {
+		t.Error("want a warning for a value that is not enabled or disabled")
+	}
+}
+
 // ---- Self-healer tests ----
 
 func assertContains(t *testing.T, haystack, needle string) {

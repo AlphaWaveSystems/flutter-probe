@@ -342,8 +342,9 @@ set airplane mode off              # nothing turns it back on or off by itself
 `set airplane mode on` and `off` change the airplane mode of the Android emulator the run targets, through
 `adb shell cmd connectivity airplane-mode enable` or `disable`. Nothing restores the state at the end of a test, so a test that
 turns it on must turn it off, in the same test or a later one. An iOS simulator has no airplane mode command, so the step fails there.
-A physical device is refused (change its airplane mode in its settings), and so is a device reached over the network (a `host:port`
-address), because airplane mode would cut the connection adb uses. Text after the value is read as the next statement, the same as
+Only an Android emulator with a serial of the form `emulator-NNNN` takes the step. A physical device (over USB or wireless debugging,
+change its airplane mode in its settings) and a device reached over the network (a `host:port` address) are refused, because airplane
+mode would cut the connection adb uses to them. The check reads the serial, not a flag the run sets. Text after the value is read as the next statement, the same as
 after `set appearance`.
 
 ## Device Location

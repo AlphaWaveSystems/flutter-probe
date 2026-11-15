@@ -22,7 +22,7 @@ func TestSetAirplaneModeStepRunsItsState(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &commandRecorder{}
-			dc := &DeviceContext{Platform: device.PlatformAndroid, Serial: "emulator-5554", settingsRun: rec}
+			dc := &DeviceContext{Platform: device.PlatformAndroid, Serial: "emulator-5554", SettingsRun: rec}
 			e := NewExecutor(nil, dc, nil, time.Second, false)
 			step := parser.ActionStep{Verb: parser.VerbSetAirplaneMode, Name: tc.state}
 			if err := e.dispatchStep(context.Background(), context.Background(), step); err != nil {
@@ -45,10 +45,13 @@ func TestSetAirplaneModeRefusesWhatItCannotDo(t *testing.T) {
 		{name: "a physical device", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "R58M123ABC", IsPhysical: true}},
 		{name: "an iOS simulator", dc: &DeviceContext{Platform: device.PlatformIOS, Serial: "AAAAAAAA-0000-0000-0000-000000000000"}},
 		{name: "a network adb address", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "192.168.1.20:5555"}},
+		// The serial decides, not the flag: these devices are refused although IsPhysical was not set for them.
+		{name: "a USB device the flag does not mark physical", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "R58M123ABC"}},
+		{name: "a wireless-debugging device the flag does not mark physical", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "adb-R58-x._adb-tls-connect._tcp"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &commandRecorder{}
-			tc.dc.settingsRun = rec
+			tc.dc.SettingsRun = rec
 			e := NewExecutor(nil, tc.dc, nil, time.Second, false)
 			step := parser.ActionStep{Verb: parser.VerbSetAirplaneMode, Name: "on"}
 			if err := e.dispatchStep(context.Background(), context.Background(), step); err == nil {

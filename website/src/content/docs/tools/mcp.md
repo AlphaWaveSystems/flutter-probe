@@ -409,7 +409,7 @@ To change the mode once without a test, use `set_device_setting` with `setting: 
      set airplane mode off
    ```
 
-3. `run_tests` with `{device: "<serial>"}` — the step runs on an Android emulator only; an iOS simulator or a physical device fails the step with a message
+3. `run_tests` with `{device: "<serial>"}` — the step runs on an Android emulator only (serial `emulator-NNNN`); an iOS simulator, a physical device or a network device fails the step with a message
 
 If a run ends before `set airplane mode off`, the emulator stays offline until it is turned back on from the harness.
 

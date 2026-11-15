@@ -135,7 +135,7 @@ Commands for device-level operations.
 | `l10n "key"` | `tap l10n "saveButton"` · `see l10n "title"` | A string from the app's ARB files in the current app language (needs `l10n.dir`). Works wherever a quoted string does |
 | `set language` | `set language "de"` · `"pt-BR"` · `"ar"` · `"system"` | Run the app in another language and relaunch it (Android 13+, iOS simulator). `"system"` removes the override. The device language and system dialogs are unchanged |
 | `set appearance` | `set appearance dark` · `light` · `auto` | Set the device's light or dark mode (`auto`: Android only). The app is not relaunched. A physical iOS device is refused |
-| `set airplane mode` | `set airplane mode on` · `off` | Turn the airplane mode of an Android emulator on or off (`adb shell cmd connectivity airplane-mode`). The state stays until a later step changes it. An iOS simulator and a physical device are refused |
+| `set airplane mode` | `set airplane mode on` · `off` | Turn the airplane mode of an Android emulator on or off (`adb shell cmd connectivity airplane-mode`). The state stays until a later step changes it. Only an Android emulator takes it (serial `emulator-NNNN`): an iOS simulator, a physical device and a network adb address are refused |
 | `travel to` | `travel to` (indented waypoints) `over N seconds` | Simulate GPS movement through an ordered list of waypoints over a duration (emulator/simulator only) — see example below |
 | `verify external browser` | `verify external browser opened` | Assert that `url_launcher` was called |
 
