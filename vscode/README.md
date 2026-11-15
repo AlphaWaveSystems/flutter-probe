@@ -18,6 +18,7 @@ Full editor support for `.probe` files:
 - **Backend data** — snippets and completions for `wait for response`, `see response`, `if response`
 - **ARB labels** — snippet for `l10n "key"` selectors
 - **App language** — snippet for `set language "de"`; `probe test --locales de,ja,ar` runs a suite per language
+- **Appearance** — snippet for `set appearance dark` (light, dark, or auto on Android)
 - **Multi-language suites** — snippets for `see any of`, `wait until any of` and `wait until … appears matching`; the grammar highlights them
 - **Snippets** — 19 built-in snippets (`test`, `tap`, `type`, `see`, `wait`, `recipe`, `if`, `repeat`, `dart`, `mock`, and more)
 - **Lint on save** — real-time diagnostics from the ProbeScript parser

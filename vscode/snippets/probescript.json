@@ -197,6 +197,14 @@
     ],
     "description": "Relaunch the app in another language (Android 13+, iOS simulator)"
   },
+  "Set appearance": {
+    "prefix": "setappearance",
+    "body": [
+      "set appearance ${1|dark,light,auto|}",
+      "$0"
+    ],
+    "description": "Set the device's light or dark mode (auto is Android only)"
+  },
   "ARB label": {
     "prefix": "l10n",
     "body": [

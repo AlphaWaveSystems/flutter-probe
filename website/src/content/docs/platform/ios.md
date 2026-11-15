@@ -204,6 +204,16 @@ Flutter's locale follows. System dialogs (permissions, share sheet) keep the sim
 `tap "Don't Allow" in system dialog` for those. Not supported on physical devices (change the language in Settings > Apps).
 `probe test --locale de` and `--locales de,ja,ar` apply it per run.
 
+## Appearance
+
+```
+set appearance dark      # xcrun simctl ui <udid> appearance dark (also light)
+```
+
+The simulator's light or dark mode. The app is not relaunched (an app whose theme follows the system setting changes with it), and the change stays until
+a later step sets it back (`set appearance light`). `auto` is refused on iOS: the simulator has no automatic mode, so a test that
+uses it fails with a message that says so. A physical iOS device is refused; change its appearance in Settings > Display & Brightness.
+
 ## Device Media
 
 ```
