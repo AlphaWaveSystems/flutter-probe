@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "fd1e888aa90814b2a44a833c95c39f140042f2652b6f486ab06dd1e8b311d34d";
+export const SOURCE_SHA256 = "0ce4f7744a19caae91e2ec056e5f83297d982657a87df78776d1e20e232b221a";
 
 export const COMMANDS = [
   {
@@ -429,6 +429,12 @@ export const COMMANDS = [
     "command": "set appearance",
     "syntax": "set appearance dark · light · auto",
     "description": "Set the device's light or dark mode (`auto`: Android only). The app is not relaunched. A physical iOS device is refused",
+    "category": "Device"
+  },
+  {
+    "command": "set airplane mode",
+    "syntax": "set airplane mode on · off",
+    "description": "Turn the airplane mode of an Android emulator on or off (`adb shell cmd connectivity airplane-mode`). The state stays until a later step changes it. An iOS simulator and a physical device are refused",
     "category": "Device"
   },
   {

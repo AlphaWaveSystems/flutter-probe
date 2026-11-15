@@ -158,6 +158,18 @@ set appearance dark      # cmd uimode night yes (also light, and auto, which And
 Changes the device's light or dark mode for the device, not one app. The app is not relaunched; an app whose theme follows the system setting (`ThemeMode.system` in Flutter) changes with it.
 The change stays until a later step sets it back, so end a test that changes it with `set appearance light` (or `auto`).
 
+## Airplane mode
+
+```
+set airplane mode on     # cmd connectivity airplane-mode enable
+set airplane mode off    # cmd connectivity airplane-mode disable
+```
+
+The emulator's airplane mode, through `adb shell cmd connectivity airplane-mode`. The state stays until a later step changes it, so
+end a test that turns it on with `set airplane mode off`. A physical device is refused, and so is a network adb address (`host:port`),
+because airplane mode would cut the connection adb uses. Checked on an Android 15 emulator (API 35). An image whose `cmd connectivity`
+does not take `airplane-mode` prints an error, and the step fails with that error.
+
 ## Location
 
 ```

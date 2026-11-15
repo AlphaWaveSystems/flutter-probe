@@ -1811,6 +1811,43 @@ func TestParser_SetAppearanceTrailingTextIsAStepOfItsOwn(t *testing.T) {
 	}
 }
 
+// TestParser_SetAirplaneMode covers `set airplane mode` with bare, quoted and `to` forms, and refuses any other value when
+// the file is parsed. enabled and disabled are Maestro's words, not ProbeScript's, so they are refused too.
+func TestParser_SetAirplaneMode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		step string
+		want string // the state; "" means the line must not parse
+	}{
+		{name: "on", step: "set airplane mode on", want: "on"},
+		{name: "off", step: "set airplane mode off", want: "off"},
+		{name: "off with the filler to", step: "set airplane mode to off", want: "off"},
+		{name: "on quoted", step: `set airplane mode "on"`, want: "on"},
+		{name: "enabled is Maestro's word", step: "set airplane mode enabled", want: ""},
+		{name: "disabled is Maestro's word", step: "set airplane mode disabled", want: ""},
+		{name: "unknown value", step: "set airplane mode maybe", want: ""},
+		{name: "capital letter", step: "set airplane mode On", want: ""},
+		{name: "no value", step: "set airplane mode", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prog, err := parser.ParseFile("test \"t\"\n  " + tc.step + "\n")
+			if tc.want == "" {
+				if err == nil {
+					t.Fatalf("%q parsed, want a parse error", tc.step)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			a, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+			if !ok || a.Verb != parser.VerbSetAirplaneMode || a.Name != tc.want {
+				t.Errorf("step = %+v, want set_airplane_mode %q", prog.Tests[0].Body[0], tc.want)
+			}
+		})
+	}
+}
+
 // TestParser_Travel covers the FP-6 `travel to ... over N seconds` block:
 // an indented list of waypoints followed by a sibling duration clause at the
 // same indent level as "travel to" (the same trailing-clause shape as `test

@@ -331,6 +331,21 @@ Settings. See [Android](/platform/android/#appearance) and [iOS](/platform/ios/)
 
 Text after the value is not rejected. The line ends after the value, and the rest is read as the next statement, the same as after `set language`.
 
+## Device Airplane Mode
+
+```
+set airplane mode on               # the emulator's radios off
+see "No connection"
+set airplane mode off              # nothing turns it back on or off by itself
+```
+
+`set airplane mode on` and `off` change the airplane mode of the Android emulator the run targets, through
+`adb shell cmd connectivity airplane-mode enable` or `disable`. Nothing restores the state at the end of a test, so a test that
+turns it on must turn it off, in the same test or a later one. An iOS simulator has no airplane mode command, so the step fails there.
+A physical device is refused (change its airplane mode in its settings), and so is a device reached over the network (a `host:port`
+address), because airplane mode would cut the connection adb uses. Text after the value is read as the next statement, the same as
+after `set appearance`.
+
 ## Device Location
 
 ```

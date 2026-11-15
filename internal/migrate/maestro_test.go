@@ -320,6 +320,35 @@ func TestConvertYAML_SetLocation(t *testing.T) {
 	mustParseProbe(t, probe)
 }
 
+// TestConvertYAML_SetAirplaneMode checks that Maestro's enabled and disabled become the step, and that the probe parses.
+// Any other value stays a TODO comment with a warning, and is never turned into a state.
+func TestConvertYAML_SetAirplaneMode(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		yaml    string
+		want    string // a line the probe must contain
+		warning bool   // whether the conversion must warn
+	}{
+		{name: "enabled turns it on", yaml: "- setAirplaneMode: enabled\n", want: "set airplane mode on"},
+		{name: "disabled turns it off", yaml: "- setAirplaneMode: disabled\n", want: "set airplane mode off"},
+		{name: "another value stays a TODO", yaml: "- setAirplaneMode: true\n", want: "# TODO: setAirplaneMode", warning: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probe, warnings, err := migrate.ConvertYAML("---\n" + tc.yaml)
+			if err != nil {
+				t.Fatalf("convert: %v", err)
+			}
+			assertContains(t, probe, tc.want)
+			if (len(warnings) > 0) != tc.warning {
+				t.Errorf("warnings = %q, want a warning: %v", warnings, tc.warning)
+			}
+			if !tc.warning {
+				mustParseProbe(t, probe)
+			}
+		})
+	}
+}
+
 // ---- Self-healer tests ----
 
 func assertContains(t *testing.T, haystack, needle string) {

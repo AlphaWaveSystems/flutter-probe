@@ -394,6 +394,25 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 
 To change the mode once without a test, use `set_device_setting` with `setting: "appearance"`.
 
+### Offline check in a test
+
+> "Check that the app shows its offline message when the emulator has no network."
+
+1. `list_devices` — find the emulator's serial
+2. `write_test` — a test that turns airplane mode on, checks the offline message, and turns it off again (nothing turns it off by itself, so the test does it):
+
+   ```
+   test "offline message"
+     set airplane mode on
+     open the app
+     see "You are offline"
+     set airplane mode off
+   ```
+
+3. `run_tests` with `{device: "<serial>"}` — the step runs on an Android emulator only; an iOS simulator or a physical device fails the step with a message
+
+If a run ends before `set airplane mode off`, the emulator stays offline until it is turned back on from the harness.
+
 ### Composite (multi-device) test authoring
 
 > "Write a test that verifies push notifications are delivered between two simulators."
