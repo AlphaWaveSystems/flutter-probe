@@ -9,6 +9,7 @@ import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
+import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
@@ -896,16 +897,8 @@ EventsOn("wifi:device-found", (dev: WiFiDevice) => {
   // Drop the "Searching…" placeholder once we have at least one entry.
   const placeholder = list.querySelector("li.empty");
   if (placeholder) placeholder.remove();
-  const li = document.createElement("li");
-  li.dataset.key = key;
-  // Use DOM construction (not innerHTML) to keep agent-controlled strings
-  // out of the HTML parser.
-  const nameEl = document.createElement("strong");
-  nameEl.textContent = dev.name;
-  const hostEl = document.createElement("span");
-  hostEl.className = "wifi-host";
-  hostEl.textContent = `${dev.host}:${dev.port}${dev.version ? ` · v${dev.version}` : ""}`;
-  li.append(nameEl, hostEl);
+  // The item is built with textContent only (wifi-label.ts): the name and version are text from any machine on the network.
+  const li = buildWiFiItem(document as unknown as DocLike, dev, key) as unknown as HTMLElement;
   void markSavedWiFi(li, dev);
   li.addEventListener("click", () => selectWiFiDevice(dev));
   list.appendChild(li);
