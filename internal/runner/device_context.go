@@ -54,6 +54,22 @@ type DeviceContext struct {
 	SettingsRun devsettings.Runner
 }
 
+// NewDeviceContext builds the device context of one device. Every builder of a DeviceContext calls it, so the physical
+// question is asked once, here, and no builder can leave IsPhysical unset. The builder fills in its own fields after it.
+// A nil manager cannot answer, so the device counts as physical.
+func NewDeviceContext(ctx context.Context, m *device.Manager, platform device.Platform, serial string) *DeviceContext {
+	isPhysical := true
+	if m != nil {
+		isPhysical = m.IsPhysical(ctx, platform, serial)
+	}
+	return &DeviceContext{
+		Manager:    m,
+		Serial:     serial,
+		Platform:   platform,
+		IsPhysical: isPhysical,
+	}
+}
+
 // SystemDriver returns the run's shared system-dialog driver, creating it on
 // first use (this starts the iOS runner on a simulator, ~5s). Only steps that
 // use system dialogs ever call it, so ordinary runs never pay for it.

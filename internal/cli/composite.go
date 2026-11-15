@@ -85,20 +85,16 @@ func setupCompositeDevices(
 // compositeAndroidContext is the device context of one Android device of a composite run. Whether the device is physical
 // is asked of the device, the same check a single-device run makes, so a physical device is never taken for an emulator.
 func compositeAndroidContext(ctx context.Context, cfg *config.Config, dm *device.Manager, spec string) *runner.DeviceContext {
-	return &runner.DeviceContext{
-		Manager:          dm,
-		Serial:           spec,
-		Platform:         device.PlatformAndroid,
-		AppID:            cfg.Project.App,
-		Port:             cfg.Agent.Port,
-		DevicePort:       cfg.Agent.AgentDevicePort(),
-		IsPhysical:       dm.IsPhysicalAndroid(ctx, spec),
-		ReconnectDelay:   cfg.Agent.ReconnectDelay,
-		RestartDelay:     cfg.Device.RestartDelay,
-		TokenReadTimeout: cfg.Agent.TokenReadTimeout,
-		DialTimeout:      cfg.Agent.DialTimeout,
-		CLIVersion:       cfg.CLIVersion,
-	}
+	dc := runner.NewDeviceContext(ctx, dm, device.PlatformAndroid, spec)
+	dc.AppID = cfg.Project.App
+	dc.Port = cfg.Agent.Port
+	dc.DevicePort = cfg.Agent.AgentDevicePort()
+	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
+	dc.RestartDelay = cfg.Device.RestartDelay
+	dc.TokenReadTimeout = cfg.Agent.TokenReadTimeout
+	dc.DialTimeout = cfg.Agent.DialTimeout
+	dc.CLIVersion = cfg.CLIVersion
+	return dc
 }
 
 // connectCompositeDevice connects to a single composite device by spec and
@@ -195,7 +191,8 @@ func connectCompositeDevice(
 
 	switch platform {
 	case device.PlatformIOS:
-		isPhysical := dm.IsPhysicalIOS(ctx, spec)
+		devCtx = runner.NewDeviceContext(ctx, dm, platform, spec)
+		isPhysical := devCtx.IsPhysical
 		if isPhysical {
 			// Physical iOS: set up iproxy
 			cleanupIProxy, iproxyErr := dm.EnsureIProxy(ctx, spec, cfg.Agent.Port, cfg.Agent.AgentDevicePort())
@@ -217,21 +214,15 @@ func connectCompositeDevice(
 		if err != nil {
 			return runner.CompositeDevice{}, nil, fmt.Errorf("dial: %w", err)
 		}
-		devCtx = &runner.DeviceContext{
-			Manager:          dm,
-			Serial:           spec,
-			Platform:         platform,
-			AppID:            cfg.Project.App,
-			Port:             cfg.Agent.Port,
-			DevicePort:       cfg.Agent.AgentDevicePort(),
-			IsPhysical:       isPhysical,
-			UseHTTP:          isPhysical,
-			ReconnectDelay:   cfg.Agent.ReconnectDelay,
-			RestartDelay:     cfg.Device.RestartDelay,
-			TokenReadTimeout: cfg.Agent.TokenReadTimeout,
-			DialTimeout:      cfg.Agent.DialTimeout,
-			CLIVersion:       cfg.CLIVersion,
-		}
+		devCtx.AppID = cfg.Project.App
+		devCtx.Port = cfg.Agent.Port
+		devCtx.DevicePort = cfg.Agent.AgentDevicePort()
+		devCtx.UseHTTP = isPhysical
+		devCtx.ReconnectDelay = cfg.Agent.ReconnectDelay
+		devCtx.RestartDelay = cfg.Device.RestartDelay
+		devCtx.TokenReadTimeout = cfg.Agent.TokenReadTimeout
+		devCtx.DialTimeout = cfg.Agent.DialTimeout
+		devCtx.CLIVersion = cfg.CLIVersion
 
 	default: // Android
 		if err := dm.EnsureADB(ctx, spec, cfg.Agent.Port); err != nil {

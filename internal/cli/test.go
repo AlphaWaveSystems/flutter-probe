@@ -925,11 +925,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if cfg.Project.App == "" {
 					return fmt.Errorf("--locale: project.app must be set in probe.yaml")
 				}
-				lc := &runner.DeviceContext{
-					Manager: dm, Serial: deviceSerial, Platform: platform, AppID: cfg.Project.App,
-					IsPhysical:   platform == device.PlatformIOS && dm.IsPhysicalIOS(ctx, deviceSerial),
-					RestartDelay: cfg.Device.RestartDelay,
-				}
+				lc := runner.NewDeviceContext(ctx, dm, platform, deviceSerial)
+				lc.AppID = cfg.Project.App
+				lc.RestartDelay = cfg.Device.RestartDelay
 				if err := lc.SetLanguage(ctx, lang); err != nil {
 					return fmt.Errorf("--locale: %w", err)
 				}
@@ -1201,36 +1199,26 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
-		// Detect if this is a physical device (vs emulator/simulator)
-		isPhysical := false
-		if platform == device.PlatformIOS {
-			isPhysical = dm.IsPhysicalIOS(ctx, deviceSerial)
-		} else if platform == device.PlatformAndroid {
-			isPhysical = dm.IsPhysicalAndroid(ctx, deviceSerial)
-		}
+		// The device context asks whether the device is physical (vs emulator/simulator), once, for every builder.
+		devCtx = runner.NewDeviceContext(ctx, dm, platform, deviceSerial)
+		isPhysical := devCtx.IsPhysical
 		if isPhysical {
 			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
 		}
 
-		devCtx = &runner.DeviceContext{
-			Manager:                 dm,
-			Serial:                  deviceSerial,
-			Platform:                platform,
-			AppID:                   cfg.Project.App,
-			Port:                    cfg.Agent.Port,
-			DriverPort:              cfg.Agent.DriverPort,
-			DevicePort:              cfg.Agent.AgentDevicePort(),
-			IsPhysical:              isPhysical,
-			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
-			AgentHost:               agentHost,  // device IP for WiFi mode
-			AllowClearData:          autoYes,
-			Confirm:                 confirmFunc(),
-			GrantPermissionsOnClear: (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear,
-			ReconnectDelay:          cfg.Agent.ReconnectDelay,
-			RestartDelay:            cfg.Device.RestartDelay,
-			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,
-			DialTimeout:             cfg.Agent.DialTimeout,
-		}
+		devCtx.DriverPort = cfg.Agent.DriverPort
+		devCtx.AppID = cfg.Project.App
+		devCtx.Port = cfg.Agent.Port
+		devCtx.DevicePort = cfg.Agent.AgentDevicePort()
+		devCtx.UseHTTP = isPhysical  // physical devices use HTTP fallback
+		devCtx.AgentHost = agentHost // device IP for WiFi mode
+		devCtx.AllowClearData = autoYes
+		devCtx.Confirm = confirmFunc()
+		devCtx.GrantPermissionsOnClear = (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear
+		devCtx.ReconnectDelay = cfg.Agent.ReconnectDelay
+		devCtx.RestartDelay = cfg.Device.RestartDelay
+		devCtx.TokenReadTimeout = cfg.Agent.TokenReadTimeout
+		devCtx.DialTimeout = cfg.Agent.DialTimeout
 	}
 
 	// The device class (emulator, simulator, physical, cloud) is only known now; add it to the report metadata.
