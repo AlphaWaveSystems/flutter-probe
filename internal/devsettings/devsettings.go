@@ -226,6 +226,12 @@ func Apply(ctx context.Context, run Runner, r Request) error {
 	if err != nil {
 		return err
 	}
+	return ApplyCommands(ctx, run, r.Platform, cmds)
+}
+
+// ApplyCommands runs a plan made by Plan or PlanAirplaneMode in order, stopping at the first failure, with the same
+// checks for every setting. A nil run uses DefaultRunner.
+func ApplyCommands(ctx context.Context, run Runner, p Platform, cmds []Command) error {
 	if run == nil {
 		run = DefaultRunner
 	}
@@ -238,7 +244,7 @@ func Apply(ctx context.Context, run Runner, r Request) error {
 			return fmt.Errorf("%s failed: %v: %s", c.Name, err, strings.TrimSpace(string(out)))
 		}
 		// adb shell exits 0 even when the on-device command prints an error.
-		if r.Platform == Android && looksFailed(string(out)) {
+		if p == Android && looksFailed(string(out)) {
 			return fmt.Errorf("the device refused the change: %s", strings.TrimSpace(string(out)))
 		}
 	}

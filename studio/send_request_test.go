@@ -739,6 +739,15 @@ func TestWhatWasTypedIsNotEchoedBack(t *testing.T) {
 			t.Errorf("a typed value that looks like a credential is shown in the request table: %q", h.Value)
 		}
 	}
+	// A short value under a credential name in the query (too short for any shape) is hidden where the answer echoes it, and the same
+	// short value under an ordinary name is not: the name decides.
+	res5, err := a.SendRequest(SendInput{Method: "GET", URL: srv.URL + "/echo?password=zz7&page=zz8"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(res5.ResponseBody.Text, "zz7") {
+		t.Errorf("a short value under a credential name is echoed: %q", res5.ResponseBody.Text)
+	}
 	// The address and the redirect carry it too: a value in a path segment survives the URL redactor, which hides only query values.
 	res4, err := a.SendRequest(SendInput{Method: "GET", URL: srv.URL + "/hop2", Headers: []SendHeader{{Name: "X-Api-Key", Value: apiKey}}})
 	if err != nil {

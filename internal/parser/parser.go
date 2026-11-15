@@ -495,6 +495,8 @@ func (p *Parser) parseStepInner() (Step, error) {
 		return p.parseActionSetLanguage()
 	case TOKEN_SET_APPEARANCE:
 		return p.parseActionSetAppearance()
+	case TOKEN_SET_AIRPLANE:
+		return p.parseActionSetAirplaneMode()
 	case TOKEN_TRAVEL:
 		return p.parseTravel()
 	case TOKEN_VERIFY_BROWSER:
@@ -1989,6 +1991,26 @@ func (p *Parser) parseActionSetAppearance() (Step, error) {
 	p.advance()
 	p.consumeNewline()
 	return ActionStep{Verb: VerbSetAppearance, Name: tok.Literal, Line: line}, nil
+}
+
+// airplaneStates are the values `set airplane mode` takes. "on" is a filler-class keyword in the lexer, so the value is
+// read directly, without skipping fillers first.
+var airplaneStates = map[string]bool{"on": true, "off": true}
+
+// parseActionSetAirplaneMode handles: set airplane mode on / set airplane mode to off / set airplane mode "on"
+func (p *Parser) parseActionSetAirplaneMode() (Step, error) {
+	line := p.peek().Line
+	p.advance() // compound "set airplane mode"
+	if p.peek().Type == TOKEN_TO {
+		p.advance()
+	}
+	tok := p.peek()
+	if (tok.Type != TOKEN_STRING && tok.Type != TOKEN_IDENT && tok.Type != TOKEN_ON_KW) || !airplaneStates[tok.Literal] {
+		return nil, fmt.Errorf("line %d: expected on or off after set airplane mode", line)
+	}
+	p.advance()
+	p.consumeNewline()
+	return ActionStep{Verb: VerbSetAirplaneMode, Name: tok.Literal, Line: line}, nil
 }
 
 // parseCoordinateLine consumes all remaining tokens up to the next NEWLINE
