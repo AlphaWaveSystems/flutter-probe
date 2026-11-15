@@ -50,6 +50,9 @@ func (e *Executor) runWebViewStep(ctx context.Context, what string, t *parser.We
 	if runner == nil {
 		return fmt.Errorf("%s: no adb is available for this device", what)
 	}
+	if dc.AppID == "" {
+		return fmt.Errorf("%s: the app id of this run is not known; set `app` under `project` in probe.yaml", what)
+	}
 	sel := device.Selector{Kind: device.SelectText, Value: e.resolve(t.Value)}
 	if t.Kind == parser.WebViewCSS {
 		sel.Kind = device.SelectCSS
@@ -68,9 +71,41 @@ func (e *Executor) runWebViewStep(ctx context.Context, what string, t *parser.We
 	}
 	err := open(ctx, opts, func(p WebViewPage) error { return fn(p, sel) })
 	if err != nil {
-		return fmt.Errorf("%s: %w", what, e.scrubEnv(err))
+		return &webViewStepError{what: what, err: e.scrubEnv(err)}
 	}
 	return nil
+}
+
+// webViewStepError is a failure of a WebView step. The message holds text the page supplied and the script's own selector, so nothing may
+// classify the error by its text: isConnectionError, isNotFoundError and the retry paths check for this type and leave it alone. A WebView
+// step never reconnects the agent and is never retried by the implicit wait; the error keeps its device.WebViewError for errors.As.
+type webViewStepError struct {
+	what string
+	err  error
+}
+
+func (e *webViewStepError) Error() string { return e.what + ": " + e.err.Error() }
+func (e *webViewStepError) Unwrap() error { return e.err }
+
+// isWebViewStepError reports whether err comes from a WebView step.
+func isWebViewStepError(err error) bool {
+	var w *webViewStepError
+	return errors.As(err, &w)
+}
+
+// isWebViewStep reports whether step is one of the WebView steps (also inside a timed step).
+func isWebViewStep(step parser.Step) bool {
+	switch s := step.(type) {
+	case parser.ActionStep:
+		return s.Verb == parser.VerbTapWebView || s.Verb == parser.VerbTypeWebView
+	case parser.AssertStep:
+		return s.WebView != nil
+	case parser.WaitStep:
+		return s.Kind == parser.WaitWebView
+	case parser.TimedStep:
+		return isWebViewStep(s.Inner)
+	}
+	return false
 }
 
 func (e *Executor) runWebViewTap(ctx context.Context, a parser.ActionStep) error {
@@ -105,7 +140,7 @@ func (e *Executor) runWebViewSee(ctx context.Context, a parser.AssertStep) error
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("expected not to see %q in the WebView page %q, but a visible element matches", e.scrubText(sel.Value), p.Title())
+		return fmt.Errorf("expected not to see %q in the WebView page %q, but a visible element matches", capShown(e.scrubText(sel.Value)), p.Title())
 	})
 }
 
@@ -115,7 +150,12 @@ func (e *Executor) runWebViewWait(ctx context.Context, w parser.WaitStep) error 
 		total = defaultWebViewWait
 	}
 	return e.runWebViewStep(ctx, "wait until in webview", w.WebView, func(p WebViewPage, sel device.Selector) error {
-		return p.WaitFor(ctx, sel, total)
+		err := p.WaitFor(ctx, sel, total)
+		// the step's own deadline can end the wait first (the wait's timer starts after the page is opened): say what was waited for
+		if err != nil && errors.Is(err, context.DeadlineExceeded) {
+			return &device.WebViewError{Kind: "not found", Message: fmt.Sprintf("Timed out waiting for %q in the WebView page %q", capShown(e.scrubText(sel.Value)), p.Title())}
+		}
+		return err
 	})
 }
 
@@ -127,7 +167,18 @@ func (e *Executor) scrubText(s string) string { return sysdialog.ScrubKnown(s) }
 func (e *Executor) webViewShown(t *parser.WebViewTarget) parser.WebViewTarget {
 	return parser.WebViewTarget{
 		Kind:  t.Kind,
-		Value: sysdialog.ScrubKnown(e.resolveVars(t.Value)),
-		Page:  sysdialog.ScrubKnown(e.resolveVars(t.Page)),
+		Value: capShown(sysdialog.ScrubKnown(e.resolveVars(t.Value))),
+		Page:  capShown(sysdialog.ScrubKnown(e.resolveVars(t.Page))),
 	}
+}
+
+// maxShownTarget is the longest target or page name a step line or message shows; a variable can hold any amount of text.
+const maxShownTarget = 200
+
+func capShown(s string) string {
+	r := []rune(s)
+	if len(r) <= maxShownTarget {
+		return s
+	}
+	return string(r[:maxShownTarget]) + "…"
 }

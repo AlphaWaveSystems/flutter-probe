@@ -1144,3 +1144,34 @@ func TestOpenWebViewRefusesANilRedactBeforeTouchingTheDevice(t *testing.T) {
 		t.Fatalf("the device was touched before the refusal: %v", ad.calls)
 	}
 }
+
+func TestDebuggerAddressesAreRemovedFromPageSuppliedText(t *testing.T) {
+	for in, want := range map[string]string{
+		"see ws://127.0.0.1:9222/devtools/page/ABC123 here":   "see <debugger address> here",
+		"http://127.0.0.1:1/devtools/page/9":                  "<debugger address>",
+		"HTTP://LOCALHOST:62395/json/list now":                "<debugger address> now",
+		"at http://[::1]:5/devtools/inspector.html?ws=x done": "at <debugger address> done",
+		"/devtools/page/9F3A and more":                        "<debugger address> and more",
+		"plain text, https://shop.example/cart stays":         "plain text, https://shop.example/cart stays",
+		"port 127.0.0.1 alone":                                "port 127.0.0.1 alone",
+	} {
+		if got := scrubDebuggerAddresses(in); got != want {
+			t.Errorf("%q -> %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The error text of the page's own DevTools reply is page-supplied: an address it echoes never reaches a message.
+func TestAPageThatEchoesItsDebuggerAddressDoesNotShowIt(t *testing.T) {
+	p := newPageFake(t)
+	p.lookup = func(string) map[string]any { return visibleAt(10, 10, "x") }
+	p.typeErr = "bad call to http://127.0.0.1:1/devtools/page/9 from ws://localhost:7/devtools/browser/Z"
+	s, _, err := sessionFor(t, p, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.Type(context.Background(), Text("x"), "hello")
+	if err == nil || strings.Contains(err.Error(), "127.0.0.1") || strings.Contains(err.Error(), "devtools") || strings.Contains(err.Error(), "localhost") {
+		t.Fatalf("err = %v", err)
+	}
+}

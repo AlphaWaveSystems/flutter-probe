@@ -13,7 +13,8 @@ import (
 // TestWebViewStepsOnARealDevice runs the WebView steps against an app that is already running on an Android device. It is skipped unless
 // PROBE_WEBVIEW_SERIAL (the device serial) and PROBE_WEBVIEW_APP (the app id) are set, and it only ever talks to that one device. The app
 // needs one WebView, with WebView debugging on, that shows the text "Getting Started", an input with id "message" and a button
-// "Contact support" that writes "Message sent" into the page.
+// "Contact support" that writes "Message sent" into the page. Start the app fresh before each run: the test taps that button, so a second
+// run on the same page already finds "Message sent".
 func TestWebViewStepsOnARealDevice(t *testing.T) {
 	serial, app := os.Getenv("PROBE_WEBVIEW_SERIAL"), os.Getenv("PROBE_WEBVIEW_APP")
 	if serial == "" || app == "" {

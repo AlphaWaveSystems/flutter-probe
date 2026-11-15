@@ -308,7 +308,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
 	// Uses exponential backoff with jitter — see tryReconnect for the formula.
-	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil {
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil {
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {
 			maxAttempts = 4
@@ -355,7 +355,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// FP-13: a deadline error names nothing by itself — add the step line, the
 	// step and what the screen showed. Skipped for lifecycle actions (restart/
 	// kill/clear), where the agent is intentionally gone and can't be asked.
-	if !isLifecycleAction {
+	if !isLifecycleAction && !isWebViewStep(step) { // the Flutter screen says nothing about a page in a WebView
 		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
 	}
 	err = annotateStepError(step, desc, err)
@@ -579,7 +579,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return "tap " + e.webViewShown(s.WebView).String()
 		case parser.VerbTypeWebView:
 			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
-			return fmt.Sprintf("type %q into %s", sysdialog.ScrubKnown(e.resolveVars(s.Text)), e.webViewShown(s.WebView).String())
+			return fmt.Sprintf("type %q into %s", capShown(sysdialog.ScrubKnown(e.resolveVars(s.Text))), e.webViewShown(s.WebView).String())
 		case parser.VerbTypeNative:
 			// like `type`, the text is masked: a let variable can hold a value the run expanded from the environment
 			return fmt.Sprintf("type native %q into %q", sysdialog.ScrubKnown(e.resolveVars(s.Text)), s.Name)
@@ -1737,7 +1737,8 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 
 // isConnectionError returns true if the error indicates a broken WebSocket connection.
 func isConnectionError(err error) bool {
-	if err == nil {
+	if err == nil || isWebViewStepError(err) {
+		// a WebView step's message holds text from the page and the script's selector; it never means the agent connection broke
 		return false
 	}
 	msg := err.Error()
@@ -1764,6 +1765,9 @@ func isConnectionError(err error) bool {
 func (e *Executor) tryReconnect(ctx context.Context, attempt int) error {
 	if e.deviceCtx == nil {
 		return fmt.Errorf("reconnect: no device context (cloud mode)")
+	}
+	if e.client == nil {
+		return fmt.Errorf("reconnect: there is no agent connection to re-establish")
 	}
 
 	// Capture the generation before locking. If somebody else reconnects while
@@ -1920,8 +1924,8 @@ func (e *Executor) scrubEnv(err error) error {
 	return &scrubbedError{msg: scrubbed, err: err}
 }
 
-// scrubbedError is err with its message masked. It does not unwrap, so errors.Is sees what it saw before; only As
-// can find a *stepTimeoutError, which carries the items the selector proposal reads (they are masked when recorded).
+// scrubbedError is err with its message masked. It does not unwrap, so errors.Is sees what it saw before; As finds the types
+// inside (the *stepTimeoutError that carries the items the selector proposal reads, a *webViewStepError).
 type scrubbedError struct {
 	msg string
 	err error
@@ -1929,16 +1933,9 @@ type scrubbedError struct {
 
 func (e *scrubbedError) Error() string { return e.msg }
 
-func (e *scrubbedError) As(target any) bool {
-	if t, ok := target.(**stepTimeoutError); ok {
-		var ste *stepTimeoutError
-		if errors.As(e.err, &ste) {
-			*t = ste
-			return true
-		}
-	}
-	return false
-}
+// As looks in the masked error for any type the caller asks for (a *stepTimeoutError, a *webViewStepError, a *device.WebViewError).
+// Is is deliberately not delegated: errors.Is sees what it saw before the masking was added.
+func (e *scrubbedError) As(target any) bool { return errors.As(e.err, target) }
 
 func (e *Executor) resolveVars(s string) string {
 	// First: expand random data generators

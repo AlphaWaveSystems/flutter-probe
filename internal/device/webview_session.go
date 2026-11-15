@@ -97,7 +97,8 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, e
 			err = fmt.Errorf("%w; also: %v", err, cerr)
 		}
 	}()
-	redact := o.Redact
+	userRedact := o.Redact
+	redact := func(s string) string { return scrubDebuggerAddresses(userRedact(s)) }
 	pages, err := ListTargets(ctx, fwd.Port())
 	if err != nil {
 		return nil, err
@@ -115,6 +116,13 @@ func OpenWebView(ctx context.Context, o WebViewOptions) (sess *WebViewSession, e
 	opened = true
 	return &WebViewSession{conn: conn, fwd: fwd, title: title, redact: redact}, nil
 }
+
+// debuggerAddress matches the addresses a page's error text can carry back: the loopback DevTools URLs (which hold a page identifier) and
+// any /devtools/ path.
+var debuggerAddress = regexp.MustCompile(`(?i)(?:wss?|https?)://(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]+)?[^\s"']*|/devtools/[A-Za-z0-9/_.:-]*`)
+
+// scrubDebuggerAddresses removes DevTools addresses from text the page supplied; the messages never show the debugger address.
+func scrubDebuggerAddresses(s string) string { return debuggerAddress.ReplaceAllString(s, "<debugger address>") }
 
 // pickPage chooses the page to use: the only one, or the one whose title or URL contains page (case-insensitive).
 func pickPage(pages []Target, page string, redact func(string) string) (Target, error) {
