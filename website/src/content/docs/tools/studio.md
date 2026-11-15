@@ -20,6 +20,7 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **Run part of a file** — next to **Run**, the scope control picks the whole file (the default), the test at the cursor, the tests with one tag, or the tests that failed the last time the file ran in this session. A scope that matches no test is reported and nothing runs. The failed tests are remembered in memory only, so a restart starts with none. When a run has more than one outcome, the results list groups its tests under Failed, Passed and Skipped, failures first.
 - **Network tab** — the requests and responses the app made during a run, read from the agent's request log, with credentials hidden before anything reaches the window (see [The Network tab](#the-network-tab)).
 - **Send request** — one HTTP request from the Network tab, to check a backend by hand, with the answer redacted the same way (see [Send request](#send-request)).
+- **Explain failures** — under the Results title, while AI is on and the last run has a failed test with error text, the AI provider gives short advice on the failed tests. Studio shows what it would send first and sends only after **Send**; the advice is shown as text and never changes a result (see [AI in Studio](/tools/ai/#in-studio)).
 - **Toast notifications**, dark theme, draggable native title bar, About panel.
 - **Keyboard shortcuts**: ⌘R run, ⌘S save, ⌘B connect/disconnect, ⌘P open workspace, ⌘K refresh devices, `?` help, `Esc` close help.
 
