@@ -14,7 +14,7 @@ import (
 // Limits of the tags and run properties a report carries.
 const (
 	MaxProperties         = 32   // --property entries per run
-	MaxPropertyValueBytes = 1024 // bytes in one --property value
+	MaxPropertyValueBytes = 1024 // bytes in one --property value, as written: it is checked before masking, so a masked value in the report can be longer
 	MaxPropertyKeyBytes   = 64   // bytes in one --property key
 	MaxTags               = 32   // tags reported per test; the rest are left out
 	MaxTagRunes           = 64   // characters of one tag; a longer tag is cut
@@ -22,7 +22,7 @@ const (
 
 var propertyKey = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
-// reservedProperties are the names the reports already write themselves; a run property of the same name would be a second
+// reservedProperties are the names the reports already write themselves (matched without regard to case, in lower case here); a run property of the same name would be a second
 // property of that name next to the built-in one.
 var reservedProperties = map[string]bool{
 	"probe_version": true, "agent_version": true, "platform": true, "os_version": true, "app_id": true,
@@ -48,7 +48,7 @@ func ParseProperties(pairs []string) (map[string]string, error) {
 		if !ok || key == "" || len(key) > MaxPropertyKeyBytes || !propertyKey.MatchString(key) {
 			return nil, fmt.Errorf("--property: entry %d is not key=value with a key of 1 to %d letters, digits, _ . or -", i+1, MaxPropertyKeyBytes)
 		}
-		if reservedProperties[key] {
+		if reservedProperties[strings.ToLower(key)] {
 			return nil, fmt.Errorf("--property: the key %q is used by the report itself", key)
 		}
 		if _, dup := out[key]; dup {
@@ -68,7 +68,7 @@ func ParseProperties(pairs []string) (map[string]string, error) {
 func ReportProperties(m map[string]string) []Property {
 	keys := make([]string, 0, len(m))
 	for k := range m {
-		if propertyKey.MatchString(k) && len(k) <= MaxPropertyKeyBytes && !reservedProperties[k] && len(m[k]) <= MaxPropertyValueBytes {
+		if propertyKey.MatchString(k) && len(k) <= MaxPropertyKeyBytes && !reservedProperties[strings.ToLower(k)] && len(m[k]) <= MaxPropertyValueBytes {
 			keys = append(keys, k)
 		}
 	}

@@ -38,7 +38,6 @@ Examples:
 	SilenceUsage: true,
 }
 
-// Execute is the entry point called by main().
 // UsageError is a command line the command refuses before it does anything (a bad --property, say). The process exits 2 for
 // it, not 1, so a script can tell "not run" from "ran and failed".
 type UsageError struct{ Err error }
@@ -55,6 +54,7 @@ func ExitCode(err error) int {
 	return 1
 }
 
+// Execute is the entry point called by main().
 func Execute() error {
 	return rootCmd.Execute()
 }
