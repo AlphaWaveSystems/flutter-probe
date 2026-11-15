@@ -104,6 +104,8 @@ type Client struct {
 	done     chan struct{} // signals ping loop to stop
 	closed   bool
 	OnNotify func(method string, params json.RawMessage)
+	// handshake is what the agent reported at connect; DeviceAction checks it before a press_key. Guarded by mu.
+	handshake *HandshakeResult
 }
 
 // Dial connects to the ProbeAgent running on the given device port.
@@ -427,7 +429,11 @@ func (c *Client) Handshake(ctx context.Context, clientVersion string) (*Handshak
 		// the response, not a version mismatch.
 		return nil, fmt.Errorf("handshake: decoding ping result: %w", err)
 	}
-	return &HandshakeResult{AgentVersion: res.AgentVersion}, nil
+	result := &HandshakeResult{AgentVersion: res.AgentVersion, Capabilities: res.Capabilities}
+	c.mu.Lock()
+	c.handshake = result
+	c.mu.Unlock()
+	return result, nil
 }
 
 // WaitSettled blocks until the agent reports the UI is fully settled (triple-signal).
@@ -686,6 +692,14 @@ func (c *Client) RegisterMock(ctx context.Context, m MockParam) error {
 }
 
 func (c *Client) DeviceAction(ctx context.Context, action, value string) error {
+	if action == "press_key" {
+		c.mu.Lock()
+		h := c.handshake
+		c.mu.Unlock()
+		if err := checkPressKey(h); err != nil {
+			return err
+		}
+	}
 	raw, err := c.Call(ctx, MethodDeviceAction, DeviceActionParams{Action: action, Value: value})
 	if err == nil {
 		return reportWarning(raw)

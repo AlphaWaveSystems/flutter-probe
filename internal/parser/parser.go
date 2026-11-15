@@ -409,6 +409,11 @@ func (p *Parser) parseStepInner() (Step, error) {
 		p.advance()
 		p.consumeNewline()
 		return ActionStep{Verb: VerbGoBack, Line: tok.Line}, nil
+	case TOKEN_PRESS:
+		if p.pressKeyLine() {
+			return p.parseActionPressKey()
+		}
+		return p.parseRecipeCall()
 	case TOKEN_PRESS_ENTER:
 		p.advance()
 		p.consumeNewline()
@@ -783,6 +788,44 @@ func (p *Parser) parseActionDoubleTap() (Step, error) {
 	opt := p.checkOptional()
 	p.consumeNewline()
 	return ActionStep{Verb: VerbDoubleTap, Sel: &sel, IfVisible: ifVis, Optional: opt, Line: line}, nil
+}
+
+// pressKeys are the keys `press <key>` takes. The agent presses each one through the focus system or the focused text field;
+// `press enter` is a step of its own.
+var pressKeys = []string{"tab", "escape", "backspace", "space", "up", "down", "left", "right"}
+
+// PressKeys returns the keys `press <key>` takes, for the lint that suggests them.
+func PressKeys() []string { return append([]string(nil), pressKeys...) }
+
+func isPressKey(word string) bool {
+	for _, k := range pressKeys {
+		if k == word {
+			return true
+		}
+	}
+	return false
+}
+
+// pressKeyLine reports whether the line at the cursor is `press <key>` and nothing else: press directly followed by one of
+// pressKeys, then the end of the line. Every other line that starts with press is a recipe call, as it always was, so a
+// recipe named "press the tab" or "press tba" keeps working. Only a recipe named exactly one of the keys loses to the step.
+// It consumes nothing.
+func (p *Parser) pressKeyLine() bool {
+	key := p.peekAt(1)
+	if key.Type == TOKEN_STRING || !isPressKey(strings.ToLower(key.Literal)) {
+		return false
+	}
+	end := p.peekAt(2).Type
+	return end == TOKEN_NEWLINE || end == TOKEN_DEDENT || end == TOKEN_EOF
+}
+
+// parseActionPressKey handles `press <key>` once pressKeyLine has said the line is one: it consumes the two words and the line.
+func (p *Parser) parseActionPressKey() (Step, error) {
+	line := p.peek().Line
+	p.advance() // press
+	word := strings.ToLower(p.advance().Literal)
+	p.consumeNewline()
+	return ActionStep{Verb: VerbPressKey, Name: word, Line: line}, nil
 }
 
 func (p *Parser) parseActionClear() (Step, error) {

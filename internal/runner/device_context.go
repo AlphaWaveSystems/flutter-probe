@@ -585,10 +585,20 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		},
 	}
 
+	return dc.dialReconnect(ctx, dialOpts)
+}
+
+// dialReconnect dials the agent after a reconnect, over HTTP or the websocket, and runs the connect-time version handshake
+// on the new client as the first connect does. A client without the handshake does not know what the agent supports, so a
+// press_key step on it is refused.
+func (dc *DeviceContext) dialReconnect(ctx context.Context, dialOpts probelink.DialOptions) (probelink.ProbeClient, error) {
 	if dc.UseHTTP {
 		client, err := probelink.DialHTTP(ctx, dialOpts)
 		if err != nil {
 			return nil, fmt.Errorf("reconnect: http dial: %w", err)
+		}
+		if err := dc.handshakeNewClient(ctx, client); err != nil {
+			return nil, fmt.Errorf("reconnect: handshake: %w", err)
 		}
 		return client, nil
 	}
@@ -597,17 +607,24 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	if err != nil {
 		return nil, fmt.Errorf("reconnect: dial: %w", err)
 	}
+	if err := dc.handshakeNewClient(ctx, client); err != nil {
+		return nil, fmt.Errorf("reconnect: handshake: %w", err)
+	}
+	return client, nil
+}
 
+// handshakeNewClient runs the connect-time version handshake on a client dialed after a reconnect, prints the version
+// warning, and closes the client when the handshake fails.
+func (dc *DeviceContext) handshakeNewClient(ctx context.Context, client probelink.ProbeClient) error {
 	warning, err := probelink.CheckHandshake(ctx, client, dc.CLIVersion)
 	if err != nil {
 		client.Close()
-		return nil, fmt.Errorf("reconnect: handshake: %w", err)
+		return err
 	}
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  %s\n", sysdialog.ScrubKnown(warning))
 	}
-
-	return client, nil
+	return nil
 }
 
 // reforwardHook returns a probelink.DialOptions.OnConnectRefused that re-creates
@@ -653,6 +670,10 @@ func (dc *DeviceContext) ReconnectWithToken(ctx context.Context, token string) (
 			client, err = probelink.DialWithOptions(ctx, dialOpts)
 		}
 		if err == nil {
+			// A handshake failure is not a dial failure: retrying will not change the agent's version, so it returns now.
+			if err := dc.handshakeNewClient(ctx, client); err != nil {
+				return nil, fmt.Errorf("reconnect with pre-shared token: handshake: %w", err)
+			}
 			return client, nil
 		}
 		select {

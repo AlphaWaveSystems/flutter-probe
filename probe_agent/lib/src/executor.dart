@@ -113,7 +113,7 @@ class ProbeExecutor {
         if (clientVersion != null && clientVersion.isNotEmpty) {
           stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
         }
-        return {'ok': true, 'agent_version': probeAgentVersion};
+        return {'ok': true, 'agent_version': probeAgentVersion, 'capabilities': probeAgentCapabilities};
 
       case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;
@@ -911,6 +911,87 @@ class ProbeExecutor {
     }
   }
 
+  /// Presses one of the keys `press <key>` takes. Tab and the arrow keys move the focus the way the focus system does; escape
+  /// leaves the focused field; backspace and space edit the focused text field. A key with nothing to act on warns, as press
+  /// enter does, so a step is not silently ignored. A key the agent does not know is an error.
+  void _pressKey(String key) {
+    final focus = FocusManager.instance.primaryFocus;
+    final target = _findFocusedEditableTarget();
+    switch (key) {
+      case 'tab':
+        (focus ?? FocusManager.instance.rootScope).nextFocus();
+        break;
+      case 'escape':
+        focus?.unfocus();
+        break;
+      case 'up':
+      case 'down':
+      case 'left':
+      case 'right':
+        const directions = {
+          'up': TraversalDirection.up,
+          'down': TraversalDirection.down,
+          'left': TraversalDirection.left,
+          'right': TraversalDirection.right,
+        };
+        if (!(focus?.focusInDirection(directions[key]!) ?? false)) {
+          _tapWarning = 'press $key: nothing to move the focus to in that direction';
+        }
+        break;
+      case 'backspace':
+        if (target == null) {
+          _tapWarning = 'press backspace: no text field has focus, nothing was deleted';
+        } else {
+          _deleteBeforeCaret(target);
+        }
+        break;
+      case 'space':
+        if (target == null) {
+          _tapWarning = 'press space: no text field has focus, nothing was typed';
+        } else {
+          _insertText(target, ' ');
+        }
+        break;
+      default:
+        throw ProbeError(ProbeError.invalidParams,
+            'press $key: not a key the agent presses (use tab, escape, backspace, space, up, down, left or right)');
+    }
+  }
+
+  /// Deletes what Backspace deletes: the selection, or the character before the caret. At the start of the field it does
+  /// nothing. The update goes through the field's own state, as [_insertText] does, so the change reaches onChanged.
+  void _deleteBeforeCaret(_EditableTarget target) {
+    final value = target.controller.value;
+    final sel = value.selection;
+    if (!sel.isValid) return;
+    var start = sel.start;
+    final end = sel.end;
+    if (sel.isCollapsed) {
+      if (start == 0) return;
+      start -= 1;
+      // A character outside the Basic Multilingual Plane is two code units: remove both, not half of one.
+      if (start > 0 &&
+          _isLowSurrogate(value.text.codeUnitAt(start)) &&
+          _isHighSurrogate(value.text.codeUnitAt(start - 1))) {
+        start -= 1;
+      }
+    }
+    final newValue = TextEditingValue(
+      text: value.text.replaceRange(start, end, ''),
+      selection: TextSelection.collapsed(offset: start),
+    );
+    final state = target.state;
+    if (state != null && state.mounted) {
+      state.userUpdateTextEditingValue(newValue, SelectionChangedCause.keyboard);
+    } else {
+      target.controller.value = newValue;
+    }
+  }
+
+  static bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;
+
+  static bool _isLowSurrogate(int unit) => unit >= 0xDC00 && unit <= 0xDFFF;
+
   /// Lets the frame an injected input caused run; a screen that animates
   /// forever must not stall a live-view interaction, so this never throws.
   Future<void> _settleBriefly() async {
@@ -1523,6 +1604,9 @@ class ProbeExecutor {
 
   Future<void> _deviceAction(String action, String value) async {
     switch (action) {
+      case 'press_key':
+        _pressKey(value);
+        break;
       case 'go_back':
         final nav = _navigator;
         if (nav != null && nav.canPop()) {
@@ -1576,6 +1660,11 @@ class ProbeExecutor {
         break;
       case 'shake':
         break;
+      default:
+        // An action this agent does not know is an error, not a pass: the CLI would otherwise report the step done
+        // without anything having happened. The CLI only sends actions listed above, so this is not reached by one.
+        throw ProbeError(ProbeError.invalidParams,
+            'unknown device action "$action": this probe_agent does not support it; update probe_agent');
     }
   }
 

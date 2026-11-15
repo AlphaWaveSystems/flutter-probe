@@ -246,6 +246,7 @@ Supports the full ProbeScript syntax:
                      turns it back, so a test that turns it on must turn it off. Only an emulator (serial
                      emulator-NNNN) takes it; iOS simulators, physical and network devices are refused.
   Keyboard:        press enter — the keyboard action key on the focused text field.
+  Keys:            press tab, escape, backspace, space, up, down, left or right acts on the focused field or moves the focus (press enter stays separate). Not on iOS yet: the step is refused there.
   See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first
                      (an optional consent dialog, a login or home screen).

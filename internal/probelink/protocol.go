@@ -227,8 +227,9 @@ type PingParams struct {
 // version. AgentVersion is empty when talking to an agent built before this
 // field existed — that must be treated as "unknown," never as a mismatch.
 type PingResult struct {
-	OK           bool   `json:"ok"`
-	AgentVersion string `json:"agent_version,omitempty"`
+	OK           bool     `json:"ok"`
+	AgentVersion string   `json:"agent_version,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // WidgetTreeResult contains the serialised widget tree.
