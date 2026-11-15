@@ -188,8 +188,7 @@ func TestRedirects(t *testing.T) {
 	var other atomic.Int64
 	otherSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { other.Add(1) }))
 	defer otherSrv.Close()
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/start":
 			http.Redirect(w, r, "/mid", http.StatusFound)
