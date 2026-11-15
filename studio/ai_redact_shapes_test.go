@@ -72,7 +72,7 @@ func TestGateShortJWTWithUrlSafeCharacters(t *testing.T) {
 		}
 	}
 	// Too short to be a JWT shape: kept.
-	for _, in := range []string{"eyJab.cd.ef", "eyJabcd.ef.gh"} {
+	for _, in := range []string{"eyJab.cd.ef", "eyJabcd.ef.gh", "eyJabc.cdef.gh", "eyJabcd.cde.gh"} {
 		if out := redactCredentials(in); out != in {
 			t.Errorf("%q changed: %q", in, out)
 		}
