@@ -283,8 +283,9 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 }
 
 // fixAnswer makes the model's text fit for the card: hidden characters are dropped first, the exact key is removed, the gate runs, and
-// the text is cut. A suggestion is one line, so a line break in it is a space.
+// personal text is scrubbed (an email address becomes [email], the home-directory part of a path becomes ~, as in what was sent), and the
+// text is cut. A suggestion is one line, so a line break in it is a space.
 func fixAnswer(s, key string, max int) string {
-	s = fromProvider(withoutInvisible(s, false), withoutInvisible(key, false))
+	s = scrubPersonal(fromProvider(withoutInvisible(s, false), withoutInvisible(key, false)))
 	return strings.TrimSpace(capRunes(s, max))
 }
