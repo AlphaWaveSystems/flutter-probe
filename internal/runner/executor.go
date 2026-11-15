@@ -577,6 +577,14 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			return fmt.Sprintf("add media %q", s.Name)
 		case parser.VerbTapNative:
 			return fmt.Sprintf("tap native %q", s.Name)
+		case parser.VerbStoreWebView:
+			// the value is read from a page: the line never shows it, only where it goes
+			t := e.webViewShown(s.WebView)
+			line := "store text of css:" + strconv.Quote(t.Value) + " in webview"
+			if t.Page != "" {
+				line += " " + strconv.Quote(t.Page)
+			}
+			return line + " as " + s.Name
 		case parser.VerbTapWebView:
 			return "tap " + e.webViewShown(s.WebView).String()
 		case parser.VerbTypeWebView:
@@ -1112,6 +1120,9 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 			return nil
 		}
 		return e.deviceCtx.AddMedia(ctx, media)
+
+	case parser.VerbStoreWebView:
+		return errStoreWebViewNotImplemented
 
 	case parser.VerbTapWebView:
 		return e.runWebViewTap(ctx, a)

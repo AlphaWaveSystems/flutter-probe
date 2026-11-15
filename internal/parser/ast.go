@@ -205,6 +205,7 @@ const (
 	// WebView steps (Android): tap "text" in webview / type "x" into css:"#f" in webview. WebView holds what to find and which page.
 	VerbTapWebView  ActionVerb = "tap_webview"
 	VerbTypeWebView ActionVerb = "type_webview"
+	VerbStoreWebView ActionVerb = "store_webview" // store text of css:"#total" in webview ["page"] as name: reads one element of a WebView into a variable (Name)
 )
 
 type SwipeDirection string
