@@ -15,7 +15,7 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > - Performance lines (memory, CPU, frames, network) under each result that uses `start measuring`
 > - Network tab: the requests the app made during a run, read from the agent's request log, with credentials hidden before they reach the window
 > - Send request (in the Network tab): one request from this machine; the first request to each host and port in a session asks first and says where the name leads; no redirect to another host is followed; ten a minute, one at a time
-> - Explain failures (under Results, while AI is on): advice on the failed tests of the last run; it shows what it would send first and sends only after you confirm
+> - Explain failures (under Results, while AI is on): advice on the failed tests of the last run; for a hosted provider it shows what it would send before every Explain; for a model on this machine, the first time in a session and again after the destination, the workspace, the provider settings or the saved key change; it sends only after you confirm
 > - Keyboard shortcuts, toast notifications, dark theme
 >
 > Stability is "beta" — expect rough edges, especially around physical
