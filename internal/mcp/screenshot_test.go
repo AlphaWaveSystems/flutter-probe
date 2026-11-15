@@ -26,7 +26,7 @@ var hostileShotNames = []string{
 	"a?b",
 	"[a-z]",
 	"a\x00b",
-	"evil‮gnp",
+	"evil\u202egnp",
 	"${HOME}",
 	"<timestamp>",
 	"`id`",
