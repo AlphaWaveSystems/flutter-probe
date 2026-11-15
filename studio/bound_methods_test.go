@@ -45,7 +45,7 @@ var boundMethods = map[string]string{
 	"StartWiFiDiscovery": catNetwork, "StopWiFiDiscovery": catNetwork,
 	// an AI provider
 	"Chat": catAIProvider, "PreviewAIChat": catAIProvider, "ExplainLastRun": catAIProvider, "ExplainPreviewed": catAIProvider, "PreviewExplain": catAIProvider,
-	"ListAIModels": catAIProvider, "TestAIConnection": catAIProvider, "SuggestSelectorFix": catAIProvider,
+	"ListAIModels": catAIProvider, "TestAIConnection": catAIProvider, "PreviewSelectorFix": catAIProvider, "SelectorFixPreviewed": catAIProvider,
 	// a device
 	"Connect": catDevice, "ConnectWiFi": catDevice, "ConnectWiFiSaved": catDevice, "Disconnect": catDevice, "ListDevices": catDevice, "TestWiFi": catDevice,
 	"ApplyDeviceSetting": catDevice, "GetDeviceSettings": catDevice, "GetDeviceView": catDevice, "GetWidgetTree": catDevice, "TakeScreenshot": catDevice,

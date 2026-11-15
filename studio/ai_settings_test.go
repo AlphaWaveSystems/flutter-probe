@@ -162,7 +162,7 @@ func TestSuggestSelectorFixNeedsTheRunSwitch(t *testing.T) {
 
 	a := failedRunApp()
 	a.workspace = workspaceWith(t, false, true)
-	_, err := a.SuggestSelectorFix("")
+	_, err := suggestFix(a, "")
 	if err == nil || !strings.Contains(err.Error(), "Include run results") {
 		t.Fatalf("err = %v, want a message that names the run-results setting", err)
 	}

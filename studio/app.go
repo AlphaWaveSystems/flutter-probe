@@ -63,6 +63,7 @@ type App struct {
 	runCancel context.CancelFunc // non-nil while RunFile is executing
 
 	track   runTracker        // what the current/last run looks like, for automation and the UI
+	fix     selectorFixState  // previews of selector-fix requests and what this session confirmed; see ai_selector_fix.go
 	autoSrv *automationServer // non-nil when PROBE_STUDIO_AUTOMATION=1
 
 	// failures remembers which tests failed in each file this session, for a run of the failed tests only.

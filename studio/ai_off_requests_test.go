@@ -74,7 +74,7 @@ func TestAIOffMakesNoRequestOnAnySurface(t *testing.T) {
 			if _, err := app.Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "file"); err == nil || err.Error() != want.Error() {
 				t.Errorf("Chat returned %v, want the provider refusal %q", err, want)
 			}
-			if _, err := app.SuggestSelectorFix("file"); err == nil || err.Error() != want.Error() {
+			if _, err := suggestFix(app, "file"); err == nil || err.Error() != want.Error() {
 				t.Errorf("SuggestSelectorFix returned %v, want the provider refusal %q", err, want)
 			}
 			_, _ = app.ListAIModels()
@@ -108,7 +108,7 @@ func TestTheCountingTransportSeesARequestWhenAIIsOn(t *testing.T) {
 	if afterChat == 0 {
 		t.Fatal("Chat with a configured local provider made no request, so the counting transport sees nothing")
 	}
-	_, _ = app.SuggestSelectorFix("file")
+	_, _ = suggestFix(app, "file")
 	if len(counter.seen()) <= afterChat {
 		t.Fatal("SuggestSelectorFix with a configured local provider made no request, so the counter does not see that surface")
 	}
