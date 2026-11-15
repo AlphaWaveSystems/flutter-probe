@@ -27,3 +27,11 @@ func seededLog(p probelink.HTTPLogParams) (probelink.HTTPLogResult, bool) {
 	}
 	return out, true
 }
+
+// netSeeded says whether the request log is the test seed: no app is connected and a seed was set. The window marks seeded rows.
+func (a *App) netSeeded() bool {
+	a.mu.Lock()
+	conn := a.conn
+	a.mu.Unlock()
+	return (conn == nil || conn.client == nil) && netSeed != nil
+}

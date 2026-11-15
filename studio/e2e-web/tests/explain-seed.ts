@@ -50,7 +50,7 @@ export function seedExchanges() {
       {
         seq: 1, method: "GET", url: `https://user:${netSecret}@api.example.test/v1/me?token=${netSecret}&id=7#access_token=${netSecret}`, status: 200, durationMs: 41,
         requestHeaders: { "X-Note": split(netToken, "\u00AD"), Authorization: `Bearer ${netSecret}`, Cookie: `sid=${netSecret}`, "Content-Type": "application/json", "X_Api_Key": netSecret, Accept: "application/json" },
-        responseHeaders: { "Content-Type": "application/json", "Set-Cookie": `sid=${netSecret}; HttpOnly`, "X-Request-Id": "req-1" },
+        responseHeaders: { "Content-Type": "application/json", "Set-Cookie": `sid=${netSecret}; HttpOnly`, "X-Request-Id": "req-1", "X-Hostile": "<img src=x onerror=\"window.__netXss=5\">" },
         requestBody: "", responseBody: JSON.stringify({ name: "Jane", email: netEmail, home: netHome, password: netSecret, nested: { apiKey: netSecret, items: [{ token: netSecret }, { ok: 1 }] } }),
         requestBytes: 0, responseBytes: 200,
       },
@@ -62,7 +62,7 @@ export function seedExchanges() {
         requestBytes: 60, responseBytes: 120,
       },
       {
-        seq: 3, method: "GET", url: "https://cdn.example.test/logo.png", status: 200, durationMs: 12,
+        seq: 3, method: "GET", url: "https://cdn.example.test/<img/src=x/onerror=window.__netXss=3>/logo.png", status: 200, durationMs: 12,
         requestHeaders: {}, responseHeaders: { "Content-Type": "image/png" }, requestBody: "", responseBody: "\u0089PNG\r\n\u001a\n\u0000\u0000", requestBytes: 0, responseBytes: 4096,
       },
       {
@@ -70,7 +70,7 @@ export function seedExchanges() {
         requestHeaders: {}, responseHeaders: { "Content-Type": "text/plain" }, requestBody: "", responseBody: "", requestBytes: 0, responseBytes: 3 * 1024 * 1024,
       },
       {
-        seq: 5, method: "GET", url: `https://down.example.test/health?key=${netSecret}`, status: 0, durationMs: 3000, error: `connection refused for https://down.example.test/health?key=${netSecret} (${netToken})`,
+        seq: 5, method: "GET", url: `https://down.example.test/health?key=${netSecret}`, status: 0, durationMs: 3000, error: `connection refused for https://down.example.test/health?key=${netSecret} (${netToken}) <img src=x onerror="window.__netXss=6">`,
         requestHeaders: {}, responseHeaders: {}, requestBody: "", responseBody: "", requestBytes: 0, responseBytes: 0,
       },
       {
@@ -78,7 +78,7 @@ export function seedExchanges() {
         requestHeaders: manyHeaders, responseHeaders: {}, requestBody: "", responseBody: "", requestBytes: 0, responseBytes: 0,
       },
       {
-        seq: 7, method: "GET", url: "https://api.example.test/v1/mocked", status: 200, durationMs: 1, mocked: true,
+        seq: 7, method: "<i onclick=x>", url: "https://api.example.test/v1/mocked", status: 200, durationMs: 1, mocked: true,
         requestHeaders: {}, responseHeaders: {}, requestBody: "", responseBody: "{\"mock\":true}", requestBytes: 0, responseBytes: 13,
       },
     ],

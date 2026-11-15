@@ -33,7 +33,7 @@ test.describe("Network tab (seeded request log)", () => {
     await expect(rows(page).nth(1)).toContainText("401");
     await expect(rows(page).nth(4)).toContainText("error");
     await expect(rows(page).nth(6)).toContainText("mocked");
-    await expect(page.locator("#net-info")).toHaveText("7");
+    await expect(page.locator("#net-info")).toHaveText("seeded (test) · 7");
     expect(await page.locator("#network-panel").innerText()).not.toContain(netSecret);
   });
 
@@ -131,5 +131,33 @@ test.describe("Network tab (seeded request log)", () => {
     await expect(app(page, "HTTPExchange", "", 1)).rejects.toThrow(/restart marker/);
     const ok: any = await app(page, "HTTPExchange", "e2e-epoch", 1);
     expect(JSON.stringify(ok)).not.toContain(netSecret);
+  });
+
+  test("nw-08 markup in the URL, a header value, the error text and the method stays inert text", async ({ page }) => {
+    await openNetwork(page);
+    // The URL and the method, in the list.
+    await expect(rows(page).nth(2)).toContainText("<img/src=x/onerror=window.__netXss=3>");
+    await expect(rows(page).nth(6)).toContainText("<I ONCLICK=X>");
+    // A header value and the error text, in the details.
+    await rows(page).nth(0).click();
+    await expect(page.locator("#net-detail")).toContainText('<img src=x onerror="window.__netXss=5">');
+    await rows(page).nth(4).click();
+    await expect(page.locator("#net-detail")).toContainText('<img src=x onerror="window.__netXss=6">');
+    await rows(page).nth(6).click();
+    await expect(page.locator("#net-detail")).toContainText("<I ONCLICK=X>");
+    await rows(page).nth(2).click();
+    await expect(page.locator("#net-detail")).toContainText("<img/src=x/onerror=window.__netXss=3>");
+    // Nothing became an element, an attribute or a handler, and nothing ran.
+    await expect(page.locator("#network-panel img, #network-panel script, #network-panel [onclick], #network-panel [onerror]")).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).__netXss)).toBeUndefined();
+  });
+
+  test("nw-09 seeded rows say so, and an empty list does not ask for a device", async ({ page }) => {
+    await openNetwork(page);
+    await expect(page.locator("#net-info")).toHaveText("seeded (test) · 7");
+    await rows(page).first().click();
+    await expect(page.locator("#net-detail")).toContainText("seeded (test)");
+    await page.fill("#net-text", "zzz-no-such");
+    await expect(page.locator("#net-list .empty")).toHaveText("No request matches the filter.");
   });
 });

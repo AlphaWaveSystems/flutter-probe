@@ -185,8 +185,10 @@ test.describe("Explain (fake providers on 127.0.0.1, a seeded run)", () => {
         await expect(page.locator("#explain-preview-note")).toContainText("before every Explain");
         expect(f.chats()).toBe((i - 1) * seedFailed);
         await page.click("#btn-explain-preview-send");
+        // The card of the previous Explain still says "hosted", so it is no sign that this one has finished: wait for its requests.
+        await expect.poll(() => f.chats(), { message: `chats after Explain ${i}` }).toBe(i * seedFailed);
+        await expect(overlay(page)).toBeHidden();
         await expect(card(page).locator(".explain-place")).toHaveText("hosted");
-        expect(f.chats()).toBe(i * seedFailed);
       }
     } finally {
       await f.close();

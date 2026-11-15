@@ -112,16 +112,41 @@ func TestSeededLogIsNotUsedWithAnAppOrWithoutASeed(t *testing.T) {
 	}
 }
 
-// Only the headless startup sets it, and only through the seed file: nothing else in the package assigns it.
-func TestNothingButTheStartupSetsTheNetSeed(t *testing.T) {
-	paths, _ := filepath.Glob("*.go")
-	for _, p := range paths {
-		if strings.HasSuffix(p, "_test.go") || p == "net_seed.go" || p == "main.go" {
-			continue
+// The seed is answered the way the agent answers: a listing without bodies has none, a detail has them, and the seed is not changed.
+func TestSeededLogHonoursNoBodiesAndSince(t *testing.T) {
+	withSeed(t, seedFromJSON(t))
+	res, ok := seededLog(probelink.HTTPLogParams{NoBodies: true})
+	if !ok || len(res.Entries) != 2 {
+		t.Fatalf("%+v %v", res, ok)
+	}
+	for _, e := range res.Entries {
+		if e.RequestBody != "" || e.ResponseBody != "" {
+			t.Errorf("a listing carries bodies: %+v", e)
 		}
-		b, _ := os.ReadFile(p)
-		if strings.Contains(string(b), "setNetSeed(") || strings.Contains(string(b), "netSeed =") {
-			t.Errorf("%s sets the network seed", p)
-		}
+	}
+	if res, _ = seededLog(probelink.HTTPLogParams{}); res.Entries[0].ResponseBody != "rs" || res.Entries[0].RequestBody != "rq" {
+		t.Errorf("a full read has no bodies: %+v", res.Entries[0])
+	}
+	if res, _ = seededLog(probelink.HTTPLogParams{Since: 1}); len(res.Entries) != 1 || res.Entries[0].Seq != 2 {
+		t.Errorf("since: %+v", res)
+	}
+	if netSeed.Entries[0].ResponseBody != "rs" {
+		t.Error("the seed was changed")
+	}
+}
+
+// The window is told when the rows are the test seed, and not when an app answered.
+func TestSeededRowsAreMarked(t *testing.T) {
+	withSeed(t, seedFromJSON(t))
+	a := &App{}
+	if list, _ := a.HTTPExchanges(NetFilter{}); !list.Seeded {
+		t.Error("a seeded list is not marked")
+	}
+	if d, _ := a.HTTPExchange("e1", 1); !d.Seeded {
+		t.Error("a seeded detail is not marked")
+	}
+	c := &fakeNetClient{res: probelink.HTTPLogResult{Epoch: "live", Entries: []probelink.HTTPEntry{{Seq: 9, Method: "GET", URL: "https://live.example.test/"}}}}
+	if list, _ := netApp(c).HTTPExchanges(NetFilter{}); list.Seeded {
+		t.Error("a list from a connected app is marked as seeded")
 	}
 }
