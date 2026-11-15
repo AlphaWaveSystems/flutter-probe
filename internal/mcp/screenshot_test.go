@@ -495,3 +495,87 @@ func TestFindMCPScreenshotTreatsTheNameAsText(t *testing.T) {
 		t.Errorf("a.b = %q, %v", p, err)
 	}
 }
+
+func TestFindMCPScreenshotAcceptsAFileJustBeforeTheCaptureOnCoarseClocks(t *testing.T) {
+	dir := t.TempDir()
+	started := time.Now()
+	fresh := filepath.Join(dir, "a_100.png")
+	writePNG(t, fresh, 4, 4, false)
+	// a coarse file system rounds the modification time down by up to two seconds
+	rounded := started.Add(-1500 * time.Millisecond)
+	if err := os.Chtimes(fresh, rounded, rounded); err != nil {
+		t.Fatal(err)
+	}
+	f, p, err := findMCPScreenshot(dir, "a", started)
+	if err != nil || filepath.Base(p) != "a_100.png" {
+		t.Fatalf("a file 1.5 s before the start was refused: %q, %v", p, err)
+	}
+	f.Close()
+	// older than the slack is still stale
+	old := started.Add(-captureSlack - time.Second)
+	if err := os.Chtimes(fresh, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if f, p, err := findMCPScreenshot(dir, "a", started); err == nil {
+		f.Close()
+		t.Fatalf("a file 3 s before the start was returned: %q", p)
+	}
+}
+
+func TestFindMCPScreenshotDoesNotMatchANameThatIsOnlyTheEndOfAnotherName(t *testing.T) {
+	dir := t.TempDir()
+	writePNG(t, filepath.Join(dir, "login_5.png"), 4, 4, false)
+	writePNG(t, filepath.Join(dir, "xlogin_5.png"), 4, 4, false)
+	for _, name := range []string{"in", "ogin", "gin"} {
+		if p, err := findPath(dir, name); err == nil {
+			t.Errorf("name %q matched %q (the match must start at the beginning of the file name)", name, p)
+		}
+	}
+	if p, err := findPath(dir, "login"); err != nil || filepath.Base(p) != "login_5.png" {
+		t.Fatalf("login = %q, %v", p, err)
+	}
+}
+
+func TestReadAtMostRefusesMoreThanTheLimitWhateverTheFileSaid(t *testing.T) {
+	for _, c := range []struct {
+		size, limit int64
+		ok          bool
+	}{{10, 10, true}, {0, 10, true}, {11, 10, false}, {1000, 10, false}} {
+		raw, err := readAtMost(strings.NewReader(strings.Repeat("x", int(c.size))), c.limit)
+		if (err == nil) != c.ok || (c.ok && int64(len(raw)) != c.size) {
+			t.Errorf("size %d limit %d: len=%d err=%v", c.size, c.limit, len(raw), err)
+		}
+		if !c.ok && !strings.Contains(err.Error(), "grew past") {
+			t.Errorf("size %d limit %d: err = %v", c.size, c.limit, err)
+		}
+	}
+}
+
+func TestBoundedScreenshotRefusesAFileOverTheSizeLimitBeforeReadingIt(t *testing.T) {
+	old := maxScreenshotSourceBytes
+	maxScreenshotSourceBytes = 100
+	defer func() { maxScreenshotSourceBytes = old }()
+	p := filepath.Join(t.TempDir(), "a_1.png")
+	writePNG(t, p, 300, 300, true) // a file of many KB
+	_, _, err := boundedPath(p)
+	if err == nil || !strings.Contains(err.Error(), "is larger than") || strings.Contains(err.Error(), "grew past") {
+		t.Fatalf("err = %v (the size check should refuse it before the read)", err)
+	}
+}
+
+func TestFindMCPScreenshotOpensThePictureWithTheNonBlockingOpen(t *testing.T) {
+	dir := t.TempDir()
+	writePNG(t, filepath.Join(dir, "a_1.png"), 4, 4, false)
+	var opened []string
+	old := openPicture
+	openPicture = func(p string) (*os.File, error) { opened = append(opened, p); return old(p) }
+	defer func() { openPicture = old }()
+	f, p, err := findMCPScreenshot(dir, "a", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if len(opened) != 1 || opened[0] != p {
+		t.Fatalf("the picture was opened through %v, want once through the non-blocking open: %q", opened, p)
+	}
+}
