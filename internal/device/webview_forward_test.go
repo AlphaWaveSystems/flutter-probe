@@ -109,7 +109,7 @@ func TestForwardWebViewFallbackWhenAdbPrintsNoPort(t *testing.T) {
 		if fw.Port() <= 0 || fw.Port() >= 65536 {
 			t.Fatalf("%q: port %d", printed, fw.Port())
 		}
-		if len(f.calls) != 4 || f.calls[3][3] != "tcp:"+strconv.Itoa(fw.Port()) {
+		if len(f.calls) != 4 || f.calls[3][3] != "--no-rebind" || f.calls[3][4] != "tcp:"+strconv.Itoa(fw.Port()) {
 			t.Fatalf("%q: fallback did not forward the chosen port: %v", printed, f.calls)
 		}
 		_ = fw.Close()
@@ -419,5 +419,23 @@ func TestFailedRemovalIsRetriedByTheNextClose(t *testing.T) {
 	}
 	if removals != 2 {
 		t.Fatalf("removals = %d, want the failed one and the retry", removals)
+	}
+}
+
+func TestFallbackForwardUsesNoRebind(t *testing.T) {
+	f := &fakeAdb{forward: func(args []string) ([]byte, error) { return nil, nil }}
+	fw, err := ForwardWebView(context.Background(), f, "emulator-5600", ownSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var chosen []string
+	for _, c := range f.calls {
+		if len(c) > 4 && c[2] == "forward" && strings.HasPrefix(c[4], "tcp:") && c[4] != "tcp:0" {
+			chosen = c
+		}
+	}
+	want := []string{"-s", "emulator-5600", "forward", "--no-rebind", "tcp:" + strconv.Itoa(fw.Port()), "localabstract:webview_devtools_remote_2783"}
+	if strings.Join(chosen, " ") != strings.Join(want, " ") {
+		t.Fatalf("the chosen-port forward = %v, want %v", chosen, want)
 	}
 }
