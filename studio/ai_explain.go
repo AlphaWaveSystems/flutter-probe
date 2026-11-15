@@ -283,7 +283,7 @@ func boundBeforeGate(s string) string { return boundRunes(s, explainPreGate) }
 // boundRunes bounds a text to limit characters before a pattern reads it, so a very long text does not hand the pattern a megabyte.
 // A text that is cut here ends in the middle of whatever was there, and a redactor can shrink the text (a private key block becomes
 // one marker), which would move the cut end up into the part that is shown. So when it cuts, it also drops the run of characters at
-// the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then explainTailCut more characters:
+// the cut that has no space in it (at most explainTailRun), which is a token cut in two, and then explainTailCut more characters, then the token that those characters may have cut in two:
 // nothing that was cut in two survives. A text that fits is returned as it is (with invalid UTF-8 replaced).
 func boundRunes(s string, limit int) string {
 	if len(s) <= limit { // fewer bytes than characters allowed: nothing to cut
@@ -302,7 +302,20 @@ func boundRunes(s string, limit int) string {
 	if len(r) <= explainTailCut {
 		return ""
 	}
-	return string(r[:len(r)-explainTailCut])
+	r = r[:len(r)-explainTailCut]
+	// The extra explainTailCut characters can end inside a token that began before them (a spaced text with a token in it), and a redactor
+	// does not see the first part of a token whose rest is gone. So the text ends where no token character is left at its end: the last
+	// token that began before the cut is dropped whole. A token longer than explainTailCut is cut anyway, and its first part is then long
+	// enough for the long-token rules.
+	for n := 0; len(r) > 0 && n < explainTailCut && tokenRune(r[len(r)-1]); n++ {
+		r = r[:len(r)-1]
+	}
+	return string(r)
+}
+
+// tokenRune says whether r can be part of a key, token, hash or identifier: an ASCII letter or digit, or one of `_ - . + / ~ %`.
+func tokenRune(r rune) bool {
+	return r < 128 && (r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || strings.ContainsRune("_-.+/~%", r))
 }
 
 // explainField makes one field of a failure fit to send, in this order: hidden characters are dropped, the field is bounded, the

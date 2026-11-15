@@ -65,7 +65,7 @@ func TestExplainBoundKeepsTheStartOfALongField(t *testing.T) {
 	if len([]rune(got)) >= explainPreGate || !strings.HasPrefix(got, "ab ab ab") || len([]rune(got)) < explainPreGate-explainTailRun-explainTailCut-1 {
 		t.Fatalf("length %d", len([]rune(got)))
 	}
-	if got := boundBeforeGate(strings.Repeat("x", explainPreGate+500)); len(got) != explainPreGate-explainTailRun-explainTailCut {
+	if got := boundBeforeGate(strings.Repeat("x", explainPreGate+500)); len(got) != explainPreGate-explainTailRun-2*explainTailCut { // the run, the tail, and the token the tail cut into
 		t.Fatalf("a run longer than the tail limit left %d characters", len(got))
 	}
 }
