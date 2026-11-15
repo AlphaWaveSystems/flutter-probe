@@ -41,8 +41,8 @@ type sendState struct {
 	// maxPerMinute is sendMaxPerMinute; the headless test build can raise it (PROBE_STUDIO_TEST_SEND_RATE) so a long browser suite sharing one
 	// server does not trip the limit. Zero means the default.
 	maxPerMinute int
-	now            func() time.Time
-	resolver       httpcall.Resolver
+	now          func() time.Time
+	resolver     httpcall.Resolver
 }
 
 func (s *sendState) clock() time.Time {
@@ -104,10 +104,20 @@ func (s *sendState) end() {
 	s.mu.Unlock()
 }
 
-// policy is asked about every address that is about to be dialed, after the name is resolved. The cloud metadata addresses, the
-// unspecified address and multicast are never allowed. An address on this machine or its network is allowed in the native app (the
-// person was warned and allowed the host) and, in the headless build, only for a host the test allow-list names.
-func (s *sendState) policy(host string, ip net.IP) error {
+// policy is what httpcall asks about every address that is about to be dialed, after the name is resolved: the host and port must have
+// been allowed by the person in this session (the decision is made here and not only in the window), and the kind of address must be
+// one that may be called.
+func (s *sendState) policy(host string, port int, ip net.IP) error {
+	if !s.isAllowed(hostKey(host, strconv.Itoa(port))) {
+		return errSendHostNotAllowed
+	}
+	return s.classPolicy(host, ip)
+}
+
+// classPolicy decides by the kind of address. The cloud metadata addresses, the unspecified address and multicast are never allowed. An
+// address on this machine or its network, or in a reserved range, is allowed in the native app (the person was warned and allowed the
+// host) and, in the headless build, only for a host the test allow-list names.
+func (s *sendState) classPolicy(host string, ip net.IP) error {
 	switch class := httpcall.ClassOf(ip); class {
 	case httpcall.Metadata, httpcall.Unspecified, httpcall.Multicast:
 		return fmt.Errorf("%s is never allowed", class)

@@ -402,3 +402,90 @@ func TestTestSendRateIsHeadlessOnlyAndBounded(t *testing.T) {
 		t.Fatalf("third call = %v, want the rate error", err)
 	}
 }
+
+// The policy that httpcall asks is the decision, not the window: a host and port that were not allowed are refused when called through
+// it directly, and the class rules are those of CheckTarget.
+func TestThePolicyChecksTheAllowAndTheClass(t *testing.T) {
+	st := &sendState{}
+	pub := net.ParseIP("93.184.216.34")
+	if err := st.policy("example.test", 443, pub); !errors.Is(err, errSendHostNotAllowed) {
+		t.Fatalf("an unallowed host: %v", err)
+	}
+	st.allow("example.test:443")
+	if err := st.policy("example.test", 443, pub); err != nil {
+		t.Fatalf("an allowed host: %v", err)
+	}
+	if err := st.policy("example.test", 8443, pub); !errors.Is(err, errSendHostNotAllowed) {
+		t.Fatalf("another port of an allowed host: %v", err)
+	}
+	// Never classes, whatever was allowed; reserved and local ones are allowed natively and refused headless.
+	for _, ip := range []string{"169.254.169.254", "64:ff9b::a9fe:a9fe", "0.0.0.0", "239.1.1.1", "2002:a9fe:a9fe::1"} {
+		if err := st.policy("example.test", 443, net.ParseIP(ip)); err == nil {
+			t.Errorf("%s was allowed", ip)
+		}
+	}
+	for _, ip := range []string{"198.18.0.1", "240.0.0.1", "10.0.0.1", "64:ff9b::7f00:1"} {
+		if err := st.policy("example.test", 443, net.ParseIP(ip)); err != nil {
+			t.Errorf("%s natively: %v", ip, err)
+		}
+	}
+	hl := &sendState{headless: true}
+	hl.allow("example.test:443")
+	for _, ip := range []string{"198.18.0.1", "10.0.0.1", "64:ff9b::7f00:1"} {
+		if err := hl.policy("example.test", 443, net.ParseIP(ip)); err == nil {
+			t.Errorf("%s headless was allowed", ip)
+		}
+	}
+}
+
+// A refusal by address kind says which kind, and a response that ends early says so and shows nothing of it.
+func TestSendSaysTheClassAndRefusesAnIncompleteResponse(t *testing.T) {
+	a := &App{}
+	a.send.resolver = sendResolver{"meta.example.test": {"169.254.169.254"}, "nat.example.test": {"64:ff9b::a9fe:a9fe"}}
+	for _, host := range []string{"meta.example.test", "nat.example.test"} {
+		_ = a.AllowHost(host + ":80")
+		_, err := a.SendRequest(SendInput{Method: "GET", URL: "http://" + host + "/"})
+		if err == nil || !strings.Contains(err.Error(), "a cloud metadata address") || strings.Contains(err.Error(), "169.254") {
+			t.Errorf("%s: %v", host, err)
+		}
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				buf := make([]byte, 4096)
+				_, _ = c.Read(buf)
+				_, _ = c.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 500\r\n\r\n{\"password\":\"x\""))
+			}()
+		}
+	}()
+	b := &App{}
+	b.send.maxPerMinute = 100
+	_ = b.AllowHost(ln.Addr().String())
+	res, err := b.SendRequest(SendInput{Method: "GET", URL: "http://" + ln.Addr().String() + "/"})
+	if err == nil || !strings.Contains(err.Error(), "none of it is shown") || res.ResponseBody.Text != "" || res.Status != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// A host written with a trailing dot is the same host, for the allow and for the call.
+func TestAHostWithATrailingDotIsTheSameHost(t *testing.T) {
+	var hits atomic.Int64
+	srv := backend(t, &hits)
+	h, p := hostPort(srv)
+	a := &App{}
+	a.send.resolver = sendResolver{"app.example.test": {h}}
+	_ = a.AllowHost("app.example.test:" + p)
+	if _, err := a.SendRequest(SendInput{Method: "GET", URL: "http://App.Example.Test.:" + p + "/"}); err != nil || hits.Load() != 1 {
+		t.Fatalf("%v hits %d", err, hits.Load())
+	}
+}

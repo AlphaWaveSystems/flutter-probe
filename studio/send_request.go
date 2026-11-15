@@ -84,7 +84,7 @@ func splitTarget(raw string) (*url.URL, string, string, error) {
 	if port == "" {
 		port = map[bool]string{true: "443", false: "80"}[strings.EqualFold(u.Scheme, "https")]
 	}
-	return u, strings.ToLower(u.Hostname()), port, nil
+	return u, strings.TrimSuffix(strings.ToLower(u.Hostname()), "."), port, nil
 }
 
 // CheckTarget says where a request to rawURL would go, and whether its host is allowed yet. It looks the name up once, so the person
@@ -107,7 +107,7 @@ func (a *App) CheckTarget(rawURL string) (TargetInfo, error) {
 		if class.Local() {
 			info.Local = true
 		}
-		if perr := a.send.policy(host, ip); perr != nil && info.Refused == "" {
+		if perr := a.send.classPolicy(host, ip); perr != nil && info.Refused == "" {
 			info.Refused = perr.Error()
 		}
 	}
@@ -130,7 +130,8 @@ var sendErrors = map[error]string{
 	httpcall.ErrURL:              "the address is not a valid http or https address",
 	httpcall.ErrUserInfo:         "an address with a user name or password is refused",
 	httpcall.ErrMethod:           "that method is not allowed",
-	httpcall.ErrHeader:           "a header is not allowed (Host, Content-Length and the connection headers are set by Studio)",
+	httpcall.ErrHeader:           "a header is not allowed (Host, Content-Length, User-Agent, Accept-Encoding and the connection headers are set by Studio)",
+	httpcall.ErrIncomplete:       "the response ended before it was complete, so none of it is shown",
 	httpcall.ErrRequestTooLarge:  "the request is larger than 256 KB",
 	httpcall.ErrBodyNotAllowed:   "this method sends no body",
 	httpcall.ErrTooManyRedirects: "too many redirects",
@@ -161,6 +162,10 @@ func (a *App) SendRequest(in SendInput) (SendResult, error) {
 	res, err := httpcall.Do(context.Background(), httpcall.Request{Method: in.Method, URL: u.String(), Header: headers, Body: in.Body},
 		httpcall.Options{Policy: a.send.policy, Resolver: a.send.resolver})
 	if err != nil {
+		var pe *httpcall.PolicyError
+		if errors.As(err, &pe) {
+			return SendResult{}, errors.New("that address is " + pe.Class.String() + ", which is not allowed from here")
+		}
 		for sentinel, text := range sendErrors {
 			if errors.Is(err, sentinel) {
 				return SendResult{}, errors.New(text)
