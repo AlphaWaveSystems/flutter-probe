@@ -660,7 +660,13 @@ syntax: a quoted string is **text**, `css:"..."` is a **CSS selector**, so a tex
 `.5 off` is text. `in webview` is recognised only when the bare word `webview` follows `in`; with a
 quoted container (`tap "Item" in "List"`) the line is an ordinary `tap-step`. The optional quoted page
 name is a part of the page's title or URL, for an app with more than one page. Nothing may follow it on
-the line: `if visible`, `optional` and `within` are errors there, not ignored. In this version the steps
+the line except a trailing `within N seconds`, which wraps the step like any other timed step: `if visible`,
+`optional`, a second string or any other word are errors there, not ignored. The words `in`, `webview` and
+`css` are matched without regard to case (`In Webview`, `CSS:"x"`), and spaces around the colon of
+`css : "x"` are allowed. A quoted string follows the lexer's rules for every STRING: `\"` is a quote, `\\` a
+backslash, `\n` and `\t` a new line and a tab, and any other `\x` is the character `x` (so `\:` is `:`; a CSS
+id such as `#a\:b` is written `"#a\\:b"`); a raw new line inside a string is a parse error. A text that
+starts with `css:` stays text when it is quoted (`tap "css:x" in webview`). In this version the steps
 parse and the runner reports that they are not implemented yet.
 
 ```probe

@@ -17,6 +17,7 @@ func webviewSteps() []parser.Step {
 		parser.AssertStep{WebView: text},
 		parser.AssertStep{Negated: true, WebView: css},
 		parser.WaitStep{Kind: parser.WaitWebView, WebView: text},
+		parser.WaitStep{Kind: parser.WaitWebView, WebView: css},
 	}
 }
 
@@ -38,6 +39,7 @@ func TestWebViewStepDescriptions(t *testing.T) {
 		`see "Pay" in webview`,
 		`don't see css:"#f" in webview "checkout"`,
 		`wait until "Pay" appears in webview`,
+		`wait until css:"#f" appears in webview "checkout"`,
 	}
 	e := newTestExecutor()
 	for i, step := range webviewSteps() {

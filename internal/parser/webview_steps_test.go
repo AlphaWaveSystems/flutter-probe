@@ -75,6 +75,9 @@ func TestWebViewStepsCarryTheirTarget(t *testing.T) {
 		{`tap "[beta] feature" in webview`, "tap_webview", parser.WebViewText, "[beta] feature", "", ""},
 		{`tap css:"Item" in webview`, "tap_webview", parser.WebViewCSS, "Item", "", ""},
 		// case and spacing
+		// a text that starts with css: is still text when it is only quoted
+		{`tap "css:x" in webview`, "tap_webview", parser.WebViewText, "css:x", "", ""},
+		{`tap "css:" in webview`, "tap_webview", parser.WebViewText, "css:", "", ""},
 		{`tap "x" IN WEBVIEW`, "tap_webview", parser.WebViewText, "x", "", ""},
 		{`tap CSS:"x" in WebView`, "tap_webview", parser.WebViewCSS, "x", "", ""},
 		{`tap css : "x" in webview`, "tap_webview", parser.WebViewCSS, "x", "", ""},
