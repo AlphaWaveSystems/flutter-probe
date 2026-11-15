@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
 )
 
@@ -742,8 +744,14 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			default:
 				// Android: screenshots are in the app's private cache dir,
 				// use run-as to read them since adb pull can't access private dirs
-				data, err := dc.Manager.ADB().Run(ctx, dc.Serial,
-					"exec-out", "run-as", dc.AppID, "cat", remotePath)
+				var data []byte
+				var err error
+				if !appPrivateFile(dc.AppID, remotePath) {
+					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.AppID)
+				} else {
+					data, err = dc.Manager.ADB().Run(ctx, dc.Serial,
+						"exec-out", "run-as", shellquote.Arg(dc.AppID), "cat", shellquote.Arg(remotePath))
+				}
 				switch {
 				case err != nil:
 					pullErr = err
@@ -961,4 +969,25 @@ func nameUnnamed(ms []perf.Metrics) []perf.Metrics {
 		}
 	}
 	return ms
+}
+
+// appPrivateFile reports whether remotePath is a file inside the private storage of the app: an absolute path under /data/user/<n>/<appID>/ or /data/data/<appID>/, with no "." or ".." part and no repeated separator.
+// The path comes from the agent's reply and is read with run-as, so anything else is refused.
+func appPrivateFile(appID, remotePath string) bool {
+	if appID == "" || !strings.HasPrefix(remotePath, "/") || path.Clean(remotePath) != remotePath {
+		return false
+	}
+	// path.Clean has removed any trailing separator, so a path that is a prefix plus nothing cannot get here
+	if strings.HasPrefix(remotePath, "/data/data/"+appID+"/") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(remotePath, "/data/user/")
+	if !ok {
+		return false
+	}
+	user, rest, ok := strings.Cut(rest, "/")
+	if !ok || user == "" || strings.Trim(user, "0123456789") != "" {
+		return false
+	}
+	return strings.HasPrefix(rest, appID+"/")
 }

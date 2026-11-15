@@ -2,6 +2,7 @@ package sysdialog
 
 import (
 	"context"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"strings"
 	"testing"
 )
@@ -100,5 +101,19 @@ func TestAndroidDiagnoseUsesDumpsys(t *testing.T) {
 	got := d.Diagnose(context.Background(), "dev.example.app", "Allow notifications")
 	if !strings.Contains(got, "POST_NOTIFICATIONS: denied") || !strings.Contains(got, "MainActivity") {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestAndroidDiagnoseQuotesTheAppID(t *testing.T) {
+	const app = "dev.ex ample;touch x"
+	// the fake answers only for the exact word list a correctly quoted call sends
+	d := NewAndroid(fakeShellADB{out: map[string]string{
+		"dumpsys window":                         windowAppFocused,
+		"dumpsys package " + shellquote.Arg(app): packageDump,
+		"dumpsys package " + app:                 "UNQUOTED CALL",
+	}}, "emulator-1")
+	got := d.Diagnose(context.Background(), app, "Allow notifications")
+	if strings.Contains(got, "UNQUOTED") || !strings.Contains(got, "POST_NOTIFICATIONS: denied") {
+		t.Fatalf("Diagnose did not quote the app id: %q", got)
 	}
 }

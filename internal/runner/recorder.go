@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 // VideoRecorder captures device screen recordings at the OS level.
@@ -127,15 +129,24 @@ func (vr *VideoRecorder) stopScrcpy(_ context.Context) (string, error) {
 	return vr.localPath, nil
 }
 
+// screenrecordSize is the only form of video resolution passed to `screenrecord --size`.
+var screenrecordSize = regexp.MustCompile(`^[0-9]{2,5}x[0-9]{2,5}$`)
+
 // --- screenrecord (built-in Android, 180s limit) ---
 
 func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) error {
 	vr.localPath = filepath.Join(vr.outputDir, safeName+".mp4")
 	vr.remotePath = "/sdcard/probe_recording.mp4"
 
+	// the size comes from probe.yaml and reaches the device's shell: only WxH is accepted
+	if !screenrecordSize.MatchString(vr.videoCfg.Resolution) {
+		vr.backend = "screencap"
+		fmt.Printf("    \033[33m⚠\033[0m  video resolution %q is not WIDTHxHEIGHT, falling back to screencap\n", vr.videoCfg.Resolution)
+		return vr.startScreencap(context.Background(), safeName)
+	}
 	adbBin := vr.manager.ADB().Bin()
 	vr.cmd = exec.Command(adbBin, "-s", vr.serial,
-		"shell", "screenrecord", "--size", vr.videoCfg.Resolution, vr.remotePath)
+		"shell", "screenrecord", "--size", shellquote.Arg(vr.videoCfg.Resolution), shellquote.Arg(vr.remotePath))
 	if err := vr.cmd.Start(); err != nil {
 		// Fall back to screencap
 		vr.backend = "screencap"
@@ -167,7 +178,7 @@ func (vr *VideoRecorder) startScreenrecord(_ context.Context, safeName string) e
 				newRemote := fmt.Sprintf("/sdcard/probe_recording_%d.mp4", segIdx)
 				vr.remotePath = newRemote
 				vr.cmd = exec.Command(adbBin, "-s", vr.serial,
-					"shell", "screenrecord", "--size", vr.videoCfg.Resolution, newRemote)
+					"shell", "screenrecord", "--size", shellquote.Arg(vr.videoCfg.Resolution), shellquote.Arg(newRemote))
 				_ = vr.cmd.Start()
 				vr.mu.Unlock()
 			}

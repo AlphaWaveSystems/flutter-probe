@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 // ADB wraps the Android Debug Bridge binary.
@@ -138,9 +140,20 @@ func (a *ADB) RemoveForward(ctx context.Context, serial string, hostPort int) er
 }
 
 // Shell runs an adb shell command on the given device.
+//
+// The device's shell reads the words as one command line: a word that comes from a script, a file name or a configuration file must be quoted (shellquote), or use ShellQ, which does it for every word.
 func (a *ADB) Shell(ctx context.Context, serial string, args ...string) ([]byte, error) {
 	cmdArgs := append([]string{"-s", serial, "shell"}, args...)
 	return a.run(ctx, cmdArgs...)
+}
+
+// ShellQ is Shell with every word passed through shellquote.Arg, so no word can be read as shell syntax. Use it for any command whose words include text that is not a fixed literal of this program.
+func (a *ADB) ShellQ(ctx context.Context, serial string, args ...string) ([]byte, error) {
+	quoted := make([]string, len(args))
+	for i, w := range args {
+		quoted[i] = shellquote.Arg(w)
+	}
+	return a.Shell(ctx, serial, quoted...)
 }
 
 // Run executes an adb command (not shell) on the given device.
@@ -151,13 +164,13 @@ func (a *ADB) Run(ctx context.Context, serial string, args ...string) ([]byte, e
 
 // GrantPermission grants a runtime permission to an app.
 func (a *ADB) GrantPermission(ctx context.Context, serial, appID, permission string) error {
-	_, err := a.Shell(ctx, serial, "pm", "grant", appID, permission)
+	_, err := a.ShellQ(ctx, serial, "pm", "grant", appID, permission)
 	return err
 }
 
 // RevokePermission revokes a runtime permission from an app.
 func (a *ADB) RevokePermission(ctx context.Context, serial, appID, permission string) error {
-	_, err := a.Shell(ctx, serial, "pm", "revoke", appID, permission)
+	_, err := a.ShellQ(ctx, serial, "pm", "revoke", appID, permission)
 	return err
 }
 
@@ -179,9 +192,9 @@ func (a *ADB) OpenURL(ctx context.Context, serial, url string) error {
 // retried unrestricted so links meant for other apps (a browser) keep working. The
 // URL is single-quoted for the device shell, so characters like & and ? survive.
 func (a *ADB) OpenURLIn(ctx context.Context, serial, url, pkg string) error {
-	quoted := "'" + strings.ReplaceAll(url, "'", `'\''`) + "'"
+	quoted := shellquote.Quote(url)
 	if pkg != "" {
-		out, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", quoted, "-p", pkg)
+		out, err := a.Shell(ctx, serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", quoted, "-p", shellquote.Arg(pkg))
 		if err == nil && !strings.Contains(string(out), "Error") {
 			return nil
 		}
@@ -203,7 +216,7 @@ func (a *ADB) Install(ctx context.Context, serial, apkPath string) error {
 // Falls back to {package}/.MainActivity if resolution fails.
 func (a *ADB) LaunchApp(ctx context.Context, serial, packageName string) error {
 	activity := a.ResolveLauncherActivity(ctx, serial, packageName)
-	_, err := a.Shell(ctx, serial, "am", "start", "-n", activity)
+	_, err := a.ShellQ(ctx, serial, "am", "start", "-n", activity)
 	if err != nil {
 		return fmt.Errorf("adb launch: %w", err)
 	}
@@ -214,7 +227,7 @@ func (a *ADB) LaunchApp(ctx context.Context, serial, packageName string) error {
 // launcher activity for a package. Returns "{package}/{activity}" format.
 // Falls back to "{package}/.MainActivity" if resolution fails.
 func (a *ADB) ResolveLauncherActivity(ctx context.Context, serial, packageName string) string {
-	out, err := a.Shell(ctx, serial, "cmd", "package", "resolve-activity", "--brief", packageName)
+	out, err := a.ShellQ(ctx, serial, "cmd", "package", "resolve-activity", "--brief", packageName)
 	if err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
 			line = strings.TrimSpace(line)
@@ -228,7 +241,7 @@ func (a *ADB) ResolveLauncherActivity(ctx context.Context, serial, packageName s
 
 // GetProp reads a system property from the device.
 func (a *ADB) GetProp(ctx context.Context, serial, prop string) (string, error) {
-	out, err := a.Shell(ctx, serial, "getprop", prop)
+	out, err := a.ShellQ(ctx, serial, "getprop", prop)
 	if err != nil {
 		return "", err
 	}
@@ -237,7 +250,7 @@ func (a *ADB) GetProp(ctx context.Context, serial, prop string) (string, error) 
 
 // GetAppVersion returns the versionName for an installed package.
 func (a *ADB) GetAppVersion(ctx context.Context, serial, appID string) (string, error) {
-	out, err := a.Shell(ctx, serial, "dumpsys", "package", appID)
+	out, err := a.ShellQ(ctx, serial, "dumpsys", "package", appID)
 	if err != nil {
 		return "", err
 	}
@@ -254,7 +267,7 @@ func (a *ADB) GetAppVersion(ctx context.Context, serial, appID string) (string, 
 // PackageInstalled reports whether pkg is installed on the device. `pm list packages` filters by substring, so the
 // output is matched by exact name.
 func (a *ADB) PackageInstalled(ctx context.Context, serial, pkg string) (bool, error) {
-	out, err := a.Shell(ctx, serial, "pm", "list", "packages", pkg)
+	out, err := a.ShellQ(ctx, serial, "pm", "list", "packages", pkg)
 	if err != nil {
 		return false, err
 	}
@@ -297,7 +310,7 @@ func (a *ADB) AddMedia(ctx context.Context, serial, localPath string) error {
 	if _, err := a.run(ctx, "-s", serial, "push", localPath, remotePath); err != nil {
 		return fmt.Errorf("adb push: %w", err)
 	}
-	if _, err := a.Shell(ctx, serial, "am", "broadcast", "-a",
+	if _, err := a.ShellQ(ctx, serial, "am", "broadcast", "-a",
 		"android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", "file://"+remotePath); err != nil {
 		return fmt.Errorf("media scanner broadcast: %w", err)
 	}
@@ -360,8 +373,37 @@ func (a *ADB) InputText(ctx context.Context, serial, text string) error {
 	if args == nil {
 		return nil
 	}
-	_, err = a.Shell(ctx, serial, args...)
-	return err
+	if _, err = a.Shell(ctx, serial, args...); err != nil {
+		return maskTypedText(err, text, args[2])
+	}
+	return nil
+}
+
+// minMaskedTextLen is the shortest typed text whose bare forms are masked: a text of one to three characters would mask every occurrence of those characters in the rest of the message ("e" would turn "device" into
+// "d<typed text>vic<typed text>"). Its quoted form, which contains the quotes, is always masked.
+const minMaskedTextLen = 4
+
+// MaskTypedText returns err with the typed text removed in every form a failed `input text` call can show it (the quoted word as this package sends it, its escaped-quote form, the %s form, and the text as typed).
+// A caller that types text by another route through the same command (the system-dialog driver) uses it for its own errors.
+func MaskTypedText(err error, text string) error {
+	return maskTypedText(err, text, shellquote.Quote(strings.ReplaceAll(text, " ", "%s")))
+}
+
+// maskTypedText returns err with the typed text, in every form it appears in the failed command line or in what a device echoes back, replaced by a marker: the quoted word as sent, the text with %s for spaces and its
+// quotes escaped for the shell (what a shell shows when it echoes the word without the outer quotes), the text with %s for spaces, and the text as typed. The error of a failed adb call quotes the whole command line,
+// and the typed text can be a password.
+func maskTypedText(err error, text, quotedWord string) error {
+	const marker = "<typed text>"
+	inner := strings.ReplaceAll(text, " ", "%s")
+	forms := []string{quotedWord}
+	if len(text) >= minMaskedTextLen {
+		forms = append(forms, strings.ReplaceAll(inner, "'", `'\''`), inner, text)
+	}
+	var pairs []string
+	for _, f := range forms {
+		pairs = append(pairs, f, marker)
+	}
+	return fmt.Errorf("%s", strings.NewReplacer(pairs...).Replace(err.Error()))
 }
 
 // ValidateInputText says whether text can be typed through `adb shell input text`. It refuses: control characters (new line, tab, NUL and the rest), because `input text` cannot type them and a new
@@ -393,7 +435,7 @@ func InputTextArgs(text string) ([]string, error) {
 		return nil, nil
 	}
 	word := strings.ReplaceAll(text, " ", "%s")
-	return []string{"input", "text", "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"}, nil
+	return []string{"input", "text", shellquote.Quote(word)}, nil
 }
 
 // run executes an adb command and returns combined stdout.
@@ -437,7 +479,7 @@ func (a *ADB) SetAppLocale(ctx context.Context, serial, pkg, bcp47 string) error
 	if bcp47 != "" {
 		args = append(args, "--locales", bcp47)
 	}
-	out, err := a.Shell(ctx, serial, args...)
+	out, err := a.ShellQ(ctx, serial, args...)
 	if err != nil {
 		return fmt.Errorf("set-app-locales: %w", err)
 	}

@@ -3,6 +3,7 @@ package devsettings
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -210,5 +211,39 @@ func TestCapabilities(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestOpenURLQuotesTheURLAndTheAppForTheDeviceShell(t *testing.T) {
+	// an app id that is not an application id is refused before any command is planned
+	if cmds, err := Plan(Request{Platform: Android, Device: "emulator-5554", Setting: OpenURL, Value: "myapp://x", App: "a b;c'd"}); err == nil || len(cmds) != 0 {
+		t.Fatalf("a hostile app id was planned: %v, %v", cmds, err)
+	}
+	const app = "com.example.app"
+	const link = "myapp://x?a=1&b=2;touch$(id)'y"
+	cmds, err := Plan(Request{Platform: Android, Device: "emulator-5554", Setting: OpenURL, Value: link, App: app})
+	if err != nil || len(cmds) != 1 {
+		t.Fatalf("plan = %v, %v", cmds, err)
+	}
+	args := cmds[0].Args
+	i := -1
+	for j, a := range args {
+		if a == "shell" {
+			i = j
+		}
+	}
+	if i < 0 {
+		t.Fatalf("no shell word in %q", args)
+	}
+	cmd := exec.Command("sh", "-c", "printf '%s\\0' "+strings.Join(args[i+1:], " "))
+	cmd.Dir = t.TempDir()
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	want := []string{"am", "start", "-a", "android.intent.action.VIEW", "-d", link, "-p", app}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("the device shell reads %q, want %q", got, want)
 	}
 }
