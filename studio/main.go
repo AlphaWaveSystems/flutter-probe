@@ -42,6 +42,11 @@ func main() {
 	if len(seeded) > 0 {
 		app.seedRun(seeded) // the browser suite starts with a finished run that has failed tests
 	}
+	if res, ok, note := seededExchanges(headless, os.Getenv("PROBE_STUDIO_SEED_EXCHANGES"), os.Getenv("PROBE_STUDIO_WORKSPACE")); note != "" {
+		fmt.Fprintln(os.Stderr, "studio:", note)
+	} else if ok {
+		setNetSeed(res) // the browser suite has a request log to show without a device
+	}
 	if headless {
 		runHeadless(app)
 		return

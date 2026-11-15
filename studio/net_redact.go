@@ -334,6 +334,7 @@ func redactHeaders(h map[string]string) (out []NetHeader, more int) {
 // redactHeadersBudget is redactHeaders with the budget of one exchange: each name and value is bounded before it is read, and a value
 // that does not fit in what is left is shown as not shown (its name stays).
 func redactHeadersBudget(h map[string]string, budget *netBudget) (out []NetHeader, more int) {
+	out = []NetHeader{} // never nil: the page reads it as a list
 	names := make([]string, 0, len(h))
 	for n := range h {
 		names = append(names, n)

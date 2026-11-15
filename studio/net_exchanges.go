@@ -138,6 +138,9 @@ func (a *App) netLog(p probelink.HTTPLogParams) (probelink.HTTPLogResult, error)
 	conn := a.conn
 	a.mu.Unlock()
 	if conn == nil || conn.client == nil {
+		if res, ok := seededLog(p); ok {
+			return res, nil // a headless build that was started with a request log, and no app connected
+		}
 		return probelink.HTTPLogResult{}, errNetNotConnected
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), netLogTimeout)

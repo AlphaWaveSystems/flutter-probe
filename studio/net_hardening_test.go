@@ -322,3 +322,24 @@ func TestChainedAssignmentsOnOneLine(t *testing.T) {
 		t.Errorf("ordinary chains were changed: %q", got)
 	}
 }
+
+// A list is never null: the page reads it as one, and an exchange with no headers is an empty list.
+func TestHeaderListsAreNeverNil(t *testing.T) {
+	hs, more := redactHeaders(nil)
+	if hs == nil || more != 0 || len(hs) != 0 {
+		t.Errorf("headers = %#v, %d", hs, more)
+	}
+	a := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e", Entries: []probelink.HTTPEntry{{Seq: 1, Method: "GET", URL: "https://h.example.test/"}}}})
+	d, err := a.HTTPExchange("e", 1)
+	if err != nil || d.RequestHeaders == nil || d.ResponseHeaders == nil {
+		t.Errorf("detail %+v, %v", d, err)
+	}
+	l, _ := a.HTTPExchanges(NetFilter{})
+	if l.Rows == nil {
+		t.Error("rows are nil")
+	}
+	empty := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e"}})
+	if l, _ := empty.HTTPExchanges(NetFilter{}); l.Rows == nil {
+		t.Error("rows of an empty log are nil")
+	}
+}

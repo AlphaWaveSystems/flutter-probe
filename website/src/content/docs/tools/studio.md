@@ -18,8 +18,17 @@ FlutterProbe Studio is a standalone desktop application for designing, recording
 - **In-process test execution** — Studio's Go backend imports `internal/runner` directly. No subprocess shell-out, no JSON wire format. Results stream into the timeline as `run:result` events fire.
 - **Live step highlight** — while a file runs, the editor gutter follows the executing step (▶ while running, then ✓ / ✗ / – stays on the line; a failed line shows its error on hover). Step rows nest under each test in the results timeline with line number, duration and attempt; click one to jump to its line. The toolbar shows `step N of M` and a **Cancel** button stops the run.
 - **Run part of a file** — next to **Run**, the scope control picks the whole file (the default), the test at the cursor, the tests with one tag, or the tests that failed the last time the file ran in this session. A scope that matches no test is reported and nothing runs. The failed tests are remembered in memory only, so a restart starts with none. When a run has more than one outcome, the results list groups its tests under Failed, Passed and Skipped, failures first.
+- **Network tab** — the requests and responses the app made during a run, read from the agent's request log, with credentials hidden before anything reaches the window (see [The Network tab](#the-network-tab)).
 - **Toast notifications**, dark theme, draggable native title bar, About panel.
 - **Keyboard shortcuts**: ⌘R run, ⌘S save, ⌘B connect/disconnect, ⌘P open workspace, ⌘K refresh devices, `?` help, `Esc` close help.
+
+## The Network tab
+
+The **Network** tab next to **Results** shows the requests and responses the app made while a test ran, as the agent in the app recorded them. It lists the newest 500 (method, URL, status, time, size, and `mocked` for a response that a `when the app calls` rule supplied), reads the log again every second while a run is going, and has filters for the method, the status class and a text.
+
+Credentials are hidden before anything reaches the window: the value of a header, query parameter, JSON key, form field or XML element whose name says it is a credential (authorization, cookie, token, password, API key, session, any name ending in `key`, and more) is replaced and only the name is shown; every query value, the user name and password in a URL, fragments, email addresses, home folders, tokens and card numbers are hidden too. Bodies show the first 4 KB as text; a binary body, or one over 1 MB, shows only its size. The filter searches the text that is shown, so it can find a parameter name and can never confirm a secret value by finding it.
+
+The tab only reads the log of the connected app. It makes no request of its own, stores nothing in the browser or on disk, and nothing in it is sent to an AI provider. Some things are not recognised by name or shape and are shown as they are: a short secret under an ordinary name, a token that is part of a path, UUIDs, IP addresses.
 
 ## Automation (no window, no cursor)
 
