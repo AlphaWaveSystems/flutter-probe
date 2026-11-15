@@ -14,7 +14,7 @@ const PROBESCRIPT_KEYWORDS = [
   'clear app data', 'restart the app',
   'allow permission', 'deny permission',
   'grant all permissions', 'revoke all permissions',
-  'toggle wifi', 'toggle airplane mode',
+  'toggle wifi', 'set airplane mode',
   'when the app calls', 'respond with',
   'start measuring', 'stop measuring', 'see memory below', 'see memory growth below', 'see cpu below',
   'see slow frames below', 'see frame time below', 'see data transferred below',

@@ -169,6 +169,7 @@ const (
 	VerbSetLanguage     ActionVerb = "set_language"
 	VerbSetAppearance   ActionVerb = "set_appearance" // set appearance light|dark|auto
 	VerbVerifyBrowser   ActionVerb = "verify_browser"
+	VerbSetAirplaneMode ActionVerb = "set_airplane_mode"
 	VerbOpenLink        ActionVerb = "open_link"   // open link "url"
 	VerbStore           ActionVerb = "store"        // store "value" as varName
 	// Biometric (Face ID / Touch ID / fingerprint) — simulator/emulator only.
