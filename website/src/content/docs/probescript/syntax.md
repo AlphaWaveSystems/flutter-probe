@@ -331,6 +331,24 @@ Settings. See [Android](/platform/android/#appearance) and [iOS](/platform/ios/)
 
 Text after the value is not rejected. The line ends after the value, and the rest is read as the next statement, the same as after `set language`.
 
+## Device Airplane Mode
+
+```
+set airplane mode on               # the emulator's radios off
+see "No connection"
+set airplane mode off              # nothing turns it back on or off by itself
+```
+
+`set airplane mode on` and `off` change the airplane mode of the Android emulator the run targets, through
+`adb shell cmd connectivity airplane-mode enable` or `disable`. Nothing restores the state at the end of a test, so a test that
+turns it on must turn it off, in the same test or a later one. An iOS simulator has no airplane mode command, so the step fails there.
+Only an Android emulator with a serial of the form `emulator-NNNN` takes the step. A physical device (over USB or wireless debugging,
+change its airplane mode in its settings) is refused, and so is a device that adb reaches over the network (a `host:port` address):
+Genymotion, other network emulators and cloud farm devices. Airplane mode would cut the connection adb uses to them. The check reads
+the serial alone, so an `emulator-NNNN` serial is accepted wherever the device runs, and a run that marks a device physical refuses it
+whatever its serial. Text after the value is read as the next statement, the same as
+after `set appearance`.
+
 ## Device Location
 
 ```
@@ -386,6 +404,8 @@ see native "IMG_0001.jpg"
 don't see native "Error"
 type native "wifi" into "Search settings"
 ```
+
+The text of `type native` goes to the device through `adb shell input text`, which has limits: it cannot type control characters, characters outside ASCII (for example accented letters or Chinese text), a `%` (adb reads `%s` as a space) or a text that starts with `-`. Such text is refused with a message before anything is tapped. Everything else is passed to the device as one quoted word, so characters like `;`, `&`, `$` and quotes are typed as text and never run as commands. To type non-ASCII text into a Flutter field, use `type "..." into ...`, which does not use this path.
 
 Android only (dispatched via `uiautomator`, no new dependencies). On iOS, `tap native`/`type
 native` error clearly rather than silently no-op'ing; `see native` reports "not found". If the

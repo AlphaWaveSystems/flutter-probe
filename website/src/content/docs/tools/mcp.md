@@ -25,7 +25,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | Tool | Description |
 |---|---|
 | `get_widget_tree` | Dump the live Flutter widget tree from the running app |
-| `take_screenshot` | Capture the current screen and return it as an image |
+| `take_screenshot` | Capture the current screen and return it as an image. The `name` is cleaned to a plain file-name fragment (separators, control characters, `..` and characters with a meaning in a script or a file pattern become `_` or are dropped; at most 120 bytes; empty means `mcp_capture`). The picture returned is the newest file named exactly `<name>_<digits>.png` that the capture just wrote (a name that merely starts with the same text does not match, and a failed capture is reported as not found instead of returning an older file). A picture over 2 MB or 2000 px on a side is scaled down; one that would need too much memory to decode is refused. |
 | `read_test` | Read the contents of a `.probe` file |
 | `write_test` | Create or overwrite a `.probe` file — content is validated before writing; syntax errors are returned without creating the file |
 | `run_script` | Execute inline ProbeScript without creating a file |
@@ -393,6 +393,25 @@ echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | probe-mcp
 3. `run_tests` with `{device: "<serial>"}` — `auto` is Android only, and an iOS simulator takes `light` or `dark`
 
 To change the mode once without a test, use `set_device_setting` with `setting: "appearance"`.
+
+### Offline check in a test
+
+> "Check that the app shows its offline message when the emulator has no network."
+
+1. `list_devices` — find the emulator's serial
+2. `write_test` — a test that turns airplane mode on, checks the offline message, and turns it off again (nothing turns it off by itself, so the test does it):
+
+   ```
+   test "offline message"
+     set airplane mode on
+     open the app
+     see "You are offline"
+     set airplane mode off
+   ```
+
+3. `run_tests` with `{device: "<serial>"}` — the step runs on an Android emulator only (serial `emulator-NNNN`); an iOS simulator, a physical device or a network device fails the step with a message
+
+If a run ends before `set airplane mode off`, the emulator stays offline until it is turned back on from the harness.
 
 ### Composite (multi-device) test authoring
 

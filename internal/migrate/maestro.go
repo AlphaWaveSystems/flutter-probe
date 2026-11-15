@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -836,13 +837,12 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 				"evalScript requires manual conversion"
 
 		case "setAirplaneMode":
-			enabled, _ := val.(bool)
-			state := "disable"
-			if enabled {
-				state = "enable"
+			state, ok := airplaneState(val)
+			if !ok {
+				return airplaneTODO(val),
+					"setAirplaneMode takes enabled or disabled; left as a TODO comment"
 			}
-			return fmt.Sprintf("# TODO: setAirplaneMode %v — ProbeScript has no network step; run `adb shell cmd connectivity airplane-mode %s` from the harness", enabled, state),
-				"airplane mode has no ProbeScript equivalent — left as a TODO comment"
+			return fmt.Sprintf("set airplane mode %s", state), ""
 
 		case "repeat":
 			if m, ok := val.(map[string]interface{}); ok {
@@ -1007,6 +1007,30 @@ func relativePoint(v interface{}) (string, bool) {
 		return "", false
 	}
 	return point, true
+}
+
+// airplaneTODO is the comment that keeps a setAirplaneMode value that is not enabled or disabled out of the probe as a
+// step. The value is printed quoted on one line, and the comment is cut to 200 characters with an ellipsis, so a long or
+// multi-line value stays readable and cannot start a new line of the probe.
+func airplaneTODO(v interface{}) string {
+	line := fmt.Sprintf("# TODO: setAirplaneMode %q — Maestro takes enabled or disabled", fmt.Sprint(v))
+	if utf8.RuneCountInString(line) > 200 {
+		line = string([]rune(line)[:199]) + "…"
+	}
+	return line
+}
+
+// airplaneState maps the argument of Maestro's setAirplaneMode (enabled or disabled) to the state `set airplane mode`
+// takes. Any other value is not a state, so the caller keeps a TODO comment for it.
+func airplaneState(v interface{}) (string, bool) {
+	s, _ := v.(string)
+	switch s {
+	case "enabled":
+		return "on", true
+	case "disabled":
+		return "off", true
+	}
+	return "", false
 }
 
 // numToStr converts a YAML-decoded numeric value (int or float64,

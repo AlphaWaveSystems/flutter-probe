@@ -215,6 +215,36 @@ func resolveDeviceAppID(written string, platform device.Platform, installed func
 	return written
 }
 
+// singleDeviceContext builds the device context of a single-device run, which the platform-level operations (restart,
+// clear data, permissions) and the settings steps read. NewDeviceContext asks whether the device is physical, and a physical
+// device takes the HTTP fallback. A platform the run does not know counts as physical, so no emulator-only step runs on it.
+func singleDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Config, platform device.Platform, serial, agentHost string, autoYes, noGrantOnClear bool, confirm runner.ConfirmFunc) *runner.DeviceContext {
+	dc := runner.NewDeviceContext(ctx, dm, platform, serial)
+	dc.UseHTTP = dc.IsPhysical // physical devices use HTTP fallback
+	dc.DriverPort = cfg.Agent.DriverPort
+	dc.AppID = cfg.Project.App
+	dc.Port = cfg.Agent.Port
+	dc.DevicePort = cfg.Agent.AgentDevicePort()
+	dc.AgentHost = agentHost // device IP for WiFi mode
+	dc.AllowClearData = autoYes
+	dc.Confirm = confirm
+	dc.GrantPermissionsOnClear = (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear
+	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
+	dc.RestartDelay = cfg.Device.RestartDelay
+	dc.TokenReadTimeout = cfg.Agent.TokenReadTimeout
+	dc.DialTimeout = cfg.Agent.DialTimeout
+	return dc
+}
+
+// localeDeviceContext builds the device context of the --locale step: the app's language is set through it, and the app is
+// relaunched through it. NewDeviceContext asks whether the device is physical, so SetLanguage refuses a physical iPhone.
+func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Config, platform device.Platform, serial string) *runner.DeviceContext {
+	lc := runner.NewDeviceContext(ctx, dm, platform, serial)
+	lc.AppID = cfg.Project.App
+	lc.RestartDelay = cfg.Device.RestartDelay
+	return lc
+}
+
 func runTests(cmd *cobra.Command, args []string) error {
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
@@ -925,11 +955,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				if cfg.Project.App == "" {
 					return fmt.Errorf("--locale: project.app must be set in probe.yaml")
 				}
-				lc := &runner.DeviceContext{
-					Manager: dm, Serial: deviceSerial, Platform: platform, AppID: cfg.Project.App,
-					IsPhysical:   platform == device.PlatformIOS && dm.IsPhysicalIOS(ctx, deviceSerial),
-					RestartDelay: cfg.Device.RestartDelay,
-				}
+				lc := localeDeviceContext(ctx, dm, cfg, platform, deviceSerial)
 				if err := lc.SetLanguage(ctx, lang); err != nil {
 					return fmt.Errorf("--locale: %w", err)
 				}
@@ -1201,35 +1227,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
-		// Detect if this is a physical device (vs emulator/simulator)
-		isPhysical := false
-		if platform == device.PlatformIOS {
-			isPhysical = dm.IsPhysicalIOS(ctx, deviceSerial)
-		} else if platform == device.PlatformAndroid {
-			isPhysical = dm.IsPhysicalAndroid(ctx, deviceSerial)
-		}
-		if isPhysical {
+		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear, confirmFunc())
+		if devCtx.IsPhysical {
 			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
-		}
-
-		devCtx = &runner.DeviceContext{
-			Manager:                 dm,
-			Serial:                  deviceSerial,
-			Platform:                platform,
-			AppID:                   cfg.Project.App,
-			Port:                    cfg.Agent.Port,
-			DriverPort:              cfg.Agent.DriverPort,
-			DevicePort:              cfg.Agent.AgentDevicePort(),
-			IsPhysical:              isPhysical,
-			UseHTTP:                 isPhysical, // physical devices use HTTP fallback
-			AgentHost:               agentHost,  // device IP for WiFi mode
-			AllowClearData:          autoYes,
-			Confirm:                 confirmFunc(),
-			GrantPermissionsOnClear: (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear,
-			ReconnectDelay:          cfg.Agent.ReconnectDelay,
-			RestartDelay:            cfg.Device.RestartDelay,
-			TokenReadTimeout:        cfg.Agent.TokenReadTimeout,
-			DialTimeout:             cfg.Agent.DialTimeout,
 		}
 	}
 
