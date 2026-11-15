@@ -548,13 +548,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		platform:     device.PlatformIOS,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
-		deviceCtx: &runner.DeviceContext{
-			Manager:    a.deviceMgr,
-			Serial:     deviceID,
-			Platform:   device.PlatformIOS,
-			Port:       port,
-			DevicePort: port,
-		},
+		deviceCtx:    newStudioDeviceContext(a, device.PlatformIOS, deviceID, port),
 	}
 
 	a.mu.Lock()
@@ -707,13 +701,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		platform:     dev.Platform,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
-		deviceCtx: &runner.DeviceContext{
-			Manager:    a.deviceMgr,
-			Serial:     deviceID,
-			Platform:   dev.Platform,
-			Port:       port,
-			DevicePort: port,
-		},
+		deviceCtx:    newStudioDeviceContext(a, dev.Platform, deviceID, port),
 	}
 
 	// Replace any existing connection (and shut down its stream first).
@@ -1205,4 +1193,12 @@ func physicalHint(d device.Device, kind string) string {
 		return "Attached through adb: " + agent + " (debug or profile)."
 	}
 	return ""
+}
+
+// newStudioDeviceContext builds the device context of a Studio connection with runner.NewDeviceContext, so the physical question is asked in one place (a Wi-Fi iOS device and a local one alike), and then sets the agent port.
+func newStudioDeviceContext(a *App, platform device.Platform, serial string, port int) *runner.DeviceContext {
+	dc := runner.NewDeviceContext(a.ctx, a.deviceMgr, platform, serial)
+	dc.Port = port
+	dc.DevicePort = port
+	return dc
 }
