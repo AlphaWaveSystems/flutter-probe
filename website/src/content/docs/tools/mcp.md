@@ -50,6 +50,8 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `system_dialog` | List, see, tap, dismiss or wait for OS system dialogs (permission alerts, the iOS share sheet, StoreKit sign-in) on a simulator/emulator; `sign-in-sandbox` provisions the StoreKit tester. Typing is deliberately not exposed (secrets) |
 | `triage_failure` | Optional, advisory: explain failures in a JSON report with the configured `ai:` model (a local model works). Never affects results |
 
+Studio's Send request, Network tab and Explain failures methods are deliberately not in the automation endpoint's method list, so no `studio_*` tool can send a request, read the request log or ask an AI provider for advice.
+
 ### Project management (1 tool)
 
 | Tool | Description |

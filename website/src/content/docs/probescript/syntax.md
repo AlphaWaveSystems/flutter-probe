@@ -247,7 +247,7 @@ See [Testing against backend data](/advanced/backend-data/).
 
 ```
 take screenshot "checkout_page"    # save PNG to screenshots folder
-take screenshot "checkout_<timestamp>"  # a name that carries the time, so a new run never overwrites the old image
+take screenshot "checkout_<timestamp>"  # a name that carries the time of the step
 compare screenshot "baseline"      # compare against visual regression baseline
 dump tree                          # dump widget tree for debugging
 save logs                          # save app logs
@@ -261,7 +261,7 @@ pause                              # 1-second pause
 
 ### Screenshot names
 
-A screenshot is saved under the name you give it, so the same name in a later run (or a second step) replaces the earlier image. The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in every other step, and three built-in placeholders make a name unique:
+The app saves a screenshot as the name you give it plus a millisecond stamp, so two screenshots with the same name do not replace each other; a placeholder lets the name itself say what the screenshot shows. The name of `take screenshot` is expanded first: `<var>`, `${ENV}` and `<random.*>` work as in every other step, and three built-in placeholders are added:
 
 | Placeholder | Value |
 | --- | --- |
@@ -273,7 +273,9 @@ A screenshot is saved under the name you give it, so the same name in a later ru
 take screenshot "F14_<test>_s02_<run>"
 ```
 
-A variable with the same name as a built-in (`<run>`) wins. A placeholder that is neither is left as written. `compare screenshot` expands variables but not the built-ins: its name is the key of the baseline, and a name that changes every run would never find it.
+A variable with the same name as a built-in (`<run>`) wins. A placeholder that is neither is left as written. The built-ins are expanded in the name as you wrote it, before variables are substituted, so a variable whose value contains `<test>` keeps that text. Two steps in the same millisecond get the same `<timestamp>`; the app's own stamp still keeps their files apart. `compare screenshot` expands variables but not the built-ins: its name is the key of the baseline, and a name that changes every run would never find it.
+
+The finished name is made safe to use as a file name, whatever a variable, an environment value or `<random.*>` put in it: `/` and `\` become `_`, control and invisible characters (including direction overrides) are dropped, every `..` is removed, the name is cut at 120 bytes (at a whole character) and a name with nothing left becomes `screenshot`. A name without these is used as it is. The app then sanitises the name once more for the device's file system (for example Windows reserved names) and appends the stamp. An `${ENV}` value that ends up in the name is part of the file name; unlike printed lines it is not masked.
 
 
 ## App Lifecycle

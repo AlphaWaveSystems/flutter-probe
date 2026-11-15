@@ -8,27 +8,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 const (
-	maxSeedBytes   = 1 << 20
-	maxSeedResults = 50
+	maxSeedBytes     = 1 << 20
+	maxSeedResults   = 50
+	maxSeedExchanges = 1000
 )
 
-// seededResults reads the finished tests a headless build starts with, so a browser spec can show the screens that need a failed
-// run without a device. Only the headless build reads it: anywhere else the variable is ignored, and note says so. The file must be
-// inside the workspace once symbolic links are resolved on both, so the variable cannot make Studio read a file elsewhere. It is a
-// JSON list of tests in the shape RunState.results has, read strictly (no unknown field, nothing after the list), at most 1 MB and
-// 50 tests. Anything else is ignored with a note that says why in words and never names the path or quotes the file.
-func seededResults(headless bool, path, workspace string) (results []RunResult, note string) {
-	if path == "" {
-		return nil, ""
-	}
-	ignored := func(why string) ([]RunResult, string) {
-		return nil, "PROBE_STUDIO_SEED_RUN was ignored: " + why
+// readSeedFile reads a file named by a seed variable (env is its name), for the headless build only. The file must be inside the workspace
+// once symbolic links are resolved on both, a regular file, and at most 1 MB. Anything else is ignored with a note that says why in words
+// and never names the path or quotes the file.
+func readSeedFile(env string, headless bool, path, workspace string) (data []byte, note string) {
+	ignored := func(why string) ([]byte, string) {
+		return nil, env + " was ignored: " + why
 	}
 	if !headless {
-		return nil, "PROBE_STUDIO_SEED_RUN is read by the headless build only, so it was ignored"
+		return nil, env + " is read by the headless build only, so it was ignored"
 	}
 	if workspace == "" {
 		return ignored("no workspace is set, and the file must be inside it")
@@ -57,18 +55,65 @@ func seededResults(headless bool, path, workspace string) (results []RunResult, 
 	if err != nil || len(b) > maxSeedBytes {
 		return ignored("the file cannot be read or is larger than 1 MB")
 	}
+	return b, ""
+}
+
+// strictJSON decodes b into v with no unknown field and nothing after the value.
+func strictJSON(b []byte, v any) bool {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return false
+	}
+	_, err := dec.Token()
+	return err == io.EOF
+}
+
+// seededResults reads the finished tests a headless build starts with, so a browser spec can show the screens that need a failed
+// run without a device. See readSeedFile for what is accepted. The file is a JSON list of tests in the shape RunState.results has, read
+// strictly (no unknown field, nothing after the list), at most 50 tests.
+func seededResults(headless bool, path, workspace string) (results []RunResult, note string) {
+	if path == "" {
+		return nil, ""
+	}
+	const env = "PROBE_STUDIO_SEED_RUN"
+	b, note := readSeedFile(env, headless, path, workspace)
+	if note != "" {
+		return nil, note
+	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&results); err != nil {
-		return ignored("the file is not a JSON list of tests")
+		return nil, env + " was ignored: the file is not a JSON list of tests"
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return ignored("the file has more after the list")
+		return nil, env + " was ignored: the file has more after the list"
 	}
 	if len(results) > maxSeedResults {
-		return ignored(fmt.Sprintf("more than %d tests", maxSeedResults))
+		return nil, fmt.Sprintf("%s was ignored: more than %d tests", env, maxSeedResults)
 	}
 	return results, ""
+}
+
+// seededExchanges reads the request log a headless build answers with when no app is connected, for the browser specs of the network
+// panel. The file is a JSON object in the shape probe.http_log answers with ({"epoch": ..., "entries": [...]}), read strictly, at most
+// 1,000 entries. See readSeedFile for what else is checked.
+func seededExchanges(headless bool, path, workspace string) (res probelink.HTTPLogResult, ok bool, note string) {
+	if path == "" {
+		return res, false, ""
+	}
+	const env = "PROBE_STUDIO_SEED_EXCHANGES"
+	b, note := readSeedFile(env, headless, path, workspace)
+	if note != "" {
+		return res, false, note
+	}
+	if !strictJSON(b, &res) {
+		return probelink.HTTPLogResult{}, false, env + " was ignored: the file is not a JSON request log"
+	}
+	if len(res.Entries) > maxSeedExchanges {
+		return probelink.HTTPLogResult{}, false, fmt.Sprintf("%s was ignored: more than %d entries", env, maxSeedExchanges)
+	}
+	return res, true, ""
 }
 
 // seedRun makes results the last finished run, as if a run had just ended.

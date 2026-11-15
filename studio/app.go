@@ -68,6 +68,9 @@ type App struct {
 	// failures remembers which tests failed in each file this session, for a run of the failed tests only.
 	failures failureLedger
 
+	// send is what the Send request panel remembers for the session: the hosts that were allowed and the recent calls.
+	send sendState
+
 	recMu     sync.Mutex
 	recActive bool
 	recLines  []string

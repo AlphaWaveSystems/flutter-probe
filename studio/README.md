@@ -13,6 +13,10 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > - Live step highlight: the editor gutter follows the executing step, step rows nest under each test, `step N of M` in the toolbar, Cancel
 > - Run scope: the whole file, the test at the cursor, a tag, or the tests that failed last time; results group failures first
 > - Performance lines (memory, CPU, frames, network) under each result that uses `start measuring`
+> - Network tab: the requests the app made during a run, read from the agent's request log, with credentials hidden before they reach the window
+> - Send request (in the Network tab): one request from this machine; the first request to each host and port in a session asks first and says where the name leads; no redirect to another host is followed; ten a minute, one at a time
+> - Save as step (in the Send request panel): inserts the typed request into the open test as a `call` step (GET, POST, PUT or DELETE; headers are not saved) with `${PROBE_SAVED_*}` placeholders for query values and anything that looks like a credential, a card number or an email address; a typed `${NAME}` or `<name>`, an invisible character or a method the grammar has no word for is refused; values the save cannot recognise are written as typed, so read the step before saving the file
+> - Explain failures (under Results, while AI is on): advice on the failed tests of the last run; for a hosted provider it shows what it would send before every Explain; for a model on this machine, the first time in a session and again after the destination, the workspace, the provider settings or the saved key change; it sends only after you confirm
 > - Keyboard shortcuts, toast notifications, dark theme
 >
 > Stability is "beta" — expect rough edges, especially around physical
@@ -159,15 +163,24 @@ so the agent advertises itself as `_flutterprobe._tcp` on the LAN.
   simulator); not started
 - Multi-device side-by-side
 - Time-travel widget tree per step
-- AI chat pane (calls the configured provider directly: the Anthropic API, or a local endpoint named in `probe.yaml`; it does not run `probe-mcp`). Workspace settings has an **AI provider** section that writes the `ai:` block, with **Test connection**; Settings never takes a key, and **Save** leaves a plain `api_key` in `probe.yaml` as it is
+- AI chat pane (calls the configured provider directly: the Anthropic API, OpenAI, or a local endpoint named in `probe.yaml`; it does not run `probe-mcp`). The first message to a destination you have not confirmed in this window shows what it would send and waits for **Send**. Workspace settings has an **AI provider** section that writes the `ai:` block, with **Test connection**; Settings never takes a key, and **Save** leaves a plain `api_key` in `probe.yaml` as it is
 
 ## Testing Studio
 
+- **Adding a method to `App` is a decision.** Every exported `App` method is callable from the window and, in the headless build, from any page script with the bridge token. `studio/bound_methods_test.go` keeps a table of every one with a category (pure, reads or writes the workspace, keychain, network, AI provider, device, run control) and fails when a method has no entry, an entry has no method, the generated Wails bindings differ, the headless bridge blocks a different set than the table says, or the automation endpoint reaches a different set of names or methods (and never one in a category that must not be reachable from it). Add your method to the table with its category in the same change.
 - `make studio-e2e-web`: the real UI in headless Chromium through Studio's headless mode (`PROBE_STUDIO_HEADLESS=1`), no window or focus involved; the device-free half runs on any CI runner. See `e2e-web/README.md`.
 - `make studio-e2e-native`: the real window, driven through macOS accessibility (smoke set; needs a second display named by `STUDIO_E2E_DISPLAY`, and focus). `make studio-e2e` is a deprecated alias for one release.
 - CI (`.github/workflows/studio-ci.yml`) runs on changes to `studio/` or `vscode/`: the Studio Go tests (after the frontend build that the binary embeds), the frontend build and its `node --test` suites, and the VS Code extension tests. The frontend suites run on Node 26: they pass a directory to `node --test`, which Node 22 does not accept.
 
 The headless suite sets `PROBE_STUDIO_KEYCHAIN=memory` in `e2e-web/playwright.config.ts`, which keeps API keys in memory so no test reads or writes the real keychain. Only the headless build reads that variable.
+
+Test variables, read by the headless build only (a normal launch ignores them):
+
+- `PROBE_STUDIO_SEED_RUN`: the finished tests (a JSON list in the shape of the run results) that Studio starts with. The file must be a regular file inside the workspace, after symlinks are resolved; strict JSON, at most 1 MB and 50 tests. Anything else is ignored with a note.
+- `PROBE_STUDIO_SEED_EXCHANGES`: the request log (the shape `probe.http_log` answers with) that Studio serves when no app is connected. A regular file inside the workspace, strict JSON, at most 1 MB and 1,000 entries.
+- `PROBE_STUDIO_LOCAL_ENDPOINT`: the default target of Find local models. Only a loopback endpoint is honoured; any other value is ignored, with a note on stderr.
+- `PROBE_STUDIO_TEST_SEND_RATE`: the Send request limit per minute, a whole number from 1 to 1000. Anything else keeps the real limit of ten a minute.
+- `PROBE_STUDIO_TEST_ALLOW_LOCAL`: comma-separated host names whose addresses on this machine, a private network or a reserved range Send request may call in the tests. Those addresses are refused for any other host in this build.
 
 ## Manual check of the native window (device view)
 

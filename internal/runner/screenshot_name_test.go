@@ -138,3 +138,99 @@ func TestScreenshotNamesCarryUTF8Unchanged(t *testing.T) {
 		t.Fatalf("name changed: %q", rec.names[1])
 	}
 }
+
+func TestCleanShotName(t *testing.T) {
+	long := strings.Repeat("é", 100) // 200 bytes
+	cases := []struct{ name, in, want string }{
+		{"plain is unchanged", "Login page 2.png-ok_v1", "Login page 2.png-ok_v1"},
+		{"UTF-8 is unchanged", "Prüfung Größe 支付 ✓", "Prüfung Größe 支付 ✓"},
+		{"forward slash", "a/b", "a_b"},
+		{"backslash", `a\b`, "a_b"},
+		{"parent directory", "a/../../x", "a___x"},
+		{"absolute path", "/etc/cron.d/x", "_etc_cron.d_x"},
+		{"dots only", "....", "screenshot"},
+		{"dots rebuilt after a removal", "...", "."},
+		{"dots split by an invisible character", "a.​.b", "ab"},
+		{"NUL", "a\x00b", "ab"},
+		{"control characters", "a\tb\nc\x7fd", "abcd"},
+		{"bidi override", "evil‮gnp.exe", "evilgnp.exe"},
+		{"zero width joiner", "a‍b", "ab"},
+		{"line separator", "a b c", "abc"},
+		{"invalid UTF-8", "a\xffb", "a_b"},
+		{"nothing left", "‮\x00", "screenshot"},
+		{"empty", "", "screenshot"},
+		{"cut at a whole character", long, strings.Repeat("é", 60)},
+		{"cut inside a character backs up", "a" + long, "a" + strings.Repeat("é", 59)},
+		{"ASCII cut", strings.Repeat("a", 300), strings.Repeat("a", 120)},
+	}
+	for _, c := range cases {
+		got := cleanShotName(c.in)
+		if got != c.want {
+			t.Errorf("%s: cleanShotName(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+		if !utf8.ValidString(got) || len(got) > maxShotName {
+			t.Errorf("%s: result %q is not valid UTF-8 within %d bytes", c.name, got, maxShotName)
+		}
+	}
+}
+
+func TestScreenshotNameFromValuesIsClean(t *testing.T) {
+	e, rec := shotExec(t)
+	e.SetStepContext("f.probe", "t", 1)
+	e.vars = map[string]string{
+		"v":    "../../x",
+		"abs":  "/etc/cron.d/x",
+		"bs":   `a\b`,
+		"nul":  "a\x00b",
+		"bidi": "n‮me",
+		"self": "<test>",
+		"half": "<tim",
+	}
+	t.Setenv("SHOT_ENV_PATH", "../../env")
+	takeShot(t, e, "a/<v>")
+	takeShot(t, e, "<abs>")
+	takeShot(t, e, "<bs>")
+	takeShot(t, e, "<nul>")
+	takeShot(t, e, "<bidi>")
+	takeShot(t, e, "${SHOT_ENV_PATH}")
+	want := []string{"a___x", "_etc_cron.d_x", "a_b", "ab", "nme", "__env"}
+	for i, w := range want {
+		if rec.names[i] != w {
+			t.Errorf("name %d = %q, want %q", i, rec.names[i], w)
+		}
+	}
+}
+
+func TestScreenshotVariableValueIsNotExpandedAsBuiltin(t *testing.T) {
+	e, rec := shotExec(t)
+	e.SetStepContext("f.probe", "My test", 1)
+	e.vars = map[string]string{"self": "<test>", "half": "<tim"}
+	takeShot(t, e, "<self>")
+	takeShot(t, e, "<half>estamp>")
+	takeShot(t, e, "<half><test>estamp>")
+	// the value stays text: "<test>" is not replaced, and the pieces do not join into <timestamp>
+	want := []string{"<test>", "<timestamp>", "<tim" + "My_test" + "estamp>"}
+	for i, w := range want {
+		if rec.names[i] != w {
+			t.Errorf("name %d = %q, want %q", i, rec.names[i], w)
+		}
+	}
+}
+
+func TestCompareScreenshotNameIsClean(t *testing.T) {
+	e, _ := shotExec(t)
+	e.vars = map[string]string{"v": "../../x"}
+	if got := e.shotName("a/<v>", false); got != "a___x" {
+		t.Errorf("compare name = %q, want a___x", got)
+	}
+}
+
+func TestTwoStepsInTheSameMillisecondShareATimestamp(t *testing.T) {
+	// documented behaviour: <timestamp> has millisecond resolution; the app still keeps both files apart with its own stamp
+	e, rec := shotExec(t)
+	takeShot(t, e, "s_<timestamp>")
+	takeShot(t, e, "s_<timestamp>")
+	if rec.names[0] != rec.names[1] {
+		t.Errorf("names differ: %q vs %q", rec.names[0], rec.names[1])
+	}
+}

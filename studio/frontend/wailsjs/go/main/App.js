@@ -10,8 +10,16 @@ export function AIChatLabelParts() {
   return window['go']['main']['App']['AIChatLabelParts']();
 }
 
+export function AllowHost(arg1) {
+  return window['go']['main']['App']['AllowHost'](arg1);
+}
+
 export function ApplyDeviceSetting(arg1, arg2, arg3) {
   return window['go']['main']['App']['ApplyDeviceSetting'](arg1, arg2, arg3);
+}
+
+export function BuildCallStep(arg1) {
+  return window['go']['main']['App']['BuildCallStep'](arg1);
 }
 
 export function CancelRun() {
@@ -20,6 +28,10 @@ export function CancelRun() {
 
 export function Chat(arg1, arg2) {
   return window['go']['main']['App']['Chat'](arg1, arg2);
+}
+
+export function CheckTarget(arg1) {
+  return window['go']['main']['App']['CheckTarget'](arg1);
 }
 
 export function Connect(arg1) {
@@ -76,6 +88,14 @@ export function GetDeviceView() {
 
 export function GetWidgetTree() {
   return window['go']['main']['App']['GetWidgetTree']();
+}
+
+export function HTTPExchange(arg1, arg2) {
+  return window['go']['main']['App']['HTTPExchange'](arg1, arg2);
+}
+
+export function HTTPExchanges(arg1) {
+  return window['go']['main']['App']['HTTPExchanges'](arg1);
 }
 
 export function InitialWorkspace() {
@@ -148,6 +168,10 @@ export function SaveWiFiToken(arg1, arg2) {
 
 export function SaveWorkspaceSettings(arg1, arg2) {
   return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
+}
+
+export function SendRequest(arg1) {
+  return window['go']['main']['App']['SendRequest'](arg1);
 }
 
 export function SetAPIKey(arg1) {
