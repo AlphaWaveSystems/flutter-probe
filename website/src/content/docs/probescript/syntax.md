@@ -69,6 +69,7 @@ double tap "Image"
 long press "Item"
 swipe left
 swipe up on "Card"
+swipe up on "Card" over 60 percent      # travel 60 percent of the card instead of the default 50
 scroll down
 scroll up on "ListView"
 scroll down until "Rate this app" appears      # keep scrolling until it is on screen

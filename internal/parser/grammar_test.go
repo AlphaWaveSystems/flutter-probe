@@ -663,7 +663,12 @@ var grammarProductionExamples = []productionExample{
 	{production: "clear-step", src: testBody(`clear "Search"`, `clear #email if visible`, `clear 2nd "Field"`), want: repeat("action:clear", 3)},
 	{production: "toggle-step", src: testBody(`toggle "Dark Mode"`, `toggle #unit`), want: repeat("action:toggle", 2)},
 	{production: "drag-step", src: testBody(`drag "A" to "B"`, `drag #a to #b`), want: repeat("action:drag", 2)},
-	{production: "swipe-step", src: testBody(`swipe left`, `swipe up on "Card"`, `swipe`), want: repeat("action:swipe", 3)},
+	{production: "swipe-step", src: testBody(`swipe left`, `swipe up on "Card"`, `swipe`, `swipe up over 40 percent`), want: repeat("action:swipe", 4),
+		check: func(t *testing.T, p *parser.Program) {
+			if a := p.Tests[0].Body[3].(parser.ActionStep); a.Percent != 40 {
+				t.Fatalf("swipe over 40 percent parsed with percent %d", a.Percent)
+			}
+		}},
 	{production: "scroll-step", src: testBody(`scroll down`, `scroll up on "List"`, `scroll down until "X" appears`,
 		`scroll until #x is visible`), want: repeat("action:scroll", 4),
 		check: func(t *testing.T, p *parser.Program) {

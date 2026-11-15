@@ -8,6 +8,7 @@ const PROBESCRIPT_KEYWORDS = [
   'open the app', 'tap on', 'tap', 'type', 'see', "don't see",
   'wait until', 'wait for', 'wait',
   'swipe up', 'swipe down', 'swipe left', 'swipe right',
+  'swipe up over 40 percent',
   'scroll up', 'scroll down', 'scroll up until', 'scroll down until',
   'go back', 'long press', 'double tap',
   'take a screenshot called', 'dump the widget tree',

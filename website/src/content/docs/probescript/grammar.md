@@ -529,7 +529,8 @@ double-tap-step  = "double tap" , selector , [ if-visible ] , [ optional-mod ] ;
 clear-step       = "clear" , selector , [ if-visible ] , [ optional-mod ] ;
 toggle-step      = "toggle" , selector ;
 drag-step        = "drag" , selector , fillers , selector ;
-swipe-step       = "swipe" , fillers , [ direction ] , fillers , [ target-selector ] ;
+swipe-step       = "swipe" , fillers , [ direction ] , fillers , [ target-selector ] , [ swipe-distance ] ;
+swipe-distance   = "over" , INT , "percent" ;          (* a whole number from 1 to 100, ending the line; without it the swipe travels 50 percent *)
 scroll-step      = "scroll" , fillers , [ direction ] , fillers , [ target-selector ] ,
                    [ "until" , fillers , target-selector , fillers , [ "appears" | "visible" | "present" ] ] ;
 direction        = "up" | "down" | "left" | "right" ;       (* default: down *)
@@ -563,6 +564,7 @@ test "swipe and scroll"
   swipe up on "Card"
   swipe down
   swipe right on #pager
+  swipe down over 30 percent
   scroll down
   scroll
   scroll up on "ListView"
@@ -1333,9 +1335,11 @@ with the same stripping applied to definition names; a call containing a bare nu
 number as part of the name first and as an argument second. No match is a run-time error. Arguments are
 bound to parameter names by position into a flat variable map; there is no per-recipe scope.
 
+**Swipe distance.** The range (a whole number from 1 to 100) and the line end of `over N percent` are checked by the parser, which the EBNF cannot express; anything else after `over` is a parse error. The agent travels the distance from the element the swipe starts on, or from the screen, and runs 50 percent when the step leaves it out.
+
 **Silent leniency.** The parser prefers to accept and default over reporting an error. These are accepted
 without complaint and yield empty values: `use`, `recipe`, `test` or `composite` without a name; `if`
-without a condition; a missing selector (`tap`); `store` without a name; `log` without a message; a
+without a condition; a missing selector (`tap`); a swipe direction that is not up, down, left or right (`swipe sideways` runs a down swipe and reads `sideways` as the next step; `probe lint` warns); `store` without a name; `log` without a message; a
 `with examples from` without a file name; a `recipe` parameter list that is never closed (it swallows the
 rest of the file); unexpected tokens at file level and inside `composite` bodies;
 Inconsistent indentation does not raise an error

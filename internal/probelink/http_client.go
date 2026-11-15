@@ -211,8 +211,8 @@ func (c *HTTPClient) Wait(ctx context.Context, params WaitParams) error {
 	return err
 }
 
-func (c *HTTPClient) Swipe(ctx context.Context, direction string, sel *SelectorParam) error {
-	_, err := c.Call(ctx, MethodSwipe, SwipeParams{Direction: direction, Selector: sel})
+func (c *HTTPClient) Swipe(ctx context.Context, direction string, sel *SelectorParam, percent int) error {
+	_, err := c.Call(ctx, MethodSwipe, SwipeParams{Direction: direction, Selector: sel, Percent: percent})
 	return err
 }
 

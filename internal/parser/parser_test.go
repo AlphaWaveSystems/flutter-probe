@@ -635,6 +635,38 @@ func TestParser_Swipe(t *testing.T) {
 	}
 }
 
+// TestParser_SwipeOverPercent checks the distance of a swipe: "over N percent" is a whole number from 1 to 100 that ends the
+// line, and a swipe without it keeps the default (0 in the AST, which the agent runs as 50 percent).
+func TestParser_SwipeOverPercent(t *testing.T) {
+	for _, tc := range []struct {
+		src     string
+		percent int
+	}{
+		{`swipe up over 40 percent`, 40},
+		{`swipe left on "Card" over 100 percent`, 100},
+		{`swipe down over 1 percent`, 1},
+		{`swipe down`, 0},
+	} {
+		prog := mustParse(t, testBody(tc.src))
+		a := firstAction(t, prog.Tests[0].Body)
+		if a.Verb != parser.VerbSwipe || a.Percent != tc.percent {
+			t.Errorf("%q: verb %q, percent %d; want swipe, %d", tc.src, a.Verb, a.Percent, tc.percent)
+		}
+	}
+	for _, src := range []string{
+		`swipe up over 0 percent`,
+		`swipe up over 101 percent`,
+		`swipe up over 40.5 percent`,
+		`swipe up over 40`,
+		`swipe up over percent`,
+		`swipe up over 40 percent on "Card"`,
+	} {
+		if _, err := parser.ParseFile(testBody(src)); err == nil {
+			t.Errorf("%q: want a parse error", src)
+		}
+	}
+}
+
 // TestParser_Scroll mirrors TestParser_Swipe — scroll's grammar was
 // previously untested even though it shares the same parse function shape
 // (direction + optional selector-scoping via "in"/"on").

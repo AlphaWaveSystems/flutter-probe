@@ -516,8 +516,8 @@ func (c *Client) Wait(ctx context.Context, params WaitParams) error {
 	return err
 }
 
-func (c *Client) Swipe(ctx context.Context, direction string, sel *SelectorParam) error {
-	_, err := c.Call(ctx, MethodSwipe, SwipeParams{Direction: direction, Selector: sel})
+func (c *Client) Swipe(ctx context.Context, direction string, sel *SelectorParam, percent int) error {
+	_, err := c.Call(ctx, MethodSwipe, SwipeParams{Direction: direction, Selector: sel, Percent: percent})
 	return err
 }
 
