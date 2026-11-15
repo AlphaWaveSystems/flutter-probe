@@ -920,6 +920,7 @@ export namespace main {
 	
 	export class TargetInfo {
 	    host: string;
+	    label?: string;
 	    port: string;
 	    key: string;
 	    allowed: boolean;
@@ -935,6 +936,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
+	        this.label = source["label"];
 	        this.port = source["port"];
 	        this.key = source["key"];
 	        this.allowed = source["allowed"];

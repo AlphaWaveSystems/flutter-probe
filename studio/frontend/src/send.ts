@@ -31,6 +31,7 @@ export function parseHeaders(text: string): HeaderParse {
 
 export interface TargetInfo {
   host: string;
+  label?: string; // the name as typed, when it is written in unicode (host is its ASCII form)
   port: string;
   key: string;
   allowed: boolean;
@@ -44,8 +45,8 @@ export interface TargetInfo {
 export function allowText(t: TargetInfo): { title: string; lines: string[]; warning: string } {
   const where = t.addresses.length ? t.addresses.map((a, i) => `${a} (${t.classes[i] ?? "?"})`).join(", ") : "an address that could not be looked up";
   return {
-    title: `Send requests to ${t.host}:${t.port}?`,
-    lines: [`The name leads to ${where}.`, "Requests are sent from this machine. Studio asks again for another host or port, and when a redirect leaves this one."],
+    title: `Send requests to ${t.key}?`,
+    lines: [...(t.label ? [`Written as ${t.label}; Studio uses ${t.host}.`] : []), `The name leads to ${where}.`, "Requests are sent from this machine. Studio asks again for another host or port, and when a redirect leaves this one."],
     warning: t.local ? "This address is on this machine or your own network. A request can reach services that are not meant to be called from here." : "",
   };
 }

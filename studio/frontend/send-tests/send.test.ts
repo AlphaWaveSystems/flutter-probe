@@ -37,6 +37,13 @@ describe("allowText", () => {
     assert.match(t.lines[0], /93\.184\.216\.34 \(the internet\)/);
     assert.equal(t.warning, "");
   });
+  it("shows an IPv6 address with its brackets, and the unicode name as a label", () => {
+    const v6 = allowText({ ...target(), host: "::1", key: "[::1]:8080", port: "8080" });
+    assert.equal(v6.title, "Send requests to [::1]:8080?");
+    const idn = allowText({ ...target(), host: "xn--bcher-kva.test", key: "xn--bcher-kva.test:443", label: "b\u00fccher.test" });
+    assert.equal(idn.title, "Send requests to xn--bcher-kva.test:443?");
+    assert.match(idn.lines[0], /Written as b\u00fccher\.test; Studio uses xn--bcher-kva\.test/);
+  });
   it("gives the stronger warning for an address on this machine or its network", () => {
     const t = allowText(target({ local: true, addresses: ["127.0.0.1", "10.0.0.5"], classes: ["this machine", "a private network"] }));
     assert.match(t.warning, /this machine or your own network/);

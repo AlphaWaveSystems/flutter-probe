@@ -18,10 +18,29 @@ import (
 
 const (
 	sendMaxPerMinute = 10
+	sendCheckPerMin  = 30 // CheckTarget looks a name up, so it is limited too
+	sendMaxAllowed   = 100
 	sendResolveTime  = 3 * time.Second
+	levelInternet    = 1 // an address anyone can reach
+	levelLocal       = 2 // this machine, a private network, link-local, a reserved range
+	levelNever       = 3 // metadata, unspecified, multicast
 )
 
+// levelOf is how strong an allow an address needs. An allow made for the internet never covers an address on this machine or its
+// network, and an allow for those never covers a kind that is never allowed.
+func levelOf(class httpcall.Class) int {
+	switch class {
+	case httpcall.Public:
+		return levelInternet
+	case httpcall.Loopback, httpcall.Private, httpcall.LinkLocal, httpcall.Reserved:
+		return levelLocal
+	}
+	return levelNever
+}
+
 var (
+	errSendCheckRate      = errors.New("too many address checks in the last minute")
+	errSendNotChecked     = errors.New("that host was not checked first: Studio shows where it leads before it is allowed")
 	errSendHostNotAllowed = errors.New("that host has not been allowed in this session: confirm it first")
 	errSendBusy           = errors.New("another request is still running")
 	errSendRate           = errors.New("too many requests in the last minute")
@@ -31,9 +50,14 @@ var (
 // written to disk.
 type sendState struct {
 	mu       sync.Mutex
-	allowed  map[string]bool // "host:port", lower case, allowed by a person in this session
+	allowed  map[string]int // host:port in the normal form -> the level the person was shown and allowed
+	order    []string       // allowed keys, oldest first, for eviction
+	shown    map[string]int // host:port -> the level CheckTarget last showed for it: an allow is for what was shown
+	shownOrd []string
+	lookups  []time.Time // CheckTarget calls
 	recent   []time.Time
 	inflight bool
+	refusal  string // why the policy refused the last address it refused, for the sentence a person reads
 	// headless is true in the browser-driven build, which refuses an address on this machine or its network unless testAllowLocal names
 	// the host. The native app has no such list: it asks the person, with a warning, and the person's allow is the decision.
 	headless       bool
@@ -43,6 +67,7 @@ type sendState struct {
 	maxPerMinute int
 	now          func() time.Time
 	resolver     httpcall.Resolver
+	dial         func(ctx context.Context, network, address string) (net.Conn, error) // tests only: answers without a real connection
 }
 
 func (s *sendState) clock() time.Time {
@@ -52,23 +77,89 @@ func (s *sendState) clock() time.Time {
 	return time.Now()
 }
 
-// hostKey is the form hosts are remembered in.
-func hostKey(host, port string) string { return strings.ToLower(host) + ":" + port }
-
-// allow remembers a host:port as allowed for the rest of the session.
-func (s *sendState) allow(key string) {
+// note remembers what CheckTarget showed for a host:port: the strongest kind among its addresses.
+func (s *sendState) note(key string, level int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.allowed == nil {
-		s.allowed = map[string]bool{}
+	if s.shown == nil {
+		s.shown = map[string]int{}
 	}
-	s.allowed[key] = true
+	if _, ok := s.shown[key]; !ok {
+		s.shownOrd = append(s.shownOrd, key)
+		if len(s.shownOrd) > sendMaxAllowed {
+			delete(s.shown, s.shownOrd[0])
+			s.shownOrd = s.shownOrd[1:]
+		}
+	}
+	s.shown[key] = level
 }
 
-func (s *sendState) isAllowed(key string) bool {
+// allow remembers a host:port as allowed for the rest of the session, at the level CheckTarget last showed for it. A host that was not
+// checked, or whose check found an address that is never allowed, cannot be allowed.
+func (s *sendState) allow(key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	level, ok := s.shown[key]
+	if !ok || level >= levelNever {
+		return errSendNotChecked
+	}
+	if s.allowed == nil {
+		s.allowed = map[string]int{}
+	}
+	if _, had := s.allowed[key]; !had {
+		s.order = append(s.order, key)
+		if len(s.order) > sendMaxAllowed {
+			delete(s.allowed, s.order[0])
+			s.order = s.order[1:]
+		}
+	}
+	s.allowed[key] = level
+	return nil
+}
+
+// allowedLevel is the level a host:port was allowed at, or 0.
+func (s *sendState) allowedLevel(key string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.allowed[key]
+}
+
+func (s *sendState) isAllowed(key string) bool { return s.allowedLevel(key) > 0 }
+
+// checkAllowed takes one of the address checks of this minute.
+func (s *sendState) checkAllowed() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cutoff := s.clock().Add(-time.Minute)
+	kept := s.lookups[:0]
+	for _, t := range s.lookups {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	s.lookups = kept
+	if len(s.lookups) >= sendCheckPerMin {
+		return errSendCheckRate
+	}
+	s.lookups = append(s.lookups, s.clock())
+	return nil
+}
+
+// refuse records why the policy said no and returns the error httpcall turns into a PolicyError.
+func (s *sendState) refuse(reason string) error {
+	s.mu.Lock()
+	s.refusal = reason
+	s.mu.Unlock()
+	return errors.New("refused")
+}
+
+// takeRefusal returns the reason of the last refusal, once.
+func (s *sendState) takeRefusal() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.refusal
+	s.refusal = ""
+	return r
 }
 
 // begin takes the one running slot and counts the call against the limit per minute.
@@ -104,31 +195,41 @@ func (s *sendState) end() {
 	s.mu.Unlock()
 }
 
-// policy is what httpcall asks about every address that is about to be dialed, after the name is resolved: the host and port must have
-// been allowed by the person in this session (the decision is made here and not only in the window), and the kind of address must be
-// one that may be called.
+// policy is what httpcall asks about every address that is about to be dialed, after the name is resolved. The host and port must have
+// been allowed by the person in this session, and the kind of the address must not be stronger than the kind the person was shown and
+// allowed: a name that led to the internet when it was allowed and leads to this machine now is refused (DNS rebinding after the yes).
+// The cloud metadata addresses, the unspecified address and multicast are never allowed.
 func (s *sendState) policy(host string, port int, ip net.IP) error {
-	if !s.isAllowed(hostKey(host, strconv.Itoa(port))) {
-		return errSendHostNotAllowed
+	allowed := s.allowedLevel(hostKey(host, strconv.Itoa(port)))
+	if allowed == 0 {
+		return s.refuse("that host has not been allowed in this session")
+	}
+	class := httpcall.ClassOf(ip)
+	level := levelOf(class)
+	switch {
+	case level >= levelNever:
+		return s.refuse("it leads to " + class.String() + ", which is never allowed")
+	case level > allowed:
+		return s.refuse("it was allowed as the internet, but now leads to " + class.String() + ": check it again")
 	}
 	return s.classPolicy(host, ip)
 }
 
-// classPolicy decides by the kind of address. The cloud metadata addresses, the unspecified address and multicast are never allowed. An
-// address on this machine or its network, or in a reserved range, is allowed in the native app (the person was warned and allowed the
-// host) and, in the headless build, only for a host the test allow-list names.
+// classPolicy decides by the kind of address, for what the check shows and for the headless build: an address on this machine or its
+// network, or in a reserved range, is allowed in the native app (the person was warned and allowed the host) and, in the headless build,
+// only for a host the test allow-list names. The cloud metadata addresses, the unspecified address and multicast are never allowed.
 func (s *sendState) classPolicy(host string, ip net.IP) error {
-	switch class := httpcall.ClassOf(ip); class {
-	case httpcall.Metadata, httpcall.Unspecified, httpcall.Multicast:
+	switch class := httpcall.ClassOf(ip); levelOf(class) {
+	case levelNever:
 		return fmt.Errorf("%s is never allowed", class)
-	case httpcall.Public:
+	case levelInternet:
 		return nil
 	default:
 		s.mu.Lock()
 		headless, listed := s.headless, s.testAllowLocal[strings.ToLower(host)]
 		s.mu.Unlock()
 		if headless && !listed {
-			return fmt.Errorf("%s is refused in this build", class)
+			return s.refuse(class.String() + " is refused in this build")
 		}
 		return nil
 	}

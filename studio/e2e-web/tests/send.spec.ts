@@ -38,6 +38,12 @@ async function backend(other?: Backend): Promise<Backend> {
         res.statusCode = 302;
         res.setHeader("Location", `${other.url}/steal?token=${netSecret}`);
         res.end();
+      } else if (path === "/echo") {
+        res.setHeader("X-Seen", String(req.headers["x-api-key"] ?? ""));
+        res.setHeader("Content-Type", "text/plain");
+        res.end(`key=${req.headers["x-api-key"]} auth=${req.headers["authorization"]} body=${Buffer.concat(chunks).toString("utf8")} soft=${split(String(req.headers["x-api-key"]), "\u2065")} kept=hello`);
+      } else if (path === "/slow") {
+        setTimeout(() => res.end("slow"), 900);
       } else if (path === "/hop") {
         res.statusCode = 302;
         res.setHeader("Location", "/ok");
@@ -247,21 +253,70 @@ test.describe("Send request (fake backends on 127.0.0.1)", () => {
     }
   });
 
-  test("sr-07 the guards are in Studio, not only in the window: an unallowed host is refused through the bridge", async ({ page }) => {
+  test("sr-07 the guards are in Studio, not only in the window: an unchecked or unallowed host is refused through the bridge", async ({ page }) => {
     const b = await backend();
     try {
       await openStudio(page);
       await expect(app(page, "SendRequest", { method: "GET", url: `${b.url}/ok`, headers: [], body: "" })).rejects.toThrow(/not been allowed/);
       expect(b.hits()).toBe(0);
+      // An allow needs a check first: what is allowed is what was shown.
+      await expect(app(page, "AllowHost", `127.0.0.1:${b.port}`)).rejects.toThrow(/not checked/);
       const info: any = await app(page, "CheckTarget", `${b.url}/ok`);
       expect(info.local).toBe(true);
       expect(info.allowed).toBe(false);
+      expect(info.key).toBe(`127.0.0.1:${b.port}`);
       expect(b.hits()).toBe(0);
       await expect(app(page, "AllowHost", "no-port")).rejects.toThrow();
-      // A name that is not on the test list is refused outright in this build, even when it is allowed.
-      await app(page, "AllowHost", `localhost:${b.port}`);
-      await expect(app(page, "SendRequest", { method: "GET", url: `http://localhost:${b.port}/ok`, headers: [], body: "" })).rejects.toThrow(/not allowed/);
+      await expect(app(page, "AllowHost", "127.0.0.1:0")).rejects.toThrow();
+      // A name that is not on the test list is refused outright in this build: it cannot even be allowed, and a request to it is refused.
+      const other: any = await app(page, "CheckTarget", `http://localhost:${b.port}/ok`);
+      expect(other.refused).toBeTruthy();
+      await expect(app(page, "AllowHost", other.key)).rejects.toThrow();
+      await expect(app(page, "SendRequest", { method: "GET", url: `http://localhost:${b.port}/ok`, headers: [], body: "" })).rejects.toThrow(/not been allowed/);
       expect(b.hits()).toBe(0);
+    } finally {
+      await b.close();
+    }
+  });
+
+  test("sr-08 pressing Enter twice sends once: the window does not start a second request", async ({ page }) => {
+    const b = await backend();
+    try {
+      await openSend(page);
+      await fill(page, `${b.url}/ok`);
+      await page.click("#btn-send");
+      await page.click("#btn-send-allow-ok");
+      await expect(page.locator("#send-result")).toContainText("200");
+      await fill(page, `${b.url}/slow`);
+      let calls = 0;
+      page.on("request", (r) => {
+        if ((r.postData() ?? "").includes("SendRequest")) calls++; // what the window asks Studio to do, not what Studio then refuses
+      });
+      // The button is disabled while a request runs, so the keyboard is the way in: Enter in the address field, twice.
+      await page.locator("#send-url").press("Enter");
+      await page.locator("#send-url").press("Enter");
+      await expect(page.locator("#send-result")).toContainText("200", { timeout: 10000 });
+      expect(calls).toBe(1);
+      expect(b.seen().filter((r) => r.url === "/slow")).toHaveLength(1);
+    } finally {
+      await b.close();
+    }
+  });
+
+  test("sr-09 what was typed is hidden wherever the answer echoes it, under a name the redactor does not know", async ({ page }) => {
+    const b = await backend();
+    try {
+      await openSend(page);
+      await fill(page, `${b.url}/echo?q=urlquery4321abcd`, { method: "POST", headers: "X-Api-Key: plainvalueqq1234\nAuthorization: Token plainauthvalue5678\nX-Note: hello", body: '{"note":"bodysecret9z8y7x6w"}' });
+      await page.click("#btn-send");
+      await page.click("#btn-send-allow-ok");
+      await expect(page.locator("#send-result")).toContainText("200");
+      const result = page.locator("#send-result");
+      await expect(result).toContainText("kept=hello"); // a value that was not a credential is still readable
+      const all = await page.locator("body").innerText();
+      for (const bad of ["plainvalueqq1234", "plainauthvalue5678", "bodysecret9z8y7x6w", "urlquery4321abcd", "plainvalue", "plainauth", "bodysecret"]) expect(all, bad).not.toContain(bad);
+      await expect(result.locator(".net-hname", { hasText: /^X-Seen$/ }).locator("xpath=following-sibling::span[1]")).toHaveText("[redacted]");
+      expect(b.seen().filter((r) => r.url.startsWith("/echo"))[0].auth).toBe("Token plainauthvalue5678"); // the server got what was typed
     } finally {
       await b.close();
     }

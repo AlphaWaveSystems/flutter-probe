@@ -358,7 +358,7 @@ func TestClassOf(t *testing.T) {
 		"10.1.2.3": Private, "172.16.0.1": Private, "172.31.255.255": Private, "172.32.0.1": Public, "172.15.255.255": Public,
 		"192.168.1.1": Private, "100.64.0.1": Private, "100.127.255.255": Private, "100.128.0.1": Public, "fc00::1": Private, "fd12::1": Private,
 		"169.254.169.254": Metadata, "::ffff:169.254.169.254": Metadata, "fd00:ec2::254": Metadata, "169.254.1.1": LinkLocal, "fe80::1": LinkLocal,
-		"0.0.0.0": Unspecified, "::": Unspecified, "224.0.0.1": LinkLocal, "239.1.1.1": Multicast, "ff02::1": LinkLocal, "ff05::1": Multicast,
+		"0.0.0.0": Unspecified, "::": Unspecified, "224.0.0.1": Multicast, "239.1.1.1": Multicast, "ff02::1": Multicast, "ff05::1": Multicast,
 		"8.8.8.8": Public, "1.1.1.1": Public, "2606:4700::1111": Public,
 	} {
 		if got := ClassOf(net.ParseIP(ip)); got != want {

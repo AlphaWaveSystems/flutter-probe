@@ -12,7 +12,7 @@ const (
 	LinkLocal                // 169.254/16 and fe80::/10, which hold the cloud metadata address below
 	Metadata                 // 169.254.169.254 and fd00:ec2::254, where cloud hosts give out credentials
 	Unspecified              // 0.0.0.0 and ::, which reach this machine on many systems
-	Multicast                // 224/4 and ff00::/8
+	Multicast                // 224/4 and ff00::/8, every scope
 	Reserved                 // ranges no public host answers from: 240/4, 255.255.255.255, 198.18/15, documentation and benchmarking ranges, fec0::/10, Teredo
 )
 
@@ -120,10 +120,10 @@ func ClassOf(ip net.IP) Class {
 		return Unspecified
 	case ip.IsLoopback():
 		return Loopback
-	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsInterfaceLocalMulticast():
-		return LinkLocal
 	case ip.IsMulticast():
-		return Multicast
+		return Multicast // all of it, also 224.0.0.0/24 and ff02::/16, which are link-local in scope
+	case ip.IsLinkLocalUnicast():
+		return LinkLocal
 	case ip.IsPrivate(), sharedNAT.Contains(ip):
 		return Private
 	}

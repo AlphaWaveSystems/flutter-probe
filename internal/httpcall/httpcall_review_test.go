@@ -216,3 +216,27 @@ func TestThePolicySeesAHostAndAPort(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 }
+
+// Dial is called only for an address the policy allowed, with that address; a refused name never reaches it.
+func TestDialIsCalledOnlyAfterThePolicy(t *testing.T) {
+	var dialed []string
+	srv, _ := echo(t)
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialed = append(dialed, address)
+		return (&net.Dialer{}).DialContext(ctx, network, "127.0.0.1:"+port) // whatever was asked for, the fake answers
+	}
+	r := &stubResolver{answers: map[string][]net.IP{"fake.test": {net.ParseIP("93.184.216.34")}, "bad.test": {net.ParseIP("10.1.2.3")}}}
+	onlyPublic := func(host string, p int, ip net.IP) error {
+		if ClassOf(ip) != Public {
+			return errors.New("no")
+		}
+		return nil
+	}
+	if _, err := Do(context.Background(), Request{Method: "GET", URL: "http://bad.test:" + port + "/"}, Options{Policy: onlyPublic, Resolver: r, Dial: dial}); !errors.Is(err, ErrPolicy) || len(dialed) != 0 {
+		t.Fatalf("a refused name: %v, dialed %v", err, dialed)
+	}
+	if _, err := Do(context.Background(), Request{Method: "GET", URL: "http://fake.test:" + port + "/"}, Options{Policy: onlyPublic, Resolver: r, Dial: dial}); err != nil || len(dialed) != 1 || dialed[0] != "93.184.216.34:"+port {
+		t.Fatalf("an allowed name: %v, dialed %v", err, dialed)
+	}
+}

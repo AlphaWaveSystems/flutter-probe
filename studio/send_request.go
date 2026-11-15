@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/httpcall"
@@ -31,8 +32,9 @@ type SendInput struct {
 // TargetInfo says where a request would go, for the confirmation shown before a host is allowed.
 type TargetInfo struct {
 	Host      string   `json:"host"`
+	Label     string   `json:"label,omitempty"` // the name as typed, when it is written in unicode (Host is its ASCII form)
 	Port      string   `json:"port"`
-	Key       string   `json:"key"`       // host:port, what AllowHost takes
+	Key       string   `json:"key"`       // host:port in the normal form (an IPv6 address in brackets), what AllowHost takes
 	Allowed   bool     `json:"allowed"`   // already allowed in this session
 	Addresses []string `json:"addresses"` // what the name resolves to now
 	Classes   []string `json:"classes"`   // the kind of each address, in words
@@ -64,12 +66,12 @@ type SendResult struct {
 	RemoteClass     string      `json:"remoteClass"`
 }
 
-func splitTarget(raw string) (*url.URL, string, string, error) {
+func splitTarget(raw string) (u *url.URL, host, port string, err error) {
 	if len(raw) > httpcall.MaxURLBytes {
 		return nil, "", "", errors.New("the address is too long")
 	}
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Host == "" || u.Hostname() == "" {
+	u, perr := url.Parse(strings.TrimSpace(raw))
+	if perr != nil || u.Host == "" || u.Hostname() == "" {
 		return nil, "", "", errors.New("the address is not a valid http or https address")
 	}
 	switch strings.ToLower(u.Scheme) {
@@ -80,26 +82,42 @@ func splitTarget(raw string) (*url.URL, string, string, error) {
 	if u.User != nil {
 		return nil, "", "", errors.New("an address with a user name or password is refused")
 	}
-	port := u.Port()
+	port = u.Port()
 	if port == "" {
 		port = map[bool]string{true: "443", false: "80"}[strings.EqualFold(u.Scheme, "https")]
 	}
-	return u, strings.TrimSuffix(strings.ToLower(u.Hostname()), "."), port, nil
+	if n, nerr := strconv.Atoi(port); nerr != nil || n < 1 || n > 65535 {
+		return nil, "", "", errors.New("the address is not a valid http or https address")
+	}
+	host, herr := asciiHost(u.Hostname())
+	if herr != nil {
+		return nil, "", "", errors.New("the address is not a valid http or https address")
+	}
+	return u, host, port, nil
 }
 
-// CheckTarget says where a request to rawURL would go, and whether its host is allowed yet. It looks the name up once, so the person
-// is shown what it resolves to before saying yes. It sends no request.
+// CheckTarget says where a request to rawURL would go, and whether its host is allowed yet. It looks the name up once (at most thirty
+// times a minute), so the person is shown what it resolves to before saying yes, and it remembers how strong the strongest address
+// was: an allow is for what was shown. It sends no request.
 func (a *App) CheckTarget(rawURL string) (TargetInfo, error) {
 	_, host, port, err := splitTarget(rawURL)
 	if err != nil {
 		return TargetInfo{}, err
 	}
-	info := TargetInfo{Host: host, Port: port, Key: hostKey(host, port), Allowed: a.send.isAllowed(hostKey(host, port)), Addresses: []string{}, Classes: []string{}}
+	if err := a.send.checkAllowed(); err != nil {
+		return TargetInfo{}, err
+	}
+	key := hostKey(host, port)
+	info := TargetInfo{Host: host, Port: port, Key: key, Addresses: []string{}, Classes: []string{}}
+	if u, perr := url.Parse(strings.TrimSpace(rawURL)); perr == nil && !strings.EqualFold(u.Hostname(), host) {
+		info.Label = shortText(strings.ToLower(u.Hostname()), 200)
+	}
 	ips, err := a.send.resolveForDisplay(host)
 	if err != nil {
 		info.Refused = err.Error()
 		return info, nil
 	}
+	level := 0
 	for _, ip := range ips {
 		class := httpcall.ClassOf(ip)
 		info.Addresses = append(info.Addresses, ip.String())
@@ -107,22 +125,29 @@ func (a *App) CheckTarget(rawURL string) (TargetInfo, error) {
 		if class.Local() {
 			info.Local = true
 		}
+		if l := levelOf(class); l > level {
+			level = l
+		}
 		if perr := a.send.classPolicy(host, ip); perr != nil && info.Refused == "" {
 			info.Refused = perr.Error()
 		}
 	}
+	if level > 0 && level < levelNever && info.Refused == "" {
+		a.send.note(key, level)
+		info.Allowed = a.send.allowedLevel(key) >= level
+	}
 	return info, nil
 }
 
-// AllowHost allows requests to a host:port for the rest of the session. It is the person's decision, made in the window after
-// CheckTarget showed where the host leads.
+// AllowHost allows requests to a host:port for the rest of the session, at the strength CheckTarget showed for it. It is the person's
+// decision, made in the window after CheckTarget showed where the host leads; a host that was not checked, or that leads somewhere that
+// is never allowed, is refused, and so is a key that is not in the normal form CheckTarget returns.
 func (a *App) AllowHost(key string) error {
-	host, port, ok := strings.Cut(strings.TrimSpace(key), ":")
-	if !ok || host == "" || port == "" || strings.ContainsAny(key, "/@ \t\r\n") {
-		return errors.New("not a host and port")
+	host, port, err := parseKey(key)
+	if err != nil {
+		return err
 	}
-	a.send.allow(hostKey(host, port))
-	return nil
+	return a.send.allow(hostKey(host, port))
 }
 
 var sendErrors = map[error]string{
@@ -139,7 +164,7 @@ var sendErrors = map[error]string{
 }
 
 // SendRequest sends the request, if its host has been allowed, and returns the answer redacted. At most one request runs at a time and
-// at most ten a minute. A refused request sends nothing.
+// at most ten a minute. A refused request sends nothing. What was typed is replaced wherever the answer echoes it.
 func (a *App) SendRequest(in SendInput) (SendResult, error) {
 	u, host, port, err := splitTarget(in.URL)
 	if err != nil {
@@ -158,12 +183,16 @@ func (a *App) SendRequest(in SendInput) (SendResult, error) {
 		return SendResult{}, err
 	}
 	defer a.send.end()
+	a.send.takeRefusal()
 
 	res, err := httpcall.Do(context.Background(), httpcall.Request{Method: in.Method, URL: u.String(), Header: headers, Body: in.Body},
-		httpcall.Options{Policy: a.send.policy, Resolver: a.send.resolver})
+		httpcall.Options{Policy: a.send.policy, Resolver: a.send.resolver, Dial: a.send.dial})
 	if err != nil {
 		var pe *httpcall.PolicyError
 		if errors.As(err, &pe) {
+			if reason := a.send.takeRefusal(); reason != "" {
+				return SendResult{}, errors.New("that address is not allowed from here: " + reason)
+			}
 			return SendResult{}, errors.New("that address is " + pe.Class.String() + ", which is not allowed from here")
 		}
 		for sentinel, text := range sendErrors {
@@ -173,7 +202,8 @@ func (a *App) SendRequest(in SendInput) (SendResult, error) {
 		}
 		return SendResult{}, errors.New(err.Error()) // already a short sentence without an address or a header
 	}
-	return viewSendResult(strings.ToUpper(strings.TrimSpace(in.Method)), u.String(), headers, res), nil
+	typed := collectTyped(u.String(), headers, in.Body)
+	return viewSendResult(strings.ToUpper(strings.TrimSpace(in.Method)), u.String(), headers, res, typed), nil
 }
 
 func flattenHeader(h map[string][]string) map[string]string {
@@ -184,30 +214,38 @@ func flattenHeader(h map[string][]string) map[string]string {
 	return out
 }
 
-func viewSendResult(method, rawURL string, reqHeaders map[string]string, res httpcall.Response) SendResult {
+func viewSendResult(method, rawURL string, reqHeaders map[string]string, res httpcall.Response, typed *typedValues) SendResult {
 	out := SendResult{
-		Sent:        method + " " + redactURL(rawURL),
+		Sent:        method + " " + redactURL(typed.scrub(rawURL)),
 		Status:      res.Status,
 		DurationMs:  res.Duration.Milliseconds(),
-		URL:         redactURL(res.URL),
+		URL:         redactURL(typed.scrub(res.URL)),
 		Hops:        []SendHop{},
 		Truncated:   res.Truncated,
 		RemoteClass: remoteClass(res.RemoteIP),
 	}
-	out.RequestHeaders, _ = redactHeaders(reqHeaders)
+	scrubbed := make(map[string]string, len(reqHeaders))
+	for k, v := range reqHeaders {
+		scrubbed[k] = typed.scrub(v)
+	}
+	out.RequestHeaders, _ = redactHeaders(scrubbed)
 	for _, h := range res.Hops {
-		out.Hops = append(out.Hops, SendHop{From: redactURL(h.From), To: redactURL(h.To), Status: h.Status})
+		out.Hops = append(out.Hops, SendHop{From: redactURL(typed.scrub(h.From)), To: redactURL(typed.scrub(h.To)), Status: h.Status})
 	}
 	if res.Stopped != nil {
-		out.Stopped = &SendHop{From: redactURL(res.Stopped.From), To: redactURL(res.Stopped.To), Status: res.Stopped.Status}
+		out.Stopped = &SendHop{From: redactURL(typed.scrub(res.Stopped.From)), To: redactURL(typed.scrub(res.Stopped.To)), Status: res.Stopped.Status}
 		if u, err := url.Parse(res.Stopped.To); err == nil {
 			out.StoppedHost = shortText(u.Host, 200)
 		}
 	}
 	budget := newNetBudget()
-	out.ResponseHeaders, out.MoreHeaders = redactHeadersBudget(flattenHeader(res.Header), budget)
+	echoed := flattenHeader(res.Header)
+	for k, v := range echoed {
+		echoed[k] = typed.scrub(v)
+	}
+	out.ResponseHeaders, out.MoreHeaders = redactHeadersBudget(echoed, budget)
 	sort.SliceStable(out.ResponseHeaders, func(i, j int) bool { return out.ResponseHeaders[i].Name < out.ResponseHeaders[j].Name })
-	out.ResponseBody = redactBodyBudget(string(res.Body), int64(len(res.Body)), res.Header.Get("Content-Type"), budget)
+	out.ResponseBody = redactBodyBudget(typed.scrub(string(res.Body)), int64(len(res.Body)), res.Header.Get("Content-Type"), budget)
 	return out
 }
 
