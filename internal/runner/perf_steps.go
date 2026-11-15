@@ -64,7 +64,11 @@ func (e *Executor) runPerf(ctx context.Context, s parser.PerfStep) error {
 	switch s.Kind {
 	case parser.PerfStart:
 		// The name is printed and written to reports and baselines, so a name built from an environment value is masked.
-		return e.startMeasuring(ctx, sysdialog.ScrubKnown(e.resolve(s.Name)))
+		name, err := e.forSink("start measuring", s.Name)
+		if err != nil {
+			return err
+		}
+		return e.startMeasuring(ctx, sysdialog.ScrubKnown(name))
 	case parser.PerfStop:
 		if e.perf.active == nil {
 			return fmt.Errorf("stop measuring: no measurement is running (start one with `start measuring \"name\"`)")

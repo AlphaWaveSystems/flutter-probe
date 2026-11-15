@@ -62,11 +62,23 @@ func (e *Executor) runSystemDialog(ctx context.Context, s parser.SystemDialogSte
 
 	switch s.Op {
 	case parser.SysTap:
-		_, err = d.Tap(ctx, e.resolve(s.Button), s.Title)
+		button, ferr := e.forSink("system dialog", s.Button)
+		if ferr != nil {
+			return ferr
+		}
+		_, err = d.Tap(ctx, button, s.Title)
 		return err
 
 	case parser.SysType:
-		text := e.resolve(s.Text)
+		// ResolveSecret reads the environment variable a "$NAME" text names, so a text that holds a value read from a page must never reach it
+		text, ferr := e.forSink("system dialog", s.Text)
+		if ferr != nil {
+			return ferr
+		}
+		field, ferr := e.forSink("system dialog", s.Field)
+		if ferr != nil {
+			return ferr
+		}
 		value, fromEnv, rerr := sysdialog.ResolveSecret(text)
 		if rerr != nil {
 			return rerr
@@ -75,7 +87,7 @@ func (e *Executor) runSystemDialog(ctx context.Context, s parser.SystemDialogSte
 			sysdialog.NoteEnvValue(sysdialog.SecretEnvName(text), value)
 		}
 		secrets = append(secrets, value, text)
-		return d.Type(ctx, e.resolve(s.Field), value, s.Title)
+		return d.Type(ctx, field, value, s.Title)
 
 	case parser.SysSee:
 		ok, serr := d.See(ctx, s.Title)

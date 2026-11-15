@@ -92,7 +92,7 @@ func (e *Executor) runHTTPStep(ctx context.Context, s parser.HTTPStep) error {
 		if !ok {
 			return fmt.Errorf("json %q not found in the body%s", s.Path, bodyHint(*entry))
 		}
-		e.vars[s.Var] = v
+		e.setVar(s.Var, v, false)
 		return nil
 
 	case parser.HTTPSeeRequests:

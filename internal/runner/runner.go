@@ -75,6 +75,7 @@ type Runner struct {
 	cfg             *config.Config
 	client          probelink.ProbeClient
 	deviceCtx       *DeviceContext  // nil in dry-run mode
+	clip            clipboardTaint  // the clipboard taint of a run that has no device context
 	opts            RunOptions
 	recipes         map[string]parser.RecipeDef
 	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
@@ -159,6 +160,7 @@ func (r *Runner) newExecutor() *Executor {
 	exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
 		r.client = newClient
 	}, r.opts.Timeout, r.opts.Verbose)
+	exec.clip = &r.clip // a cloud run has no device context: the clipboard flag then lives as long as the Runner, not as long as one test attempt
 	exec.SetReconnectPolicy(r.cfg.Agent.ReconnectAttempts, r.cfg.Agent.ReconnectBackoff)
 	exec.SetLaunchTimeout(r.cfg.Agent.LaunchTimeout)
 	exec.SetImplicitWait(r.cfg.Defaults.ImplicitWait)

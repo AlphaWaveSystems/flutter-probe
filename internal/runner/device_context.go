@@ -46,6 +46,8 @@ type DeviceContext struct {
 	CLIVersion              string        // running probe binary's version, sent during the reconnect handshake
 	Language                string        // app language set by `set language` / --locale ("" = device default)
 
+	clip clipboardTaint // see clipboardTaint: the clipboard of this device holds a tainted value
+
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
 
