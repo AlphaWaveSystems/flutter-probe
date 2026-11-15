@@ -76,6 +76,12 @@ func FuzzSaveStep(f *testing.F) {
 			f.Add("POST", "https://api.example.test/x", "", uint8(s), uint8(p), "some words, 12 and \"quotes\" \\ back")
 		}
 	}
+	// A card behind a very long run of digit groups (a size cap once hid it), and next to other digits.
+	for _, noise := range []string{strings.Repeat("0 ", 2001), strings.Repeat("000 ", 3000), "6 ", "99-"} {
+		f.Add("POST", "https://api.example.test/x", "", uint8(1), uint8(7), noise)
+	}
+	// A credential as a key with whitespace around it.
+	f.Add("POST", "https://api.example.test/x", `{" 9f86d081884c7d659a2feaa0c55ad015 ":1}`, uint8(255), uint8(0), "")
 	// The classes the reviews found, as typed requests.
 	for _, c := range [][3]string{
 		{"POST", "https://api.example.test/x", `{"note":"${REV_DEPLOY_TOKEN}"}`},

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -304,4 +305,121 @@ func TestSaveStepFindsCardsNextToDigitsAndRefusesCredentialKeys(t *testing.T) {
 			t.Errorf("the key %q: %v %+v", key, err, s.Lines)
 		}
 	}
+}
+
+// The card search has no size limit and is linear: a card behind any number of digit groups is found (a cap that skipped long runs hid
+// one behind 2,000 groups), and a megabyte of digit groups is searched in well under a second.
+func TestCardSearchHasNoSizeLimit(t *testing.T) {
+	const card = "4111111111111111"
+	for _, n := range []int{10, 1999, 2000, 2001, 3000, 100000} {
+		for _, group := range []string{"0 ", "000 ", "123 "} {
+			body := strings.Repeat(group, n) + card
+			s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
+			if err != nil {
+				continue // a refusal keeps it out as well
+			}
+			if got := stepOf(t, s).Body; strings.Contains(strings.ReplaceAll(got, " ", ""), card) || strings.HasSuffix(got, card) {
+				t.Fatalf("%d groups of %q before a card: the card is in the step", n, group)
+			}
+		}
+	}
+	start := time.Now()
+	big := strings.Repeat("123 ", 1<<18) // 1 MB
+	_ = cardRuns(big)
+	_ = cardRuns(strings.Repeat("7", 1<<20))
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("a megabyte of digit groups took %v", d)
+	}
+}
+
+// More values to replace than a step may name stops the save, and the placeholders are handed out in linear time.
+func TestTooManyValuesStopTheSave(t *testing.T) {
+	start := time.Now()
+	body := strings.Repeat("000 ", 100000) + "4111111111111111"
+	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body}); err == nil {
+		t.Errorf("20,000 cards of zeros were saved: %d lines", len(s.Lines))
+	} else if !strings.Contains(err.Error(), "more than 200 values") {
+		t.Errorf("%v", err)
+	}
+	var ph placeholders
+	for i := 0; i < maxPlaceholders; i++ {
+		ph.next("same")
+	}
+	if ph.overflow || ph.order[0] != "PROBE_SAVED_SAME" || ph.order[1] != "PROBE_SAVED_SAME_2" || ph.order[maxPlaceholders-1] != "PROBE_SAVED_SAME_200" {
+		t.Errorf("names: %v %v %v overflow %v", ph.order[0], ph.order[1], ph.order[maxPlaceholders-1], ph.overflow)
+	}
+	if got := ph.next("same"); !ph.overflow || got != "${PROBE_SAVED_MORE}" {
+		t.Errorf("the 201st: %q overflow %v", got, ph.overflow)
+	}
+	// 199 values are fine.
+	var parts []string
+	for i := 0; i < 199; i++ {
+		parts = append(parts, fmt.Sprintf("k%d=v%d", i, i))
+	}
+	if _, err := buildCallStep(SaveStepInput{Method: "GET", URL: "https://a.example.test/x?" + strings.Join(parts, "&")}); err != nil {
+		t.Errorf("199 query values: %v", err)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("took %v", d)
+	}
+}
+
+// A card number written with other digits around it is replaced whole, and a longer number that passes is not cut at a shorter prefix.
+func TestCardsAreReplacedWholeNotInPart(t *testing.T) {
+	luhnDigit := func(prefix string) string {
+		for d := 0; d < 10; d++ {
+			if luhn(prefix + string(rune('0'+d))) {
+				return prefix + string(rune('0'+d))
+			}
+		}
+		return ""
+	}
+	n19 := luhnDigit("411111111111111111") // 19 digits that pass
+	grouped := n19[0:4] + " " + n19[4:8] + " " + n19[8:12] + " " + n19[12:16] + " " + n19[16:]
+	for _, c := range []struct{ typed, want string }{
+		{"6 4111 1111 1111 1111", "6 ${PROBE_SAVED_CARD}"},
+		{"4111 1111 1111 1111 12", "${PROBE_SAVED_CARD} 12"},
+		{grouped, "${PROBE_SAVED_CARD}"},
+		{"a " + n19 + " b", "a ${PROBE_SAVED_CARD} b"},
+	} {
+		s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: c.typed})
+		if err != nil {
+			t.Errorf("%q: %v", c.typed, err)
+			continue
+		}
+		if got := stepOf(t, s).Body; got != c.want {
+			t.Errorf("%q became %q, want %q", c.typed, got, c.want)
+		}
+	}
+}
+
+// Whitespace around an object key does not hide a credential key, and a name made from a key never carries what the key holds.
+func TestKeysAndNamesDoNotCarryACredential(t *testing.T) {
+	hex := "9f86d081884c7d659a2feaa0c55ad015"
+	for _, key := range []string{" " + hex + " ", "\t" + hex, hex + "\n"} {
+		body := `{"` + strings.ReplaceAll(key, "\n", `\n`) + `":1}`
+		body = strings.ReplaceAll(body, "\t", `\t`)
+		if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body}); err == nil {
+			t.Errorf("the key %q was saved: %v", key, s.Lines)
+		}
+	}
+	// A key with a credential as a word is refused whole; a key with only a short credential-looking word is kept, and its name is neutral.
+	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"Bearer ` + hex + `":"value1234abcd"}`}); err == nil {
+		t.Errorf("a key holding a credential was saved: %v", s.Lines)
+	}
+	s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"user_id_ab12cd34ef":"value1234abcd","api_key_for_9f86d081":"other5678efgh"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := strings.ToUpper(strings.Join(s.Lines, "\n"))
+	if strings.Contains(strings.SplitN(all, "\n", 2)[0], "AB12CD34EF") || strings.Contains(strings.SplitN(all, "\n", 2)[0], "9F86D081") {
+		t.Errorf("a credential from a key is in the comment or the names:\n%s", strings.Join(s.Lines, "\n"))
+	}
+	var ph placeholders
+	for base, want := range map[string]string{"Bearer " + hex: "VALUE", "user_id_ab12cd34ef": "VALUE", "token": "TOKEN", "api key": "API_KEY", hex: "VALUE"} {
+		if got := nameBase(base); got != want {
+			t.Errorf("nameBase(%q) = %q, want %q", base, got, want)
+		}
+	}
+	_ = ph
 }

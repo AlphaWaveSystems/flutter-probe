@@ -41,18 +41,37 @@ func (a *App) BuildCallStep(in SaveStepInput) (SavedStep, error) { return buildC
 
 // placeholders hands out ${NAME}s: upper case, letters, digits and underscores, a name used once for one value.
 type placeholders struct {
-	used  map[string]bool
-	order []string
+	used     map[string]bool
+	order    []string
+	overflow bool // more values to replace than a step may name: the save stops
 }
+
+// maxPlaceholders is the most values one step may replace. More is not a request somebody typed to check a backend, and the comment
+// above the step would name every one of them.
+const maxPlaceholders = 200
 
 // savedPrefix is on every generated name, so a name can never be one the shell already has (USER, PATH, HOME) and so what to set is
 // plain in the comment.
 const savedPrefix = "PROBE_SAVED_"
 
+// boundText cuts a name before it is read: only its start matters.
+func boundText(s string) string {
+	if len(s) > 400 {
+		return s[:400]
+	}
+	return s
+}
+
 // nameBase turns what a value was called into letters, digits and underscores, at most 40 of them: every other character, of any kind
 // (a line break, a space, a quote, a brace, a letter that is not ASCII), is an underscore, so a name can neither end the comment line
 // nor open a placeholder of its own.
 func nameBase(base string) string {
+	// A name made from what a value was called must not carry a credential: a key such as "Bearer <hex>" has none of its text in the name.
+	for _, tok := range regexp.MustCompile(`[^A-Za-z0-9]+`).Split(boundText(base), -1) {
+		if looksSecret(tok) || hexRun.MatchString(tok) {
+			return "VALUE"
+		}
+	}
 	var b strings.Builder
 	for _, r := range strings.ToUpper(base) {
 		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
@@ -75,12 +94,16 @@ func nameBase(base string) string {
 }
 
 func (p *placeholders) next(base string) string {
+	if len(p.order) >= maxPlaceholders {
+		p.overflow = true
+		return "${" + savedPrefix + "MORE}"
+	}
 	name := savedPrefix + nameBase(base)
 	if p.used == nil {
 		p.used = map[string]bool{}
 	}
 	cand := name
-	for i := 2; p.used[cand]; i++ {
+	for i := 2; p.used[cand]; i++ { // at most maxPlaceholders names exist, so this is short
 		cand = fmt.Sprintf("%s_%d", name, i)
 	}
 	p.used[cand] = true
@@ -129,10 +152,17 @@ func interpolatedForm(s string) string {
 
 var digitRun = regexp.MustCompile(`\d(?:[ -]?\d)*`)
 
-// cardRuns are the spans of s that are 13 to 19 digits, in whole groups of digits (separated by a single space or hyphen, or one
-// solid group), that pass the card number check. Every run of digit groups is searched in every span of groups, so a card number next
-// to other digits ("0 4111 1111 1111 1111 0") is found, and a window that starts or ends inside a group is not tried: that would take
-// one in ten long numbers for a card.
+const (
+	cardMinGroup  = 3 // a card number is written in groups of at least three digits (4-4-4-4, 4-6-5, 4-4-4-4-3), or solid
+	cardMaxGroups = 8
+)
+
+// cardRuns are the spans of s that are 13 to 19 digits, as one solid group or as consecutive groups of at least three digits (separated
+// by a single space or hyphen, at most eight groups), that pass the card number check. The search has no size limit: every run of digit
+// groups is walked once from each group with at most 19 digits ahead of it, so it is linear in the text. A card number next to other
+// digits ("0 4111 1111 1111 1111 0") is found, and a window that starts or ends inside a group is not tried (that would take one in ten
+// long numbers for a card). Of the windows that start at a group, the longest that passes is taken, so a 19-digit number is not cut at
+// its 16-digit prefix. Short groups (one or two digits) cannot be part of a window: they end the run of groups.
 func cardRuns(s string) [][2]int {
 	var out [][2]int
 	for _, m := range digitRun.FindAllStringIndex(s, -1) {
@@ -151,32 +181,31 @@ func cardRuns(s string) [][2]int {
 			groups = append(groups, group{i, j})
 			i = j
 		}
-		if len(groups) > 2000 {
-			continue
-		}
 		for a := 0; a < len(groups); {
-			found := false
-			digits := 0
-			for z := a; z < len(groups); z++ {
-				digits += groups[z].b - groups[z].a
+			if groups[a].b-groups[a].a < cardMinGroup {
+				a++
+				continue
+			}
+			best, digits := -1, 0
+			var d strings.Builder
+			for z := a; z < len(groups) && z-a < cardMaxGroups; z++ {
+				n := groups[z].b - groups[z].a
+				if n < cardMinGroup {
+					break
+				}
+				digits += n
 				if digits > 19 {
 					break
 				}
-				if digits < 13 {
-					continue
-				}
-				var d strings.Builder
-				for k := a; k <= z; k++ {
-					d.WriteString(run[groups[k].a:groups[k].b])
-				}
-				if luhn(d.String()) {
-					out = append(out, [2]int{m[0] + groups[a].a, m[0] + groups[z].b})
-					a = z + 1
-					found = true
-					break
+				d.WriteString(run[groups[z].a:groups[z].b])
+				if digits >= 13 && luhn(d.String()) {
+					best = z
 				}
 			}
-			if !found {
+			if best >= 0 {
+				out = append(out, [2]int{m[0] + groups[a].a, m[0] + groups[best].b})
+				a = best + 1
+			} else {
 				a++
 			}
 		}
@@ -232,6 +261,9 @@ func buildCallStep(in SaveStepInput) (SavedStep, error) {
 	savedBody, err := safeBody(body, &ph)
 	if err != nil {
 		return SavedStep{}, err
+	}
+	if ph.overflow {
+		return SavedStep{}, fmt.Errorf("the request has more than %d values to replace, so nothing was saved", maxPlaceholders)
 	}
 	line := "call " + method + " " + probeString(savedURL)
 	if savedBody != "" {
@@ -469,6 +501,22 @@ var (
 	errKeyLooksSecret = errors.New("an object key in the body looks like a credential, so nothing was saved")
 )
 
+// keyHoldsCredential says whether an object key is, or contains as a word, a credential in a shape no ordinary key has: a key of
+// "Bearer <hex>" or " <hex> " is a value written where a name goes.
+func keyHoldsCredential(name string) bool {
+	if strongSecretShape(strings.TrimSpace(boundText(name))) {
+		return true
+	}
+	for _, tok := range strings.FieldsFunc(boundText(name), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '+' || r == '/' || r == '_' || r == '-' || r == '=' || r == '.')
+	}) {
+		if strongSecretShape(tok) {
+			return true
+		}
+	}
+	return false
+}
+
 // strongSecretShape says whether a name is a hex string of 16 or more digits, a JWT, or base64 with padding: shapes an ordinary key
 // does not have, so a name of one of them is a value written where a name goes.
 func strongSecretShape(name string) bool {
@@ -505,7 +553,7 @@ func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph 
 					out.WriteByte(',')
 				}
 				first = false
-				if strongSecretShape(name) {
+				if keyHoldsCredential(name) {
 					return errKeyLooksSecret // a name that is a hex string, a JWT or padded base64 is a value written as a name
 				}
 				if stepEmail.MatchString(name) || len(cardRuns(name)) > 0 {
