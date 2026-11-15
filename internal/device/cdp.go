@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -66,7 +67,7 @@ func ListTargets(ctx context.Context, port int) ([]Target, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not list the WebView pages on port %d: %s", port, transportReason(ctx, err))
+		return nil, fmt.Errorf("could not list the WebView pages: %s", transportReason(ctx, err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -111,6 +112,28 @@ func transportReason(ctx context.Context, err error) string {
 	return "the debugger did not answer as expected"
 }
 
+// ErrMalformedReply is the error of a call whose reply could not be decoded.
+var ErrMalformedReply = errors.New("the WebView page sent a reply that could not be read")
+
+var replyIDPattern = regexp.MustCompile(`^\s*\{\s*"id"\s*:\s*([0-9]{1,18})\b`)
+
+// replyID reads the id of a message from its first bytes without decoding the message, or returns -1. DevTools writes the id first.
+func replyID(msg []byte) int64 {
+	head := msg
+	if len(head) > 64 {
+		head = head[:64]
+	}
+	m := replyIDPattern.FindSubmatch(head)
+	if m == nil {
+		return -1
+	}
+	n, err := strconv.ParseInt(string(m[1]), 10, 64)
+	if err != nil {
+		return -1
+	}
+	return n
+}
+
 // CDPError is an error answer from the page. The message is the page's own text, so it is cleaned when the error is made: only printable characters, at most maxCDPErrorChars of them.
 type CDPError struct {
 	Code    int
@@ -150,7 +173,7 @@ type CDPConn struct {
 func DialTarget(ctx context.Context, port int, t Target) (*CDPConn, error) {
 	u, err := url.Parse(t.WebSocketDebuggerURL)
 	if err != nil || u.Scheme != "ws" || u.Host != net.JoinHostPort("127.0.0.1", strconv.Itoa(port)) || !strings.HasPrefix(u.Path, "/devtools/") {
-		return nil, fmt.Errorf("the WebView page has no usable debugger address on 127.0.0.1:%d", port)
+		return nil, fmt.Errorf("the WebView page has no usable debugger address")
 	}
 	d := websocket.Dialer{Proxy: nil, NetDialContext: loopbackDialer(port), HandshakeTimeout: cdpHTTPTimeout}
 	ws, resp, err := d.DialContext(ctx, u.String(), nil)
@@ -206,7 +229,15 @@ func (c *CDPConn) Call(ctx context.Context, method string, params any) (json.Raw
 			return nil, wrapCtx(ctx, fmt.Errorf("the WebView connection closed while waiting for %s: %w", method, err))
 		}
 		var r cdpResponse
-		if json.Unmarshal(msg, &r) != nil || r.ID != id {
+		if err := json.Unmarshal(msg, &r); err != nil {
+			// a reply to this very command that cannot be decoded (a value that is not JSON, nesting past the decoder's limit) is an answer we will never get in a better form: fail now instead of waiting
+			// for the call's whole timeout. Anything else that cannot be decoded is not ours and is skipped.
+			if replyID(msg) == id {
+				return nil, ErrMalformedReply
+			}
+			continue
+		}
+		if r.ID != id {
 			continue
 		}
 		if r.Error != nil {
