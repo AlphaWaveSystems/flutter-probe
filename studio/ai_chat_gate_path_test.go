@@ -122,3 +122,33 @@ func TestChatRequestAndPreviewAreGatedTheSameWay(t *testing.T) {
 		}
 	}
 }
+
+// A card number split by hidden characters or no-break spaces is whole again before the gate reads it.
+func TestChatFieldRedactsASplitCard(t *testing.T) {
+	for _, in := range []string{"card 4111\u200b1111\u200b1111\u200b1111 end", "card 4111\u00a01111\u00a01111\u00a01111 end", "card 41\u200d11 1111 1111 1111 end", "card 4111\u20601111-1111-1111 end"} {
+		if out := chatField(in, ""); strings.Contains(out, "4111") || strings.Contains(out, "1111") {
+			t.Errorf("%q -> %q", in, out)
+		}
+	}
+}
+
+// The reply is cleaned: an email, a home folder and a token the provider echoes back are not shown, hidden characters in it do not
+// hide them, and ordinary text is shown as it is.
+func TestChatReplyIsCleaned(t *testing.T) {
+	isolateProvider(t, "")
+	token := "ghp_" + strings.Repeat("a1B2", 9)
+	f := newLocalFake(t, "Mail jane.doe@example.test, file /Users/jane/dev/app, token "+splitBy(token, "\u200b")+".\n\tUse `tap \"Sign in\"`.")
+	dir := writeProbeYAML(t, localYAML(f.srv.URL))
+	resp, err := appIn(dir).Chat([]ChatMessage{{Role: "user", Content: "hi"}}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"jane", "example.test", "/Users", token[:7], "a1B2a1B2", "\u200b"} {
+		if strings.Contains(resp.Content, leak) {
+			t.Errorf("%q is in the reply %q", leak, resp.Content)
+		}
+	}
+	if !strings.Contains(resp.Content, "[email]") || !strings.Contains(resp.Content, "~/dev/app") || !strings.Contains(resp.Content, "\n") || !strings.Contains(resp.Content, "tap \"Sign in\"") {
+		t.Errorf("the reply is not what was expected: %q", resp.Content)
+	}
+}

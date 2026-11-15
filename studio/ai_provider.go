@@ -295,6 +295,9 @@ func completeChat(s aiProviderSettings, system string, msgs []claudeMessage) (Ch
 	if err != nil {
 		return ChatResponse{}, errors.New(chatField(err.Error(), s.APIKey))
 	}
+	// The reply is cleaned the way an Explain's is: hidden characters dropped, the exact key removed, the families redacted, personal text
+	// scrubbed, so a provider that echoes what it was sent shows none of it back.
+	resp.Content = scrubPersonal(fromProvider(withoutInvisible(resp.Content, true), withoutInvisible(s.APIKey, false)))
 	resp.Notice = s.Notice
 	return resp, nil
 }
