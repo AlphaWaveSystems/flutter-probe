@@ -421,3 +421,66 @@ func TestSeedNamesAreMentionedOnlyWhereTheyBelong(t *testing.T) {
 		}
 	}
 }
+
+// The Send request panel is the one place Studio calls out on a person's say-so. Its names appear in no AI file, no monitor file and
+// no other file but its own, and only its two files import the call package, so nothing the panel sends or receives can reach the chat,
+// Explain or the request monitor, and nothing else can call out through it.
+var sendNames = map[string]bool{
+	"SendRequest": true, "CheckTarget": true, "AllowHost": true, "SendInput": true, "SendResult": true, "sendState": true, "SendHeader": true,
+	"TargetInfo": true, "SendHop": true,
+}
+
+func sendFileMisuse(filename, src string) []string {
+	f, err := parser.ParseFile(token.NewFileSet(), filename, src, 0)
+	if err != nil {
+		return []string{"does not parse: " + err.Error()}
+	}
+	own := filename == "send_policy.go" || filename == "send_request.go" || filename == "app.go" || filename == "main.go"
+	var bad []string
+	for _, spec := range f.Imports {
+		path, _ := strconv.Unquote(spec.Path.Value)
+		if strings.HasSuffix(path, "/internal/httpcall") && filename != "send_policy.go" && filename != "send_request.go" {
+			bad = append(bad, filename+" imports httpcall")
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && sendNames[id.Name] && !own {
+			bad = append(bad, filename+" mentions "+id.Name)
+		}
+		return true
+	})
+	sort.Strings(bad)
+	return dedupe(bad)
+}
+
+func TestTheSendPanelIsReachedByNoOtherCode(t *testing.T) {
+	for name, c := range map[string]struct{ file, src string }{
+		"the chat reads the panel":      {"ai_chat.go", `package main; func f(a *App) { a.SendRequest(SendInput{}) }`},
+		"Explain allows a host":         {"ai_explain.go", `package main; func f(a *App) { a.AllowHost("x:1") }`},
+		"the monitor calls out":         {"net_exchanges.go", `package main; var _ = sendState{}`},
+		"another file imports the call": {"ai_chat.go", `package main; import "github.com/alphawavesystems/flutter-probe/internal/httpcall"; var _ = httpcall.Do`},
+		"a helper imports the call":     {"util.go", `package main; import hc "github.com/alphawavesystems/flutter-probe/internal/httpcall"; var _ = hc.Do`},
+	} {
+		if bad := sendFileMisuse(c.file, c.src); len(bad) == 0 {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if bad := sendFileMisuse("send_request.go", `package main; import "github.com/alphawavesystems/flutter-probe/internal/httpcall"; func f(a *App) { a.SendRequest(SendInput{}); _ = httpcall.Do }`); len(bad) != 0 {
+		t.Errorf("the panel's own file was refused: %v", bad)
+	}
+	paths, _ := filepath.Glob("*.go")
+	checked := 0
+	for _, p := range paths {
+		if strings.HasSuffix(p, "_test.go") {
+			continue
+		}
+		b, _ := os.ReadFile(p)
+		checked++
+		if bad := sendFileMisuse(p, string(b)); len(bad) != 0 {
+			t.Errorf("%v", bad)
+		}
+	}
+	if checked < 10 {
+		t.Fatalf("looked at %d files", checked)
+	}
+}

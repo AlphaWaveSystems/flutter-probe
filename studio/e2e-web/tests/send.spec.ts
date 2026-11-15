@@ -2,7 +2,9 @@ import { expect, Page, test } from "@playwright/test";
 import * as http from "node:http";
 import * as net from "node:net";
 import { app, openStudio, workspace } from "./helpers";
-import { netEmail, netSecret, netToken } from "./explain-seed";
+import { netEmail, netHome, netSecret, netToken } from "./explain-seed";
+
+const split = (s: string, ch: string) => [...s].join(ch);
 
 // The Send request panel, against fake backends on 127.0.0.1 (the headless build refuses local addresses except for the host named in
 // PROBE_STUDIO_TEST_ALLOW_LOCAL). No real service is called.
@@ -30,7 +32,8 @@ async function backend(other?: Backend): Promise<Backend> {
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Set-Cookie", `sid=${netSecret}; HttpOnly`);
         res.setHeader("X-Request-Id", "req-9");
-        res.end(JSON.stringify({ ok: true, password: netSecret, note: '<img src=x onerror="window.__sendXss=1"><script>window.__sendXss=2</script>', email: netEmail, token: netToken }));
+        res.setHeader("X-Split", split(netToken, "\u00AD")); // a header can only carry Latin-1
+        res.end(JSON.stringify({ ok: true, password: netSecret, note: '<img src=x onerror="window.__sendXss=1"><script>window.__sendXss=2</script>', email: netEmail, token: netToken, soft: split(netToken, "\u00AD"), glyph: split(netEmail, "\uE000"), home: split(netHome, "\u2065") }));
       } else if (path === "/away" && other) {
         res.statusCode = 302;
         res.setHeader("Location", `${other.url}/steal?token=${netSecret}`);
@@ -126,7 +129,7 @@ test.describe("Send request (fake backends on 127.0.0.1)", () => {
       await expect(result.locator("img, script")).toHaveCount(0);
       expect(await page.evaluate(() => (window as any).__sendXss)).toBeUndefined();
       const all = await page.locator("body").innerText();
-      for (const bad of [netSecret, netEmail, "jane.doe", netToken.slice(4, 20)]) expect(all, bad).not.toContain(bad);
+      for (const bad of [netSecret, netEmail, "jane.doe", netToken.slice(4, 20), "alice"]) expect(all, bad).not.toContain(bad); // also when split by hidden or glyphless characters
     } finally {
       await b.close();
     }
