@@ -1,7 +1,7 @@
 import { expect, Page, test } from "@playwright/test";
 import * as http from "node:http";
 import * as net from "node:net";
-import { app, openStudio, workspace } from "./helpers";
+import { app, openPath, openStudio, workspace } from "./helpers";
 import { netEmail, netHome, netSecret, netToken } from "./explain-seed";
 
 const split = (s: string, ch: string) => [...s].join(ch);
@@ -81,6 +81,16 @@ async function fill(page: Page, url: string, opts: { method?: string; headers?: 
 }
 
 const overlay = (page: Page) => page.locator("#send-allow-overlay");
+
+/** The editor's lines in the order they are drawn (Monaco reuses its line elements, so their order in the page is not the file's). */
+async function editorLines(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("#editor .view-lines .view-line")]
+      .map((el) => ({ top: parseFloat((el as HTMLElement).style.top || "0"), text: (el.textContent ?? "").replace(/\u00a0/g, " ") }))
+      .sort((a, b) => a.top - b.top)
+      .map((l) => l.text),
+  );
+}
 
 test.describe("Send request (fake backends on 127.0.0.1)", () => {
   test.skip(!workspace, "STUDIO_WORKSPACE is not set (run scripts/studio-e2e-web.sh)");
@@ -322,34 +332,99 @@ test.describe("Send request (fake backends on 127.0.0.1)", () => {
     }
   });
 
-  test("sr-10 Save as step inserts a call line into the open file: placeholders for what must not be written, no headers, no request", async ({ page }) => {
+  // Save as step is checked with a file open (counter.probe) and without one.
+  async function openSendWithFile(page: Page) {
+    await openStudio(page);
+    await openPath(page, "probe-tests/counter.probe");
+    await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+    await page.click("#tab-network");
+    await page.click("#btn-net-send");
+    await expect(page.locator("#send-panel")).toBeVisible();
+  }
+
+  test("sr-10 Save as step inserts a call line into the open test: placeholders for what must not be written, no headers, no request", async ({ page }) => {
     const b = await backend();
     try {
-      await openSend(page);
+      await openSendWithFile(page);
       await expect(page.locator("#send-save-note")).toContainText("Headers are not saved");
+      await expect(page.locator("#send-save-note")).toContainText("read the step before you save the file");
       await fill(page, `${b.url}/v1/reset/${netSecret}?token=${netSecret}&id=7`, { method: "POST", headers: `Authorization: Bearer ${netSecret}\nX-Note: hello`, body: JSON.stringify({ name: "Jane", password: netSecret, email: netEmail }) });
       await page.click("#btn-send-save");
       await expect(page.locator("#send-status")).toContainText("Inserted into the open file");
       await expect(page.locator("#send-status")).toContainText("2 headers were not saved");
-      await expect(page.locator("#send-status")).toContainText("TOKEN");
+      await expect(page.locator("#send-status")).toContainText("PROBE_SAVED_TOKEN");
       const editor = page.locator("#editor .view-lines");
       await expect(editor).toContainText("call POST");
-      await expect(editor).toContainText("${TOKEN}");
-      await expect(editor).toContainText("${PASSWORD}");
+      await expect(editor).toContainText("${PROBE_SAVED_TOKEN}");
+      await expect(editor).toContainText("${PROBE_SAVED_PASSWORD}");
+      await expect(editor).toContainText("counter increments and resets"); // the test it went into is still there
       const text = await editor.innerText();
       for (const bad of [netSecret, netEmail, "jane.doe", "Authorization", "Bearer", "X-Note", "hunter2"]) expect(text, bad).not.toContain(bad);
       expect(b.hits()).toBe(0); // saving asks nobody: no request, and no dialog
       await expect(overlay(page)).toBeHidden();
       // What the call step cannot say is not saved, and the editor does not change.
-      const before = await editor.innerText();
+      const before = await editorLines(page);
       await fill(page, `${b.url}/ok`, { method: "PATCH", body: "{}" });
       await page.click("#btn-send-save");
       await expect(page.locator("#send-status")).toContainText("PATCH");
       await expect(page.locator("#send-status")).toContainText("cannot be saved as a step");
-      expect(await editor.innerText()).toBe(before);
-      // Nothing is stored in the browser.
+      // A request the runner would fill in is not saved either, and the sentence repeats nothing typed.
+      await fill(page, `${b.url}/ok`, { method: "POST", body: '{"note":"${REV_DEPLOY_TOKEN}"}' });
+      await page.click("#btn-send-save");
+      await expect(page.locator("#send-status")).toContainText("fills in");
+      expect(await page.locator("#send-status").innerText()).not.toContain("REV_DEPLOY");
+      expect(await editorLines(page)).toEqual(before);
       const stored = await page.evaluate(() => JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage } }));
       expect(stored).not.toContain("call POST");
+    } finally {
+      await b.close();
+    }
+  });
+
+  test("sr-11 Save as step inserts once for a double click, and nothing without a file or outside a test", async ({ page }) => {
+    const b = await backend();
+    try {
+      // No file open: the editor holds the preview buffer, and nothing goes into it.
+      await openStudio(page);
+      await page.click("#tab-network");
+      await page.click("#btn-net-send");
+      const editor = page.locator("#editor .view-lines");
+      const preview = await editorLines(page);
+      await fill(page, `${b.url}/ok`, { method: "POST", body: '{"a":1}' });
+      await page.click("#btn-send-save");
+      await expect(page.locator("#send-status")).toContainText("no file is open");
+      expect(await editorLines(page)).toEqual(preview);
+
+      // A file, and a double click: one insertion, inside the test, under the cursor's line.
+      await openPath(page, "probe-tests/counter.probe");
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+      await page.click("#tab-network");
+      await page.click("#btn-net-send");
+      await fill(page, `${b.url}/ok`, { method: "POST", body: '{"a":1}' });
+      await page.dblclick("#btn-send-save");
+      await expect(page.locator("#send-status")).toContainText("Inserted into the open file");
+      await page.waitForTimeout(500); // a second insertion, if there were one, would be in by now
+      let lines = await editorLines(page);
+      expect(lines.filter((l) => l.includes("call POST"))).toHaveLength(1);
+      const at = lines.findIndex((l) => l.includes("call POST"));
+      expect(lines[at].startsWith("  ")).toBe(true); // at the indent of the steps
+      expect(lines.slice(0, at).some((l) => l.startsWith('test "counter increments and resets"'))).toBe(true); // after the header, inside the test
+
+      // A cursor above the first test: a comment typed on a line of its own at the top. Nothing is inserted there.
+      await editor.locator(".view-line").first().click();
+      await page.keyboard.press("Home");
+      await page.keyboard.type("# top comment");
+      await page.keyboard.press("Escape"); // close any suggestion, so Enter is a line break
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("ArrowUp");
+      await page.waitForTimeout(500);
+      const withComment = await editorLines(page);
+      expect(withComment[0]).toBe("# top comment");
+      await fill(page, `${b.url}/ok`, { method: "POST", body: '{"b":2}' });
+      await page.click("#btn-send-save");
+      await expect(page.locator("#send-status")).toContainText("inside a test");
+      expect(await editorLines(page)).toEqual(withComment);
+      expect(b.hits()).toBe(0);
     } finally {
       await b.close();
     }

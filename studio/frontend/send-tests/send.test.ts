@@ -82,7 +82,7 @@ describe("errorText", () => {
 
 describe("savedSummary", () => {
   it("says what to set and what was not saved", () => {
-    assert.equal(savedSummary([], 0), "Inserted into the open file. Save the file to keep it.");
+    assert.equal(savedSummary([], 0), "Inserted into the open file. Read the step: values the save could not recognise are written as typed. Save the file to keep it.");
     assert.match(savedSummary(["TOKEN"], 1), /this environment variable before you run it: TOKEN\. The header was not saved\./);
     assert.match(savedSummary(["A", "B"], 3), /these environment variables before you run it: A, B\. 3 headers were not saved\./);
   });

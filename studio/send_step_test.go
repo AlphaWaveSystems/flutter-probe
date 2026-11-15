@@ -33,15 +33,15 @@ func TestSaveStepWritesTheCallGrammarAndNothingElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Lines) != 2 || !strings.HasPrefix(s.Lines[0], "# set before running probe test: ") || !strings.Contains(s.Lines[0], "PAGE") || !strings.Contains(s.Lines[0], "TOKEN") || !strings.Contains(s.Lines[0], "PASSWORD") {
+	if len(s.Lines) != 2 || !strings.HasPrefix(s.Lines[0], "# set before running probe test: ") || !strings.Contains(s.Lines[0], "PROBE_SAVED_PAGE") || !strings.Contains(s.Lines[0], "PROBE_SAVED_TOKEN") || !strings.Contains(s.Lines[0], "PROBE_SAVED_PASSWORD") {
 		t.Fatalf("%+v", s)
 	}
 	c := stepOf(t, s)
-	want := `{"name":"Jane","password":"${PASSWORD}","n":{"apiKey":"${APIKEY}","ok":true},"list":["a","${LIST}",null],"count":3}`
-	if c.Method != "POST" || c.URL != "https://api.example.test/v1/items/abc?page=${PAGE}&token=${TOKEN}" || c.Body != want {
+	want := `{"name":"Jane","password":"${PROBE_SAVED_PASSWORD}","n":{"apiKey":"${PROBE_SAVED_APIKEY}","ok":true},"list":["a","${PROBE_SAVED_LIST}",null],"count":3}`
+	if c.Method != "POST" || c.URL != "https://api.example.test/v1/items/abc?page=${PROBE_SAVED_PAGE}&token=${PROBE_SAVED_TOKEN}" || c.Body != want {
 		t.Fatalf("url %q\nbody %q", c.URL, c.Body)
 	}
-	if strings.Join(s.Fill, ",") != "PAGE,TOKEN,PASSWORD,APIKEY,LIST" {
+	if strings.Join(s.Fill, ",") != "PROBE_SAVED_PAGE,PROBE_SAVED_TOKEN,PROBE_SAVED_PASSWORD,PROBE_SAVED_APIKEY,PROBE_SAVED_LIST" {
 		t.Errorf("fill %v", s.Fill)
 	}
 	// PUT and DELETE are the other methods with a body.
@@ -206,7 +206,7 @@ func TestSaveStepChecksStandOnTheirOwn(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := stepOf(t, s)
-	if c.Body != "the password: ${PASSWORD} ok" || c.URL != "https://a.example.test/x?a=${A}&a=${A_2}" {
+	if c.Body != "the password: ${PROBE_SAVED_PASSWORD}" || c.URL != "https://a.example.test/x?a=${PROBE_SAVED_A}&a=${PROBE_SAVED_A_2}" {
 		t.Errorf("%q %q", c.URL, c.Body)
 	}
 }

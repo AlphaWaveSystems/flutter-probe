@@ -122,21 +122,30 @@ async function send(): Promise<void> {
 }
 
 /** Saves the typed request as a call step in the open file. Headers are not part of it; Go builds the lines from the method, address and body. */
-async function saveStep(insertLines: (lines: string[]) => boolean): Promise<void> {
+let saving = false;
+
+async function saveStep(insertLines: (lines: string[]) => Promise<{ ok: boolean; message?: string }>): Promise<void> {
+  if (saving) return; // a second click or key press while the first is being checked inserts nothing
+  saving = true;
+  ($("btn-send-save") as HTMLButtonElement).disabled = true;
   const headerLines = $<HTMLTextAreaElement>("send-headers").value.split("\n").filter((l) => l.trim() !== "").length;
   try {
     const step = await BuildCallStep(main.SaveStepInput.createFrom({ method: $<HTMLSelectElement>("send-method").value, url: $<HTMLInputElement>("send-url").value.trim(), body: $<HTMLTextAreaElement>("send-body").value }));
-    if (!insertLines(step.lines)) {
-      status("Nothing was inserted: no file is open.");
+    const done = await insertLines(step.lines);
+    if (!done.ok) {
+      status(done.message || "Nothing was inserted.");
       return;
     }
     status(savedSummary(step.fill, headerLines));
   } catch (err) {
     status(errorText(err));
+  } finally {
+    saving = false;
+    ($("btn-send-save") as HTMLButtonElement).disabled = false;
   }
 }
 
-export function initSendPanel(editor: { insertLines: (lines: string[]) => boolean }): void {
+export function initSendPanel(editor: { insertLines: (lines: string[]) => Promise<{ ok: boolean; message?: string }> }): void {
   const showSend = (on: boolean) => {
     $("send-panel").hidden = !on;
     $("net-body").hidden = on;

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -44,7 +45,14 @@ type placeholders struct {
 	order []string
 }
 
-func (p *placeholders) next(base string) string {
+// savedPrefix is on every generated name, so a name can never be one the shell already has (USER, PATH, HOME) and so what to set is
+// plain in the comment.
+const savedPrefix = "PROBE_SAVED_"
+
+// nameBase turns what a value was called into letters, digits and underscores, at most 40 of them: every other character, of any kind
+// (a line break, a space, a quote, a brace, a letter that is not ASCII), is an underscore, so a name can neither end the comment line
+// nor open a placeholder of its own.
+func nameBase(base string) string {
 	var b strings.Builder
 	for _, r := range strings.ToUpper(base) {
 		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
@@ -52,14 +60,22 @@ func (p *placeholders) next(base string) string {
 		} else {
 			b.WriteByte('_')
 		}
+		if b.Len() >= 200 { // enough: a longer name is cut below, and a very long one is not walked to its end
+			break
+		}
 	}
 	name := strings.Trim(b.String(), "_")
-	if name == "" || len(name) > 40 {
-		name = "VALUE"
+	if name == "" {
+		return "VALUE"
 	}
-	if name[0] >= '0' && name[0] <= '9' {
-		name = "V_" + name
+	if len(name) > 40 {
+		name = strings.TrimRight(name[:40], "_")
 	}
+	return name
+}
+
+func (p *placeholders) next(base string) string {
+	name := savedPrefix + nameBase(base)
 	if p.used == nil {
 		p.used = map[string]bool{}
 	}
@@ -94,14 +110,51 @@ func probeString(s string) string {
 	return b.String()
 }
 
+var (
+	envForm = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*\}`)
+	// a <name>, <response.body>, <random.number(1,5)>: what the runner replaces from its variables and generators
+	varForm = regexp.MustCompile(`<[A-Za-z_][A-Za-z0-9_.\-]*(?:\([^)]*\))?>`)
+)
+
+// interpolatedForm names what in s the runner would replace when the step runs, or returns "".
+func interpolatedForm(s string) string {
+	switch {
+	case envForm.MatchString(s):
+		return "a ${NAME} (an environment variable)"
+	case varForm.MatchString(s):
+		return "a <name> (a variable or generator)"
+	}
+	return ""
+}
+
+// cardRuns are the spans of s that are runs of 13 to 19 digits passing the card number check.
+func cardRuns(s string) [][2]int {
+	var out [][2]int
+	for _, m := range cardPattern.FindAllStringIndex(s, -1) {
+		digits := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, s[m[0]:m[1]])
+		if len(digits) >= 13 && len(digits) <= 19 && luhn(digits) {
+			out = append(out, [2]int{m[0], m[1]})
+		}
+	}
+	return out
+}
+
 func buildCallStep(in SaveStepInput) (SavedStep, error) {
 	method := strings.ToUpper(strings.TrimSpace(in.Method))
 	switch method {
 	case "GET", "POST", "PUT", "DELETE":
 	case "":
 		return SavedStep{}, errors.New("there is no method to save")
-	default:
+	case "PATCH", "HEAD", "OPTIONS":
 		return SavedStep{}, fmt.Errorf("the call step knows GET, POST, PUT and DELETE, so a %s request cannot be saved as a step", method)
+	default:
+		// What was typed in the method box is not repeated: it could be anything.
+		return SavedStep{}, errors.New("the call step knows GET, POST, PUT and DELETE, so this request cannot be saved as a step")
 	}
 	u, _, _, err := splitTarget(in.URL)
 	if err != nil {
@@ -120,6 +173,14 @@ func buildCallStep(in SaveStepInput) (SavedStep, error) {
 		}
 	}
 	body := strings.ReplaceAll(in.Body, "\r\n", "\n")
+	// `probe test` fills ${NAME} from the environment and <name> and <random.*> from its variables whenever a step runs, and there is no way
+	// to write them literally: a step that held one would do something other than what was typed (and could put an environment value into the
+	// request). So the save stops, naming the form and nothing else.
+	for _, text := range []string{in.URL, body} {
+		if form := interpolatedForm(text); form != "" {
+			return SavedStep{}, fmt.Errorf("the request has %s, which probe test fills in when the step runs, so it cannot be saved as typed", form)
+		}
+	}
 	if body != "" && method == "GET" {
 		return SavedStep{}, errors.New("a GET request has no body to save")
 	}
@@ -136,13 +197,10 @@ func buildCallStep(in SaveStepInput) (SavedStep, error) {
 	if savedBody != "" {
 		line += " with body " + probeString(savedBody)
 	}
-	// Nothing typed may be left in the lines: what collectTyped finds in the request is looked for in the result, whatever the code
-	// above did. A value that is still there stops the save, and the message says nothing of it.
-	if leftover(line, in.URL, body) {
-		return SavedStep{}, errors.New("a value that looks like a credential could not be hidden, so nothing was saved")
+	if corruptLineForTest != nil {
+		line = corruptLineForTest(line)
 	}
-	// The step has to read back as exactly this request, or it is not saved.
-	if err := verifyCall(line, method, savedURL, savedBody); err != nil {
+	if err := checkSavedLine(line, in.URL, body, method, savedURL, savedBody, &ph); err != nil {
 		return SavedStep{}, err
 	}
 	out := SavedStep{Lines: []string{line}, Fill: ph.order}
@@ -150,12 +208,35 @@ func buildCallStep(in SaveStepInput) (SavedStep, error) {
 		out.Fill = []string{}
 	}
 	if len(ph.order) > 0 {
-		out.Lines = []string{"# set before running probe test: " + strings.Join(ph.order, ", ") + " (environment variables; nothing typed in the panel is saved)", line}
+		out.Lines = []string{"# set before running probe test: " + strings.Join(ph.order, ", ") + " (environment variables). Review this step before you save the file: values the save could not recognise are written as typed.", line}
 	}
 	return out, nil
 }
 
-// leftover says whether any value found in the typed request is still in the line, whatever the code that built it did.
+// corruptLineForTest lets a test change the finished line before it is checked, to show that the checks cannot be skipped. It is nil.
+var corruptLineForTest func(line string) string
+
+// checkSavedLine is every check on the finished line, in one place that the build always goes through: nothing typed that the saver
+// recognises is left in it (the same heuristics as the echo scrubber, plus emails and card numbers), the only ${...} in it are the
+// placeholders it made, no <name> is in it, and the ProbeScript parser reads it back as exactly this request.
+func checkSavedLine(line, rawURL, body, method, savedURL, savedBody string, ph *placeholders) error {
+	if leftover(line, rawURL, body) {
+		return errors.New("a value that looks like a credential could not be hidden, so nothing was saved")
+	}
+	for _, m := range envForm.FindAllString(savedURL+"\x00"+savedBody, -1) {
+		if !ph.used[strings.TrimSuffix(strings.TrimPrefix(m, "${"), "}")] {
+			return errors.New("the step would hold a ${NAME} that is not one it generated, so nothing was saved")
+		}
+	}
+	if varForm.MatchString(savedURL + "\x00" + savedBody) {
+		return errors.New("the step would hold a <name> that probe test fills in, so nothing was saved")
+	}
+	return verifyCall(line, method, savedURL, savedBody)
+}
+
+// leftover says whether any value found in the typed request is still in the line, whatever the code that built it did: a typed value
+// the echo scrubber would remember, an email address, or a card number. It uses the same heuristics as the saver, so it catches a bug
+// in the saver and not a shape the heuristics do not know.
 func leftover(line, rawURL, body string) bool {
 	low := strings.ToLower(line)
 	for v := range collectTyped(rawURL, nil, body).items {
@@ -163,7 +244,7 @@ func leftover(line, rawURL, body string) bool {
 			return true
 		}
 	}
-	return false
+	return stepEmail.MatchString(line) || len(cardRuns(line)) > 0
 }
 
 // verifyCall parses the line with the real parser and compares what it reads with what was meant.
@@ -194,7 +275,7 @@ func safeURL(u *url.URL, ph *placeholders) (string, error) {
 		if err != nil {
 			plain = seg
 		}
-		if looksSecret(plain) || stepEmail.MatchString(plain) {
+		if looksSecret(plain) || stepEmail.MatchString(plain) || len(cardRuns(plain)) > 0 {
 			b.WriteString(ph.next(fmt.Sprintf("path_%d", i)))
 		} else {
 			b.WriteString(seg)
@@ -211,7 +292,7 @@ func safeURL(u *url.URL, ph *placeholders) (string, error) {
 			if err != nil {
 				plainName = name
 			}
-			if hasValue && (looksSecret(plainName) || stepEmail.MatchString(plainName)) {
+			if hasValue && (looksSecret(plainName) || stepEmail.MatchString(plainName) || len(cardRuns(plainName)) > 0) {
 				return "", errors.New("a query name looks like a credential, so nothing was saved")
 			}
 			switch {
@@ -255,7 +336,7 @@ func safeBody(body string, ph *placeholders) (string, error) {
 			}
 			plainName, _ := url.QueryUnescape(name)
 			plainValue, _ := url.QueryUnescape(value)
-			if isSecretName(plainName) || looksSecret(plainValue) || stepEmail.MatchString(plainValue) {
+			if isSecretName(plainName) || looksSecret(plainValue) || stepEmail.MatchString(plainValue) || len(cardRuns(plainValue)) > 0 {
 				parts[i] = name + "=" + ph.next(plainName)
 			}
 		}
@@ -264,7 +345,24 @@ func safeBody(body string, ph *placeholders) (string, error) {
 	return safeText(body, ph), nil
 }
 
-// safeText replaces, in free text, the value of a credential-named assignment, each email address and each token that looks like a credential.
+var (
+	// <password type="x">value</password>: an element named for a credential, with or without attributes
+	stepXMLElement = regexp.MustCompile(`<([A-Za-z_][A-Za-z0-9_.\-]*)(?:\s[^<>]*)?>([^<]+)</([A-Za-z_][A-Za-z0-9_.\-]*)>`)
+	// Authorization: Bearer abc, as it may be pasted into a body: the scheme word stays, the credential goes
+	stepAuthLine = regexp.MustCompile(`(?i)\b(?:proxy-)?authorization\s*[:=]\s*(?:(?:bearer|basic|token|digest|negotiate|ntlm|apikey|hmac)\s+)?([^\s"',;]+)`)
+	// password: my secret phrase: a credential name, a colon and the rest of the line
+	stepNameLine = regexp.MustCompile(`(?m)([A-Za-z0-9_.\-]+)[ \t]*:[ \t]+([^\n]+)$`)
+)
+
+// isAuthName is an Authorization name, whose scheme word is kept and whose credential is replaced by its own rule.
+func isAuthName(n string) bool {
+	n = strings.ToLower(n)
+	return n == "authorization" || n == "proxy-authorization"
+}
+
+// safeText replaces, in free text, the value of a credential-named assignment (the whole rest of the line after `name:`), the credential
+// in an Authorization line, the text of an element named for a credential, each email address, each card number and each token that
+// looks like a credential.
 func safeText(s string, ph *placeholders) string {
 	type span struct {
 		a, b int
@@ -272,26 +370,41 @@ func safeText(s string, ph *placeholders) string {
 	}
 	var spans []span
 	for _, m := range assignment.FindAllStringSubmatchIndex(s, -1) {
-		if isSecretName(s[m[2]:m[3]]) {
+		if isSecretName(s[m[2]:m[3]]) && !isAuthName(s[m[2]:m[3]]) {
+			spans = append(spans, span{m[4], m[5], s[m[2]:m[3]]})
+		}
+	}
+	for _, m := range stepNameLine.FindAllStringSubmatchIndex(s, -1) {
+		if isSecretName(s[m[2]:m[3]]) && !isAuthName(s[m[2]:m[3]]) {
+			spans = append(spans, span{m[4], m[5], s[m[2]:m[3]]})
+		}
+	}
+	for _, m := range stepAuthLine.FindAllStringSubmatchIndex(s, -1) {
+		spans = append(spans, span{m[2], m[3], "authorization"})
+	}
+	for _, m := range stepXMLElement.FindAllStringSubmatchIndex(s, -1) {
+		if s[m[2]:m[3]] == s[m[6]:m[7]] && isSecretName(s[m[2]:m[3]]) {
 			spans = append(spans, span{m[4], m[5], s[m[2]:m[3]]})
 		}
 	}
 	for _, m := range stepEmail.FindAllStringIndex(s, -1) {
 		spans = append(spans, span{m[0], m[1], "email"})
 	}
+	for _, m := range cardRuns(s) {
+		spans = append(spans, span{m[0], m[1], "card"})
+	}
 	for _, m := range bodyToken.FindAllStringIndex(s, -1) {
 		if looksSecret(s[m[0]:m[1]]) {
 			spans = append(spans, span{m[0], m[1], "token"})
 		}
 	}
-	// Earliest first; a span inside an earlier one is skipped.
-	for i := range spans {
-		for j := i + 1; j < len(spans); j++ {
-			if spans[j].a < spans[i].a {
-				spans[i], spans[j] = spans[j], spans[i]
-			}
+	// Earliest first, the longer first on a tie; a span inside an earlier one is skipped.
+	sort.SliceStable(spans, func(i, j int) bool {
+		if spans[i].a != spans[j].a {
+			return spans[i].a < spans[j].a
 		}
-	}
+		return spans[i].b > spans[j].b
+	})
 	var b strings.Builder
 	at := 0
 	for _, sp := range spans {
@@ -336,7 +449,11 @@ func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph 
 					out.WriteByte(',')
 				}
 				first = false
-				out.WriteString(enc(name) + ":")
+				if stepEmail.MatchString(name) || len(cardRuns(name)) > 0 {
+					out.WriteString(enc(ph.next("key")) + ":") // a name that carries an address or a card number is a value too
+				} else {
+					out.WriteString(enc(name) + ":")
+				}
 				if err := copyJSON(dec, out, name, isSecretName(name), ph); err != nil {
 					return err
 				}
@@ -363,13 +480,13 @@ func copyJSON(dec *json.Decoder, out *bytes.Buffer, key string, secret bool, ph 
 			out.WriteByte(']')
 		}
 	case string:
-		if secret || looksSecret(t) || stepEmail.MatchString(t) {
+		if secret || looksSecret(t) || stepEmail.MatchString(t) || len(cardRuns(t)) > 0 {
 			out.WriteString(enc(ph.next(key)))
 		} else {
 			out.WriteString(enc(t))
 		}
 	case json.Number:
-		if secret {
+		if secret || len(cardRuns(t.String())) > 0 {
 			out.WriteString(enc(ph.next(key)))
 		} else {
 			out.WriteString(t.String())
