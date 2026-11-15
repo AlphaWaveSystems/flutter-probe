@@ -273,7 +273,7 @@ const maxChatMessages = 40
 
 // hiddenEscape matches the ways an error body can write a character as plain ASCII: \uXXXX, \x{XXXX}, &#N; and &#xN; and a
 // percent-encoded UTF-8 sequence.
-var hiddenEscape = regexp.MustCompile(`\\u([0-9a-fA-F]{4})|\\x\{([0-9a-fA-F]{1,6})\}|&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|((?:%[0-9a-fA-F]{2}){2,4})`)
+var hiddenEscape = regexp.MustCompile(`\\u([0-9a-fA-F]{4})|\\x\{([0-9a-fA-F]{1,6})\}|&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|((?:%[0-9a-fA-F]{2})+)`)
 
 // decodeHiddenEscapes turns the escapes that spell a hidden character into the character, so the drop that follows sees it. An
 // escape of any other character is left as it was.
@@ -292,11 +292,17 @@ func decodeHiddenEscapes(s string) string {
 		case sub[4] != "":
 			n, err = strconv.ParseUint(sub[4], 16, 32)
 		default:
+			// a run of percent-encoded bytes: decoded only when every character in it is a hidden one
 			dec, derr := url.PathUnescape(sub[5])
-			if r, size := utf8.DecodeRuneInString(dec); derr == nil && size == len(dec) && hiddenRune(r) {
-				return dec
+			if derr != nil || !utf8.ValidString(dec) {
+				return m
 			}
-			return m
+			for _, r := range dec {
+				if !hiddenRune(r) {
+					return m
+				}
+			}
+			return dec
 		}
 		if err == nil && n <= unicode.MaxRune && hiddenRune(rune(n)) {
 			return string(rune(n))
@@ -305,18 +311,24 @@ func decodeHiddenEscapes(s string) string {
 	})
 }
 
-// foldDigits turns full-width digits and the dash characters (a full-width hyphen, a minus sign, the typographic dashes) into ASCII
-// ones, so a card written with them is read as a card.
+// wideCardRun finds a run of 12 or more digits (ASCII or full-width), spaces and dashes (ASCII, full-width, typographic): the shape of a
+// card number written with other characters.
+var wideCardRun = regexp.MustCompile("[0-9\uff10-\uff19](?:[0-9\uff10-\uff19 \\-\uff0d\u2010-\u2015\u2212]){11,}")
+
+// foldDigits turns full-width digits and dashes into ASCII ones, but only inside such a run that holds one, so a card written with
+// them is read as a card and no other text changes (`Save — now`, `１２３円` are sent as they are).
 func foldDigits(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r >= 0xff10 && r <= 0xff19:
-			return '0' + (r - 0xff10)
-		case r == 0xff0d || r == 0x2212 || (r >= 0x2010 && r <= 0x2015):
-			return '-'
-		}
-		return r
-	}, s)
+	return wideCardRun.ReplaceAllStringFunc(s, func(run string) string {
+		return strings.Map(func(r rune) rune {
+			switch {
+			case r >= 0xff10 && r <= 0xff19:
+				return '0' + (r - 0xff10)
+			case r == 0xff0d || r == 0x2212 || (r >= 0x2010 && r <= 0x2015):
+				return '-'
+			}
+			return r
+		}, run)
+	})
 }
 
 // chatField makes one field of a chat turn fit to send, in the order Explain uses for every field: hidden characters (and no-break

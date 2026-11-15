@@ -125,132 +125,78 @@ func scrubPersonal(s string) string {
 }
 
 // scrubPersonalText is scrubPersonal for text a person writes or reads as code (a chat turn and its reply, which hold test files with
-// routes and URLs in them): an email address is replaced, and a home folder only where it is one (see scrubHomes).
+// routes and URLs in them): an email address is replaced, and this account's own home folder, which can be told from a route, and
+// nothing else that looks like a path. (A path of another account is not guessed at here: `/home/settings` is a route.)
 func scrubPersonalText(s string) string {
-	return scrubOwnHome(scrubHomes(emailPattern.ReplaceAllString(s, "[email]")))
+	return scrubOwnHome(emailPattern.ReplaceAllString(s, "[email]"))
 }
 
-// homeHead finds the start of a home folder: /Users/x and /home/x, C:\Users\x and C:/Users/x (any case), /root and /var/root.
-var homeHead = regexp.MustCompile(`(/(?:Users|home)/[^/\s"'<>]+|(?i:[a-z]:[\\/]users[\\/][^\\/\s"'<>]+)|/(?:var/)?root\b)`)
-
-// homeSubfolders are the folders a home folder usually has: a path that goes on into one of them is a home folder whoever it belongs to.
-var homeSubfolders = map[string]bool{
-	"desktop": true, "documents": true, "downloads": true, "library": true, "pictures": true, "music": true, "movies": true, "public": true,
-	"projects": true, "project": true, "dev": true, "src": true, "code": true, "work": true, "workspace": true, "repos": true, "go": true,
-	".config": true, ".ssh": true, ".cache": true, ".local": true, ".gradle": true, ".android": true, ".pub-cache": true, "appdata": true,
+// scrubOwnHome replaces this account's own home folder with ~: the folder os.UserHomeDir names, and /Users/<name> and /home/<name> for
+// this account's name (any case), also written with its slashes escaped for JSON (`\/Users\/me`, `C:\\Users\\me`). A match needs a
+// boundary on both sides, so `/home/users/42` is not the home folder `/home/user`. One pass per form, linear in the text.
+func scrubOwnHome(s string) string {
+	var forms []string
+	if h, err := os.UserHomeDir(); err == nil && len(h) > 4 && strings.Count(h, "/")+strings.Count(h, "\\") >= 2 {
+		forms = append(forms, h)
+	}
+	if me := currentUserName(); me != "" {
+		forms = append(forms, "/Users/"+me, "/home/"+me, `C:\Users\`+me, "C:/Users/"+me)
+	}
+	n := len(forms)
+	for i := 0; i < n; i++ {
+		forms = append(forms, strings.ReplaceAll(forms[i], "/", `\/`), strings.ReplaceAll(forms[i], `\`, `\\`))
+	}
+	for _, f := range forms {
+		s = replaceFolder(s, f)
+	}
+	return s
 }
 
-// pathStartOK says whether a path may start at s[i]: the character before it is not part of a longer path or word (`/tmp/home/x` is
-// a path inside /tmp, and is not /home/x).
-func pathStartOK(s string, i int) bool {
-	if i == 0 || strings.HasSuffix(s[:i], "file://") || strings.HasSuffix(strings.ToLower(s[:i]), "file://localhost") {
-		return true
-	}
-	return !strings.ContainsRune("/\\.~-_", rune(s[i-1])) && !(s[i-1] >= '0' && s[i-1] <= '9') && !(s[i-1] >= 'a' && s[i-1] <= 'z') && !(s[i-1] >= 'A' && s[i-1] <= 'Z')
-}
-
-// inURL says whether the path that starts at s[i] is part of a URL: the run of characters before it, with no space or quote, holds a
-// scheme and `://` or starts with `//` (a scheme-relative URL). file:// with no host or localhost is a folder, not a URL.
-func inURL(s string, i, end int) bool {
-	start := i
-	for start > 0 && !strings.ContainsRune(" \t\r\n\"'`<>()[]{},", rune(s[start-1])) {
-		start--
-	}
-	run := s[start:end]
-	if strings.HasPrefix(run, "//") {
-		return true
-	}
-	k := strings.Index(run, "://")
-	if k <= 0 {
-		return false
-	}
-	if scheme := strings.ToLower(run[:k]); scheme == "file" {
-		host := strings.TrimPrefix(run[k+3:], "")
-		host = host[:strings.IndexByte(host+"/", '/')]
-		return host != "" && !strings.EqualFold(host, "localhost")
-	}
-	return true
-}
-
-// segmentsAfter counts the path segments that follow s[end:], up to 3.
-func segmentsAfter(s string, end int) (n int) {
-	for end < len(s) && s[end] == '/' && n < 3 {
-		next := end + 1
-		stop := next
-		for stop < len(s) && !strings.ContainsRune("/ \t\r\n\"'`<>", rune(s[stop])) {
-			stop++
-		}
-		if stop == next {
-			break
-		}
-		n++
-		end = stop
-	}
-	return n
-}
-
-// scrubHomes replaces the folder part of a home folder with ~, and nothing else, so a route or a URL that looks like one survives.
-// A path is not looked at when it sits inside a URL or inside a longer path (`/tmp/home/x`). /Users/x and /home/x (the capital U and
-// the lower case are exact: `/users/42` is a route) are replaced when x is a folder on this machine, when the path goes into a usual
-// home subfolder (`/Users/x/Documents`), when it goes two segments on (`/home/x/dev/app`), or, unquoted, one segment on. A quoted
-// single segment (`'/home/settings'`) is a route. /root needs the same, and /var/root is always replaced. C:\Users\x always is.
-// This account's own home folder is replaced everywhere, by scrubOwnHome.
-func scrubHomes(s string) string {
-	locs := homeHead.FindAllStringIndex(s, -1)
-	if len(locs) == 0 {
+// replaceFolder replaces each occurrence of the folder f (compared without regard to ASCII case) in s with ~, where it starts a path
+// (the start of the text, or a character that cannot be part of one) and ends one (the end, or a character that cannot continue a name).
+func replaceFolder(s, f string) string {
+	if f == "" || len(s) < len(f) {
 		return s
 	}
 	var b strings.Builder
 	at := 0
-	for _, loc := range locs {
-		start, end := loc[0], loc[1]
-		if start < at || !pathStartOK(s, start) || inURL(s, start, end) {
+	for i := 0; i+len(f) <= len(s); {
+		if !strings.EqualFold(s[i:i+len(f)], f) || len(s[i:i+len(f)]) != len(f) {
+			i++
 			continue
 		}
-		head := s[start:end]
-		if head[0] == '/' && !strings.HasPrefix(head, "/var/") {
-			after := segmentsAfter(s, end)
-			quoted := start > 0 && strings.ContainsRune("'\"`", rune(s[start-1]))
-			known := false
-			if after > 0 {
-				first := s[end+1:]
-				if i := strings.IndexAny(first, "/ \t\r\n\"'`<>"); i >= 0 {
-					first = first[:i]
-				}
-				known = homeSubfolders[strings.ToLower(first)]
-			}
-			if strings.HasSuffix(head, "root") {
-				if !(after >= 2 || (!quoted && after >= 1)) {
-					continue
-				}
-			} else if !(after >= 2 || (!quoted && after >= 1) || known || folderExists(head)) {
-				continue
-			}
+		end := i + len(f)
+		beforeOK := i == 0 || !strings.ContainsRune("/\\.~-_", rune(s[i-1])) && !isAlnum(s[i-1]) || (f[0] == '/' && afterHostOfURL(s, i))
+		afterOK := end == len(s) || !(isAlnum(s[end]) || s[end] == '_' || s[end] == '-')
+		if !beforeOK || !afterOK {
+			i++
+			continue
 		}
-		b.WriteString(s[at:start])
+		b.WriteString(s[at:i])
 		b.WriteString("~")
-		at = end
+		at, i = end, end
+	}
+	if at == 0 {
+		return s
 	}
 	b.WriteString(s[at:])
 	return b.String()
 }
 
-// folderExists says whether the home folder head names exists on this machine (`/Users/alice`).
-func folderExists(head string) bool {
-	st, err := os.Stat(head)
-	return err == nil && st.IsDir()
+// afterHostOfURL says whether the path at s[i] directly follows the host of a URL (`https://x.test` + `/home/me`): the run of characters
+// before it, at most 2,000 bytes, has a scheme and `://` in it and no `/` after the host.
+func afterHostOfURL(s string, i int) bool {
+	lo := max(i-2000, 0)
+	run := s[lo:i]
+	k := strings.LastIndex(run, "://")
+	if k < 0 || strings.ContainsAny(run[k+3:], "/ \t\r\n\"'`<>()[]{},;") {
+		return false
+	}
+	return true
 }
 
-// scrubOwnHome replaces this account's own home folder wherever it is, in any case, quoted or not, inside a URL or not, and the
-// folder os.UserHomeDir names.
-func scrubOwnHome(s string) string {
-	if me := currentUserName(); me != "" {
-		s = regexp.MustCompile(`(?i)/(?:users|home)/`+regexp.QuoteMeta(me)+`([^A-Za-z0-9._-]|$)`).ReplaceAllString(s, "~${1}")
-	}
-	if h, err := os.UserHomeDir(); err == nil && len(h) > 4 && strings.Count(h, "/")+strings.Count(h, "\\") >= 2 {
-		s = strings.ReplaceAll(s, h, "~")
-	}
-	return s
+func isAlnum(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 // currentUserName is this account's login name, or "".
