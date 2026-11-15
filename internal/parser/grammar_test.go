@@ -178,6 +178,7 @@ var waitKindNames = map[parser.WaitKind]string{
 	parser.WaitAnimations:  "animations",
 	parser.WaitIdle:        "idle",
 	parser.WaitAny:         "any",
+	parser.WaitWebView:     "webview",
 }
 
 // describe renders a step as a short, stable label such as "action:tap".
@@ -188,6 +189,8 @@ func describe(s parser.Step) string {
 	case parser.AssertStep:
 		kind := "assert"
 		switch {
+		case v.WebView != nil:
+			kind = "assert:webview"
 		case v.Native:
 			kind = "assert:native"
 		case v.WithAI:
@@ -663,7 +666,12 @@ var grammarProductionExamples = []productionExample{
 	{production: "clear-step", src: testBody(`clear "Search"`, `clear #email if visible`, `clear 2nd "Field"`), want: repeat("action:clear", 3)},
 	{production: "toggle-step", src: testBody(`toggle "Dark Mode"`, `toggle #unit`), want: repeat("action:toggle", 2)},
 	{production: "drag-step", src: testBody(`drag "A" to "B"`, `drag #a to #b`), want: repeat("action:drag", 2)},
-	{production: "swipe-step", src: testBody(`swipe left`, `swipe up on "Card"`, `swipe`), want: repeat("action:swipe", 3)},
+	{production: "swipe-step", src: testBody(`swipe left`, `swipe up on "Card"`, `swipe`, `swipe up over 40 percent`), want: repeat("action:swipe", 4),
+		check: func(t *testing.T, p *parser.Program) {
+			if a := p.Tests[0].Body[3].(parser.ActionStep); a.Percent != 40 {
+				t.Fatalf("swipe over 40 percent parsed with percent %d", a.Percent)
+			}
+		}},
 	{production: "scroll-step", src: testBody(`scroll down`, `scroll up on "List"`, `scroll down until "X" appears`,
 		`scroll until #x is visible`), want: repeat("action:scroll", 4),
 		check: func(t *testing.T, p *parser.Program) {
@@ -687,6 +695,14 @@ var grammarProductionExamples = []productionExample{
 		want: repeat("assert:negated", 4)},
 	{production: "see-any-tail", src: testBody(`see any of "A", "B"`, `see any of "A" or "B" or "C" optional`, `don't see any of "A", "B"`),
 		want: []string{"assert:any", "assert:any", "assert:any:negated"}},
+	{production: "tap-webview-step", src: testBody(`tap "Contact support" in webview`, `tap css:"#submit" in webview`, `tap "Pay" in webview "checkout"`, `tap "x" in "Container"`),
+		want: []string{"action:tap_webview", "action:tap_webview", "action:tap_webview", "action:tap"}},
+	{production: "type-webview-step", src: testBody(`type "hello" into css:"#message" in webview`, `type "42" into "Quantity" in webview "order form"`, `type "x" into "Field"`),
+		want: []string{"action:type_webview", "action:type_webview", "action:type"}},
+	{production: "see-webview-step", src: testBody(`see "Getting Started" in webview`, `don't see css:".error" in webview`, `dont see "Oops" in webview "help"`, `see "Total" in "Cart"`),
+		want: []string{"assert:webview", "assert:webview:negated", "assert:webview:negated", "assert"}},
+	{production: "wait-webview-step", src: testBody(`wait until "Message sent" appears in webview`, `wait until css:"#result" appears in webview "help"`, `wait until "A" appears`),
+		want: []string{"wait:webview", "wait:webview", "wait:appears"}},
 	{production: "see-native-step", src: testBody(`see native "IMG"`, `don't see native "Err"`),
 		want: []string{"assert:native", "assert:native:negated"}},
 	{production: "assert-defects-step", src: testBody(`assert no visual defects with ai`, `assert no defects with ai`),
@@ -750,6 +766,12 @@ var grammarProductionExamples = []productionExample{
 	{production: "kill-step", src: testBody(`kill the app`, `kill`), want: repeat("action:kill", 2)},
 	{production: "clear-data-step", src: testBody(`clear app data`), want: []string{"action:clear_app_data"}},
 	{production: "go-back-step", src: testBody(`go back`), want: []string{"action:go_back"}},
+	{production: "press-key-step", src: testBody(`press tab`, `press backspace`, `press enter`), want: []string{"action:press_key", "action:press_key", "action:press_enter"},
+		check: func(t *testing.T, p *parser.Program) {
+			if a := p.Tests[0].Body[1].(parser.ActionStep); a.Name != "backspace" {
+				t.Fatalf("press backspace parsed with key %q", a.Name)
+			}
+		}},
 	{production: "press-enter-step", src: testBody(`press enter`), want: []string{"action:press_enter"}},
 	{production: "shake-step", src: testBody(`shake`), want: []string{"action:shake"}},
 	{production: "pause-step", src: testBody(`pause`), want: []string{"action:pause"}},

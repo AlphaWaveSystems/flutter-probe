@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "16286173ba5d6b58549a6fe7bf035f11cbba33ba336ccaeec99e6fe313bab78a";
+export const SOURCE_SHA256 = "9acb765f6df68adde87de0be2312cace4eed4f5933a2d0f056407c1b8d4513a0";
 
 export const COMMANDS = [
   {
@@ -37,8 +37,8 @@ export const COMMANDS = [
   },
   {
     "command": "swipe",
-    "syntax": "swipe up/down/left/right",
-    "description": "Swipe gesture on screen or widget",
+    "syntax": "swipe up/down/left/right [over N percent]",
+    "description": "Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50)",
     "category": "Actions"
   },
   {
@@ -57,6 +57,12 @@ export const COMMANDS = [
     "command": "drag",
     "syntax": "drag #source to #target",
     "description": "Drag one widget to another",
+    "category": "Actions"
+  },
+  {
+    "command": "press <key>",
+    "syntax": "press tab",
+    "description": "Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Not on iOS yet. The agent must report the `press_key` capability: a probe_agent up to 0.27.0 does not, and the step fails with a message to update it. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
     "category": "Actions"
   },
   {

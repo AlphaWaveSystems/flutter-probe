@@ -103,6 +103,7 @@ type WaitParams struct {
 type SwipeParams struct {
 	Direction string        `json:"direction"` // up | down | left | right
 	Selector  *SelectorParam `json:"selector,omitempty"`
+	Percent   int            `json:"percent,omitempty"` // how far to travel, percent of the element or screen; 0 = the agent's default (50)
 }
 
 // ScrollParams controls a scroll action.
@@ -226,8 +227,9 @@ type PingParams struct {
 // version. AgentVersion is empty when talking to an agent built before this
 // field existed — that must be treated as "unknown," never as a mismatch.
 type PingResult struct {
-	OK           bool   `json:"ok"`
-	AgentVersion string `json:"agent_version,omitempty"`
+	OK           bool     `json:"ok"`
+	AgentVersion string   `json:"agent_version,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // WidgetTreeResult contains the serialised widget tree.

@@ -50,6 +50,8 @@ type ChatResponse struct {
 	CostUSD      float64 `json:"costUSD"`
 	// Notice is a line to show with the reply, such as a plain key that Studio did not use. It is empty otherwise.
 	Notice string `json:"notice,omitempty"`
+	// Changed is set when cleaning removed or replaced text in the reply (an address, a path, a credential, the key).
+	Changed bool `json:"changed,omitempty"`
 }
 
 // claudeMessage is one turn of a request to the Messages API.

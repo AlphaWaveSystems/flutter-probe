@@ -1,6 +1,9 @@
 package parser
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 // ---- Selector types ----
 
@@ -150,6 +153,7 @@ const (
 	VerbToggle     ActionVerb = "toggle"
 	VerbShake      ActionVerb = "shake"
 	VerbPress      ActionVerb = "press"
+	VerbPressKey   ActionVerb = "press_key" // press tab|escape|backspace|space|up|down|left|right; Name = the key
 	VerbTakeShot    ActionVerb = "take_screenshot"
 	VerbCompareShot ActionVerb = "compare_screenshot"
 	VerbDumpTree   ActionVerb = "dump_widget_tree"
@@ -198,6 +202,9 @@ const (
 	VerbTapNative ActionVerb = "tap_native"
 	// Name = query, Text = value to type (type native "text" into "query").
 	VerbTypeNative ActionVerb = "type_native"
+	// WebView steps (Android): tap "text" in webview / type "x" into css:"#f" in webview. WebView holds what to find and which page.
+	VerbTapWebView  ActionVerb = "tap_webview"
+	VerbTypeWebView ActionVerb = "type_webview"
 )
 
 type SwipeDirection string
@@ -214,12 +221,17 @@ type ActionStep struct {
 	Sel       *Selector   // target selector (may be nil for directionless actions)
 	Text      string      // for "type" — the text to enter
 	Direction SwipeDirection // for swipe / scroll
+	Percent   int            // for swipe: how far it travels, as a percent of the element or screen; 0 means the default, 50
+	// for swipe: a word where a direction was expected that is not up, down, left or right. The swipe runs down, and the
+	// word is left to parse as the next step, as it always has; lint warns about it.
+	DirectionWord string
 	Name      string      // for screenshot name, rotate direction, locale, etc.
 	To        *Selector   // for drag: destination
 	Until     *Selector   // for scroll: keep scrolling until this target is visible
 	IfVisible bool        // if true, skip silently when selector is not found
 	Optional  bool        // if true, attempt the step but don't fail the test if it errors
 	DeepLink  bool        // for VerbOpenLink: "in/into the app" — route via OS intent handling, not url_launcher
+	WebView   *WebViewTarget // for VerbTapWebView and VerbTypeWebView: what to find inside the WebView and which page
 	Line      int
 }
 
@@ -240,6 +252,7 @@ type AssertStep struct {
 	Optional bool       // if true, attempt the assertion but don't fail the test if it doesn't hold
 	Any      []string   // see any of "A", "B": passes when any alternative is on screen (don't see any of: none is)
 	Native   bool       // see native "..." — matched against uiautomator's text/resource-id, not the Flutter agent
+	WebView  *WebViewTarget // see "..." in webview / see css:"..." in webview: matched inside a WebView page, not by the Dart agent
 	Line     int
 }
 
@@ -307,6 +320,7 @@ const (
 	WaitAnimations                 // wait for animations to end
 	WaitIdle                       // wait for idle: route transitions + frames/animations/HTTP settled
 	WaitAny                        // wait until any of "A", "B" appears
+	WaitWebView                    // wait until "X" appears in webview (WebView holds the target)
 )
 
 type WaitStep struct {
@@ -315,6 +329,7 @@ type WaitStep struct {
 	Duration float64  // seconds
 	Pattern  string   // WaitAppears: "matching" regular expression the text must match
 	Any      []string // WaitAny: alternatives; the first one that appears satisfies the wait
+	WebView  *WebViewTarget // WaitWebView: what to wait for inside the WebView
 	Line     int
 }
 
@@ -653,3 +668,36 @@ type HTTPCallStep struct {
 func (h HTTPCallStep) nodeType() string { return "http_call" }
 func (h HTTPCallStep) GetLine() int     { return h.Line }
 func (h HTTPCallStep) stepType() string { return "http_call" }
+
+// ---- WebView steps ----
+
+// WebViewSelectorKind says how the value of a WebViewTarget is read.
+type WebViewSelectorKind string
+
+const (
+	// WebViewText is the visible text of an element: a quoted string in the script.
+	WebViewText WebViewSelectorKind = "text"
+	// WebViewCSS is a CSS selector: css:"..." in the script. The syntax decides the kind; it is never guessed from the characters of the value.
+	WebViewCSS WebViewSelectorKind = "css"
+)
+
+// WebViewTarget is what a WebView step (tap, type, see, wait until ... in webview) addresses: an element of a page of the app's WebView. Page is an optional part of the page's title or URL,
+// for an app with more than one page; empty means the only page.
+type WebViewTarget struct {
+	Kind  WebViewSelectorKind
+	Value string
+	Page  string
+}
+
+// String writes the target the way the script wrote it, for step descriptions: `"text" in webview`, `css:"#f" in webview "checkout"`.
+func (t WebViewTarget) String() string {
+	v := strconv.Quote(t.Value)
+	if t.Kind == WebViewCSS {
+		v = "css:" + v
+	}
+	s := v + " in webview"
+	if t.Page != "" {
+		s += " " + strconv.Quote(t.Page)
+	}
+	return s
+}

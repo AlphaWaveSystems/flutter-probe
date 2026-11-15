@@ -46,6 +46,11 @@ func TestTheRealHomeFolderIsScrubbed(t *testing.T) {
 	if out := scrubPersonal("opened /srv/people/dana/app/x.go"); out != "opened ~/app/x.go" {
 		t.Errorf("%q", out)
 	}
+	// A name that continues is not the home folder (the boundary rule of scrubOwnHome).
+	t.Setenv("HOME", "/srv/people/dana")
+	if out := scrubPersonal("see /srv/people/danadu/x and /srv/people/dana/y"); out != "see /srv/people/danadu/x and ~/y" {
+		t.Errorf("boundary: %q", out)
+	}
 	t.Setenv("HOME", "/a/b") // too short to be told from a path inside another one: not replaced
 	if out := scrubPersonal("see x/a/b/c"); out != "see x/a/b/c" {
 		t.Errorf("a short home folder changed text: %q", out)

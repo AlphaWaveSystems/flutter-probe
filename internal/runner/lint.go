@@ -125,6 +125,12 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 	for _, body := range own {
 		walkSteps(body, func(s parser.Step) {
 			line := stepLine(s)
+			if a, ok := s.(parser.ActionStep); ok && a.DirectionWord != "" {
+				// A word that names a recipe is a recipe call, not a mistyped direction: no warning.
+				if _, _, _, isRecipe := resolveCall(r.recipes, parser.RecipeCall{Name: a.DirectionWord}); !isRecipe {
+					findings = append(findings, LintFinding{Line: line, Warning: true, Message: fmt.Sprintf("swipe: %q is not up, down, left or right, so the swipe runs down", a.DirectionWord)})
+				}
+			}
 			if rc, ok := s.(parser.RecipeCall); ok {
 				if _, _, _, found := resolveCall(r.recipes, rc); !found {
 					msg := fmt.Sprintf("unknown step %q: not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)", rc.Name)
@@ -135,6 +141,9 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 						msg = "a use statement must come before the first test; inside a test it is not read"
 					}
 					findings = append(findings, LintFinding{Line: rc.Line, Message: msg})
+					if word, ok := pressKeyTypo(rc.Name); ok {
+						findings = append(findings, LintFinding{Line: rc.Line, Warning: true, Message: fmt.Sprintf("unknown key '%s'; keys: %s; or define a recipe named '%s'", word, strings.Join(parser.PressKeys(), ", "), rc.Name)})
+					}
 				}
 			}
 			texts, sels := scanStep(s)
@@ -155,6 +164,43 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 		})
 	}
 	return dedupeFindings(findings), nil
+}
+
+// pressKeyTypo reports the word of a `press <word>` line that is within two edits of one of the keys press takes, so
+// `press tba` can be pointed at `tab`. Such a line is a recipe call; the warning only suggests the key.
+func pressKeyTypo(name string) (string, bool) {
+	fields := strings.Fields(strings.ToLower(name))
+	if len(fields) != 2 || fields[0] != "press" {
+		return "", false
+	}
+	word := fields[1]
+	for _, key := range parser.PressKeys() {
+		if editDistance(word, key) <= 2 {
+			return word, true
+		}
+	}
+	return "", false
+}
+
+// editDistance is the Levenshtein distance between a and b, counted in bytes (the keys are ASCII).
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(b)]
 }
 
 // markStored records the names a step stores, which a placeholder may use later in the run.

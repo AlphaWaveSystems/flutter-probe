@@ -158,9 +158,9 @@ listed-word = "verify" | "set" | "location" | "language" | "clipboard" ;
 `"else"` is an alias of `"otherwise"`, `"animation"` of `"animations"`, `"permissions"` of `"permission"`.
 Because every `keyword` is reserved, a keyword cannot be used where a plain `WORD` is required (a recipe
 parameter, a `store ... as` variable, a type selector); quote it or choose another word. Keywords are
-fine inside recipe-call names and inside strings. A number of keywords (`press`, `pinch`, `between`,
+fine inside recipe-call names and inside strings. A number of keywords (`pinch`, `between`,
 `home`, `back`, `load`, `widget`, ...) have no built-in statement of their own; a line starting with
-one is a [recipe call](#recipe-calls).
+one is a [recipe call](#recipe-calls). `press` is the exception only for a line that is exactly `press <key>` with one of the eight keys (see `press-key-step`). Every other line that starts with `press` is a recipe call, as before, so a recipe named `press <word>` still works unless its name is exactly one of the keys.
 
 ### Compound keywords
 
@@ -402,13 +402,13 @@ composite test "alice messages bob" @smoke
 statement  = fillers , ( system-dialog-step | line-step ) , NEWLINE
            | fillers , block-step ;
 
-line-step  = tap-native-step | tap-step | type-native-step | type-step
+line-step  = tap-webview-step | tap-native-step | tap-step | type-webview-step | type-native-step | type-step
            | long-press-step | double-tap-step | clear-step | toggle-step | drag-step
            | swipe-step | scroll-step
-           | see-native-step | see-step | dont-see-step | assert-defects-step
+           | see-webview-step | see-native-step | see-step | dont-see-step | assert-defects-step
            | wait-step
            | open-app-step | open-link-step | close-step | restart-step | kill-step | clear-data-step
-           | go-back-step | press-enter-step | shake-step | pause-step | log-step | rotate-step
+           | go-back-step | press-enter-step | press-key-step | shake-step | pause-step | log-step | rotate-step
            | permission-step | grant-revoke-step
            | copy-step | paste-step | set-location-step | set-language-step | set-appearance-step | set-airplane-step
            | verify-browser-step | add-media-step
@@ -424,7 +424,7 @@ timed-step = line-step , "within" , ( INT | FLOAT ) , ( "seconds" | "second" | "
 
 block-step = if-step | repeat-step | retry-step | dart-step | mock-step | travel-step ;
 
-wait-step  = wait-until-step | wait-any-step | wait-idle-step | wait-animations-step
+wait-step  = wait-webview-step | wait-until-step | wait-any-step | wait-idle-step | wait-animations-step
            | wait-network-step | wait-duration-step | wait-id-step | wait-page-step ;
 
 any-token  = ? any token except NEWLINE and end of input ? ;
@@ -441,6 +441,7 @@ The first matching row wins.
 | line contains `system dialog`, `system field` or `sign in sandbox tester` (outside strings) | `system-dialog-step` |
 | `open` followed by `app` or `link` | `open-app-step`, `open-link-step` |
 | `open` followed by anything else | `recipe-call-step` (a recipe whose name starts with "open") |
+| `tap`, `type`, `see`, `don't see` or `wait until` whose operand is followed by `in webview` | `tap-webview-step`, `type-webview-step`, `see-webview-step`, `wait-webview-step` (checked before the rows below) |
 | `tap` followed by the word `native` | `tap-native-step`; otherwise `tap-step` |
 | `type` followed by the word `native` | `type-native-step`; otherwise `type-step` |
 | a line ending in `within N seconds` (or `s`, `ms`, `milliseconds`) | the step before it, as `timed-step` (not for recipe calls or block steps) |
@@ -467,7 +468,8 @@ The first matching row wins.
 | `see` followed by a performance phrase (`memory below`, `cpu below`, `slow frames below`, ...) and a number | `see-metric-step` (before the other `see` forms) |
 | `if`, `repeat`, `retry`, `run`, `when`, `travel` | `if-step`, `repeat-step`, `retry-step`, `dart-step`, `mock-step`, `travel-step` |
 | an empty line (NEWLINE) | nothing (ignored) |
-| anything else, including `press`, `pinch`, `sync` outside composite tests, unknown words | `recipe-call-step` |
+| `press <key>`: `press` directly followed by one of the eight keys and then the end of the line | `press-key-step` (`press enter` is above); any other line that starts with `press` is a recipe call, as before |
+| anything else, including `pinch`, `sync` outside composite tests, unknown words | `recipe-call-step` |
 
 Inside `wait-step` the order is: `until` (then `any`, then `network`, `idle`, otherwise a text target),
 `idle`, `animations`, `network`, `page`, a number, an `#id`, and finally the catch-all `wait-page-step`.
@@ -529,7 +531,8 @@ double-tap-step  = "double tap" , selector , [ if-visible ] , [ optional-mod ] ;
 clear-step       = "clear" , selector , [ if-visible ] , [ optional-mod ] ;
 toggle-step      = "toggle" , selector ;
 drag-step        = "drag" , selector , fillers , selector ;
-swipe-step       = "swipe" , fillers , [ direction ] , fillers , [ target-selector ] ;
+swipe-step       = "swipe" , fillers , [ direction ] , fillers , [ target-selector ] , [ swipe-distance ] ;
+swipe-distance   = "over" , INT , "percent" ;          (* a whole number from 1 to 100, ending the line; without it the swipe travels 50 percent *)
 scroll-step      = "scroll" , fillers , [ direction ] , fillers , [ target-selector ] ,
                    [ "until" , fillers , target-selector , fillers , [ "appears" | "visible" | "present" ] ] ;
 direction        = "up" | "down" | "left" | "right" ;       (* default: down *)
@@ -563,6 +566,7 @@ test "swipe and scroll"
   swipe up on "Card"
   swipe down
   swipe right on #pager
+  swipe down over 30 percent
   scroll down
   scroll
   scroll up on "ListView"
@@ -639,6 +643,44 @@ test "negative assertions"
   don't see "Promo" optional
   see native "IMG_0001.jpg"
   don't see native "Error"
+```
+
+### WebView steps
+
+```ebnf
+webview-operand   = STRING | "css" , ":" , STRING ;      (* a quoted string is the visible text of an element; css:"..." is a CSS selector *)
+webview-target    = "in" , "webview" , [ STRING ] ;      (* ends the step: no modifier may follow; STRING names the page *)
+tap-webview-step  = "tap" , fillers , webview-operand , webview-target ;
+type-webview-step = "type" , STRING , fillers , webview-operand , webview-target ;
+see-webview-step  = ( "see" | "don't see" | "dont see" ) , fillers , webview-operand , webview-target ;
+wait-webview-step = "wait" , fillers , "until" , fillers , webview-operand , "appears" , webview-target ;
+```
+
+These steps reach content inside an app's WebView (Android). The kind of the operand comes from the
+syntax: a quoted string is **text**, `css:"..."` is a **CSS selector**, so a text such as `#1 Item` or
+`.5 off` is text. `in webview` is recognised only when the bare word `webview` follows `in`; with a
+quoted container (`tap "Item" in "List"`) the line is an ordinary `tap-step`. The optional quoted page
+name is a part of the page's title or URL, for an app with more than one page. Nothing may follow it on
+the line except a trailing `within N seconds`, which wraps the step like any other timed step: `if visible`,
+`optional`, a second string or any other word are errors there, not ignored. The words `in`, `webview` and
+`css` are matched without regard to case (`In Webview`, `CSS:"x"`), and spaces around the colon of
+`css : "x"` are allowed. A quoted string follows the lexer's rules for every STRING: `\"` is a quote, `\\` a
+backslash, `\n` and `\t` a new line and a tab, and any other `\x` is the character `x` (so `\:` is `:`; a CSS
+id such as `#a\:b` is written `"#a\\:b"`); a raw new line inside a string is a parse error. A text that
+starts with `css:` stays text when it is quoted (`tap "css:x" in webview`). In this version the steps
+parse and the runner reports that they are not implemented yet.
+
+```probe
+test "webview steps"
+  tap "Contact support" in webview
+  tap css:"#submit" in webview
+  tap "Pay" in webview "checkout"
+  type "hello" into css:"#message" in webview
+  type "42" into "Quantity" in webview "order form"
+  see "Getting Started" in webview
+  don't see css:".error" in webview
+  wait until "Message sent" appears in webview
+  wait until css:"#result" appears in webview "help"
 ```
 
 ### AI-assisted steps
@@ -761,6 +803,8 @@ restart-step    = "restart" , fillers , [ "app" ] ;
 kill-step       = "kill" , fillers , [ "app" ] ;
 clear-data-step = "clear app data" ;
 go-back-step    = "go back" ;   (* takes no arguments: words after it on the same line are a separate step *)
+press-key-step = "press" , key-name ;   (* a key the agent presses, ending the line: the list below; no fillers, so "press the tab" is a recipe call *)
+key-name = "tab" | "escape" | "backspace" | "space" | "up" | "down" | "left" | "right" ;   (* the eight keys; a line that is press and another word is a recipe call *)
 press-enter-step = "press enter" ;                  (* the keyboard action key on the focused text field *)
 shake-step      = "shake" ;
 pause-step      = "pause" ;
@@ -1333,9 +1377,11 @@ with the same stripping applied to definition names; a call containing a bare nu
 number as part of the name first and as an argument second. No match is a run-time error. Arguments are
 bound to parameter names by position into a flat variable map; there is no per-recipe scope.
 
+**Swipe distance.** The range (a whole number from 1 to 100) and the line end of `over N percent` are checked by the parser, which the EBNF cannot express; anything else after `over` is a parse error. The agent travels the distance from the element the swipe starts on, or from the screen, and runs 50 percent when the step leaves it out. The swipe starts at the centre of that element or screen, so above 50 percent the finger ends outside it: 50 percent ends at the edge and 100 percent ends one half-size past it. The travelled distance has not been measured on a device yet.
+
 **Silent leniency.** The parser prefers to accept and default over reporting an error. These are accepted
 without complaint and yield empty values: `use`, `recipe`, `test` or `composite` without a name; `if`
-without a condition; a missing selector (`tap`); `store` without a name; `log` without a message; a
+without a condition; a missing selector (`tap`); a swipe direction that is not up, down, left or right (`swipe sideways` runs a down swipe and reads `sideways` as the next step; `probe lint` warns); `store` without a name; `log` without a message; a
 `with examples from` without a file name; a `recipe` parameter list that is never closed (it swallows the
 rest of the file); unexpected tokens at file level and inside `composite` bodies;
 Inconsistent indentation does not raise an error
@@ -1370,7 +1416,7 @@ The grammar above follows the parser.
 | `wait until network is idle`, `wait for the app to be idle` (parser comments) | the first leaves a stray `idle` recipe call; the second is the page-load catch-all | `wait for network idle`, `wait for idle` |
 | filler words list lacks `to` (Dictionary) | `to` is a filler (needed by `drag A to B`, `travel to`) | n/a |
 | recipe args "matched using connecting words like and, with, or into" (Recipes) | the run-time lookup ignores `and`, `with`, `the`, `then` only | use `and` / `with` |
-| `Press` and `Pinch` DSL steps (Annotations) | `press` and `pinch` are reserved words with no statement; a line starting with them is a recipe call | `go back` |
+| `Press` and `Pinch` DSL steps (Annotations) | `press <key>` is a step for tab, escape, backspace, space, up, down, left and right on a line of its own (a recipe named exactly one of those keys is shadowed); other `press` lines are recipe calls; `pinch` is a reserved word with no statement | `go back` |
 | a `Dart` block "executes arbitrary Dart" (Syntax) | code is re-assembled from tokens; characters such as `=`, `;`, `.` and braces never reach the agent | keep Dart snippets to token-safe code |
 | `ordinal ... in "Container"` (Annotations: `Ordinal(2, 'Item', container: 'List')`) | the container is parsed but dropped | use a positional selector |
 | `rotate landscape` / `rotate portrait` (Dictionary) | any word or string is accepted; unknown values are only rejected at run time | `landscape` or `portrait` |

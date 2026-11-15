@@ -275,7 +275,7 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 	return SelectorFix{
 		Suggestion:   cleanLine,
 		Rationale:    cleanWhy,
-		Changed:      fixChanged(line, cleanLine),
+		Changed:      resp.Changed || fixChanged(line, cleanLine),
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
 		CostUSD:      resp.CostUSD,
