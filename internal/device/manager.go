@@ -524,7 +524,7 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 
 		// Try 1: read from app cache via run-as (most reliable)
 		if appID != "" {
-			out, err := m.adb.Shell(ctx, serial, "run-as", appID, "cat", "cache/probe/token")
+			out, err := m.adb.ShellQ(ctx, serial, "run-as", appID, "cat", "cache/probe/token")
 			if err != nil {
 				trace.log("android: [attempt %d] run-as read failed: %v", attempt, err)
 			} else {
@@ -589,7 +589,7 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 	// No "— is the app running with probe_agent?" suffix here: the caller in
 	// internal/cli/test.go already appends this suggestion when wrapping.
 	if appID != "" {
-		if out, err := m.adb.Shell(ctx, serial, "pidof", appID); err == nil && strings.TrimSpace(string(out)) == "" {
+		if out, err := m.adb.ShellQ(ctx, serial, "pidof", appID); err == nil && strings.TrimSpace(string(out)) == "" {
 			return "", fmt.Errorf("android: probe token not found within %s: the app process %s is not running (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, appID)
 		}
 	}

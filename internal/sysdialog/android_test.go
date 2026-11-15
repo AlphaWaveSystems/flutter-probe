@@ -216,14 +216,6 @@ func TestAndroidDumpErrorPropagates(t *testing.T) {
 	}
 }
 
-func TestShellQuote(t *testing.T) {
-	cases := map[string]string{"abc": "'abc'", "a b": "'a b'", "it's": `'it'\''s'`, "": "''"}
-	for in, want := range cases {
-		if got := ShellQuote(in); got != want {
-			t.Errorf("ShellQuote(%q) = %s, want %s", in, got, want)
-		}
-	}
-}
 
 func TestParseBoundsAndCenter(t *testing.T) {
 	r, err := parseBounds("[10,20][30,60]")

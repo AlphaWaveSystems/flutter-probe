@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Security
+- **Every Android device command that carries text from a script, a file name or the configuration now quotes it for the device's shell.** `adb shell` hands its words to the device's shell as one command line, so a file name such as `x;touch y.jpg` in `add media`, or an app id or language tag with `;`, `&`, `$(...)` or a quote, ran as a command on the device. The quoting is now one helper, `internal/shellquote` (the three earlier copies are gone), used for `add media`, `set language`, permission grants and revokes, deep links, package queries, the launch, restart, clear-data and kill commands, and the app-token read. Plain words (package names, permissions, paths) are passed unchanged.
+- **A failed `type native` no longer prints the typed text.** The error of a failed adb call quotes the whole command line, which held the typed text (it can be a password); the text is now masked in that error, and `type native` masks known secret values in its step line the way `type` does.
+
 - **`type native` no longer lets typed text run as a command on the Android device.** The text was passed to `adb shell input text` with only spaces escaped, and adb hands the line to the device's shell, so text such as `a;reboot` ran `reboot` there (checked on an emulator). The text is now passed as one single-quoted word. Text that cannot be typed this way is refused with a clear message, before the tap: control characters (a new line included), anything outside ASCII (`input text` cannot type it), a `%` (`input text` reads `%s` as a space) and a text that starts with `-`. Typing non-ASCII text into a native field is not supported until another path exists.
 
 ### Added
