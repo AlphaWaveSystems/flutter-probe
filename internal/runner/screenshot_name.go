@@ -52,7 +52,7 @@ func (e *Executor) shotName(raw string, builtins bool) string {
 
 // cleanShotName makes a name safe to be a file name on the device and on this machine. The app puts the name into a path unchanged, so the name must not be able to leave the folder or to hide what it is:
 //   - "/" and "\" become "_", and a byte that is not valid UTF-8 becomes "_";
-//   - control characters (NUL included), invisible format characters (direction changes such as U+202E, zero-width joiners) and line or paragraph separators are dropped;
+//   - control characters (NUL included), direction-changing characters (U+200E, U+200F, U+061C, U+202A-U+202E, U+2066-U+2069), the byte order mark U+FEFF and line or paragraph separators (U+2028, U+2029) are dropped; the joiners U+200C and U+200D stay, because ordinary text (Persian, Indic scripts, emoji sequences) uses them;
 //   - every ".." is removed, repeatedly, so none is left (and none can be rebuilt from what remains);
 //   - at most maxShotName bytes are kept, cut at a whole character;
 //   - nothing left gives "screenshot".
@@ -67,7 +67,7 @@ func cleanShotName(s string) string {
 			b.WriteByte('_')
 		case r == '/' || r == '\\':
 			b.WriteByte('_')
-		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r):
+		case unicode.IsControl(r) || hiddenShotRune(r):
 		default:
 			b.WriteRune(r)
 		}
@@ -106,4 +106,15 @@ func safeShotPart(s string) string {
 		return "test"
 	}
 	return b.String()
+}
+
+// hiddenShotRune reports the characters that change how a name is shown or read without being visible: direction controls, the byte order mark, and the line and paragraph separators.
+func hiddenShotRune(r rune) bool {
+	switch {
+	case r == 0x200E, r == 0x200F, r == 0x061C, r == 0xFEFF, r == 0x2028, r == 0x2029:
+		return true
+	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069:
+		return true
+	}
+	return false
 }

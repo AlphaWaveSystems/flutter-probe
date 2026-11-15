@@ -150,11 +150,16 @@ func TestCleanShotName(t *testing.T) {
 		{"absolute path", "/etc/cron.d/x", "_etc_cron.d_x"},
 		{"dots only", "....", "screenshot"},
 		{"dots rebuilt after a removal", "...", "."},
-		{"dots split by an invisible character", "a.\u200b.b", "ab"},
+		{"dots split by a byte order mark", "a.\ufeff.b", "ab"},
+		{"zero width space stays", "a\u200bb", "a\u200bb"},
+		{"zero width non-joiner stays (Persian)", "می\u200cخواهم", "می\u200cخواهم"},
+		{"zero width joiner stays (emoji sequence)", "\U0001F468\u200d\U0001F469", "\U0001F468\u200d\U0001F469"},
+		{"trailing dots lose one pair", "loading...", "loading."},
+		{"left-to-right and right-to-left marks, Arabic letter mark", "a\u200eb\u200fc\u061cd", "abcd"},
+		{"direction isolate", "a\u2066b\u2069c", "abc"},
 		{"NUL", "a\x00b", "ab"},
 		{"control characters", "a\tb\nc\x7fd", "abcd"},
 		{"bidi override", "evil\u202egnp.exe", "evilgnp.exe"},
-		{"zero width joiner", "a\u200db", "ab"},
 		{"line separator", "a\u2028b\u2029c", "abc"},
 		{"invalid UTF-8", "a\xffb", "a_b"},
 		{"nothing left", "\u202e\x00", "screenshot"},
@@ -232,5 +237,22 @@ func TestTwoStepsInTheSameMillisecondShareATimestamp(t *testing.T) {
 	takeShot(t, e, "s_<timestamp>")
 	if rec.names[0] != rec.names[1] {
 		t.Errorf("names differ: %q vs %q", rec.names[0], rec.names[1])
+	}
+}
+
+func TestCompareStepSendsTheCleanedName(t *testing.T) {
+	// through the compare step itself, not only shotName: the name handed to the screenshot call must be clean
+	e, rec := shotExec(t)
+	e.vars = map[string]string{"v": "../../x", "bidi": "n\u202Eme"}
+	for _, name := range []string{"a/<v>", "<bidi>", "/etc/<v>"} {
+		if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbCompareShot, Name: name, Line: 1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"a___x", "nme", "_etc___x"}
+	for i, w := range want {
+		if rec.names[i] != w {
+			t.Errorf("compare step name %d = %q, want %q", i, rec.names[i], w)
+		}
 	}
 }
