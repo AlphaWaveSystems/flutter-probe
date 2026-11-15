@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,6 +34,9 @@ const (
 	MaxURLBytes        = 8 << 10
 	MaxHeaders         = 50
 	MaxHeaderBytes     = 8 << 10
+
+	// UserAgent is sent with every request. A caller cannot change it.
+	UserAgent = "FlutterProbe-Studio"
 )
 
 // The errors a caller can tell apart. None of them carries what was sent or received.
@@ -46,7 +50,19 @@ var (
 	ErrBodyNotAllowed   = errors.New("this method sends no body")
 	ErrTooManyRedirects = errors.New("too many redirects")
 	ErrPolicy           = errors.New("the address is not allowed")
+	// ErrIncomplete: the connection ended or failed after the response began, so the body that arrived is not the whole of it. No
+	// partial body is returned. A body cut at Options.MaxResponseBytes is not this: it is Response.Truncated.
+	ErrIncomplete = errors.New("the response ended before it was complete")
 )
+
+// PolicyError is what Do returns when the Policy refused an address. It matches ErrPolicy, and says what kind of address was refused,
+// so a caller can tell a person "a private network was refused". It holds no address and none of the policy's own text.
+type PolicyError struct{ Class Class }
+
+func (e *PolicyError) Error() string { return "the address is not allowed (" + e.Class.String() + ")" }
+
+// Is makes errors.Is(err, ErrPolicy) true.
+func (e *PolicyError) Is(target error) bool { return target == ErrPolicy }
 
 // Request is what is sent.
 type Request struct {
@@ -67,9 +83,10 @@ type Options struct {
 	MaxResponseBytes int64
 	MaxRequestBytes  int
 	MaxRedirects     int
-	// Policy is called for each address that is about to be dialed, with the host name or literal of the request and the address, and
-	// returns an error to refuse it. The first allowed address is dialed. A nil Policy allows all.
-	Policy func(host string, ip net.IP) error
+	// Policy is called for every address that is about to be dialed, with the host of the request (lower case, no trailing dot, a name in
+	// its ASCII form), its port and the address, and returns an error to refuse it. A name with several addresses is dialed only when
+	// the policy allows all of them. A nil Policy allows all.
+	Policy func(host string, port int, ip net.IP) error
 	// Resolver is used for names. The default is net.DefaultResolver. A name is resolved once per connection, and the answer is what is
 	// checked and dialed.
 	Resolver Resolver
@@ -133,6 +150,8 @@ var bodyMethods = map[string]bool{"POST": true, "PUT": true, "PATCH": true, "DEL
 var forbiddenHeaders = map[string]bool{
 	"host": true, "content-length": true, "transfer-encoding": true, "connection": true, "upgrade": true, "te": true, "trailer": true,
 	"proxy-connection": true, "proxy-authorization": true, "keep-alive": true, "expect": true,
+	"user-agent":      true, // fixed
+	"accept-encoding": true, // the transport asks for gzip and decodes it, under the size cap; a caller-set one would return raw bytes
 }
 
 var tokenPattern = regexp.MustCompile("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$")
@@ -157,7 +176,10 @@ func validate(r Request, o Options) (*url.URL, string, error) {
 	default:
 		return nil, "", ErrScheme
 	}
-	if u.Host == "" || u.Hostname() == "" || u.Opaque != "" {
+	if u.Host == "" || u.Hostname() == "" || u.Opaque != "" || strings.Contains(u.Hostname(), "%") {
+		return nil, "", ErrURL // a zone (fe80::1%eth0) is refused: the zone is what selects the interface
+	}
+	if !validPort(u.Port()) {
 		return nil, "", ErrURL
 	}
 	if u.User != nil || strings.Contains(u.Host, "@") {
@@ -182,6 +204,15 @@ func validate(r Request, o Options) (*url.URL, string, error) {
 		}
 	}
 	return u, method, nil
+}
+
+// validPort accepts no port (the scheme's) or a number from 1 to 65535.
+func validPort(p string) bool {
+	if p == "" {
+		return true
+	}
+	n, err := strconv.Atoi(p)
+	return err == nil && n >= 1 && n <= 65535 && len(p) <= 5
 }
 
 func origin(u *url.URL) string {
@@ -225,6 +256,9 @@ func Do(ctx context.Context, req Request, opts Options) (Response, error) {
 			if r.URL.User != nil {
 				return ErrUserInfo
 			}
+			if !validPort(r.URL.Port()) {
+				return ErrURL
+			}
 			if origin(r.URL) != start {
 				res.Stopped = &hop
 				return http.ErrUseLastResponse
@@ -241,6 +275,7 @@ func Do(ctx context.Context, req Request, opts Options) (Response, error) {
 	if err != nil {
 		return Response{}, ErrURL
 	}
+	hreq.Header.Set("User-Agent", UserAgent)
 	if req.Body == "" {
 		hreq.Body = http.NoBody
 		hreq.ContentLength = 0
@@ -265,8 +300,13 @@ func Do(ctx context.Context, req Request, opts Options) (Response, error) {
 	res.URL = resp.Request.URL.String()
 	if method != "HEAD" {
 		body, rerr := io.ReadAll(io.LimitReader(resp.Body, o.MaxResponseBytes+1))
-		if rerr != nil && len(body) == 0 {
-			return Response{}, unwrap(rerr)
+		if rerr != nil {
+			// A read that failed part way (a stall until the time limit, a body shorter than its Content-Length, broken chunk framing) is
+			// an error, never a shorter response that looks complete.
+			if e := unwrap(rerr); e != errFailed {
+				return Response{}, e
+			}
+			return Response{}, ErrIncomplete
 		}
 		if int64(len(body)) > o.MaxResponseBytes {
 			body, res.Truncated = body[:o.MaxResponseBytes], true
@@ -279,6 +319,10 @@ func Do(ctx context.Context, req Request, opts Options) (Response, error) {
 
 // unwrap returns the sentinel an error holds, or a short sentence, so no address or text from the transport is passed on.
 func unwrap(err error) error {
+	var pe *PolicyError
+	if errors.As(err, &pe) {
+		return pe
+	}
 	for _, sentinel := range []error{ErrScheme, ErrURL, ErrUserInfo, ErrTooManyRedirects, ErrPolicy} {
 		if errors.Is(err, sentinel) {
 			return sentinel
@@ -298,8 +342,10 @@ func unwrap(err error) error {
 	if errors.As(err, &ne) && ne.Timeout() {
 		return errors.New("the request took longer than the time limit")
 	}
-	return errors.New("the request failed")
+	return errFailed
 }
+
+var errFailed = errors.New("the request failed")
 
 // newTransport is the transport of one call: no proxy, no reuse of connections, and a dialer that asks the policy about every address
 // before it connects. The address that was dialed is written to remote.
@@ -312,39 +358,40 @@ func newTransport(o Options, remote *string) *http.Transport {
 		ResponseHeaderTimeout:  o.Timeout,
 		MaxResponseHeaderBytes: 64 << 10,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
+			host, portText, err := net.SplitHostPort(addr)
+			port, perr := strconv.Atoi(portText)
+			if err != nil || perr != nil || port < 1 || port > 65535 {
 				return nil, ErrURL
 			}
+			host = strings.TrimSuffix(strings.ToLower(host), ".")
 			var ips []net.IP
 			if ip := net.ParseIP(host); ip != nil {
 				ips = []net.IP{ip}
 			} else {
 				addrs, err := o.Resolver.LookupIPAddr(ctx, host) // once: what is checked is what is dialed
-				if err != nil {
+				if err != nil || len(addrs) == 0 {
 					return nil, fmt.Errorf("the name could not be resolved")
 				}
 				for _, a := range addrs {
 					ips = append(ips, a.IP)
 				}
 			}
-			var refused error
-			for _, ip := range ips {
-				if o.Policy != nil {
-					if perr := o.Policy(host, ip); perr != nil {
-						refused = perr
-						continue
+			// Every address is checked before any is dialed, and one refusal refuses the name: a name that answers with an allowed and a
+			// refused address is not dialed at all.
+			if o.Policy != nil {
+				for _, ip := range ips {
+					if o.Policy(host, port, ip) != nil {
+						return nil, &PolicyError{Class: ClassOf(ip)}
 					}
 				}
-				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			}
+			for _, ip := range ips {
+				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), portText))
 				if err != nil {
 					continue
 				}
 				*remote = ip.String()
 				return conn, nil
-			}
-			if refused != nil {
-				return nil, fmt.Errorf("%w: %v", ErrPolicy, refused)
 			}
 			return nil, fmt.Errorf("the connection failed")
 		},

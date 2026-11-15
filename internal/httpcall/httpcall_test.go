@@ -276,7 +276,7 @@ func (s *stubResolver) LookupIPAddr(_ context.Context, host string) ([]net.IPAdd
 func TestPolicyIsAskedAboutTheResolvedAddress(t *testing.T) {
 	srv, hits := echo(t)
 	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
-	noLocal := func(host string, ip net.IP) error {
+	noLocal := func(host string, _ int, ip net.IP) error {
 		if ClassOf(ip).Local() {
 			return fmt.Errorf("%s is %s", host, ClassOf(ip))
 		}
@@ -294,17 +294,24 @@ func TestPolicyIsAskedAboutTheResolvedAddress(t *testing.T) {
 	if hits.Load() != 0 {
 		t.Fatalf("the server was called %d time(s) through a refused address", hits.Load())
 	}
-	// A name with two answers: the refused one is skipped and the allowed one is dialed, and the name is resolved once.
-	r2 := &stubResolver{answers: map[string][]net.IP{"two.test": {net.ParseIP("10.255.255.1"), net.ParseIP("127.0.0.1")}}}
-	onlyLoopback := func(host string, ip net.IP) error {
+	// A name with two answers is dialed only when the policy allows both: one refusal refuses the name, and nothing is dialed.
+	r2 := &stubResolver{answers: map[string][]net.IP{"two.test": {net.ParseIP("127.0.0.1"), net.ParseIP("10.255.255.1")}}}
+	onlyLoopback := func(host string, _ int, ip net.IP) error {
 		if ClassOf(ip) != Loopback {
 			return errors.New("not loopback")
 		}
 		return nil
 	}
-	res, err := Do(context.Background(), Request{Method: "GET", URL: "http://two.test:" + port + "/"}, Options{Policy: onlyLoopback, Resolver: r2})
-	if err != nil || res.RemoteIP != "127.0.0.1" || hits.Load() != 1 || r2.calls.Load() != 1 {
-		t.Fatalf("two answers: %+v %v hits %d lookups %d", res, err, hits.Load(), r2.calls.Load())
+	_, err := Do(context.Background(), Request{Method: "GET", URL: "http://two.test:" + port + "/"}, Options{Policy: onlyLoopback, Resolver: r2})
+	var pe *PolicyError
+	if !errors.As(err, &pe) || pe.Class != Private || !errors.Is(err, ErrPolicy) || hits.Load() != 0 || r2.calls.Load() != 1 {
+		t.Fatalf("two answers, one refused: %v hits %d lookups %d", err, hits.Load(), r2.calls.Load())
+	}
+	// Both allowed: the first is dialed, the name is resolved once.
+	r3 := &stubResolver{answers: map[string][]net.IP{"both.test": {net.ParseIP("127.0.0.1"), net.ParseIP("127.0.0.2")}}}
+	res, err := Do(context.Background(), Request{Method: "GET", URL: "http://both.test:" + port + "/"}, Options{Policy: onlyLoopback, Resolver: r3})
+	if err != nil || res.RemoteIP != "127.0.0.1" || hits.Load() != 1 || r3.calls.Load() != 1 {
+		t.Fatalf("two allowed answers: %+v %v hits %d lookups %d", res, err, hits.Load(), r3.calls.Load())
 	}
 	// A name that does not resolve is an error with no detail.
 	if _, err := Do(context.Background(), Request{Method: "GET", URL: "http://nowhere.test/"}, Options{Resolver: &stubResolver{}}); err == nil || !strings.Contains(err.Error(), "failed") {
@@ -338,6 +345,15 @@ func TestTheEnvironmentsProxyIsNotUsed(t *testing.T) {
 
 func TestClassOf(t *testing.T) {
 	for ip, want := range map[string]Class{
+		// IPv6 forms that route to an IPv4 address are classed by it.
+		"64:ff9b::7f00:1": Loopback, "64:ff9b::a9fe:a9fe": Metadata, "64:ff9b::a00:1": Private, "64:ff9b::808:808": Public,
+		"2002:7f00:1::": Loopback, "2002:a9fe:a9fe::1": Metadata, "2002:c0a8:101::": Private, "2002:808:808::": Public,
+		"::7f00:1": Loopback, "::a9fe:a9fe": Metadata, "::a00:1": Private, "::808:808": Public,
+		"::ffff:0:7f00:1": Loopback, "::ffff:0:a9fe:a9fe": Metadata,
+		// Reserved ranges.
+		"255.255.255.255": Reserved, "240.0.0.1": Reserved, "198.18.0.1": Reserved, "198.19.255.255": Reserved, "198.20.0.1": Public,
+		"192.0.2.1": Reserved, "198.51.100.1": Reserved, "203.0.113.1": Reserved, "fec0::1": Reserved, "2001:db8::1": Reserved,
+		"2001::1": Reserved, "64:ff9b:1::1": Reserved, "0.1.2.3": Unspecified,
 		"127.0.0.1": Loopback, "127.9.9.9": Loopback, "::1": Loopback, "::ffff:127.0.0.1": Loopback,
 		"10.1.2.3": Private, "172.16.0.1": Private, "172.31.255.255": Private, "172.32.0.1": Public, "172.15.255.255": Public,
 		"192.168.1.1": Private, "100.64.0.1": Private, "100.127.255.255": Private, "100.128.0.1": Public, "fc00::1": Private, "fd12::1": Private,
@@ -349,10 +365,10 @@ func TestClassOf(t *testing.T) {
 			t.Errorf("%s is %v, want %v", ip, got, want)
 		}
 	}
-	if Public.Local() || !Loopback.Local() || !Private.Local() || !Metadata.Local() {
+	if Public.Local() || !Loopback.Local() || !Private.Local() || !Metadata.Local() || !Reserved.Local() {
 		t.Error("Local")
 	}
-	for c := Public; c <= Multicast; c++ {
+	for c := Public; c <= Reserved; c++ {
 		if c.String() == "" {
 			t.Errorf("class %d has no name", c)
 		}
