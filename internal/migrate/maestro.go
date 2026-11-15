@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -838,7 +839,7 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 		case "setAirplaneMode":
 			state, ok := airplaneState(val)
 			if !ok {
-				return fmt.Sprintf("# TODO: setAirplaneMode %q — Maestro takes enabled or disabled", fmt.Sprint(val)),
+				return airplaneTODO(val),
 					"setAirplaneMode takes enabled or disabled; left as a TODO comment"
 			}
 			return fmt.Sprintf("set airplane mode %s", state), ""
@@ -1006,6 +1007,17 @@ func relativePoint(v interface{}) (string, bool) {
 		return "", false
 	}
 	return point, true
+}
+
+// airplaneTODO is the comment that keeps a setAirplaneMode value that is not enabled or disabled out of the probe as a
+// step. The value is printed quoted on one line, and the comment is cut to 200 characters with an ellipsis, so a long or
+// multi-line value stays readable and cannot start a new line of the probe.
+func airplaneTODO(v interface{}) string {
+	line := fmt.Sprintf("# TODO: setAirplaneMode %q — Maestro takes enabled or disabled", fmt.Sprint(v))
+	if utf8.RuneCountInString(line) > 200 {
+		line = string([]rune(line)[:199]) + "…"
+	}
+	return line
 }
 
 // airplaneState maps the argument of Maestro's setAirplaneMode (enabled or disabled) to the state `set airplane mode`

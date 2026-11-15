@@ -43,6 +43,8 @@ func TestSetAirplaneModeRefusesWhatItCannotDo(t *testing.T) {
 		dc   *DeviceContext
 	}{
 		{name: "a physical device", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "R58M123ABC", IsPhysical: true}},
+		// The run's own flag is a second check: an emulator serial the run marks physical is still refused.
+		{name: "an emulator serial the run marks physical", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "emulator-5554", IsPhysical: true}},
 		{name: "an iOS simulator", dc: &DeviceContext{Platform: device.PlatformIOS, Serial: "AAAAAAAA-0000-0000-0000-000000000000"}},
 		{name: "a network adb address", dc: &DeviceContext{Platform: device.PlatformAndroid, Serial: "192.168.1.20:5555"}},
 		// The serial decides, not the flag: these devices are refused although IsPhysical was not set for them.

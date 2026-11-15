@@ -167,8 +167,8 @@ set airplane mode off    # cmd connectivity airplane-mode disable
 
 The emulator's airplane mode, through `adb shell cmd connectivity airplane-mode`. The state stays until a later step changes it, so
 end a test that turns it on with `set airplane mode off`. Only a serial of the form `emulator-NNNN` takes the step. A physical device
-(USB or wireless debugging) and a network adb address (`host:port`) are refused, because airplane mode would cut the connection adb uses
-to them. Checked on an Android 15 emulator (API 35). An image whose `cmd connectivity`
+(USB or wireless debugging) is refused, and so is a network adb address (`host:port`), which covers Genymotion, other network emulators
+and cloud farm devices. Airplane mode would cut the connection adb uses to them. Checked on an Android 15 emulator (API 35). An image whose `cmd connectivity`
 does not take `airplane-mode` prints an error, and the step fails with that error.
 
 ## Location

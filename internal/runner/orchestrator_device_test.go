@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +67,60 @@ func TestParallelDeviceContextAsksTheDevice(t *testing.T) {
 			}
 			if len(rec.cmds) != 1 || rec.cmds[0] != "adb -s emulator-5554 shell cmd connectivity airplane-mode enable" {
 				t.Errorf("commands = %q, want the emulator's enable command", rec.cmds)
+			}
+		})
+	}
+}
+
+// fakeXcrun puts an xcrun stand-in first on PATH. It answers `simctl list devices --json` with listJSON, and every other
+// simctl command succeeds without output, so no simulator is needed.
+func fakeXcrun(t *testing.T, listJSON string) {
+	t.Helper()
+	dir := t.TempDir()
+	listPath := filepath.Join(dir, "list.json")
+	if err := os.WriteFile(listPath, []byte(listJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\ncase \"$*\" in\n  *\"list devices\"*) cat '" + listPath + "' ;;\nesac\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "xcrun"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestParallelIOSDeviceContextAsksSimctl checks the iOS device of a parallel run: a device that simctl does not list is
+// physical, and `set language` refuses it, where a simulator takes the change. The simulator is the control.
+func TestParallelIOSDeviceContextAsksSimctl(t *testing.T) {
+	const simUDID = "AAAAAAAA-1111-2222-3333-444444444444"
+	const physUDID = "BBBBBBBB-1111-2222-3333-444444444444"
+	simList := `{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-26-4":[{"udid":"` + simUDID +
+		`","name":"sim","state":"Shutdown","deviceTypeIdentifier":"x"}]}}`
+	for _, tc := range []struct {
+		name     string
+		udid     string
+		list     string
+		physical bool
+	}{
+		{name: "a physical iPhone", udid: physUDID, list: `{"devices":{}}`, physical: true},
+		{name: "a simulator", udid: simUDID, list: simList, physical: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeXcrun(t, tc.list)
+			po := NewParallelOrchestrator(&config.Config{}, device.NewManager(), nil, RunOptions{}, 0)
+			dr := &DeviceRun{DeviceID: tc.udid, Platform: device.PlatformIOS, Port: 48790}
+			dc := po.deviceContext(context.Background(), dr, "com.example.app", time.Second, time.Second)
+			if dc.IsPhysical != tc.physical {
+				t.Errorf("IsPhysical = %v, want %v", dc.IsPhysical, tc.physical)
+			}
+			err := dc.SetLanguage(context.Background(), "de")
+			if tc.physical {
+				if err == nil || !strings.Contains(err.Error(), "physical iOS") {
+					t.Errorf("SetLanguage on a physical iPhone: err = %v, want the physical iOS refusal", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("SetLanguage on a simulator: %v", err)
 			}
 		})
 	}

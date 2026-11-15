@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/migrate"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -364,6 +365,36 @@ func TestConvertYAML_AirplaneTODOStaysOneLine(t *testing.T) {
 	}
 	if len(warnings) == 0 {
 		t.Error("want a warning for a value that is not enabled or disabled")
+	}
+}
+
+// TestConvertYAML_AirplaneTODOIsCapped checks that a long setAirplaneMode value keeps its TODO comment within 200
+// characters, and that the cut is marked with an ellipsis.
+func TestConvertYAML_AirplaneTODOIsCapped(t *testing.T) {
+	yaml := "---\n- setAirplaneMode: \"" + strings.Repeat("x", 500) + "\"\n"
+	probe, warnings, err := migrate.ConvertYAML(yaml)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Error("want a warning for a value that is not enabled or disabled")
+	}
+	found := false
+	for _, line := range strings.Split(probe, "\n") {
+		comment := strings.TrimSpace(line)
+		if !strings.HasPrefix(comment, "# TODO: setAirplaneMode") {
+			continue
+		}
+		found = true
+		if n := utf8.RuneCountInString(comment); n > 200 {
+			t.Errorf("the TODO comment is %d characters, want at most 200", n)
+		}
+		if !strings.HasSuffix(comment, "…") {
+			t.Errorf("the cut comment does not end with an ellipsis: %q", comment)
+		}
+	}
+	if !found {
+		t.Error("no TODO comment for the value")
 	}
 }
 
