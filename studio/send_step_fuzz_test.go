@@ -30,6 +30,27 @@ var plantedSecrets = []string{
 	"dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA==",
 }
 
+func init() {
+	// A card number in the layouts a search of whole groups of three digits or more once missed, spaced and hyphenated.
+	for _, l := range []struct {
+		digits int
+		sizes  []int
+	}{{13, []int{4, 4, 4, 1}}, {14, []int{4, 4, 4, 2}}, {17, []int{1, 4, 4, 4, 4}}, {17, []int{2, 4, 4, 4, 3}}, {17, []int{4, 4, 4, 4, 1}}, {18, []int{4, 4, 4, 4, 2}}, {19, []int{6, 6, 6, 1}}} {
+		spaced := groupBy(luhnNumber(l.digits), l.sizes...)
+		plantedSecrets = append(plantedSecrets, spaced, strings.ReplaceAll(spaced, " ", "-"))
+	}
+}
+
+// digitsOf is the digits of s, in order.
+func digitsOf(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, s)
+}
+
 // plant puts the secret into a request at one position, with the noise around it.
 func plant(position uint8, secret, noise string) (method, url, body string) {
 	word := regexp.MustCompile(`[^A-Za-z0-9_]`).ReplaceAllString(noise, "")
@@ -162,6 +183,11 @@ func FuzzSaveStep(f *testing.F) {
 				if strings.Contains(all, strings.ToLower(s)) {
 					t.Fatalf("the planted secret %q is in the step (position %d):\n%s", s, position%12, strings.Join(step.Lines, "\n"))
 				}
+			}
+			// A number written as digits and separators is not in the step with its separators changed either: the digits, in order, are not
+			// in the digits of the step.
+			if d := digitsOf(secret); len(d) >= 13 && strings.Trim(secret, "0123456789 -") == "" && strings.Contains(digitsOf(all), d) {
+				t.Fatalf("the digits of the planted number %q are in the step (position %d):\n%s", secret, position%12, strings.Join(step.Lines, "\n"))
 			}
 		}
 		_ = fmt.Sprint(line)

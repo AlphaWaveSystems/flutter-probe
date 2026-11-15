@@ -152,17 +152,13 @@ func interpolatedForm(s string) string {
 
 var digitRun = regexp.MustCompile(`\d(?:[ -]?\d)*`)
 
-const (
-	cardMinGroup  = 3 // a card number is written in groups of at least three digits (4-4-4-4, 4-6-5, 4-4-4-4-3), or solid
-	cardMaxGroups = 8
-)
-
-// cardRuns are the spans of s that are 13 to 19 digits, as one solid group or as consecutive groups of at least three digits (separated
-// by a single space or hyphen, at most eight groups), that pass the card number check. The search has no size limit: every run of digit
-// groups is walked once from each group with at most 19 digits ahead of it, so it is linear in the text. A card number next to other
-// digits ("0 4111 1111 1111 1111 0") is found, and a window that starts or ends inside a group is not tried (that would take one in ten
-// long numbers for a card). Of the windows that start at a group, the longest that passes is taken, so a 19-digit number is not cut at
-// its 16-digit prefix. Short groups (one or two digits) cannot be part of a window: they end the run of groups.
+// cardRuns are the spans of s that hold a card number: a run of digit groups separated by single spaces or hyphens (or one solid group) in
+// which some window of consecutive groups has 13 to 19 digits that pass the card number check, in any layout (4-4-4-4, 4-6-5, 4-4-4-1,
+// 1-4-4-4-4 and the rest). The whole run is the span, because where the card ends inside a run is not known: the groups next to a valid
+// window may be the rest of the number, and a replacement that stopped at the window could leave the last four digits of a real card in the
+// text. So `6 4111 1111 1111 1111` is one span, and so is a list of short numbers in which some stretch of 13 to 19 digits happens to
+// pass the check (about one stretch in ten does). The search has no size limit and is linear: from each group it looks at most 19 digits
+// ahead, so at most 19 groups, and it stops at the first window that passes. A window starts and ends at a group, never inside one.
 func cardRuns(s string) [][2]int {
 	var out [][2]int
 	for _, m := range digitRun.FindAllStringIndex(s, -1) {
@@ -181,37 +177,33 @@ func cardRuns(s string) [][2]int {
 			groups = append(groups, group{i, j})
 			i = j
 		}
-		for a := 0; a < len(groups); {
-			if groups[a].b-groups[a].a < cardMinGroup {
-				a++
-				continue
-			}
-			best, digits := -1, 0
+		found := false
+		for a := 0; a < len(groups) && !found; a++ {
+			digits := 0
 			var d strings.Builder
-			for z := a; z < len(groups) && z-a < cardMaxGroups; z++ {
-				n := groups[z].b - groups[z].a
-				if n < cardMinGroup {
-					break
-				}
-				digits += n
-				if digits > 19 {
+			for z := a; z < len(groups); z++ {
+				digits += groups[z].b - groups[z].a
+				if digits > cardMaxDigits {
 					break
 				}
 				d.WriteString(run[groups[z].a:groups[z].b])
-				if digits >= 13 && luhn(d.String()) {
-					best = z
+				if digits >= cardMinDigits && luhn(d.String()) {
+					found = true
+					break
 				}
 			}
-			if best >= 0 {
-				out = append(out, [2]int{m[0] + groups[a].a, m[0] + groups[best].b})
-				a = best + 1
-			} else {
-				a++
-			}
+		}
+		if found {
+			out = append(out, [2]int{m[0], m[1]})
 		}
 	}
 	return out
 }
+
+const (
+	cardMinDigits = 13
+	cardMaxDigits = 19
+)
 
 func buildCallStep(in SaveStepInput) (SavedStep, error) {
 	method := strings.ToUpper(strings.TrimSpace(in.Method))
@@ -501,16 +493,30 @@ var (
 	errKeyLooksSecret = errors.New("an object key in the body looks like a credential, so nothing was saved")
 )
 
-// keyHoldsCredential says whether an object key is, or contains as a word, a credential in a shape no ordinary key has: a key of
-// "Bearer <hex>" or " <hex> " is a value written where a name goes.
+var hexBounded = regexp.MustCompile(`(?:^|[^0-9A-Fa-f])([0-9A-Fa-f]{16,})(?:[^0-9A-Fa-f]|$)`)
+
+// keyHoldsCredential says whether an object key is, or contains, a credential in a shape no ordinary key has: a run of 16 or more hex
+// digits bounded by anything that is not a hex digit (`<hex>`, `password=<hex>`, `0x<hex>`, `x_<hex>`, `<hex>.pem`, ` <hex> `), a JWT, or
+// padded base64, as the whole key, as a word of it, or after any of `= : ; , | /`. What is not refused: hex written in short groups
+// (`9f86d081-884c7d65-...`: a UUID-like id is an ordinary key), unpadded base64 that is not hex, and a credential with no shape.
 func keyHoldsCredential(name string) bool {
-	if strongSecretShape(strings.TrimSpace(boundText(name))) {
-		return true
+	name = boundText(name)
+	for _, m := range hexBounded.FindAllStringSubmatch(name, -1) {
+		if strings.ContainsAny(m[1], "abcdefABCDEF") { // digits only is an id or a card number, handled as a value
+			return true
+		}
 	}
-	for _, tok := range strings.FieldsFunc(boundText(name), func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '+' || r == '/' || r == '_' || r == '-' || r == '=' || r == '.')
-	}) {
-		if strongSecretShape(tok) {
+	candidates := []string{name, strings.TrimSpace(name)}
+	for _, word := range strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '"' || r == '\'' }) {
+		candidates = append(candidates, word)
+		for i := 0; i < len(word); i++ {
+			if strings.IndexByte("=:;,|/", word[i]) >= 0 && i+1 < len(word) {
+				candidates = append(candidates, word[i+1:])
+			}
+		}
+	}
+	for _, c := range candidates {
+		if strongSecretShape(c) {
 			return true
 		}
 	}
@@ -520,7 +526,7 @@ func keyHoldsCredential(name string) bool {
 // strongSecretShape says whether a name is a hex string of 16 or more digits, a JWT, or base64 with padding: shapes an ordinary key
 // does not have, so a name of one of them is a value written where a name goes.
 func strongSecretShape(name string) bool {
-	return hexRun.MatchString(name) || jwtShape.MatchString(name) || paddedBase64.MatchString(name)
+	return (hexRun.MatchString(name) && strings.ContainsAny(name, "abcdefABCDEF")) || jwtShape.MatchString(name) || paddedBase64.MatchString(name)
 }
 
 // copyJSON copies one JSON value, replacing a string or number that is under a credential name, a string that looks like a

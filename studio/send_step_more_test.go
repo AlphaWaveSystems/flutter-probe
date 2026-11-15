@@ -335,11 +335,16 @@ func TestCardSearchHasNoSizeLimit(t *testing.T) {
 // More values to replace than a step may name stops the save, and the placeholders are handed out in linear time.
 func TestTooManyValuesStopTheSave(t *testing.T) {
 	start := time.Now()
-	body := strings.Repeat("000 ", 100000) + "4111111111111111"
+	// 300 separate cards (a letter between them, so each is its own run) are more than a step may name.
+	body := strings.Repeat("4111111111111111 x ", 300)
 	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body}); err == nil {
-		t.Errorf("20,000 cards of zeros were saved: %d lines", len(s.Lines))
+		t.Errorf("300 cards were saved: %d lines", len(s.Lines))
 	} else if !strings.Contains(err.Error(), "more than 200 values") {
 		t.Errorf("%v", err)
+	}
+	// One run of 100,000 groups is one value, and fast.
+	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: strings.Repeat("000 ", 100000) + "4111111111111111"}); err != nil || len(s.Fill) != 1 {
+		t.Errorf("one run of digit groups: %v %v", err, s.Fill)
 	}
 	var ph placeholders
 	for i := 0; i < maxPlaceholders; i++ {
@@ -364,7 +369,7 @@ func TestTooManyValuesStopTheSave(t *testing.T) {
 	}
 }
 
-// A card number written with other digits around it is replaced whole, and a longer number that passes is not cut at a shorter prefix.
+// A card number written with other digits around it is replaced with its whole run of digit groups, and a longer number that passes is not cut at a shorter prefix.
 func TestCardsAreReplacedWholeNotInPart(t *testing.T) {
 	luhnDigit := func(prefix string) string {
 		for d := 0; d < 10; d++ {
@@ -377,8 +382,8 @@ func TestCardsAreReplacedWholeNotInPart(t *testing.T) {
 	n19 := luhnDigit("411111111111111111") // 19 digits that pass
 	grouped := n19[0:4] + " " + n19[4:8] + " " + n19[8:12] + " " + n19[12:16] + " " + n19[16:]
 	for _, c := range []struct{ typed, want string }{
-		{"6 4111 1111 1111 1111", "6 ${PROBE_SAVED_CARD}"},
-		{"4111 1111 1111 1111 12", "${PROBE_SAVED_CARD} 12"},
+		{"6 4111 1111 1111 1111", "${PROBE_SAVED_CARD}"},
+		{"4111 1111 1111 1111 12", "${PROBE_SAVED_CARD}"},
 		{grouped, "${PROBE_SAVED_CARD}"},
 		{"a " + n19 + " b", "a ${PROBE_SAVED_CARD} b"},
 	} {
@@ -422,4 +427,139 @@ func TestKeysAndNamesDoNotCarryACredential(t *testing.T) {
 		}
 	}
 	_ = ph
+}
+
+// luhnNumber returns digits of the given length that pass the card number check, from a base pattern.
+func luhnNumber(length int) string {
+	base := strings.Repeat("4", 1) + strings.Repeat("2", length-2)
+	for d := 0; d < 10; d++ {
+		if n := base + string(rune('0'+d)); luhn(n) {
+			return n
+		}
+	}
+	return ""
+}
+
+func groupBy(n string, sizes ...int) string {
+	var parts []string
+	for _, k := range sizes {
+		parts = append(parts, n[:k])
+		n = n[k:]
+	}
+	return strings.Join(parts, " ")
+}
+
+// A card number in any layout is gone: solid, with spaces, with hyphens, with a one- or two-digit group at either end (a layout the
+// first version of the search missed whole).
+func TestACardIsGoneInEveryLayout(t *testing.T) {
+	layouts := []struct {
+		digits int
+		sizes  []int
+	}{
+		{13, []int{4, 4, 4, 1}}, {14, []int{4, 4, 4, 2}}, {15, []int{4, 6, 5}}, {16, []int{4, 4, 4, 4}}, {17, []int{1, 4, 4, 4, 4}},
+		{17, []int{2, 4, 4, 4, 3}}, {17, []int{4, 4, 4, 4, 1}}, {18, []int{4, 4, 4, 4, 2}}, {19, []int{6, 6, 6, 1}}, {19, []int{4, 4, 4, 4, 3}},
+		{13, []int{13}}, {19, []int{19}}, {16, []int{1, 1, 1, 13}}, {16, []int{13, 1, 1, 1}},
+	}
+	for _, l := range layouts {
+		n := luhnNumber(l.digits)
+		if n == "" || len(n) != l.digits {
+			t.Fatalf("no %d-digit number", l.digits)
+		}
+		spaced := groupBy(n, l.sizes...)
+		for form, typed := range map[string]string{"solid": n, "spaced": spaced, "hyphenated": strings.ReplaceAll(spaced, " ", "-")} {
+			for _, body := range []string{typed, "card " + typed + " ok", `{"n":"` + typed + `"}`, "x=" + typed + "&y=1"} {
+				s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
+				if err != nil {
+					continue
+				}
+				got := stepOf(t, s).Body
+				digits := strings.Map(func(r rune) rune {
+					if r >= '0' && r <= '9' {
+						return r
+					}
+					return -1
+				}, got)
+				if strings.Contains(digits, n) {
+					t.Errorf("%d digits %v, %s, in %q: the card is in %q", l.digits, l.sizes, form, body, got)
+				}
+			}
+		}
+	}
+}
+
+// The window is 13 to 19 digits: a number of 12 or 20 digits that passes the check is not a card, one of 13 or 19 is, and a window that
+// starts inside a group is never tried.
+func TestTheCardWindowIs13To19Digits(t *testing.T) {
+	for _, c := range []struct {
+		digits int
+		card   bool
+	}{{12, false}, {13, true}, {19, true}, {20, false}, {21, false}} {
+		n := luhnNumber(c.digits)
+		if got := len(cardRuns(n)) > 0; got != c.card {
+			t.Errorf("%d digits: card %v, want %v", c.digits, got, c.card)
+		}
+		if got := len(cardRuns(groupBy(n, 4, c.digits-4))) > 0; got != c.card && c.digits >= 13 {
+			t.Errorf("%d digits as 4+%d: card %v, want %v", c.digits, c.digits-4, got, c.card)
+		}
+	}
+	// A 20-digit run that holds a 19-digit window at a group boundary is a card; one that holds it only inside a group is not.
+	n19 := luhnNumber(19)
+	if len(cardRuns("7 "+n19)) == 0 {
+		t.Error("a 19-digit card after a one-digit group was not found")
+	}
+	if len(cardRuns("7"+n19)) != 0 && !luhn("7"+n19) {
+		t.Error("a window that starts inside a group was tried")
+	}
+}
+
+// The first measured rate of false replacements, for the record: stretches of short numbers written with spaces.
+func TestAListOfShortNumbersIsMostlyLeftAlone(t *testing.T) {
+	for _, body := range []string{"1 2 3", "12 34 56 78", "100 200 300 400", "2024 11 15", "1 22 333 4444"} { // at most 12 digits: never a card
+		if len(cardRuns(body)) != 0 {
+			t.Errorf("%q was taken for a card", body)
+		}
+	}
+}
+
+// An object key that is a card number (digits only) is replaced and not refused: a number is an id or a card, and the replacement keeps the
+// object whole. One that holds a credential in a shape no ordinary key has, hex with a letter among 16 or more digits, a JWT or padded base64,
+// is refused.
+func TestCredentialKeysAreRefusedAndCardKeysReplaced(t *testing.T) {
+	s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"4111111111111111":1,"ok":2}`})
+	if err != nil || strings.Contains(stepOf(t, s).Body, "4111") || !strings.Contains(stepOf(t, s).Body, `"ok":2`) || !strings.Contains(stepOf(t, s).Body, "${PROBE_SAVED_") {
+		t.Errorf("a card as a key must be replaced, not refused and not kept: %v %+v", err, s.Lines)
+	}
+	// A long id that is no card is kept.
+	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"1234567890123456789":1}`}); err != nil || stepOf(t, s).Body != `{"1234567890123456789":1}` {
+		t.Errorf("a numeric id as a key: %v", err)
+	}
+	hex := "9f86d081884c7d659a2feaa0c55ad015"
+	for _, key := range []string{hex, "password=" + hex, "0x" + hex, "x_" + hex, hex + ".pem", " " + hex + " ", "token:" + hex, "a;b," + hex,
+		"password=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxw", "k=dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA=="} {
+		if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`}); err == nil {
+			t.Errorf("the key %q was saved: %v", key, s.Lines)
+		}
+	}
+	// What is not refused, on purpose: hex in short groups (a UUID-like id), 15 hex digits, and ordinary keys.
+	for _, key := range []string{"9f86d081-884c7d65-9a2feaa0-c55ad015", "123e4567-e89b-12d3-a456-426614174000", "9f86d081884c7d6", "address1_line", "ABCDEF012345678"} {
+		if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`}); err != nil || stepOf(t, s).Body != `{"`+key+`":1}` {
+			t.Errorf("the key %q: %v", key, err)
+		}
+	}
+	// The same boundary for a run inside a longer key (bounded by a character that is not a hex digit): 15 digits kept, 16 and 17 refused.
+	for n, refused := range map[int]bool{15: false, 16: true, 17: true} {
+		key := "x_" + strings.Repeat("b", n-1) + "2_y"
+		_, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`})
+		if (err != nil) != refused {
+			t.Errorf("a run of %d hex digits inside a key: refused %v, want %v", n, err != nil, refused)
+		}
+	}
+	// The boundary of the hex run: 15 digits are kept, 16 and 17 are refused.
+	for n, refused := range map[int]bool{15: false, 16: true, 17: true} {
+		key := strings.Repeat("a", n-1) + "1"
+		_, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: `{"` + key + `":1}`})
+		if (err != nil) != refused {
+			t.Errorf("a key of %d hex digits: refused %v, want %v", n, err != nil, refused)
+		}
+	}
 }
