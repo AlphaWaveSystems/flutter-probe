@@ -1595,8 +1595,6 @@ class ProbeExecutor {
 
   Future<void> _deviceAction(String action, String value) async {
     switch (action) {
-      // First in the switch, with its own break: the cases below fall through into each other (go back and press enter run on
-      // into close), so a case placed after them would inherit that.
       case 'press_key':
         _pressKey(value);
         break;
