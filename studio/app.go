@@ -101,6 +101,7 @@ type connection struct {
 	deviceName   string
 	platform     device.Platform
 	toolsNote    string // set when this connection uses an adb that probe.yaml names
+	disposable   bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
 	appBuild     string // what the app reports about its build (see appBuildText); empty when it reports nothing
 	streamCancel context.CancelFunc
 	streamDone   chan struct{} // closed when the streaming loop exits
@@ -770,6 +771,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		deviceName:   dev.Name,
 		platform:     dev.Platform,
 		toolsNote:    toolsNote,
+		disposable:   dev.Disposable(),
 		appBuild:     appBuildText(hs),
 		streamCancel: streamCancel,
 		streamDone:   streamDone,

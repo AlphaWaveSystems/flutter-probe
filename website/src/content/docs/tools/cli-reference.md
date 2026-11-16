@@ -24,6 +24,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe ios-driver` | Manage the iOS system-dialog driver: `install`, `status`, `stop` |
 | `probe ai doctor` | Check the configured `ai:` provider: endpoint, model, text, vision. Optional — see [AI & local models](/tools/ai/) |
 | `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
+| `probe prefs` | Show or change your own settings on this computer (`probe prefs show`, `probe prefs set clear-data-without-asking on\|off`). Shared with FlutterProbe Studio; never read from a project |
 | `probe studio` | Launch interactive test studio |
 
 `probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)).
@@ -188,6 +189,17 @@ Record user interactions and generate ProbeScript.
 probe record --device <UDID> --output tests/my_flow.probe
 probe record --timeout 60s -o tests/flow.probe
 ```
+
+## probe prefs
+
+Settings that belong to you, kept in your user configuration folder and shared by `probe` and FlutterProbe Studio. They are never read from a project, so a `probe.yaml` or a cloned repository cannot change them.
+
+```bash
+probe prefs show
+probe prefs set clear-data-without-asking on     # off is the default
+```
+
+`clear-data-without-asking`: when on, a `clear app data` step runs on a simulator or an emulator without the question (and without `--yes`, which also grants permissions). A line says so. It applies only to a device that is positively a simulator or an emulator (an Android serial that starts with `emulator-`, an iOS device with no USB or network transport); a physical phone, and any device that cannot be told, still ask, or fail in CI with the hint to pass `--yes`.
 
 ## probe report
 
