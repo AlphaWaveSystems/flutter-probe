@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
@@ -39,10 +41,19 @@ func Step(params map[string]interface{}) string {
 			return fmt.Sprintf("  # type into %s was not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into %s by hand.", sel, sel)
 		}
 		text, _ := params["text"].(string)
-		if sel != "the element" {
-			return fmt.Sprintf("  type %q into the %s field", text, sel)
+		quoted, ok := Quote(text)
+		if !ok {
+			// The text has a character a script line cannot hold (a control character, a line separator): no step is made for it, and the
+			// comment says what to do. The text itself is not in the comment.
+			if sel != "the element" {
+				return fmt.Sprintf("  # type into %s was not recorded: the text has a character a script cannot hold. Add the step by hand.", sel)
+			}
+			return "  # type was not recorded: the text has a character a script cannot hold. Add the step by hand."
 		}
-		return fmt.Sprintf("  type %q", text)
+		if sel != "the element" {
+			return fmt.Sprintf("  type %s into the %s field", quoted, sel)
+		}
+		return "  type " + quoted
 	case "swipe":
 		dir, _ := params["direction"].(string)
 		return fmt.Sprintf("  swipe %s", cleanName(dir))
@@ -120,14 +131,18 @@ func Selector(params map[string]interface{}) string {
 				}
 				return "#" + text
 			case "text":
-				return fmt.Sprintf("%q", text)
+				if quoted, ok := Quote(text); ok {
+					return quoted
+				}
 			case "type":
 				return "the " + text
 			}
 		}
 	}
 	if text, ok := params["text"].(string); ok && text != "" {
-		return fmt.Sprintf("%q", Sanitize(text))
+		if quoted, ok := Quote(Sanitize(text)); ok {
+			return quoted
+		}
 	}
 	if id, ok := params["id"].(string); ok && id != "" {
 		return "#" + Sanitize(id)
@@ -139,6 +154,37 @@ func Selector(params map[string]interface{}) string {
 // cleaning (line and paragraph separators, control, invisible and bidirectional characters become one space, runs of space collapse, trimmed) and
 // at most MaxNameRunes runes (a cut ends with an ellipsis).
 func cleanName(s string) string { return device.CleanOneLine(s, MaxNameRunes) }
+
+// Quote writes s as a ProbeScript string literal, or reports false when a script line cannot hold it. The lexer reads \" \\ \n and \t as escapes
+// (and any other backslash pair as the second character alone), and everything else literally, so only those four are escaped: a no-break space, a
+// soft hyphen, a zero-width or bidirectional character, an emoji are written as they are and match at replay. (Go's %q wrote \u00a0, \x00 and
+// \r, which the lexer reads as "u00a0", "x00" and "r", so a label with a no-break space never matched.) What cannot be held is a control character
+// other than tab and newline, a line or paragraph separator, and text that is not valid UTF-8.
+func Quote(s string) (string, bool) {
+	if !utf8.ValidString(s) {
+		return "", false
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case unicode.IsControl(r) || r == '\u2028' || r == '\u2029':
+			return "", false
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String(), true
+}
 
 // Sanitize makes text from the screen safe for a ProbeScript line: no line breaks (they would end the step), trimmed.
 func Sanitize(s string) string {

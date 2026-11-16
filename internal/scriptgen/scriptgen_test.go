@@ -2,12 +2,15 @@ package scriptgen
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
 type ev = map[string]interface{}
@@ -222,5 +225,124 @@ func TestNamesAreCleanedLikeEverywhereElseInTheEngine(t *testing.T) {
 	}
 	if got := Step(ev{"action": "swipe", "direction": "  left  "}); got != "  swipe left" {
 		t.Errorf("a direction is trimmed: %q", got)
+	}
+}
+
+// Text that Go's %q escaped as \u00a0, \x00 or \r was read by the lexer as "u00a0", "x00" and "r": a label with a no-break space was recorded as
+// `tap "Signu00a0in"` and never matched. The recorded text now survives the real parser, character for character.
+func TestQuoteSurvivesTheRealParser(t *testing.T) {
+	for name, text := range map[string]string{
+		"a no-break space": "Sign\u00a0in", "a soft hyphen": "co\u00adop", "a zero-width space": "a\u200bb", "a bidi override": "a\u202eb", "a BOM": "\ufeffx",
+		"an emoji": "Pay 💳", "a combining mark": "e\u0301", "a quote": `Say "hi"`, "a backslash": `C:\path\x`, "a backslash before n": `a\nb`, "a tab": "a\tb",
+		"a trailing backslash": `end\`, "a quote after a backslash": `a\"b`, "a unicode escape lookalike": `\u00a0`, "Cyrillic and CJK": "Привет 世界",
+	} {
+		line := Step(ev{"action": "tap", "selector": sel("text", text)})
+		prog, err := parser.ParseFile("test \"t\"\n" + line + "\n")
+		if err != nil {
+			t.Errorf("%s: %q does not parse: %v", name, line, err)
+			continue
+		}
+		act, ok := prog.Tests[0].Body[0].(parser.ActionStep)
+		if !ok || act.Sel == nil || act.Sel.Text != Sanitize(text) {
+			t.Errorf("%s: %q parsed to %+v, want the text %q", name, line, act.Sel, Sanitize(text))
+		}
+		typed := Step(ev{"action": "type", "text": text, "selector": sel("id", "field")})
+		prog, err = parser.ParseFile("test \"t\"\n" + typed + "\n")
+		if err != nil {
+			t.Errorf("%s: %q does not parse: %v", name, typed, err)
+			continue
+		}
+		act, ok = prog.Tests[0].Body[0].(parser.ActionStep)
+		if !ok || act.Text != text {
+			t.Errorf("%s: %q typed %q, want %q", name, typed, act.Text, text)
+		}
+	}
+}
+
+// What a script line cannot hold is refused, not written wrong: a selector text with it falls back to the next lookup, and typed text becomes a
+// comment that does not carry the text.
+func TestWhatAScriptCannotHoldIsRefused(t *testing.T) {
+	for name, text := range map[string]string{
+		"NUL": "a\x00b", "an escape": "a\x1bb", "DEL": "a\x7fb", "a C1 control": "a\u009bb", "NEL": "a\u0085b", "a line separator": "a\u2028b",
+		"a paragraph separator": "a\u2029b", "invalid UTF-8": "a\xffb", "a bell": "a\ab", "a vertical tab": "a\vb", "a form feed": "a\fb",
+	} {
+		if q, ok := Quote(text); ok {
+			t.Errorf("%s: Quote accepted %q as %q", name, text, q)
+		}
+		typed := Step(ev{"action": "type", "text": text, "selector": sel("id", "field")})
+		if !strings.HasPrefix(typed, "  # type into #field was not recorded: the text has a character a script cannot hold") || strings.Contains(typed, "a") && strings.Contains(typed, text) {
+			t.Errorf("%s: typed text became %q", name, typed)
+		}
+		if got := Step(ev{"action": "type", "text": text}); !strings.HasPrefix(got, "  # type was not recorded: the text has a character a script cannot hold") {
+			t.Errorf("%s: with no target: %q", name, got)
+		}
+		// a selector text that cannot be held falls back to the flat id, then to the element
+		if got := Step(ev{"action": "tap", "selector": sel("text", text), "id": "ok"}); got != "  tap #ok" {
+			t.Errorf("%s: %q", name, got)
+		}
+		if got := Step(ev{"action": "tap", "selector": sel("text", text)}); got != "  tap the element" {
+			t.Errorf("%s: %q", name, got)
+		}
+	}
+}
+
+// The oracle: for 20,000 random texts built from the awkward characters, a text step either parses to exactly the text (selector: after Sanitize;
+// typed: as it is) or is a comment/fallback that says nothing of the text. Fixed seed.
+func TestQuoteOracleOverRandomTexts(t *testing.T) {
+	r := rand.New(rand.NewSource(20261116))
+	alphabet := []string{"a", "Z", "7", " ", "\"", "\\", "\t", "\n", "\r", "\u00a0", "\u00ad", "\u200b", "\u202e", "\ufeff", "💳", "é", "\u0301", "世", "\x00", "\x1b", "\x7f", "\u0085", "\u2028", "\u2029", "\xff", "$", "{", "#", "'"}
+	held, refused := 0, 0
+	for i := 0; i < 20000; i++ {
+		var b strings.Builder
+		for n := r.Intn(8); n >= 0; n-- {
+			b.WriteString(alphabet[r.Intn(len(alphabet))])
+		}
+		text := b.String()
+		// typed text
+		line := Step(ev{"action": "type", "text": text, "selector": sel("id", "f")})
+		if q, ok := Quote(text); ok {
+			held++
+			prog, err := parser.ParseFile("test \"t\"\n" + line + "\n")
+			if err != nil {
+				t.Fatalf("typed %q: %q does not parse: %v", text, line, err)
+			}
+			if act, ok := prog.Tests[0].Body[0].(parser.ActionStep); !ok || act.Text != text {
+				t.Fatalf("typed %q: %q parsed to %q (quote %s)", text, line, act.Text, q)
+			}
+		} else {
+			refused++
+			if !strings.HasPrefix(line, "  # type into #f was not recorded") {
+				t.Fatalf("typed %q is not representable but the line is %q", text, line)
+			}
+		}
+		// selector text
+		clean := Sanitize(text)
+		sline := Step(ev{"action": "tap", "selector": sel("text", text)})
+		if q, ok := Quote(clean); ok && clean != "" {
+			prog, err := parser.ParseFile("test \"t\"\n" + sline + "\n")
+			if err != nil {
+				t.Fatalf("selector %q: %q does not parse: %v", text, sline, err)
+			}
+			if act, ok := prog.Tests[0].Body[0].(parser.ActionStep); !ok || act.Sel == nil || act.Sel.Text != clean {
+				t.Fatalf("selector %q: %q parsed to %+v (quote %s)", text, sline, act.Sel, q)
+			}
+		} else if clean == "" || !ok {
+			if sline != "  tap the element" {
+				t.Fatalf("selector %q cannot be held: the step is %q", text, sline)
+			}
+		}
+	}
+	if held < 5000 || refused < 2000 {
+		t.Errorf("the corpus is lopsided: %d held, %d refused", held, refused)
+	}
+	_ = fmt.Sprint
+}
+
+// The four escapes are written as escapes, so a recorded file never holds an invisible raw tab or a split line.
+func TestQuoteEscapesExactlyTheFour(t *testing.T) {
+	for in, want := range map[string]string{"a\tb": `"a\tb"`, "a\nb": `"a\nb"`, `a"b`: `"a\"b"`, `a\b`: `"a\\b"`, "plain": `"plain"`, "": `""`, "a b": "\"a b\""} {
+		if got, ok := Quote(in); !ok || got != want {
+			t.Errorf("Quote(%q) = %q, %v; want %q", in, got, ok, want)
+		}
 	}
 }
