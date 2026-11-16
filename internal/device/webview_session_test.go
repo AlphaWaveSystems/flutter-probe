@@ -1586,3 +1586,35 @@ func TestOnlyTheReadModeReturnsThePageText(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Characters that show nothing but are not whitespace are dropped, one class at a time; spaces that show as spaces are kept.
+func TestReadTextDropsInvisibleLettersOneClassAtATime(t *testing.T) {
+	classes := map[string][]rune{
+		"variation selectors":           {0xFE00, 0xFE0F, 0xE0100, 0xE01EF},
+		"Hangul fillers":                {0x3164, 0x115F, 0xFFA0},
+		"braille blank":                 {0x2800},
+		"combining grapheme joiner":     {0x034F},
+		"Mongolian variation selectors": {0x180B, 0x180C, 0x180D, 0x180E, 0x180F},
+		"object replacement character":  {0xFFFC},
+	}
+	for name, runes := range classes {
+		for _, r := range runes {
+			in := "ab" + string(r) + "cd"
+			p := newPageFake(t)
+			p.lookup = readElement(in, len(in))
+			s, _, _ := sessionFor(t, p, "")
+			res, err := s.ReadText(context.Background(), CSS("#t"))
+			if err != nil || res.Text != "abcd" {
+				t.Errorf("%s: U+%04X was not dropped: %q (err %v)", name, r, res.Text, err)
+			}
+		}
+	}
+	for name, in := range map[string]string{"no-break space": "a\u00a0b", "ideographic space": "a\u3000b", "ordinary text with an accent": "caf\u00e9"} {
+		p := newPageFake(t)
+		p.lookup = readElement(in, len(in))
+		s, _, _ := sessionFor(t, p, "")
+		if res, _ := s.ReadText(context.Background(), CSS("#t")); res.Text != in {
+			t.Errorf("%s was changed: %q", name, res.Text)
+		}
+	}
+}

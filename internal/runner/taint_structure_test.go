@@ -1005,6 +1005,27 @@ func sourceProblems(files map[string]*ast.File, name, fn string) []string {
 					out = append(out, name+": returns the text")
 				}
 			}
+		case *ast.Ident:
+			// the result struct itself (`res`) may be declared, assigned to, and have its fields read; any other use (an alias, an argument, a return, printing the
+			// whole struct) would carry the text somewhere the field checks do not look
+			if v.Name == "res" && len(stack) > 0 {
+				fine := false
+				switch p := stack[len(stack)-1].(type) {
+				case *ast.SelectorExpr:
+					fine = p.X == ast.Expr(v)
+				case *ast.ValueSpec:
+					for _, nm := range p.Names {
+						fine = fine || nm == v
+					}
+				case *ast.AssignStmt:
+					for _, l := range p.Lhs {
+						fine = fine || l == ast.Expr(v)
+					}
+				}
+				if !fine {
+					out = append(out, name+": the result struct `res` is used as a whole (an alias, an argument, a return); use its fields")
+				}
+			}
 		}
 		stack = append(stack, n)
 		return true
@@ -1073,11 +1094,19 @@ func (e *Executor) prints(a A) error { var res R; e.setVar(a.Name, res.Text, tru
 func (e *Executor) returns(a A) (string, error) { var res R; e.setVar(a.Name, res.Text, true); return res.Text, nil }
 func (e *Executor) expands(a A) error { var res R; e.setVar(a.Name, e.resolve(res.Text), true); return nil }
 func (e *Executor) cleanToo(a A) error { var res R; e.setVar(a.Name, res.Text, true); e.setVar("c", "x", false); return nil }
+func (e *Executor) aliased(a A) error { var res R; e.setVar(a.Name, res.Text, true); r2 := res; fmt.Println(r2.Text); return nil }
+func (e *Executor) printsStruct(a A) error { var res R; e.setVar(a.Name, res.Text, true); fmt.Printf("%v", res); return nil }
+func (e *Executor) passesStruct(a A) error { var res R; e.setVar(a.Name, res.Text, true); log(res); return nil }
+func (e *Executor) returnsStruct(a A) (R, error) { var res R; e.setVar(a.Name, res.Text, true); return res, nil }
+func (e *Executor) copiesText(a A) error { var res R; e.setVar(a.Name, res.Text, true); keep := res.Text; _ = keep; return nil }
+func (e *Executor) readsFields(a A) error { var res R; res = e.read(); e.setVar(a.Name, res.Text, true); _ = res.Cut; _ = res.Length; return nil }
 `})
-	if p := sourceProblems(files, "S", "good"); len(p) != 0 {
-		t.Errorf("a good source was reported: %v", p)
+	for _, good := range []string{"good", "readsFields"} {
+		if p := sourceProblems(files, "S", good); len(p) != 0 {
+			t.Errorf("%s: a good source was reported: %v", good, p)
+		}
 	}
-	for fn, want := range map[string]string{"twice": "2 time(s)", "none": "0 time(s)", "prints": "used other than", "returns": "used other than", "expands": "never expanded", "cleanToo": "a taint other than true"} {
+	for fn, want := range map[string]string{"twice": "2 time(s)", "none": "0 time(s)", "prints": "used other than", "returns": "used other than", "expands": "never expanded", "cleanToo": "a taint other than true", "aliased": "used as a whole", "printsStruct": "used as a whole", "passesStruct": "used as a whole", "returnsStruct": "used as a whole", "copiesText": "used other than"} {
 		if p := sourceProblems(files, "S", fn); len(p) == 0 || !strings.Contains(strings.Join(p, " "), want) {
 			t.Errorf("%s: not reported (want %q): %v", fn, want, p)
 		}

@@ -457,7 +457,9 @@ func (s *WebViewSession) ReadText(ctx context.Context, sel Selector) (ReadResult
 }
 
 // cleanPageText drops the characters a reader of a log or a report cannot see or that change how text is shown: control and format characters (zero-width,
-// bidi controls, the byte order mark), line and paragraph separators, private-use characters, non-characters, the replacement character and bytes that are not UTF-8.
+// bidi controls, the byte order mark), line and paragraph separators, private-use characters, non-characters, the replacement character, bytes that are not UTF-8, and the
+// characters that show nothing but are not whitespace (variation selectors, Hangul fillers, the braille blank, the combining grapheme joiner, Mongolian free variation
+// selectors, the object replacement character). A no-break space and the ideographic space are kept: they show as spaces.
 func cleanPageText(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
@@ -467,6 +469,9 @@ func cleanPageText(s string) string {
 		case r == utf8.RuneError,
 			unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.Is(unicode.Co, r), unicode.Is(unicode.Cs, r),
 			r == '\u2028', r == '\u2029',
+			r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF, // variation selectors
+			r == '\u3164', r == '\u115F', r == '\uFFA0', // Hangul fillers: blank letters
+			r == '\u2800', r == '\u034F', r >= 0x180B && r <= 0x180F, r == '\uFFFC', // braille blank, combining grapheme joiner, Mongolian free variation selectors, object replacement
 			r >= 0xFDD0 && r <= 0xFDEF, r&0xFFFE == 0xFFFE:
 		default:
 			b.WriteRune(r)
