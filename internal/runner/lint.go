@@ -205,7 +205,7 @@ func editDistance(a, b string) int {
 
 // markStored records the names a step stores, which a placeholder may use later in the run.
 func markStored(s parser.Step, defined map[string]bool) {
-	if a, ok := s.(parser.ActionStep); ok && (a.Verb == parser.VerbStore || a.Verb == parser.VerbReadWithAI) {
+	if a, ok := s.(parser.ActionStep); ok && (a.Verb == parser.VerbStore || a.Verb == parser.VerbReadWithAI || a.Verb == parser.VerbStoreWebView) {
 		defined[a.Name] = true
 	}
 }

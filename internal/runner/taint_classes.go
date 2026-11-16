@@ -16,6 +16,9 @@ const (
 	classPropagates
 	// classNoString: the step takes no script string, or only a number.
 	classNoString
+	// classSource: the step puts text from a page into a variable as a tainted value (setVar with taint true). Only a handler of this class may do that, once
+	// (a test lists every setVar call of the package).
+	classSource
 )
 
 // taintClasses classifies every ActionVerb of the parser and every Step type, by the names used in internal/parser/ast.go. TestEveryStepIsClassifiedForTaint
@@ -69,7 +72,7 @@ var taintClasses = map[string]taintClass{
 
 	// ---- propagates
 	"VerbStore":          classPropagates,
-	"VerbStoreWebView":   classPropagates, // the value it will read is the first tainted one (T2b); until then the step is not implemented
+	"VerbStoreWebView":   classSource,
 	"VerbCopyClipboard":  classPropagates,
 	"VerbPasteClipboard": classPropagates,
 	"RecipeCall":         classPropagates,
@@ -115,4 +118,20 @@ var literalHandlers = map[string]struct{ fn string }{
 	"VerbOpen": {"runAction"}, "VerbClose": {"runAction"}, "VerbRotate": {"runAction"}, "VerbPressKey": {"runAction"},
 	"VerbLog": {"runAction"}, "VerbSetLocation": {"runAction"}, "VerbSetAppearance": {"runAction"}, "VerbSetAirplaneMode": {"runAction"},
 	"VerbAllowPermission": {"runAction"}, "VerbDenyPermission": {"runAction"}, "VerbDeliverSignal": {"runAction"},
+}
+
+// sourceHandlers names the function of each source step.
+var sourceHandlers = map[string]struct{ fn string }{"VerbStoreWebView": {"runStoreWebView"}}
+
+// propagateRules says, for each propagating step, what its handler must do with the taint of its inputs: the calls it must contain (checked in its handler, a
+// case of runAction or a function) and the third argument of its setVar calls, if any. A propagating step that stops passing taint on fails the test.
+var propagateRules = map[string]struct {
+	fn       string
+	mustCall []string
+	setVars  []string // the taint arguments of the setVar calls the handler must make, in any order
+}{
+	"VerbStore":          {fn: "runAction", mustCall: []string{"resolveT"}, setVars: []string{"len(by) > 0"}},
+	"VerbCopyClipboard":  {fn: "runAction", mustCall: []string{"resolveT", "afterCopy"}},
+	"VerbPasteClipboard": {fn: "runAction", setVars: []string{"e.clipboard().get()"}},
+	"RecipeCall":         {fn: "runRecipeCall", setVars: []string{"false"}}, // the argument text is expanded where the parameter is used
 }

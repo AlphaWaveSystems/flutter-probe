@@ -2924,9 +2924,31 @@ func (p *Parser) tryStoreWebView(line int) (Step, error) {
 		return nil, fmt.Errorf("line %d: store text of css:\"...\" in webview as ... needs a variable name", line)
 	}
 	name := p.advance().Literal
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("line %d: store text of css:\"...\" in webview as ... needs a variable name that is not empty", line)
+	}
+	if managedVariable(name) {
+		return nil, fmt.Errorf("line %d: %s is a variable another step manages (the clipboard, a response); store text ... in webview needs a name of its own", line, shownName(name))
+	}
 	if t := p.peek().Type; t != TOKEN_NEWLINE && t != TOKEN_EOF {
-		return nil, fmt.Errorf("line %d: after \"as %s\" nothing may follow on a store text of ... in webview line", line, name)
+		return nil, fmt.Errorf("line %d: after \"as %s\" nothing may follow on a store text of ... in webview line", line, shownName(name))
 	}
 	p.consumeNewline()
 	return ActionStep{Verb: VerbStoreWebView, Name: name, WebView: &WebViewTarget{Kind: WebViewCSS, Value: value, Page: page}, Line: line}, nil
+}
+
+// managedVariable says whether name is one a step fills in by itself: the clipboard variable of a paste, and the response variables of `call`. A read from a page
+// may not write them, because their taint is decided by the step that owns them.
+func managedVariable(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	return n == "clipboard" || n == "response" || strings.HasPrefix(n, "response.")
+}
+
+// shownName is a variable name made safe to repeat in an error: quoted (so a new line shows as \n) and cut at 60 characters.
+func shownName(name string) string {
+	r := []rune(name)
+	if len(r) > 60 {
+		return strconv.Quote(string(r[:60])) + "..."
+	}
+	return strconv.Quote(name)
 }

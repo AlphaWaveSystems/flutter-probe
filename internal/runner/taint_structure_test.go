@@ -567,7 +567,7 @@ func TestTaintClassCounts(t *testing.T) {
 	for _, c := range taintClasses {
 		counts[c]++
 	}
-	t.Logf("sink %d, literal only %d, UI only %d, propagates %d, no string %d (total %d)", counts[classSink], counts[classLiteral], counts[classUI], counts[classPropagates], counts[classNoString], len(taintClasses))
+	t.Logf("sink %d, literal only %d, UI only %d, propagates %d, source %d, no string %d (total %d)", counts[classSink], counts[classLiteral], counts[classUI], counts[classPropagates], counts[classSource], counts[classNoString], len(taintClasses))
 }
 
 // More ways a handler could reach an expansion without a plain call: all reported. A same-named helper on two types is followed for both.
@@ -879,5 +879,285 @@ func TestEveryExecutorBuilderSharesTheClipboardFlag(t *testing.T) {
 				return true
 			})
 		})
+	}
+}
+
+// ---- sources: the only places a tainted value is made
+
+// setVarCall is one call of setVar in the package, with the function it is in and the text of its third argument (the taint).
+type setVarCall struct{ fn, taint string }
+
+func setVarCalls(fset *token.FileSet, f *ast.File) []setVarCall {
+	var out []setVarCall
+	eachFunc(f, func(q string, fd *ast.FuncDecl) {
+		ast.Inspect(fd, func(n ast.Node) bool {
+			if c, ok := n.(*ast.CallExpr); ok && len(c.Args) == 3 {
+				if sel, ok := c.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "setVar" {
+					out = append(out, setVarCall{q, types.ExprString(c.Args[2])})
+				}
+			}
+			return true
+		})
+	})
+	return out
+}
+
+// The closed list of every setVar call in the package. A new way to write a variable, and above all a new way to make a TAINTED one, fails this test until it is
+// added here by someone who has read the taint design.
+var expectedSetVarCalls = map[setVarCall]int{
+	{"Executor.SetVar", "false"}:                  1, // a data-driven row
+	{"Executor.runAction", "false"}:               0, // (none: the clipboard and the store pass their own taint)
+	{"Executor.runAction", "len(by) > 0"}:         1, // store: a copy of a tainted value is tainted
+	{"Executor.runAction", "e.clipboard().get()"}: 1, // paste: the taint of what was copied
+	{"Executor.runReadWithAI", "false"}:           1, // the text an AI provider read from a screenshot (a stated limit)
+	{"Executor.runHTTPCall", "false"}:             2, // response.status and response.body (a stated limit)
+	{"Executor.runHTTPStep", "false"}:             1, // store response (a stated limit)
+	{"Executor.runRecipeCall", "false"}:           1, // a recipe parameter: the argument text is expanded where it is used
+	{"Executor.runStoreWebView", "true"}:          1, // the one source: text read from a page
+}
+
+func TestEverySetVarCallIsKnown(t *testing.T) {
+	fset := token.NewFileSet()
+	entries, _ := os.ReadDir(".")
+	got := map[setVarCall]int{}
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, n, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range setVarCalls(fset, f) {
+			got[c]++
+		}
+	}
+	for c, n := range got {
+		if expectedSetVarCalls[c] != n {
+			t.Errorf("%s calls setVar with taint %q %d time(s), the list expects %d: a new way to write a variable must be added to expectedSetVarCalls on purpose", c.fn, c.taint, n, expectedSetVarCalls[c])
+		}
+	}
+	for c, n := range expectedSetVarCalls {
+		if n > 0 && got[c] != n {
+			t.Errorf("%s was expected to call setVar with taint %q %d time(s), found %d", c.fn, c.taint, n, got[c])
+		}
+	}
+}
+
+// A source's handler makes the tainted variable once, expands nothing (the selector is expanded by runWebViewStep, not here), and uses the text only to store it, to
+// register it by name and to count it: it never prints or returns it.
+func sourceProblems(files map[string]*ast.File, name, fn string) []string {
+	var body ast.Node
+	for _, f := range files {
+		eachFunc(f, func(q string, fd *ast.FuncDecl) {
+			if q == "Executor."+fn {
+				body = fd
+			}
+		})
+	}
+	if body == nil {
+		return []string{name + ": the handler " + fn + " was not found"}
+	}
+	var out []string
+	trueCalls := 0
+	var stack []ast.Node
+	ast.Inspect(body, func(n ast.Node) bool {
+		if n == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		switch v := n.(type) {
+		case *ast.CallExpr:
+			if sel, ok := v.Fun.(*ast.SelectorExpr); ok {
+				switch {
+				case sel.Sel.Name == "setVar" && len(v.Args) == 3 && types.ExprString(v.Args[2]) == "true":
+					trueCalls++
+				case sel.Sel.Name == "setVar":
+					out = append(out, name+": a setVar with a taint other than true")
+				case func() bool {
+					for _, r := range plainResolvers {
+						if sel.Sel.Name == r {
+							return true
+						}
+					}
+					return false
+				}():
+					out = append(out, name+": calls "+sel.Sel.Name+"; the text of a page is never expanded")
+				}
+			}
+		case *ast.SelectorExpr:
+			if id, ok := v.X.(*ast.Ident); ok && id.Name == "res" && v.Sel.Name == "Text" && len(stack) > 0 {
+				ok := false
+				if call, isCall := stack[len(stack)-1].(*ast.CallExpr); isCall {
+					switch f := call.Fun.(type) {
+					case *ast.SelectorExpr:
+						ok = f.Sel.Name == "setVar" || f.Sel.Name == "NoteNamedSecret" || f.Sel.Name == "RuneCountInString"
+					}
+				}
+				if !ok {
+					out = append(out, name+": the text read from the page is used other than to store, register or count it")
+				}
+			}
+		case *ast.ReturnStmt:
+			for _, r := range v.Results {
+				if strings.Contains(types.ExprString(r), "res.Text") {
+					out = append(out, name+": returns the text")
+				}
+			}
+		}
+		stack = append(stack, n)
+		return true
+	})
+	if trueCalls != 1 {
+		out = append(out, name+": makes the tainted variable "+strconvItoa(trueCalls)+" time(s), want exactly 1")
+	}
+	return out
+}
+
+func strconvItoa(n int) string { return string(rune('0' + n)) }
+
+func TestSourceHandlersMakeTheTaintedVariableOnceAndNeverShowItsText(t *testing.T) {
+	files := parsePkgFiles(t)
+	for name, c := range taintClasses {
+		if c != classSource {
+			continue
+		}
+		h, ok := sourceHandlers[name]
+		if !ok {
+			t.Errorf("%s is a source but has no entry in sourceHandlers", name)
+			continue
+		}
+		for _, p := range sourceProblems(files, name, h.fn) {
+			t.Error(p)
+		}
+	}
+	for name := range sourceHandlers {
+		if taintClasses[name] != classSource {
+			t.Errorf("%s has a sourceHandlers entry but is not classified as a source", name)
+		}
+	}
+}
+
+// Nothing but a source handler may call setVar with taint true: the closed list above enforces it, and this says why in terms of classes.
+func TestOnlySourceHandlersMakeTaintedVariables(t *testing.T) {
+	files := parsePkgFiles(t)
+	fset := token.NewFileSet()
+	_ = fset
+	sources := map[string]bool{}
+	for name, h := range sourceHandlers {
+		if taintClasses[name] == classSource {
+			sources["Executor."+h.fn] = true
+		}
+	}
+	for file, f := range files {
+		eachFunc(f, func(q string, fd *ast.FuncDecl) {
+			ast.Inspect(fd, func(n ast.Node) bool {
+				if c, ok := n.(*ast.CallExpr); ok && len(c.Args) == 3 {
+					if sel, ok := c.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "setVar" && types.ExprString(c.Args[2]) == "true" && !sources[q] {
+						t.Errorf("%s: %s makes a tainted variable but is not the handler of a source step", file, q)
+					}
+				}
+				return true
+			})
+		})
+	}
+}
+
+func TestTheSourceChecksReportTheirNegativeCases(t *testing.T) {
+	files := parseFiles(t, map[string]string{"s.go": `package runner
+func (e *Executor) good(a A) error { var res R; e.setVar(a.Name, res.Text, true); sysdialog.NoteNamedSecret(a.Name, res.Text); _ = utf8.RuneCountInString(res.Text); return nil }
+func (e *Executor) twice(a A) error { var res R; e.setVar(a.Name, res.Text, true); e.setVar("b", res.Text, true); return nil }
+func (e *Executor) none(a A) error { return nil }
+func (e *Executor) prints(a A) error { var res R; e.setVar(a.Name, res.Text, true); fmt.Printf("%s", res.Text); return nil }
+func (e *Executor) returns(a A) (string, error) { var res R; e.setVar(a.Name, res.Text, true); return res.Text, nil }
+func (e *Executor) expands(a A) error { var res R; e.setVar(a.Name, e.resolve(res.Text), true); return nil }
+func (e *Executor) cleanToo(a A) error { var res R; e.setVar(a.Name, res.Text, true); e.setVar("c", "x", false); return nil }
+`})
+	if p := sourceProblems(files, "S", "good"); len(p) != 0 {
+		t.Errorf("a good source was reported: %v", p)
+	}
+	for fn, want := range map[string]string{"twice": "2 time(s)", "none": "0 time(s)", "prints": "used other than", "returns": "used other than", "expands": "never expanded", "cleanToo": "a taint other than true"} {
+		if p := sourceProblems(files, "S", fn); len(p) == 0 || !strings.Contains(strings.Join(p, " "), want) {
+			t.Errorf("%s: not reported (want %q): %v", fn, want, p)
+		}
+	}
+}
+
+// propagateProblems checks that the handler of a propagating step passes the taint of its inputs on: it makes the calls it must, and its setVar calls carry the
+// taint arguments the rule lists (no more and no fewer).
+func propagateProblems(files map[string]*ast.File, name string, rule struct {
+	fn       string
+	mustCall []string
+	setVars  []string
+}) []string {
+	body := bodyOf(files, name, rule.fn)
+	if body == nil {
+		return []string{name + ": the handler " + rule.fn + " was not found"}
+	}
+	var out []string
+	calls := callsIn(body)
+	for _, c := range rule.mustCall {
+		if calls[c] == 0 {
+			out = append(out, name+": its handler does not call "+c)
+		}
+	}
+	var got []string
+	ast.Inspect(body, func(n ast.Node) bool {
+		if c, ok := n.(*ast.CallExpr); ok && len(c.Args) == 3 {
+			if sel, ok := c.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "setVar" {
+				got = append(got, types.ExprString(c.Args[2]))
+			}
+		}
+		return true
+	})
+	sort.Strings(got)
+	want := append([]string(nil), rule.setVars...)
+	sort.Strings(want)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		out = append(out, name+": its setVar calls carry taint "+strings.Join(got, ", ")+", want "+strings.Join(want, ", "))
+	}
+	return out
+}
+
+func TestPropagatingHandlersPassTheTaintOfTheirInputsOn(t *testing.T) {
+	files := parsePkgFiles(t)
+	for name, c := range taintClasses {
+		if c != classPropagates {
+			continue
+		}
+		rule, ok := propagateRules[name]
+		if !ok {
+			t.Errorf("%s propagates but has no entry in propagateRules", name)
+			continue
+		}
+		for _, p := range propagateProblems(files, name, rule) {
+			t.Error(p)
+		}
+	}
+	for name := range propagateRules {
+		if taintClasses[name] != classPropagates {
+			t.Errorf("%s has a propagateRules entry but is not classified as propagating", name)
+		}
+	}
+}
+
+func TestThePropagationCheckReportsItsNegativeCases(t *testing.T) {
+	files := parseFiles(t, map[string]string{"p.go": `package runner
+func (e *Executor) runGood(a A) error { text, by := e.resolveT(a.Text); e.setVar(a.Name, text, len(by) > 0); return nil }
+func (e *Executor) runDrops(a A) error { text, by := e.resolveT(a.Text); _ = by; e.setVar(a.Name, text, false); return nil }
+func (e *Executor) runNoResolve(a A) error { text := e.resolve(a.Text); e.setVar(a.Name, text, true); return nil }
+func (e *Executor) runExtra(a A) error { text, by := e.resolveT(a.Text); e.setVar(a.Name, text, len(by) > 0); e.setVar("x", text, false); return nil }
+`})
+	rule := struct {
+		fn       string
+		mustCall []string
+		setVars  []string
+	}{mustCall: []string{"resolveT"}, setVars: []string{"len(by) > 0"}}
+	for fn, wantBad := range map[string]bool{"runGood": false, "runDrops": true, "runNoResolve": true, "runExtra": true} {
+		rule.fn = fn
+		if p := propagateProblems(files, "P", rule); (len(p) > 0) != wantBad {
+			t.Errorf("%s: problems = %v, want bad = %v", fn, p, wantBad)
+		}
 	}
 }

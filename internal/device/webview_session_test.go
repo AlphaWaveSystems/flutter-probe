@@ -1314,7 +1314,7 @@ func TestTheNotEditableMessageIsMaskedAndCapped(t *testing.T) {
 // The fake pages in these tests do not run the template, so what it reads is pinned here as text (and checked against a real page by the opt-in device test).
 func TestTheTemplateReportsWhatTypeNeedsToKnow(t *testing.T) {
 	for _, want := range []string{"found.matches(':disabled')", "found.readOnly === true", "found.isContentEditable === true", "tag: tag.slice(0, 20)",
-		"inputType: tag === 'input' ? String(found.type || '').toLowerCase().slice(0, 20) : ''", "readOnly: found.readOnly === true", "disabled: disabled", "editable: found.isContentEditable === true"} {
+		"inputType: tag === 'input' ? String(found.type || '').toLowerCase().slice(0, 20) : ''", "readOnly: found.readOnly === true", "disabled: disabled", "editable: found.isContentEditable === true", "textLength: label(found).length"} {
 		if !strings.Contains(findFunction, want) {
 			t.Errorf("the template no longer contains %q", want)
 		}
@@ -1456,5 +1456,133 @@ func TestTypeChecksTheElementAgainAfterTheFocusingLookup(t *testing.T) {
 	err = s.Type(context.Background(), CSS("#f"), "hello")
 	if err == nil || !strings.Contains(err.Error(), "(read-only)") || len(p.of("Input.insertText")) != 0 {
 		t.Fatalf("err = %v, inserted %d", err, len(p.of("Input.insertText")))
+	}
+}
+
+// readElement is a lookup reply for a visible element with this text, as the page reports it.
+func readElement(text string, length int) func(string) map[string]any {
+	return func(string) map[string]any {
+		m := visibleAt(10, 10, "")
+		m["text"], m["textLength"] = text, length
+		return m
+	}
+}
+
+func TestReadTextReturnsTheCleanedTextAndAsksForTheReadMode(t *testing.T) {
+	p := newPageFake(t)
+	p.lookup = readElement("Total: 42.00", 12)
+	s, _, err := sessionFor(t, p, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.ReadText(context.Background(), CSS("#total"))
+	if err != nil || res.Text != "Total: 42.00" || res.Cut || res.Length != 12 {
+		t.Fatalf("res = %+v, err = %v", res, err)
+	}
+	// the lookup ran in read mode and asked for more text than a message shows
+	modes := lookupModes(p)
+	if len(modes) != 1 || modes[0] != "read" {
+		t.Fatalf("modes = %v", modes)
+	}
+	args, _ := p.of("Runtime.callFunctionOn")[0].Params["arguments"].([]any)
+	if v, _ := args[2].(map[string]any)["value"].(float64); int(v) != readFetchChars {
+		t.Errorf("the lookup asked for %v characters, want %d", v, readFetchChars)
+	}
+	// the text is not cut to the length of a message, and not masked here
+	long := strings.Repeat("0123456789", 20)
+	p2 := newPageFake(t)
+	p2.lookup = readElement(long, len(long))
+	s2, _, _ := sessionFor(t, p2, "")
+	if res, err := s2.ReadText(context.Background(), CSS("#t")); err != nil || res.Text != long {
+		t.Errorf("a 200-character text was changed: %d characters, err = %v", len(res.Text), err)
+	}
+}
+
+func TestReadTextDropsHiddenCharactersAndCutsAtTheCap(t *testing.T) {
+	for in, want := range map[string]string{
+		"a\u200bb\u202ec\x07d\ufeff e":  "abcd e", // zero-width, a bidi override, a control, the byte order mark
+		"line\u2028one\u2029two":        "lineonetwo",
+		"nonchars\uFFFE\uFFFFend\ufdd0": "noncharsend",
+		"private\ue000use":              "privateuse",
+		"bad\xffbytes":                  "badbytes",
+		"e\u0301 and \U0001F4A5 stay":   "e\u0301 and \U0001F4A5 stay",
+		"":                              "",
+		"\u200b\u200c":                  "",
+	} {
+		p := newPageFake(t)
+		p.lookup = readElement(in, len(in))
+		s, _, _ := sessionFor(t, p, "")
+		res, err := s.ReadText(context.Background(), CSS("#t"))
+		if err != nil || res.Text != want {
+			t.Errorf("%q -> %q (err %v), want %q", in, res.Text, err, want)
+		}
+	}
+	for n, wantCut := range map[int]bool{999: false, 1000: false, 1001: true, 1500: true} {
+		text := strings.Repeat("é", n)
+		p := newPageFake(t)
+		p.lookup = readElement(text, n)
+		s, _, _ := sessionFor(t, p, "")
+		res, err := s.ReadText(context.Background(), CSS("#t"))
+		if err != nil || res.Cut != wantCut || len([]rune(res.Text)) != min(n, MaxReadChars) {
+			t.Errorf("%d characters: cut = %v (want %v), kept %d, err %v", n, res.Cut, wantCut, len([]rune(res.Text)), err)
+		}
+	}
+	// hidden characters do not count against the cap: 900 visible + 700 zero-width characters is 900 characters, not cut
+	mixed := strings.Repeat("a\u200b", 700) + strings.Repeat("b", 200)
+	p := newPageFake(t)
+	p.lookup = readElement(mixed, len(mixed))
+	s, _, _ := sessionFor(t, p, "")
+	if res, _ := s.ReadText(context.Background(), CSS("#t")); res.Cut || len([]rune(res.Text)) != 900 {
+		t.Errorf("hidden characters counted against the cap: cut %v, kept %d", res.Cut, len([]rune(res.Text)))
+	}
+	// a text longer than the lookup fetches is cut even when what came back is short
+	p = newPageFake(t)
+	p.lookup = readElement("short", readFetchChars+1)
+	s, _, _ = sessionFor(t, p, "")
+	if res, _ := s.ReadText(context.Background(), CSS("#t")); !res.Cut {
+		t.Errorf("a text longer than the fetch was not marked cut")
+	}
+}
+
+func TestReadTextFailsLikeTheOtherLookupsAndNeverRepeatsThePageText(t *testing.T) {
+	secret := "page-secret-Rt58"
+	p := newPageFake(t)
+	p.lookup = func(string) map[string]any {
+		return map[string]any{"count": 0, "visible": false, "text": secret, "textLength": len(secret)}
+	}
+	s, _, _ := sessionFor(t, p, "")
+	_, err := s.ReadText(context.Background(), CSS("#none"))
+	var we *WebViewError
+	if !errors.As(err, &we) || we.Kind != "not found" || strings.Contains(err.Error(), secret) {
+		t.Fatalf("err = %v", err)
+	}
+	p.lookup = func(string) map[string]any {
+		m := visibleAt(1, 1, "")
+		m["visible"] = false
+		m["text"] = secret
+		return m
+	}
+	if _, err := s.ReadText(context.Background(), CSS("#hidden")); !errors.As(err, &we) || we.Kind != "not visible" || strings.Contains(err.Error(), secret) {
+		t.Fatalf("hidden: err = %v", err)
+	}
+	for _, bad := range []float64{-1, 1e9} {
+		p.lookup = func(string) map[string]any { m := readElement("x", 1)(""); m["textLength"] = bad; return m }
+		if _, err := s.ReadText(context.Background(), CSS("#t")); !errors.As(err, &we) || we.Kind != "page error" {
+			t.Errorf("text length %v: err = %v", bad, err)
+		}
+	}
+}
+
+// Only the read mode hands out the page's text as it is: Find, Tap and the others get a short, masked copy for messages and no Read text.
+func TestOnlyTheReadModeReturnsThePageText(t *testing.T) {
+	p := newPageFake(t)
+	p.lookup = readElement(strings.Repeat("secret page text ", 20), 340)
+	s, _, _ := sessionFor(t, p, "")
+	info, err := s.Find(context.Background(), CSS("#t"))
+	if err != nil || info.Read != "" || info.TextLength != 340 || len(info.Text) > 4*maxShownChars {
+		t.Fatalf("Find: Read = %q, TextLength = %d, Text = %d bytes, err = %v", info.Read, info.TextLength, len(info.Text), err)
+	}
+	if err := s.Tap(context.Background(), CSS("#t")); err != nil {
+		t.Fatal(err)
 	}
 }

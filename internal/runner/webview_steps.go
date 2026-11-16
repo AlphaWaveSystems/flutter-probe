@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -16,6 +17,7 @@ type WebViewPage interface {
 	Tap(ctx context.Context, sel device.Selector) error
 	Type(ctx context.Context, sel device.Selector, text string) error
 	See(ctx context.Context, sel device.Selector) error
+	ReadText(ctx context.Context, sel device.Selector) (device.ReadResult, error)
 	WaitFor(ctx context.Context, sel device.Selector, timeout time.Duration) error
 	Title() string
 }
@@ -183,5 +185,30 @@ func capShown(s string) string {
 	return string(r[:maxShownTarget]) + "…"
 }
 
-// errStoreWebViewNotImplemented is what `store text of css:"..." in webview as name` reports until its runner part exists: the step parses, it does not run yet.
-var errStoreWebViewNotImplemented = errors.New("store text of ... in webview is not implemented yet in this version of probe")
+// runStoreWebView is `store text of css:"..." in webview ["page"] as name`: the first source of tainted values. The text of the element is page content: it is
+// stored once, as a tainted variable (so no step that sends a string out of the UI can use it), it is never printed or put in an error here, and the variable's
+// name decides whether it is also registered as a secret (a variable called token or password is masked everywhere it could show up; any other name is not,
+// because an ordinary page text must not be masked wherever it appears).
+func (e *Executor) runStoreWebView(ctx context.Context, a parser.ActionStep) error {
+	if e.deviceCtx == nil {
+		// a skipped read would leave the variable unset and the test reading a placeholder: the step needs a device
+		return errors.New("store text in webview needs a local Android device (it cannot be skipped in cloud mode)")
+	}
+	var res device.ReadResult
+	err := e.runWebViewStep(ctx, "store text in webview", a.WebView, func(p WebViewPage, sel device.Selector) error {
+		r, err := p.ReadText(ctx, sel)
+		res = r
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	e.setVar(a.Name, res.Text, true)
+	sysdialog.NoteNamedSecret(a.Name, res.Text)
+	note := ""
+	if res.Cut {
+		note = fmt.Sprintf(", cut from %d", res.Length)
+	}
+	fmt.Printf("    stored %q: %d characters%s\n", a.Name, utf8.RuneCountInString(res.Text), note)
+	return nil
+}
