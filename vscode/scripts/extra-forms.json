@@ -1,0 +1,15 @@
+{
+  "_about": "Completion forms the parser accepts that dictionary.md does not list. Each one needs a reason and the evidence that the parser accepts it; internal/parser/completion_forms_test.go checks the parse.",
+  "forms": [
+    {
+      "label": "tap on",
+      "insert": "tap on \"${1:Label}\"",
+      "reason": "The parser reads `on` as a filler word, so `tap on \"Sign In\"` is a tap. Used in internal/parser/parser_test.go and internal/runner/runner_test.go. The dictionary lists `tap \"Label\"`; this is the form written after `tap`."
+    },
+    {
+      "label": "toggle wifi",
+      "insert": "toggle wifi",
+      "reason": "`toggle` takes any selector, so `toggle wifi` parses as a toggle of a widget labelled wifi (probe lint accepts it). The dictionary's example is `toggle \"Dark Mode\"`."
+    }
+  ]
+}
