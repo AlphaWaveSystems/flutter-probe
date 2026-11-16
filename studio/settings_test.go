@@ -29,7 +29,7 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &App{}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, DefaultsTimeout: "20s", IOSDeviceID: "SIM-UDID", AndroidDeviceID: "emulator-5554"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, DefaultsTimeout: "20s", IOSDeviceID: "SIM-UDID", AndroidDeviceID: "emulator-5554"}); err != nil {
 		t.Fatal(err)
 	}
 	m := readYAML(t, dir)
@@ -53,10 +53,10 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 func TestSaveWorkspaceSettingsRemovesClearedKeys(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: "X"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: "X"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800}); err != nil {
 		t.Fatal(err)
 	}
 	if dev, ok := readYAML(t, dir)["device"].(map[string]any); ok && dev["ios_device_id"] != nil {
@@ -72,7 +72,7 @@ func TestSaveWorkspaceSettingsRefusesBadInputBeforeTouchingTheFile(t *testing.T)
 	}
 	a := &App{}
 	for _, bad := range []WorkspaceSettings{{DefaultsTimeout: "soon"}, {AgentPort: 70000}, {AgentPort: -1}} {
-		if err := a.SaveWorkspaceSettings(dir, bad); err == nil {
+		if err := inWS(a, dir).SaveWorkspaceSettings(dir, bad); err == nil {
 			t.Errorf("%+v must be refused", bad)
 		}
 	}
@@ -86,7 +86,7 @@ func TestSaveWorkspaceSettingsRefusesBadInputBeforeTouchingTheFile(t *testing.T)
 	if err := os.WriteFile(path, []byte("agent: [unclosed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1}); err == nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1}); err == nil {
 		t.Error("an unparsable probe.yaml must be reported")
 	}
 	if b, _ := os.ReadFile(path); string(b) != "agent: [unclosed\n" {
@@ -102,7 +102,7 @@ func TestSaveWorkspaceSettingsWritesTheRunKnobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &App{}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s", RetryFailedTests: 2, ImplicitWait: "2s"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s", RetryFailedTests: 2, ImplicitWait: "2s"}); err != nil {
 		t.Fatal(err)
 	}
 	d := readYAML(t, dir)["defaults"].(map[string]any)
@@ -113,7 +113,7 @@ func TestSaveWorkspaceSettingsWritesTheRunKnobs(t *testing.T) {
 	if err != nil || got.TestTimeout != "1m30s" || got.RetryFailedTests != 2 || got.ImplicitWait != "2s" {
 		t.Errorf("load = %+v, %v", got, err)
 	}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{}); err != nil {
 		t.Fatal(err)
 	}
 	d2, _ := readYAML(t, dir)["defaults"].(map[string]any)
@@ -143,7 +143,7 @@ func TestSaveWorkspaceSettingsRefusesBadRunKnobs(t *testing.T) {
 		"a wait past five minutes":       {WorkspaceSettings{ImplicitWait: "6m"}, "outside 0 to"},
 	} {
 		dir := t.TempDir()
-		err := (&App{}).SaveWorkspaceSettings(dir, tc.s)
+		err := inWS(&App{}, dir).SaveWorkspaceSettings(dir, tc.s)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
 		}
@@ -165,7 +165,7 @@ func TestSaveWorkspaceSettingsKeepsAValueBeyondTheFormsBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	loaded.AgentPort = 48800
-	if err := a.SaveWorkspaceSettings(dir, loaded); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, loaded); err != nil {
 		t.Fatalf("saving an unrelated change was refused: %v", err)
 	}
 	d := readYAML(t, dir)["defaults"].(map[string]any)
@@ -173,7 +173,7 @@ func TestSaveWorkspaceSettingsKeepsAValueBeyondTheFormsBounds(t *testing.T) {
 		t.Errorf("defaults = %v", d)
 	}
 	loaded.RetryFailedTests = 16
-	if err := a.SaveWorkspaceSettings(dir, loaded); err == nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, loaded); err == nil {
 		t.Error("a changed value beyond the bounds was accepted")
 	}
 }

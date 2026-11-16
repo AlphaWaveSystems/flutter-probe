@@ -201,7 +201,9 @@ func (y *probeYAML) set(v any, path ...string) error {
 		return err
 	}
 	if cur, ok := y.current(path...); ok {
-		if want, _ := v.(string); cur == want || cur == text {
+		// A string is equal when its decoded text matches; any other value when it is written the same way. (A string compare for an int
+		// or bool would match an empty current value and report success while writing nothing.)
+		if want, isString := v.(string); (isString && cur == want) || cur == text {
 			return nil
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -22,7 +23,7 @@ func saveKnobs(t *testing.T, dir string) error {
 	form.Base = &loaded
 	form.TestTimeout = "45s"
 	form.RetryFailedTests = 2
-	return a.SaveWorkspaceSettings(dir, form)
+	return inWS(a, dir).SaveWorkspaceSettings(dir, form)
 }
 
 // expectedAfter is the original's decoded content with the two edits made: what the engine must read after the save, and nothing else changed.
@@ -138,7 +139,7 @@ func TestRandomProbeYAMLShapesAreEditedExactlyOrRefused(t *testing.T) {
 		form.Base = &loaded
 		form.TestTimeout = "45s"
 		form.RetryFailedTests = 2
-		err = a.SaveWorkspaceSettings(dir, form)
+		err = inWS(a, dir).SaveWorkspaceSettings(dir, form)
 		after := read(t, path)
 		if err != nil {
 			if after != src {
@@ -242,7 +243,7 @@ func TestSaveRefusesWhenTheFileChangedUnderTheForm(t *testing.T) {
 	form := loaded
 	form.Base = &loaded
 	form.ImplicitWait = "2s" // the person changes another field
-	if err := a.SaveWorkspaceSettings(dir, form); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, form); err != nil {
 		t.Fatalf("a change to a field the file did not change under the form was refused: %v", err)
 	}
 	if got := read(t, path); !strings.Contains(got, "test_timeout: 99s") || !strings.Contains(got, "implicit_wait: 2s") {
@@ -251,7 +252,7 @@ func TestSaveRefusesWhenTheFileChangedUnderTheForm(t *testing.T) {
 	form = loaded
 	form.Base = &loaded
 	form.TestTimeout = "30s" // the person changes the field that changed on disk
-	err := a.SaveWorkspaceSettings(dir, form)
+	err := inWS(a, dir).SaveWorkspaceSettings(dir, form)
 	if err == nil || !strings.Contains(err.Error(), "changed on disk") || !strings.Contains(err.Error(), "test time limit") {
 		t.Errorf("err = %v", err)
 	}
@@ -268,14 +269,14 @@ func TestAPreExistingOutOfRangeValueDoesNotBlockOtherSaves(t *testing.T) {
 	form := loaded
 	form.Base = &loaded
 	form.AgentPort = 48800
-	if err := a.SaveWorkspaceSettings(dir, form); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, form); err != nil {
 		t.Fatalf("saving the port was blocked by values that were already there: %v", err)
 	}
 	if !strings.Contains(read(t, path), "test_timeout: 500ms") {
 		t.Error("the existing value changed")
 	}
 	form.TestTimeout = "200ms"
-	if err := a.SaveWorkspaceSettings(dir, form); err == nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, form); err == nil {
 		t.Error("a changed value under 1s was accepted")
 	}
 }
@@ -309,7 +310,7 @@ func TestConcurrentSavesKeepTheFileWhole(t *testing.T) {
 			form := loaded
 			form.Base = &loaded
 			form.RetryFailedTests = 1 + i%3
-			_ = a.SaveWorkspaceSettings(dir, form)
+			_ = inWS(a, dir).SaveWorkspaceSettings(dir, form)
 			_ = writeAISettings(dir, AISettings{Provider: "local", Endpoint: "http://127.0.0.1:11434/v1", Model: fmt.Sprintf("m%d", i), KeySource: "keychain", Vision: true})
 		}(i)
 	}
@@ -376,5 +377,163 @@ func TestAnAddedChainKeepsTheFilesLineEnding(t *testing.T) {
 	want := "# nothing yet\r\n# more\r\ndefaults:\r\n  test_timeout: 45s\r\n  retry_failed_tests: 2\r\n"
 	if got := read(t, path); got != want {
 		t.Errorf("got %q want %q", got, want)
+	}
+}
+
+// inWS puts a in the workspace dir, as opening it in the window does, and returns it.
+func inWS(a *App, dir string) *App {
+	a.workspace = dir
+	return a
+}
+
+// A crafted call cannot make Studio write the probe.yaml of any folder: only the workspace that is open, however its path is spelled.
+func TestSettingsAreSavedOnlyToTheOpenWorkspace(t *testing.T) {
+	open, other := t.TempDir(), t.TempDir()
+	a := &App{workspace: open}
+	if err := a.SaveWorkspaceSettings(other, WorkspaceSettings{AgentPort: 9}); err == nil || !strings.Contains(err.Error(), "only to the workspace that is open") {
+		t.Errorf("another folder: %v", err)
+	}
+	if err := a.SaveAISettings(other, AISettings{Provider: "none", Vision: true, KeySource: "keychain"}); err == nil || !strings.Contains(err.Error(), "only to the workspace that is open") {
+		t.Errorf("another folder (AI): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(other, "probe.yaml")); err == nil {
+		t.Error("a probe.yaml was written in the other folder")
+	}
+	if err := (&App{}).SaveWorkspaceSettings(open, WorkspaceSettings{AgentPort: 9}); err == nil || !strings.Contains(err.Error(), "open a workspace first") {
+		t.Errorf("no workspace open: %v", err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(open, link); err == nil {
+		if err := a.SaveWorkspaceSettings(link, WorkspaceSettings{AgentPort: 9}); err != nil {
+			t.Errorf("the open workspace by a link to it was refused: %v", err)
+		}
+	}
+	if err := a.SaveWorkspaceSettings(open+"/.", WorkspaceSettings{AgentPort: 10}); err != nil {
+		t.Errorf("the open workspace spelled with a dot was refused: %v", err)
+	}
+}
+
+// A value that is not a string is compared as written: a current value of "" must not make an int look already set and report success.
+func TestAnIntIsNotTakenForAnEmptyString(t *testing.T) {
+	dir, path := writeGolden(t, "defaults:\n  retry_failed_tests: \"\"\n", 0o644)
+	y, err := openProbeYAML(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := y.set(5, "defaults", "retry_failed_tests"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(y.text, "retry_failed_tests: 5") {
+		t.Errorf("the int was not written: %q", y.text)
+	}
+	if err := y.set(true, "defaults", "flag"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(y.text, "flag: true") {
+		t.Errorf("the bool was not written: %q", y.text)
+	}
+	_ = path
+}
+
+// A top-level key added to a multi-document file goes into the first document, before the marker, and the other documents are untouched.
+func TestATopLevelKeyInAMultiDocumentFile(t *testing.T) {
+	src := "defaults:\n  timeout: 30s\n---\nother: 1\n"
+	dir, path := writeGolden(t, src, 0o644)
+	a := inWS(&App{}, dir)
+	loaded, _ := a.LoadWorkspaceSettings(dir)
+	form := loaded
+	form.Base = &loaded
+	form.AgentPort = 4444
+	if err := a.SaveWorkspaceSettings(dir, form); err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if got, want := read(t, path), "defaults:\n  timeout: 30s\nagent:\n  port: 4444\n---\nother: 1\n"; got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}
+
+// The check before the write covers every document, not only the first, and a key nobody asked for.
+func TestTheCheckCoversEveryDocumentAndExtraKeys(t *testing.T) {
+	src := "defaults:\n  timeout: 30s\n---\nother: 1\n"
+	for name, corrupt := range map[string]func(string) string{
+		"a change in the second document":    func(s string) string { return strings.Replace(s, "other: 1", "other: 2", 1) },
+		"a key added to the second document": func(s string) string { return s + "added: 1\n" },
+		"an extra key in the first":          func(s string) string { return strings.Replace(s, "---", "extra: 1\n---", 1) },
+	} {
+		dir, path := writeGolden(t, src, 0o644)
+		y, err := openProbeYAML(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := y.set("45s", "defaults", "test_timeout"); err != nil {
+			t.Fatal(err)
+		}
+		y.text = corrupt(y.text)
+		if err := y.save(); err == nil || !strings.Contains(err.Error(), "nothing was written") {
+			t.Errorf("%s: save = %v", name, err)
+		}
+		if read(t, path) != src {
+			t.Errorf("%s: the file changed", name)
+		}
+	}
+}
+
+// A probe.yaml the engine cannot load is not saved over, even by an edit that is itself right: Studio does not write a file it cannot vouch for.
+func TestAFileTheEngineCannotLoadIsNotWritten(t *testing.T) {
+	src := "defaults:\n  retry_failed_tests: many\n"
+	dir, path := writeGolden(t, src, 0o644)
+	a := inWS(&App{}, dir)
+	err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 4444})
+	if err == nil || !strings.Contains(err.Error(), "would not load") {
+		t.Errorf("err = %v", err)
+	}
+	if read(t, path) != src {
+		t.Error("the file changed")
+	}
+}
+
+// Saves of different fields that start together all land: none is lost to another's read-modify-write.
+func TestConcurrentSavesOfDifferentFieldsAllLand(t *testing.T) {
+	for round := 0; round < 15; round++ {
+		dir, path := writeGolden(t, "project:\n  app: a.b\n", 0o644)
+		edits := []func(f *WorkspaceSettings){
+			func(f *WorkspaceSettings) { f.AgentPort = 4001 },
+			func(f *WorkspaceSettings) { f.DefaultsTimeout = "41s" },
+			func(f *WorkspaceSettings) { f.TestTimeout = "42s" },
+			func(f *WorkspaceSettings) { f.RetryFailedTests = 3 },
+			func(f *WorkspaceSettings) { f.ImplicitWait = "5s" },
+			func(f *WorkspaceSettings) { f.IOSDeviceID = "IOS-1" },
+			func(f *WorkspaceSettings) { f.AndroidDeviceID = "emu-1" },
+			func(f *WorkspaceSettings) { f.AIContextRunResults = true },
+		}
+		a := inWS(&App{}, dir)
+		loaded, _ := a.LoadWorkspaceSettings(dir)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		errs := make([]error, len(edits))
+		for i, e := range edits {
+			wg.Add(1)
+			go func(i int, e func(*WorkspaceSettings)) {
+				defer wg.Done()
+				form := loaded
+				form.Base = &loaded
+				e(&form)
+				<-start
+				errs[i] = a.SaveWorkspaceSettings(dir, form)
+			}(i, e)
+		}
+		close(start)
+		wg.Wait()
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("round %d save %d: %v", round, i, err)
+			}
+		}
+		got := read(t, path)
+		for _, want := range []string{"port: 4001", "timeout: 41s", "test_timeout: 42s", "retry_failed_tests: 3", "implicit_wait: 5s", "ios_device_id: IOS-1", "android_device_id: emu-1", "run_results: true"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("round %d: a save was lost, %q is missing:\n%s", round, want, got)
+			}
+		}
 	}
 }

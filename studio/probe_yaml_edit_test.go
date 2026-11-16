@@ -62,7 +62,7 @@ func TestSaveKeepsACommentedProbeYAMLByteForByte(t *testing.T) {
 	loaded.AgentPort = 48800
 	loaded.TestTimeout = "90s"
 	loaded.RetryFailedTests = 2
-	if err := a.SaveWorkspaceSettings(dir, loaded); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, loaded); err != nil {
 		t.Fatal(err)
 	}
 	want := strings.NewReplacer(
@@ -83,7 +83,7 @@ func TestSaveWithNothingChangedLeavesTheFileAlone(t *testing.T) {
 	before, _ := os.Stat(path)
 	a := &App{}
 	loaded, _ := a.LoadWorkspaceSettings(dir)
-	if err := a.SaveWorkspaceSettings(dir, loaded); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, loaded); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.Stat(path)
@@ -99,7 +99,7 @@ func TestAnUnchangedValueKeepsTheSpellingInTheFile(t *testing.T) {
 	a := &App{}
 	loaded, _ := a.LoadWorkspaceSettings(dir)
 	loaded.AgentPort = 48800
-	if err := a.SaveWorkspaceSettings(dir, loaded); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, loaded); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, path); got != src+"agent:\n  port: 48800\n" {
@@ -112,7 +112,7 @@ func TestAnUnparsableProbeYAMLIsNeverWritten(t *testing.T) {
 	bad := "agent: [unclosed\n# keep me\n"
 	dir, path := writeGolden(t, bad, 0o600)
 	a := &App{}
-	err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s"})
+	err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s"})
 	if err == nil || !strings.Contains(err.Error(), "cannot be parsed") || !strings.Contains(err.Error(), "Fix it by hand first") || strings.Contains(err.Error(), dir) {
 		t.Errorf("err = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestAProbeYAMLThatIsALinkIsNotWritten(t *testing.T) {
 	if err := os.Symlink(target, filepath.Join(dir, "probe.yaml")); err != nil {
 		t.Skip("no symlinks here")
 	}
-	err := (&App{}).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 9})
+	err := inWS(&App{}, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 9})
 	if err == nil || !strings.Contains(err.Error(), "link") {
 		t.Errorf("err = %v", err)
 	}
@@ -150,10 +150,10 @@ func TestAProbeYAMLThatIsALinkIsNotWritten(t *testing.T) {
 func TestTheWriteLeavesNoTempFilesAndANewFileIsPrivate(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s", RetryFailedTests: 99}); err == nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s", RetryFailedTests: 99}); err == nil {
 		t.Error("retries 99 were accepted")
 	}
 	entries, _ := os.ReadDir(dir)
@@ -183,7 +183,7 @@ func TestEditsOnOtherShapesOfProbeYAML(t *testing.T) {
 		dir, path := writeGolden(t, tc.src, 0o600)
 		form, _ := a.LoadWorkspaceSettings(dir) // the form as it was loaded, with one field changed
 		form.TestTimeout = "90s"
-		if err := a.SaveWorkspaceSettings(dir, form); err != nil {
+		if err := inWS(a, dir).SaveWorkspaceSettings(dir, form); err != nil {
 			t.Errorf("%s: %v", name, err)
 			continue
 		}
@@ -199,7 +199,7 @@ func TestEditsOnOtherShapesOfProbeYAML(t *testing.T) {
 		"a top-level list": "- a\n- b\n",
 	} {
 		dir, path := writeGolden(t, src, 0o600)
-		if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s"}); err == nil {
+		if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s"}); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 		if read(t, path) != src {
@@ -212,14 +212,14 @@ func TestEditsOnOtherShapesOfProbeYAML(t *testing.T) {
 func TestClearingRemovesTheLineAndAnEmptiedParent(t *testing.T) {
 	a := &App{}
 	dir, path := writeGolden(t, "project:\n  app: a.b\ndefaults:\n  test_timeout: 90s\nagent:\n  port: 1\n", 0o600)
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, path); got != "project:\n  app: a.b\nagent:\n  port: 1\n" {
 		t.Errorf("got %q", got)
 	}
 	dir, path = writeGolden(t, "defaults: # my defaults\n  test_timeout: 90s\n", 0o600)
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, path); got != "defaults: # my defaults\n" {

@@ -227,6 +227,9 @@ func (a *App) SaveAISettings(workspace string, s AISettings) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace path is required") // before the compare: an empty path would read ./probe.yaml
 	}
+	if err := a.requireOpenWorkspace(workspace); err != nil {
+		return err
+	}
 	// A form that equals what the file already says changes nothing, so it is neither validated nor written. A setup the CLI
 	// accepts, such as OpenAI with a plain key, must not stop the rest of Settings from saving.
 	if cur, err := readAISettings(workspace); err == nil {

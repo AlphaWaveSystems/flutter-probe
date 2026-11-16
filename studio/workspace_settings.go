@@ -73,6 +73,9 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 	if workspace == "" {
 		return fmt.Errorf("workspace path is required")
 	}
+	if err := a.requireOpenWorkspace(workspace); err != nil {
+		return err
+	}
 	probeYAMLMu.Lock()
 	defer probeYAMLMu.Unlock()
 	y, err := openProbeYAML(workspace)
@@ -253,4 +256,27 @@ func isZero(v any) bool {
 		return !x
 	}
 	return v == nil
+}
+
+// requireOpenWorkspace refuses a save for any folder but the workspace that is open in Studio: the bound methods that write probe.yaml take the
+// workspace as a string from the window, and a crafted call must not be able to write <any folder>/probe.yaml. Both paths are cleaned and
+// resolved through links before they are compared.
+func (a *App) requireOpenWorkspace(workspace string) error {
+	a.mu.Lock()
+	open := a.workspace
+	a.mu.Unlock()
+	if open == "" {
+		return fmt.Errorf("open a workspace first: settings are saved to the probe.yaml of the workspace that is open")
+	}
+	same := func(p string) string {
+		p = filepath.Clean(p)
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return real
+		}
+		return p
+	}
+	if same(open) != same(workspace) {
+		return fmt.Errorf("settings are saved only to the workspace that is open in Studio")
+	}
+	return nil
 }
