@@ -985,27 +985,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return nil
 
 	case parser.VerbClearAppData:
-		if e.deviceCtx == nil {
-			// In cloud mode, there's no device context (no ADB/simctl).
-			// The app is already fresh since it was just installed on the cloud device.
-			fmt.Println("    \033[33m⚠\033[0m  Skipping clear app data (cloud mode — app is already fresh)")
-			return nil
-		}
-		e.client.Close()
-		if err := e.deviceCtx.ClearAppData(ctx); err != nil {
-			return err
-		}
-		newClient, err := e.deviceCtx.Reconnect(ctx)
-		if err != nil {
-			return fmt.Errorf("clear app data: %w", err)
-		}
-		e.client = newClient
-		e.reapplyMocks(ctx)
-		e.reapplyPerf(ctx)
-		if e.onReconnect != nil {
-			e.onReconnect(newClient)
-		}
-		return nil
+		return e.clearAppData(ctx, false)
 
 	case parser.VerbAllowPermission:
 		if e.deviceCtx == nil {
@@ -2201,4 +2181,36 @@ func shownDiff(path string) string {
 		return "none (no pixel differs)"
 	}
 	return path
+}
+
+// clearAppData wipes the app's data and reconnects to the relaunched app. confirmed says the question was already asked and answered yes (the
+// "clear data before each test" setting asks once for the run); otherwise the step asks as `clear app data` always has.
+func (e *Executor) clearAppData(ctx context.Context, confirmed bool) error {
+	if e.deviceCtx == nil {
+		// In cloud mode, there's no device context (no ADB/simctl).
+		// The app is already fresh since it was just installed on the cloud device.
+		fmt.Println("    \033[33m⚠\033[0m  Skipping clear app data (cloud mode — app is already fresh)")
+		return nil
+	}
+	e.client.Close()
+	var err error
+	if confirmed {
+		err = e.deviceCtx.ClearAppDataConfirmed(ctx)
+	} else {
+		err = e.deviceCtx.ClearAppData(ctx)
+	}
+	if err != nil {
+		return err
+	}
+	newClient, err := e.deviceCtx.Reconnect(ctx)
+	if err != nil {
+		return fmt.Errorf("clear app data: %w", err)
+	}
+	e.client = newClient
+	e.reapplyMocks(ctx)
+	e.reapplyPerf(ctx)
+	if e.onReconnect != nil {
+		e.onReconnect(newClient)
+	}
+	return nil
 }

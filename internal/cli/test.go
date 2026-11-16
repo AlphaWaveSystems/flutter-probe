@@ -109,6 +109,7 @@ func init() {
 	f.String("locale", "", `run the app in this language (BCP-47, e.g. "de", "pt-BR", "ar"; "system" = device default). Android 13+ and iOS simulators; the device language itself is unchanged`)
 	f.String("locales", "", `run the whole suite once per language (comma-separated, e.g. "de,ja,ar"), each in its own run; -o report files get the tag in their name`)
 	f.Duration("test-timeout", 0, "wall-clock limit per test attempt (also defaults.test_timeout): a test that runs past it fails with \"test exceeded <limit>\" and the run goes on. 0 turns it off. Each retry and each data-driven row gets its own limit")
+	f.Bool("clear-data-before-each-test", false, "wipe the app's data and relaunch before every test, so each starts from a clean state (also defaults.clear_data_before_each_test). Asked once per run: --yes, or \"probe prefs set clear-data-without-asking on\" on a simulator or emulator, answers it")
 	f.Int("retry-failed", 0, "re-run a failing test up to N extra times before reporting it failed (also defaults.retry_failed_tests); a pass on a retry is reported with its attempt count")
 	f.String("perf-baseline", "", "compare every `start measuring` window with this baseline file; a test whose memory/CPU/frames/data got worse than the tolerance fails (create it with --perf-update-baseline)")
 	f.Float64("perf-tolerance", 20, "percent a measured number may exceed its baseline by before it counts as a regression (small absolute changes are ignored)")
@@ -424,6 +425,9 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 	if err := applyTestTimeout(cmd, cfg); err != nil {
 		return err
+	}
+	if cmd.Flags().Changed("clear-data-before-each-test") {
+		cfg.Defaults.ClearDataBeforeEachTest, _ = cmd.Flags().GetBool("clear-data-before-each-test")
 	}
 	if n, _ := cmd.Flags().GetInt("retry-failed"); n > 0 {
 		cfg.Defaults.RetryFailedTests = n

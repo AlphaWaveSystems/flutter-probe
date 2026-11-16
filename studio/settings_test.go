@@ -177,3 +177,35 @@ func TestSaveWorkspaceSettingsKeepsAValueBeyondTheFormsBounds(t *testing.T) {
 		t.Error("a changed value beyond the bounds was accepted")
 	}
 }
+
+// The "clear data before every test" box is written under defaults and read back, and clearing it removes the key.
+func TestSettingsWritesClearDataBeforeEachTest(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("project:\n  app: com.example.app\ndefaults:\n  platform: ios # keep\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := inWS(&App{}, dir)
+	loaded, _ := a.LoadWorkspaceSettings(dir)
+	form := loaded
+	form.Base = &loaded
+	form.ClearDataBeforeEachTest = true
+	if err := a.SaveWorkspaceSettings(dir, form); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(dir, "probe.yaml")); got != "project:\n  app: com.example.app\ndefaults:\n  platform: ios # keep\n  clear_data_before_each_test: true\n" {
+		t.Errorf("got %q", got)
+	}
+	again, _ := a.LoadWorkspaceSettings(dir)
+	if !again.ClearDataBeforeEachTest {
+		t.Error("not read back")
+	}
+	base := again
+	again.Base = &base
+	again.ClearDataBeforeEachTest = false
+	if err := a.SaveWorkspaceSettings(dir, again); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(dir, "probe.yaml")); strings.Contains(got, "clear_data") {
+		t.Errorf("the key was not removed: %q", got)
+	}
+}
