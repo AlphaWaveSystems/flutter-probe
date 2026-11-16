@@ -265,6 +265,8 @@ func callClaude(apiKey, model, system string, msgs []claudeMessage) (ChatRespons
 // SelectorFix is a suggested replacement for the failed step of the last run. Nothing is applied: the user reads it and
 // decides.
 type SelectorFix struct {
+	// ID names this suggestion for CheckReplaceLine, which reads the line it replaces from Studio's own record and not from the window.
+	ID           string  `json:"id"`
 	Suggestion   string  `json:"suggestion"`
 	Rationale    string  `json:"rationale"`
 	InputTokens  int     `json:"inputTokens"`

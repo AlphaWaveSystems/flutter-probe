@@ -388,4 +388,103 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await plain.close();
     }
   });
+
+  const loginFile = () => path.join(workspace, "probe-tests", "login.probe");
+  const loginText = 'test "sign in"\n  open the app\n  tap "Welcome"\n  tap "Sign in"\n  see "Home"\n';
+  const lines = (page: Page) => page.locator("#editor .view-lines");
+
+  async function suggestWith(page: Page, reply: string) {
+    const f = await fakeProvider(reply);
+    useProvider(f);
+    fs.mkdirSync(path.dirname(loginFile()), { recursive: true });
+    fs.writeFileSync(loginFile(), loginText);
+    await openStudio(page);
+    await openPath(page, "probe-tests/login.probe");
+    await expect(page.locator("#editor-filename")).toContainText("login.probe");
+    await page.click("#btn-fix");
+    await expect(overlay(page)).toBeVisible();
+    await page.click("#btn-fix-preview-send");
+    await expect(card(page)).toBeVisible();
+    return f;
+  }
+
+  test("sf-13 Replace the line puts the suggestion in the editor as one undo step, and saves and runs nothing", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nThe label changed.');
+    try {
+      await expect(page.locator("#btn-fix-replace")).toBeVisible();
+      const calls = countCalls(page);
+      await page.click("#btn-fix-replace");
+      await expect(lines(page)).toContainText('tap "Sign in now"');
+      await expect(lines(page)).not.toContainText('tap "Sign in"\n');
+      await expect(page.locator("#explain-status")).toContainText("not saved and not run");
+      await expect(card(page)).toBeHidden();
+      expect(fs.readFileSync(loginFile(), "utf8")).toBe(loginText); // the file on disk is untouched
+      expect(calls.WriteFile ?? 0).toBe(0);
+      expect(calls.RunFile ?? 0).toBe(0);
+      expect(calls.RunFileScoped ?? 0).toBe(0);
+      // one Undo restores the line
+      await lines(page).locator(".view-line", { hasText: "Welcome" }).click(); // focus the editor
+      await page.keyboard.press("ControlOrMeta+z");
+      await expect(lines(page)).toContainText('tap "Sign in"');
+      await expect(lines(page)).not.toContainText("Sign in now");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-14 Replace the line is refused for a suggestion that is not one step of the same kind", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\nsee "Welcome"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await expect(page.locator("#explain-status")).toContainText("Not replaced");
+      await expect(page.locator("#explain-status")).toContainText("same kind");
+      await expect(lines(page)).not.toContainText('see "Welcome"\n  tap');
+      await expect(lines(page)).toContainText('tap "Sign in"');
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-15 Replace the line is refused when the line was edited after the suggestion", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      // edit the failed step's line in the editor: go to line 4, end of line, type
+      await lines(page).locator(".view-line", { hasText: 'tap "Sign in"' }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.type("!");
+      await page.click("#btn-fix-replace");
+      await expect(page.locator("#explain-status")).toContainText("Not replaced");
+      await expect(lines(page)).toContainText('tap "Sign in"!');
+      await expect(lines(page)).not.toContainText("Sign in now");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-16 a suggestion that cleaning changed has no Replace the line button", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntype "jane.doe@example.com" into "Email"\n```\nWhy.');
+    try {
+      await expect(card(page).locator(".explain-row-changed")).toHaveCount(1);
+      await expect(page.locator("#btn-fix-replace")).toHaveCount(0);
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-17 one Undo takes back the replacement and nothing typed before it", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await lines(page).locator(".view-line", { hasText: 'see "Home"' }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.type("x"); // an edit on another line, before the replacement
+      await page.click("#btn-fix-replace");
+      await expect(lines(page)).toContainText('tap "Sign in now"');
+      await lines(page).locator(".view-line", { hasText: "Welcome" }).click();
+      await page.keyboard.press("ControlOrMeta+z");
+      await expect(lines(page)).not.toContainText("Sign in now");
+      await expect(lines(page)).toContainText('see "Home"x'); // the earlier typing is still there
+    } finally {
+      await f.close();
+    }
+  });
 });

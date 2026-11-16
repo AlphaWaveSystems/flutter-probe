@@ -7,7 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
-import { FixSession, fixCardModel, fixPreviewNote, type FixAnswer, type FixPreview } from "./selector-fix";
+import { FixSession, REPLACE_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, type FixAnswer, type FixPreview } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -18,6 +18,7 @@ import { toast } from "./toast";
 
 import {
   CancelRun,
+  CheckReplaceLine,
   Chat,
   Connect,
   ConnectWiFi,
@@ -794,7 +795,45 @@ function showFixCard(answer: FixAnswer, step: string): void {
     div.append(textEl("div", "explain-row-label", row.label), textEl("p", "explain-row-text", row.text));
     card.append(div);
   }
+  if (canOfferReplace(answer)) {
+    const bar = document.createElement("div");
+    bar.className = "explain-actions";
+    const btn = textEl("button", "btn btn-primary", "Replace the line") as HTMLButtonElement;
+    btn.setAttribute("type", "button");
+    btn.id = "btn-fix-replace";
+    btn.setAttribute("title", REPLACE_NOTE);
+    btn.addEventListener("click", () => void replaceFailedLine(answer, btn));
+    bar.append(btn, textEl("span", "dim", REPLACE_NOTE));
+    card.append(bar);
+  }
   card.hidden = false;
+}
+
+// replaceFailedLine asks Studio whether the suggestion may replace the failed step's line in the file as the editor holds it now, and
+// applies it as one undo step when Studio says yes. It saves nothing and runs nothing.
+async function replaceFailedLine(answer: FixAnswer, btn: HTMLButtonElement): Promise<void> {
+  const status = $("explain-status");
+  if (!answer.id || !currentPath) return;
+  btn.disabled = true;
+  try {
+    const checked = model.getValue();
+    const check = await CheckReplaceLine(answer.id, currentPath, checked);
+    const plan = planReplace(check, checked, model.getValue());
+    if (plan.kind === "refuse") {
+      status.textContent = `Not replaced: ${plan.reason}`;
+      return;
+    }
+    editor.pushUndoStop();
+    editor.executeEdits("replace-line", [{ range: new monaco.Range(plan.line, 1, plan.line, model.getLineMaxColumn(plan.line)), text: plan.text }]);
+    editor.pushUndoStop();
+    editor.revealLineInCenterIfOutsideViewport(plan.line);
+    status.textContent = `Line ${plan.line} replaced in the editor. It is not saved and not run; Undo restores it.`;
+    hideFixCard();
+  } catch (err) {
+    status.textContent = `Not replaced: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // confirmFixSend shows what the suggestion would send and waits for Send or Cancel. Nothing is sent before Send.
