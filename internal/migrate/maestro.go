@@ -828,7 +828,7 @@ func (c *converter) convertStepInner(step MaestroStep) (string, string) {
 			if name == "" {
 				name = "screenshot"
 			}
-			return fmt.Sprintf("take a screenshot called %q", name), ""
+			return fmt.Sprintf("take screenshot %q", name), ""
 
 		case "evalScript":
 			src, _ := val.(string)

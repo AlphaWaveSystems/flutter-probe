@@ -14,7 +14,7 @@ test "should add item to cart"
   tap on "Running Shoes"
   tap on #addToCartBtn
   see "Cart (1)"
-  take a screenshot called "item_added"
+  take screenshot "item_added"
 
 test "should edit cart item quantity"
   tap on "Cart"
@@ -31,4 +31,4 @@ test "should perform gestures"
 test "should handle device operations"
   restart the app
   wait until "Dashboard" appears
-  take a screenshot called "after_reload"
+  take screenshot "after_reload"

@@ -258,7 +258,7 @@ describe('Screenshot', () => {
 		t.Fatalf("convert: %v", err)
 	}
 
-	assertContains(t, result.ProbeCode, `take a screenshot called "home.png"`)
+	assertContains(t, result.ProbeCode, `take screenshot "home.png"`)
 }
 
 func assertContains(t *testing.T, haystack, needle string) {

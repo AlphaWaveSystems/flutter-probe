@@ -33,7 +33,7 @@ Supported commands:
   scroll/scrollDown  → scroll down
   scrollUp           → scroll up
   swipe              → swipe <direction>
-  takeScreenshot     → take a screenshot called "name"
+  takeScreenshot     → take screenshot "name"
   waitForAnimation   → wait for the page to load
   wait               → wait N seconds
   runFlow            → use "path"

@@ -57,7 +57,7 @@ Action       = "click" | "send_keys" | "clear" .
 			// Screenshot
 			{ID: "appium_py.screenshot", Name: "save_screenshot()", Category: CatScreenshot, Level: Full,
 				EBNF: `("get_screenshot" | "save_screenshot") "(" STRING ")"`, Example: "self.driver.save_screenshot('home.png')",
-				ProbeTemplate: `take a screenshot called "$1"`, ProbeExample: `take a screenshot called "home.png"`},
+				ProbeTemplate: `take screenshot "$1"`, ProbeExample: `take screenshot "home.png"`},
 
 			// Locators
 			{ID: "appium_py.locator.id", Name: "By.ID", Category: CatData, Level: Full,
@@ -181,7 +181,7 @@ BrowserAction  = ( "browser" | "driver" ) "." Action "(" { Arg } ")" .
 			{ID: "appium_js.screenshot", Name: "browser.saveScreenshot()", Category: CatScreenshot, Level: Full,
 				EBNF: `("browser" | "driver") "." ("saveScreenshot" | "takeScreenshot") "(" STRING ")"`,
 				Example: "await browser.saveScreenshot('home.png')",
-				ProbeTemplate: `take a screenshot called "$1"`, ProbeExample: `take a screenshot called "home.png"`},
+				ProbeTemplate: `take screenshot "$1"`, ProbeExample: `take screenshot "home.png"`},
 		},
 	}
 }
