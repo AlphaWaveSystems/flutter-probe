@@ -104,3 +104,39 @@ func TestReadFileRefusesASymlinkOutOfTheWorkspace(t *testing.T) {
 		t.Errorf("a symlink out of the workspace: err %v; want the outside-the-folders refusal", err)
 	}
 }
+
+// A click on a failing row opens the file the result names, so ReadFile is what stands between a result's file name and the disk: a file that
+// was deleted since the run, a link to nothing, a folder with a .probe name, and a name written with .. all fail, and a name that is fine
+// still reads.
+func TestReadFileForAFailingRowRefusesWhatCannotBeOpened(t *testing.T) {
+	workspace := t.TempDir()
+	good := filepath.Join(workspace, "good.probe")
+	if err := os.WriteFile(good, []byte("test \"x\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(workspace, "dir.probe"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(workspace, "nothing-here.probe"), filepath.Join(workspace, "dangling.probe")); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{}
+	a.SetWorkspace(workspace)
+	for name, path := range map[string]string{
+		"a file deleted since the run":    filepath.Join(workspace, "deleted.probe"),
+		"a link to nothing":               filepath.Join(workspace, "dangling.probe"),
+		"a folder with a .probe name":     filepath.Join(workspace, "dir.probe"),
+		"a name with .. back into itself": workspace + "/sub/../good.probe", // not cleaned: Join would remove the ..
+		"a name that climbs out":          workspace + "/../other/x.probe",
+		"a Windows-style climb":           workspace + `/sub\..\good.probe`,
+		"a name with a control character": filepath.Join(workspace, "a\nb.probe"),
+	} {
+		if got, err := a.ReadFile(path); err == nil {
+			t.Errorf("%s: read %q", name, got)
+		}
+	}
+	// and the file that is there still reads, through the same call
+	if got, err := a.ReadFile(good); err != nil || got != "test \"x\"\n" {
+		t.Errorf("the good file: %q %v", got, err)
+	}
+}

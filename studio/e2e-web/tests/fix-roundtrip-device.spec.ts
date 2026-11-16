@@ -186,4 +186,30 @@ test.describe("Fix round trip on a named simulator", () => {
       await f.close();
     }
   });
+
+  test("dg-05 after a real failed run, a click on its failing row brings back that file and line from another file", async ({ page }) => {
+    test.setTimeout(300_000);
+    test.info().annotations.push({ type: "device", description: simName });
+    const bundle = process.env.STUDIO_E2E_BUNDLE_ID ?? "com.alphawavesystems.studioFixture";
+    execFileSync("xcrun", ["simctl", "terminate", udid, bundle], { stdio: "ignore" });
+    execFileSync("xcrun", ["simctl", "launch", udid, bundle], { stdio: "ignore" });
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    fs.writeFileSync(file, mistyped);
+    await openStudio(page);
+    await connect(page);
+    await expect(page.locator("#status-text")).toContainText(simName); // the named device
+    await page.locator("#file-list li", { hasText: "probe-tests" }).first().click();
+    await page.locator("#file-list li", { hasText: "fix-roundtrip.probe" }).first().click();
+    await expect(page.locator("#editor-filename")).toContainText("fix-roundtrip.probe");
+    await page.click("#btn-run");
+    await expect(page.locator("#results-list li.fail", { hasText: "fix round trip" })).toBeVisible({ timeout: 180_000 });
+    await expect(page.locator("#btn-run")).toBeEnabled({ timeout: 60_000 });
+    // another file in the editor, then a click on the failed step of the real run
+    await page.locator("#file-list li", { hasText: "counter.probe" }).first().click();
+    await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+    await page.locator("#results-list li.step.fail", { hasText: 'tap "Tap Mee"' }).click();
+    await expect(page.locator("#editor-filename")).toContainText("fix-roundtrip.probe");
+    await expect(page.locator("#editor .active-line-number")).toHaveText("5"); // the mistyped tap
+    expect(fs.readFileSync(file, "utf8")).toBe(mistyped); // nothing was written
+  });
 });

@@ -6,6 +6,7 @@ import { initDeviceStream, onElementSelected, startStream, stopStream } from "./
 import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
+import { clampLine, planJump, type JumpTarget } from "./goto-line";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
@@ -248,7 +249,14 @@ async function onFileClick(path: string, isDir: boolean) {
     return;
   }
   if (!path.endsWith(".probe")) return;
-  if (dirty && !confirm("Discard unsaved changes?")) return;
+  await openProbeFile(path);
+}
+
+// openProbeFile puts a file in the editor. It asks about unsaved changes first, reads the file through ReadFile (Studio refuses a path
+// outside the workspace, with a .. segment, through a link out of it, and a file that is not there) and changes nothing until that has
+// worked. It returns whether the file is open now.
+async function openProbeFile(path: string): Promise<boolean> {
+  if (dirty && !confirm("Discard unsaved changes?")) return false;
   try {
     const content = await ReadFile(path);
     model.setValue(content);
@@ -265,9 +273,11 @@ async function onFileClick(path: string, isDir: boolean) {
         )
       );
     updateRunButton();
+    return true;
   } catch (err) {
     console.error("ReadFile failed", err);
     toast(`Cannot open ${path}: ${err}`, "error");
+    return false;
   }
 }
 
@@ -1723,13 +1733,24 @@ EventsOn("run:step", (s: RunStep) => {
   renderStepDecorations();
 });
 
-document.addEventListener("studio:goto-line", (ev) => {
-  const line = (ev as CustomEvent<number>).detail;
-  if (!line) return;
-  editor.revealLineInCenter(line);
-  editor.setPosition({ lineNumber: line, column: 1 });
+// A click on a failing row asks for a file and a line (planJump decides what is allowed). Only a click moves the editor.
+document.addEventListener("studio:goto-line", (ev) => void gotoFailingLine((ev as CustomEvent<JumpTarget>).detail));
+
+async function gotoFailingLine(target: JumpTarget): Promise<void> {
+  const plan = planJump(target ?? {}, { openFile: currentPath, workspaceRoot });
+  if (plan.kind === "refuse") {
+    toast(`Not opened: ${plan.reason}`, "error", 5000);
+    return;
+  }
+  if (plan.kind === "open" && !(await openProbeFile(plan.path))) return; // cancelled, or refused by Studio: the editor is as it was
+  const spot = clampLine(plan.line, model.getLineCount());
+  if (spot.note) toast(spot.note, "info", 4000);
+  if (spot.line > 0) {
+    editor.revealLineInCenter(spot.line);
+    editor.setPosition({ lineNumber: spot.line, column: 1 });
+  }
   editor.focus();
-});
+}
 
 // ---- Recorder -----------------------------------------------------------
 

@@ -152,6 +152,7 @@ function onStep(s: RunStep): void {
     li.classList.add("step", "running");
     li.style.paddingLeft = `${28 + s.depth * 14}px`;
     li.dataset.line = String(s.line);
+    li.dataset.file = s.file;
     const dot = document.createElement("span");
     dot.classList.add("dot");
     const line = document.createElement("span");
@@ -168,7 +169,7 @@ function onStep(s: RunStep): void {
     li.appendChild(duration);
     li.setAttribute("aria-label", `step running: ${s.description}`);
     li.addEventListener("click", () => {
-      if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: s.line }));
+      if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file: s.file, line: s.line } }));
     });
     listEl.appendChild(li);
     pendingRows.push(li);
@@ -246,6 +247,20 @@ function appendResult(res: RunResult): void {
   li.appendChild(dot);
   li.appendChild(name);
   li.appendChild(duration);
+
+  // A failed test row opens the line where it failed: its first failed step, in that step's file (or, with no step, the test's file).
+  if (status === "fail") {
+    const failedStep = pendingRows.find((r) => r.classList.contains("step") && r.classList.contains("fail") && Number(r.dataset.line) > 0);
+    const target = failedStep ? { file: failedStep.dataset.file || res.file, line: Number(failedStep.dataset.line) } : { file: res.file, line: 0 };
+    li.classList.add("goto");
+    li.tabIndex = 0;
+    li.title = failedStep ? `Open line ${target.line}` : "Open the file";
+    const open = () => document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: target }));
+    li.addEventListener("click", open);
+    li.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") open();
+    });
+  }
 
   // The verdict row heads its step rows.
   if (firstStepOfTest && firstStepOfTest.parentElement === listEl) {
