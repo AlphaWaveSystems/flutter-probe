@@ -38,6 +38,10 @@ For each touch event, the recorder:
 3. Prefers: `ValueKey` > Text content > Semantics label > widget type
 4. Skips framework internals like `NotificationListener`, `Padding`, `Container`
 
+### Text in recorded steps
+
+`probe record` and Studio's recorder write the steps from the same code, so the same event gives the same step in both. Text is written as the ProbeScript lexer reads it: only `\"`, `\\`, newline and tab are escaped, and everything else (a no-break space, a soft hyphen, a zero-width or bidirectional character, emoji, any script) is written as it is, so it matches when the test runs. A line break in a label becomes a space, and spaces around the text are trimmed. A character a script line cannot hold (a control character, a line separator, text that is not valid UTF-8) is not written wrong: a lookup that has one falls back to the next one (an id, else `the element`), and typed text becomes a comment that asks you to add the step by hand. The runner expands `${NAME}` and `<name>` placeholders in a step's text, and there is no way to escape them, so a step whose recorded text contains one is followed by a comment that says so.
+
 ### Wait Step Insertion
 
 When the gap between two actions exceeds 2 seconds, a `wait N seconds` step is automatically inserted in the generated script.
