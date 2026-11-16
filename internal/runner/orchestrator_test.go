@@ -73,9 +73,9 @@ func TestShardFiles_Deterministic(t *testing.T) {
 	files := []string{"a.probe", "b.probe", "c.probe", "d.probe", "e.probe", "f.probe"}
 
 	// Get all 3 shards
-	shard0 := ShardFiles(files, 0, 3)
-	shard1 := ShardFiles(files, 1, 3)
-	shard2 := ShardFiles(files, 2, 3)
+	shard0 := ShardFiles(files, "", 0, 3)
+	shard1 := ShardFiles(files, "", 1, 3)
+	shard2 := ShardFiles(files, "", 2, 3)
 
 	// Every file should be in exactly one shard
 	total := len(shard0) + len(shard1) + len(shard2)
@@ -84,7 +84,7 @@ func TestShardFiles_Deterministic(t *testing.T) {
 	}
 
 	// Run again — should produce same assignment
-	shard0b := ShardFiles(files, 0, 3)
+	shard0b := ShardFiles(files, "", 0, 3)
 	if len(shard0) != len(shard0b) {
 		t.Error("shard assignment is not deterministic")
 	}
@@ -97,7 +97,7 @@ func TestShardFiles_Deterministic(t *testing.T) {
 
 func TestShardFiles_SingleShard(t *testing.T) {
 	files := []string{"a.probe", "b.probe"}
-	result := ShardFiles(files, 0, 1)
+	result := ShardFiles(files, "", 0, 1)
 	if len(result) != 2 {
 		t.Errorf("single shard should return all files, got %d", len(result))
 	}

@@ -496,12 +496,21 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		if err != nil {
 			return err
 		}
-		files = runner.ShardFiles(files, shardIdx, shardTotal)
+		files = runner.ShardFiles(files, shardBase(cmd), shardIdx, shardTotal)
 		if len(files) == 0 {
 			fmt.Fprintf(statusW, "  Shard %s: no files assigned to this shard\n", shardStr)
 			return nil
 		}
 		fmt.Fprintf(statusW, "  Shard %s: running %d files\n", shardStr, len(files))
+		if verbose {
+			for _, f := range files {
+				key, outside := runner.ShardKey(f, shardBase(cmd))
+				fmt.Fprintf(statusW, "    %s\n", f)
+				if outside {
+					fmt.Fprintf(statusW, "      note: outside the repository and the config directory, so its shard uses its absolute path (%s)\n", key)
+				}
+			}
+		}
 	}
 
 	// Parallel mode: --parallel [--devices serial1,serial2]
@@ -539,30 +548,22 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 		// Discover or parse devices
 		var deviceRuns []runner.DeviceRun
+		connected, err := listDevices(ctx, dm)
+		if err != nil {
+			return fmt.Errorf("list devices: %w", err)
+		}
 		if devicesStr != "" {
-			for _, serial := range strings.Split(devicesStr, ",") {
-				serial = strings.TrimSpace(serial)
-				if serial == "" {
-					continue
-				}
-				p := device.PlatformAndroid
-				// Simple heuristic: UUIDs with dashes are iOS
-				if strings.Count(serial, "-") >= 4 && len(serial) > 30 {
-					p = device.PlatformIOS
-				}
-				deviceRuns = append(deviceRuns, runner.DeviceRun{
-					DeviceID: serial,
-					Platform: p,
-					AppID:    runner.ResolveAppID(cfg.Project.App, p),
-				})
+			runs, err := devicesFlagRuns(devicesStr, cfg.Project.App, connected)
+			if err != nil {
+				return err
 			}
+			deviceRuns = runs
 		} else {
 			// Auto-discover all connected devices
-			devList, err := dm.List(ctx)
-			if err != nil || len(devList) < 2 {
-				return fmt.Errorf("parallel mode requires 2+ connected devices (found %d)", len(devList))
+			if len(connected) < 2 {
+				return fmt.Errorf("parallel mode requires 2+ connected devices (found %d)", len(connected))
 			}
-			for _, d := range devList {
+			for _, d := range connected {
 				deviceRuns = append(deviceRuns, runner.DeviceRun{
 					DeviceID:   d.ID,
 					DeviceName: d.Name,
@@ -570,6 +571,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 					AppID:      runner.ResolveAppID(cfg.Project.App, d.Platform),
 				})
 			}
+		}
+
+		if err := onePlatformError(deviceRuns, devicesStr != ""); err != nil {
+			return err
 		}
 
 		// Distribute files across devices
@@ -922,15 +927,16 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				}
 			}
 			if deviceSerial == "" {
-				devices, err := dm.List(ctx)
-				if err != nil || len(devices) == 0 {
+				devices, err := listDevices(ctx, dm)
+				first, ok := defaultDevice(devices)
+				if err != nil || !ok {
 					return noDeviceError(err)
 				}
-				deviceSerial = devices[0].ID
-				platform = devices[0].Platform
+				deviceSerial = first.ID
+				platform = first.Platform
 			} else {
 				// Detect platform from device list when serial is specified manually
-				devices, _ := dm.List(ctx)
+				devices, _ := listDevices(ctx, dm)
 				for _, d := range devices {
 					if d.ID == deviceSerial {
 						platform = d.Platform
@@ -1135,7 +1141,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {
 					connectFailed = true
-					return fmt.Errorf("connecting to ProbeAgent: %w", err)
+					return fmt.Errorf("connecting to ProbeAgent: %w%s", err, device.ForwardHint(ctx, dm.ADB(), cfg.Agent.Port, deviceSerial))
 				}
 				defer client.Close()
 			}

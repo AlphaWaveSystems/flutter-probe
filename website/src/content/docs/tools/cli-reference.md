@@ -46,7 +46,7 @@ probe test [path] [flags]
 | `--host <ip>` | `127.0.0.1` | Agent host IP (use device IP for WiFi testing) |
 | `--token <string>` | — | Agent auth token (skip auto-detection; for WiFi testing) |
 | `--parallel` | `false` | Run tests in parallel across all connected devices |
-| `--devices <serials>` | — | Comma-separated device serials for parallel execution |
+| `--devices <serials>` | — | Comma-separated device serials for parallel execution. Each serial must be a connected device (otherwise the run is refused at start), and takes the platform that device reports. The devices must be listable: if the device listing fails (adb not found, say), the run stops at start with that error. The devices must be of one platform: a list that mixes Android and iOS is refused at start, so run one `probe test` per platform |
 | `--tag <tag>` | — | Run only tests matching this tag |
 | `--timeout <duration>` | `30s` | Per-step timeout |
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |
@@ -99,7 +99,7 @@ probe test [path] [flags]
 | `--adb <path>` | `adb` | Override ADB binary path |
 | `--flutter <path>` | `flutter` | Override Flutter binary path |
 | `--config <path>` | `probe.yaml` | Config file path |
-| `--shard <N/M>` | — | Run shard N of M (for parallel CI) |
+| `--shard <N/M>` | — | Run shard N of M (for parallel CI). A file's shard comes from its path relative to the repository root (the nearest directory above the config that holds a `.git`), or to the config's directory when there is no repository, so the same file lands in the same shard however CI spells the path or where it checks out. A file outside both is keyed by its absolute path, which `--verbose` marks. `--verbose` lists each shard's files |
 | `--fail-on-warning` | `false` | Treat agent warnings as step failures: a tap that provably did nothing (covered, screen unchanged), `press enter` with no focused field, `go back` at the root route |
 | `--dry-run` | `false` | Parse and validate without executing; also fails on any step that is not built in and matches no recipe (typos, unknown verbs), including inside recipes |
 

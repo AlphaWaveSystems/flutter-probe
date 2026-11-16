@@ -48,8 +48,5 @@ func (e *Executor) reconnectHint(ctx context.Context) string {
 			return fmt.Sprintf(" — the app %s is not running: it ended during this step (run with --crash-evidence to see why)", dc.AppID)
 		}
 	}
-	if other, ok := device.ForwardSerial(cctx, runner, dc.Port); ok && other != dc.Serial {
-		return fmt.Sprintf(" — agent port %d is forwarded to another device (%s): remove that forward with `adb -s %s forward --remove tcp:%d`, or pick another port with --agent-port", dc.Port, other, other, dc.Port)
-	}
-	return ""
+	return device.ForwardHint(cctx, runner, dc.Port, dc.Serial)
 }
