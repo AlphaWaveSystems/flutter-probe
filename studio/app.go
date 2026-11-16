@@ -497,6 +497,11 @@ func (a *App) StopWiFiDiscovery() {
 	}
 }
 
+// wifiPlatformUnknown is the platform a WiFi connection reports. Neither the
+// agent's handshake nor its mDNS record says whether the phone is iOS or
+// Android, so Studio must not guess one.
+const wifiPlatformUnknown device.Platform = "unknown"
+
 // ConnectWiFi establishes an agent connection to a WiFi-discovered (or
 // manually-entered) device by IP, port, and token. Unlike Connect, there
 // is no UDID lookup, no port forwarding, and no token auto-discovery —
@@ -541,9 +546,9 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 
 	// WiFi connections have no host-side cleanup (no iproxy, no adb forward).
 	// The deviceID for runner/event purposes is host:port — unique enough
-	// for status display and disambiguation in logs. Platform is recorded as
-	// iOS as a best-effort default; the agent doesn't currently advertise
-	// platform in TXT records.
+	// for status display and disambiguation in logs. The handshake and the
+	// mDNS record carry no platform, so the reported platform is unknown;
+	// the runner keeps its iOS step behaviour, as it did before.
 	deviceID := fmt.Sprintf("%s:%d", host, port)
 	streamCtx, streamCancel := context.WithCancel(context.Background())
 	streamDone := make(chan struct{})
@@ -552,9 +557,12 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		cfg:          cfg,
 		deviceID:     deviceID,
 		deviceName:   fmt.Sprintf("WiFi %s", host),
-		platform:     device.PlatformIOS,
+		platform:     wifiPlatformUnknown,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
+		// The device context keeps PlatformIOS on purpose: the runner picks its platform-specific
+		// steps from it, and a guessed value there is not reported to the user. The status above
+		// reports the platform as unknown, so the two can differ for a WiFi connection.
 		deviceCtx:    newStudioDeviceContext(a, cfg, device.PlatformIOS, deviceID, port, host),
 	}
 
