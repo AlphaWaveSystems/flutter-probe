@@ -100,11 +100,11 @@ func TestHolderTextIsCleanedBeforeItIsPrinted(t *testing.T) {
 		"plain":            {"python3", "python3"},
 		"escape sequence":  {"\x1b[31mred\x1b[0m", "[31mred [0m"},
 		"newline and tab":  {"a\nb\tc", "a b c"},
-		"bidi and zero":    {"ab‮​cd", "ab cd"},
+		"bidi and zero":    {"ab\u202e\u200bcd", "ab cd"},
 		"runs of spaces":   {"  a   b  ", "a b"},
 		"invalid utf8":     {"ab\xffcd", "ab cd"},
 		"empty":            {"", ""},
-		"only hidden text": {"​‮", ""},
+		"only hidden text": {"\u200b\u202e", ""},
 	} {
 		if got := cleanHolderText(c.in, 48); got != c.want {
 			t.Errorf("%s: got %q, want %q", name, got, c.want)
@@ -121,8 +121,8 @@ func TestHolderTextIsCleanedBeforeItIsPrinted(t *testing.T) {
 		t.Error("a simulator id is a UUID")
 	}
 
-	hostile := describeHolders(48686, []Holder{{PID: "9\x1b[2J", Name: "ru\x1b[31mn\nner‮" + long}})
-	for _, bad := range []string{"\x1b", "\n", "‮", long} {
+	hostile := describeHolders(48686, []Holder{{PID: "9\x1b[2J", Name: "ru\x1b[31mn\nner\u202e" + long}})
+	for _, bad := range []string{"\x1b", "\n", "\u202e", long} {
 		if strings.Contains(hostile, bad) {
 			t.Errorf("a hostile holder name or pid reached the message: %q", hostile)
 		}
