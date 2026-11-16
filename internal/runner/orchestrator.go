@@ -3,7 +3,10 @@ package runner
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +17,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
+	"golang.org/x/text/unicode/norm"
 )
 
 // DeviceRun tracks a parallel test execution on a single device.
@@ -91,11 +95,13 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 			defer wg.Done()
 			start := time.Now()
 
-			// Retry up to 2 times on connection failure
+			// Retry up to 2 times, and only a failure to connect: a lane that has connected ran its files once, and a retry would run the
+			// completed ones again. Its results so far are kept with its error.
 			maxRetries := 2
 			for attempt := 0; attempt <= maxRetries; attempt++ {
 				dr.Results, dr.Error = po.runOnDevice(ctx, dr)
-				if dr.Error == nil {
+				var ce *connectError
+				if dr.Error == nil || !errors.As(dr.Error, &ce) {
 					break
 				}
 				if attempt < maxRetries {
@@ -105,6 +111,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 				}
 			}
 
+			addNotRun(dr)
 			dr.Duration = time.Since(start)
 			if dr.Error != nil {
 				fmt.Printf("  \033[31m✗\033[0m  [%s] all attempts failed: %v\n",
@@ -117,13 +124,20 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 	return po.mergeResults(), po.summaryError()
 }
 
+// connectError is a failure before a lane runs its first file: the port forward, the token, the dial or the handshake. Only these are retried.
+// A failure after the lane has connected is a run error, and its results are kept.
+type connectError struct{ err error }
+
+func (e *connectError) Error() string { return e.err.Error() }
+func (e *connectError) Unwrap() error { return e.err }
+
 // runOnDevice connects to a single device and runs its assigned files.
 func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) ([]TestResult, error) {
 	// Setup port forward for Android
 	if dr.Platform == device.PlatformAndroid {
 		devPort := po.cfg.Agent.AgentDevicePort()
 		if err := po.manager.ForwardPort(ctx, dr.DeviceID, dr.Port, devPort); err != nil {
-			return nil, fmt.Errorf("[%s] port forward: %w", dr.DeviceID, err)
+			return nil, &connectError{fmt.Errorf("[%s] port forward: %w", dr.DeviceID, err)}
 		}
 		defer po.manager.RemoveForward(ctx, dr.DeviceID, dr.Port)
 	}
@@ -148,7 +162,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("[%s] token: %w", dr.DeviceID, err)
+		return nil, &connectError{fmt.Errorf("[%s] token: %w", dr.DeviceID, err)}
 	}
 
 	// Connect WebSocket
@@ -164,13 +178,13 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("[%s] connect: %w", dr.DeviceID, err)
+		return nil, &connectError{fmt.Errorf("[%s] connect: %w", dr.DeviceID, err)}
 	}
 	defer client.Close()
 
 	warning, err := probelink.CheckHandshake(ctx, client, po.cfg.CLIVersion)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)
+		return nil, &connectError{fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)}
 	}
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(warning))
@@ -219,6 +233,25 @@ func (po *ParallelOrchestrator) mergeResults() []TestResult {
 		all = append(all, dr.Results...)
 	}
 	return all
+}
+
+// addNotRun gives a failed result to each file of a lane that stopped with an error before the file ran, so a lane that never connected
+// shows its files in the report. A file the runner reached already has its results and is not added again.
+func addNotRun(dr *DeviceRun) {
+	if dr.Error == nil {
+		return
+	}
+	named := map[string]bool{}
+	for _, r := range dr.Results {
+		named[r.File] = true
+	}
+	var missing []string
+	for _, f := range dr.Files {
+		if !named[f] {
+			missing = append(missing, f)
+		}
+	}
+	dr.Results = append(dr.Results, notRunAll(missing, dr.Error)...)
 }
 
 // summaryError returns an error if any device failed to connect.
@@ -351,9 +384,10 @@ func DistributeFiles(files []string, n int) [][]string {
 	return buckets
 }
 
-// ShardFiles returns the subset of files for shard index/total.
-// Uses deterministic hash so the same files always go to the same shard.
-func ShardFiles(files []string, index, total int) []string {
+// ShardFiles returns the subset of files for shard index/total. A file's shard comes from its path relative to base, the directory of the
+// config (the working directory when base is empty), so the same file lands in the same shard however the run spells it: relative, with
+// ./, absolute, with a trailing separator, under a symbolic link to the checkout, or with Windows separators.
+func ShardFiles(files []string, base string, index, total int) []string {
 	if total <= 1 {
 		return files
 	}
@@ -364,13 +398,88 @@ func ShardFiles(files []string, index, total int) []string {
 
 	var result []string
 	for _, f := range sorted {
-		h := sha256.Sum256([]byte(f))
+		key, _ := ShardKey(f, base)
+		h := sha256.Sum256([]byte(key))
 		bucket := int(h[0]) % total
 		if bucket == index {
 			result = append(result, f)
 		}
 	}
 	return result
+}
+
+// ShardKey is the path a file is hashed by. It is the file's path relative to the repository root, the nearest ancestor of base that holds
+// a .git, or relative to base when there is no repository. A file inside neither keeps its absolute path, and outside reports it, so the
+// caller can say so. A typed relative path is taken from the working directory, and base is the config directory (the working directory
+// when empty). Every path has its symbolic links resolved where they exist, is cleaned, has forward slashes, is in Unicode NFC, and is
+// lower-cased: the same checkout hashes the same wherever it is and on any file system. Two files can collide; they then share a shard.
+func ShardKey(file, base string) (key string, outside bool) {
+	if base == "" {
+		base = "."
+	}
+	if b, err := filepath.Abs(base); err == nil {
+		base = b
+	}
+	base = resolvePath(base)
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		abs = file
+	}
+	abs = resolvePath(abs)
+	root := gitRepoRoot(base)
+	if root == "" {
+		root = base
+	}
+	if rel, ok := relInside(root, abs); ok {
+		return normalizeShardKey(rel), false
+	}
+	if rel, ok := relInside(base, abs); ok {
+		return normalizeShardKey(rel), false
+	}
+	return normalizeShardKey(abs), true
+}
+
+// relInside returns the path of p relative to root, and whether p is inside root.
+func relInside(root, p string) (string, bool) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
+}
+
+// gitRepoRoot returns the nearest directory at or above dir that holds a .git, or "" when there is none.
+func gitRepoRoot(dir string) string {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// normalizeShardKey makes a key the same on every platform: cleaned, with forward slashes, in Unicode NFC (macOS names files in NFD), and
+// lower-cased (case-insensitive file systems).
+func normalizeShardKey(key string) string {
+	k := strings.ReplaceAll(filepath.ToSlash(filepath.Clean(key)), `\`, "/")
+	return strings.ToLower(norm.NFC.String(k))
+}
+
+// resolvePath resolves the symbolic links of p. A path that does not exist (a file that is named but not there) resolves through its
+// nearest existing parent, so it is spelled the same way as a path that exists under the same checkout.
+func resolvePath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	parent := filepath.Dir(p)
+	if parent == p {
+		return p
+	}
+	return filepath.Join(resolvePath(parent), filepath.Base(p))
 }
 
 // ParseShard parses "N/M" format into zero-based index and total.

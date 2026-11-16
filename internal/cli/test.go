@@ -496,12 +496,21 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		if err != nil {
 			return err
 		}
-		files = runner.ShardFiles(files, shardIdx, shardTotal)
+		files = runner.ShardFiles(files, shardBase(cmd), shardIdx, shardTotal)
 		if len(files) == 0 {
 			fmt.Fprintf(statusW, "  Shard %s: no files assigned to this shard\n", shardStr)
 			return nil
 		}
 		fmt.Fprintf(statusW, "  Shard %s: running %d files\n", shardStr, len(files))
+		if verbose {
+			for _, f := range files {
+				key, outside := runner.ShardKey(f, shardBase(cmd))
+				fmt.Fprintf(statusW, "    %s\n", f)
+				if outside {
+					fmt.Fprintf(statusW, "      note: outside the repository and the config directory, so its shard uses its absolute path (%s)\n", key)
+				}
+			}
+		}
 	}
 
 	// Parallel mode: --parallel [--devices serial1,serial2]
@@ -634,7 +643,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 		}
 
-		return failedRunError(results, nil)
+		return parallelRunError(results, orchErr)
 	}
 
 	// ── Single-device mode (default) ──

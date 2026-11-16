@@ -78,8 +78,14 @@ func redactCredentials(s string) string {
 	})
 }
 
-// A text input as the widget dump names it. The capture groups keep the indentation and the widget type.
-var editableWidgetLine = regexp.MustCompile(`^(\s*)(EditableText|TextField|TextFormField|CupertinoTextField)\b`)
+// A text input as the widget dump names it. The capture groups keep the indentation and the widget type. It is a pattern on the
+// class name, not a list of classes, so a field a newer Flutter adds, a subclass (a private _TextField or an app's own
+// PasswordTextField) and the search and autocomplete inputs are covered: the framework's text-entry widgets are TextField,
+// TextFormField, EditableText, the Cupertino fields (CupertinoTextField, CupertinoSearchTextField, CupertinoTextFormFieldRow),
+// SearchBar and SearchAnchor, DropdownMenu and its form field, and Autocomplete and RawAutocomplete. A name that merely looks like
+// one is covered too (it costs a line of "obscured" in the tree sent to the provider, never a leak). The test reads
+// docs/compat/catalog.json and fails when a catalog widget with such a name is neither covered nor reviewed as not an input.
+var editableWidgetLine = regexp.MustCompile(`^(\s*)(_?\w*(?:TextField|TextFormField|SearchField|SearchBar|SearchAnchor|EditableText|Autocomplete|DropdownMenu|InputDatePickerFormField|PasswordField|PinField|PinCode)\w*)\b`)
 
 // obscuredMarker is what an agent writes on a dump line for a field whose text is hidden. The current agent writes no
 // such marker, so the secret-field rule below is what applies today.
