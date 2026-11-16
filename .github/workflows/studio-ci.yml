@@ -86,6 +86,9 @@ jobs:
       - name: Suggest a fix tests
         working-directory: studio/frontend
         run: npm run test:fix
+      - name: First-run guidance tests
+        working-directory: studio/frontend
+        run: npm run test:first-run
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
