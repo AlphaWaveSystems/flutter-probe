@@ -224,6 +224,18 @@
             <span>Default step timeout</span>
             <input id="settings-timeout" type="text" placeholder="30s" />
           </label>
+          <label class="settings-row" title="A test that runs longer than this fails with &quot;test exceeded&quot; and the run goes on. Empty = off. At least 1s.">
+            <span>Test time limit</span>
+            <input id="settings-test-timeout" type="text" placeholder="off (e.g. 90s)" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="settings-row" title="Run a failing test again up to this many extra times before it is reported failed. 0 = off, at most 10.">
+            <span>Retry a failed test</span>
+            <input id="settings-retry" type="number" min="0" max="10" step="1" placeholder="0" />
+          </label>
+          <label class="settings-row" title="How long tap, type and see wait for their target to appear before failing. Empty = off, at most 5m.">
+            <span>Wait for a target</span>
+            <input id="settings-implicit-wait" type="text" placeholder="off (e.g. 2s)" autocomplete="off" spellcheck="false" />
+          </label>
           <label class="settings-row">
             <span>Preferred iOS UDID</span>
             <input id="settings-ios" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />

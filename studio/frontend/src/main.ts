@@ -541,8 +541,12 @@ async function openSettingsOverlay() {
 
   try {
     const s = await LoadWorkspaceSettings(workspaceRoot);
+    loadedSettings = s; // what the form shows now: Save sends it back, and writes only what the person changed from it
     ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
     ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
+    ($("settings-test-timeout") as HTMLInputElement).value = s.testTimeout ?? "";
+    ($("settings-retry") as HTMLInputElement).value = s.retryFailedTests ? String(s.retryFailedTests) : "";
+    ($("settings-implicit-wait") as HTMLInputElement).value = s.implicitWait ?? "";
     ($("settings-ios") as HTMLInputElement).value = s.iosDeviceId ?? "";
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
     ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
@@ -552,6 +556,9 @@ async function openSettingsOverlay() {
     toast(`Cannot load settings: ${err}`, "error");
   }
 }
+
+// The settings the form was filled from, sent back with Save so that Studio writes only what changed since, and notices a probe.yaml that changed on disk.
+let loadedSettings: main.WorkspaceSettings | undefined;
 
 function closeSettingsOverlay() {
   $("settings-overlay").hidden = true;
@@ -1252,8 +1259,18 @@ $("btn-settings-save").addEventListener("click", async () => {
     toast("Agent port must be a number.", "error");
     return;
   }
+  const retryRaw = ($("settings-retry") as HTMLInputElement).value.trim();
+  const retries = retryRaw === "" ? 0 : Number(retryRaw);
+  if (!Number.isInteger(retries)) {
+    toast("Retries must be a whole number.", "error");
+    return;
+  }
   const settings = main.WorkspaceSettings.createFrom({
+    base: loadedSettings,
     agentPort: port,
+    testTimeout: ($("settings-test-timeout") as HTMLInputElement).value.trim(),
+    retryFailedTests: retries,
+    implicitWait: ($("settings-implicit-wait") as HTMLInputElement).value.trim(),
     defaultsTimeout: ($("settings-timeout") as HTMLInputElement).value.trim(),
     iosDeviceId: ($("settings-ios") as HTMLInputElement).value.trim(),
     androidDeviceId: ($("settings-android") as HTMLInputElement).value.trim(),
@@ -1272,6 +1289,7 @@ $("btn-settings-save").addEventListener("click", async () => {
   }
   try {
     await SaveWorkspaceSettings(workspaceRoot, settings);
+    loadedSettings = main.WorkspaceSettings.createFrom({ ...settings, base: undefined }); // the file now has what the form shows (the form can stay open on an AI error)
   } catch (err) {
     toast(`Save failed: ${err}`, "error");
     return;
