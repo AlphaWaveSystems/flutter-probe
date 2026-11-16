@@ -155,6 +155,25 @@ export interface RerunTarget {
   file: string;
   line: number;
   text: string;
+  /** How many lines the file had right after the replacement: a line added or removed since moves what the line number means. */
+  lineCount: number;
+  /** The `test "..."` line that holds the replaced line, with its line number, or null when there is none. */
+  header: TestHeader | null;
+}
+
+export interface TestHeader {
+  line: number;
+  text: string;
+}
+
+const TEST_HEADER = /^\s*(?:composite\s+)?test\s+"/;
+
+/** The header of the test that holds `line` (1-based) in `lines`: the nearest `test "..."` line at or above it. */
+export function enclosingTest(lines: string[], line: number): TestHeader | null {
+  for (let i = Math.min(line, lines.length) - 1; i >= 0; i--) {
+    if (TEST_HEADER.test(lines[i])) return { line: i + 1, text: lines[i] };
+  }
+  return null;
 }
 
 export interface RerunContext {
@@ -164,6 +183,8 @@ export interface RerunContext {
   running: boolean;
   /** The text of the target line in the editor now, or null when the file has no such line. */
   lineText: string | null;
+  lineCount: number;
+  header: TestHeader | null;
 }
 
 export interface RerunGate {
@@ -181,6 +202,11 @@ export function rerunGate(t: RerunTarget | null, c: RerunContext): RerunGate {
   if (!t) return no("");
   if (c.openFile !== t.file) return no("Open the file that was changed to re-run its test.");
   if (c.lineText !== t.text) return no(`Line ${t.line} was edited after it was replaced, so a re-run would not test the replacement.`);
+  // The same text on the same line number is not enough: lines added above and removed elsewhere, or a test header that moved, can put an
+  // identical line into another test. The line count and the header of the test must be what they were.
+  if (c.lineCount !== t.lineCount || c.header?.line !== t.header?.line || c.header?.text !== t.header?.text) {
+    return no("Lines were added or removed, or the test was changed, since the replacement, so a re-run might not test it.");
+  }
   if (c.running) return no("A run is in progress.");
   if (c.dirty) return no("Save the file first: the run reads it from disk, and Studio does not save for you.");
   if (!c.connected) return no("Connect a device to re-run the test.");
@@ -203,18 +229,43 @@ export interface Verdict {
 
 const VERDICT_ERROR_MAX = 300;
 
+/**
+ * An error text made fit to show on the card: control, bidirectional, zero-width and other hidden characters are dropped (a line break
+ * becomes a space), a home folder is masked (/Users/x, /home/x, C:\Users\x become ~), runs of spaces are one, and the text is cut on a
+ * character boundary, never inside a surrogate pair.
+ */
+export function cleanVerdictError(raw: string): string {
+  let s = raw
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\u00ad\u034f\u180e\ufe00-\ufe0f\u2800\ufffc]/gu, "")
+    .replace(/[\p{Zs}]/gu, " ")
+    .replace(/(?:\/Users\/|\/home\/)[^/\s"'<>]+|[A-Za-z]:\\Users\\[^\\\s"'<>]+/g, "~")
+    .replace(/ {2,}/g, " ")
+    .trim();
+  const chars = Array.from(s);
+  if (chars.length > VERDICT_ERROR_MAX) s = chars.slice(0, VERDICT_ERROR_MAX - 1).join("") + "…";
+  return s;
+}
+
 /** What the card says about the re-run. Every string is set with textContent. */
 export function rerunVerdict(results: RerunResult[], changedDuringRun: boolean): Verdict {
   const stale = changedDuringRun;
   const failed = results.find((r) => !r.passed && !r.skipped);
   if (results.length === 0) return { kind: "none", text: "The run reported no test.", stale };
   if (failed) {
-    const err = (failed.error ?? "").trim();
-    const shown = err.length > VERDICT_ERROR_MAX ? err.slice(0, VERDICT_ERROR_MAX - 1) + "…" : err;
-    return { kind: "failed", text: shown ? `Still failing: ${failed.name}: ${shown}` : `Still failing: ${failed.name}`, stale };
+    const shown = cleanVerdictError(failed.error ?? "");
+    return { kind: "failed", text: shown ? `Still failing: ${cleanVerdictName(failed.name)}: ${shown}` : `Still failing: ${cleanVerdictName(failed.name)}`, stale };
   }
-  if (results.every((r) => r.skipped)) return { kind: "skipped", text: "The test was skipped.", stale };
-  return { kind: "passed", text: results.length === 1 ? `Passed: ${results[0].name}` : `Passed: ${results.length} tests`, stale };
+  const ran = results.filter((r) => !r.skipped); // a skipped test next to a passed one does not make the verdict "skipped"
+  if (ran.length === 0) return { kind: "skipped", text: "The test was skipped.", stale };
+  return { kind: "passed", text: ran.length === 1 ? `Passed: ${cleanVerdictName(ran[0].name)}` : `Passed: ${ran.length} tests`, stale };
+}
+
+/** A test name made fit to show: the same cleaning as an error, cut shorter. */
+function cleanVerdictName(name: string): string {
+  const s = cleanVerdictError(name);
+  const chars = Array.from(s);
+  return chars.length > 80 ? chars.slice(0, 79).join("") + "…" : s;
 }
 
 export const STALE_VERDICT_NOTE = "The file changed while the test ran, so this may not be the result of the replaced line.";

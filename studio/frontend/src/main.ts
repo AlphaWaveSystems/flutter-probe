@@ -7,7 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
-import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
+import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -835,7 +835,7 @@ async function replaceFailedLine(answer: FixAnswer, btn: HTMLButtonElement): Pro
     editor.pushUndoStop();
     editor.revealLineInCenterIfOutsideViewport(plan.line);
     status.textContent = `Line ${plan.line} replaced in the editor. It is not saved and not run; Undo restores it.`;
-    showReplacedCard({ file: currentPath, line: plan.line, text: plan.text });
+    showReplacedCard({ file: currentPath, line: plan.line, text: plan.text, lineCount: model.getLineCount(), header: enclosingTest(editorLines(), plan.line) });
   } catch (err) {
     status.textContent = `Not replaced: ${err instanceof Error ? err.message : String(err)}`;
   } finally {
@@ -848,9 +848,15 @@ async function replaceFailedLine(answer: FixAnswer, btn: HTMLButtonElement): Pro
 // The card stays, with one button. It never saves (the person saves: Save, or Cmd+S) and it runs the replaced line's test only, once per
 // click. It is for that line in that file: see rerunGate.
 
+function editorLines(): string[] {
+  return model.getLinesContent();
+}
+
 function rerunContext() {
   const lines = model.getLineCount();
   return {
+    lineCount: lines,
+    header: fixRerun ? enclosingTest(editorLines(), fixRerun.line) : null,
     openFile: currentPath,
     dirty,
     connected,
