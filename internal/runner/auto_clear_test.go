@@ -54,7 +54,7 @@ func TestClearBeforeTestWithNobodyToAskNamesYes(t *testing.T) {
 
 func TestClearBeforeTestWithYesNeverAsks(t *testing.T) {
 	asks := 0
-	dc := &DeviceContext{AppID: "a.b", Serial: "s", AllowClearData: true, ExplicitYes: true, Confirm: func(string) bool { asks++; return false }}
+	dc := &DeviceContext{AppID: "a.b", Serial: "s", AllowClearData: true, Confirm: func(string) bool { asks++; return false }}
 	r := &Runner{cfg: &config.Config{}, deviceCtx: dc}
 	if err := r.clearBeforeTest(context.Background(), &Executor{}); err != nil || asks != 0 {
 		t.Errorf("err = %v, asked %d", err, asks)
@@ -125,33 +125,40 @@ func TestABeforeEachHookDoesNotRunAfterARefusedClear(t *testing.T) {
 	}
 }
 
-// A parallel lane has AllowClearData set by the orchestrator, no confirmation and no --yes: "clear data before each test" refuses there, whatever
-// else is set. A project's probe.yaml must not wipe every attached device through that flag.
-func TestALaneCannotAnswerClearBeforeEachTest(t *testing.T) {
-	lane := &DeviceContext{AppID: "com.example.app", Serial: "R58M123ABC", AllowClearData: true} // what ParallelOrchestrator.deviceContext builds
-	r := &Runner{cfg: &config.Config{}, deviceCtx: lane}
+// A parallel lane takes its consent from --yes alone (the shared gate): a lane with no --yes (no AllowClearData) and nobody to ask refuses
+// "clear data before each test" and nothing runs, not a hook, not the body; a lane with --yes answers it, with one line in the log naming the
+// package, the device and "BEFORE EVERY TEST".
+func TestALaneAnswersClearBeforeEachTestOnlyWithYes(t *testing.T) {
+	noYes := &DeviceContext{AppID: "com.example.app", Serial: "R58M123ABC", NoPrompt: true} // what a lane is without --yes
+	r := &Runner{cfg: &config.Config{}, deviceCtx: noYes}
 	err := r.clearBeforeTest(context.Background(), &Executor{})
-	if err == nil || !strings.Contains(err.Error(), "--yes") || !strings.Contains(err.Error(), "parallel") || !strings.Contains(err.Error(), "R58M123ABC") {
-		t.Fatalf("a lane was allowed to clear before each test: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "--yes") || !strings.Contains(err.Error(), "clear data before each test") {
+		t.Fatalf("a lane without --yes was allowed to clear before each test: %v", err)
 	}
-	// through the real attempt: nothing runs, neither a hook nor the body
 	client := newSlowClient()
 	run := newTimeoutRunner(client, 0)
 	run.cfg.Defaults.ClearDataBeforeEachTest = true
-	run.deviceCtx = lane
+	run.deviceCtx = noYes
 	prog, tdef := parseOneTest(t, "before each\n  tap \"Hook\"\n\ntest \"t\"\n  tap \"Body\"\n")
 	res := run.runSingleTest(context.Background(), prog, tdef, "t.probe", nil, -1)
 	client.mu.Lock()
 	taps := append([]string(nil), client.taps...)
 	client.mu.Unlock()
 	if res.Passed || len(taps) != 0 {
-		t.Errorf("passed=%v taps=%v: a lane wiped or ran after a refusal", res.Passed, taps)
+		t.Errorf("passed=%v taps=%v: a lane without --yes wiped or ran after a refusal", res.Passed, taps)
 	}
-	// the person's answer to the question still answers it for a lane that has one, and --yes answers it
-	asked := 0
-	withConfirm := &DeviceContext{AppID: "a.b", Serial: "s", AllowClearData: true, Confirm: func(string) bool { asked++; return true }}
-	if err := (&Runner{cfg: &config.Config{}, deviceCtx: withConfirm}).clearBeforeTest(context.Background(), &Executor{}); err != nil || asked != 1 {
-		t.Errorf("a lane with a confirmation: %v asked %d", err, asked)
+	// with --yes the lane is answered, and the log says once what it is for
+	withYes := &DeviceContext{AppID: "com.example.app", Serial: "R58M123ABC", NoPrompt: true, AllowClearData: true}
+	rr := &Runner{cfg: &config.Config{}, deviceCtx: withYes}
+	out := captureStdout(t, func() {
+		for i := 0; i < 3; i++ {
+			if err := rr.clearBeforeTest(context.Background(), &Executor{}); err != nil {
+				t.Errorf("a lane with --yes was refused: %v", err)
+			}
+		}
+	})
+	if strings.Count(out, "BEFORE EVERY TEST") != 1 || !strings.Contains(out, "com.example.app") || !strings.Contains(out, "R58M123ABC") {
+		t.Errorf("the log line should name the package and device once for 3 tests: %q", out)
 	}
 }
 
@@ -166,10 +173,10 @@ func TestAClearAppDataStepStillAsksThroughTheExecutor(t *testing.T) {
 	if res.Passed || res.Error == nil || !strings.Contains(res.Error.Error(), "clear app data: cancelled by user") || asks != 1 {
 		t.Errorf("the step did not ask: passed=%v err=%v asks=%d", res.Passed, res.Error, asks)
 	}
-	// AllowClearData (what a lane has) answers the step's own question as it always did; it does not answer the per-test one (see TestALane...)
-	lane := &DeviceContext{AppID: "a.b", Serial: "s", AllowClearData: true}
+	// --yes (AllowClearData) answers the step's own question as it always did
+	lane := &DeviceContext{AppID: "a.b", Serial: "s", AllowClearData: true, NoPrompt: true}
 	if err := lane.AskClearData(false); err != nil {
-		t.Errorf("a clear app data step on a lane: %v", err)
+		t.Errorf("a clear app data step on a lane with --yes: %v", err)
 	}
 }
 

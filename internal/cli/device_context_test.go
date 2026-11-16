@@ -170,7 +170,7 @@ func TestSingleDeviceContextIsTheSharedConstructorOutput(t *testing.T) {
 	cfg.Device.RestartDelay = 6 * time.Second
 	cfg.Defaults.CrashEvidence = true
 	got := singleDeviceContext(ctx, dm, cfg, device.PlatformAndroid, "R58M123ABC", "192.168.1.20", true, false, nil)
-	want := runner.NewConfiguredDeviceContext(ctx, dm, cfg, device.PlatformAndroid, "R58M123ABC", runner.ConnFacts{AgentHost: "192.168.1.20", AllowClearData: true, ExplicitYes: true})
+	want := runner.NewConfiguredDeviceContext(ctx, dm, cfg, device.PlatformAndroid, "R58M123ABC", runner.ConnFacts{AgentHost: "192.168.1.20", AllowClearData: true})
 	g, w := reflect.ValueOf(got).Elem(), reflect.ValueOf(want).Elem()
 	for i := 0; i < g.NumField(); i++ {
 		f := g.Type().Field(i)

@@ -23,6 +23,25 @@ import (
 // this is bypassed by setting AllowClearData.
 type ConfirmFunc func(message string) bool
 
+// ClearGate answers `clear app data` on the lanes of a parallel or composite run, which have nobody to ask. Yes is --yes: every lane may
+// clear. Lane gives the confirmation of one lane, by platform and serial. It must never prompt, and it returns true only where the person
+// has allowed the wipe without a question (the cli builds it from the setting and the device's verification). A nil Lane refuses.
+type ClearGate struct {
+	Yes  bool
+	Lane func(platform device.Platform, serial string) ConfirmFunc
+}
+
+// ApplyClearGate sets how this context answers `clear app data` on a lane: --yes, and the lane's confirmation. It never prompts, and a
+// refused wipe is the hint. Every lane of a parallel or composite run gets its context from here, so the gate is set in one place.
+func (dc *DeviceContext) ApplyClearGate(g ClearGate) {
+	dc.AllowClearData = g.Yes
+	dc.NoPrompt = true
+	dc.Confirm = nil
+	if g.Lane != nil {
+		dc.Confirm = g.Lane(dc.Platform, dc.Serial)
+	}
+}
+
 // DeviceContext holds device-level information needed for platform operations
 // that bypass the Dart agent (restart, clear data). These operations kill
 // the running app, so they handle reconnection transparently.
@@ -37,8 +56,8 @@ type DeviceContext struct {
 	UseHTTP                 bool          // if true, use HTTP POST instead of WebSocket for reconnection
 	AgentHost               string        // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
 	AllowClearData          bool          // if true, skip confirmation for clear app data (CI/CD mode)
-	ExplicitYes             bool          // the person passed --yes to this run (set only by the CLI's single-device path): the only flag that answers "clear data before each test"
 	Confirm                 ConfirmFunc   // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
+	NoPrompt                bool          // a lane of a parallel or composite run: nobody is there to ask, so a refused answer is the hint, not "cancelled"
 	GrantPermissionsOnClear bool          // if true, auto-grant all permissions after clearing data
 	ReconnectDelay          time.Duration // delay after app restart before reconnecting WebSocket (default 2s)
 	RestartDelay            time.Duration // delay after force-stop before relaunching (default 500ms)
@@ -93,7 +112,6 @@ type ConnFacts struct {
 	Port           int         // host-side agent port; 0 takes cfg.Agent.Port
 	DevicePort     int         // on-device agent port; 0 takes cfg.Agent.AgentDevicePort()
 	AllowClearData bool        // skip the confirmation for clear app data (--yes)
-	ExplicitYes    bool        // the person passed --yes: it also answers "clear data before each test", which AllowClearData alone does not
 	NoGrantOnClear bool        // --no-grant-on-clear
 	Confirm        ConfirmFunc // asks before a destructive step; nil denies unless AllowClearData
 }
@@ -120,7 +138,6 @@ func NewConfiguredDeviceContext(ctx context.Context, m *device.Manager, cfg *con
 	}
 	dc.AgentHost = f.AgentHost
 	dc.AllowClearData = f.AllowClearData
-	dc.ExplicitYes = f.ExplicitYes
 	dc.Confirm = f.Confirm
 	dc.GrantPermissionsOnClear = (f.AllowClearData || cfg.Defaults.GrantPermissionsOnClear) && !f.NoGrantOnClear
 	dc.CrashEvidence = cfg.Defaults.CrashEvidence
@@ -266,6 +283,38 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 	return nil
 }
 
+// AskClearData is the gate for a data wipe: nil when the wipe may go ahead, otherwise the error to fail with. It answers every clear, a step
+// or the before-each question (perTest: the question names the package and device, cleaned to one line, and says it happens before every test). --yes (AllowClearData) lets it through. Otherwise a context with a confirmation
+// asks, and a refused answer is "cancelled by user", or the hint to pass --yes when NoPrompt says nobody is there to ask. A context with no
+// confirmation fails with the hint.
+func (dc *DeviceContext) AskClearData(perTest bool) error {
+	if dc.AllowClearData {
+		return nil
+	}
+	what := "clear app data"
+	if perTest {
+		what = "clear data before each test"
+	}
+	hint := fmt.Errorf("%s: this is a destructive operation that wipes all app data for %s. "+
+		"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", what, dc.AppID)
+	if dc.Confirm == nil {
+		return hint
+	}
+	msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
+		"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
+	if perTest {
+		msg = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
+			"  SharedPreferences, databases, and files will be wiped each time. Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80))
+	}
+	if !dc.Confirm(msg) {
+		if dc.NoPrompt {
+			return hint
+		}
+		return fmt.Errorf("%s: cancelled by user", what)
+	}
+	return nil
+}
+
 // ClearAppData clears all app storage and relaunches. This is a destructive
 // operation that wipes SharedPreferences, databases, and all local files.
 // It requires explicit opt-in via --allow-clear-data flag or interactive confirmation.
@@ -278,48 +327,11 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		return nil
 	}
 
-	// Gate: require explicit permission for destructive data wipe
+	// The gate for a data wipe: the step and every question asked before a run's wipes answer here.
 	if err := dc.AskClearData(false); err != nil {
 		return err
 	}
 	return dc.clearAppData(ctx)
-}
-
-// AskClearData is the question before a data wipe, or nil when it may go ahead (--yes, or the confirmation said yes). perTest says the wipe is the
-// "clear data before every test" setting, asked once for the run: the message says so, and the failure names the setting. A run with no one to ask
-// fails with the hint to pass --yes.
-func (dc *DeviceContext) AskClearData(perTest bool) error {
-	what := "clear app data"
-	if perTest {
-		what = "clear data before each test"
-		// "Clear data before each test" is answered by the person only: --yes (ExplicitYes) or the question. AllowClearData is not enough: a parallel run
-		// sets it on every lane without anyone having said yes, so a project's setting must not wipe every attached device through it.
-		if dc.ExplicitYes {
-			return nil
-		}
-		if dc.Confirm == nil {
-			return fmt.Errorf("%s: this wipes all app data for %s on %s before every test, and needs your answer: pass --yes (-y) to `probe test`, or run "+
-				"interactively on one device (a parallel run, --devices, cannot ask)", what, device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80))
-		}
-	} else {
-		if dc.AllowClearData {
-			return nil
-		}
-		if dc.Confirm == nil {
-			return fmt.Errorf("%s: this is a destructive operation that wipes all app data for %s. "+
-				"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", what, dc.AppID)
-		}
-	}
-	msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
-		"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
-	if perTest {
-		msg = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
-			"  SharedPreferences, databases, and files will be wiped each time. Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80))
-	}
-	if !dc.Confirm(msg) {
-		return fmt.Errorf("%s: cancelled by user", what)
-	}
-	return nil
 }
 
 // ClearAppDataConfirmed wipes the app's data and relaunches without asking: the caller has already asked (AskClearData). Physical iOS is skipped, as in ClearAppData.

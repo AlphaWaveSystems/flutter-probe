@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
 
 // autoClearState remembers, for one run, the answer to the question "clear data before each test?": it is asked when the first test starts, and
@@ -33,6 +35,10 @@ func (r *Runner) clearBeforeTest(ctx context.Context, exec *Executor) error {
 	r.autoClear.mu.Lock()
 	if !r.autoClear.asked {
 		r.autoClear.asked = true
+		if r.deviceCtx.AllowClearData {
+			// --yes answers it; the log still says once what it is for, since nobody was shown the question
+			fmt.Printf("    \033[31m⚠\033[0m  --yes: all data of %s on %s will be wiped BEFORE EVERY TEST of this run\n", device.CleanOneLine(r.deviceCtx.AppID, 80), device.CleanOneLine(r.deviceCtx.Serial, 80))
+		}
 		r.autoClear.answer = r.deviceCtx.AskClearData(true)
 	}
 	answer := r.autoClear.answer
