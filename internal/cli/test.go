@@ -208,6 +208,16 @@ func init() {
 // has a snake_case Android form (see runner.ResolveAppID), and the converted form is used only when it is the installed
 // one. The ID as written is kept when it is installed, and when neither form is, so a run that works today keeps its ID.
 // iOS keeps the bundle ID as written, and installed is not asked about it.
+// applyTestTimeout sets the per-test limit from --test-timeout when the flag is given, which wins over defaults.test_timeout from the
+// file. Either way the value is checked before the run starts, so a bad limit is an error, not a run that ignores it.
+func applyTestTimeout(cmd *cobra.Command, cfg *config.Config) error {
+	if cmd.Flags().Changed("test-timeout") {
+		d, _ := cmd.Flags().GetDuration("test-timeout")
+		cfg.Defaults.TestTimeout = d
+	}
+	return runner.ValidateTestTimeout(cfg.Defaults.TestTimeout)
+}
+
 func resolveDeviceAppID(written string, platform device.Platform, installed func(id string) bool) string {
 	converted := runner.ResolveAppID(written, platform)
 	if converted == written || installed(written) {
@@ -407,12 +417,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		cfg.Visual.PixelDelta = visualPixelDelta
 	}
 
-	// --test-timeout overrides defaults.test_timeout when it is given; either way the value is checked before the run starts.
-	if cmd.Flags().Changed("test-timeout") {
-		d, _ := cmd.Flags().GetDuration("test-timeout")
-		cfg.Defaults.TestTimeout = d
-	}
-	if err := runner.ValidateTestTimeout(cfg.Defaults.TestTimeout); err != nil {
+	if err := applyTestTimeout(cmd, cfg); err != nil {
 		return err
 	}
 	if n, _ := cmd.Flags().GetInt("retry-failed"); n > 0 {

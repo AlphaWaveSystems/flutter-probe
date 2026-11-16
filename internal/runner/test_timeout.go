@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -11,8 +12,9 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
-// testTimeoutGrace is the total budget of the grace phase after a test ran past its limit: the failure screenshot, the on-failure
-// hooks and the after-each hooks run within it, and it holds even when a call never returns. A variable so the tests can shorten it.
+// testTimeoutGrace is the total budget of the cleanup after a test ran past its limit: the failure screenshot, the on-failure and
+// after-each hooks, the video stop and the perf close run within it, and it holds even when one of those calls never returns. A
+// variable so the tests can shorten it.
 var testTimeoutGrace = 30 * time.Second
 
 // ValidateTestTimeout checks defaults.test_timeout (or --test-timeout): zero turns the limit off, and a positive limit must be at
@@ -27,16 +29,24 @@ func ValidateTestTimeout(d time.Duration) error {
 	return nil
 }
 
-// testTimeoutError is the failure of an attempt that ran past its limit. Error names the limit; cause is the step error the
-// cancellation produced, kept for Unwrap; restart is set when the restart that follows the timeout failed.
+// testTimeoutError is the failure of an attempt that ran past its limit. Error names the limit and the step the attempt was on,
+// and keeps the text of the error the attempt ended with when that error was not the limit's own cancellation. cause is kept for
+// Unwrap. restart is set when the restart that follows the timeout did not happen or failed.
 type testTimeoutError struct {
 	limit   time.Duration
+	step    string // the step that was running when the limit ended the attempt, e.g. `line 3: tap "Save"`; empty when none
 	cause   error
 	restart error
 }
 
 func (e *testTimeoutError) Error() string {
 	msg := fmt.Sprintf("test exceeded %s", formatLimit(e.limit))
+	if e.step != "" {
+		msg += fmt.Sprintf(" (%s)", e.step)
+	}
+	if e.cause != nil && !isCancellation(e.cause) {
+		msg += ": " + e.cause.Error()
+	}
 	if e.restart != nil {
 		msg += fmt.Sprintf(" (restart after the timeout failed: %v)", e.restart)
 	}
@@ -44,6 +54,23 @@ func (e *testTimeoutError) Error() string {
 }
 
 func (e *testTimeoutError) Unwrap() error { return e.cause }
+
+// isCancellation reports whether err is a context ending (the limit's, or the run's). The limit's own failure is named by the
+// timeout error; a cancellation is not worth repeating in its text.
+func isCancellation(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// stepText is the step a timeout names: its line and its description, as the step events give them.
+func stepText(ev StepEvent) string {
+	if ev.Description == "" {
+		return ""
+	}
+	if ev.Line > 0 {
+		return fmt.Sprintf("line %d: %s", ev.Line, ev.Description)
+	}
+	return ev.Description
+}
 
 // formatLimit writes a limit as the config writes it: 90s, not 1m30s.
 func formatLimit(d time.Duration) string {
@@ -144,20 +171,40 @@ func (r *Runner) finishAttempt(ctx context.Context, exec *Executor, prog *parser
 	}
 }
 
-// finishTimedOutAttempt is the cleanup after an attempt that ran past its limit. The run is not cancelled, so the failure
-// screenshot and the hooks run on a context with the grace budget as their deadline. They run on their own goroutine: if a call
-// never returns, the grace phase is abandoned at the budget, and the goroutine can still write only through exec and the guard,
-// which are not read or released for it. Then the app is restarted through the existing restart step, on a fresh executor.
-// It reports the artifacts the attempt has, and whether the grace phase was abandoned.
-func (r *Runner) finishTimedOutAttempt(ctx context.Context, exec *Executor, guard *cleanupGuard, prog *parser.Program, t parser.TestDef, te *testTimeoutError) ([]string, bool) {
+// graceOutcome is what the cleanup after a timed-out attempt left behind.
+type graceOutcome struct {
+	abandoned bool     // the grace budget ran out before the cleanup returned: nothing the cleanup wrote may be read
+	artifacts []string // the attempt's artifacts: all of them when the cleanup finished, else a snapshot taken before it
+	video     string   // the path the video stop returned, when the cleanup finished
+	videoErr  error
+}
+
+// finishTimedOutAttempt is the cleanup after an attempt that ran past its limit. Its order is the order the app needs:
+//
+//  1. crash evidence (a seam until S2b), while the app is still the one that ran the test;
+//  2. the failure screenshot, then the on-failure hooks and the after-each hooks, which may still read the app's screen and state;
+//  3. the video stop and the perf close, which end the recording and the measurement of this attempt;
+//  4. the restart, last, because it relaunches the app and clears what the steps above read.
+//
+// Steps 1 to 3 run on their own goroutine under the grace budget, so a call that never returns is given up at the budget and the
+// attempt goes on. The writes they make go through guard, which is released when the attempt ends. A grace phase that was abandoned
+// reports its artifacts as they were before it began; its video and perf window are dropped, and nothing it wrote is read after.
+//
+// The restart runs on ctx, the run's context, not on the attempt's, which the limit has expired. The restart step is bounded by
+// agent.launch_timeout. It is skipped when the run itself was cancelled.
+func (r *Runner) finishTimedOutAttempt(ctx context.Context, exec *Executor, guard *cleanupGuard, prog *parser.Program, t parser.TestDef, te *testTimeoutError, stopVideo func(context.Context) (string, error)) graceOutcome {
 	before := exec.Artifacts()
 	client := r.client // read here, on the runner's goroutine: the grace goroutine may outlive this call
-	graceCtx, cancelGrace := context.WithTimeout(context.WithoutCancel(ctx), testTimeoutGrace)
+	graceCtx, cancelGrace := context.WithTimeout(ctx, testTimeoutGrace)
+	var video string
+	var videoErr error
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		exec.collectCrashAfterTimeout(graceCtx)
 		r.finishAttempt(graceCtx, exec, prog, t, te, client, guard)
+		video, videoErr = stopVideo(graceCtx)
+		exec.closePerf(graceCtx)
 	}()
 	abandoned := false
 	select {
@@ -168,17 +215,30 @@ func (r *Runner) finishTimedOutAttempt(ctx context.Context, exec *Executor, guar
 	}
 	cancelGrace()
 
-	artifacts := before
-	if !abandoned {
-		artifacts = exec.Artifacts()
+	// The restart happens whether or not the cleanup finished: the next test needs the app relaunched either way.
+	r.restartAfterTimeout(ctx, te)
+	guard.release()
+	if abandoned {
+		return graceOutcome{abandoned: true, artifacts: before}
 	}
+	return graceOutcome{artifacts: exec.Artifacts(), video: video, videoErr: videoErr}
+}
 
+// restartAfterTimeout relaunches the app so that the next test starts clean. A failure, or a restart that could not happen because
+// the run was cancelled, is recorded on te: the run goes on with the next test either way.
+func (r *Runner) restartAfterTimeout(ctx context.Context, te *testTimeoutError) {
+	if ctx.Err() != nil {
+		te.restart = errors.New("the run was cancelled, so the app was not restarted")
+		return
+	}
+	if r.restartHook != nil {
+		te.restart = r.restartHook(ctx)
+		return
+	}
 	restartGuard := newCleanupGuard()
 	restart := r.newAttemptExecutor(restartGuard)
-	if err := restart.RunStep(context.WithoutCancel(ctx), parser.ActionStep{Verb: parser.VerbRestart}); err != nil {
+	if err := restart.RunStep(ctx, parser.ActionStep{Verb: parser.VerbRestart}); err != nil {
 		te.restart = err
 	}
 	restartGuard.release()
-	guard.release()
-	return artifacts, abandoned
 }

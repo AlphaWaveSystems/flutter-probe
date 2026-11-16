@@ -315,7 +315,10 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
 	// Uses exponential backoff with jitter — see tryReconnect for the formula.
-	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil {
+	// Not when ctx has ended: the call failed because the attempt's limit or the
+	// run's cancel ended the step, and reconnecting would spend the cleanup budget
+	// (test_timeout, Ctrl-C) on an adb round trip.
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil && ctx.Err() == nil {
 		e.collectCrashOnce(ctx) // before anything reconnects or relaunches; does nothing unless the run asked for crash evidence
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {

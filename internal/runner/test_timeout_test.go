@@ -24,6 +24,8 @@ type slowClient struct {
 	shotLive  []bool
 	shotDelay time.Duration // a screenshot returns after this long, whatever its context says
 	release   chan struct{}
+	probeLive []bool // a tap on "Probe" records whether its context was still live when it was called
+	closed    bool   // Close was called on this client
 }
 
 func newSlowClient() *slowClient {
@@ -46,7 +48,19 @@ func (c *slowClient) Tap(ctx context.Context, sel probelink.SelectorParam) error
 	case "Hang":
 		<-c.release
 		return nil
+	case "Probe":
+		c.mu.Lock()
+		c.probeLive = append(c.probeLive, ctx.Err() == nil)
+		c.mu.Unlock()
 	}
+	return nil
+}
+
+// Close records that the client was closed: a reconnect that the guard drops closes the client it was given.
+func (c *slowClient) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
 	return nil
 }
 
@@ -120,8 +134,8 @@ func TestTestTimeoutNamesTheLimitAndCleansUp(t *testing.T) {
 	if res.TimeLimit != time.Second {
 		t.Errorf("TimeLimit = %v, want 1s", res.TimeLimit)
 	}
-	if got := res.Error.Error(); got != "test exceeded 1s" {
-		t.Errorf("error = %q, want %q", got, "test exceeded 1s")
+	if got := res.Error.Error(); got != `test exceeded 1s (line 2: tap "Slow")` {
+		t.Errorf("error = %q, want the limit and the step it was on", got)
 	}
 	var te *testTimeoutError
 	if !errors.As(res.Error, &te) {
