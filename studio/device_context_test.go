@@ -47,17 +47,18 @@ func TestStudioDeviceContextMatchesTheSharedConstructor(t *testing.T) {
 	}
 }
 
-// A Studio run does not wipe app data: no window answers yet, so the destructive step is refused, whatever probe.yaml says.
+// A Studio context asks before it wipes app data and never skips the question: with no window to ask, `clear app data` is refused, whatever
+// probe.yaml says, and the refusal does not send a Studio user to the CLI's --yes.
 func TestStudioDeviceContextRefusesClearData(t *testing.T) {
 	a := &App{ctx: context.Background()}
 	cfg := parityConfig()
 	cfg.Defaults.GrantPermissionsOnClear = true
 	dc := newStudioDeviceContext(a, cfg, device.PlatformAndroid, "R58M123ABC", 51234, "")
-	if dc.AllowClearData || dc.Confirm != nil {
-		t.Fatalf("destructive steps are on: AllowClearData=%v Confirm=%v", dc.AllowClearData, dc.Confirm != nil)
+	if dc.AllowClearData || dc.Confirm == nil {
+		t.Fatalf("AllowClearData=%v Confirm set=%v: the question must be asked and never skipped", dc.AllowClearData, dc.Confirm != nil)
 	}
 	err := dc.ClearAppData(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "destructive") {
-		t.Fatalf("ClearAppData = %v, want a refusal", err)
+	if err == nil || !strings.Contains(err.Error(), "clear app data") || strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("ClearAppData = %v, want a refusal that does not mention --yes", err)
 	}
 }

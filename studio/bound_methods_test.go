@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +30,7 @@ const (
 	catAIProvider    = "aiProvider"    // text sent to, or read from, an AI provider
 	catDevice        = "device"        // talks to a connected device or its agent
 	catRunControl    = "runControl"    // starts or stops a run or a recording
+	catConfirm       = "confirm"       // answers a question the window asked about a destructive step: only a person in the window may
 )
 
 var boundMethods = map[string]string{
@@ -35,7 +38,7 @@ var boundMethods = map[string]string{
 	"AIChatLabel": catUI, "AIChatLabelParts": catUI, "ExplainAvailability": catUI, "InitialWorkspace": catUI, "Lint": catUI, "RunState": catUI,
 	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, "SelectorFixAttempts": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
 	// the workspace
-	"ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
+	"AnswerConfirm": catConfirm, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
 	"WriteFile": catWritesWS, "SaveAISettings": catWritesWS, "SaveWorkspaceSettings": catWritesWS,
 	"SetWorkspace": catWorkspaceRoot, "PickWorkspace": catWorkspaceRoot,
 	// the keychain
@@ -55,7 +58,7 @@ var boundMethods = map[string]string{
 }
 
 // bridgeBlocked are the methods the headless bridge refuses by name (headless.go methodsNotOverHTTP): they need a native window.
-var bridgeBlocked = []string{"PickWorkspace"}
+var bridgeBlocked = []string{"AnswerConfirm", "PickWorkspace"}
 
 // automationRPC are the method names the automation endpoint accepts, and automationBackendMethods the methods of App it can reach.
 var automationRPC = []string{"cancel", "connect", "connect_wifi", "disconnect", "list_devices", "list_dir", "open_workspace", "read_file", "results", "run_file", "run_state", "screenshot", "status", "test_wifi", "ui_state", "widget_tree"}
@@ -63,7 +66,7 @@ var automationBackendMethods = []string{"CancelRun", "Connect", "ConnectWiFi", "
 
 // automationNever are the categories no automation method may belong to: a token for the automation endpoint grants what its methods do,
 // and none of these is something a script that drives a device should be able to do.
-var automationNever = map[string]bool{catWritesWS: true, catSecrets: true, catNetwork: true, catAIProvider: true, catWorkspaceRoot: true}
+var automationNever = map[string]bool{catConfirm: true, catWritesWS: true, catSecrets: true, catNetwork: true, catAIProvider: true, catWorkspaceRoot: true}
 
 func exportedMethods(t reflect.Type) []string {
 	var out []string
@@ -114,7 +117,7 @@ func TestEveryBoundMethodHasADecision(t *testing.T) {
 	}
 	for name, cat := range boundMethods {
 		switch cat {
-		case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl:
+		case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl, catConfirm:
 		default:
 			t.Errorf("%s has the unknown category %q", name, cat)
 		}
@@ -226,5 +229,32 @@ func TestTheAutomationEndpointReachesAnExplicitSet(t *testing.T) {
 	}
 	if !reflect.TypeOf(&App{}).Implements(iface) {
 		t.Error("App no longer satisfies the automation backend")
+	}
+}
+
+// The automation endpoint cannot answer a confirmation: it refuses every spelling by name, before any backend method is reached, and the
+// method is in a category and outside the lists that keep it out of the endpoint's reach.
+type untouchableBackend struct{ automationBackend } // every method panics if it is called: a refused name must never reach the backend
+
+func TestAutomationEndpointCannotAnswerAConfirmation(t *testing.T) {
+	if cat := boundMethods["AnswerConfirm"]; cat != catConfirm || !automationNever[cat] {
+		t.Errorf("AnswerConfirm is %q, which must be a category no automation method may have", cat)
+	}
+	s := &automationServer{backend: untouchableBackend{}}
+	for _, name := range []string{"answer_confirm", "AnswerConfirm", "confirm", "answerConfirm", "confirm:answer"} {
+		_, err := s.call(name, []byte(`{"id":"x","allow":true}`))
+		if err == nil || err.Error() != fmt.Sprintf("unknown method %q", name) {
+			t.Errorf("the endpoint's answer to %q = %v, want the plain unknown-method refusal", name, err)
+		}
+	}
+	for _, m := range automationBackendMethods {
+		if m == "AnswerConfirm" {
+			t.Error("AnswerConfirm is reachable from the automation backend")
+		}
+	}
+	for _, m := range automationRPC {
+		if strings.Contains(strings.ToLower(m), "confirm") {
+			t.Errorf("the automation endpoint accepts %q", m)
+		}
 	}
 }

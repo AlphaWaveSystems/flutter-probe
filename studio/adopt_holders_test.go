@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -315,7 +316,10 @@ func (r *runFake) Call(context.Context, string, any) (json.RawMessage, error) {
 }
 func (r *runFake) ScreenshotBytes(context.Context, string) ([]byte, error) { return []byte("s"), nil }
 func (r *runFake) DumpWidgetTree(context.Context) (string, error)          { return "", nil }
-func (r *runFake) HTTPClear(context.Context, bool) error                   { return nil }
+func (r *runFake) Screenshot(context.Context, string) (string, error) {
+	return "", errors.New("no screenshot")
+}
+func (r *runFake) HTTPClear(context.Context, bool) error { return nil }
 func (r *runFake) HTTPLog(context.Context, probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
 	return probelink.HTTPLogResult{}, nil
 }
