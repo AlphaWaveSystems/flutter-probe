@@ -212,21 +212,26 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	return r.Run(ctx)
 }
 
-// deviceContext is the device context of one device of a parallel run. Whether the device is physical is asked of the
-// device, the same check a single-device run makes, so a physical device is never taken for an emulator.
+// deviceContext is the device context of one device of a parallel run: NewLaneContext with the run's configuration and clear gate.
 func (po *ParallelOrchestrator) deviceContext(ctx context.Context, dr *DeviceRun, appID string, tokenTimeout, dialTimeout time.Duration) *DeviceContext {
-	dc := NewDeviceContext(ctx, po.manager, dr.Platform, dr.DeviceID)
+	return NewLaneContext(ctx, po.manager, po.cfg, po.opts.ClearGate, dr.Platform, dr.DeviceID, appID, dr.Port, tokenTimeout, dialTimeout)
+}
+
+// NewLaneContext is the device context of one lane of a parallel run. Whether the device is physical is asked of the device, the same check
+// a single-device run makes, so a physical device is never taken for an emulator. A lane has nobody to ask: its wipes follow the run's clear
+// gate (ApplyClearGate). The orchestrator builds every lane through here, and so does the clear-gate table, so the two cannot drift.
+func NewLaneContext(ctx context.Context, m *device.Manager, cfg *config.Config, gate ClearGate, platform device.Platform, serial, appID string, port int, tokenTimeout, dialTimeout time.Duration) *DeviceContext {
+	dc := NewDeviceContext(ctx, m, platform, serial)
 	dc.AppID = appID
-	dc.Port = dr.Port
-	dc.DevicePort = po.cfg.Agent.AgentDevicePort()
-	// A lane has nobody to ask: its wipes follow the run's clear gate (see ApplyClearGate).
-	dc.ApplyClearGate(po.opts.ClearGate)
-	dc.CrashEvidence = po.cfg.Defaults.CrashEvidence
-	dc.ReconnectDelay = po.cfg.Agent.ReconnectDelay
-	dc.RestartDelay = po.cfg.Device.RestartDelay
+	dc.Port = port
+	dc.DevicePort = cfg.Agent.AgentDevicePort()
+	dc.ApplyClearGate(gate)
+	dc.CrashEvidence = cfg.Defaults.CrashEvidence
+	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
+	dc.RestartDelay = cfg.Device.RestartDelay
 	dc.TokenReadTimeout = tokenTimeout
 	dc.DialTimeout = dialTimeout
-	dc.CLIVersion = po.cfg.CLIVersion
+	dc.CLIVersion = cfg.CLIVersion
 	return dc
 }
 

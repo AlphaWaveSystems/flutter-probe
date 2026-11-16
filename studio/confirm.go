@@ -96,7 +96,7 @@ func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
 		}
 		// The person's own setting, kept outside the workspace: on a simulator or an emulator the step may run without the question. A physical
 		// device, a WiFi connection and a device that is not classified always ask.
-		if conn.disposable && userprefs.Load().ClearDataWithoutAsking && a.verifiedDisposable(conn) {
+		if runner.AnswersWithoutQuestion(userprefs.Load().ClearDataWithoutAsking, func() bool { return conn.disposable && a.verifiedDisposable(conn) }) {
 			a.emit("confirm:note", "Cleared data of "+dialogText(dc.AppID)+" on "+dialogText(conn.deviceName)+" ("+dialogText(conn.deviceID)+") without asking: your setting for simulators and emulators")
 			return true
 		}

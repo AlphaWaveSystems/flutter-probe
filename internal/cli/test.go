@@ -1687,7 +1687,7 @@ func confirmWithPrefs(ask func(string) bool, allowOnDisposable bool, disposable 
 		return ask
 	}
 	return func(message string) bool {
-		if !disposable() {
+		if !runner.AnswersWithoutQuestion(allowOnDisposable, disposable) {
 			if ask == nil {
 				return false
 			}
