@@ -535,6 +535,68 @@ func TestHarnessNeverConnectingLaneReportsItsFilesNotRun(t *testing.T) {
 	}
 }
 
+// A lane that never connects says where it stopped once: each file names the file the lane stopped at, and only that file's result carries
+// the cause.
+func TestHarnessNotRunStatesTheCauseOnceOnTheStopFile(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	other := writeHarnessFile(t, dir, "other.probe", "test \"other\"\n  tap \"Other\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{fine, other}})
+	h.po.dial = func(ctx context.Context, opts probelink.DialOptions) (probelink.ProbeClient, error) {
+		return nil, errors.New("connection refused")
+	}
+
+	results, _ := h.po.Run(context.Background())
+
+	if len(results) != 2 {
+		t.Fatalf("both files of the lane must be reported, got %+v", results)
+	}
+	if r := results[0]; r.File != fine || r.Error == nil || !strings.HasPrefix(r.Error.Error(), "not run: lane stopped at "+fine+": ") || !strings.Contains(r.Error.Error(), "connection refused") {
+		t.Errorf("the stop file must carry the cause, got %+v", r)
+	}
+	if r := results[1]; r.File != other || r.Error == nil || r.Error.Error() != "not run: lane stopped at "+fine {
+		t.Errorf("a file after the stop must say only where the lane stopped, got %+v", r)
+	}
+	causes := 0
+	for _, r := range results {
+		if r.Error != nil && strings.Contains(r.Error.Error(), "connection refused") {
+			causes++
+		}
+	}
+	if causes != 1 {
+		t.Errorf("the cause must be stated once, found on %d results", causes)
+	}
+}
+
+// A file whose tests a tag filter lets through none of ends with no results. A lane that stops at a later file does not report that file as
+// not run: it ran, and had nothing to run.
+func TestHarnessFileWithNoTestsBeforeAFailureIsNotReportedNotRun(t *testing.T) {
+	dir := t.TempDir()
+	quiet := writeHarnessFile(t, dir, "quiet.probe", "test \"quiet\"\n  tap \"Quiet\"\n")
+	bad := writeHarnessFile(t, dir, "bad.probe", "test \"bad\"\n  tap <name>\n")
+	never := writeHarnessFile(t, dir, "never.probe", "test \"never\"\n  tap \"Never\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{quiet, bad, never}})
+	h.po.opts.Tags = []string{"smoke"}
+
+	results, err := h.po.Run(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "bad.probe") {
+		t.Errorf("the lane's parse error must be reported, got %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("want the failed file and the file not run, and no result for the file with no test left, got %+v", results)
+	}
+	if r := results[0]; r.File != bad || r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "parse") {
+		t.Errorf("the file that does not parse must be a failed result that says so, got %+v", r)
+	}
+	if r := results[1]; r.File != never || r.Passed || r.Error == nil || r.Error.Error() != "not run: lane stopped at "+bad {
+		t.Errorf("the file after the error must say the lane stopped at the bad file, got %+v", r)
+	}
+	if n := countOf(h.taps(0), "Quiet") + countOf(h.taps(0), "Never"); n != 0 {
+		t.Errorf("no test may run, ran %d", n)
+	}
+}
+
 // A file that does not parse stops its lane: the completed file keeps its result, the bad file is a failed result, and the file after it
 // is reported as not run and does not run.
 func TestHarnessParseErrorMidLaneKeepsCompletedAndReportsTheRest(t *testing.T) {
@@ -599,7 +661,8 @@ func TestHarnessCSVErrorKeepsTheCompletedTestsOfItsFile(t *testing.T) {
 	}
 }
 
-// A --grant that names no permission stops the lane before any file runs: each file is reported as not run, with the grant that failed. (A
+// A --grant that names no permission stops the lane before any file runs: each file is reported as not run, and the grant that failed is
+// stated once, on the file the lane stopped at. (A
 // grant the device refuses on Android is a warning, not an error: some permissions do not exist on older API levels.)
 func TestHarnessGrantErrorReportsTheLaneNotRun(t *testing.T) {
 	dir := t.TempDir()
@@ -616,10 +679,11 @@ func TestHarnessGrantErrorReportsTheLaneNotRun(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("both files of the lane must be reported, got %+v", results)
 	}
-	for _, r := range results {
-		if r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "--grant no-such-permission") {
-			t.Errorf("%s must be a failed result that names the grant, got %+v", r.File, r)
-		}
+	if r := results[0]; r.File != fine || r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "--grant no-such-permission") {
+		t.Errorf("the file the lane stopped at must be a failed result that names the grant, got %+v", r)
+	}
+	if r := results[1]; r.File != other || r.Passed || r.Error == nil || r.Error.Error() != "not run: lane stopped at "+fine {
+		t.Errorf("the file after it must say only where the lane stopped, got %+v", r)
 	}
 	if n := countOf(h.taps(0), "Fine") + countOf(h.taps(0), "Other"); n != 0 {
 		t.Errorf("no test may run after a grant failed, ran %d", n)
