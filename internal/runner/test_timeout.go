@@ -57,6 +57,15 @@ func (e *testTimeoutError) Error() string {
 
 func (e *testTimeoutError) Unwrap() error { return e.cause }
 
+// timeoutError is the limit's error in err's chain, or nil when err is not a timeout. Reports classify a timed-out test by it.
+func timeoutError(err error) *testTimeoutError {
+	var te *testTimeoutError
+	if errors.As(err, &te) {
+		return te
+	}
+	return nil
+}
+
 // isCancellation reports whether err is a context ending (the limit's, or the run's). The limit's own failure is named by the
 // timeout error; a cancellation is not worth repeating in its text.
 func isCancellation(err error) bool {

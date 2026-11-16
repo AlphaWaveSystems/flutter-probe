@@ -173,6 +173,7 @@ func (r *Runner) SetCompositeRunner(cr *CompositeRunner) {
 // test runs. Without a guard it is newExecutor.
 func (r *Runner) newAttemptExecutor(guard *cleanupGuard) *Executor {
 	exec := r.newExecutor()
+	exec.testLimit = r.cfg.Defaults.TestTimeout
 	if guard != nil {
 		inner := exec.onReconnect
 		exec.onReconnect = func(newClient probelink.ProbeClient) {
