@@ -46,7 +46,7 @@ probe test [path] [flags]
 | `--host <ip>` | `127.0.0.1` | Agent host IP (use device IP for WiFi testing) |
 | `--token <string>` | — | Agent auth token (skip auto-detection; for WiFi testing) |
 | `--parallel` | `false` | Run tests in parallel across all connected devices |
-| `--devices <serials>` | — | Comma-separated device serials for parallel execution |
+| `--devices <serials>` | — | Comma-separated device serials for parallel execution. The devices must be of one platform: a list that mixes Android serials and iOS UDIDs is refused at start, so run one `probe test` per platform |
 | `--tag <tag>` | — | Run only tests matching this tag |
 | `--timeout <duration>` | `30s` | Per-step timeout |
 | `--format <fmt>` | `terminal` | Output format: `terminal`, `junit`, `json` |

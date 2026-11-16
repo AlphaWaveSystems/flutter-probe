@@ -572,6 +572,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			}
 		}
 
+		if err := onePlatformError(deviceRuns, devicesStr != ""); err != nil {
+			return err
+		}
+
 		// Distribute files across devices
 		portBase := cfg.Agent.Port
 		if portBase == 0 {
