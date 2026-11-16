@@ -348,56 +348,41 @@ func providerLabel(s aiProviderSettings) string {
 }
 
 // mergeAIForm applies the form's changes to what the file says now. A field that differs from base (the form as it was loaded) is the person's
-// change and is taken from the form, unless the file changed that field since: then the save is refused, with a reload message, rather than
-// overwrite an edit made elsewhere. A field that does not differ keeps what the file says now, so an untouched field is never put back to the
-// value it had when the form was loaded. The key source and its variable name are one field.
+// change and is taken from the form, unless the file changed that field since to something else: then the save is refused, with a reload
+// message that names the field and no value, rather than overwrite an edit made elsewhere. (If the file now says what the person asked for,
+// nothing is lost and the change is accepted.) A field that does not differ keeps what the file says now, so an untouched field is never put
+// back to the value it had when the form was loaded. The key source and its variable name are one field.
 func mergeAIForm(base, form, disk AISettings) (AISettings, error) {
 	out := disk
 	out.Base = nil
 	refuse := func(name string) error {
 		return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", name)
 	}
-	if form.Provider != base.Provider {
-		if disk.Provider != base.Provider {
-			return AISettings{}, refuse("the AI provider")
-		}
-		out.Provider = form.Provider
+	type field struct {
+		name                string
+		changed, onDisk, same bool // the person changed it; the file still has the loaded value; the file already has the person's value
+		take                func()
 	}
-	if form.Endpoint != base.Endpoint {
-		if disk.Endpoint != base.Endpoint {
-			return AISettings{}, refuse("the endpoint")
-		}
-		out.Endpoint = form.Endpoint
+	fields := []field{
+		{"the AI provider", form.Provider != base.Provider, disk.Provider == base.Provider, disk.Provider == form.Provider, func() { out.Provider = form.Provider }},
+		{"the endpoint", form.Endpoint != base.Endpoint, disk.Endpoint == base.Endpoint, disk.Endpoint == form.Endpoint, func() { out.Endpoint = form.Endpoint }},
+		{"the model", form.Model != base.Model, disk.Model == base.Model, disk.Model == form.Model, func() { out.Model = form.Model }},
+		{"the key source", form.KeySource != base.KeySource || form.KeyEnvName != base.KeyEnvName,
+			disk.KeySource == base.KeySource && disk.KeyEnvName == base.KeyEnvName,
+			disk.KeySource == form.KeySource && disk.KeyEnvName == form.KeyEnvName,
+			func() { out.KeySource, out.KeyEnvName = form.KeySource, form.KeyEnvName }},
+		{"the timeout", form.Timeout != base.Timeout, disk.Timeout == base.Timeout, disk.Timeout == form.Timeout, func() { out.Timeout = form.Timeout }},
+		{"the vision switch", form.Vision != base.Vision, disk.Vision == base.Vision, disk.Vision == form.Vision, func() { out.Vision = form.Vision }},
+		{"the remote-endpoint switch", form.AllowRemoteEndpoint != base.AllowRemoteEndpoint, disk.AllowRemoteEndpoint == base.AllowRemoteEndpoint, disk.AllowRemoteEndpoint == form.AllowRemoteEndpoint, func() { out.AllowRemoteEndpoint = form.AllowRemoteEndpoint }},
 	}
-	if form.Model != base.Model {
-		if disk.Model != base.Model {
-			return AISettings{}, refuse("the model")
+	for _, f := range fields {
+		if !f.changed {
+			continue
 		}
-		out.Model = form.Model
-	}
-	if form.KeySource != base.KeySource || form.KeyEnvName != base.KeyEnvName {
-		if disk.KeySource != base.KeySource || disk.KeyEnvName != base.KeyEnvName {
-			return AISettings{}, refuse("the key source")
+		if !f.onDisk && !f.same {
+			return AISettings{}, refuse(f.name)
 		}
-		out.KeySource, out.KeyEnvName = form.KeySource, form.KeyEnvName
-	}
-	if form.Timeout != base.Timeout {
-		if disk.Timeout != base.Timeout {
-			return AISettings{}, refuse("the timeout")
-		}
-		out.Timeout = form.Timeout
-	}
-	if form.Vision != base.Vision {
-		if disk.Vision != base.Vision {
-			return AISettings{}, refuse("the vision switch")
-		}
-		out.Vision = form.Vision
-	}
-	if form.AllowRemoteEndpoint != base.AllowRemoteEndpoint {
-		if disk.AllowRemoteEndpoint != base.AllowRemoteEndpoint {
-			return AISettings{}, refuse("the remote-endpoint switch")
-		}
-		out.AllowRemoteEndpoint = form.AllowRemoteEndpoint
+		f.take()
 	}
 	return out, nil
 }

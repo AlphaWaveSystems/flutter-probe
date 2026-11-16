@@ -648,6 +648,16 @@ $("settings-ai-provider").addEventListener("change", refreshPlainKeyNote);
 let loadedAI: main.AISettings | undefined;
 
 function fillAIForm(s: main.AISettings): void {
+  setAIFields(s);
+  $("settings-ai-error").hidden = true;
+  $("settings-ai-models").replaceChildren();
+  $("settings-ai-find-status").textContent = "";
+  $("settings-ai-result").replaceChildren();
+}
+
+// setAIFields puts the settings the file holds into the form's fields, and remembers them as the form's base: the next Save writes only what
+// the person changes from them. It leaves the connection test and the model list alone, so it can refresh a form that stays open.
+function setAIFields(s: main.AISettings): void {
   loadedAI = main.AISettings.createFrom({ ...s, base: undefined });
   ($("settings-ai-provider") as HTMLSelectElement).value = s.provider ?? "";
   ($("settings-ai-endpoint") as HTMLInputElement).value = s.endpoint ?? "";
@@ -663,10 +673,6 @@ function fillAIForm(s: main.AISettings): void {
   ($("settings-ai-remote") as HTMLInputElement).checked = s.allowRemoteEndpoint === true;
   aiPlainKeyInFile = s.plainKeyInFile === true;
   refreshPlainKeyNote();
-  $("settings-ai-error").hidden = true;
-  $("settings-ai-models").replaceChildren();
-  $("settings-ai-find-status").textContent = "";
-  $("settings-ai-result").replaceChildren();
 }
 
 function readAIForm(): main.AISettings {
@@ -1291,7 +1297,13 @@ $("btn-settings-save").addEventListener("click", async () => {
   try {
     const form = readAIForm();
     await SaveAISettings(workspaceRoot, form);
-    loadedAI = main.AISettings.createFrom({ ...form, base: undefined }); // the file now has what the form shows (the form can stay open on an error)
+    // The file now has what the person changed, and keeps any edit made elsewhere under the form: show what it holds, and make it the base
+    // for the next Save (the form can stay open on an error). If it cannot be read back, the form itself is the base.
+    try {
+      setAIFields(await LoadAISettings(workspaceRoot));
+    } catch {
+      loadedAI = main.AISettings.createFrom({ ...form, base: undefined });
+    }
   } catch (err) {
     aiFailure = err;
   }
