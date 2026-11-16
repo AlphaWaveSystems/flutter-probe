@@ -16,6 +16,13 @@ and its native UI-automation verb family (all three) side by side:
 | Reveal button | `native_message_button` | `native_message_button` | `native_message_button` | "Show Message" |
 | Hidden message | `native_message` | `native_message` | `native_message` | "Message Revealed" — absent from the tree until revealed |
 
+## android-webview/ — a WebView page for the WebView steps
+
+A plain-Java Android app with one WebView and a page of fixed ids (a message field and button, text with spaces, hidden
+characters, an empty and a long element, and one element of each input kind). It is built with the SDK command-line tools by
+`android-webview/build.sh` (no Gradle, no APK committed) and is the target of the opt-in real-device tests of the WebView steps. It is
+not a ProbeAgent host. See `android-webview/README.md`.
+
 ## flutter/ — same surface, driven through probe's normal (Dart-agent) verbs
 
 Standard Flutter app, `ProbeAgent.start()` gated behind `--dart-define=PROBE_AGENT=true` (same

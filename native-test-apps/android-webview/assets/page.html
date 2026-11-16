@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixture page</title>
+  <style>body { font: 16px sans-serif; margin: 12px; } p, fieldset { margin: 6px 0; } #ce { border: 1px solid #888; min-height: 20px; }</style>
+</head>
+<body>
+  <h1>Getting Started</h1>
+
+  <!-- see / tap / type / wait until -->
+  <p><input id="message" placeholder="Message"></p>
+  <p><button id="contact" onclick="document.getElementById('result').textContent = 'Message sent'">Contact support</button></p>
+  <p id="result"></p>
+
+  <!-- store text: text with runs of spaces, a secret-looking value, hidden characters, an empty element, and a long text -->
+  <p id="total">Total: 42.00   USD</p>
+  <p id="pw">my-device-pass-77</p>
+  <!-- a, a zero-width space, b, a right-to-left override, c, a byte order mark (the page shows it as a space), d -->
+  <p id="hidden">a&#8203;b&#8238;c&#65279;d</p>
+  <p id="empty" style="min-height: 20px"></p>
+  <p id="long"></p>
+  <script>document.getElementById('long').textContent = '0123456789'.repeat(300);</script>
+
+  <!-- type: one element of each kind -->
+  <p><input id="ok" placeholder="Plain"></p>
+  <p><input id="ro" readonly value="locked"></p>
+  <p><input id="dis" disabled placeholder="Disabled"></p>
+  <fieldset disabled><input id="fs" placeholder="In fieldset"></fieldset>
+  <p><input id="cb" type="checkbox"> <input id="dt" type="date"> <input id="num" type="number"></p>
+  <p><textarea id="ta" placeholder="Area"></textarea></p>
+  <div id="ce" contenteditable="true">edit me</div>
+  <p><select id="sel"><option>One</option></select> <button id="btn">Press</button></p>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# build.sh writes the APK and the throwaway debug key here; nothing built is committed
+out/
