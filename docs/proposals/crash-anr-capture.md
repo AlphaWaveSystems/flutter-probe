@@ -51,6 +51,8 @@ Not collected: symbolication, memory dumps, any data from outside the app under 
 
 ## What is not known and needs a spike first
 
+Results of the first spike (Android emulator and iOS simulator, one measurement each) are in `docs/proposals/crash-anr-capture-spike.md`; the open items below say what it did not cover.
+
 - Whether `exit-info` is complete on the emulator images the project uses and on physical devices, and how long entries stay.
 - Whether the crash buffer still holds the crash by the time the failure is noticed on a busy device, and what window to read.
 - Whether a hang can be told from a slow screen without false alarms.
