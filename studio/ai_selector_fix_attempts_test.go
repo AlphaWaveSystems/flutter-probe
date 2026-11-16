@@ -151,3 +151,75 @@ func TestOpeningAnotherWorkspaceStartsTheCountAgain(t *testing.T) {
 		t.Errorf("after SetWorkspace: attempt %d, %v", p.Attempt, err)
 	}
 }
+
+// Past the cap nothing is built: the device is not asked for its widget tree for a suggestion that cannot be made.
+func TestPastTheCapTheDeviceIsNotAsked(t *testing.T) {
+	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"x\"\n```\nWhy.")
+	useProvider(t, f, "test-key")
+	trees := 0
+	contextSwitches = func(*App) aiContextSettings { return aiContextSettings{RunResults: true, WidgetTree: true} }
+	fetchTree = func(*App) (string, error) { trees++; return "Text(\"Sign in\")", nil }
+	a := failedRunApp()
+	for i := 0; i < fixMaxAttempts; i++ {
+		if _, _, err := askOnce(a, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if trees != fixMaxAttempts {
+		t.Fatalf("%d tree reads for %d suggestions", trees, fixMaxAttempts)
+	}
+	if _, err := a.PreviewSelectorFix(""); !errors.Is(err, errFixAttempts) {
+		t.Fatal(err)
+	}
+	if trees != fixMaxAttempts {
+		t.Errorf("the device was asked for its tree after the cap: %d reads", trees)
+	}
+}
+
+// The live count: what the window shows as "left" is Studio's, whether or not the suggestions were replaced.
+func TestTheLiveCountIsStudios(t *testing.T) {
+	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"x\"\n```\nWhy.")
+	useProvider(t, f, "test-key")
+	a := failedRunApp()
+	if got := a.SelectorFixAttempts(); got.Used != 0 || got.Max != fixMaxAttempts {
+		t.Fatalf("%+v", got)
+	}
+	for want := 1; want <= fixMaxAttempts; want++ {
+		if _, _, err := askOnce(a, ""); err != nil {
+			t.Fatal(err)
+		}
+		if got := a.SelectorFixAttempts(); got.Used != want || got.Max != fixMaxAttempts {
+			t.Errorf("after %d suggestions: %+v", want, got)
+		}
+	}
+	// another failed step has its own count; with no failed step there is none to count
+	a.track.begin("tests/login.probe", RunPlan{})
+	a.track.step(RunStep{File: "tests/login.probe", Test: "sign out", Line: 9, Description: `tap "x"`, Status: "failed", Error: "e"})
+	a.track.finish(nil, nil)
+	if got := a.SelectorFixAttempts(); got.Used != 0 {
+		t.Errorf("another step: %+v", got)
+	}
+	a.track.begin("tests/login.probe", RunPlan{})
+	a.track.finish(nil, nil)
+	if got := a.SelectorFixAttempts(); got.Used != 0 || got.Max != fixMaxAttempts {
+		t.Errorf("no failed step: %+v", got)
+	}
+}
+
+// Two different tests at the same file and line are different failed steps.
+func TestTwoTestsAtTheSameLineCountSeparately(t *testing.T) {
+	f := newFakeProvider(t, http.StatusOK, "```probe\ntap \"x\"\n```\nWhy.")
+	useProvider(t, f, "test-key")
+	a := failedRunApp()
+	for i := 0; i < fixMaxAttempts; i++ {
+		if _, _, err := askOnce(a, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.track.begin("tests/login.probe", RunPlan{})
+	a.track.step(RunStep{File: "tests/login.probe", Test: "sign up", Line: 4, Description: `tap "Sign in"`, Status: "failed", Error: "no widget"})
+	a.track.finish([]RunResult{{Name: "sign up", File: "tests/login.probe", Error: "no widget"}}, nil)
+	if p, _, err := askOnce(a, ""); err != nil || p.Attempt != 1 {
+		t.Fatalf("another test at the same file and line: attempt %d, %v", p.Attempt, err)
+	}
+}

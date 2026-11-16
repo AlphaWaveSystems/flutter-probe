@@ -20,6 +20,11 @@ async function fakeProvider(replies: string | string[]) {
       if (req.method === "POST" && (req.url ?? "").endsWith("/chat/completions")) {
         const reply = list[Math.min(requests, list.length - 1)]; // the nth request gets the nth reply; the last one repeats
         requests++;
+        if (reply === "__error__") {
+          res.statusCode = 500; // a request that goes out and fails: it is an attempt all the same
+          res.end(JSON.stringify({ error: { message: "boom" } }));
+          return;
+        }
         res.end(JSON.stringify({ choices: [{ message: { content: reply } }] }));
         return;
       }
@@ -157,6 +162,26 @@ test.describe("Fix round trip on a named simulator", () => {
       await page.click("#btn-fix-rerun");
       await expect(page.locator("#fix-verdict")).toContainText("Passed: fix round trip", { timeout: 180_000 });
       expect(f.requests()).toBe(2);
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("dg-04 the number left is Studio's live count: a suggestion that failed to arrive still counted", async ({ page }) => {
+    test.setTimeout(300_000);
+    test.info().annotations.push({ type: "device", description: simName });
+    const f = await fakeProvider(['```probe\ntap "Tap Mee2"\n```\nTry this label.', "__error__"]);
+    try {
+      await reachRerun(page, f, 'tap "Tap Mee2"');
+      // a second request goes out, from the button next to Explain, and the provider fails: the card of the replacement stays
+      await page.click("#btn-fix");
+      await expect(page.locator("#explain-status")).toContainText("Suggest a fix failed");
+      expect(f.requests()).toBe(2);
+      await expect(page.locator("#btn-fix-rerun")).toBeVisible();
+      await page.click("#btn-fix-rerun");
+      await expect(page.locator("#fix-verdict")).toContainText("Still failing", { timeout: 180_000 });
+      // the replaced answer said attempt 1; Studio has asked twice
+      await expect(page.locator("#fix-verdict")).toContainText("Suggestion 2 of 3 was used; 1 left");
     } finally {
       await f.close();
     }

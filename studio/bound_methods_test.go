@@ -33,7 +33,7 @@ const (
 var boundMethods = map[string]string{
 	// pure
 	"AIChatLabel": catUI, "AIChatLabelParts": catUI, "ExplainAvailability": catUI, "InitialWorkspace": catUI, "Lint": catUI, "RunState": catUI,
-	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
+	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, "SelectorFixAttempts": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
 	// the workspace
 	"ListDir": catReadsWS, "ReadFile": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
 	"WriteFile": catWritesWS, "SaveAISettings": catWritesWS, "SaveWorkspaceSettings": catWritesWS,

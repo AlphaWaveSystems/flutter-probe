@@ -298,3 +298,14 @@ describe("Suggest a fix again", () => {
     assert.equal(fixCardModel({ ...answer, maxAttempts: 3 }, "s").title, "Suggested fix");
   });
 });
+
+describe("the preview dialog says which suggestion it is", () => {
+  it("names the attempt and the maximum when Studio sends them", () => {
+    assert.match(fixPreviewNote(false, 2, 3), /^This would be suggestion 2 of 3 for this step\. /);
+    assert.match(fixPreviewNote(true, 1, 3), /suggestion 1 of 3/);
+    assert.doesNotMatch(fixPreviewNote(false), /This would be suggestion/);
+    assert.doesNotMatch(fixPreviewNote(false, 2, undefined), /This would be suggestion/);
+    // the rest of the note is unchanged
+    assert.match(fixPreviewNote(false, 2, 3), /Nothing is sent until you press Send/);
+  });
+});

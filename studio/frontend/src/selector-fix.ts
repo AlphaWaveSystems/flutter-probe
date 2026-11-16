@@ -116,8 +116,9 @@ export function fixCardModel(answer: FixAnswer, step: string): FixCardModel {
 }
 
 /** The wording of the preview dialog. */
-export function fixPreviewNote(hosted: boolean): string {
-  const base =
+export function fixPreviewNote(hosted: boolean, attempt?: number, maxAttempts?: number): string {
+  const which = attempt && maxAttempts ? `This would be suggestion ${attempt} of ${maxAttempts} for this step. ` : "";
+  const base = which +
     "This is what Suggest a fix would send to the AI provider: the failed step, the last run and the open file, with credentials redacted. Nothing is sent until you press Send.";
   return hosted ? base + " This destination is not this machine, so you see this before every suggestion." : base + " You see this again when the destination changes.";
 }
@@ -164,9 +165,6 @@ export interface RerunTarget {
   lineCount: number;
   /** The `test "..."` line that holds the replaced line, with its line number, or null when there is none. */
   header: TestHeader | null;
-  /** Which suggestion this replacement came from, and how many a session allows: what "Suggest a fix again" can still ask for. */
-  attempt?: number;
-  maxAttempts?: number;
 }
 
 export interface TestHeader {
@@ -285,8 +283,9 @@ export interface AgainOffer {
 }
 
 /**
- * What the card offers after a re-run that still failed: another suggestion, while the session allows one more for this step. The count is
- * Studio's (it refuses a fourth ask whatever the window does); this only says so before the person presses.
+ * What the card offers after a re-run that still failed: another suggestion, while the session allows one more for this step. `attempt` is
+ * how many suggestions Studio has asked for this step so far (Studio's live count, read when the verdict is shown, not what an earlier
+ * answer said). Studio refuses a fourth ask whatever the window does; this only says so before the person presses.
  */
 export function againOffer(attempt: number | undefined, maxAttempts: number | undefined): AgainOffer {
   const label = "Suggest a fix again";

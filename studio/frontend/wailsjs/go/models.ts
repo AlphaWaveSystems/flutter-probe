@@ -859,6 +859,20 @@ export namespace main {
 	        this.maxAttempts = source["maxAttempts"];
 	    }
 	}
+	export class SelectorFixAttempts {
+	    used: number;
+	    max: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectorFixAttempts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.used = source["used"];
+	        this.max = source["max"];
+	    }
+	}
 	export class SelectorFixPreview {
 	    id: string;
 	    destination: string;

@@ -123,6 +123,36 @@ type fixDeps struct {
 	dest     string // where it goes, hashed: a local destination is confirmed again when it changes
 }
 
+// failedStepKey names the last failed step for counting suggestions: its file, line and test, hashed.
+func (a *App) failedStepKey() (string, bool) {
+	step, ok := lastFailedStep(a.track.snapshot())
+	if !ok {
+		return "", false
+	}
+	return sum(step.File, fmt.Sprint(step.Line), step.Test), true
+}
+
+// fixAttemptsUsed is how many suggestions were asked of a provider for the failed step with this key, this session.
+func (a *App) fixAttemptsUsed(key string) int {
+	a.fix.mu.Lock()
+	defer a.fix.mu.Unlock()
+	return a.fix.attempts[key]
+}
+
+// SelectorFixAttempts is the live count for the last failed step: how many suggestions were asked for it this session, and how many a
+// session allows. It reads Studio's own memory and nothing else, so the window can say how many are left without asking for a suggestion.
+type SelectorFixAttempts struct {
+	Used int `json:"used"`
+	Max  int `json:"max"`
+}
+
+func (a *App) SelectorFixAttempts() SelectorFixAttempts {
+	if key, ok := a.failedStepKey(); ok {
+		return SelectorFixAttempts{Used: a.fixAttemptsUsed(key), Max: fixMaxAttempts}
+	}
+	return SelectorFixAttempts{Max: fixMaxAttempts}
+}
+
 func (a *App) fixDependencies() (fixDeps, error) {
 	s, err := a.aiProvider()
 	if err != nil {
@@ -176,7 +206,7 @@ func (a *App) buildSelectorFix(fileContent string) (req fixRequest, err error) {
 	return fixRequest{
 		system: fixGate(system), user: user, label: d.label, hosted: d.hosted, dest: d.dest, state: d.state,
 		step:       capRunes(fmt.Sprintf("line %d of %q: %s", d.step.Line, test, desc), fixMaxFile),
-		attemptKey: sum(d.step.File, fmt.Sprint(d.step.Line), d.step.Test),
+		attemptKey: sum(d.step.File, fmt.Sprint(d.step.Line), d.step.Test), // the same as failedStepKey // the same as failedStepKey
 	}, nil
 }
 
@@ -191,6 +221,10 @@ func newFixID() string {
 // PreviewSelectorFix returns what a selector fix would send, and where, with an id for SelectorFixPreviewed. It sends nothing, and it
 // does not ask the provider anything. fileContent is the open file, as the window holds it.
 func (a *App) PreviewSelectorFix(fileContent string) (SelectorFixPreview, error) {
+	// The cap is checked first: past it nothing is built, so the device is not asked for its widget tree for a suggestion that cannot be made.
+	if key, ok := a.failedStepKey(); ok && a.fixAttemptsUsed(key) >= fixMaxAttempts {
+		return SelectorFixPreview{}, errFixAttempts
+	}
 	req, err := a.buildSelectorFix(fileContent)
 	if err != nil {
 		return SelectorFixPreview{}, err

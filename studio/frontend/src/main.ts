@@ -19,6 +19,7 @@ import { toast } from "./toast";
 import {
   CancelRun,
   CheckReplaceLine,
+  SelectorFixAttempts,
   Chat,
   Connect,
   ConnectWiFi,
@@ -836,7 +837,7 @@ async function replaceFailedLine(answer: FixAnswer, btn: HTMLButtonElement): Pro
     editor.pushUndoStop();
     editor.revealLineInCenterIfOutsideViewport(plan.line);
     status.textContent = `Line ${plan.line} replaced in the editor. It is not saved and not run; Undo restores it.`;
-    showReplacedCard({ file: currentPath, line: plan.line, text: plan.text, lineCount: model.getLineCount(), header: enclosingTest(editorLines(), plan.line), attempt: answer.attempt, maxAttempts: answer.maxAttempts });
+    showReplacedCard({ file: currentPath, line: plan.line, text: plan.text, lineCount: model.getLineCount(), header: enclosingTest(editorLines(), plan.line) });
   } catch (err) {
     status.textContent = `Not replaced: ${err instanceof Error ? err.message : String(err)}`;
   } finally {
@@ -944,7 +945,14 @@ async function rerunFixedTest(): Promise<void> {
   if (verdict.stale) verdictEl.append(textEl("p", "dim", STALE_VERDICT_NOTE));
   if (verdict.kind === "failed") {
     // Still failing: offer another suggestion, for as long as Studio allows one for this step. It is a button, never automatic.
-    const offer = againOffer(target.attempt, target.maxAttempts);
+    let live: { used: number; max: number } | null = null;
+    try {
+      live = await SelectorFixAttempts(); // Studio's own count for the step that failed, which is not what the replaced answer said
+    } catch {
+      live = null; // no count: the offer is there, and Studio still refuses past its cap
+    }
+    if (fixRerun !== target) return; // the card went while the count was read
+    const offer = againOffer(live?.used, live?.max);
     const bar = document.createElement("div");
     bar.className = "explain-actions";
     const again = textEl("button", "btn", offer.label) as HTMLButtonElement;
@@ -963,7 +971,7 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   const overlay = $("fix-preview-overlay");
   const send = $("btn-fix-preview-send");
   const cancel = $("btn-fix-preview-cancel");
-  $("fix-preview-note").textContent = fixPreviewNote(p.hosted);
+  $("fix-preview-note").textContent = fixPreviewNote(p.hosted, p.attempt, p.maxAttempts);
   $("fix-preview-text").textContent = p.text;
   const opener = document.activeElement as HTMLElement | null;
   overlay.hidden = false;
