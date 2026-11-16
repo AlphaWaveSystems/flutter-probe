@@ -32,6 +32,7 @@ Report: `reports/studio-e2e-web/html/index.html` (+ `report.json`, traces and sc
 | 02 | no | Open a file: name and content in the editor |
 | 03 | no | Device picker, Connect disabled until a booted device is picked |
 | 04 | no | Settings overlay reads and saves probe.yaml |
+| sk-01 to sk-03 | no | Settings run knobs (`settings-knobs.spec.ts`): test time limit, retries and wait for a target are saved to `defaults:` and shown again; a wrong value is refused with the reason and probe.yaml is untouched; clearing a knob removes its key |
 | 05 | no | AI chat pane toggle and API key overlay |
 | 06 | no | WiFi discovery overlay |
 | 07 | no | Help overlay |

@@ -387,6 +387,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ExportOutcome {
+	    saved: boolean;
+	    name?: string;
+	    tests: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportOutcome(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.saved = source["saved"];
+	        this.name = source["name"];
+	        this.tests = source["tests"];
+	    }
+	}
 	export class FileEntry {
 	    name: string;
 	    path: string;
@@ -1153,10 +1169,14 @@ export namespace main {
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;
+	    testTimeout: string;
+	    retryFailedTests: number;
+	    implicitWait: string;
 	    iosDeviceId: string;
 	    androidDeviceId: string;
 	    aiContextRunResults: boolean;
 	    aiContextWidgetTree: boolean;
+	    base?: WorkspaceSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorkspaceSettings(source);
@@ -1166,11 +1186,33 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.agentPort = source["agentPort"];
 	        this.defaultsTimeout = source["defaultsTimeout"];
+	        this.testTimeout = source["testTimeout"];
+	        this.retryFailedTests = source["retryFailedTests"];
+	        this.implicitWait = source["implicitWait"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
 	        this.aiContextRunResults = source["aiContextRunResults"];
 	        this.aiContextWidgetTree = source["aiContextWidgetTree"];
+	        this.base = this.convertValues(source["base"], WorkspaceSettings);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

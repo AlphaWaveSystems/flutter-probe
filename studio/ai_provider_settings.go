@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
 )
 
 // AISettings is the provider form in Settings. It maps onto probe.yaml's ai: block and studio.ai_allow_remote_endpoint.
@@ -142,69 +143,74 @@ func writeAISettings(workspace string, s AISettings) error {
 	if err := s.validate(); err != nil {
 		return err
 	}
-	path := filepath.Join(workspace, "probe.yaml")
-	raw := map[string]any{}
-	existing, err := os.ReadFile(path)
-	if err == nil {
-		if err := yaml.Unmarshal(existing, &raw); err != nil {
-			return fmt.Errorf("parsing existing probe.yaml: %w", err)
+	// The edit is made on the file's own text (probe_yaml_edit.go): comments, blank lines and every key the form does not manage stay exactly
+	// as they were, only a changed line is touched, and the file is replaced atomically with its mode. A new probe.yaml is private to the
+	// user (0600); an existing one keeps its own mode. A key that is not a map is refused rather than overwritten.
+	probeYAMLMu.Lock()
+	defer probeYAMLMu.Unlock()
+	y, err := openProbeYAML(workspace)
+	if err != nil {
+		return err
+	}
+	y.check = func(text string) error {
+		var cfg config.Config
+		if err := yaml.Unmarshal([]byte(text), &cfg); err != nil {
+			return fmt.Errorf("the edited probe.yaml would not load (%v), so nothing was written", err)
 		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("reading probe.yaml: %w", err)
+		return nil
 	}
-	if _, err := mapAt(raw, "ai"); err != nil {
-		return err
+	set := func(value string, path ...string) error {
+		if strings.TrimSpace(value) == "" {
+			return y.remove(path...)
+		}
+		return y.set(value, path...)
 	}
-	if _, err := mapAt(raw, "studio"); err != nil {
-		return err
-	}
-
 	endpoint := ""
 	if s.Provider == "local" {
 		endpoint = s.Endpoint
 	}
-	mergeKey(raw, "ai", "provider", s.Provider)
-	mergeKey(raw, "ai", "endpoint", endpoint)
-	mergeKey(raw, "ai", "model", s.Model)
-	mergeKey(raw, "ai", "timeout", s.Timeout)
+	for _, e := range []struct {
+		value string
+		key   string
+	}{{s.Provider, "provider"}, {endpoint, "endpoint"}, {s.Model, "model"}, {s.Timeout, "timeout"}} {
+		if err := set(e.value, "ai", e.key); err != nil {
+			return err
+		}
+	}
 	// The key line changes only when the form asks for it. A form that names an environment variable writes that reference. A
 	// form that uses the keychain removes an existing reference, because the person switched the source, and leaves a plain
 	// key alone: Studio never reads a plain key, but the CLI does, and deleting it would break a setup Save did not make.
-	aiBlock, _ := raw["ai"].(map[string]any)
-	existingKey, _ := aiBlock["api_key"].(string)
+	existingKey, _ := y.current("ai", "api_key")
 	_, existingIsRef := envRef(existingKey)
 	switch {
 	case s.KeySource == "env":
-		mergeKey(raw, "ai", "api_key", "${"+s.KeyEnvName+"}")
+		if err := set("${"+s.KeyEnvName+"}", "ai", "api_key"); err != nil {
+			return err
+		}
 	case existingKey == "" || existingIsRef:
-		mergeKey(raw, "ai", "api_key", "")
+		if err := set("", "ai", "api_key"); err != nil {
+			return err
+		}
 	}
 	// Otherwise the file holds a plain key and the form names the keychain or the file: the line stays as it is.
-	ai := ensureMap(raw, "ai")
 	if s.Vision {
-		delete(ai, "vision")
+		if cur, ok := y.current("ai", "vision"); ok && cur == "false" {
+			if err := y.remove("ai", "vision"); err != nil {
+				return err
+			}
+		}
+	} else if err := y.set(false, "ai", "vision"); err != nil {
+		return err
+	}
+	if s.AllowRemoteEndpoint {
+		err = y.set(true, "studio", "ai_allow_remote_endpoint")
 	} else {
-		ai["vision"] = false
+		err = y.remove("studio", "ai_allow_remote_endpoint")
 	}
-	if len(ai) == 0 {
-		delete(raw, "ai")
-	}
-	studio := ensureMap(raw, "studio")
-	setSwitch(studio, "ai_allow_remote_endpoint", s.AllowRemoteEndpoint)
-	if len(studio) == 0 {
-		delete(raw, "studio")
-	}
-
-	out, err := yaml.Marshal(raw)
 	if err != nil {
-		return fmt.Errorf("encoding probe.yaml: %w", err)
+		return err
 	}
-	// A new probe.yaml is private to the user. WriteFile applies the mode only when it creates the file, so an existing one
-	// keeps its own.
-	if err := os.WriteFile(path, out, 0o600); err != nil {
-		return fmt.Errorf("writing probe.yaml: %w", err)
-	}
-	return nil
+	return y.save()
 }
 
 // LoadAISettings returns the provider form for a workspace's probe.yaml.
@@ -220,6 +226,9 @@ func (a *App) LoadAISettings(workspace string) (AISettings, error) {
 func (a *App) SaveAISettings(workspace string, s AISettings) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace path is required") // before the compare: an empty path would read ./probe.yaml
+	}
+	if err := a.requireOpenWorkspace(workspace); err != nil {
+		return err
 	}
 	// A form that equals what the file already says changes nothing, so it is neither validated nor written. A setup the CLI
 	// accepts, such as OpenAI with a plain key, must not stop the rest of Settings from saving.

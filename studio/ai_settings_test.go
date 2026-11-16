@@ -244,7 +244,7 @@ func TestSaveAndLoadKeepTheSwitchesAndTheRestOfProbeYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &App{}
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1234, AIContextRunResults: true}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1234, AIContextRunResults: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := a.LoadWorkspaceSettings(dir)
@@ -265,7 +265,7 @@ func TestSaveAndLoadKeepTheSwitchesAndTheRestOfProbeYaml(t *testing.T) {
 	}
 
 	// Both switches off again: the studio section goes, and the rest of the file stays.
-	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1234}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 1234}); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(filepath.Join(dir, "probe.yaml"))
@@ -280,7 +280,7 @@ func TestSaveRefusesAStudioKeyThatIsNotAMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &App{}
-	err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{AIContextRunResults: true})
+	err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AIContextRunResults: true})
 	if err == nil || !strings.Contains(err.Error(), "not a map") {
 		t.Fatalf("err = %v, want a refusal that the studio key is not a map", err)
 	}
