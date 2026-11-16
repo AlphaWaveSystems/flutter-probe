@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -351,9 +352,10 @@ func DistributeFiles(files []string, n int) [][]string {
 	return buckets
 }
 
-// ShardFiles returns the subset of files for shard index/total.
-// Uses deterministic hash so the same files always go to the same shard.
-func ShardFiles(files []string, index, total int) []string {
+// ShardFiles returns the subset of files for shard index/total. A file's shard comes from its path relative to base, the directory of the
+// config (the working directory when base is empty), so the same file lands in the same shard however the run spells it: relative, with
+// ./, absolute, with a trailing separator, under a symbolic link to the checkout, or with Windows separators.
+func ShardFiles(files []string, base string, index, total int) []string {
 	if total <= 1 {
 		return files
 	}
@@ -364,13 +366,47 @@ func ShardFiles(files []string, index, total int) []string {
 
 	var result []string
 	for _, f := range sorted {
-		h := sha256.Sum256([]byte(f))
+		h := sha256.Sum256([]byte(shardKey(f, base)))
 		bucket := int(h[0]) % total
 		if bucket == index {
 			result = append(result, f)
 		}
 	}
 	return result
+}
+
+// shardKey is the path a file is hashed by: its path relative to base when it is inside base, its absolute path otherwise. Both are taken
+// with symbolic links resolved where they exist, cleaned, and with forward slashes.
+func shardKey(file, base string) string {
+	if base == "" {
+		base = "."
+	}
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		abs = file
+	}
+	abs = resolvePath(abs)
+	if b, err := filepath.Abs(base); err == nil {
+		base = resolvePath(b)
+	}
+	key := abs
+	if rel, err := filepath.Rel(base, abs); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		key = rel
+	}
+	return strings.ReplaceAll(filepath.ToSlash(filepath.Clean(key)), `\`, "/")
+}
+
+// resolvePath resolves the symbolic links of p. A path that does not exist (a file that is named but not there) resolves through its
+// nearest existing parent, so it is spelled the same way as a path that exists under the same checkout.
+func resolvePath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	parent := filepath.Dir(p)
+	if parent == p {
+		return p
+	}
+	return filepath.Join(resolvePath(parent), filepath.Base(p))
 }
 
 // ParseShard parses "N/M" format into zero-based index and total.

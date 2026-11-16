@@ -153,7 +153,7 @@ func TestHarnessShardPartitionIsStable(t *testing.T) {
 	const total = 3
 	var first [total][]string
 	for i := 0; i < total; i++ {
-		first[i] = ShardFiles(files, i, total)
+		first[i] = ShardFiles(files, "", i, total)
 	}
 
 	seen := map[string]int{}
@@ -176,10 +176,10 @@ func TestHarnessShardPartitionIsStable(t *testing.T) {
 		reversed[len(files)-1-i] = f
 	}
 	for i := 0; i < total; i++ {
-		if got := ShardFiles(reversed, i, total); !reflect.DeepEqual(got, first[i]) {
+		if got := ShardFiles(reversed, "", i, total); !reflect.DeepEqual(got, first[i]) {
 			t.Errorf("shard %d changes with the order the files are listed in:\n  listed %v\n  reversed %v", i+1, first[i], got)
 		}
-		if got := ShardFiles(files, i, total); !reflect.DeepEqual(got, first[i]) {
+		if got := ShardFiles(files, "", i, total); !reflect.DeepEqual(got, first[i]) {
 			t.Errorf("shard %d changes between runs", i+1)
 		}
 	}
@@ -187,20 +187,45 @@ func TestHarnessShardPartitionIsStable(t *testing.T) {
 
 // Each file goes to one lane whole, so a data-driven test's rows and a composite test stay with their file.
 func TestHarnessDistributeKeepsEachFileWhole(t *testing.T) {
-	var files []string
-	for i := 0; i < 7; i++ {
-		files = append(files, fmt.Sprintf("tests/file_%d.probe", i))
-	}
-	buckets := DistributeFiles(files, 3)
+	dir := t.TempDir()
+	writeHarnessFile(t, dir, "users.csv", "user\nalice\nbob\ncarol\n")
+	rows := writeHarnessFile(t, dir, "rows.probe", "test \"greets <user>\"\n  tap \"<user>\"\n\nwith examples from \"users.csv\"\n")
+	a := writeHarnessFile(t, dir, "a.probe", "test \"a\"\n  tap \"A\"\n")
+	b := writeHarnessFile(t, dir, "b.probe", "test \"b\"\n  tap \"B\"\n")
+	files := []string{rows, a, b}
+	buckets := DistributeFiles(files, 2)
+
 	var all []string
-	for _, b := range buckets {
-		all = append(all, b...)
+	for _, bucket := range buckets {
+		all = append(all, bucket...)
 	}
 	sort.Strings(all)
 	want := append([]string(nil), files...)
 	sort.Strings(want)
 	if !reflect.DeepEqual(all, want) {
-		t.Errorf("the lanes hold %v, want every file exactly once: %v", all, want)
+		t.Fatalf("the lanes hold %v, want every file exactly once: %v", all, want)
+	}
+
+	// The file with three rows runs in one lane, and all three rows run there.
+	h := newHarnessRun(t, harnessConfig(), buckets)
+	results, err := h.po.Run(context.Background())
+	if err != nil {
+		t.Fatalf("a run of well-formed files is not an error, got %v", err)
+	}
+	lane, rowsRun := "", 0
+	for _, r := range results {
+		if r.File != rows {
+			continue
+		}
+		rowsRun++
+		if lane == "" {
+			lane = r.DeviceID
+		} else if r.DeviceID != lane {
+			t.Errorf("row %q ran in %s, the file's other rows in %s", r.TestName, r.DeviceID, lane)
+		}
+	}
+	if rowsRun != 3 {
+		t.Errorf("all three rows must run, got %d", rowsRun)
 	}
 }
 
@@ -266,6 +291,20 @@ func TestHarnessRetryWorstCaseIsRetriesPlusOneLimits(t *testing.T) {
 		}
 		if a.Duration > time.Second+restartAllowance {
 			t.Errorf("attempt %d lasted %v; a timed-out attempt is its limit plus at most %v of cleanup and restart", i+1, a.Duration, restartAllowance)
+		}
+	}
+	// Each attempt's tap had the whole limit left on its context. A limit cut to a third leaves about a third at the tap, while the attempt's
+	// duration still passes the check above, since the restart adds seconds to it. So the tap is what is checked.
+	agent := h.agents[0]
+	agent.mu.Lock()
+	remain := append([]time.Duration(nil), agent.slowRemain...)
+	agent.mu.Unlock()
+	if len(remain) != 3 {
+		t.Fatalf("want one tap per attempt, got %d", len(remain))
+	}
+	for i, d := range remain {
+		if d < 900*time.Millisecond || d > time.Second {
+			t.Errorf("attempt %d's tap had %v of its limit left; each attempt must get the whole 1s", i+1, d)
 		}
 	}
 	if max := 3 * (time.Second + restartAllowance); h.po.devices[0].Duration > max {
