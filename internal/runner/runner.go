@@ -124,6 +124,7 @@ type RunOptions struct {
 	DeviceID     string // device serial/UDID (for tagging results)
 	DeviceName   string // human-readable device name
 	Grant        []string // permissions to pre-grant before the first test (--grant)
+	ClearGate    ClearGate // how `clear app data` is answered on the lanes of a parallel or composite run (see ClearGate)
 
 	MeasureAll    bool           // open a measuring window around every test that does not measure itself
 	PerfBaseline  *perf.Baseline // compare measurements with this baseline (nil = off)
