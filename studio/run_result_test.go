@@ -155,3 +155,80 @@ func (f *slowFake) Tap(ctx context.Context, _ probelink.SelectorParam) error {
 		return ctx.Err()
 	}
 }
+
+// A test the retries ran more than once: the count, and the failed attempts before the last, each cleaned to one line.
+func TestRunResultForCarriesTheAttemptsOfARetriedTest(t *testing.T) {
+	a := &App{}
+	a.SetWorkspace("/work/space")
+	conn := &connection{platform: device.PlatformIOS, cfg: &config.Config{}}
+	log := []runner.AttemptOutcome{
+		{Passed: false, Error: errors.New("line 3: see \"x\": not found at /work/space/tests/a.probe\nsecond line")},
+		{Passed: false, Error: errors.New("connection reset by peer \u202e")},
+		{Passed: true},
+	}
+	rr := a.runResultFor(runner.TestResult{TestName: "t", Passed: true, Attempts: 3, AttemptLog: log}, conn)
+	if rr.Attempts != 3 || len(rr.EarlierFailures) != 2 {
+		t.Fatalf("result = %+v", rr)
+	}
+	if rr.EarlierFailures[0].Attempt != 1 || rr.EarlierFailures[1].Attempt != 2 {
+		t.Errorf("attempt numbers = %+v", rr.EarlierFailures)
+	}
+	for _, f := range rr.EarlierFailures {
+		if strings.ContainsAny(f.Error, "\n\u202e") || strings.Contains(f.Error, "/work/space") {
+			t.Errorf("an earlier failure was not cleaned: %q", f.Error)
+		}
+	}
+	if !strings.Contains(rr.EarlierFailures[0].Error, "not found") || !strings.Contains(rr.EarlierFailures[0].Error, "tests/a.probe") {
+		t.Errorf("first earlier failure = %q", rr.EarlierFailures[0].Error)
+	}
+	// a failure on every attempt: the last attempt's error is the result's own, so it is not listed twice
+	failed := a.runResultFor(runner.TestResult{TestName: "t", Error: errors.New("last"), Attempts: 2, AttemptLog: []runner.AttemptOutcome{{Error: errors.New("first")}, {Error: errors.New("last")}}}, conn)
+	if failed.Attempts != 2 || len(failed.EarlierFailures) != 1 || failed.EarlierFailures[0].Error != "first" {
+		t.Errorf("failed result = %+v", failed)
+	}
+	// one attempt: nothing about retries
+	once := a.runResultFor(runner.TestResult{TestName: "t", Passed: true, Attempts: 1, AttemptLog: log[2:]}, conn)
+	if once.Attempts != 0 || once.EarlierFailures != nil {
+		t.Errorf("a test that ran once carries retry fields: %+v", once)
+	}
+	if none := a.runResultFor(runner.TestResult{TestName: "t", Passed: true}, conn); none.Attempts != 0 {
+		t.Errorf("a result with no attempt count: %+v", none)
+	}
+}
+
+func TestEarlierFailuresAreCappedAndNeverListTheLastAttempt(t *testing.T) {
+	var log []runner.AttemptOutcome
+	for i := 0; i < 9; i++ {
+		log = append(log, runner.AttemptOutcome{Error: errors.New("e")})
+	}
+	got := earlierFailures(runner.TestResult{Attempts: 9, AttemptLog: log}, "")
+	if len(got) != maxEarlierFailures {
+		t.Errorf("listed %d earlier failures, want the cap of %d", len(got), maxEarlierFailures)
+	}
+	if got[len(got)-1].Attempt != maxEarlierFailures {
+		t.Errorf("attempt numbers = %+v", got)
+	}
+	if got := earlierFailures(runner.TestResult{AttemptLog: []runner.AttemptOutcome{{Error: errors.New("only")}}}, ""); len(got) != 0 {
+		t.Errorf("the only attempt is the last: %+v", got)
+	}
+	if got := earlierFailures(runner.TestResult{AttemptLog: []runner.AttemptOutcome{{}, {}}}, ""); len(got) != 1 || got[0].Error != "(no error text)" {
+		t.Errorf("an attempt with no error text = %+v", got)
+	}
+}
+
+// The attempts are for the window only: they are not in what the chat or an Explain sends.
+func TestAttemptFieldsAreNotInWhatTheProviderGets(t *testing.T) {
+	const marker = "EARLIERSECRET-31ab"
+	a := &App{}
+	a.track.begin("/work/space/tests/a.probe", RunPlan{})
+	a.track.result(RunResult{Name: "t", File: "/work/space/tests/a.probe", Error: "step failed", Attempts: 7391, EarlierFailures: []AttemptNote{{Attempt: 1, Error: marker}}})
+	if got := summarizeRun(a.track.snapshot()); strings.Contains(got, marker) || strings.Contains(got, "attempt") || strings.Contains(got, "7391") {
+		t.Errorf("the chat's run summary = %q", got)
+	}
+	failures, _, _, _ := a.explainFailures("")
+	for _, f := range failures {
+		if strings.Contains(f.Test+f.File+f.Error, marker) || strings.Contains(f.Test+f.File+f.Error, "7391") || f.Error != "step failed" {
+			t.Errorf("what Explain would send = %+v", f)
+		}
+	}
+}

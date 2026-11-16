@@ -20,10 +20,37 @@ func (a *App) runResultFor(res runner.TestResult, conn *connection) RunResult {
 		rr.TimedOut = true
 		rr.TimeLimitSeconds = res.TimeLimit.Seconds()
 	}
+	if res.Attempts > 1 {
+		rr.Attempts = res.Attempts
+		rr.EarlierFailures = earlierFailures(res, ws)
+	}
 	if conn != nil && conn.cfg != nil {
 		rr.CrashHint = wantsCrashHint(res, conn.platform, conn.cfg.Defaults.CrashEvidence)
 	}
 	return rr
+}
+
+// maxEarlierFailures is how many replaced attempts the window lists; more are counted in Attempts and not listed.
+const maxEarlierFailures = 5
+
+// earlierFailures lists the failed attempts a retry replaced: every attempt of the log but the last (whose error is the result's own), cleaned
+// to one line by the same last guard as the crash line.
+func earlierFailures(res runner.TestResult, ws string) []AttemptNote {
+	var out []AttemptNote
+	for i, at := range res.AttemptLog {
+		if i == len(res.AttemptLog)-1 || at.Passed {
+			continue
+		}
+		if len(out) == maxEarlierFailures {
+			break
+		}
+		msg := "(no error text)"
+		if at.Error != nil {
+			msg = oneLine(withoutPaths(at.Error.Error(), ws))
+		}
+		out = append(out, AttemptNote{Attempt: i + 1, Error: msg})
+	}
+	return out
 }
 
 // wantsCrashHint says whether to tell the person how to find out why the app died: the test failed with the kind of error a lost connection gives,

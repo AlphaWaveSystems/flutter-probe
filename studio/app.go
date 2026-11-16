@@ -1048,6 +1048,16 @@ type RunResult struct {
 	TimeLimitSeconds float64 `json:"timeLimitSeconds,omitempty"`
 	// CrashHint says an Android test failed with a lost connection while crash evidence was off: the window can say how to turn it on.
 	CrashHint bool `json:"crashHint,omitempty"`
+	// Attempts is how many times the test ran, set only when defaults.retry_failed_tests ran it more than once. EarlierFailures are the failed
+	// attempts before the last one, in order, with their error cleaned to one line. Like the fields above they are for the window only.
+	Attempts        int           `json:"attempts,omitempty"`
+	EarlierFailures []AttemptNote `json:"earlierFailures,omitempty"`
+}
+
+// AttemptNote is one failed attempt that a retry replaced.
+type AttemptNote struct {
+	Attempt int    `json:"attempt"` // 1-based
+	Error   string `json:"error"`
 }
 
 // RunFile parses and executes a .probe file in-process. Per-test events are

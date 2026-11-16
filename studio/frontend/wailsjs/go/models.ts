@@ -105,6 +105,20 @@ export namespace main {
 	        this.plainKeyInFile = source["plainKeyInFile"];
 	    }
 	}
+	export class AttemptNote {
+	    attempt: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttemptNote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attempt = source["attempt"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ChatLabelParts {
 	    prefix: string;
 	    model: string;
@@ -716,6 +730,8 @@ export namespace main {
 	    timedOut?: boolean;
 	    timeLimitSeconds?: number;
 	    crashHint?: boolean;
+	    attempts?: number;
+	    earlierFailures?: AttemptNote[];
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -734,6 +750,8 @@ export namespace main {
 	        this.timedOut = source["timedOut"];
 	        this.timeLimitSeconds = source["timeLimitSeconds"];
 	        this.crashHint = source["crashHint"];
+	        this.attempts = source["attempts"];
+	        this.earlierFailures = this.convertValues(source["earlierFailures"], AttemptNote);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
