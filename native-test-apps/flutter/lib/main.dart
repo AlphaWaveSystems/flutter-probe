@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:ffi';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_probe_agent/flutter_probe_agent.dart';
@@ -32,13 +34,86 @@ class FixtureApp extends StatelessWidget {
     const listScreen = bool.fromEnvironment('PROBE_FIXTURE_LIST', defaultValue: false);
     // PROBE_FIXTURE_CRASH=true builds the crash screen (used by probe-tests/crash/): one button that aborts the process.
     const crashScreen = bool.fromEnvironment('PROBE_FIXTURE_CRASH', defaultValue: false);
+    // PROBE_FIXTURE_LOAD=true builds the load screen (used by probe-tests/load/): sustained background work, the kind a real
+    // app's SDKs do (PT-25). See FixtureLoadScreen.
+    const loadScreen = bool.fromEnvironment('PROBE_FIXTURE_LOAD', defaultValue: false);
     return MaterialApp(
       title: 'Probe Fixture (Flutter)',
       home: listScreen
           ? const FixtureListScreen()
           : crashScreen
               ? const FixtureCrashScreen()
-              : const FixtureScreen(),
+              : loadScreen
+                  ? const FixtureLoadScreen()
+                  : const FixtureScreen(),
+    );
+  }
+}
+
+/// Burns CPU for about [budget] and churns the allocator, so the garbage collector runs too. Returns a value so the work is not
+/// optimised away.
+int _burnSlice(Duration budget) {
+  final sw = Stopwatch()..start();
+  var x = 1;
+  while (sw.elapsed < budget) {
+    x = (x * 1103515245 + 12345) & 0x7fffffff;
+    if (x % 64 == 0) {
+      final junk = List<int>.filled(4096, x);
+      x ^= junk.length;
+    }
+  }
+  return x;
+}
+
+/// The entry point of the background isolate in PROBE_FIXTURE_LOAD_MODE=isolate.
+void _burnForever(Object? _) {
+  while (true) {
+    _burnSlice(const Duration(milliseconds: 40));
+  }
+}
+
+/// The load screen for the sustained-load reproduction (probe-tests/load/): one text, "Load running", and background work that
+/// never stops while the screen is up. PROBE_FIXTURE_LOAD_MODE=ui (the default) burns about 40 ms of every 50 ms on the UI
+/// isolate, which is also where the agent's socket is served; PROBE_FIXTURE_LOAD_MODE=isolate burns it on a second isolate and
+/// leaves the UI isolate free. Key: load_ticks (the tick count, which moves while the load runs).
+class FixtureLoadScreen extends StatefulWidget {
+  const FixtureLoadScreen({super.key});
+
+  @override
+  State<FixtureLoadScreen> createState() => _FixtureLoadScreenState();
+}
+
+class _FixtureLoadScreenState extends State<FixtureLoadScreen> {
+  static const _mode = String.fromEnvironment('PROBE_FIXTURE_LOAD_MODE', defaultValue: 'ui');
+  Timer? _timer;
+  Isolate? _worker;
+  int _ticks = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_mode == 'isolate') {
+      Isolate.spawn(_burnForever, null).then((isolate) => _worker = isolate);
+    } else {
+      _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+        _burnSlice(const Duration(milliseconds: 40));
+        setState(() => _ticks++);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _worker?.kill(priority: Isolate.immediate);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Load running')),
+      body: Center(child: Text('Ticks: $_ticks', key: const ValueKey('load_ticks'))),
     );
   }
 }

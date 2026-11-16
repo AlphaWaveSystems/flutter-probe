@@ -1,0 +1,9 @@
+# Needs the load build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_LOAD=true (see README).
+# Reproduction for PT-25 (the agent connection drops, close 1006, under sustained background work). Fifteen cycles of an
+# idle wait and a live check: about five minutes. Each wait stays under the 30 second step timeout.
+test "sustained load keeps the agent connection"
+  restart the app
+  wait until "Load running" appears
+  repeat 15 times
+    wait 20 seconds
+    see "Load running"
