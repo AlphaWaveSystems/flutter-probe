@@ -2,12 +2,14 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -318,19 +320,53 @@ func TestDialAgentWithoutASeamReturnsNilOnFailure(t *testing.T) {
 	}
 }
 
-// F3, verified on this harness: a lane whose later file cannot be parsed. The first file runs once; its test must not run again when the lane
-// is retried. Skipped until the fix lands: the run shows the retry running the completed file again (see the report of the harness PR).
+// A lane whose later file cannot be parsed fails after it has connected, so it is not retried: the first file runs once, and its result is
+// kept with the lane's error. Before the fix a retry started the lane again and ran the completed file on every attempt.
 func TestHarnessLaneRetryDoesNotRerunCompletedTests(t *testing.T) {
-	t.Skip("F3, known bug: a lane whose later file fails to parse is retried from the start, so the completed file runs again; fixed in a separate PR")
 	dir := t.TempDir()
 	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
 	bad := writeHarnessFile(t, dir, "bad.probe", "test \"bad\"\n  tap <name>\n")
 	cfg := harnessConfig()
 	h := newHarnessRun(t, cfg, [][]string{{fine, bad}})
 
-	_, _ = h.po.Run(context.Background())
+	results, err := h.po.Run(context.Background())
 
 	if n := countOf(h.taps(0), "Fine"); n != 1 {
 		t.Errorf("the completed test ran %d times; a lane retry must not run completed tests again", n)
+	}
+	if err == nil || !strings.Contains(err.Error(), "bad.probe") {
+		t.Errorf("the lane's parse error must be reported, got %v", err)
+	}
+	if len(results) != 1 || results[0].TestName != "fine" || !results[0].Passed {
+		t.Errorf("the completed test's result must be kept, got %+v", results)
+	}
+}
+
+// A lane that cannot connect is retried: its first dial fails, the retry connects, and the test runs once.
+func TestHarnessConnectionFailureIsRetriedAndTheTestRunsOnce(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	cfg := harnessConfig()
+	h := newHarnessRun(t, cfg, [][]string{{fine}})
+	dial := h.po.dial
+	failed := false
+	h.po.dial = func(ctx context.Context, opts probelink.DialOptions) (probelink.ProbeClient, error) {
+		if !failed {
+			failed = true
+			return nil, errors.New("connection refused")
+		}
+		return dial(ctx, opts)
+	}
+
+	results, err := h.po.Run(context.Background())
+
+	if err != nil {
+		t.Fatalf("a connection that succeeds on the retry is not an error, got %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Errorf("the test must run after the retry connects, got %+v", results)
+	}
+	if n := countOf(h.taps(0), "Fine"); n != 1 {
+		t.Errorf("the test ran %d times, want 1", n)
 	}
 }
