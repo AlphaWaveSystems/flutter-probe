@@ -545,6 +545,7 @@ async function openSettingsOverlay() {
     loadedSettings = s; // what the form shows now: Save sends it back, and writes only what the person changed from it
     ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
     ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
+    ($("settings-clear-each-test") as HTMLInputElement).checked = s.clearDataBeforeEachTest === true;
     ($("settings-test-timeout") as HTMLInputElement).value = s.testTimeout ?? "";
     ($("settings-retry") as HTMLInputElement).value = s.retryFailedTests ? String(s.retryFailedTests) : "";
     ($("settings-implicit-wait") as HTMLInputElement).value = s.implicitWait ?? "";
@@ -1281,6 +1282,7 @@ $("btn-settings-save").addEventListener("click", async () => {
   const settings = main.WorkspaceSettings.createFrom({
     base: loadedSettings,
     agentPort: port,
+    clearDataBeforeEachTest: ($("settings-clear-each-test") as HTMLInputElement).checked,
     testTimeout: ($("settings-test-timeout") as HTMLInputElement).value.trim(),
     retryFailedTests: retries,
     implicitWait: ($("settings-implicit-wait") as HTMLInputElement).value.trim(),

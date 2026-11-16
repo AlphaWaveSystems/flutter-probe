@@ -276,18 +276,49 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 	}
 
 	// Gate: require explicit permission for destructive data wipe
-	if !dc.AllowClearData {
-		if dc.Confirm == nil {
-			return fmt.Errorf("clear app data: this is a destructive operation that wipes all app data for %s. "+
-				"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", dc.AppID)
-		}
-		msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
-			"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
-		if !dc.Confirm(msg) {
-			return fmt.Errorf("clear app data: cancelled by user")
-		}
+	if err := dc.AskClearData(false); err != nil {
+		return err
 	}
+	return dc.clearAppData(ctx)
+}
 
+// AskClearData is the question before a data wipe, or nil when it may go ahead (--yes, or the confirmation said yes). perTest says the wipe is the
+// "clear data before every test" setting, asked once for the run: the message says so, and the failure names the setting. A run with no one to ask
+// fails with the hint to pass --yes.
+func (dc *DeviceContext) AskClearData(perTest bool) error {
+	if dc.AllowClearData {
+		return nil
+	}
+	what := "clear app data"
+	if perTest {
+		what = "clear data before each test"
+	}
+	if dc.Confirm == nil {
+		return fmt.Errorf("%s: this is a destructive operation that wipes all app data for %s. "+
+			"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", what, dc.AppID)
+	}
+	msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
+		"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
+	if perTest {
+		msg = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
+			"  SharedPreferences, databases, and files will be wiped each time. Continue?", dc.AppID, dc.Serial)
+	}
+	if !dc.Confirm(msg) {
+		return fmt.Errorf("%s: cancelled by user", what)
+	}
+	return nil
+}
+
+// ClearAppDataConfirmed wipes the app's data and relaunches without asking: the caller has already asked (AskClearData). Physical iOS is skipped, as in ClearAppData.
+func (dc *DeviceContext) ClearAppDataConfirmed(ctx context.Context) error {
+	if dc.Platform == device.PlatformIOS && dc.IsPhysical {
+		fmt.Println("    \033[33m⚠\033[0m  clear app data is not supported on physical iOS devices — skipping")
+		return nil
+	}
+	return dc.clearAppData(ctx)
+}
+
+func (dc *DeviceContext) clearAppData(ctx context.Context) error {
 	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", dc.AppID, dc.Serial)
 
 	switch dc.Platform {

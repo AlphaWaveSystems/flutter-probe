@@ -1194,6 +1194,7 @@ export namespace main {
 	    testTimeout: string;
 	    retryFailedTests: number;
 	    implicitWait: string;
+	    clearDataBeforeEachTest: boolean;
 	    iosDeviceId: string;
 	    androidDeviceId: string;
 	    aiContextRunResults: boolean;
@@ -1211,6 +1212,7 @@ export namespace main {
 	        this.testTimeout = source["testTimeout"];
 	        this.retryFailedTests = source["retryFailedTests"];
 	        this.implicitWait = source["implicitWait"];
+	        this.clearDataBeforeEachTest = source["clearDataBeforeEachTest"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
 	        this.aiContextRunResults = source["aiContextRunResults"];
