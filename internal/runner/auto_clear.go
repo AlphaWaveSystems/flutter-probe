@@ -12,6 +12,18 @@ type autoClearState struct {
 	mu     sync.Mutex
 	asked  bool
 	answer error
+	noted  bool
+}
+
+// noteNoDevice says once per run that the setting does nothing when the run has no local device (cloud mode, dry run).
+func (s *autoClearState) noteNoDevice() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.noted {
+		return
+	}
+	s.noted = true
+	fmt.Println("    \033[33m⚠\033[0m  clear-before-each-test has no effect here: this run has no local device to clear")
 }
 
 // clearBeforeTest wipes the app's data and relaunches before a test, using the executor of the attempt so the run follows the relaunched app. The

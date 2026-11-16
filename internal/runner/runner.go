@@ -554,8 +554,10 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	exec.beginHTTP(ctx) // each test starts with an empty request log and no mocks
 
 	// defaults.clear_data_before_each_test: the app starts every test from a clean state. It is asked once for the run, and a no stops the tests.
-	if r.cfg.Defaults.ClearDataBeforeEachTest && r.deviceCtx != nil {
-		if err := r.clearBeforeTest(attemptCtx, exec); err != nil {
+	if r.cfg.Defaults.ClearDataBeforeEachTest {
+		if r.deviceCtx == nil {
+			r.autoClear.noteNoDevice() // cloud mode and dry runs have no local device to clear
+		} else if err := r.clearBeforeTest(attemptCtx, exec); err != nil {
 			runErr = err
 		}
 	}

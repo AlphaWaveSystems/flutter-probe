@@ -37,6 +37,7 @@ type DeviceContext struct {
 	UseHTTP                 bool          // if true, use HTTP POST instead of WebSocket for reconnection
 	AgentHost               string        // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
 	AllowClearData          bool          // if true, skip confirmation for clear app data (CI/CD mode)
+	ExplicitYes             bool          // the person passed --yes to this run (set only by the CLI's single-device path): the only flag that answers "clear data before each test"
 	Confirm                 ConfirmFunc   // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
 	GrantPermissionsOnClear bool          // if true, auto-grant all permissions after clearing data
 	ReconnectDelay          time.Duration // delay after app restart before reconnecting WebSocket (default 2s)
@@ -92,6 +93,7 @@ type ConnFacts struct {
 	Port           int         // host-side agent port; 0 takes cfg.Agent.Port
 	DevicePort     int         // on-device agent port; 0 takes cfg.Agent.AgentDevicePort()
 	AllowClearData bool        // skip the confirmation for clear app data (--yes)
+	ExplicitYes    bool        // the person passed --yes: it also answers "clear data before each test", which AllowClearData alone does not
 	NoGrantOnClear bool        // --no-grant-on-clear
 	Confirm        ConfirmFunc // asks before a destructive step; nil denies unless AllowClearData
 }
@@ -118,6 +120,7 @@ func NewConfiguredDeviceContext(ctx context.Context, m *device.Manager, cfg *con
 	}
 	dc.AgentHost = f.AgentHost
 	dc.AllowClearData = f.AllowClearData
+	dc.ExplicitYes = f.ExplicitYes
 	dc.Confirm = f.Confirm
 	dc.GrantPermissionsOnClear = (f.AllowClearData || cfg.Defaults.GrantPermissionsOnClear) && !f.NoGrantOnClear
 	dc.CrashEvidence = cfg.Defaults.CrashEvidence
@@ -286,22 +289,32 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 // "clear data before every test" setting, asked once for the run: the message says so, and the failure names the setting. A run with no one to ask
 // fails with the hint to pass --yes.
 func (dc *DeviceContext) AskClearData(perTest bool) error {
-	if dc.AllowClearData {
-		return nil
-	}
 	what := "clear app data"
 	if perTest {
 		what = "clear data before each test"
-	}
-	if dc.Confirm == nil {
-		return fmt.Errorf("%s: this is a destructive operation that wipes all app data for %s. "+
-			"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", what, dc.AppID)
+		// "Clear data before each test" is answered by the person only: --yes (ExplicitYes) or the question. AllowClearData is not enough: a parallel run
+		// sets it on every lane without anyone having said yes, so a project's setting must not wipe every attached device through it.
+		if dc.ExplicitYes {
+			return nil
+		}
+		if dc.Confirm == nil {
+			return fmt.Errorf("%s: this wipes all app data for %s on %s before every test, and needs your answer: pass --yes (-y) to `probe test`, or run "+
+				"interactively on one device (a parallel run, --devices, cannot ask)", what, device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80))
+		}
+	} else {
+		if dc.AllowClearData {
+			return nil
+		}
+		if dc.Confirm == nil {
+			return fmt.Errorf("%s: this is a destructive operation that wipes all app data for %s. "+
+				"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", what, dc.AppID)
+		}
 	}
 	msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
 		"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
 	if perTest {
 		msg = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
-			"  SharedPreferences, databases, and files will be wiped each time. Continue?", dc.AppID, dc.Serial)
+			"  SharedPreferences, databases, and files will be wiped each time. Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80))
 	}
 	if !dc.Confirm(msg) {
 		return fmt.Errorf("%s: cancelled by user", what)

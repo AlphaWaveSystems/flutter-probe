@@ -237,7 +237,7 @@ func resolveDeviceAppID(written string, platform device.Platform, installed func
 // device takes the HTTP fallback. A platform the run does not know counts as physical, so no emulator-only step runs on it.
 func singleDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Config, platform device.Platform, serial, agentHost string, autoYes, noGrantOnClear bool, confirm runner.ConfirmFunc) *runner.DeviceContext {
 	return runner.NewConfiguredDeviceContext(ctx, dm, cfg, platform, serial, runner.ConnFacts{
-		AgentHost: agentHost, AllowClearData: autoYes, NoGrantOnClear: noGrantOnClear, Confirm: confirm,
+		AgentHost: agentHost, AllowClearData: autoYes, ExplicitYes: autoYes, NoGrantOnClear: noGrantOnClear, Confirm: confirm,
 	})
 }
 
