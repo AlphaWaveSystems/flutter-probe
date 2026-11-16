@@ -76,6 +76,7 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--dry-run` | Validate syntax without a device connection |
 | `--parallel` | Distribute tests across all connected devices |
 | `--shard 1/3` | Run 1/3 of test files (for CI matrix builds) |
+| `--shard-root <dir>` | Directory the shard keys are taken from. Give the same one in every shard job (see the [CI/CD guide](/ci-cd/github-actions/)) |
 | `--host <ip> --token <t>` | WiFi mode for physical devices |
 | `--agent-port 48700` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=48700` so simulators don't collide. A failed dial names the process holding the port. |
 | `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
