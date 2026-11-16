@@ -1,0 +1,6 @@
+# Needs the list build: flutter build apk --dart-define=PROBE_FIXTURE_LIST=true (see README).
+test "scroll moves the list"
+  restart the app
+  see "Offset 0.0"
+  scroll down on #fixture_list
+  see "Offset" matching "Offset [1-9]"

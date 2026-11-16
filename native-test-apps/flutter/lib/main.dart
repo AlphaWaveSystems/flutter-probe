@@ -25,9 +25,54 @@ class FixtureApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // PROBE_FIXTURE_LIST=true builds the list screen instead of the default surface (used by probe-tests/list/). The default
+    // surface stays the same 8-element surface as the Android and iOS fixtures.
+    const listScreen = bool.fromEnvironment('PROBE_FIXTURE_LIST', defaultValue: false);
     return MaterialApp(
       title: 'Probe Fixture (Flutter)',
-      home: const FixtureScreen(),
+      home: listScreen ? const FixtureListScreen() : const FixtureScreen(),
+    );
+  }
+}
+
+/// The list screen for the scroll checks: a full-height ListView with no other scrollable around it, and its offset in the app
+/// bar. Keys: fixture_list (the list) and fixture_row_N (its rows).
+class FixtureListScreen extends StatefulWidget {
+  const FixtureListScreen({super.key});
+
+  @override
+  State<FixtureListScreen> createState() => _FixtureListScreenState();
+}
+
+class _FixtureListScreenState extends State<FixtureListScreen> {
+  final _controller = ScrollController();
+  double _offset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() => setState(() => _offset = _controller.offset));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Offset ${_offset.toStringAsFixed(1)}')),
+      body: ListView.builder(
+        key: const ValueKey('fixture_list'),
+        controller: _controller,
+        itemCount: 200,
+        itemBuilder: (context, i) => SizedBox(
+          height: 56,
+          child: ListTile(key: ValueKey('fixture_row_$i'), title: Text('Row $i')),
+        ),
+      ),
     );
   }
 }
