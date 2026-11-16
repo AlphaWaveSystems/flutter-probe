@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FIX_DISCLAIMER, FixSession, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
+import { FIX_DISCLAIMER, FixSession, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
 
 const preview = (extra: Partial<FixPreview> = {}): FixPreview => ({ id: "id-1", destination: "qwen3-coder:30b, on this machine", hosted: false, needsConfirm: true, step: 'line 4 of "sign in": tap "Sign in"', text: "Sent to: x", ...extra });
 const answer: FixAnswer = { suggestion: 'tap "Sign in now"', rationale: "The label changed.", destination: "qwen3-coder:30b, on this machine", hosted: false };
@@ -161,5 +161,49 @@ describe("replacing the line", () => {
     for (const bad of [{ ...ok, text: "a\nb" }, { ...ok, text: "a\rb" }, { ...ok, text: "" }, { ...ok, line: 0 }, { ...ok, line: -1 }, { ...ok, line: 1.5 }]) {
       assert.equal(planReplace(bad, "f", "f").kind, "refuse");
     }
+  });
+});
+
+describe("re-running the failed test after a replacement", () => {
+  const target = { file: "tests/login.probe", line: 4, text: '  tap "Sign in now"' };
+  const ok = { openFile: "tests/login.probe", dirty: false, connected: true, running: false, lineText: '  tap "Sign in now"' };
+  it("is enabled only when saved, connected, idle, in the same file, with the replaced line as it was", () => {
+    assert.deepEqual(rerunGate(target, ok), { enabled: true, reason: "" });
+    assert.equal(rerunGate(target, { ...ok, dirty: true }).enabled, false);
+    assert.match(rerunGate(target, { ...ok, dirty: true }).reason, /Save the file first/);
+    assert.equal(rerunGate(target, { ...ok, connected: false }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, running: true }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, openFile: "tests/other.probe" }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, openFile: null }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, lineText: '  tap "Sign in now!"' }).enabled, false);
+    assert.match(rerunGate(target, { ...ok, lineText: '  tap "Sign in now!"' }).reason, /edited after it was replaced/);
+    assert.equal(rerunGate(target, { ...ok, lineText: null }).enabled, false);
+    assert.equal(rerunGate(null, ok).enabled, false);
+  });
+  it("names the reason in the order a person can act on it", () => {
+    // another file first, then an edited line, then a run in progress, then unsaved, then no device
+    assert.match(rerunGate(target, { ...ok, openFile: "x", dirty: true, connected: false }).reason, /Open the file/);
+    assert.match(rerunGate(target, { ...ok, lineText: "x", dirty: true }).reason, /edited after/);
+    assert.match(rerunGate(target, { ...ok, running: true, dirty: true }).reason, /in progress/);
+    assert.match(rerunGate(target, { ...ok, dirty: true, connected: false }).reason, /Save the file first/);
+    assert.match(rerunGate(target, { ...ok, connected: false }).reason, /Connect a device/);
+  });
+  it("says what the run found", () => {
+    assert.deepEqual(rerunVerdict([{ name: "sign in", passed: true, skipped: false }], false), { kind: "passed", text: "Passed: sign in", stale: false });
+    assert.equal(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: true, skipped: false }], false).text, "Passed: 2 tests");
+    const failed = rerunVerdict([{ name: "sign in", passed: false, skipped: false, error: 'no widget with text "Sign in now"' }], false);
+    assert.equal(failed.kind, "failed");
+    assert.equal(failed.text, 'Still failing: sign in: no widget with text "Sign in now"');
+    assert.equal(rerunVerdict([{ name: "x", passed: false, skipped: false }], false).text, "Still failing: x");
+    assert.equal(rerunVerdict([{ name: "x", passed: false, skipped: true }], false).kind, "skipped");
+    assert.equal(rerunVerdict([], false).kind, "none");
+    // a passed test next to a failed one is a failure
+    assert.equal(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: false, skipped: false, error: "e" }], false).kind, "failed");
+  });
+  it("bounds a long error and marks a verdict for a file that changed during the run", () => {
+    const long = rerunVerdict([{ name: "t", passed: false, skipped: false, error: "e".repeat(1000) }], false);
+    assert.ok(long.text.length < 340 && long.text.endsWith("…"));
+    assert.equal(rerunVerdict([{ name: "t", passed: true, skipped: false }], true).stale, true);
+    assert.equal(rerunVerdict([{ name: "t", passed: true, skipped: false }], false).stale, false);
   });
 });

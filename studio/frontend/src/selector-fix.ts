@@ -147,3 +147,74 @@ export function planReplace(check: ReplaceCheck, checkedText: string, currentTex
 }
 
 export const REPLACE_NOTE = "The line is replaced in the editor only. It is not saved and not run: Undo restores it.";
+
+// ---- Re-run the failed test, after a replacement ------------------------------------------------------------------------------------
+
+/** Where the replaced line is: the file and line Studio replaced, and what that line says now. The re-run is for this line only. */
+export interface RerunTarget {
+  file: string;
+  line: number;
+  text: string;
+}
+
+export interface RerunContext {
+  openFile: string | null;
+  dirty: boolean;
+  connected: boolean;
+  running: boolean;
+  /** The text of the target line in the editor now, or null when the file has no such line. */
+  lineText: string | null;
+}
+
+export interface RerunGate {
+  enabled: boolean;
+  reason: string; // why not, in a sentence; empty when enabled
+}
+
+/**
+ * Whether Re-run the failed test may be pressed. It never saves: the run reads the file on disk, so a file with unsaved changes is
+ * refused and the person saves it (Studio does not do that for them). It is for the replaced line only: another file, or a line that
+ * was edited since, is refused too, so a result is never shown for text that is not the replacement.
+ */
+export function rerunGate(t: RerunTarget | null, c: RerunContext): RerunGate {
+  const no = (reason: string): RerunGate => ({ enabled: false, reason });
+  if (!t) return no("");
+  if (c.openFile !== t.file) return no("Open the file that was changed to re-run its test.");
+  if (c.lineText !== t.text) return no(`Line ${t.line} was edited after it was replaced, so a re-run would not test the replacement.`);
+  if (c.running) return no("A run is in progress.");
+  if (c.dirty) return no("Save the file first: the run reads it from disk, and Studio does not save for you.");
+  if (!c.connected) return no("Connect a device to re-run the test.");
+  return { enabled: true, reason: "" };
+}
+
+export interface RerunResult {
+  name: string;
+  passed: boolean;
+  skipped: boolean;
+  error?: string;
+}
+
+export interface Verdict {
+  kind: "passed" | "failed" | "skipped" | "none";
+  text: string;
+  /** The file changed while the test ran: the result may not be for the replaced line. */
+  stale: boolean;
+}
+
+const VERDICT_ERROR_MAX = 300;
+
+/** What the card says about the re-run. Every string is set with textContent. */
+export function rerunVerdict(results: RerunResult[], changedDuringRun: boolean): Verdict {
+  const stale = changedDuringRun;
+  const failed = results.find((r) => !r.passed && !r.skipped);
+  if (results.length === 0) return { kind: "none", text: "The run reported no test.", stale };
+  if (failed) {
+    const err = (failed.error ?? "").trim();
+    const shown = err.length > VERDICT_ERROR_MAX ? err.slice(0, VERDICT_ERROR_MAX - 1) + "…" : err;
+    return { kind: "failed", text: shown ? `Still failing: ${failed.name}: ${shown}` : `Still failing: ${failed.name}`, stale };
+  }
+  if (results.every((r) => r.skipped)) return { kind: "skipped", text: "The test was skipped.", stale };
+  return { kind: "passed", text: results.length === 1 ? `Passed: ${results[0].name}` : `Passed: ${results.length} tests`, stale };
+}
+
+export const STALE_VERDICT_NOTE = "The file changed while the test ran, so this may not be the result of the replaced line.";
