@@ -188,7 +188,7 @@ var tools = []mcpTool{
 
 Supports the full ProbeScript syntax:
   Regular tests:   test "name" with tap, see, wait, swipe, type, scroll, etc.
-  Swiping:         swipe up on "Card" over 40 percent travels 40 percent of the card or screen instead of the default 50; the number is a whole number from 1 to 100 and ends the line.
+  Swiping:         swipe up on "Card" over 40 percent travels 40 percent of the card or screen instead of the default 50; the number is a whole number from 1 to 100 and ends the line. swipe right on "Menu" from 2 percent starts the swipe 2 percent in from the left edge of "Menu" (an edge swipe for a drawer); from comes after the target and before over, and needs a target.
   Scrolling:       scroll down until "Text" appears (or until #key_id appears) keeps
                      scrolling until the target is on screen — use it for rows below
                      the fold instead of counting plain "scroll down" steps. Note

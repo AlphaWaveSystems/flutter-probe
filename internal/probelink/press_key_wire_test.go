@@ -23,7 +23,7 @@ type keyAgent struct {
 }
 
 func (a keyAgent) reply(req Request) Response {
-	if req.Method == MethodDeviceAction {
+	if req.Method == MethodDeviceAction || req.Method == MethodSwipe {
 		select {
 		case a.actions <- req.Params:
 		default:

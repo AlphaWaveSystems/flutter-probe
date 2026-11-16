@@ -695,6 +695,45 @@ func TestParser_SwipeOverPercent(t *testing.T) {
 	}
 }
 
+// TestParser_SwipeFrom checks the start of a swipe: "from N percent" is a whole number from 1 to 100 that comes after a
+// target, before "over", and it is a parse error anywhere else. A swipe without it starts at the centre (StartPercent 0).
+func TestParser_SwipeFrom(t *testing.T) {
+	for _, tc := range []struct {
+		src       string
+		startPct  int
+		percent   int
+		direction parser.SwipeDirection
+	}{
+		{`swipe right on "Menu" from 2 percent`, 2, 0, parser.SwipeRight},
+		{`swipe up on "Card" from 80 percent`, 80, 0, parser.SwipeUp},
+		{`swipe left on #drawer from 100 percent`, 100, 0, parser.SwipeLeft},
+		{`swipe down on "Sheet" from 1 percent over 60 percent`, 1, 60, parser.SwipeDown},
+		{`swipe up on "Card"`, 0, 0, parser.SwipeUp},
+	} {
+		a := firstAction(t, mustParse(t, testBody(tc.src)).Tests[0].Body)
+		if a.Verb != parser.VerbSwipe || a.StartPercent != tc.startPct || a.Percent != tc.percent || a.Direction != tc.direction {
+			t.Errorf("%q: verb %q, start %d, percent %d, direction %q; want swipe, start %d, percent %d, direction %q",
+				tc.src, a.Verb, a.StartPercent, a.Percent, a.Direction, tc.startPct, tc.percent, tc.direction)
+		}
+	}
+	for _, src := range []string{
+		`swipe right from 2 percent`,
+		`swipe from 2 percent`,
+		`swipe right on "Menu" from 0 percent`,
+		`swipe right on "Menu" from 101 percent`,
+		`swipe right on "Menu" from 2.5 percent`,
+		`swipe right on "Menu" from 2`,
+		`swipe right on "Menu" from percent`,
+		`swipe right on "Menu" over 40 percent from 2 percent`,
+		`swipe right on "Menu" from 2 percent over 40 percent now`,
+		`swipe right on "Menu" from 2 percent now`,
+	} {
+		if _, err := parser.ParseFile(testBody(src)); err == nil {
+			t.Errorf("%q: want a parse error", src)
+		}
+	}
+}
+
 // TestParser_Scroll mirrors TestParser_Swipe — scroll's grammar was
 // previously untested even though it shares the same parse function shape
 // (direction + optional selector-scoping via "in"/"on").

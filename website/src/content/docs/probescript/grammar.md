@@ -532,7 +532,8 @@ double-tap-step  = "double tap" , selector , [ if-visible ] , [ optional-mod ] ;
 clear-step       = "clear" , selector , [ if-visible ] , [ optional-mod ] ;
 toggle-step      = "toggle" , selector ;
 drag-step        = "drag" , selector , fillers , selector ;
-swipe-step       = "swipe" , fillers , [ direction ] , fillers , [ target-selector ] , [ swipe-distance ] ;
+swipe-step       = "swipe" , fillers , [ direction ] , fillers , [ target-selector , [ swipe-start ] ] , [ swipe-distance ] ;
+swipe-start      = "from" , INT , "percent" ;          (* where the swipe starts, counted from the edge it starts at, a whole number from 1 to 100; only after a target-selector, and before swipe-distance; without it the swipe starts at the centre *)
 swipe-distance   = "over" , INT , "percent" ;          (* a whole number from 1 to 100, ending the line; without it the swipe travels 50 percent *)
 scroll-step      = "scroll" , fillers , [ direction ] , fillers , [ target-selector ] ,
                    [ "until" , fillers , target-selector , fillers , [ "appears" | "visible" | "present" ] ] ;
@@ -1383,6 +1384,8 @@ number as part of the name first and as an argument second. No match is a run-ti
 bound to parameter names by position into a flat variable map; there is no per-recipe scope.
 
 **Swipe distance.** The range (a whole number from 1 to 100) and the line end of `over N percent` are checked by the parser, which the EBNF cannot express; anything else after `over` is a parse error. The agent travels the distance from the element the swipe starts on, or from the screen, and runs 50 percent when the step leaves it out. The swipe starts at the centre of that element or screen, so above 50 percent the finger ends outside it: 50 percent ends at the edge and 100 percent ends one half-size past it. The travelled distance has not been measured on a device yet.
+
+**Swipe start.** `from N percent` (a whole number from 1 to 100) sets where a swipe starts, counted from the edge it starts at: the bottom for `swipe up`, the top for `swipe down`, the left for `swipe right` and the right for `swipe left`. It applies only to a swipe on a target (`swipe right on "Menu" from 2 percent`), and a bare swipe with `from` is a parse error. The parser checks the range and that `from` comes before `over` and ends the line after `over N percent`, which the EBNF cannot express. Without it the swipe starts at the centre of the target, as before. An agent that does not report the `swipe_from` capability in its handshake refuses the step, so an older probe_agent never swipes from the centre by mistake.
 
 **Silent leniency.** The parser prefers to accept and default over reporting an error. These are accepted
 without complaint and yield empty values: `use`, `recipe`, `test` or `composite` without a name; `if`

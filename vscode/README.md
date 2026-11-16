@@ -343,6 +343,7 @@ wait until "Element" appears
 wait 3 seconds
 swipe up / down / left / right
 swipe up over 40 percent
+swipe right on "Menu" from 2 percent
 press tab
 tap "Contact support" in webview
 type "hi" into css:"#message" in webview

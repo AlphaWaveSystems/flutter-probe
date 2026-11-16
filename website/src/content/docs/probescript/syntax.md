@@ -70,6 +70,7 @@ long press "Item"
 swipe left
 swipe up on "Card"
 swipe up on "Card" over 60 percent      # travel 60 percent of the card instead of the default 50
+swipe right on "Menu" from 2 percent    # start 2 percent in from the left edge of "Menu": an edge swipe for a drawer
 press backspace                         # delete the character before the caret in the focused field
 scroll down
 scroll up on "ListView"

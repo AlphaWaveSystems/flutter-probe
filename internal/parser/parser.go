@@ -705,6 +705,11 @@ func (p *Parser) parseActionType() (Step, error) {
 func (p *Parser) parseActionSwipe() (Step, error) {
 	line := p.peek().Line
 	p.advance() // swipe
+	// "from" starts a swipe's start point only after a target, so a swipe with no target cannot have it. It is checked before
+	// the fillers are skipped, since "from" is a filler where it is not a clause.
+	if p.peek().Type == TOKEN_FROM {
+		return nil, fmt.Errorf("line %d: swipe from needs a target before it, for example: swipe right on \"Menu\" from 2 percent", line)
+	}
 	p.skipFillers()
 	// A bare word where the direction goes is not one of the four: parseDirection runs the swipe down and leaves the word
 	// unread, so it parses as the next step. Record it here, without consuming it, so lint can say so.
@@ -717,11 +722,37 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		}
 	}
 	dir := p.parseDirection()
+	if p.peek().Type == TOKEN_FROM {
+		return nil, fmt.Errorf("line %d: swipe from needs a target before it, for example: swipe right on \"Menu\" from 2 percent", line)
+	}
 	p.skipFillers()
 	var sel *Selector
 	if p.peek().Type == TOKEN_STRING || p.peek().Type == TOKEN_ID {
 		s := p.parseSelector()
 		sel = &s
+	}
+	// "from N percent" sets where the swipe starts, counted from the edge it starts at (the bottom for up, the top for
+	// down, the right for left, the left for right). It is a whole number from 1 to 100, it needs a target before it, and
+	// it comes before "over": `swipe right on "Menu" from 2 percent over 40 percent`. Without it the swipe starts at the centre.
+	startPercent := 0
+	if p.peek().Type == TOKEN_FROM {
+		p.advance() // from
+		if p.peek().Type != TOKEN_INT {
+			return nil, fmt.Errorf("line %d: swipe from needs a whole percentage from 1 to 100, for example: swipe right on \"Menu\" from 2 percent", line)
+		}
+		lit := p.advance().Literal
+		n, err := strconv.Atoi(lit)
+		if err != nil || n < 1 || n > 100 {
+			return nil, fmt.Errorf("line %d: swipe from %s percent is out of range: use a whole percentage from 1 to 100", line, lit)
+		}
+		if !p.peekLiteral("percent") {
+			return nil, fmt.Errorf("line %d: swipe from %s needs the word percent after the number", line, lit)
+		}
+		p.advance() // percent
+		if t := p.peek().Type; t != TOKEN_OVER && t != TOKEN_NEWLINE && t != TOKEN_DEDENT && t != TOKEN_EOF {
+			return nil, fmt.Errorf("line %d: swipe from %d percent must be followed by over N percent or the end of the line; %q is not part of a swipe", line, n, p.peek().Literal)
+		}
+		startPercent = n
 	}
 	// "over N percent" sets how far the swipe travels, as a percent of the element or the screen. It is a whole number
 	// from 1 to 100, and it ends the line; without it the swipe travels 50 percent.
@@ -746,7 +777,7 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		percent = n
 	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, DirectionWord: dirWord, Line: line}, nil
+	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, StartPercent: startPercent, DirectionWord: dirWord, Line: line}, nil
 }
 
 func (p *Parser) parseActionScroll() (Step, error) {
