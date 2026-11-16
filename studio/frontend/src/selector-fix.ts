@@ -21,6 +21,7 @@ export interface FixAnswer {
   destination: string;
   hosted: boolean;
   changed?: boolean; // Studio removed personal text or a credential from the suggestion
+  id?: string; // names the suggestion for CheckReplaceLine; empty when there is no line to replace
 }
 
 export type FixOutcome = { kind: "cancelled" } | { kind: "stale" } | { kind: "answer"; answer: FixAnswer; step: string };
@@ -115,3 +116,34 @@ export function fixPreviewNote(hosted: boolean): string {
     "This is what Suggest a fix would send to the AI provider: the failed step, the last run and the open file, with credentials redacted. Nothing is sent until you press Send.";
   return hosted ? base + " This destination is not this machine, so you see this before every suggestion." : base + " You see this again when the destination changes.";
 }
+
+/** What Studio says about replacing the failed step's line (CheckReplaceLine). */
+export interface ReplaceCheck {
+  ok: boolean;
+  reason: string;
+  line: number;
+  text: string;
+}
+
+export type ReplacePlan = { kind: "apply"; line: number; text: string } | { kind: "refuse"; reason: string };
+
+/** Whether the card offers Replace the line at all: only for a suggestion with a place, and never for one that cleaning changed. */
+export function canOfferReplace(answer: FixAnswer): boolean {
+  return !!answer.id && !answer.changed;
+}
+
+/**
+ * What to do with Studio's answer. Studio decides (the file, the line, the text on it, one step of the same kind); the window applies
+ * the edit only when Studio said yes AND the editor still holds exactly the text Studio checked: a keystroke while the question was
+ * on its way means the answer is about a file that is gone.
+ */
+export function planReplace(check: ReplaceCheck, checkedText: string, currentText: string): ReplacePlan {
+  if (!check.ok) return { kind: "refuse", reason: check.reason || "Studio refused the replacement" };
+  if (checkedText !== currentText) return { kind: "refuse", reason: "the file changed while Studio was checking it: press Replace the line again" };
+  if (!Number.isInteger(check.line) || check.line < 1 || check.text === "" || /[\r\n]/.test(check.text)) {
+    return { kind: "refuse", reason: "Studio's answer was not one line" };
+  }
+  return { kind: "apply", line: check.line, text: check.text };
+}
+
+export const REPLACE_NOTE = "The line is replaced in the editor only. It is not saved and not run: Undo restores it.";

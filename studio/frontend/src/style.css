@@ -509,6 +509,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .explain-row { margin: 6px 0; }
 .explain-row-label { font-weight: 600; overflow-wrap: anywhere; }
 .explain-row-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.explain-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .explain-row-changed { border-left: 3px solid var(--warn, #d9a400); padding-left: 8px; }
 .explain-row-changed .explain-row-label { color: var(--warn, #d9a400); }
 .explain-row-stopped .explain-row-text, .explain-row-omitted .explain-row-text { color: var(--fg-muted); }

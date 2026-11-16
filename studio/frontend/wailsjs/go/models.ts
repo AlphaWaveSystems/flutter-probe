@@ -583,6 +583,24 @@ export namespace main {
 		}
 	}
 	
+	export class ReplaceLineCheck {
+	    ok: boolean;
+	    reason: string;
+	    line: number;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReplaceLineCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.reason = source["reason"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	    }
+	}
 	export class RunPlanTest {
 	    name: string;
 	    line: number;
@@ -810,6 +828,7 @@ export namespace main {
 	    }
 	}
 	export class SelectorFix {
+	    id: string;
 	    suggestion: string;
 	    rationale: string;
 	    inputTokens: number;
@@ -825,6 +844,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.suggestion = source["suggestion"];
 	        this.rationale = source["rationale"];
 	        this.inputTokens = source["inputTokens"];

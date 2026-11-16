@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FIX_DISCLAIMER, FixSession, fixCardModel, fixPreviewNote, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
+import { FIX_DISCLAIMER, FixSession, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
 
 const preview = (extra: Partial<FixPreview> = {}): FixPreview => ({ id: "id-1", destination: "qwen3-coder:30b, on this machine", hosted: false, needsConfirm: true, step: 'line 4 of "sign in": tap "Sign in"', text: "Sent to: x", ...extra });
 const answer: FixAnswer = { suggestion: 'tap "Sign in now"', rationale: "The label changed.", destination: "qwen3-coder:30b, on this machine", hosted: false };
@@ -138,6 +138,28 @@ describe("a suggestion that Studio changed", () => {
     assert.match(changed.rows[1].text, /removed from this suggestion or its reason/);
     for (const a of [answer, { ...answer, changed: false }]) {
       assert.deepEqual(fixCardModel(a, "step").rows.map((r) => r.kind), ["step", "line", "why"]);
+    }
+  });
+});
+
+describe("replacing the line", () => {
+  const ok = { ok: true, reason: "", line: 4, text: '  tap "Sign in now"' };
+  it("is offered only for a suggestion with a place that cleaning did not change", () => {
+    assert.equal(canOfferReplace({ ...answer, id: "abc" }), true);
+    assert.equal(canOfferReplace({ ...answer, id: "" }), false);
+    assert.equal(canOfferReplace({ ...answer }), false);
+    assert.equal(canOfferReplace({ ...answer, id: "abc", changed: true }), false);
+  });
+  it("applies Studio's yes only when the editor still holds the text Studio checked", () => {
+    assert.deepEqual(planReplace(ok, "file", "file"), { kind: "apply", line: 4, text: '  tap "Sign in now"' });
+    const moved = planReplace(ok, "file", "file!");
+    assert.equal(moved.kind, "refuse");
+  });
+  it("refuses Studio's no, and an answer that is not one line", () => {
+    assert.deepEqual(planReplace({ ok: false, reason: "line 4 is not what it was", line: 0, text: "" }, "f", "f"), { kind: "refuse", reason: "line 4 is not what it was" });
+    assert.equal(planReplace({ ok: false, reason: "", line: 0, text: "" }, "f", "f").kind, "refuse");
+    for (const bad of [{ ...ok, text: "a\nb" }, { ...ok, text: "a\rb" }, { ...ok, text: "" }, { ...ok, line: 0 }, { ...ok, line: -1 }, { ...ok, line: 1.5 }]) {
+      assert.equal(planReplace(bad, "f", "f").kind, "refuse");
     }
   });
 });

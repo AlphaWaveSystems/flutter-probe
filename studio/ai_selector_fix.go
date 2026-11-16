@@ -60,11 +60,16 @@ type fixRequest struct {
 type fixStored struct {
 	req     fixRequest
 	created time.Time
+	// Where the failed step is, as the preview read it from the file the window held: the run's file and line, and the text of that line.
+	// A Replace the line is offered only for this line, and only while the file still says the same there.
+	file, original string
+	line           int
 }
 
 // selectorFixState is what a session remembers about selector fixes. Nothing is written to disk.
 type selectorFixState struct {
 	mu        sync.Mutex
+	results   map[string]fixResult // the suggestions a Replace the line can use, by id
 	previews  map[string]fixStored
 	confirmed map[string]bool // a local destination, by what identifies it, confirmed this session
 	busy      bool
@@ -206,7 +211,8 @@ func (a *App) PreviewSelectorFix(fileContent string) (SelectorFixPreview, error)
 		delete(f.previews, oldest)
 	}
 	id := newFixID()
-	f.previews[id] = fixStored{req: req, created: now}
+	file, line, original := failedStepPlace(a, fileContent)
+	f.previews[id] = fixStored{req: req, created: now, file: file, line: line, original: original}
 	return SelectorFixPreview{
 		ID: id, Destination: req.label, Hosted: req.hosted, Step: req.step, Text: b.String(),
 		NeedsConfirm: req.hosted || !f.confirmed[req.dest],
@@ -272,10 +278,12 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 		return SelectorFix{}, fmt.Errorf("the reply did not hold exactly one ProbeScript line, so there is no suggestion")
 	}
 	cleanLine, cleanWhy := fixAnswer(line, s.APIKey, fixMaxLine), fixAnswer(rationale, s.APIKey, maxRationaleBytes)
+	changed := resp.Changed || fixChanged(line, cleanLine)
 	return SelectorFix{
+		ID:           a.rememberFix(p, cleanLine, changed),
 		Suggestion:   cleanLine,
 		Rationale:    cleanWhy,
-		Changed:      resp.Changed || fixChanged(line, cleanLine),
+		Changed:      changed,
 		InputTokens:  resp.InputTokens,
 		OutputTokens: resp.OutputTokens,
 		CostUSD:      resp.CostUSD,
