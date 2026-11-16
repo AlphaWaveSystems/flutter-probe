@@ -24,10 +24,11 @@ import (
 
 // fakeAgent is a real WebSocket agent that answers every call with an empty result and remembers the methods it was asked.
 type fakeAgent struct {
-	mu      sync.Mutex
-	methods []string
-	port    int
-	srv     *http.Server
+	pingExtra map[string]any // extra fields of the probe.ping result, when set
+	mu        sync.Mutex
+	methods   []string
+	port      int
+	srv       *http.Server
 }
 
 func newFakeAgent(t *testing.T) *fakeAgent {
@@ -53,7 +54,18 @@ func newFakeAgent(t *testing.T) *fakeAgent {
 			f.mu.Lock()
 			f.methods = append(f.methods, req.Method)
 			f.mu.Unlock()
-			out, _ := json.Marshal(probelink.Response{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{}`)})
+			result := json.RawMessage(`{}`)
+			f.mu.Lock()
+			extra := f.pingExtra
+			f.mu.Unlock()
+			if req.Method == "probe.ping" && extra != nil { // an agent that reports its build facts
+				body := map[string]any{"ok": true}
+				for k, v := range extra {
+					body[k] = v
+				}
+				result, _ = json.Marshal(body)
+			}
+			out, _ := json.Marshal(probelink.Response{JSONRPC: "2.0", ID: req.ID, Result: result})
 			_ = conn.WriteMessage(websocket.TextMessage, out)
 		}
 	})

@@ -218,3 +218,35 @@ func TestCheckHandshakeVersion_AgentPredatingTheFieldReportsNoVersion(t *testing
 		t.Errorf("CheckHandshakeVersion = (%q, %v), want an empty agent version and no error", agent, err)
 	}
 }
+
+// CheckHandshakeResult returns the whole handshake result, and CheckHandshakeVersion is it with only the agent version.
+func TestCheckHandshakeResult_ReturnsTheWholeResult(t *testing.T) {
+	var discard string
+	srv := pingServer(t, false, "0.25.1", &discard)
+	defer srv.Close()
+	c := &HTTPClient{baseURL: srv.URL + "/probe/rpc", token: "t", httpClient: srv.Client()}
+
+	res, warning, err := CheckHandshakeResult(context.Background(), c, "0.25.1")
+	if err != nil || warning != "" {
+		t.Fatalf("CheckHandshakeResult = (%+v, %q, %v)", res, warning, err)
+	}
+	if res.AgentVersion != "0.25.1" {
+		t.Errorf("the result lacks the agent version: %+v", res)
+	}
+	agent, _, _ := CheckHandshakeVersion(context.Background(), c, "0.25.1")
+	if agent != res.AgentVersion {
+		t.Errorf("CheckHandshakeVersion = %q, want %q", agent, res.AgentVersion)
+	}
+}
+
+func TestCheckHandshakeResult_AnIncompatibleMajorIsAnErrorAndNoResult(t *testing.T) {
+	var discard string
+	srv := pingServer(t, false, "1.0.0", &discard)
+	defer srv.Close()
+	c := &HTTPClient{baseURL: srv.URL + "/probe/rpc", token: "t", httpClient: srv.Client()}
+
+	res, _, err := CheckHandshakeResult(context.Background(), c, "0.25.1")
+	if err == nil || res.AgentVersion != "" || res.FlutterVersion != "" {
+		t.Errorf("CheckHandshakeResult = (%+v, %v), want an error and the zero result", res, err)
+	}
+}
