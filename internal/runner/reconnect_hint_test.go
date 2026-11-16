@@ -169,7 +169,7 @@ func TestAFailingKillThroughRunStepLeavesTheAppUnmarked(t *testing.T) {
 
 // Device text cannot reach the hint: a forward whose serial is not a plain serial is not blamed, so nothing from it is in the message or the command it suggests.
 func TestTheHintNeverCarriesDeviceText(t *testing.T) {
-	for _, serial := range []string{"emu\x1b[2Jlator", "a;rm", "$(id)", "a‮b"} {
+	for _, serial := range []string{"emu\x1b[2Jlator", "a;rm", "$(id)", "a\u202eb"} {
 		h := hintExecutor(liveAdb(serial+" tcp:48792 tcp:48792\n"), true).reconnectHint(context.Background())
 		if h != "" {
 			t.Errorf("hostile serial %q reached the hint: %q", serial, h)
