@@ -256,11 +256,11 @@ func TestAnUnchangedSaveNeverBlocksTheRest(t *testing.T) {
 				t.Fatal(err)
 			}
 			app := appIn(dir)
-			if err := app.SaveAISettings(dir, form); err != nil {
+			if err := inWS(app, dir).SaveAISettings(dir, form); err != nil {
 				t.Fatalf("an unchanged AI form was refused: %v", err)
 			}
 			// The rest of Settings saves, and the ai block means the same afterwards.
-			if err := app.SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48777}); err != nil {
+			if err := inWS(app, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48777}); err != nil {
 				t.Fatal(err)
 			}
 			after, _ := os.ReadFile(filepath.Join(dir, "probe.yaml"))

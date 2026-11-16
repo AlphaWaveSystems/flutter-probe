@@ -10,21 +10,29 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // WorkspaceSettings is the JSON shape the Studio settings form binds to.
-// It exposes a deliberately small subset of probe.yaml — the four knobs
-// most users actually touch, and the two switches that let the AI chat send
+// It exposes a deliberately small subset of probe.yaml — the knobs
+// most users actually touch (the three that decide how a run behaves among them), and the two switches that let the AI chat send
 // the last run and the screen. Other probe.yaml fields are preserved on save
 // (loaded as raw map, only the managed keys are overwritten), so a power user
 // with complex config doesn't lose anything by using the UI.
 type WorkspaceSettings struct {
 	AgentPort           int    `json:"agentPort"`           // probe.yaml: agent.port
 	DefaultsTimeout     string `json:"defaultsTimeout"`     // probe.yaml: defaults.timeout (Go duration string, e.g. "30s")
+	TestTimeout         string `json:"testTimeout"`         // probe.yaml: defaults.test_timeout (wall-clock limit per test attempt; "" = off)
+	RetryFailedTests    int    `json:"retryFailedTests"`    // probe.yaml: defaults.retry_failed_tests (extra attempts of a failing test; 0 = off)
+	ImplicitWait        string `json:"implicitWait"`        // probe.yaml: defaults.implicit_wait (how long tap/type/see wait for a target; "" = off)
 	IOSDeviceID         string `json:"iosDeviceId"`         // probe.yaml: device.ios_device_id
 	AndroidDeviceID     string `json:"androidDeviceId"`     // probe.yaml: device.android_device_id
 	AIContextRunResults bool   `json:"aiContextRunResults"` // probe.yaml: studio.ai_context.run_results (off unless set)
 	AIContextWidgetTree bool   `json:"aiContextWidgetTree"` // probe.yaml: studio.ai_context.widget_tree (off unless set)
+	// Base is the form as it was loaded. Save writes only the fields that differ from it, and refuses when probe.yaml has changed on disk
+	// since then for any of them (an editor, git or another window may have written it), so a field the person did not touch is never put
+	// back to an old value.
+	Base *WorkspaceSettings `json:"base,omitempty"`
 }
 
 // LoadWorkspaceSettings reads probe.yaml from the workspace and returns
@@ -45,6 +53,9 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 	return WorkspaceSettings{
 		AgentPort:           cfg.Agent.Port,
 		DefaultsTimeout:     cfg.Defaults.Timeout.String(),
+		TestTimeout:         durationText(cfg.Defaults.TestTimeout),
+		RetryFailedTests:    cfg.Defaults.RetryFailedTests,
+		ImplicitWait:        durationText(cfg.Defaults.ImplicitWait),
 		IOSDeviceID:         cfg.Device.IOSDeviceID,
 		AndroidDeviceID:     cfg.Device.AndroidDeviceID,
 		AIContextRunResults: ai.RunResults,
@@ -52,54 +63,145 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 	}, nil
 }
 
-// SaveWorkspaceSettings writes the managed fields back to probe.yaml.
-// Reads the existing file as a raw map so other keys (recipes_folder,
-// cloud, plugins, etc.) survive untouched. Creates the file if missing.
+// SaveWorkspaceSettings writes the managed fields back to probe.yaml, and only the ones that changed: a field equal to what the form was
+// loaded with (s.Base) leaves its line alone. The edit is made on the file's own text (probe_yaml_edit.go), so comments, blank lines, the order
+// of the keys and every unmanaged key stay exactly as they were, the result is checked against the original before anything is written, and the
+// file is replaced atomically with its mode. A probe.yaml that does not parse is refused and never overwritten. If probe.yaml changed on disk
+// since the form was loaded, for a field being written, Save refuses and asks for a reload. Creates the file if missing. Everything is validated
+// here, in Go, before anything is written.
 func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace path is required")
 	}
-
-	// Validate the duration string round-trips before touching disk.
-	if s.DefaultsTimeout != "" {
+	if err := a.requireOpenWorkspace(workspace); err != nil {
+		return err
+	}
+	probeYAMLMu.Lock()
+	defer probeYAMLMu.Unlock()
+	y, err := openProbeYAML(workspace)
+	if err != nil {
+		return err
+	}
+	// What the file says now, as the form shows it. A probe.yaml the engine cannot read leaves nothing to compare with.
+	var disk WorkspaceSettings
+	if cur, err := a.LoadWorkspaceSettings(workspace); err == nil {
+		disk = cur
+	}
+	base := disk
+	if s.Base != nil {
+		base = *s.Base
+	}
+	// Validate before touching the file: only a value that is being changed is held to the rules, so a hand-written value that is outside
+	// them never blocks the save of another field.
+	if s.DefaultsTimeout != base.DefaultsTimeout && s.DefaultsTimeout != "" {
 		if _, err := time.ParseDuration(s.DefaultsTimeout); err != nil {
 			return fmt.Errorf("defaultsTimeout %q is not a valid Go duration: %w", s.DefaultsTimeout, err)
 		}
 	}
-	if s.AgentPort < 0 || s.AgentPort > 65535 {
+	if s.AgentPort != base.AgentPort && (s.AgentPort < 0 || s.AgentPort > 65535) {
 		return fmt.Errorf("agentPort %d is outside the valid TCP port range", s.AgentPort)
 	}
-
-	path := filepath.Join(workspace, "probe.yaml")
-	raw := map[string]any{}
-	existing, err := os.ReadFile(path)
-	if err == nil {
-		if err := yaml.Unmarshal(existing, &raw); err != nil {
-			return fmt.Errorf("parsing existing probe.yaml: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("reading probe.yaml: %w", err)
-	}
-
-	// Mutate only the keys we manage; leave the rest of the user's YAML alone.
-	setNestedString(raw, "agent", "port", "")           // ensure parent map exists
-	setNestedString(raw, "device", "ios_device_id", "") // ensure parent map exists
-	setNestedString(raw, "defaults", "timeout", "")     // ensure parent map exists
-
-	mergeKey(raw, "agent", "port", s.AgentPort)
-	mergeKey(raw, "defaults", "timeout", s.DefaultsTimeout)
-	mergeKey(raw, "device", "ios_device_id", s.IOSDeviceID)
-	mergeKey(raw, "device", "android_device_id", s.AndroidDeviceID)
-	if err := setAIContextFlags(raw, s); err != nil {
+	if err := validateRunKnobs(s, base); err != nil {
 		return err
 	}
-
-	out, err := yaml.Marshal(raw)
-	if err != nil {
-		return fmt.Errorf("encoding probe.yaml: %w", err)
+	type edit struct {
+		name    string
+		changed bool
+		onDisk  bool // the file still has what the form was loaded with
+		value   any
+		path    []string
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return fmt.Errorf("writing probe.yaml: %w", err)
+	for _, e := range []edit{
+		{"the agent port", s.AgentPort != base.AgentPort, disk.AgentPort == base.AgentPort, s.AgentPort, []string{"agent", "port"}},
+		{"the default step timeout", s.DefaultsTimeout != base.DefaultsTimeout, disk.DefaultsTimeout == base.DefaultsTimeout, strings.TrimSpace(s.DefaultsTimeout), []string{"defaults", "timeout"}},
+		{"the test time limit", s.TestTimeout != base.TestTimeout, disk.TestTimeout == base.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
+		{"the retries", s.RetryFailedTests != base.RetryFailedTests, disk.RetryFailedTests == base.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
+		{"the wait for a target", s.ImplicitWait != base.ImplicitWait, disk.ImplicitWait == base.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{"the iOS device", s.IOSDeviceID != base.IOSDeviceID, disk.IOSDeviceID == base.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
+		{"the Android device", s.AndroidDeviceID != base.AndroidDeviceID, disk.AndroidDeviceID == base.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
+		{"the AI run results switch", s.AIContextRunResults != base.AIContextRunResults, disk.AIContextRunResults == base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
+		{"the AI widget tree switch", s.AIContextWidgetTree != base.AIContextWidgetTree, disk.AIContextWidgetTree == base.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
+	} {
+		if e.changed && !e.onDisk {
+			return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", e.name)
+		}
+	}
+	y.check = func(text string) error {
+		var cfg config.Config
+		if err := yaml.Unmarshal([]byte(text), &cfg); err != nil {
+			return fmt.Errorf("the edited probe.yaml would not load (%v), so nothing was written", err)
+		}
+		return nil
+	}
+	for _, e := range []struct {
+		changed bool
+		value   any
+		path    []string
+	}{
+		{s.AgentPort != base.AgentPort, s.AgentPort, []string{"agent", "port"}},
+		{s.DefaultsTimeout != base.DefaultsTimeout, strings.TrimSpace(s.DefaultsTimeout), []string{"defaults", "timeout"}},
+		{s.TestTimeout != base.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
+		{s.RetryFailedTests != base.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
+		{s.ImplicitWait != base.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{s.IOSDeviceID != base.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
+		{s.AndroidDeviceID != base.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
+		{s.AIContextRunResults != base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
+		{s.AIContextWidgetTree != base.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
+	} {
+		if !e.changed {
+			continue
+		}
+		if isZero(e.value) { // a cleared field leaves probe.yaml: the file lists only what the person set
+			err = y.remove(e.path...)
+		} else {
+			err = y.set(e.value, e.path...)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return y.save()
+}
+
+// The largest values Studio's form accepts for the run knobs. The CLI takes any; a typo such as 300 for 3 attempts, or "90m" for "90s", would
+// make a run that never ends look like a hang, so the form refuses what is surely a slip. A value outside them can still be set in probe.yaml.
+const (
+	maxRetryFailedTests = 10
+	maxImplicitWait     = 5 * time.Minute
+)
+
+// durationText is a duration as probe.yaml and the form show it: "" for zero (off).
+func durationText(d time.Duration) string {
+	if d == 0 {
+		return ""
+	}
+	return d.String()
+}
+
+// validateRunKnobs checks test_timeout, retry_failed_tests and implicit_wait with the rules the CLI applies (runner.ValidateTestTimeout for the
+// limit), plus the upper bounds above, for a value that differs from current (the form as loaded). A value that was already in probe.yaml is
+// not checked, so one outside the rules never blocks the save of another field. It refuses before anything is written.
+func validateRunKnobs(s, current WorkspaceSettings) error {
+	if strings.TrimSpace(s.TestTimeout) != strings.TrimSpace(current.TestTimeout) && strings.TrimSpace(s.TestTimeout) != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(s.TestTimeout))
+		if err != nil {
+			return fmt.Errorf("testTimeout %q is not a valid duration (for example 90s or 2m): %w", s.TestTimeout, err)
+		}
+		if err := runner.ValidateTestTimeout(d); err != nil {
+			return err
+		}
+	}
+	if s.RetryFailedTests != current.RetryFailedTests && (s.RetryFailedTests < 0 || s.RetryFailedTests > maxRetryFailedTests) {
+		return fmt.Errorf("retryFailedTests %d is outside 0 to %d (0 = off)", s.RetryFailedTests, maxRetryFailedTests)
+	}
+	if strings.TrimSpace(s.ImplicitWait) != strings.TrimSpace(current.ImplicitWait) && strings.TrimSpace(s.ImplicitWait) != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(s.ImplicitWait))
+		if err != nil {
+			return fmt.Errorf("implicitWait %q is not a valid duration (for example 2s): %w", s.ImplicitWait, err)
+		}
+		if d < 0 || d > maxImplicitWait {
+			return fmt.Errorf("implicitWait %s is outside 0 to %s (0 = off)", d, maxImplicitWait)
+		}
 	}
 	return nil
 }
@@ -144,87 +246,6 @@ func readAIContext(workspace string) (aiContextSettings, error) {
 	}, nil
 }
 
-// setAIContextFlags writes the two switches under studio.ai_context. A switch that is off is removed, as mergeKey does for
-// the other managed keys, and maps left empty are removed with it. A studio or ai_context key that is not a map is refused
-// rather than overwritten, because that would discard the user's own value.
-func setAIContextFlags(raw map[string]any, s WorkspaceSettings) error {
-	studio, err := mapAt(raw, "studio")
-	if err != nil {
-		return err
-	}
-	ai, err := mapAt(studio, "ai_context")
-	if err != nil {
-		return err
-	}
-	setSwitch(ai, "run_results", s.AIContextRunResults)
-	setSwitch(ai, "widget_tree", s.AIContextWidgetTree)
-	if len(ai) == 0 {
-		delete(studio, "ai_context")
-	}
-	if len(studio) == 0 {
-		delete(raw, "studio")
-	}
-	return nil
-}
-
-// mapAt returns the map stored under key, creating it when the key is absent. A value that is not a map is an error.
-func mapAt(m map[string]any, key string) (map[string]any, error) {
-	v, ok := m[key]
-	if !ok {
-		created := map[string]any{}
-		m[key] = created
-		return created, nil
-	}
-	if inner, isMap := v.(map[string]any); isMap {
-		return inner, nil
-	}
-	return nil, fmt.Errorf("probe.yaml has a %q key that is not a map; fix it by hand before saving settings that use it", key)
-}
-
-func setSwitch(m map[string]any, key string, on bool) {
-	if on {
-		m[key] = true
-		return
-	}
-	delete(m, key)
-}
-
-// mergeKey writes value at raw[parent][key]. If value is the zero value
-// for its type, the key is removed instead — preserving the convention
-// that probe.yaml only lists fields the user has explicitly set.
-func mergeKey(raw map[string]any, parent, key string, value any) {
-	parentMap := ensureMap(raw, parent)
-	if isZero(value) {
-		delete(parentMap, key)
-		// Drop the empty parent map too so we don't litter probe.yaml with
-		// `agent: {}` when the user clears every field under it.
-		if len(parentMap) == 0 {
-			delete(raw, parent)
-		}
-		return
-	}
-	parentMap[key] = value
-}
-
-func ensureMap(raw map[string]any, key string) map[string]any {
-	if existing, ok := raw[key].(map[string]any); ok {
-		return existing
-	}
-	// yaml.v3 Unmarshal produces map[string]interface{} for object values,
-	// but Marshal accepts both shapes. Coerce to keep the writeback path
-	// consistent.
-	m := map[string]any{}
-	raw[key] = m
-	return m
-}
-
-// setNestedString is a no-op nudge that ensures the parent map exists
-// without overriding any value the user already set there. Useful as
-// a defensive prelude before mergeKey when we're about to delete keys.
-func setNestedString(raw map[string]any, parent, _, _ string) {
-	ensureMap(raw, parent)
-}
-
 func isZero(v any) bool {
 	switch x := v.(type) {
 	case string:
@@ -235,4 +256,27 @@ func isZero(v any) bool {
 		return !x
 	}
 	return v == nil
+}
+
+// requireOpenWorkspace refuses a save for any folder but the workspace that is open in Studio: the bound methods that write probe.yaml take the
+// workspace as a string from the window, and a crafted call must not be able to write <any folder>/probe.yaml. Both paths are cleaned and
+// resolved through links before they are compared.
+func (a *App) requireOpenWorkspace(workspace string) error {
+	a.mu.Lock()
+	open := a.workspace
+	a.mu.Unlock()
+	if open == "" {
+		return fmt.Errorf("open a workspace first: settings are saved to the probe.yaml of the workspace that is open")
+	}
+	same := func(p string) string {
+		p = filepath.Clean(p)
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return real
+		}
+		return p
+	}
+	if same(open) != same(workspace) {
+		return fmt.Errorf("settings are saved only to the workspace that is open in Studio")
+	}
+	return nil
 }
