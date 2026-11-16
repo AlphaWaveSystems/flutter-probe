@@ -1,0 +1,4 @@
+# A step that takes long on purpose: it waits for a text that never appears (until its step timeout), so the Studio run shows how long it has waited.
+test "a step that waits"
+  open the app
+  wait until "This text never appears" appears

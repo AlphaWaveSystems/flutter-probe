@@ -41,6 +41,18 @@ let inspectorEl: HTMLElement | null = null;
 let framesInWindow = 0;
 let windowStartMs = 0;
 let connected = false;
+let noSignal = false; // the live view's frames have failed since the last good one
+
+/** True while the live view gets no frames from the device (the label says "no signal"). */
+export function deviceHasNoSignal(): boolean {
+  return noSignal;
+}
+
+function setNoSignal(lost: boolean): void {
+  if (noSignal === lost) return;
+  noSignal = lost;
+  document.dispatchEvent(new CustomEvent("studio:signal", { detail: { lost } }));
+}
 
 export function initDeviceStream(): void {
   viewEl = document.getElementById("device-view");
@@ -50,12 +62,14 @@ export function initDeviceStream(): void {
 
   EventsOn("device:frame", (frame: FrameEvent) => {
     if (!connected) return; // ignore stragglers after disconnect
+    setNoSignal(false);
     paint(frame.screenshot);
     updateInspector(frame.widgetTree);
     tickFps(frame.frameMs);
   });
 
   EventsOn("device:stream-error", (msg: string) => {
+    setNoSignal(true);
     if (fpsLabel) fpsLabel.textContent = "no signal";
     console.warn("stream error:", msg);
   });
