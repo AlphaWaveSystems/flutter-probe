@@ -119,4 +119,60 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: TextField(key: const ValueKey('show'), controller: shown))));
     expect((await _call(tester, ex, ProbeMethods.see, {'selector': _text('visible-from-the-start')}))['error'], isNull);
   });
+
+  testWidgets('a container selector (in "<container>") does not find the field by its value, nor use the value as the container', (tester) async {
+    final pw = TextEditingController(text: _secret);
+    addTearDown(pw.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Card(
+          child: Column(children: [
+            const Text('Login card'),
+            TextField(key: const ValueKey('pw'), controller: pw, obscureText: true),
+          ]),
+        ),
+      ),
+    ));
+    final inside = await _call(tester, ex, ProbeMethods.see, {'selector': {'kind': 'positional', 'text': _secret, 'container': 'Login card'}});
+    expect(inside['error'], isNotNull, reason: 'the value is not found inside its card');
+    final asContainer = await _call(tester, ex, ProbeMethods.see, {'selector': {'kind': 'positional', 'text': 'Login', 'container': _secret}});
+    expect(asContainer['error'], isNotNull, reason: 'the value does not name a container');
+    final self = await _call(tester, ex, ProbeMethods.see, {'selector': {'kind': 'positional', 'text': _secret, 'container': _secret}});
+    expect(self['error'], isNotNull, reason: 'the field is not its own container either');
+    final selfPrefix = await _call(tester, ex, ProbeMethods.see, {'selector': {'kind': 'positional', 'text': 'zq-', 'container': 'zq-'}});
+    expect(selfPrefix['error'], isNotNull, reason: 'nor by a prefix');
+    final prefix = await _call(tester, ex, ProbeMethods.see, {'selector': {'kind': 'positional', 'text': 'zq-', 'container': 'Login card'}});
+    expect(prefix['error'], isNotNull, reason: 'nor by a prefix');
+    // what is in the card and is not the value is still found
+    expect((await _call(tester, ex, ProbeMethods.see, {'selector': {'kind': 'positional', 'text': 'Login card', 'container': 'Login card'}}))['error'], isNull);
+  });
+
+  testWidgets('an unkeyed field seen obscured stays secret when the app then shows the password (same controller)', (tester) async {
+    final pw = TextEditingController(text: _secret);
+    addTearDown(pw.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Column(children: [const Text('Hello'), TextField(controller: pw, obscureText: true)]))));
+    await _call(tester, ex, ProbeMethods.see, {'selector': _text('Hello')}); // a text search visits the field and sees it obscured
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Column(children: [const Text('Hello'), TextField(controller: pw)]))));
+    await expectNoSelectorFinds(tester, _secret);
+  });
+
+  testWidgets('a TextFormField with obscureText is not found by its value either', (tester) async {
+    final pw = TextEditingController(text: _secret);
+    addTearDown(pw.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Form(child: TextFormField(key: const ValueKey('formpw'), controller: pw, obscureText: true)))));
+    await expectNoSelectorFinds(tester, _secret);
+    await expectNoSelectorFinds(tester, 'zq-');
+  });
+
+  testWidgets('the hint line is exactly one fixed sentence: nothing of the value, the screen or the query is added by it', (tester) async {
+    final pw = TextEditingController(text: _secret);
+    addTearDown(pw.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Column(children: [const Text('Hello'), TextField(key: const ValueKey('pw'), controller: pw, obscureText: true)]))));
+    final tap = jsonEncode((await _call(tester, ex, ProbeMethods.tap, {'selector': _text(_secret)}))['error']);
+    expect(RegExp(RegExp.escape(_sentence)).allMatches(tap).length, 1, reason: 'said once');
+    final withoutAsked = tap.replaceAll(_secret, '<asked>').replaceAll(_sentence, '<sentence>');
+    expect(withoutAsked, isNot(contains('zq')), reason: 'no part of the value is added by the hint');
+    // the visible texts of the screen are listed, the obscured field's value is not among them
+    expect(tap, contains('Hello'));
+  });
 }

@@ -61,6 +61,19 @@ see "Terms" is checked             # checkbox state
 see "Price" contains "$9.99"       # partial text match
 ```
 
+### Password fields
+
+The value of an obscured (password) field is never matched: `see "secret"`, a prefix of it, `wait until "secret" appears` and `tap "secret"` do not find the field, so a test cannot learn the value by asking. Find the field by its id, label or hint, and assert what the screen shows about it:
+
+```
+type "secret" into #password
+see "Password length: 6"          # a Text the app shows about the field
+see #password                      # the field is on screen
+don't see "secret"                 # the value is not searchable
+```
+
+A field stays secret once it has been seen obscured, also after the app shows its text, so a suite that taps "show password" and then asserts the value fails. The value is still readable through `run_dart`, screenshots and the app's own logs. `see #password is filled` and `is empty` are planned.
+
 ## Gestures
 
 ```

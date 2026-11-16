@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "f2305596004878c0d94c5868163b1d3315a04e40c8243dd149092e511ef4c342";
+export const SOURCE_SHA256 = "7a437f34c821ce537e393573d989fc8cc02383ce68a5cba8bad9641a44d48af4";
 
 export const COMMANDS = [
   {
@@ -182,7 +182,7 @@ export const COMMANDS = [
   {
     "command": "see",
     "syntax": "see \"Text\"",
-    "description": "Assert that text is visible on screen. A text selector matches substrings; use `see matching` for an exact count or zero-state check",
+    "description": "Assert that text is visible on screen. A text selector matches substrings; use `see matching` for an exact count or zero-state check. The value of an obscured (password) field is never matched",
     "category": "Assertions"
   },
   {
@@ -380,7 +380,7 @@ export const COMMANDS = [
   {
     "command": "clear app data",
     "syntax": "clear app data",
-    "description": "Wipe all app data and relaunch (skipped on physical iOS). On iOS `--yes` cannot answer the notification alert (simctl cannot grant notifications): use `--grant notifications` for that. Asks for confirmation on a terminal; without one (CI, scripts) pass `probe test --yes` or the step fails",
+    "description": "Wipe all app data and relaunch (skipped on physical iOS). On an iOS simulator it also resets the keychain of ALL apps on that simulator. On iOS `--yes` cannot answer the notification alert (simctl cannot grant notifications): use `--grant notifications` for that. Asks for confirmation on a terminal; without one (CI, scripts) pass `probe test --yes` or the step fails",
     "category": "App Lifecycle"
   },
   {
