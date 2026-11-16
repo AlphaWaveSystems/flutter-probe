@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { getWorkspaceRoot } from '../config';
 // The completion words come from the ProbeScript docs (see scripts/gen-keywords.mjs): the lead of each command and the
 // reserved words. The examples with arguments are in the snippets.
-import { PROBESCRIPT_KEYWORDS } from './probescriptKeywords.generated';
+import { PROBESCRIPT_COMMANDS, PROBESCRIPT_KEYWORDS } from './probescriptKeywords.generated';
 
 const PERMISSION_NAMES = [
   'notifications', 'camera', 'location', 'microphone',
@@ -40,14 +40,26 @@ export class ProbeCompletionProvider implements vscode.CompletionItemProvider {
   }
 
   private getKeywordCompletions(textBefore: string): vscode.CompletionItem[] {
-    const trimmed = textBefore.trimStart();
-    return PROBESCRIPT_KEYWORDS
-      .filter(kw => kw.startsWith(trimmed.toLowerCase()) || trimmed === '')
+    const trimmed = textBefore.trimStart().toLowerCase();
+    const words = PROBESCRIPT_KEYWORDS
+      .filter(kw => kw.startsWith(trimmed) || trimmed === '')
       .map(kw => {
         const item = new vscode.CompletionItem(kw, vscode.CompletionItemKind.Keyword);
         item.detail = 'ProbeScript';
         return item;
       });
+    // A command form with its arguments as tab stops (`press <key>`, `see no requests`). A form that is only a keyword word is
+    // already offered above.
+    const commands = PROBESCRIPT_COMMANDS
+      .filter(cmd => !PROBESCRIPT_KEYWORDS.includes(cmd.label))
+      .filter(cmd => cmd.label.toLowerCase().startsWith(trimmed) || trimmed === '')
+      .map(cmd => {
+        const item = new vscode.CompletionItem(cmd.label, vscode.CompletionItemKind.Snippet);
+        item.insertText = new vscode.SnippetString(cmd.insert);
+        item.detail = 'ProbeScript command';
+        return item;
+      });
+    return [...words, ...commands];
   }
 
   private getWorkspaceRecipes(document: vscode.TextDocument): vscode.CompletionItem[] {
