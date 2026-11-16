@@ -21,6 +21,8 @@ concurrency:
 jobs:
   drift:
     name: Catalog and release log
+    # Only this repository runs the schedule and the manual trigger, so a fork that enables them does not open issues.
+    if: github.repository == 'AlphaWaveSystems/flutter-probe'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -33,7 +35,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0 (the exact release; the v7 tag is the same commit)
         with:
           go-version-file: go.mod
 
@@ -83,11 +85,15 @@ jobs:
           STABLE: ${{ steps.manifest.outputs.version }}
         run: |
           set -euo pipefail
-          logged=$(grep -m1 -E '^## Flutter [0-9]' docs/compat/RELEASES.md | sed -E 's/^## Flutter ([0-9.]+).*/\1/')
+          logged=$(grep -m1 -E '^## Flutter [0-9]' docs/compat/RELEASES.md | sed -E 's/^## Flutter ([0-9.]+).*/\1/' || true)
+          if [ -z "$logged" ]; then
+            echo "RELEASES.md has no entry for $STABLE: no '## Flutter <version>' heading in docs/compat/RELEASES.md"
+            exit 1
+          fi
           echo "Newest entry in docs/compat/RELEASES.md: $logged"
           newest=$(printf '%s\n%s\n' "$logged" "$STABLE" | sort -V | tail -n1)
           if [ "$newest" != "$logged" ]; then
-            echo "The stable Flutter $STABLE is not in docs/compat/RELEASES.md"
+            echo "RELEASES.md has no entry for $STABLE (newest entry: $logged)"
             exit 1
           fi
 
@@ -102,7 +108,8 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          gh label create compat-drift --color D93F0B --description "Flutter or Dart compatibility catalog or release log is behind" 2>/dev/null || true
+          # gh exits non-zero when the label already exists, so the create may fail. Any other error prints to the log.
+          gh label create compat-drift --color D93F0B --description "Flutter or Dart compatibility catalog or release log is behind" || true
           body="$RUNNER_TEMP/compat-drift-body.md"
           {
             echo "The weekly compatibility check (docs/compat/README.md, rule 5) failed."
