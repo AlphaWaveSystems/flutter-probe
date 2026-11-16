@@ -498,3 +498,26 @@ type partialRunner string
 func (p partialRunner) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
 	return []byte(p), errors.New("adb: connection lost")
 }
+
+// The serial ends up in a message and a command line: anything that is not a plain serial is not returned at all, so device text cannot reach either.
+func TestForwardSerialRefusesAnythingThatIsNotAPlainSerial(t *testing.T) {
+	for name, serial := range map[string]string{
+		"escape sequence":  "emu\x1b[2Jlator",
+		"shell characters": "a;rm",
+		"a substitution":   "$(id)",
+		"a quote":          "a'b",
+		"bidi":             "a\u202eb",
+		"65 characters":    strings.Repeat("a", 65),
+		"a slash":          "a/b",
+	} {
+		list := serial + " tcp:48792 tcp:48792\n"
+		if got, ok := ForwardSerial(context.Background(), forwardListRunner(list), 48792); ok || got != "" {
+			t.Errorf("%s: %q %v", name, got, ok)
+		}
+	}
+	for _, serial := range []string{"emulator-5554", "0123456789ABCDEF", "192.168.1.5:5555", "R58M12345AB", "adb-0123abcd._tcp", strings.Repeat("a", 64)} {
+		if got, ok := ForwardSerial(context.Background(), forwardListRunner(serial+" tcp:48792 tcp:48792\n"), 48792); !ok || got != serial {
+			t.Errorf("%q refused: %q %v", serial, got, ok)
+		}
+	}
+}

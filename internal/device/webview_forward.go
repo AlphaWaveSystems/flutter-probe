@@ -176,6 +176,8 @@ func freeLoopbackPort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
+var forwardSerialRE = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,64}$`)
+
 // ForwardSerial reports which device the `adb forward` for a host port belongs to, by reading `adb forward --list` (lines of "<serial> tcp:<host> tcp:<device>").
 // found is false when no forward uses the port or the list cannot be read. Read-only; it never changes or removes a forward.
 func ForwardSerial(ctx context.Context, runner AdbRunner, hostPort int) (serial string, found bool) {
@@ -186,7 +188,11 @@ func ForwardSerial(ctx context.Context, runner AdbRunner, hostPort int) (serial 
 	rule := "tcp:" + strconv.Itoa(hostPort)
 	for _, line := range strings.Split(string(out), "\n") {
 		f := strings.Fields(line)
-		if len(f) >= 3 && f[1] == rule && len(f[0]) <= 64 {
+		if len(f) >= 3 && f[1] == rule {
+			// the serial goes into a message and a command line: only what a serial can be (letters, digits and . _ : -), at most 64, or nothing
+			if !forwardSerialRE.MatchString(f[0]) {
+				return "", false
+			}
 			return f[0], true
 		}
 	}

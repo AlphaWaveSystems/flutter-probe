@@ -166,3 +166,52 @@ func TestAFailingKillThroughRunStepLeavesTheAppUnmarked(t *testing.T) {
 		t.Error("a failing second kill cleared the state of the first")
 	}
 }
+
+// Device text cannot reach the hint: a forward whose serial is not a plain serial is not blamed, so nothing from it is in the message or the command it suggests.
+func TestTheHintNeverCarriesDeviceText(t *testing.T) {
+	for _, serial := range []string{"emu\x1b[2Jlator", "a;rm", "$(id)", "a‮b"} {
+		h := hintExecutor(liveAdb(serial+" tcp:48792 tcp:48792\n"), true).reconnectHint(context.Background())
+		if h != "" {
+			t.Errorf("hostile serial %q reached the hint: %q", serial, h)
+		}
+	}
+	// what the hint does contain is made of constants, the app id (validated), the port (a number) and a serial that passed the check
+	h := hintExecutor(liveAdb("emulator-5554 tcp:48792 tcp:48792\n"), true).reconnectHint(context.Background())
+	for _, r := range h {
+		if r < 0x20 || r == 0x7f {
+			t.Errorf("a control character in the hint: %q", h)
+		}
+	}
+}
+
+// The hint costs nothing on a step that passes: no adb call at all, with the opt-in off, and it is asked for only by a reconnect that failed.
+func TestAPassingStepAsksNothingForTheHint(t *testing.T) {
+	a := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}, forward: "emulator-5554 tcp:48792 tcp:48792\n"}
+	e := hintExecutor(a, false)
+	e.client = &ceFailingClient{log: new([]string)}
+	if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter}); err != nil || len(a.calls) != 0 {
+		t.Errorf("a passing step: err %v, %d adb calls", err, len(a.calls))
+	}
+	// a step that fails without a lost connection never reaches the reconnect, so the hint's calls are not made either
+	b := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{"4100"}, forward: "emulator-5554 tcp:48792 tcp:48792\n"}
+	e2 := hintExecutor(b, false)
+	e2.client = &ceFailingClient{log: new([]string), err: errors.New("rpc error -32001: Widget not found")}
+	_ = e2.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
+	if b.words("pidof") != 0 || len(b.calls) != 0 {
+		t.Errorf("a widget that was not found asked adb %d times", len(b.calls))
+	}
+}
+
+// The hint stays inside its bound: an adb that never answers ends at the hint's own timeout, and the run's cancel ends it at once.
+func TestTheHintIsBoundedAndCancellable(t *testing.T) {
+	e := ceExecutorWith(&ceHangAdb{})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(30 * time.Millisecond); cancel() }()
+	start := time.Now()
+	if h := e.reconnectHint(ctx); h != "" || time.Since(start) > 3*time.Second {
+		t.Errorf("cancel: %q after %v", h, time.Since(start))
+	}
+	if reconnectHintTimeout != 5*time.Second {
+		t.Errorf("the hint's bound is %v, documented as 5 s", reconnectHintTimeout)
+	}
+}
