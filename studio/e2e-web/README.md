@@ -99,4 +99,6 @@ sf-20 and sf-21 check the place buttons on the Suggest a fix card and the Explai
 
 **`device-note.spec.ts` (dn-01 to dn-04).** When `adb` cannot be found and no device is usable, the first-run line adds why Android devices are missing (the Go calls are answered by hand: an empty device list and the note), says nothing about `adb` when it is found, is text only, and a connection that uses the adb `probe.yaml` names says so.
 
+**`still-waiting.spec.ts` (sw-01 to sw-06) and `still-waiting-device.spec.ts` (sw-10).** A run that takes long: the elapsed time of the running step after a few seconds, the "still waiting" line after ten (not before, not changing as the seconds pass, gone with the step or the run), "no signal" next to Cancel, text only, and which lines are live regions. The seeded specs fire the `run:*` and `device:*` events and fake the page's clock; on the named simulator a step that waits for a text that never appears (`slow-step.probe`) shows the line, and Cancel ends the run.
+
 **`lint-problems.spec.ts` lp-11.** A `${NAME}` that Studio's environment does not have is a warning on its line with the name and the way out; a set variable (`${HOME}`) and one in a comment say nothing.

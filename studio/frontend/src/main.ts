@@ -13,6 +13,8 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { progressText, signalNote, waitingLine } from "./still-waiting";
+import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -911,7 +913,10 @@ EventsOn("run:started", () => {
   fixSession.invalidate(); // nor a suggested fix for a step of the previous run
   if (!rerunInFlight) dropFixView(); // the re-run of a replaced line is the one run that keeps its card, to show the verdict there
 });
-EventsOn("run:finished", () => void refreshExplainOffer());
+EventsOn("run:finished", () => {
+  stopWaitTimer();
+  void refreshExplainOffer();
+});
 
 // ---- Suggest a fix: one ProbeScript line for the failed step of the last run ------------
 
@@ -1858,13 +1863,48 @@ function renderStepDecorations() {
   stepDecorations.set(decs);
 }
 
-function updateProgress() {
-  const progress = $("run-progress");
-  if (stepsTotal > 0) progress.textContent = `step ${Math.min(stepsDone + 1, stepsTotal)} of ${stepsTotal}`;
-  else progress.textContent = `step ${stepsDone + 1}`;
+// The running step and when it started, for the elapsed time and the "still waiting" line. A clock tick once a second updates them while a run
+// goes on; the progress text is not a live region (it would be read out every second), the waiting line is and says one thing once.
+let runningStep: { text: string; line: number; startedAt: number } | null = null;
+let waitTimer: number | undefined;
+
+function runningMs(): number | null {
+  return runningStep ? Date.now() - runningStep.startedAt : null;
 }
 
+function updateProgress() {
+  $("run-progress").textContent = progressText(stepsDone, stepsTotal, runningMs());
+}
+
+/** Draws the parts of the toolbar that depend on time and on the device's signal. */
+function updateWaiting(): void {
+  const active = waitTimer !== undefined; // a run is going (its run:started came and its run:finished has not)
+  const noSignal = deviceHasNoSignal();
+  const signal = $("run-signal");
+  signal.textContent = active ? signalNote(noSignal) : "";
+  signal.hidden = !signal.textContent;
+  const line = active ? waitingLine(runningStep?.text ?? "", runningMs(), noSignal) : "";
+  const el = $("run-waiting");
+  if (el.textContent !== line) el.textContent = line;
+  el.hidden = line === "";
+  if (active) updateProgress();
+}
+
+function startWaitTimer(): void {
+  if (waitTimer === undefined) waitTimer = window.setInterval(updateWaiting, 1000);
+}
+
+function stopWaitTimer(): void {
+  if (waitTimer !== undefined) window.clearInterval(waitTimer);
+  waitTimer = undefined;
+  runningStep = null;
+  updateWaiting();
+}
+
+document.addEventListener("studio:signal", () => updateWaiting());
+
 EventsOn("run:started", (path: string) => {
+  startWaitTimer();
   runFilePath = path;
   stepState.clear();
   stepDecorations.clear();
@@ -1878,6 +1918,13 @@ EventsOn("run:plan", (plan: RunPlan) => {
 });
 
 EventsOn("run:step", (s: RunStep) => {
+  if (s.status === "started") {
+    runningStep = { text: s.description, line: s.line, startedAt: Date.now() };
+    updateWaiting();
+  } else if (runningStep && runningStep.line === s.line) {
+    runningStep = null;
+    updateWaiting();
+  }
   // Only decorate the file that is open in the editor.
   if (s.file !== runFilePath || s.file !== currentPath || s.line <= 0) return;
   if (s.status === "started") {
