@@ -183,6 +183,7 @@ func (p *Parser) parseTest() (TestDef, error) {
 	// "with examples:"
 	var examples *ExamplesBlock
 	if p.peek().Type == TOKEN_EXAMPLES || p.peekSeq(TOKEN_WITH, TOKEN_EXAMPLES) {
+		statementLine := p.peek().Line
 		if p.peek().Type == TOKEN_WITH {
 			p.advance()
 		}
@@ -198,7 +199,8 @@ func (p *Parser) parseTest() (TestDef, error) {
 				source = p.advance().Literal
 			}
 			p.consumeNewline()
-			examples = &ExamplesBlock{Source: source, Line: p.peek().Line}
+			// The line of the with examples statement itself, not the line after it.
+			examples = &ExamplesBlock{Source: source, Line: statementLine}
 		} else {
 			p.consumeNewline()
 			ex, err := p.parseExamples()

@@ -27,7 +27,8 @@
         <button id="btn-cancel" class="btn btn-cancel" hidden title="Cancel the running test">
           <span class="btn-icon">■</span><span class="btn-label">Cancel</span>
         </button>
-        <span id="run-progress" class="run-progress" hidden aria-live="polite"></span>
+        <span id="run-progress" class="run-progress" hidden></span>
+        <span id="run-signal" class="run-signal" hidden></span>
         <button id="btn-record" class="btn" disabled title="Record interactions (⌘⇧R)">
           <span class="btn-icon btn-record-icon">●</span><span class="btn-label">Record</span>
         </button>
@@ -51,6 +52,7 @@
 
     <div id="device-hint" class="device-hint" role="status" aria-live="polite" hidden></div>
     <div id="next-step" class="next-step" role="status" aria-live="polite" hidden></div>
+    <div id="run-waiting" class="next-step run-waiting" role="status" aria-live="polite" hidden></div>
     <span id="reason-run" class="sr-only"></span>
     <span id="reason-record" class="sr-only"></span>
     <span id="reason-save" class="sr-only"></span>
@@ -67,6 +69,7 @@
           </span>
         </div>
         <div id="file-path" class="file-path"></div>
+        <p id="workspace-note" class="workspace-note" role="status" hidden></p>
         <ul id="file-list"></ul>
       </aside>
 
@@ -113,12 +116,13 @@
       <section id="results-pane">
         <div class="pane-title">
           <span class="pane-tabs" role="tablist">
-            <button type="button" id="tab-results" class="pane-tab active" role="tab" aria-selected="true">Results</button>
-            <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" title="The requests and responses the app made, with credentials hidden">Network</button>
+            <button type="button" id="tab-results" class="pane-tab active" role="tab" aria-selected="true" aria-controls="results-panel">Results</button>
+            <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" aria-controls="network-panel" title="The requests and responses the app made, with credentials hidden">Network</button>
+            <button type="button" id="tab-problems" class="pane-tab" role="tab" aria-selected="false" aria-controls="problems-panel" title="What the lint rules find in the open file: a recipe or a data file that is not there, a test with no steps">Problems</button>
           </span>
           <span id="results-summary" class="dim"></span>
         </div>
-        <div id="results-panel" class="pane-panel">
+        <div id="results-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-results">
         <div id="explain-bar" class="explain-bar" hidden>
           <button type="button" id="btn-explain" class="btn-mini" title="Ask the AI provider for advice on the failed tests of the last run. You see what is sent first.">Explain failures</button>
           <button type="button" id="btn-fix" class="btn-mini" title="Ask the AI provider for one ProbeScript line to replace the failed step. You see what is sent first.">Suggest a fix</button>
@@ -128,7 +132,11 @@
         <section id="fix-card" class="explain-card" aria-label="Suggested fix" hidden></section>
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
         </div>
-        <div id="network-panel" class="pane-panel" hidden>
+        <div id="problems-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-problems" hidden>
+          <p id="problems-status" class="dim problems-status" role="status"></p>
+          <ul id="problems-list" class="problems-list" aria-label="Problems in the open file"></ul>
+        </div>
+        <div id="network-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-network" hidden>
           <div class="net-toolbar">
             <select id="net-method" aria-label="Method">
               <option value="">Any method</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
@@ -394,6 +402,21 @@
       </div>
     </div>
 
+    <div id="confirm-overlay" class="overlay" hidden>
+      <div class="overlay-card confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-lead confirm-app confirm-device confirm-warning">
+        <div class="overlay-header"><h2 id="confirm-title"></h2></div>
+        <p id="confirm-lead"></p>
+        <dl class="confirm-facts">
+          <dt id="confirm-app-label">App</dt><dd id="confirm-app"></dd>
+          <dt>Device</dt><dd id="confirm-device"></dd>
+        </dl>
+        <p id="confirm-warning" class="overlay-foot"></p>
+        <div class="confirm-buttons">
+          <button type="button" id="btn-confirm-cancel" class="btn btn-primary"></button>
+          <button type="button" id="btn-confirm-danger" class="btn btn-danger"></button>
+        </div>
+      </div>
+    </div>
     <div id="help-overlay" class="overlay" hidden>
       <div class="overlay-card">
         <div class="overlay-header">

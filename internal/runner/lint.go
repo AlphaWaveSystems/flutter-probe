@@ -46,18 +46,19 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 	if err != nil {
 		return nil, err
 	}
-	return lintReferencesSource(cfg, path, string(src))
+	return lintReferencesSource(cfg, path, string(src), nil)
 }
 
 // lintReferencesSource is LintReferences over the given text. The file at path is only used to resolve use targets and the
-// CSV examples of `with examples from` relative to its folder.
-func lintReferencesSource(cfg *config.Config, path, content string) ([]LintFinding, error) {
+// CSV examples of `with examples from` relative to its folder. conf, when not nil, fences every read (see LintWithRoot).
+func lintReferencesSource(cfg *config.Config, path, content string, conf *lintConfinement) ([]LintFinding, error) {
 	prog, err := parser.ParseFile(content)
 	if err != nil {
 		return nil, err
 	}
 	ctx := context.Background()
 	r := New(cfg, nil, nil, RunOptions{DryRun: true, Files: []string{path}})
+	r.confine = conf
 	if err := r.loadRecipes(ctx); err != nil {
 		return nil, err
 	}
@@ -70,10 +71,20 @@ func lintReferencesSource(cfg *config.Config, path, content string) ([]LintFindi
 	var findings []LintFinding
 	for _, u := range prog.Uses {
 		target := filepath.Join(filepath.Dir(path), u.Path)
-		if _, err := os.Stat(target); os.IsNotExist(err) {
+		stat, shown := target, target
+		if conf != nil {
+			// A target outside the workspace was refused when loadUse reached it, and is not checked again here. A missing one is
+			// named relative to the workspace, as the linted text writes it.
+			resolved, inside := conf.locate(target)
+			if !inside {
+				continue
+			}
+			stat, shown = resolved, conf.name(target)
+		}
+		if _, err := os.Stat(stat); os.IsNotExist(err) {
 			// A missing file is a warning: a run only fails when a call needs one of its recipes, and that call is
 			// reported as an unknown step.
-			findings = append(findings, LintFinding{Line: u.Line, Warning: true, Message: fmt.Sprintf("use %q: no file at %s", u.Path, target)})
+			findings = append(findings, LintFinding{Line: u.Line, Warning: true, Message: fmt.Sprintf("use %q: no file at %s", u.Path, shown)})
 		}
 	}
 
@@ -105,7 +116,7 @@ func lintReferencesSource(cfg *config.Config, path, content string) ([]LintFindi
 		}
 		headers := t.Examples.Headers
 		if t.Examples.Source != "" {
-			if csv, err := loadCSVExamples(filepath.Dir(path), t.Examples.Source); err == nil {
+			if csv, ok := loadCSVSource(conf, path, t.Examples.Source, t.Examples.Line); ok {
 				headers = csv.Headers
 			}
 		}
@@ -146,7 +157,11 @@ func lintReferencesSource(cfg *config.Config, path, content string) ([]LintFindi
 						// The parser reads use only at the top of a file; inside a test it is an ordinary call.
 						msg = "a use statement must come before the first test; inside a test it is not read"
 					}
-					findings = append(findings, LintFinding{Line: rc.Line, Message: msg})
+					// With a recipe source refused (the folder, a recipe file or a use target), a call it might define is not
+					// an error: the one warning for the refused source says why recipes were not read.
+					if !conf.recipesSkipped() {
+						findings = append(findings, LintFinding{Line: rc.Line, Message: msg})
+					}
 					if word, ok := pressKeyTypo(rc.Name); ok {
 						findings = append(findings, LintFinding{Line: rc.Line, Warning: true, Message: fmt.Sprintf("unknown key '%s'; keys: %s; or define a recipe named '%s'", word, strings.Join(parser.PressKeys(), ", "), rc.Name)})
 					}
@@ -169,6 +184,9 @@ func lintReferencesSource(cfg *config.Config, path, content string) ([]LintFindi
 			}
 		})
 	}
+	if conf != nil {
+		findings = append(findings, conf.findings...)
+	}
 	return dedupeFindings(findings), nil
 }
 
@@ -190,12 +208,12 @@ type LintReport struct {
 // not to the probe.yaml it was read from. probe lint loads cfg from --config when it is set, and otherwise from the probe.yaml
 // in the working directory, falling back to the defaults (recipes_folder "tests/recipes") when there is none. A caller such as
 // Studio must load cfg the same way and run from the same working directory, or the same file can resolve different recipes.
-func LintFile(cfg *config.Config, path string) (LintReport, error) {
+func LintFile(cfg *config.Config, path string, opts ...LintOption) (LintReport, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return LintReport{}, err
 	}
-	return LintSource(cfg, path, string(src))
+	return LintSource(cfg, path, string(src), opts...)
 }
 
 // LintSource lints content as if it were the file at path: the editor's text, say, which may differ from the file on disk. It
@@ -209,16 +227,62 @@ func LintFile(cfg *config.Config, path string) (LintReport, error) {
 // from the same working directory.
 //
 // The error is returned only when content cannot be parsed or the recipes folder cannot be read. A finding is not an error.
-func LintSource(cfg *config.Config, path string, content string) (LintReport, error) {
+//
+// With LintWithRoot the reads are fenced to the workspace; see that option. The fence is opt-in: without it the lint reads as it
+// always has.
+func LintSource(cfg *config.Config, path string, content string, opts ...LintOption) (LintReport, error) {
+	var set lintSettings
+	for _, opt := range opts {
+		opt(&set)
+	}
 	prog, err := parser.ParseFile(content)
 	if err != nil {
 		return LintReport{}, err
 	}
-	refs, err := lintReferencesSource(cfg, path, content)
+	var conf *lintConfinement
+	if set.rootSet {
+		if set.root == "" {
+			return LintReport{}, fmt.Errorf("LintWithRoot: the workspace root is empty")
+		}
+		conf, err = newLintConfinement(set.root, path)
+		if err != nil {
+			return LintReport{}, err
+		}
+	}
+	refs, err := lintReferencesSource(cfg, path, content, conf)
 	if err != nil {
 		return LintReport{}, err
 	}
 	return LintReport{Program: lintProgram(prog), References: refs}, nil
+}
+
+// LintOption changes what LintSource and LintFile read. Without options they read exactly as the CLI does.
+type LintOption func(*lintSettings)
+
+type lintSettings struct {
+	rootSet bool
+	root    string
+}
+
+// LintWithRoot fences a lint to the workspace at root, for a caller that lints text it does not fully trust, such as an editor's
+// unsaved text. With it, a lint reads a file only when the file, with symlinks resolved, lies inside root:
+//   - a `use` target, a CSV source, or the recipes folder outside root is not read, and one warning with fixed text is reported
+//     for it, naming no file;
+//   - with a recipe source refused (the folder, a recipe file or a use target), an unresolved recipe call is not reported as an
+//     unknown step: the lint cannot tell whether the refused source defines it, so it reports neither as an error;
+//   - a file inside root that does not parse is reported by its relative name and the parser's line, never by its text. Parse
+//     errors of the linted text itself are returned as before.
+//
+// An empty root is an error, so a caller cannot lint unfenced by accident.
+//
+// The check and the read are two steps, and the read uses the path the check resolved, so the file read is the one checked. A symlink
+// that is replaced between the two is not caught: the window is the time of one check, and nothing in the lint writes the workspace.
+// A hard link to a file outside the root cannot be told from a file inside it, so it is read.
+func LintWithRoot(root string) LintOption {
+	return func(s *lintSettings) {
+		s.rootSet = true
+		s.root = root
+	}
 }
 
 // pressKeyTypo reports the word of a `press <word>` line that is within two edits of one of the keys press takes, so

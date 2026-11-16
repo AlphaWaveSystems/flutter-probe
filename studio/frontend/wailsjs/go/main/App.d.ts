@@ -8,6 +8,8 @@ export function AIChatLabelParts():Promise<main.ChatLabelParts>;
 
 export function AllowHost(arg1:string):Promise<void>;
 
+export function AnswerConfirm(arg1:string,arg2:boolean):Promise<boolean>;
+
 export function ApplyDeviceSetting(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function BuildCallStep(arg1:main.SaveStepInput):Promise<main.SavedStep>;
@@ -27,6 +29,8 @@ export function ConnectWiFi(arg1:string,arg2:number,arg3:string):Promise<main.Co
 export function ConnectWiFiSaved(arg1:string,arg2:number,arg3:string):Promise<main.ConnectionStatus>;
 
 export function DeleteAPIKey():Promise<void>;
+
+export function DeviceListNote():Promise<string>;
 
 export function Disconnect():Promise<void>;
 
@@ -55,6 +59,8 @@ export function HTTPExchanges(arg1:main.NetFilter):Promise<main.NetList>;
 export function InitialWorkspace():Promise<string>;
 
 export function Lint(arg1:string):Promise<Array<main.Diagnostic>>;
+
+export function LintProblems(arg1:string,arg2:string):Promise<main.LintProblemsResult>;
 
 export function ListAIModels():Promise<Array<string>>;
 
@@ -117,5 +123,7 @@ export function TestAIConnection():Promise<main.AIConnectionReport>;
 export function TestWiFi(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function WiFiTokenSaved(arg1:string):Promise<boolean>;
+
+export function WorkspaceNote():Promise<main.WorkspaceNote>;
 
 export function WriteFile(arg1:string,arg2:string):Promise<void>;

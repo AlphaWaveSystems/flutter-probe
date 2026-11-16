@@ -60,6 +60,7 @@ type Executor struct {
 	resolvedSelectors    []resolvedSelector // selectors the running step resolved, cleared when the step ends
 	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
 	startedAt            time.Time          // when this executor (one test attempt) was made
+	testLimit            time.Duration      // the attempt's per-test limit (defaults.test_timeout); zero is off. A literal wait at or above it fails at once
 	crashReport          *CrashReport       // set by collectCrashOnce when the app died during the test
 	crashTries           int                // collections tried so far
 	appStopped           bool               // the test stopped the app on purpose (a kill step) and has not launched it again
@@ -316,7 +317,10 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
 	// Uses exponential backoff with jitter — see tryReconnect for the formula.
-	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil {
+	// Not when a limit (test_timeout) ended ctx: the call failed because the attempt ran past its limit, and a
+	// reconnect would spend the cleanup budget on an adb round trip. A deadline is the limit's only signal; a Ctrl-C
+	// (a cancel) still reconnects as it always did, so a run without the limit behaves as before.
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil && ctx.Err() != context.DeadlineExceeded {
 		e.collectCrashOnce(ctx) // before anything reconnects or relaunches; does nothing unless the run asked for crash evidence
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {
@@ -369,7 +373,11 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// step and what the screen showed. Skipped for lifecycle actions (restart/
 	// kill/clear), where the agent is intentionally gone and can't be asked.
 	if !isLifecycleAction {
-		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
+		// A limit (a deadline on the enclosing context) is not a step timeout: the snapshot the annotation asks the agent for could outlive the
+		// grace budget. A cancel (Ctrl-C) is not a deadline, so it is annotated as it always was.
+		if ctx.Err() != context.DeadlineExceeded {
+			err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
+		}
 	}
 	err = annotateStepError(step, desc, err)
 	err = e.scrubEnv(err)
@@ -1558,6 +1566,12 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	// ECONNREFUSED, so PT-18's relaunch heuristic never fired either).
 	// Waiting for wall-clock time needs no device at all — sleep CLI-side.
 	if w.Kind == parser.WaitDuration {
+		// A wait at or above the test's limit can only end in the limit: the test would be cut before the wait is over, and it would be reported
+		// as a timeout at the limit's place. It fails here, at once, with its own message. The limit is zero when it is off.
+		if d := time.Duration(w.Duration * float64(time.Second)); e.testLimit > 0 && d >= e.testLimit {
+			return fmt.Errorf("wait %s seconds is at or above test_timeout (%s): the test would be cut before the wait ends; wait until the screen shows what the test needs, or raise test_timeout",
+				strconv.FormatFloat(w.Duration, 'f', -1, 64), formatLimit(e.testLimit))
+		}
 		select {
 		case <-time.After(time.Duration(w.Duration * float64(time.Second))):
 			return nil
@@ -1805,6 +1819,10 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 }
 
 // ---- Auto-Reconnect ----
+
+// IsConnectionLost says whether err is the kind of failure a lost agent connection gives (a closed socket, a broken pipe, a reset), so a caller
+// can tell a test that failed that way from one that failed on a step. It is the check the runner makes before it tries to reconnect.
+func IsConnectionLost(err error) bool { return isConnectionError(err) }
 
 // isConnectionError returns true if the error indicates a broken WebSocket connection.
 func isConnectionError(err error) bool {

@@ -11,6 +11,11 @@ import { connectReason, nextStep, recordReason, runReason, saveReason, workspace
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
+import { renderProblems } from "./problems-panel";
+import { initConfirmDialog } from "./confirm-dialog";
+import { progressText, signalNote, waitingLine } from "./still-waiting";
+import { deviceHasNoSignal } from "./device-stream";
+import { LintSession, toMarkers, type Problem } from "./lint-problems";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
@@ -33,6 +38,7 @@ import {
   InitialWorkspace,
   SetWorkspace,
   Lint,
+  LintProblems,
   ListAIModels,
   ListDevices,
   ListDir,
@@ -62,6 +68,8 @@ import {
   TestWiFi,
   WiFiTokenSaved,
   WriteFile,
+  WorkspaceNote,
+  DeviceListNote,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 type ChatMessage = { role: string; content: string };
@@ -80,6 +88,7 @@ type Diagnostic = {
 };
 
 type ConnectionStatus = {
+  toolsNote?: string; // the connection uses a program that probe.yaml names ("Using adb from probe.yaml: adb")
   connected: boolean;
   deviceId: string;
   deviceName: string;
@@ -187,8 +196,43 @@ async function runLint() {
   );
 }
 
+// The project's lint rules (recipes, data files, program rules) for the open file, from the editor's text. It never blocks Run: a failure is a
+// line in the Problems panel. The call waits 400 ms after the last change, and an answer for text that has changed since is dropped.
+const problemsSession = new LintSession();
+let problemsHandle: number | undefined;
+function scheduleProblems() {
+  if (problemsHandle !== undefined) clearTimeout(problemsHandle);
+  problemsSession.cancel(); // what is on the way is for older text
+  problemsHandle = window.setTimeout(runProblems, 400);
+}
+
+async function runProblems() {
+  const path = currentPath;
+  const content = model.getValue();
+  if (!path) {
+    monaco.editor.setModelMarkers(model, "probescript-lint", []);
+    renderProblems(null, [], "");
+    return;
+  }
+  const token = problemsSession.begin();
+  let problems: Problem[] = [];
+  let note = "";
+  try {
+    const res = await LintProblems(path, content);
+    if (res?.stale) return; // a newer request replaced this one before it ran
+    problems = res?.problems ?? [];
+    note = res?.unavailable ?? "";
+  } catch (err) {
+    note = "Lint unavailable: " + String(err);
+  }
+  if (!problemsSession.accept(token, content, model.getValue()) || currentPath !== path) return; // the text or the file changed meanwhile
+  monaco.editor.setModelMarkers(model, "probescript-lint", toMarkers(problems, model.getLineCount(), (l) => model.getLineMaxColumn(l)));
+  renderProblems(path, problems, note);
+}
+
 editor.onDidChangeModelContent(() => {
   scheduleLint();
+  scheduleProblems();
   setDirty(true);
 });
 
@@ -205,6 +249,7 @@ let dirty = false;
 let bootLoading = true;
 let devicesLoaded = false;
 let listing: FirstRunInput["listing"] = "unknown";
+let adbNote = ""; // why Android devices may be missing from the list (adb not found), from Go; plain text
 // The replaced line the card can re-run, whether that re-run is ours, and whether a run is going (declared here: setDirty reads them at start-up).
 let fixRerun: RerunTarget | null = null;
 let rerunInFlight = false;
@@ -283,6 +328,7 @@ function firstRunInput(): FirstRunInput {
     connected,
     running: runInProgress,
     listing,
+    adbNote,
   };
 }
 
@@ -330,6 +376,7 @@ async function openProbeFile(path: string): Promise<boolean> {
     $("editor-filename").textContent = path;
     setDirty(false);
     runLint();
+    scheduleProblems();
     document
       .querySelectorAll("#file-list li")
       .forEach((li) =>
@@ -355,7 +402,24 @@ $("btn-files-up").addEventListener("click", () => {
   refreshFiles(parent);
 });
 
-$("btn-files-refresh").addEventListener("click", () => refreshFiles(currentDir));
+$("btn-files-refresh").addEventListener("click", () => {
+  void refreshWorkspaceNote(); // probe.yaml may have been edited outside Studio
+  void refreshFiles(currentDir);
+});
+
+// refreshWorkspaceNote says in the Workspace pane what in the workspace's probe.yaml will trip a first run: no file, a file that cannot be read,
+// or no project.app. It reads one file in the workspace, shows plain text, and is hidden when there is nothing to say.
+async function refreshWorkspaceNote(): Promise<void> {
+  const el = $("workspace-note");
+  try {
+    const n = await WorkspaceNote();
+    el.textContent = n?.text ?? "";
+    el.hidden = !n?.text;
+  } catch {
+    el.textContent = "";
+    el.hidden = true;
+  }
+}
 
 async function pickWorkspace() {
   try {
@@ -367,6 +431,7 @@ async function pickWorkspace() {
     workspaceRoot = path;
     resetNetworkPanel();
     refreshFiles(path);
+    void refreshWorkspaceNote();
     toast(`Workspace: ${path}`, "success", 1800);
   } catch (err) {
     toast(`Open failed: ${err}`, "error");
@@ -848,7 +913,10 @@ EventsOn("run:started", () => {
   fixSession.invalidate(); // nor a suggested fix for a step of the previous run
   if (!rerunInFlight) dropFixView(); // the re-run of a replaced line is the one run that keeps its card, to show the verdict there
 });
-EventsOn("run:finished", () => void refreshExplainOffer());
+EventsOn("run:finished", () => {
+  stopWaitTimer();
+  void refreshExplainOffer();
+});
 
 // ---- Suggest a fix: one ProbeScript line for the failed step of the last run ------------
 
@@ -1173,6 +1241,7 @@ $("btn-settings-save").addEventListener("click", async () => {
     toast(`Save failed: ${err}`, "error");
     return;
   }
+  void refreshWorkspaceNote(); // the settings write probe.yaml
   resetAIPreview(); // changed provider settings are shown again before the next message
   void updateChatContextNote();
   if (aiFailure !== null) {
@@ -1494,6 +1563,11 @@ async function refreshDevices() {
     select.appendChild(makeOption("", "— select device —"));
     lastDeviceList = devs;
     devicesLoaded = true;
+    try {
+      adbNote = (await DeviceListNote()) ?? "";
+    } catch {
+      adbNote = "";
+    }
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
     const sorted = [...devs].sort(
@@ -1606,6 +1680,7 @@ $("btn-connect").addEventListener("click", async () => {
     );
     startStream();
     toast(`Connected to ${status.deviceName}`, "success");
+    if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
     setStatus("error", "connection failed", detail);
@@ -1674,6 +1749,7 @@ if (inspectorSearch) {
 
 initResults();
 initNetworkPanel();
+initConfirmDialog();
 // Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
 // Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
 // parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.
@@ -1787,13 +1863,48 @@ function renderStepDecorations() {
   stepDecorations.set(decs);
 }
 
-function updateProgress() {
-  const progress = $("run-progress");
-  if (stepsTotal > 0) progress.textContent = `step ${Math.min(stepsDone + 1, stepsTotal)} of ${stepsTotal}`;
-  else progress.textContent = `step ${stepsDone + 1}`;
+// The running step and when it started, for the elapsed time and the "still waiting" line. A clock tick once a second updates them while a run
+// goes on; the progress text is not a live region (it would be read out every second), the waiting line is and says one thing once.
+let runningStep: { text: string; line: number; startedAt: number } | null = null;
+let waitTimer: number | undefined;
+
+function runningMs(): number | null {
+  return runningStep ? Date.now() - runningStep.startedAt : null;
 }
 
+function updateProgress() {
+  $("run-progress").textContent = progressText(stepsDone, stepsTotal, runningMs());
+}
+
+/** Draws the parts of the toolbar that depend on time and on the device's signal. */
+function updateWaiting(): void {
+  const active = waitTimer !== undefined; // a run is going (its run:started came and its run:finished has not)
+  const noSignal = deviceHasNoSignal();
+  const signal = $("run-signal");
+  signal.textContent = active ? signalNote(noSignal) : "";
+  signal.hidden = !signal.textContent;
+  const line = active ? waitingLine(runningStep?.text ?? "", runningMs(), noSignal) : "";
+  const el = $("run-waiting");
+  if (el.textContent !== line) el.textContent = line;
+  el.hidden = line === "";
+  if (active) updateProgress();
+}
+
+function startWaitTimer(): void {
+  if (waitTimer === undefined) waitTimer = window.setInterval(updateWaiting, 1000);
+}
+
+function stopWaitTimer(): void {
+  if (waitTimer !== undefined) window.clearInterval(waitTimer);
+  waitTimer = undefined;
+  runningStep = null;
+  updateWaiting();
+}
+
+document.addEventListener("studio:signal", () => updateWaiting());
+
 EventsOn("run:started", (path: string) => {
+  startWaitTimer();
   runFilePath = path;
   stepState.clear();
   stepDecorations.clear();
@@ -1807,6 +1918,13 @@ EventsOn("run:plan", (plan: RunPlan) => {
 });
 
 EventsOn("run:step", (s: RunStep) => {
+  if (s.status === "started") {
+    runningStep = { text: s.description, line: s.line, startedAt: Date.now() };
+    updateWaiting();
+  } else if (runningStep && runningStep.line === s.line) {
+    runningStep = null;
+    updateWaiting();
+  }
   // Only decorate the file that is open in the editor.
   if (s.file !== runFilePath || s.file !== currentPath || s.line <= 0) return;
   if (s.status === "started") {
@@ -1949,6 +2067,7 @@ initDeviceSettings();
     resetAIPreview();
     workspaceRoot = ws;
     resetNetworkPanel();
+    void refreshWorkspaceNote();
     await refreshFiles(ws);
   } else {
     await refreshFiles();

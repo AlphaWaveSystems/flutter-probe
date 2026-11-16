@@ -71,6 +71,20 @@ right tool for an action whose result is checked afterwards. For flaky tests as 
 failing test again up to that many extra times before reporting it failed. A test that passes on a retry counts as passed and is
 marked (`passed on attempt 2` in the terminal, `"attempts": 2` in the JSON report), so flakiness stays visible. Off by default.
 
+## A limit for each test
+
+A step timeout bounds one step; a test of many steps can still run for a long time. `defaults.test_timeout: 90s` (or `probe test --test-timeout 90s`, which wins over the file) is a wall-clock limit for one attempt of a test. The file's value is used when the flag is not given, and no value means no limit. A value below one second, or a negative one, stops the run before it starts.
+
+When an attempt runs past the limit it fails with `test exceeded 90s`, naming the step it was on, and the run goes on. The cleanup then runs in this order: the failure screenshot, the on-failure hooks, the after-each hooks, the video stop, and the perf close. It has a 30 second total budget, and a cleanup call that does not return in time is given up. Then the app is restarted, so the next test starts clean, also after a cleanup that was given up. The restart has its own bound, `agent.launch_timeout`, and it is skipped only when the run itself was cancelled (Ctrl-C). The JSON report marks the test with `timed_out` and `time_limit_seconds`; without the limit those fields are absent. The JUnit report gives such a test a `<failure type="test_timeout" message="test exceeded 90s">`, and the HTML report marks its row with the limit.
+
+A `wait N seconds` at or above the limit cannot end in anything but the limit, so it fails as soon as it starts, with a message that names the wait and the limit. Use `wait until` for the screen the test needs, or raise `test_timeout`.
+
+The limit cuts a call only when the call honours its context, as step timeouts already require. A `before each` hook or a step in the body that ignores its context blocks the attempt, as it does with no limit. A recording stop is given the same budget: the scrcpy stop kills its process when the budget ends, while the screenrecord and simctl stops wait for their recording process, so an abandoned one of those lasts until that process exits.
+
+A timed-out attempt is retried like any other failure. Each retry gets a fresh budget, so the worst case for one test is `retry_failed_tests + 1` attempts of up to `test_timeout` each, plus each attempt's cleanup: with `retry_failed_tests: 2` and `test_timeout: 90s`, one test can take about 270 seconds of attempts before the failure is reported.
+
+Each retry (`retry_failed_tests`) and each data-driven row gets its own budget. A composite test has one budget for all its device blocks. In a composite test the device blocks stop together at the limit, but their cleanup (the screenshot, the hooks and the restart) is not run yet.
+
 ## Choosing
 
 | The thing is... | Use |

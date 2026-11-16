@@ -146,6 +146,17 @@ func (a *App) claimRun() (context.Context, context.CancelFunc, error) {
 	return runCtx, cancel, nil
 }
 
+// errConnectDuringRun is why Connect refuses while a run is going: the run keeps the device it started with, and a window on another device would
+// name one device and act on the other.
+var errConnectDuringRun = errors.New("a run is in progress: cancel it or wait for it to finish before connecting to another device")
+
+// runActive says whether a run holds the run slot.
+func (a *App) runActive() bool {
+	a.runMu.Lock()
+	defer a.runMu.Unlock()
+	return a.runCancel != nil
+}
+
 // releaseRun gives back the run slot that claimRun took and stops the run's context.
 func (a *App) releaseRun(cancel context.CancelFunc) {
 	a.runMu.Lock()
