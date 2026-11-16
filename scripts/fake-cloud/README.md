@@ -5,7 +5,7 @@
 | File | What it is |
 |---|---|
 | `fake_server.py` | A fake service on `127.0.0.1`. `POST /v1/reports` records the request and answers `--status` (default 202). `GET /oidc` plays GitHub's identity-token issuer and returns a **placeholder** token. Python 3, no packages. |
-| `sign-test-license/` | Makes a throwaway Ed25519 key pair and a one-day license signed with it, and prints the two `export` lines. |
+| `sign-test-license/` | Makes a throwaway Ed25519 key pair and a one-day license signed with it, and prints the two `export` lines. It generates the key pair at run time, marks the license (`customer: LOCAL-TEST-ONLY-NOT-A-REAL-LICENSE`, key id `localtest`) and prints a TEST ONLY line on stderr. It refuses to run when `PROBE_CLOUD_URL` names a host that is not this machine. |
 
 ## What you need
 

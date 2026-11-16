@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -33,5 +34,27 @@ func TestTheTestLicenseVerifiesWithItsOwnKey(t *testing.T) {
 	// a released CLI trusts no such key: with no key set at all, nothing verifies
 	if _, err := license.VerifyWith(key, license.KeySet{}, now); err != license.ErrNoPublicKey {
 		t.Errorf("with no trusted key: %v", err)
+	}
+}
+
+// The tool makes nothing when the service address is not this machine, and says why without printing a key.
+func TestItRefusesAServiceThatIsNotThisMachine(t *testing.T) {
+	for _, ok := range []string{"", "http://127.0.0.1:48899", "http://localhost:1", "https://127.0.0.1", "http://[::1]:8080"} {
+		if err := checkLoopback(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"https://api.flutterprobe.dev", "http://example.com", "http://10.0.0.5:48899", "http://127.0.0.1.example.com", "not a url", "http://"} {
+		if err := checkLoopback(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}
+
+func TestTheLicenseIsMarkedAsATestOne(t *testing.T) {
+	_, key := sign(time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC))
+	payload, _ := base64.RawURLEncoding.DecodeString(strings.Split(key, ".")[2])
+	if !strings.Contains(string(payload), "LOCAL-TEST-ONLY-NOT-A-REAL-LICENSE") || !strings.Contains(string(payload), `"kid":"localtest"`) {
+		t.Errorf("payload = %s", payload)
 	}
 }
