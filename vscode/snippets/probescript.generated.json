@@ -139,11 +139,6 @@
     "body": "read \"${1:the 6-digit OTP code}\" with ai into otp",
     "description": "Extract text off the current screen into a variable"
   },
-  "respond": {
-    "prefix": "respond with 200 and body \"[]\" after 2 seconds",
-    "body": "respond with ${1:200} and body \"${2:[]}\" after ${3:2} seconds",
-    "description": "Define the mock response; after N seconds delays it, network failure drops the connection"
-  },
   "retry N times": {
     "prefix": "retry 3 times",
     "body": "retry ${1:3} times",
@@ -264,11 +259,6 @@
     "body": "store text of css:\"${1:#total}\" in webview as total",
     "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but open link, add media, set language, type native, screenshot names, call, mock, start measuring and system dialog steps refuse it. Needs a local Android device; see Reading text from a WebView"
   },
-  "swipe": {
-    "prefix": "swipe up/down/left/right [on \"X\" [from N percent]] [over N percent]",
-    "body": "swipe up/down/left/right [on \"${1:X}\" [from N percent]] [over N percent]",
-    "description": "Swipe gesture on screen or widget; over N percent sets how far it travels, 1 to 100 percent of the element or screen (default 50). from N percent sets where a swipe on a target starts, counted from the edge it starts at (the bottom for up, the left for right): swipe right on \"Menu\" from 2 percent is an edge swipe for a drawer. Without it the swipe starts at the centre. It needs a target and a probe_agent that reports the swipe_from capability. The start is in the target's own coordinates, so a target under a scale transform starts at the wrong point"
-  },
   "sync": {
     "prefix": "sync \"label\"",
     "body": "sync \"${1:label}\"",
@@ -328,11 +318,6 @@
     "prefix": "wait 5 seconds",
     "body": "wait ${1:5} seconds",
     "description": "Wait for a fixed duration"
-  },
-  "wait for response": {
-    "prefix": "wait for response GET \"/api/orders\" status 200",
-    "body": "wait for response GET \"${1:/api/orders}\" status ${2:200}",
-    "description": "Wait for a new matching response"
   },
   "wait until ... appears in webview": {
     "prefix": "wait until \"Message sent\" appears in webview",
