@@ -8,8 +8,11 @@ package scriptgen
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
@@ -39,10 +42,19 @@ func Step(params map[string]interface{}) string {
 			return fmt.Sprintf("  # type into %s was not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into %s by hand.", sel, sel)
 		}
 		text, _ := params["text"].(string)
-		if sel != "the element" {
-			return fmt.Sprintf("  type %q into the %s field", text, sel)
+		quoted, ok := Quote(text)
+		if !ok {
+			// The text has a character a script line cannot hold (a control character, a line separator): no step is made for it, and the
+			// comment says what to do. The text itself is not in the comment.
+			if sel != "the element" {
+				return fmt.Sprintf("  # type into %s was not recorded: the text has a character a script cannot hold. Add the step by hand.", sel)
+			}
+			return "  # type was not recorded: the text has a character a script cannot hold. Add the step by hand."
 		}
-		return fmt.Sprintf("  type %q", text)
+		if sel != "the element" {
+			return fmt.Sprintf("  type %s into the %s field", quoted, sel)
+		}
+		return "  type " + quoted
 	case "swipe":
 		dir, _ := params["direction"].(string)
 		return fmt.Sprintf("  swipe %s", cleanName(dir))
@@ -115,34 +127,116 @@ func Selector(params map[string]interface{}) string {
 		if text != "" {
 			switch kind {
 			case "id":
-				if strings.HasPrefix(text, "#") {
-					return text
+				if holdable(text) {
+					if strings.HasPrefix(text, "#") {
+						return text
+					}
+					return "#" + text
 				}
-				return "#" + text
 			case "text":
-				return fmt.Sprintf("%q", text)
+				if quoted, ok := Quote(text); ok {
+					return quoted
+				}
 			case "type":
-				return "the " + text
+				if holdable(text) {
+					return "the " + text
+				}
 			}
 		}
 	}
-	if text, ok := params["text"].(string); ok && text != "" {
-		return fmt.Sprintf("%q", Sanitize(text))
+	if text, ok := params["text"].(string); ok {
+		if clean := Sanitize(text); clean != "" {
+			if quoted, ok := Quote(clean); ok {
+				return quoted
+			}
+		}
 	}
-	if id, ok := params["id"].(string); ok && id != "" {
-		return "#" + Sanitize(id)
+	if id, ok := params["id"].(string); ok {
+		if clean := Sanitize(id); clean != "" && holdable(clean) {
+			return "#" + clean
+		}
 	}
 	return "the element"
 }
+
+// holdable says whether text can be written into a script line as it is (an id, a widget type): valid UTF-8 and no control character or line
+// separator. A lookup that is not holdable is not written; Selector falls back to the next one.
+func holdable(s string) bool {
+	if !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		if unholdable(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// unholdable is a character a script line cannot hold: a control character (the escapes for tab and newline are Quote's), or a line or
+// paragraph separator.
+func unholdable(r rune) bool { return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' }
 
 // cleanName makes a word the agent sent that is not text from the screen (an unknown action, a direction) safe for a line: the engine's one-line
 // cleaning (line and paragraph separators, control, invisible and bidirectional characters become one space, runs of space collapse, trimmed) and
 // at most MaxNameRunes runes (a cut ends with an ellipsis).
 func cleanName(s string) string { return device.CleanOneLine(s, MaxNameRunes) }
 
-// Sanitize makes text from the screen safe for a ProbeScript line: no line breaks (they would end the step), trimmed.
+// Quote writes s as a ProbeScript string literal, or reports false when a script line cannot hold it. The lexer reads \" \\ \n and \t as escapes
+// (and any other backslash pair as the second character alone), and everything else literally, so only those four are escaped: a no-break space, a
+// soft hyphen, a zero-width or bidirectional character, an emoji are written as they are and match at replay. (Go's %q wrote \u00a0, \x00 and
+// \r, which the lexer reads as "u00a0", "x00" and "r", so a label with a no-break space never matched.) What cannot be held is a control character
+// other than tab and newline, a line or paragraph separator, and text that is not valid UTF-8.
+func Quote(s string) (string, bool) {
+	if !utf8.ValidString(s) {
+		return "", false
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case unholdable(r):
+			return "", false
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String(), true
+}
+
+// Sanitize makes text from the screen safe for a ProbeScript line: a line break (LF or CRLF) becomes a space, and spaces, tabs and carriage
+// returns around the text are trimmed. Nothing else changes, so a no-break space at an edge is kept, and a carriage return inside the text stays
+// and makes the lookup unholdable (it is refused downstream, not deleted).
 func Sanitize(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\r", "")
-	return strings.TrimSpace(s)
+	return strings.Trim(s, " \t\r")
+}
+
+// placeholderShape matches what the runner expands when a step runs: ${NAME} (the environment) and <name> or <random.name> (a variable).
+var placeholderShape = regexp.MustCompile(`\$\{|<[A-Za-z_][A-Za-z0-9_.]*>`)
+
+// PlaceholderNote is the comment line that follows a step whose text has a placeholder the runner would expand at replay.
+const PlaceholderNote = "  # the text above contains a placeholder (${...} or <...>): the runner expands it, so the step may not mean what was recorded"
+
+// Lines is Step plus what a reader of the script should know about it: a step whose text has a ${...} or <name> placeholder is followed by a
+// comment saying the runner expands it at replay (there is no escape for it). The comment never carries the text.
+func Lines(params map[string]interface{}) []string {
+	line := Step(params)
+	if line == "" {
+		return nil
+	}
+	if !strings.HasPrefix(line, "  #") && placeholderShape.MatchString(line) {
+		return []string{line, PlaceholderNote}
+	}
+	return []string{line}
 }

@@ -1146,6 +1146,20 @@ export namespace main {
 		}
 	}
 	
+	export class StudioPrefs {
+	    clearDataWithoutAsking: boolean;
+	    warning?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudioPrefs(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.clearDataWithoutAsking = source["clearDataWithoutAsking"];
+	        this.warning = source["warning"];
+	    }
+	}
 	export class TargetInfo {
 	    host: string;
 	    label?: string;
@@ -1194,6 +1208,7 @@ export namespace main {
 	    testTimeout: string;
 	    retryFailedTests: number;
 	    implicitWait: string;
+	    clearDataBeforeEachTest: boolean;
 	    iosDeviceId: string;
 	    androidDeviceId: string;
 	    aiContextRunResults: boolean;
@@ -1211,6 +1226,7 @@ export namespace main {
 	        this.testTimeout = source["testTimeout"];
 	        this.retryFailedTests = source["retryFailedTests"];
 	        this.implicitWait = source["implicitWait"];
+	        this.clearDataBeforeEachTest = source["clearDataBeforeEachTest"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
 	        this.aiContextRunResults = source["aiContextRunResults"];

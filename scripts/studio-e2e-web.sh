@@ -35,6 +35,8 @@ mkdir -p "$WS/probe-tests"
 sed "s/port: 48686/port: $AGENT_PORT/" "$FIXTURE/probe.yaml" > "$WS/probe.yaml"
 cp "$FIXTURE"/probe-tests/*.probe "$WS/probe-tests/"
 export STUDIO_WORKSPACE="$WS"
+# The person's own preferences (a file in the user config folder) go to a folder of this run, never to the real one.
+export PROBE_STUDIO_TEST_USER_CONFIG_DIR="$OUT/userconfig"
 
 if [[ -z "${STUDIO_E2E_NO_DEVICE:-}" && "$(uname)" == "Darwin" ]]; then
   echo "== simulator $SIM_NAME with the fixture app"

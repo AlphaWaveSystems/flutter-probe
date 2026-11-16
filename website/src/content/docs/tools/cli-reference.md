@@ -24,6 +24,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe ios-driver` | Manage the iOS system-dialog driver: `install`, `status`, `stop` |
 | `probe ai doctor` | Check the configured `ai:` provider: endpoint, model, text, vision. Optional — see [AI & local models](/tools/ai/) |
 | `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
+| `probe prefs` | Show or change your own settings on this computer (`probe prefs show`, `probe prefs set clear-data-without-asking on\|off`). Shared with FlutterProbe Studio; never read from a project |
 | `probe studio` | Launch interactive test studio |
 
 `probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)).
@@ -79,8 +80,9 @@ probe test [path] [flags]
 | `--test-timeout` | `0` (off) | Wall-clock limit per test attempt (also `defaults.test_timeout`); a test that runs past it fails with `test exceeded <limit>`, after a cleanup that restarts the app. Each retry and each data-driven row gets its own limit. A value below 1s or negative is an error |
 | `--implicit-wait` | `0` (off) | Retry `tap`, `type`, `long press`, `double tap`, `clear`, `drag` and plain `see` steps whose target is not on screen yet for up to this long before failing, like Maestro's implicit waiting (`--implicit-wait 7s`). `defaults.implicit_wait` in probe.yaml sets it permanently. Steps with `if visible` / `optional`, `don't see` and explicit waits are never retried |
 | `--crash-evidence` | `false` | Android only. When a step fails because the connection to the app was lost and the app turns out to have died (crash, native crash, killed, ANR kill), keep why: the exit reason and the crash text from the device, cleaned and masked, and print one line for the failed test, add a `crash` object to that test in the JSON report, and write `crash/<test>-<hash>/exit.txt` and `crash.txt` under the reports folder (one folder per test, row and attempt) (never uploaded to the hosted service; JUnit and HTML do not show it yet). Also `defaults.crash_evidence`. Off by default; nothing extra is read from the device unless a step lost its connection. Not for iOS, cloud runs or composite runs yet |
+| `--clear-data-before-each-test` | `false` | Wipe the app's data and relaunch before every test (also `defaults.clear_data_before_each_test`). Asked once per run; `--yes` or the question answers it, and on a simulator or emulator `probe prefs set clear-data-without-asking on` answers the question for you. A parallel run (`--devices`) needs `--yes` (its lanes cannot ask) and logs once what it will wipe. The clear and relaunch count against `--test-timeout`. `=false` overrides a `probe.yaml` that turns it on |
 | `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog |
-| `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions (on an iOS simulator notifications cannot be granted this way: pass `--grant notifications` to answer the alert) |
+| `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions. In a parallel or composite run it is the only consent for `clear app data`: without it a device is wiped only when the person has allowed simulators and emulators in `probe prefs` and the device is verified as one. A refused wipe fails with the hint to pass `--yes` (on an iOS simulator notifications cannot be granted this way: pass `--grant notifications` to answer the alert) |
 | `--watch` | `false` | Watch mode — re-run on file changes |
 | `--video` | `false` | Enable video recording per test |
 | `--video-resolution` | `720x1280` | Android screenrecord resolution |
@@ -188,6 +190,17 @@ Record user interactions and generate ProbeScript.
 probe record --device <UDID> --output tests/my_flow.probe
 probe record --timeout 60s -o tests/flow.probe
 ```
+
+## probe prefs
+
+Settings that belong to you, kept in your user configuration folder and shared by `probe` and FlutterProbe Studio. They are never read from a project, so a `probe.yaml` or a cloned repository cannot change them.
+
+```bash
+probe prefs show
+probe prefs set clear-data-without-asking on     # off is the default
+```
+
+`clear-data-without-asking`: when on, a `clear app data` step runs on a simulator or an emulator without the question (and without `--yes`, which also grants permissions). A line says so. It applies only to a device that is verified to be a simulator or an emulator at the moment the step asks (the device list says so, and an Android device also says so itself through `ro.kernel.qemu` or `ro.boot.qemu`); a physical phone, and any device that cannot be told, still ask, or fail in CI with the hint to pass `--yes`. The line says which package was cleared on which device. The setting file is not used if it is a link or other users can read or write it. A parallel run (`--devices`) answers every `clear app data` question yes on every device, as it did before this setting.
 
 ## probe report
 

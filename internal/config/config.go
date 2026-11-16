@@ -177,6 +177,7 @@ type DefaultsConfig struct {
 	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation to 0.001 (animations end within a frame); 0 is not a valid Flutter value
 	Match                   string        `yaml:"match"`                      // text matching: "exact" (default, case-sensitive substring) or "loose" (fold case, accents, apostrophes, whitespace). Overridden by --match-loose.
 	CrashEvidence           bool          `yaml:"crash_evidence"`             // when a step loses its connection and the app died (Android), keep why: the exit reason and the crash text, masked, as one line for the failed test. --crash-evidence turns it on for a run. Off by default
+	ClearDataBeforeEachTest bool          `yaml:"clear_data_before_each_test"` // wipe the app's data and relaunch before every test, so each starts from a clean state (default: off). Asked once per run, like `clear app data`: --yes, or "clear-data-without-asking" on a simulator or emulator (`probe prefs`), answers it. Overridden by --clear-data-before-each-test.
 	ImplicitWait            time.Duration `yaml:"implicit_wait"`              // retry tap/type/see/... on "not found" for up to this long before failing (default: 0 = off). Overridden by --implicit-wait.
 }
 

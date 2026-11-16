@@ -23,6 +23,25 @@ import (
 // this is bypassed by setting AllowClearData.
 type ConfirmFunc func(message string) bool
 
+// ClearGate answers `clear app data` on the lanes of a parallel or composite run, which have nobody to ask. Yes is --yes: every lane may
+// clear. Lane gives the confirmation of one lane, by platform and serial. It must never prompt, and it returns true only where the person
+// has allowed the wipe without a question (the cli builds it from the setting and the device's verification). A nil Lane refuses.
+type ClearGate struct {
+	Yes  bool
+	Lane func(platform device.Platform, serial string) ConfirmFunc
+}
+
+// ApplyClearGate sets how this context answers `clear app data` on a lane: --yes, and the lane's confirmation. It never prompts, and a
+// refused wipe is the hint. Every lane of a parallel or composite run gets its context from here, so the gate is set in one place.
+func (dc *DeviceContext) ApplyClearGate(g ClearGate) {
+	dc.AllowClearData = g.Yes
+	dc.NoPrompt = true
+	dc.Confirm = nil
+	if g.Lane != nil {
+		dc.Confirm = g.Lane(dc.Platform, dc.Serial)
+	}
+}
+
 // DeviceContext holds device-level information needed for platform operations
 // that bypass the Dart agent (restart, clear data). These operations kill
 // the running app, so they handle reconnection transparently.
@@ -38,6 +57,7 @@ type DeviceContext struct {
 	AgentHost               string        // agent host IP (default "127.0.0.1"; set to device IP for WiFi)
 	AllowClearData          bool          // if true, skip confirmation for clear app data (CI/CD mode)
 	Confirm                 ConfirmFunc   // interactive confirmation callback (nil = deny destructive ops unless AllowClearData)
+	NoPrompt                bool          // a lane of a parallel or composite run: nobody is there to ask, so a refused answer is the hint, not "cancelled"
 	GrantPermissionsOnClear bool          // if true, auto-grant all permissions after clearing data
 	ReconnectDelay          time.Duration // delay after app restart before reconnecting WebSocket (default 2s)
 	RestartDelay            time.Duration // delay after force-stop before relaunching (default 500ms)
@@ -263,6 +283,65 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 	return nil
 }
 
+// iosKeychainSentence is said of an iOS simulator's clear. `simctl keychain reset` clears the keychain items of every app on the
+// simulator, not only this app's. Measured on a scratch simulator: a container wipe leaves this app's keychain item, and the reset removes it.
+const iosKeychainSentence = "It also resets the keychain of ALL apps on this simulator."
+
+// iosKeychainHint is the same fact as a clause of the reason a wipe is refused.
+const iosKeychainHint = "; it also resets the keychain of ALL apps on this simulator"
+
+// askWipe is the one gate under every destructive wipe: nil when the wipe may go ahead, otherwise the error to fail with. --yes
+// (AllowClearData) lets it through. Otherwise a context with a confirmation asks question, and a refused answer is "cancelled by user",
+// or the hint to pass --yes when NoPrompt says nobody is there to ask. A context with no confirmation fails with the hint.
+func (dc *DeviceContext) askWipe(what, reason, question string) error {
+	if dc.AllowClearData {
+		return nil
+	}
+	hint := fmt.Errorf("%s: this is a destructive operation that %s. "+
+		"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", what, reason)
+	if dc.Confirm == nil {
+		return hint
+	}
+	if !dc.Confirm(question) {
+		if dc.NoPrompt {
+			return hint
+		}
+		return fmt.Errorf("%s: cancelled by user", what)
+	}
+	return nil
+}
+
+// AskClearData is the gate for a clear: the clear step, or the before-each question (perTest: its text names the package and device cleaned to one line and says it happens before every test). On an iOS
+// simulator the question and the hint also say what the keychain reset takes with it.
+func (dc *DeviceContext) AskClearData(perTest bool) error {
+	what := "clear app data"
+	if perTest {
+		what = "clear data before each test"
+	}
+	reason := "wipes all app data for " + dc.AppID
+	note := ""
+	if dc.Platform == device.PlatformIOS {
+		reason += iosKeychainHint
+		note = " " + iosKeychainSentence
+	}
+	question := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
+		"  SharedPreferences, databases, and files will be wiped.%s Continue?", dc.AppID, dc.Serial, note)
+	if perTest {
+		question = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
+			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80), note)
+	}
+	return dc.askWipe(what, reason, question)
+}
+
+// AskReinstallForNotifications is the gate for the reinstall that resets an iOS simulator's notification decision. The reinstall deletes
+// the app's data container, so it is asked the way a clear is. Its keychain items are kept: measured, they survive an uninstall.
+func (dc *DeviceContext) AskReinstallForNotifications() error {
+	reason := fmt.Sprintf("reinstalls %s to reset its notification decision; this wipes ALL its app data (its keychain items are kept)", dc.AppID)
+	question := fmt.Sprintf("This will reinstall %s on %s to reset its notification decision.\n"+
+		"  This wipes ALL its app data. Its keychain items are kept. Continue?", dc.AppID, dc.Serial)
+	return dc.askWipe("deny notifications", reason, question)
+}
+
 // ClearAppData clears all app storage and relaunches. This is a destructive
 // operation that wipes SharedPreferences, databases, and all local files.
 // It requires explicit opt-in via --allow-clear-data flag or interactive confirmation.
@@ -275,19 +354,23 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 		return nil
 	}
 
-	// Gate: require explicit permission for destructive data wipe
-	if !dc.AllowClearData {
-		if dc.Confirm == nil {
-			return fmt.Errorf("clear app data: this is a destructive operation that wipes all app data for %s. "+
-				"pass --yes (-y) to `probe test` to permit this (no terminal to ask on), or run interactively", dc.AppID)
-		}
-		msg := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
-			"  SharedPreferences, databases, and files will be wiped. Continue?", dc.AppID, dc.Serial)
-		if !dc.Confirm(msg) {
-			return fmt.Errorf("clear app data: cancelled by user")
-		}
+	// The gate for a data wipe: the step and every question asked before a run's wipes answer here.
+	if err := dc.AskClearData(false); err != nil {
+		return err
 	}
+	return dc.clearAppData(ctx)
+}
 
+// ClearAppDataConfirmed wipes the app's data and relaunches without asking: the caller has already asked (AskClearData). Physical iOS is skipped, as in ClearAppData.
+func (dc *DeviceContext) ClearAppDataConfirmed(ctx context.Context) error {
+	if dc.Platform == device.PlatformIOS && dc.IsPhysical {
+		fmt.Println("    \033[33m⚠\033[0m  clear app data is not supported on physical iOS devices — skipping")
+		return nil
+	}
+	return dc.clearAppData(ctx)
+}
+
+func (dc *DeviceContext) clearAppData(ctx context.Context) error {
 	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", dc.AppID, dc.Serial)
 
 	switch dc.Platform {
@@ -524,6 +607,9 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 			if dc.AppID != "" && !simctl.IsAppRunning(ctx, dc.Serial, dc.AppID) {
 				// The app is not running, so there is no alert to answer, and iOS keeps an earlier
 				// decision (a previous Allow, or --grant) for good: the only way back to "not asked yet" is a reinstall.
+				if err := dc.AskReinstallForNotifications(); err != nil {
+					return err
+				}
 				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", dc.AppID)
 				if err := simctl.Reinstall(ctx, dc.Serial, dc.AppID); err != nil {
 					return fmt.Errorf("deny notifications: %w", err)

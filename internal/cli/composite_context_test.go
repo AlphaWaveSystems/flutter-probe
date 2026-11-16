@@ -9,6 +9,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // compositeFakeADB returns a device manager whose adb answers `getprop ro.hardware` with hardware, so the physical check
@@ -49,7 +50,7 @@ func TestCompositeDeviceContextAsksTheDevice(t *testing.T) {
 		{name: "network adb address", serial: "192.168.1.20:5555", physical: true, refused: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dc := compositeAndroidContext(ctx, cfg, dm, tc.serial)
+			dc := compositeAndroidContext(ctx, cfg, dm, tc.serial, runner.ClearGate{})
 			if dc.IsPhysical != tc.physical {
 				t.Errorf("IsPhysical = %v, want %v", dc.IsPhysical, tc.physical)
 			}

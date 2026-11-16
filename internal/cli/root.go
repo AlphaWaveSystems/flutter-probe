@@ -67,6 +67,7 @@ func init() {
 	rootCmd.AddCommand(lintCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(deviceCmd)
+	rootCmd.AddCommand(prefsCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

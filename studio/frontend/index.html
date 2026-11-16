@@ -237,6 +237,9 @@
             <span>Wait for a target</span>
             <input id="settings-implicit-wait" type="text" placeholder="off (e.g. 2s)" autocomplete="off" spellcheck="false" />
           </label>
+          <label class="settings-check" title="Wipe the app's data and relaunch it before every test, so each test starts from a clean state. You are asked once for the run; on a simulator or emulator your own setting can answer for you (Studio on this computer, below).">
+            <input id="settings-clear-each-test" type="checkbox" /> Clear the app's data before every test
+          </label>
           <label class="settings-row">
             <span>Preferred iOS UDID</span>
             <input id="settings-ios" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
@@ -245,6 +248,12 @@
             <span>Preferred Android serial</span>
             <input id="settings-android" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
           </label>
+          <fieldset class="settings-ai" id="settings-studio-prefs">
+            <legend>Studio on this computer</legend>
+            <label class="settings-check"><input id="settings-clear-data-sim" type="checkbox" /> Run <code>clear app data</code> on simulators and emulators without asking</label>
+            <p id="settings-prefs-warning" class="ai-error" role="alert" hidden></p>
+            <p class="dim">Off by default. A physical phone, a WiFi connection and any device Studio cannot tell is a simulator or emulator always ask. This is your setting on this computer, applied when you press the box: a <code>probe.yaml</code> cannot change it.</p>
+          </fieldset>
           <fieldset class="settings-ai">
             <legend>AI chat context</legend>
             <label class="settings-check"><input id="settings-ai-run-results" type="checkbox" /> Include the last run's failures</label>
