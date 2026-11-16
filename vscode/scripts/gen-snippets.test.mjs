@@ -63,7 +63,8 @@ test("each skeleton has a context the Go gate knows, and no context is left with
 
 test("every documented command with an argument has a hand-written snippet, a skeleton, or a reason it has neither", () => {
   const handWritten = JSON.parse(readFileSync(HAND_WRITTEN_PATH, "utf8"));
-  const { skeletons } = buildSnippetOutputs();
+  // The file on disk is what ships, so the check reads it, not the outputs regenerated from the docs.
+  const skeletons = JSON.parse(readFileSync(SNIPPETS_OUTPUT_PATH, "utf8"));
   const missing = [];
   for (const row of parseDictionary(readFileSync(DICTIONARY_PATH, "utf8"))) {
     const example = splitExamples(row.syntax)[0];
