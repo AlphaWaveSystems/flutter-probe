@@ -638,7 +638,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			maybeAITriage(ctx, statusW, cfg, results, cfg.Reports)
 		}
 
-		return failedRunError(results, nil)
+		return parallelRunError(results, orchErr)
 	}
 
 	// ── Single-device mode (default) ──
