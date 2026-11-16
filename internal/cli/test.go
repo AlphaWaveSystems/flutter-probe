@@ -106,6 +106,7 @@ func init() {
 	f.Duration("implicit-wait", 0, "retry tap/type/see steps whose target is not on screen yet for up to this long before failing (Maestro-style implicit waiting); 0 uses probe.yaml defaults.implicit_wait, default off")
 	f.String("locale", "", `run the app in this language (BCP-47, e.g. "de", "pt-BR", "ar"; "system" = device default). Android 13+ and iOS simulators; the device language itself is unchanged`)
 	f.String("locales", "", `run the whole suite once per language (comma-separated, e.g. "de,ja,ar"), each in its own run; -o report files get the tag in their name`)
+	f.Duration("test-timeout", 0, "wall-clock limit per test attempt (also defaults.test_timeout): a test that runs past it fails with \"test exceeded <limit>\" and the run goes on. 0 turns it off. Each retry and each data-driven row gets its own limit")
 	f.Int("retry-failed", 0, "re-run a failing test up to N extra times before reporting it failed (also defaults.retry_failed_tests); a pass on a retry is reported with its attempt count")
 	f.String("perf-baseline", "", "compare every `start measuring` window with this baseline file; a test whose memory/CPU/frames/data got worse than the tolerance fails (create it with --perf-update-baseline)")
 	f.Float64("perf-tolerance", 20, "percent a measured number may exceed its baseline by before it counts as a regression (small absolute changes are ignored)")
@@ -207,6 +208,16 @@ func init() {
 // has a snake_case Android form (see runner.ResolveAppID), and the converted form is used only when it is the installed
 // one. The ID as written is kept when it is installed, and when neither form is, so a run that works today keeps its ID.
 // iOS keeps the bundle ID as written, and installed is not asked about it.
+// applyTestTimeout sets the per-test limit from --test-timeout when the flag is given, which wins over defaults.test_timeout from the
+// file. Either way the value is checked before the run starts, so a bad limit is an error, not a run that ignores it.
+func applyTestTimeout(cmd *cobra.Command, cfg *config.Config) error {
+	if cmd.Flags().Changed("test-timeout") {
+		d, _ := cmd.Flags().GetDuration("test-timeout")
+		cfg.Defaults.TestTimeout = d
+	}
+	return runner.ValidateTestTimeout(cfg.Defaults.TestTimeout)
+}
+
 func resolveDeviceAppID(written string, platform device.Platform, installed func(id string) bool) string {
 	converted := runner.ResolveAppID(written, platform)
 	if converted == written || installed(written) {
@@ -406,6 +417,9 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		cfg.Visual.PixelDelta = visualPixelDelta
 	}
 
+	if err := applyTestTimeout(cmd, cfg); err != nil {
+		return err
+	}
 	if n, _ := cmd.Flags().GetInt("retry-failed"); n > 0 {
 		cfg.Defaults.RetryFailedTests = n
 	}
