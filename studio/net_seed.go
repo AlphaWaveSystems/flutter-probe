@@ -33,5 +33,5 @@ func (a *App) netSeeded() bool {
 	a.mu.Lock()
 	conn := a.conn
 	a.mu.Unlock()
-	return (conn == nil || conn.client == nil) && netSeed != nil
+	return (conn == nil || a.clientOf(conn) == nil) && netSeed != nil
 }
