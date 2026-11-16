@@ -17,6 +17,46 @@ type HandshakeResult struct {
 	// Capabilities are the optional features the agent reports, such as
 	// CapabilityPressKey. An agent that predates the field reports none.
 	Capabilities []string
+	// FlutterVersion, FlutterChannel, FrameworkRevision and DartVersion describe the build of the APP under test (the Flutter tool puts them into the app as
+	// compile-time defines). Each is "" when the agent does not send it (an older agent, or a build whose tool did not set it) and when what it sent is not
+	// plain version text: letters, digits, dots, dashes and plus signs, at most 64 characters. The text comes from the app, which is untrusted, and is shown in
+	// Studio and the CLI, so anything else is dropped here and never repaired. They are facts of the build, not a promise: a fork or a custom embedder can
+	// report values that are not the real ones.
+	FlutterVersion    string
+	FlutterChannel    string
+	FrameworkRevision string
+	DartVersion       string
+}
+
+// maxBuildFieldLen is the longest build field (version, channel, revision) accepted from an agent.
+const maxBuildFieldLen = 64
+
+// plainBuildText returns s when it is plain version text (letters, digits, '.', '-' and '+', 1 to 64 of them), else "".
+func plainBuildText(s string) string {
+	if s == "" || len(s) > maxBuildFieldLen {
+		return ""
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '-', c == '+':
+		default:
+			return ""
+		}
+	}
+	return s
+}
+
+// newHandshakeResult is what both clients make of an agent's ping answer.
+func newHandshakeResult(res PingResult) *HandshakeResult {
+	return &HandshakeResult{
+		AgentVersion:      res.AgentVersion,
+		Capabilities:      res.Capabilities,
+		FlutterVersion:    plainBuildText(string(res.FlutterVersion)),
+		FlutterChannel:    plainBuildText(string(res.FlutterChannel)),
+		FrameworkRevision: plainBuildText(string(res.FrameworkRevision)),
+		DartVersion:       plainBuildText(string(res.DartVersion)),
+	}
 }
 
 // CapabilityPressKey is reported by an agent that presses the key of a `press <key>` step (the press_key device action).

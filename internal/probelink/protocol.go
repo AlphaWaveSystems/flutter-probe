@@ -233,6 +233,26 @@ type PingResult struct {
 	OK           bool     `json:"ok"`
 	AgentVersion string   `json:"agent_version,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
+	// The app's own build, as its Flutter tool recorded it (see HandshakeResult). Optional: an older agent sends none of them.
+	FlutterVersion    OptionalText `json:"flutter_version,omitempty"`
+	FlutterChannel    OptionalText `json:"flutter_channel,omitempty"`
+	FrameworkRevision OptionalText `json:"framework_revision,omitempty"`
+	DartVersion       OptionalText `json:"dart_version,omitempty"`
+}
+
+// OptionalText is a text field an app may send or not. Anything but a JSON string (a number, null, an object) reads as "": an app is not trusted to send the
+// right type, and a field it gets wrong must not fail the connect.
+type OptionalText string
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (t *OptionalText) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		*t = ""
+		return nil
+	}
+	*t = OptionalText(s)
+	return nil
 }
 
 // WidgetTreeResult contains the serialised widget tree.

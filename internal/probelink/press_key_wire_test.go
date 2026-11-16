@@ -20,6 +20,7 @@ type keyAgent struct {
 	version      string
 	capabilities []string
 	actions      chan json.RawMessage
+	extra        map[string]any // more fields of the ping answer, such as the build info
 }
 
 func (a keyAgent) reply(req Request) Response {
@@ -39,6 +40,9 @@ func (a keyAgent) reply(req Request) Response {
 	}
 	if a.capabilities != nil {
 		body["capabilities"] = a.capabilities
+	}
+	for k, v := range a.extra {
+		body[k] = v
 	}
 	raw, _ := json.Marshal(body)
 	return Response{JSONRPC: "2.0", ID: req.ID, Result: raw}

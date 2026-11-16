@@ -77,7 +77,7 @@
   "don't see ... in webview": {
     "prefix": "don't see css:\".error\" in webview",
     "body": "don't see css:\"${1:.error}\" in webview",
-    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only"
+    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only; the app must host the probe agent"
   },
   "don't see native": {
     "prefix": "don't see native \"...\"",
@@ -147,7 +147,7 @@
   "see ... in webview": {
     "prefix": "see \"Getting Started\" in webview",
     "body": "see \"${1:Getting Started}\" in webview",
-    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only"
+    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only; the app must host the probe agent"
   },
   "see checked": {
     "prefix": "see \"Agree\" is checked",
@@ -257,7 +257,7 @@
   "store text of ... in webview": {
     "prefix": "store text of css:\"#total\" in webview as total",
     "body": "store text of css:\"${1:#total}\" in webview as total",
-    "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but open link, add media, set language, type native, screenshot names, call, mock, start measuring and system dialog steps refuse it. Needs a local Android device; see Reading text from a WebView"
+    "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but open link, add media, set language, type native, screenshot names, call, mock, start measuring and system dialog steps refuse it. Needs a local Android device; see Reading text from a WebView. The app must host the probe agent."
   },
   "sync": {
     "prefix": "sync \"label\"",
@@ -292,7 +292,7 @@
   "type ... in webview": {
     "prefix": "type \"hello\" into css:\"#message\" in webview",
     "body": "type \"${1:hello}\" into css:\"${2:#message}\" in webview",
-    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element cannot take typed text: a disabled or read-only field, an input of a type that takes no text (checkbox, radio, file, button, range, color, date and time types), an element that is not a text field (a select, a button, a plain element), or one that does not take the focus. Text and number inputs, textareas and content-editable elements are typed into. Android only"
+    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element cannot take typed text: a disabled or read-only field, an input of a type that takes no text (checkbox, radio, file, button, range, color, date and time types), an element that is not a text field (a select, a button, a plain element), or one that does not take the focus. Text and number inputs, textareas and content-editable elements are typed into. Android only; the app must host the probe agent"
   },
   "type if visible": {
     "prefix": "type \"text\" into \"Field\" if visible",
@@ -317,7 +317,7 @@
   "wait until ... appears in webview": {
     "prefix": "wait until \"Message sent\" appears in webview",
     "body": "wait until \"${1:Message sent}\" appears in webview",
-    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only"
+    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only; the app must host the probe agent"
   },
   "wait until appears matching": {
     "prefix": "wait until \"0 ml\" appears matching \"^0 ml$\"",

@@ -643,7 +643,22 @@ function refreshPlainKeyNote(): void {
 $("settings-ai-provider").addEventListener("change", refreshPlainKeyNote);
 
 // The key is never in the form. probe.yaml names only the environment variable, and the keychain holds a saved key.
+// The AI form as it was loaded (or last saved). Save sends it back as `base`, so Studio writes only what the person changed from it and
+// notices a probe.yaml that changed on disk under the form.
+let loadedAI: main.AISettings | undefined;
+
 function fillAIForm(s: main.AISettings): void {
+  setAIFields(s);
+  $("settings-ai-error").hidden = true;
+  $("settings-ai-models").replaceChildren();
+  $("settings-ai-find-status").textContent = "";
+  $("settings-ai-result").replaceChildren();
+}
+
+// setAIFields puts the settings the file holds into the form's fields, and remembers them as the form's base: the next Save writes only what
+// the person changes from them. It leaves the connection test and the model list alone, so it can refresh a form that stays open.
+function setAIFields(s: main.AISettings): void {
+  loadedAI = main.AISettings.createFrom({ ...s, base: undefined });
   ($("settings-ai-provider") as HTMLSelectElement).value = s.provider ?? "";
   ($("settings-ai-endpoint") as HTMLInputElement).value = s.endpoint ?? "";
   ($("settings-ai-model") as HTMLInputElement).value = s.model ?? "";
@@ -658,10 +673,6 @@ function fillAIForm(s: main.AISettings): void {
   ($("settings-ai-remote") as HTMLInputElement).checked = s.allowRemoteEndpoint === true;
   aiPlainKeyInFile = s.plainKeyInFile === true;
   refreshPlainKeyNote();
-  $("settings-ai-error").hidden = true;
-  $("settings-ai-models").replaceChildren();
-  $("settings-ai-find-status").textContent = "";
-  $("settings-ai-result").replaceChildren();
 }
 
 function readAIForm(): main.AISettings {
@@ -675,6 +686,7 @@ function readAIForm(): main.AISettings {
     vision: ($("settings-ai-vision") as HTMLInputElement).checked,
     allowRemoteEndpoint: ($("settings-ai-remote") as HTMLInputElement).checked,
     plainKeyInFile: false,
+    base: loadedAI,
   });
 }
 
@@ -1283,7 +1295,15 @@ $("btn-settings-save").addEventListener("click", async () => {
   aiError.hidden = true;
   let aiFailure: unknown = null;
   try {
-    await SaveAISettings(workspaceRoot, readAIForm());
+    const form = readAIForm();
+    await SaveAISettings(workspaceRoot, form);
+    // The file now has what the person changed, and keeps any edit made elsewhere under the form: show what it holds, and make it the base
+    // for the next Save (the form can stay open on an error). If it cannot be read back, the form itself is the base.
+    try {
+      setAIFields(await LoadAISettings(workspaceRoot));
+    } catch {
+      loadedAI = main.AISettings.createFrom({ ...form, base: undefined });
+    }
   } catch (err) {
     aiFailure = err;
   }
