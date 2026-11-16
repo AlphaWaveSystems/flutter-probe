@@ -93,6 +93,11 @@ and AI agents can reason about behavior.
 | App control | `probe.run_dart`, `probe.mock`, `probe.open_link`, `probe.set_time_dilation`, `probe.set_next_token`, clipboard and recording methods |
 | Signals from tests | `probe.biometric_signal`, `probe.signal`, `probe.set_output`, `probe.drain_output` |
 
+The `probe.ping` answer carries the agent's version and capabilities, and, when the app's build knows them, `flutter_version`, `flutter_channel`,
+`framework_revision` and `dart_version`: the Flutter and Dart that built the app (the Flutter tool records them in the app at build time; they are not the
+Flutter that published `probe_agent`). Each field is optional and left out when unknown. The CLI keeps only plain version text (letters, digits, dots, dashes
+and plus signs, at most 64 characters) and ignores the rest. A fork or a custom embedder can report values that are not the real ones.
+
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
 not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed.
 
