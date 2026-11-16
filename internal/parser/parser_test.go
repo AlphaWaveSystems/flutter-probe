@@ -739,6 +739,42 @@ func TestParser_SwipeFrom(t *testing.T) {
 	}
 }
 
+// TestParser_SwipeDirectionWord checks the word where a swipe's direction goes: up, down, left or right in any case, or nothing, which is a
+// down swipe. Any other word is a parse error that lists the four directions, and it is not read as the next step: before, `swipe sideways`
+// ran a down swipe and the word became a step of its own. An element name must be quoted, so a bare name is refused the same way.
+func TestParser_SwipeDirectionWord(t *testing.T) {
+	for _, tc := range []struct {
+		src       string
+		direction parser.SwipeDirection
+	}{
+		{`swipe`, parser.SwipeDown},
+		{`swipe up`, parser.SwipeUp},
+		{`swipe Left`, parser.SwipeLeft},
+		{`swipe RIGHT on "Menu"`, parser.SwipeRight},
+		{`swipe down over 30 percent`, parser.SwipeDown},
+	} {
+		a := firstAction(t, mustParse(t, testBody(tc.src)).Tests[0].Body)
+		if a.Verb != parser.VerbSwipe || a.Direction != tc.direction {
+			t.Errorf("%q: verb %q, direction %q; want swipe, %q", tc.src, a.Verb, a.Direction, tc.direction)
+		}
+	}
+	for _, src := range []string{
+		`swipe sideways`,
+		`swipe upward`,
+		`swipe Menu`,
+		`swipe login`,
+	} {
+		_, err := parser.ParseFile(testBody(src))
+		if err == nil {
+			t.Errorf("%q: want a parse error", src)
+			continue
+		}
+		if !strings.Contains(err.Error(), "up, down, left or right") {
+			t.Errorf("%q: the error must list the four directions, got %v", src, err)
+		}
+	}
+}
+
 // TestParser_Scroll mirrors TestParser_Swipe — scroll's grammar was
 // previously untested even though it shares the same parse function shape
 // (direction + optional selector-scoping via "in"/"on").

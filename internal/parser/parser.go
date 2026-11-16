@@ -735,14 +735,13 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		return nil, fmt.Errorf("line %d: swipe from needs a target before it, for example: swipe right on \"Menu\" from 2 percent", line)
 	}
 	p.skipFillers()
-	// A bare word where the direction goes is not one of the four: parseDirection runs the swipe down and leaves the word
-	// unread, so it parses as the next step. Record it here, without consuming it, so lint can say so.
-	dirWord := ""
+	// A bare word where the direction goes must be one of the four. parseDirection would run the swipe down and leave the word unread,
+	// so the word would parse as the next step: a silent down swipe. Refuse it, and say what to write.
 	if w := p.peek(); w.Type == TOKEN_IDENT {
 		switch strings.ToLower(w.Literal) {
 		case "up", "down", "left", "right":
 		default:
-			dirWord = w.Literal
+			return nil, fmt.Errorf(`line %d: swipe %q is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "%s"`, line, w.Literal, w.Literal)
 		}
 	}
 	dir := p.parseDirection()
@@ -806,7 +805,7 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		percent = n
 	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, StartPercent: startPercent, DirectionWord: dirWord, Line: line}, nil
+	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, StartPercent: startPercent, Line: line}, nil
 }
 
 func (p *Parser) parseActionScroll() (Step, error) {
