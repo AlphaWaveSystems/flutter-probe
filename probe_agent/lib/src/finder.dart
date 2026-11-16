@@ -187,7 +187,7 @@ class ProbeFinder {
           final results = <Element>[];
           for (final c in containers) {
             _visitElement(c, (e) {
-              if (_matchesText(e.widget, text) && _isVisible(e)) {
+              if (_matchesText(e, text) && _isVisible(e)) {
                 results.add(e);
               }
             });
@@ -238,7 +238,7 @@ class ProbeFinder {
   List<Element> _findByText(String text) {
     final results = <Element>[];
     walkTree((e) {
-      if (_matchesText(e.widget, text)) {
+      if (_matchesText(e, text)) {
         results.add(e);
       }
     });
@@ -295,7 +295,11 @@ class ProbeFinder {
 
   bool _loose = false;
 
-  bool _matchesText(Widget widget, String text) {
+  /// Whether [e] is a widget that shows [text]. The value of an obscured field (a password) is never a match target: a selector that could
+  /// find a field by the text it holds would let a test learn the value by asking about it, one prefix at a time. The field is still found by its
+  /// key, its label or its hint, and a Text that mirrors the value is just text (see [isSecretEditable] for the limits).
+  bool _matchesText(Element e, String text) {
+    final widget = e.widget;
     if (widget is Text) {
       final data = widget.data;
       return data != null && (data == text || _textHit(data, text));
@@ -304,9 +308,20 @@ class ProbeFinder {
       return _textHit(widget.text.toPlainText(), text);
     }
     if (widget is EditableText) {
+      if (isSecretEditable(e)) return false;
       return _textHit(widget.controller.text, text);
     }
     return false;
+  }
+
+  /// True when an obscured field is on the screen. It does not depend on what was asked, so a failure message can say that the value of such a
+  /// field is never searched without telling whether it would have matched.
+  bool hasSecretField() {
+    var found = false;
+    walkTree((e) {
+      if (!found && e.widget is EditableText && isSecretEditable(e)) found = true;
+    });
+    return found;
   }
 
   /// Returns true if the element is currently visible on screen.

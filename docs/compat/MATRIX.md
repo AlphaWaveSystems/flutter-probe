@@ -50,12 +50,11 @@ the radio's own group value when it has one and otherwise the nearest `RadioGrou
 |---|---|---|---|---|---|
 | `TextField` (`wf_textfield`) | pass | pass | pass via the mirror (`Plain: (empty)` after `clear`; the field's own text was not read) | not assessed (read through a mirror text) | partly |
 | `TextFormField` with a validator (`wf_formfield`, `wf_validate`) | pass | pass | not assessed | mirror only (the test asserts `Form error: Required` and `Form error: none`, the mirror of the validator's result; the error text the field itself shows is not asserted) | partly |
-| `TextField` with `obscureText` (`wf_password`) | pass | pass (the mirror shows 6 characters) | not assessed | not assessed (see the observation) | partly |
+| `TextField` with `obscureText` (`wf_password`) | pass | pass (the mirror shows 6 characters) | not assessed | the value is not readable by design: `don't see "secret"` and `don't see "sec"` pass (see below) | pass for what is asserted |
 | `TextField` with `maxLines: 3` (`wf_multiline`) | pass | pass for one line; **a line break was not typed** | not assessed | not assessed | partly |
 | `CupertinoTextField` (`wf_cupertino_field`) | pass | pass | not assessed | not assessed (mirror text only) | partly |
 
-**Observation, not a verdict:** after typing into an obscured field, `see "<the typed text>"` finds it. The agent's own tests promise that an obscured value is never *echoed* in its output; they do not say a check
-for the value must fail, so this was left out of the test rather than asserted either way.
+**The value of an obscured field is never searchable (agent rule).** The agent used to match a text selector against an obscured field's value, so `see "<typed text>"` (or a prefix of it), `wait until ... appears`, `tap` and `selector_bounds` by that text found the field: a test could learn the value one prefix at a time. Its responses never carried the value (`dump_tree`, `visible_summary`, `hit_test`, the failure messages: measured, none did). The value is now never a match target; the field is still found by its id, key, label or hint. The test asserts it (`don't see "secret"`, `don't see "sec"`): with an agent from before the rule it fails at `don't see "secret"`. To assert on such a field, assert what the screen shows about it: a `Text` with its length (`see "Password length: 6"`, as `wf_password` does), the field by its id (`see #wf_password`), or what the app does after the value is accepted; `see #pw is filled` and `is empty` are planned. A suite that taps "show password" and then asserts the value now fails, because a field seen obscured stays secret once the app shows it. Limits: a field that was never seen obscured is ordinary text, two fields that share a key share the state, a `Text` that mirrors the value is just text, and the value is still readable through `run_dart`, screenshots and the app's own logs, which this rule does not cover.
 
 ### How it was run
 

@@ -47,7 +47,7 @@ Commands that verify the state of the UI.
 
 | Command | Syntax | Description |
 |---|---|---|
-| `see` | `see "Text"` | Assert that text is visible on screen. A text selector matches substrings; use `see matching` for an exact count or zero-state check |
+| `see` | `see "Text"` | Assert that text is visible on screen. A text selector matches substrings; use `see matching` for an exact count or zero-state check. The value of an obscured (password) field is never matched |
 | `don't see` | `don't see "Text"` | Assert that text is NOT visible (`dont see` is accepted too) |
 | `see native` | `see native "..."` | Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as "not found" on other platforms |
 | `don't see native` | `don't see native "..."` | Assert a native UI element matching the query is NOT present |

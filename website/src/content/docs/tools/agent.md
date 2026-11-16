@@ -99,7 +99,7 @@ Flutter that published `probe_agent`). Each field is optional and left out when 
 and plus signs, at most 64 characters) and ignores the rest. A fork or a custom embedder can report values that are not the real ones.
 
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
-not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed.
+not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed. The value of an obscured (password) field is never matched by a selector and never listed there; the field is found by its id, label or hint (see Password fields in the ProbeScript syntax page).
 
 ## Selectors
 
