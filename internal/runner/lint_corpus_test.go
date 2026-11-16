@@ -29,7 +29,7 @@ func renderLintReport(b *strings.Builder, label, path string, report LintReport,
 		return
 	}
 	for _, w := range report.Program {
-		fmt.Fprintf(b, "program warning: %s\n", w)
+		fmt.Fprintf(b, "program warning: %s\n", w.Message)
 	}
 	for _, f := range report.References {
 		kind := "error"

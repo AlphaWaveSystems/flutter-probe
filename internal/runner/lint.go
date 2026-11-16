@@ -46,7 +46,13 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 	if err != nil {
 		return nil, err
 	}
-	prog, err := parser.ParseFile(string(src))
+	return lintReferencesSource(cfg, path, string(src))
+}
+
+// lintReferencesSource is LintReferences over the given text. The file at path is only used to resolve use targets and the
+// CSV examples of `with examples from` relative to its folder.
+func lintReferencesSource(cfg *config.Config, path, content string) ([]LintFinding, error) {
+	prog, err := parser.ParseFile(content)
 	if err != nil {
 		return nil, err
 	}
@@ -169,9 +175,10 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 // LintReport is what LintFile found in one file. probe lint prints the References errors first, then Program, then the
 // References warnings, each line numbered where it has a line.
 type LintReport struct {
-	// Program holds the warnings of the program rules, as the text probe lint prints (each one names its test, hook or
-	// recipe and, where it has one, its line).
-	Program []string
+	// Program holds the warnings of the program rules. Message is the text probe lint prints; Line is the line the parser
+	// has for the finding (the test's line for a test with no steps or a dart share, the step's line for a count check),
+	// or 0 where it has none.
+	Program []LintFinding
 	// References holds the reference findings, in line order, as LintReferences returns them.
 	References []LintFinding
 }
@@ -188,11 +195,26 @@ func LintFile(cfg *config.Config, path string) (LintReport, error) {
 	if err != nil {
 		return LintReport{}, err
 	}
-	prog, err := parser.ParseFile(string(src))
+	return LintSource(cfg, path, string(src))
+}
+
+// LintSource lints content as if it were the file at path: the editor's text, say, which may differ from the file on disk. It
+// gives the same report as LintFile for the same content. It never touches a device, and it writes no package state, so
+// concurrent calls are safe; cfg is only read.
+//
+// path is used for one thing: resolving the `use` targets and the CSV examples of `with examples from` relative to the file's
+// folder, as they are for a file on disk. The file need not exist. The config rules are LintFile's: cfg.Recipes is used as
+// given, so a relative path is relative to the working directory, and probe lint loads cfg from --config or from the probe.yaml
+// in the working directory, with the defaults when there is none. A caller such as Studio must load cfg the same way and run
+// from the same working directory.
+//
+// The error is returned only when content cannot be parsed or the recipes folder cannot be read. A finding is not an error.
+func LintSource(cfg *config.Config, path string, content string) (LintReport, error) {
+	prog, err := parser.ParseFile(content)
 	if err != nil {
 		return LintReport{}, err
 	}
-	refs, err := LintReferences(cfg, path)
+	refs, err := lintReferencesSource(cfg, path, content)
 	if err != nil {
 		return LintReport{}, err
 	}
