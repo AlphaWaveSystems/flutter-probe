@@ -3,6 +3,12 @@ package runner
 import (
 	"context"
 	"errors"
+	"fmt"
+	"go/ast"
+	parser2 "go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -213,5 +219,143 @@ func TestTheHintIsBoundedAndCancellable(t *testing.T) {
 	}
 	if reconnectHintTimeout != 5*time.Second {
 		t.Errorf("the hint's bound is %v, documented as 5 s", reconnectHintTimeout)
+	}
+}
+
+// ---- review of #665 ----
+
+// Both reconnect paths start from reconnectDialOptions and build no dial options of their own: a literal in either would leave out the own-forward marker.
+func TestBothReconnectPathsUseTheSharedDialOptions(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser2.ParseFile(fset, "device_context.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, d := range f.Decls {
+		fn, ok := d.(*ast.FuncDecl)
+		if !ok || (fn.Name.Name != "Reconnect" && fn.Name.Name != "ReconnectWithToken") {
+			continue
+		}
+		calls, literals := 0, 0
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			switch v := n.(type) {
+			case *ast.CallExpr:
+				if sel, ok := v.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "reconnectDialOptions" {
+					calls++
+				}
+			case *ast.CompositeLit:
+				if sel, ok := v.Type.(*ast.SelectorExpr); ok && sel.Sel.Name == "DialOptions" {
+					literals++
+				}
+			}
+			return true
+		})
+		seen[fn.Name.Name] = true
+		if calls != 1 || literals != 0 {
+			t.Errorf("%s: %d calls of reconnectDialOptions and %d DialOptions literals, want 1 and 0", fn.Name.Name, calls, literals)
+		}
+	}
+	if !seen["Reconnect"] || !seen["ReconnectWithToken"] {
+		t.Errorf("a reconnect function was not found: %v", seen)
+	}
+}
+
+// A kill step that works, run through runStep, marks the app as stopped; a restart that works afterwards (the same executor, an adb that succeeds) clears it.
+func TestAKillStepThroughRunStepMarksTheApp(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "adb")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dc := &DeviceContext{Serial: ceSerial, Platform: device.PlatformAndroid, AppID: cePkg, Manager: device.NewManagerWithPaths(device.ToolPaths{ADB: bin})}
+	e := NewExecutor(&ceTimeoutClient{err: nil}, dc, nil, 2*time.Second, false)
+	if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbKill}); err != nil {
+		t.Fatalf("the kill step failed: %v", err)
+	}
+	if !e.appStopped {
+		t.Error("a kill step that worked did not mark the app as stopped")
+	}
+}
+
+// A cancelled run gets no hint and costs no adb call, through the step itself.
+func TestACancelledRunGetsNoHintThroughRunStep(t *testing.T) {
+	a := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}}
+	e := hintExecutor(a, false)
+	e.client = &ceClient{log: new([]string)}
+	e.SetReconnectPolicy(1, time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := e.runStep(ctx, parser.ActionStep{Verb: parser.VerbPressEnter})
+	if err == nil || strings.Contains(err.Error(), " — the app ") || len(a.calls) != 0 {
+		t.Errorf("err %v, %d adb calls", err, len(a.calls))
+	}
+}
+
+// The step's own error stays in the chain: errors.Is finds it through the reconnect failure and the hint.
+func TestTheStepErrorStaysInTheChainThroughTheHint(t *testing.T) {
+	sentinel := errors.New("the original failure")
+	a := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}}
+	e := hintExecutor(a, false)
+	e.client = &ceTimeoutClient{err: fmt.Errorf("probelink: write: broken pipe: %w", sentinel)}
+	e.SetReconnectPolicy(1, time.Hour)
+	e.hooks.reconnect = func(ctx context.Context, attempt int) error { return errors.New("reconnect refused") }
+	err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
+	if err == nil || !errors.Is(err, sentinel) || !strings.Contains(err.Error(), " — the app ") {
+		t.Errorf("err = %v (is the original: %v)", err, errors.Is(err, sentinel))
+	}
+}
+
+// ceFlakyClient loses the connection once and then works, which is what a successful reconnect looks like to the step.
+type ceFlakyClient struct {
+	fakeAIClient
+	calls int
+}
+
+func (c *ceFlakyClient) DeviceAction(ctx context.Context, action, value string) error {
+	c.calls++
+	if c.calls == 1 {
+		return errors.New("probelink: write: broken pipe")
+	}
+	return nil
+}
+
+// The hint is asked for after a failed reconnect only: not before the reconnect, and not at all when the reconnect worked and the retried step passed.
+func TestTheHintComesAfterTheReconnectAndOnlyWhenItFailed(t *testing.T) {
+	var log []string
+	a := &ceAdb{log: &log, date: "2026-11-15 19:31:15", pidof: []string{""}}
+	e := hintExecutor(a, false)
+	e.client = &ceTimeoutClient{err: errors.New("probelink: write: broken pipe")}
+	e.SetReconnectPolicy(1, time.Hour)
+	e.hooks.reconnect = func(ctx context.Context, attempt int) error {
+		log = append(log, "reconnect")
+		return errors.New("reconnect refused")
+	}
+	_ = e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
+	rec := -1
+	for i, l := range log {
+		if l == "reconnect" && rec < 0 {
+			rec = i
+		}
+	}
+	if rec < 0 || len(log) < 2 {
+		t.Fatalf("log = %v", log)
+	}
+	for i, l := range log {
+		if strings.HasPrefix(l, "adb ") && i < rec {
+			t.Errorf("an adb call came before the reconnect: %v", log)
+		}
+	}
+	// a reconnect that works and a retried step that passes: nothing is asked
+	log = nil
+	b := &ceAdb{log: &log, date: "2026-11-15 19:31:15", pidof: []string{""}}
+	e2 := hintExecutor(b, false)
+	e2.client = &ceFlakyClient{}
+	e2.SetReconnectPolicy(1, time.Hour)
+	e2.hooks.reconnect = func(ctx context.Context, attempt int) error { log = append(log, "reconnect"); return nil }
+	if err := e2.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter}); err != nil {
+		t.Fatalf("the retried step failed: %v", err)
+	}
+	if len(b.calls) != 0 || len(log) != 1 || log[0] != "reconnect" {
+		t.Errorf("after a successful reconnect: %d adb calls, log %v", len(b.calls), log)
 	}
 }

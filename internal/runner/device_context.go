@@ -162,7 +162,6 @@ func (dc *DeviceContext) CloseSystemDriver() {
 	}
 }
 
-// agentHost returns the configured agent host or the default.
 // reconnectDialOptions are the dial options every reconnect starts from: where the agent is, the token, the timeout, the hook that re-creates a vanished `adb forward`
 // while dials are refused (another tool on the same adb server clearing forwards, an adb restart), and whether the port is this CLI's own forward.
 func (dc *DeviceContext) reconnectDialOptions(token string) probelink.DialOptions {
@@ -180,6 +179,7 @@ func (dc *DeviceContext) reconnectDialOptions(token string) probelink.DialOption
 // adb forward for holding the port (reconnectHint says so when the forward belongs to another device).
 func (dc *DeviceContext) ownAdbForward() bool { return dc.Platform == device.PlatformAndroid }
 
+// agentHost returns the configured agent host or the default.
 func (dc *DeviceContext) agentHost() string {
 	if dc.AgentHost != "" {
 		return dc.AgentHost

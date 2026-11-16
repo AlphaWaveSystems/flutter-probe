@@ -521,3 +521,17 @@ func TestForwardSerialRefusesAnythingThatIsNotAPlainSerial(t *testing.T) {
 		}
 	}
 }
+
+// A serial starts with a letter or a digit, so it can never read as an option of the command it is put into.
+func TestForwardSerialCannotLookLikeAnOption(t *testing.T) {
+	for _, serial := range []string{"--force", "-x", "-", ".x", ":5555", "_a"} {
+		if got, ok := ForwardSerial(context.Background(), forwardListRunner(serial+" tcp:48792 tcp:48792\n"), 48792); ok || got != "" {
+			t.Errorf("%q: %q %v", serial, got, ok)
+		}
+	}
+	for _, serial := range []string{"1abc", "a", "9", "x-y"} {
+		if got, ok := ForwardSerial(context.Background(), forwardListRunner(serial+" tcp:48792 tcp:48792\n"), 48792); !ok || got != serial {
+			t.Errorf("%q refused: %q %v", serial, got, ok)
+		}
+	}
+}

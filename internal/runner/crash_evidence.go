@@ -277,3 +277,9 @@ func (e *Executor) noteAppState(step parser.Step, err error) {
 		e.appStopped = false
 	}
 }
+
+// executorTestHooks replace parts of an Executor that cannot be driven in a unit test. The zero value is the real behaviour; only tests set it.
+type executorTestHooks struct {
+	// reconnect replaces the auto-reconnect attempt of a step that lost its connection.
+	reconnect func(ctx context.Context, attempt int) error
+}
