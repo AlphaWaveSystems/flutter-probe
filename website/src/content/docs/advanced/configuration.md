@@ -125,7 +125,7 @@ The agent is not part of the pin. `probe test` prints `probe CLI X / agent A` on
 | `video` | bool | `false` | Enable video recording |
 | `retry_failed_tests` | int | `0` | Re-run a failing test up to this many extra times (0 = off); also `--retry-failed N` |
 | `test_timeout` | duration | `0` (off) | Wall-clock limit per test attempt, e.g. `90s`; a test that runs past it fails with `test exceeded 90s`. Each retry gets its own limit. Overridden by `--test-timeout`; a value below 1s, or negative, is an error. See [timeouts and retries](/advanced/timeouts-and-retries/#a-limit-for-each-test) |
-| `grant_permissions_on_clear` | bool | `false` | Auto-grant permissions after `clear app data` |
+| `grant_permissions_on_clear` | bool | `false` | Auto-grant permissions after `clear app data`, on a single-device, parallel or composite run. `--yes` grants too; `--no-grant-on-clear` turns it off |
 
 ### devices
 

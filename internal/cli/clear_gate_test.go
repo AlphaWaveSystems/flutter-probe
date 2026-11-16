@@ -58,7 +58,7 @@ func TestClearGateLanes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := logLength(t, log)
-			gate := clearGateFor(ctx, dm, tc.yes, tc.withoutAsk, "com.example.app")
+			gate := clearGateFor(ctx, dm, tc.yes, tc.withoutAsk, false, "com.example.app")
 			dc := &runner.DeviceContext{Platform: tc.platform, Serial: tc.serial, AppID: "com.example.app"}
 			dc.ApplyClearGate(gate)
 			err := dc.AskClearData(false)
@@ -82,7 +82,7 @@ func TestClearGateLaneDoesNotCheckUntilAsked(t *testing.T) {
 	bin, log := clearGateADB(t)
 	dm := device.NewManagerWithPaths(device.ToolPaths{ADB: bin})
 	before := logLength(t, log)
-	gate := clearGateFor(context.Background(), dm, false, true, "com.example.app")
+	gate := clearGateFor(context.Background(), dm, false, true, false, "com.example.app")
 	confirm := gate.Lane(device.PlatformAndroid, "emulator-5590")
 	if logLength(t, log) != before {
 		t.Fatal("building a lane's confirmation must not check the device")
