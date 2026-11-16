@@ -1815,6 +1815,10 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 
 // ---- Auto-Reconnect ----
 
+// IsConnectionLost says whether err is the kind of failure a lost agent connection gives (a closed socket, a broken pipe, a reset), so a caller
+// can tell a test that failed that way from one that failed on a step. It is the check the runner makes before it tries to reconnect.
+func IsConnectionLost(err error) bool { return isConnectionError(err) }
+
 // isConnectionError returns true if the error indicates a broken WebSocket connection.
 func isConnectionError(err error) bool {
 	if err == nil || isWebViewStepError(err) {

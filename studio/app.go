@@ -1040,6 +1040,14 @@ type RunResult struct {
 	Error    string  `json:"error,omitempty"`
 	// Perf holds the `start measuring` windows of the test (memory, CPU, frames, network).
 	Perf []perf.Metrics `json:"perf,omitempty"`
+	// Crash is the one line that says why the app died during a failed test (set only when crash evidence was on and the app died). The window
+	// shows it as text and never sends it to an AI provider.
+	Crash string `json:"crash,omitempty"`
+	// TimedOut and TimeLimitSeconds say the test ran past defaults.test_timeout, and what that limit was.
+	TimedOut         bool    `json:"timedOut,omitempty"`
+	TimeLimitSeconds float64 `json:"timeLimitSeconds,omitempty"`
+	// CrashHint says an Android test failed with a lost connection while crash evidence was off: the window can say how to turn it on.
+	CrashHint bool `json:"crashHint,omitempty"`
 }
 
 // RunFile parses and executes a .probe file in-process. Per-test events are
@@ -1104,7 +1112,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 
 	r := runner.New(conn.cfg, a.clientOf(conn), conn.deviceCtx, a.runOptions(conn, path, sel))
 	r.OnResult(func(res runner.TestResult) {
-		rr := toRunResult(res)
+		rr := a.runResultFor(res, conn)
 		a.track.result(rr)
 		a.emit("run:result", rr)
 	})

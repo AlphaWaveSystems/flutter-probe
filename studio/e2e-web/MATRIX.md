@@ -67,6 +67,7 @@ Status column (filled by a run; see `RESULTS.md` for the dated record): ✅ pass
 | E-01 | Syntax and lint | ProbeScript highlighting; lint marks an unknown step | B | ui, probescript tests |
 | E-06 | Problems tab (lint) | rows + markers with lines; click/Enter goes to the line without typing; lints unsaved text; 400 ms debounce; stale answer dropped; lint failure is one line; unparsable text "Not checked"; findings are text | B | lint-problems lp-01..08 |
 | E-07 | Confirm before `clear app data` | dialog names app + device; Cancel focused; Escape/Cancel deny; Enter never presses Clear data; second step asks again; timeout / no window / cancelled run deny; unknown kind refused; ids single-use and bound to the run; automation cannot answer | B/D | confirm-dialog cd-01..06, confirm-device cd-10/11, Go confirm_test |
+| R-09 | Result notes (crash line, timeout, hint) | crash line under the error; timeout + limit; hint only with a lost connection on Android and evidence off; none for passed/skipped; markup is text; not sent to a provider | B | result-notes rn-01..06, Go run_result_test |
 | E-02 | Record | disabled without device (reason shown); records taps into the editor | B/W | ui 24, W-13 |
 | E-03 | Insert tap | + tap writes a selector; refuses control characters (U+2028/2029 and hidden set tracked, see PR queue) | B | device-stream tests |
 | E-04 | Inspector / widget tree | loads after connect; refresh | D/W | device.spec, W-14 |
