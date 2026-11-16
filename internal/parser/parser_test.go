@@ -739,6 +739,69 @@ func TestParser_SwipeFrom(t *testing.T) {
 	}
 }
 
+// TestParser_SwipeDirectionWord checks the token where a swipe's direction goes: up, down, left or right in any case, or nothing, which is a
+// down swipe. A quoted name, an #id, over or the end of the line may come there instead. Any other token is a parse error that lists the
+// four directions. It is not read as the next step: before, `swipe sideways` and `swipe 5` ran a down swipe and the token became a step of
+// its own. An element name must be quoted, so a bare name is refused the same way.
+func TestParser_SwipeDirectionWord(t *testing.T) {
+	for _, tc := range []struct {
+		src       string
+		direction parser.SwipeDirection
+	}{
+		{`swipe`, parser.SwipeDown},
+		{`swipe up`, parser.SwipeUp},
+		{`swipe Up`, parser.SwipeUp},
+		{`swipe DOWN`, parser.SwipeDown},
+		{`swipe Left`, parser.SwipeLeft},
+		{`swipe RIGHT on "Menu"`, parser.SwipeRight},
+		{`swipe down over 30 percent`, parser.SwipeDown},
+		{`swipe over 40 percent`, parser.SwipeDown},
+		{`swipe "Menu"`, parser.SwipeDown},
+		{`swipe #pager`, parser.SwipeDown},
+	} {
+		a := firstAction(t, mustParse(t, testBody(tc.src)).Tests[0].Body)
+		if a.Verb != parser.VerbSwipe || a.Direction != tc.direction {
+			t.Errorf("%q: verb %q, direction %q; want swipe, %q", tc.src, a.Verb, a.Direction, tc.direction)
+		}
+	}
+	// A bare swipe as the last line of a file has no newline after it. The lexer still ends that line with a newline token, so the slot sees
+	// the end of the line; this input keeps that path covered.
+	prog, err := parser.ParseFile("test \"t\"\n  swipe")
+	if err != nil {
+		t.Fatalf("a bare swipe at the end of the file must parse: %v", err)
+	}
+	if a := firstAction(t, prog.Tests[0].Body); a.Verb != parser.VerbSwipe || a.Direction != parser.SwipeDown {
+		t.Errorf("a bare swipe at the end of the file: verb %q, direction %q; want swipe, %q", a.Verb, a.Direction, parser.SwipeDown)
+	}
+	// Each of these is a token that used to run a down swipe and parse as the next step, or a word that is not a direction. Numbers, keywords
+	// and a word followed by a target are all refused in the direction slot.
+	for _, src := range []string{
+		`swipe sideways`,
+		`swipe sideways on "x"`,
+		`swipe sideways "x"`,
+		`swipe upward`,
+		`swipe Menu`,
+		`swipe login`,
+		`swipe 5`,
+		`swipe 5 3 times`,
+		`swipe 1st`,
+		`swipe back`,
+		`swipe tap`,
+		`swipe scroll`,
+		`swipe if`,
+		`swipe until "x"`,
+	} {
+		_, err := parser.ParseFile(testBody(src))
+		if err == nil {
+			t.Errorf("%q: want a parse error", src)
+			continue
+		}
+		if !strings.Contains(err.Error(), "is not a direction") || !strings.Contains(err.Error(), "up, down, left or right") {
+			t.Errorf("%q: the error must say the token is not a direction and list the four, got %v", src, err)
+		}
+	}
+}
+
 // TestParser_Scroll mirrors TestParser_Swipe — scroll's grammar was
 // previously untested even though it shares the same parse function shape
 // (direction + optional selector-scoping via "in"/"on").
