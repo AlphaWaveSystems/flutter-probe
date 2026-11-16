@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
@@ -28,12 +30,45 @@ class FixtureApp extends StatelessWidget {
     // PROBE_FIXTURE_LIST=true builds the list screen instead of the default surface (used by probe-tests/list/). The default
     // surface stays the same 8-element surface as the Android and iOS fixtures.
     const listScreen = bool.fromEnvironment('PROBE_FIXTURE_LIST', defaultValue: false);
+    // PROBE_FIXTURE_CRASH=true builds the crash screen (used by probe-tests/crash/): one button that aborts the process.
+    const crashScreen = bool.fromEnvironment('PROBE_FIXTURE_CRASH', defaultValue: false);
     return MaterialApp(
       title: 'Probe Fixture (Flutter)',
-      home: listScreen ? const FixtureListScreen() : const FixtureScreen(),
+      home: listScreen
+          ? const FixtureListScreen()
+          : crashScreen
+              ? const FixtureCrashScreen()
+              : const FixtureScreen(),
     );
   }
 }
+
+/// The crash screen for the crash checks: one button, fixture_crash, that aborts the process from native code, the way a crash
+/// in a plugin ends the app. The step after the tap loses its connection to the agent, so a run with --crash-evidence keeps why.
+class FixtureCrashScreen extends StatelessWidget {
+  const FixtureCrashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Crash fixture')),
+      body: Center(
+        child: Semantics(
+          identifier: 'fixture_crash',
+          child: ElevatedButton(
+            onPressed: _abortProcess,
+            child: const Text('Crash the app'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// abort is the C library's abort(), looked up in the process itself (no plugin): it ends the process with SIGABRT.
+final _abort = DynamicLibrary.process().lookupFunction<Void Function(), void Function()>('abort');
+
+void _abortProcess() => _abort();
 
 /// The list screen for the scroll checks: a full-height ListView with no other scrollable around it, and its offset in the app
 /// bar. Keys: fixture_list (the list) and fixture_row_N (its rows).

@@ -84,3 +84,5 @@ sf-20 and sf-21 check the place buttons on the Suggest a fix card and the Explai
 **`run-reason-device.spec.ts` (rd-01).** On the named simulator: while a run is held in flight, Run is disabled with the reason "A run is in progress." as its title and `aria-describedby` description, typing in the editor keeps it, and it goes when the run ends.
 
 **`restart-stream-device.spec.ts` (rs-01).** On the named simulator: a run with `restart the app` passes, the live view shows a frame rate again afterwards (not "no signal"), and a second run on the same connection passes. Uses `native-test-apps/studio-fixture/probe-tests/restart.probe`.
+
+**`first-run.spec.ts` fr-06.** A remembered workspace that is gone, or that exists but is empty: the pane and the line under the toolbar name the folder (not a file) as the next step, the button is there, a folder that goes away after start-up says so on refresh.

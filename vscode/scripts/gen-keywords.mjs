@@ -69,16 +69,20 @@ export function examplePhrase(example) {
 }
 
 // commandForms returns the command forms the completion list offers, sorted by label: the Command cell of each row and the
-// plain phrase of each of its examples, each with the snippet insertText makes; then the extra forms of extra-forms.json,
-// which the parser accepts and the dictionary does not list, with their snippet as written there.
+// plain phrase of each of its examples. A form's snippet comes from the row's first example when that example has an argument
+// (`open link "myapp://item/42" in the app`, so the argument is a tab stop); otherwise from the Command cell (`press <key>`).
+// Then the extra forms of extra-forms.json, which the parser accepts and the dictionary does not list, with their snippet as
+// written there.
 export function commandForms(dictionary, extra) {
   const forms = new Map();
   for (const row of parseDictionary(dictionary)) {
-    forms.set(row.command, insertText(row.command));
-    for (const example of splitExamples(row.syntax)) {
+    const examples = splitExamples(row.syntax);
+    const fromExample = examples[0] ? exampleSnippet(examples[0]) : "";
+    forms.set(row.command, hasTabStop(fromExample) ? fromExample : insertText(row.command));
+    for (const example of examples) {
       const phrase = examplePhrase(example);
       if (phrase && !forms.has(phrase)) {
-        forms.set(phrase, insertText(phrase));
+        forms.set(phrase, exampleSnippet(example));
       }
     }
   }
@@ -93,8 +97,8 @@ export function commandLabels(dictionary, extra) {
   return commandForms(dictionary, extra).map((form) => form.label);
 }
 
-// insertText is the snippet a completion inserts for a command form: each placeholder (`<key>`, `N`) becomes a tab stop, and
-// the ellipsis of a form (`open link ... in the app`) is dropped.
+// insertText is the snippet a completion inserts for a command form that has no example to take it from: each placeholder
+// (`<key>`, `N`) becomes a tab stop, and the ellipsis of a form is dropped.
 export function insertText(label) {
   let stop = 0;
   return label
@@ -102,6 +106,34 @@ export function insertText(label) {
     .replace(/\bN\b/g, () => `\${${++stop}:N}`)
     .replace(/\s*\.\.\.\s*/g, " ")
     .trim();
+}
+
+// escapeSnippet escapes the characters a VS Code snippet reads as syntax: backslash, dollar and closing brace.
+function escapeSnippet(text) {
+  return text.replace(/[\\$}]/g, "\\$&");
+}
+
+// exampleSnippet turns a documented example into a snippet: each quoted text and each number becomes a tab stop whose default is
+// the text (`see exactly 2 requests GET "/api/orders"` gives `see exactly ${1:2} requests ${2:GET} "${3:/api/orders}"`).
+export function exampleSnippet(example) {
+  let stop = 0;
+  let out = "";
+  let last = 0;
+  for (const match of example.matchAll(/"([^"]*)"|\b\d+\b/g)) {
+    out += escapeSnippet(example.slice(last, match.index));
+    if (match[1] !== undefined) {
+      out += `"\${${++stop}:${escapeSnippet(match[1])}}"`;
+    } else {
+      out += `\${${++stop}:${match[0]}}`;
+    }
+    last = match.index + match[0].length;
+  }
+  return out + escapeSnippet(example.slice(last));
+}
+
+// hasTabStop reports whether a snippet has at least one tab stop.
+export function hasTabStop(snippet) {
+  return /\$\{\d+:/.test(snippet);
 }
 
 // keywordWords returns the completion words: the command leads, then the reserved words, without duplicates. Sorted, so the

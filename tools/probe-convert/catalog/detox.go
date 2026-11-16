@@ -98,7 +98,7 @@ DeviceAction = "device." ( "launchApp" | "reloadReactNative" | "takeScreenshot" 
 				EBNF: `"device.reloadReactNative()"`, Example: "device.reloadReactNative()", ProbeTemplate: "restart the app", ProbeExample: "restart the app"},
 			{ID: "detox.device.screenshot", Name: "device.takeScreenshot()", Category: CatScreenshot, Level: Full,
 				EBNF: `"device.takeScreenshot(" STRING ")"`, Example: "device.takeScreenshot('home')",
-				ProbeTemplate: `take a screenshot called "$1"`, ProbeExample: `take a screenshot called "home"`},
+				ProbeTemplate: `take screenshot "$1"`, ProbeExample: `take screenshot "home"`},
 		},
 	}
 }
