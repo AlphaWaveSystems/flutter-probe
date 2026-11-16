@@ -6,8 +6,9 @@ import { initDeviceStream, onElementSelected, startStream, stopStream } from "./
 import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
+import { clampLine, placeLabel, planJump, type JumpTarget } from "./goto-line";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
-import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
+import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -19,6 +20,7 @@ import { toast } from "./toast";
 import {
   CancelRun,
   CheckReplaceLine,
+  SelectorFixAttempts,
   Chat,
   Connect,
   ConnectWiFi,
@@ -247,7 +249,14 @@ async function onFileClick(path: string, isDir: boolean) {
     return;
   }
   if (!path.endsWith(".probe")) return;
-  if (dirty && !confirm("Discard unsaved changes?")) return;
+  await openProbeFile(path);
+}
+
+// openProbeFile puts a file in the editor. It asks about unsaved changes first, reads the file through ReadFile (Studio refuses a path
+// outside the workspace, with a .. segment, through a link out of it, and a file that is not there) and changes nothing until that has
+// worked. It returns whether the file is open now.
+async function openProbeFile(path: string): Promise<boolean> {
+  if (dirty && !confirm("Discard unsaved changes?")) return false;
   try {
     const content = await ReadFile(path);
     model.setValue(content);
@@ -264,9 +273,11 @@ async function onFileClick(path: string, isDir: boolean) {
         )
       );
     updateRunButton();
+    return true;
   } catch (err) {
     console.error("ReadFile failed", err);
     toast(`Cannot open ${path}: ${err}`, "error");
+    return false;
   }
 }
 
@@ -687,9 +698,23 @@ function showExplainCard(r: ExplainResult): void {
     div.className = `explain-row explain-row-${row.kind}`;
     if (row.label) div.append(textEl("div", "explain-row-label", row.label));
     div.append(textEl("p", "explain-row-text", row.text));
+    const jump = placeButton(row.file, row.line);
+    if (jump) div.append(jump);
     card.append(div);
   }
   card.hidden = false;
+}
+
+// placeButton is the small button on a card that opens the place a failure is at, with the same click as a failing row in Results (the
+// jump decides what may open). It names the line (`L12`) and the file's name, never its folder; with no file it is nothing.
+function placeButton(file: string | undefined, line: number | undefined): HTMLElement | null {
+  const label = placeLabel(file, line);
+  if (!label) return null;
+  const btn = textEl("button", "btn-mini goto-place", label.text);
+  btn.setAttribute("type", "button");
+  btn.setAttribute("title", label.title);
+  btn.addEventListener("click", () => document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file, line } })));
+  return btn;
 }
 
 // confirmExplainSend shows what Explain would send and waits for Send or Cancel. Nothing is sent before Send.
@@ -784,6 +809,7 @@ function dropFixView(): void {
 // showFixCard writes the advisory card. It sits beside the results and never touches them: the pass and fail counts and the rows stay as
 // the run left them. Nothing in it is applied to the file.
 function showFixCard(answer: FixAnswer, step: string): void {
+  fixRerun = null; // a new suggestion replaces the card of the replacement before it
   const model = fixCardModel(answer, step);
   hideExplainCard(); // one advisory card at a time
   const card = $("fix-card");
@@ -800,6 +826,8 @@ function showFixCard(answer: FixAnswer, step: string): void {
     const div = document.createElement("div");
     div.className = `explain-row explain-row-${row.kind}`;
     div.append(textEl("div", "explain-row-label", row.label), textEl("p", "explain-row-text", row.text));
+    const jump = placeButton(row.file, row.line);
+    if (jump) div.append(jump);
     card.append(div);
   }
   if (canOfferReplace(answer)) {
@@ -941,6 +969,26 @@ async function rerunFixedTest(): Promise<void> {
   verdictEl.className = `fix-verdict fix-verdict-${verdict.kind}`;
   verdictEl.append(textEl("p", "explain-row-text", verdict.text));
   if (verdict.stale) verdictEl.append(textEl("p", "dim", STALE_VERDICT_NOTE));
+  if (verdict.kind === "failed") {
+    // Still failing: offer another suggestion, for as long as Studio allows one for this step. It is a button, never automatic.
+    let live: { used: number; max: number } | null = null;
+    try {
+      live = await SelectorFixAttempts(); // Studio's own count for the step that failed, which is not what the replaced answer said
+    } catch {
+      live = null; // no count: the offer is there, and Studio still refuses past its cap
+    }
+    if (fixRerun !== target) return; // the card went while the count was read
+    const offer = againOffer(live?.used, live?.max);
+    const bar = document.createElement("div");
+    bar.className = "explain-actions";
+    const again = textEl("button", "btn", offer.label) as HTMLButtonElement;
+    again.setAttribute("type", "button");
+    again.id = "btn-fix-again";
+    again.disabled = !offer.enabled;
+    again.addEventListener("click", () => void askForFix());
+    bar.append(again, textEl("span", "dim", offer.note));
+    verdictEl.append(bar);
+  }
   refreshRerun();
 }
 
@@ -949,7 +997,7 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   const overlay = $("fix-preview-overlay");
   const send = $("btn-fix-preview-send");
   const cancel = $("btn-fix-preview-cancel");
-  $("fix-preview-note").textContent = fixPreviewNote(p.hosted);
+  $("fix-preview-note").textContent = fixPreviewNote(p.hosted, p.attempt, p.maxAttempts);
   $("fix-preview-text").textContent = p.text;
   const opener = document.activeElement as HTMLElement | null;
   overlay.hidden = false;
@@ -976,7 +1024,11 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   });
 }
 
-$("btn-fix").addEventListener("click", async () => {
+$("btn-fix").addEventListener("click", () => void askForFix());
+
+// askForFix is Suggest a fix, from the button next to Explain and from the card after a re-run that still failed: the preview first, the
+// confirmation when Studio asks for it, then the one request. Studio counts the attempts and refuses a fourth for the same failed step.
+async function askForFix(): Promise<void> {
   const btn = $("btn-fix") as HTMLButtonElement;
   const status = $("explain-status");
   btn.disabled = true;
@@ -999,7 +1051,7 @@ $("btn-fix").addEventListener("click", async () => {
     btn.disabled = fixSession.running; // a newer suggestion that is in flight keeps its button disabled
   }
   if (!fixSession.running) status.textContent = "";
-});
+}
 
 // confirmFirstChatSend shows what the next chat message carries and waits for Send or Cancel. Nothing is sent before Send.
 function confirmFirstChatSend(preview: string): Promise<boolean> {
@@ -1697,13 +1749,24 @@ EventsOn("run:step", (s: RunStep) => {
   renderStepDecorations();
 });
 
-document.addEventListener("studio:goto-line", (ev) => {
-  const line = (ev as CustomEvent<number>).detail;
-  if (!line) return;
-  editor.revealLineInCenter(line);
-  editor.setPosition({ lineNumber: line, column: 1 });
+// A click on a failing row asks for a file and a line (planJump decides what is allowed). Only a click moves the editor.
+document.addEventListener("studio:goto-line", (ev) => void gotoFailingLine((ev as CustomEvent<JumpTarget>).detail));
+
+async function gotoFailingLine(target: JumpTarget): Promise<void> {
+  const plan = planJump(target ?? {}, { openFile: currentPath, workspaceRoot });
+  if (plan.kind === "refuse") {
+    toast(`Not opened: ${plan.reason}`, "error", 5000);
+    return;
+  }
+  if (plan.kind === "open" && !(await openProbeFile(plan.path))) return; // cancelled, or refused by Studio: the editor is as it was
+  const spot = clampLine(plan.line, model.getLineCount());
+  if (spot.note) toast(spot.note, "info", 4000);
+  if (spot.line > 0) {
+    editor.revealLineInCenter(spot.line);
+    editor.setPosition({ lineNumber: spot.line, column: 1 });
+  }
   editor.focus();
-});
+}
 
 // ---- Recorder -----------------------------------------------------------
 

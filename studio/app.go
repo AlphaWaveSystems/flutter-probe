@@ -172,6 +172,7 @@ func (a *App) SetWorkspace(path string) {
 	a.workspace = path
 	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.mu.Unlock()
+	a.resetFixAttempts() // another workspace is another session of suggestions
 }
 
 // useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike

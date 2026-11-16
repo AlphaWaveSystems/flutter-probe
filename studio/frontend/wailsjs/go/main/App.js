@@ -178,6 +178,10 @@ export function SaveWorkspaceSettings(arg1, arg2) {
   return window['go']['main']['App']['SaveWorkspaceSettings'](arg1, arg2);
 }
 
+export function SelectorFixAttempts() {
+  return window['go']['main']['App']['SelectorFixAttempts']();
+}
+
 export function SelectorFixPreviewed(arg1) {
   return window['go']['main']['App']['SelectorFixPreviewed'](arg1);
 }

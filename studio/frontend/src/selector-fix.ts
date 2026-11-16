@@ -10,6 +10,8 @@ export interface FixPreview {
   id: string;
   destination: string; // the provider and model, never an endpoint
   hosted: boolean;
+  attempt?: number; // which suggestion for this failed step this would be, and how many a session allows
+  maxAttempts?: number;
   needsConfirm: boolean; // Studio's decision: show the preview and ask before sending
   step: string; // the failed step, in one line
   text: string;
@@ -22,6 +24,10 @@ export interface FixAnswer {
   hosted: boolean;
   changed?: boolean; // Studio removed personal text or a credential from the suggestion
   id?: string; // names the suggestion for CheckReplaceLine; empty when there is no line to replace
+  attempt?: number; // which suggestion this is for the failed step (1 to maxAttempts)
+  maxAttempts?: number;
+  file?: string; // where the failed step is, for the jump to it
+  line?: number;
 }
 
 export type FixOutcome = { kind: "cancelled" } | { kind: "stale" } | { kind: "answer"; answer: FixAnswer; step: string };
@@ -86,7 +92,7 @@ export class FixSession {
 export const FIX_DISCLAIMER =
   "Proposed by a language model from the texts and keys that were on screen when the step failed. Not applied to the test file and not verified against the app. It does not change this result.";
 
-export type FixRow = { kind: "step" | "line" | "why" | "changed"; label: string; text: string };
+export type FixRow = { kind: "step" | "line" | "why" | "changed"; label: string; text: string; file?: string; line?: number };
 
 export interface FixCardModel {
   title: string;
@@ -99,7 +105,7 @@ export interface FixCardModel {
 /** What the card shows. Every string in it is set with textContent: a model's answer and a step's text are text, never markup. */
 export function fixCardModel(answer: FixAnswer, step: string): FixCardModel {
   const rows: FixRow[] = [
-    { kind: "step", label: "Failed step", text: step },
+    { kind: "step", label: "Failed step", text: step, file: answer.file, line: answer.line },
     { kind: "line", label: "Suggested line", text: answer.suggestion },
   ];
   // A suggestion that cleaning changed (`type "[email]" into "Email"`) may not say what the model meant: say so, above the line.
@@ -107,12 +113,14 @@ export function fixCardModel(answer: FixAnswer, step: string): FixCardModel {
     rows.splice(1, 0, { kind: "changed", label: "Changed", text: "personal text or a credential was removed from this suggestion or its reason, so it may not say what the model meant. Check it before you run it." });
   }
   if (answer.rationale) rows.push({ kind: "why", label: "Why", text: answer.rationale });
-  return { title: "Suggested fix", destination: answer.destination, place: answer.hosted ? "hosted" : "local", disclaimer: FIX_DISCLAIMER, rows };
+  const n = answer.attempt && answer.maxAttempts && answer.attempt > 1 ? ` (${answer.attempt} of ${answer.maxAttempts})` : "";
+  return { title: `Suggested fix${n}`, destination: answer.destination, place: answer.hosted ? "hosted" : "local", disclaimer: FIX_DISCLAIMER, rows };
 }
 
 /** The wording of the preview dialog. */
-export function fixPreviewNote(hosted: boolean): string {
-  const base =
+export function fixPreviewNote(hosted: boolean, attempt?: number, maxAttempts?: number): string {
+  const which = attempt && maxAttempts ? `This would be suggestion ${attempt} of ${maxAttempts} for this step. ` : "";
+  const base = which +
     "This is what Suggest a fix would send to the AI provider: the failed step, the last run and the open file, with credentials redacted. Nothing is sent until you press Send.";
   return hosted ? base + " This destination is not this machine, so you see this before every suggestion." : base + " You see this again when the destination changes.";
 }
@@ -269,3 +277,24 @@ function cleanVerdictName(name: string): string {
 }
 
 export const STALE_VERDICT_NOTE = "The file changed while the test ran, so this may not be the result of the replaced line.";
+
+export interface AgainOffer {
+  enabled: boolean;
+  label: string;
+  note: string;
+}
+
+/**
+ * What the card offers after a re-run that still failed: another suggestion, while the session allows one more for this step. `attempt` is
+ * how many suggestions Studio has asked for this step so far (Studio's live count, read when the verdict is shown, not what an earlier
+ * answer said). Studio refuses a fourth ask whatever the window does; this only says so before the person presses.
+ */
+export function againOffer(attempt: number | undefined, maxAttempts: number | undefined): AgainOffer {
+  const label = "Suggest a fix again";
+  if (!attempt || !maxAttempts) return { enabled: true, label, note: "" };
+  if (attempt >= maxAttempts) {
+    return { enabled: false, label, note: `All ${maxAttempts} suggestions for this step are used: edit the line by hand.` };
+  }
+  const left = maxAttempts - attempt;
+  return { enabled: true, label, note: `Suggestion ${attempt} of ${maxAttempts} was used; ${left} left for this step.` };
+}

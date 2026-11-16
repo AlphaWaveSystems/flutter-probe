@@ -25,6 +25,9 @@ import (
 
 const (
 	fixMaxPreviews = 4
+	// fixMaxAttempts is how many suggestions Studio asks a provider for, for one failed step, in one session: a model that is wrong three times
+	// is not helped by a fourth ask, and a loop of suggest, replace and re-run must end.
+	fixMaxAttempts = 3
 	fixPreviewTTL  = 10 * time.Minute
 	fixPreGate     = 60000 // a field is bounded to this many characters before anything reads it
 
@@ -46,6 +49,8 @@ type SelectorFixPreview struct {
 	NeedsConfirm bool   `json:"needsConfirm"` // show it and ask: always for a hosted destination, once per session for a local one
 	Step         string `json:"step"`         // the failed step, in one line
 	Text         string `json:"text"`
+	Attempt      int    `json:"attempt"` // which suggestion for this failed step this one would be (1 for the first)
+	MaxAttempts  int    `json:"maxAttempts"`
 }
 
 type fixRequest struct {
@@ -55,6 +60,9 @@ type fixRequest struct {
 	step         string
 	state        string // what the request depends on, hashed: a change is a new preview
 	dest         string // where it goes, hashed
+	attemptKey   string // the failed step (file, line, test), hashed: what the attempts are counted for
+	stepFile     string // where the failed step is, for the window's jump to it: never sent to a provider
+	stepLine     int
 }
 
 type fixStored struct {
@@ -70,6 +78,7 @@ type fixStored struct {
 type selectorFixState struct {
 	mu        sync.Mutex
 	results   map[string]fixResult // the suggestions a Replace the line can use, by id
+	attempts  map[string]int       // suggestions asked of a provider this session, by failed step
 	previews  map[string]fixStored
 	confirmed map[string]bool // a local destination, by what identifies it, confirmed this session
 	busy      bool
@@ -114,6 +123,36 @@ type fixDeps struct {
 	hosted   bool
 	state    string // everything above, hashed: a change is a new preview
 	dest     string // where it goes, hashed: a local destination is confirmed again when it changes
+}
+
+// failedStepKey names the last failed step for counting suggestions: its file, line and test, hashed.
+func (a *App) failedStepKey() (string, bool) {
+	step, ok := lastFailedStep(a.track.snapshot())
+	if !ok {
+		return "", false
+	}
+	return sum(step.File, fmt.Sprint(step.Line), step.Test), true
+}
+
+// fixAttemptsUsed is how many suggestions were asked of a provider for the failed step with this key, this session.
+func (a *App) fixAttemptsUsed(key string) int {
+	a.fix.mu.Lock()
+	defer a.fix.mu.Unlock()
+	return a.fix.attempts[key]
+}
+
+// SelectorFixAttempts is the live count for the last failed step: how many suggestions were asked for it this session, and how many a
+// session allows. It reads Studio's own memory and nothing else, so the window can say how many are left without asking for a suggestion.
+type SelectorFixAttempts struct {
+	Used int `json:"used"`
+	Max  int `json:"max"`
+}
+
+func (a *App) SelectorFixAttempts() SelectorFixAttempts {
+	if key, ok := a.failedStepKey(); ok {
+		return SelectorFixAttempts{Used: a.fixAttemptsUsed(key), Max: fixMaxAttempts}
+	}
+	return SelectorFixAttempts{Max: fixMaxAttempts}
 }
 
 func (a *App) fixDependencies() (fixDeps, error) {
@@ -168,7 +207,9 @@ func (a *App) buildSelectorFix(fileContent string) (req fixRequest, err error) {
 	system := selectorFixPrompt + chatContext(fixField(fileContent, key, true, maxContextFileBytes), lastRun, tree)
 	return fixRequest{
 		system: fixGate(system), user: user, label: d.label, hosted: d.hosted, dest: d.dest, state: d.state,
-		step: capRunes(fmt.Sprintf("line %d of %q: %s", d.step.Line, test, desc), fixMaxFile),
+		step:       capRunes(fmt.Sprintf("line %d of %q: %s", d.step.Line, test, desc), fixMaxFile),
+		attemptKey: sum(d.step.File, fmt.Sprint(d.step.Line), d.step.Test), // the same as failedStepKey
+		stepFile:   d.step.File, stepLine: d.step.Line,
 	}, nil
 }
 
@@ -183,6 +224,10 @@ func newFixID() string {
 // PreviewSelectorFix returns what a selector fix would send, and where, with an id for SelectorFixPreviewed. It sends nothing, and it
 // does not ask the provider anything. fileContent is the open file, as the window holds it.
 func (a *App) PreviewSelectorFix(fileContent string) (SelectorFixPreview, error) {
+	// The cap is checked first: past it nothing is built, so the device is not asked for its widget tree for a suggestion that cannot be made.
+	if key, ok := a.failedStepKey(); ok && a.fixAttemptsUsed(key) >= fixMaxAttempts {
+		return SelectorFixPreview{}, errFixAttempts
+	}
 	req, err := a.buildSelectorFix(fileContent)
 	if err != nil {
 		return SelectorFixPreview{}, err
@@ -192,6 +237,9 @@ func (a *App) PreviewSelectorFix(fileContent string) (SelectorFixPreview, error)
 	f := &a.fix
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.attempts[req.attemptKey] >= fixMaxAttempts {
+		return SelectorFixPreview{}, errFixAttempts
+	}
 	if f.previews == nil {
 		f.previews = map[string]fixStored{}
 	}
@@ -216,6 +264,7 @@ func (a *App) PreviewSelectorFix(fileContent string) (SelectorFixPreview, error)
 	return SelectorFixPreview{
 		ID: id, Destination: req.label, Hosted: req.hosted, Step: req.step, Text: b.String(),
 		NeedsConfirm: req.hosted || !f.confirmed[req.dest],
+		Attempt:      f.attempts[req.attemptKey] + 1, MaxAttempts: fixMaxAttempts,
 	}, nil
 }
 
@@ -223,6 +272,7 @@ var (
 	errFixNoPreview = errors.New("there is no preview for that request: press Suggest a fix again to see what it would send")
 	errFixChanged   = errors.New("the provider, the workspace, the settings or the failed step changed since the preview: press Suggest a fix again to see what it sends now")
 	errFixBusy      = errors.New("another suggestion is still being asked for")
+	errFixAttempts  = fmt.Errorf("%d suggestions were already asked for this step in this session: edit the line by hand", fixMaxAttempts)
 )
 
 // SelectorFixPreviewed sends the request a preview returned, once, and returns the model's one-line suggestion. The preview is used up
@@ -261,6 +311,19 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 		return SelectorFix{}, errFixChanged
 	}
 	s := d.settings
+	// The attempt is counted when the request goes out, whatever the provider answers, and the cap holds here too, so a preview taken before
+	// the cap was reached cannot send past it.
+	f.mu.Lock()
+	if f.attempts[p.req.attemptKey] >= fixMaxAttempts {
+		f.mu.Unlock()
+		return SelectorFix{}, errFixAttempts
+	}
+	if f.attempts == nil {
+		f.attempts = map[string]int{}
+	}
+	f.attempts[p.req.attemptKey]++
+	attempt := f.attempts[p.req.attemptKey]
+	f.mu.Unlock()
 	resp, err := completeChat(s, p.req.system, []claudeMessage{{Role: "user", Content: p.req.user}})
 	if err != nil {
 		return SelectorFix{}, errorFrom(err, s.APIKey)
@@ -289,6 +352,8 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 		CostUSD:      resp.CostUSD,
 		Destination:  p.req.label,
 		Hosted:       p.req.hosted,
+		Attempt:      attempt, MaxAttempts: fixMaxAttempts,
+		File: p.req.stepFile, Line: p.req.stepLine,
 	}, nil
 }
 

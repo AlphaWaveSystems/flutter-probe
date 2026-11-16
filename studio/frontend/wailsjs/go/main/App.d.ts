@@ -90,6 +90,8 @@ export function SaveWiFiToken(arg1:string,arg2:string):Promise<void>;
 
 export function SaveWorkspaceSettings(arg1:string,arg2:main.WorkspaceSettings):Promise<void>;
 
+export function SelectorFixAttempts():Promise<main.SelectorFixAttempts>;
+
 export function SelectorFixPreviewed(arg1:string):Promise<main.SelectorFix>;
 
 export function SendRequest(arg1:main.SendInput):Promise<main.SendResult>;
