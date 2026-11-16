@@ -98,7 +98,7 @@ func TestClientSwipeCarriesThePercent(t *testing.T) {
 				t.Fatalf("DialWithOptions: %v", err)
 			}
 			defer client.Close()
-			if err := client.Swipe(context.Background(), "up", nil, tc.percent); err != nil {
+			if err := client.Swipe(context.Background(), "up", nil, 0, tc.percent); err != nil {
 				t.Fatalf("Swipe: %v", err)
 			}
 			checkSwipeParams(t, <-params, tc.percent)
@@ -133,7 +133,7 @@ func TestHTTPClientSwipeCarriesThePercent(t *testing.T) {
 				httpClient: srv.Client(),
 				addr:       srv.URL,
 			}
-			if err := c.Swipe(context.Background(), "up", nil, tc.percent); err != nil {
+			if err := c.Swipe(context.Background(), "up", nil, 0, tc.percent); err != nil {
 				t.Fatalf("Swipe: %v", err)
 			}
 			checkSwipeParams(t, <-params, tc.percent)

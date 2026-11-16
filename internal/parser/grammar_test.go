@@ -666,10 +666,17 @@ var grammarProductionExamples = []productionExample{
 	{production: "clear-step", src: testBody(`clear "Search"`, `clear #email if visible`, `clear 2nd "Field"`), want: repeat("action:clear", 3)},
 	{production: "toggle-step", src: testBody(`toggle "Dark Mode"`, `toggle #unit`), want: repeat("action:toggle", 2)},
 	{production: "drag-step", src: testBody(`drag "A" to "B"`, `drag #a to #b`), want: repeat("action:drag", 2)},
-	{production: "swipe-step", src: testBody(`swipe left`, `swipe up on "Card"`, `swipe`, `swipe up over 40 percent`), want: repeat("action:swipe", 4),
+	{production: "swipe-step", src: testBody(`swipe left`, `swipe up on "Card"`, `swipe`, `swipe up over 40 percent`,
+		`swipe right on "Menu" from 2 percent`, `swipe right on "Menu" from 2 percent over 40 percent`), want: repeat("action:swipe", 6),
 		check: func(t *testing.T, p *parser.Program) {
 			if a := p.Tests[0].Body[3].(parser.ActionStep); a.Percent != 40 {
 				t.Fatalf("swipe over 40 percent parsed with percent %d", a.Percent)
+			}
+			if a := p.Tests[0].Body[4].(parser.ActionStep); a.StartPercent != 2 || a.Percent != 0 {
+				t.Fatalf("swipe from 2 percent parsed with start %d and percent %d", a.StartPercent, a.Percent)
+			}
+			if a := p.Tests[0].Body[5].(parser.ActionStep); a.StartPercent != 2 || a.Percent != 40 {
+				t.Fatalf("swipe from 2 percent over 40 percent parsed with start %d and percent %d", a.StartPercent, a.Percent)
 			}
 		}},
 	{production: "scroll-step", src: testBody(`scroll down`, `scroll up on "List"`, `scroll down until "X" appears`,

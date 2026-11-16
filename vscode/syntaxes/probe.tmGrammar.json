@@ -52,7 +52,7 @@
       "name": "keyword.control.probe"
     },
     "modifier-keyword": {
-      "match": "\\b(optional|native|if visible|with ai|in the app|into the app)\\b",
+      "match": "\\b(optional|native|if visible|with ai|in the app|into the app|from)\\b",
       "name": "storage.modifier.probe"
     },
     "string": {

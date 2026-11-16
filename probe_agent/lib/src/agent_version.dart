@@ -14,4 +14,4 @@ const String probeAgentVersion = '0.27.0';
 /// Optional features this agent supports, reported in the `probe.ping` handshake as `capabilities`. The CLI refuses a
 /// step that needs one the agent does not report, before it sends the step, so an agent without it cannot pass that
 /// step by answering ok without doing anything.
-const List<String> probeAgentCapabilities = ['press_key'];
+const List<String> probeAgentCapabilities = ['press_key', 'swipe_from'];

@@ -104,6 +104,9 @@ type SwipeParams struct {
 	Direction string        `json:"direction"` // up | down | left | right
 	Selector  *SelectorParam `json:"selector,omitempty"`
 	Percent   int            `json:"percent,omitempty"` // how far to travel, percent of the element or screen; 0 = the agent's default (50)
+	// StartPercent is where the swipe starts, counted from the edge it starts at; 0 = the centre. Sent only for a swipe on a
+	// target with a start, and an agent without CapabilitySwipeFrom never receives it (the client refuses first).
+	StartPercent int `json:"start_percent,omitempty"`
 }
 
 // ScrollParams controls a scroll action.

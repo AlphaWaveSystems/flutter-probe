@@ -16,7 +16,7 @@ Commands that interact with the app's UI.
 | `long press` | `long press "Label"` | Long-press a widget (triggers context menus) |
 | `type` | `type "text" into "Field"` | Enter text into a text field |
 | `clear` | `clear "Field"` | Clear the contents of a text field |
-| `swipe` | `swipe up/down/left/right [over N percent]` | Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50) |
+| `swipe` | `swipe up/down/left/right [on "X" [from N percent]] [over N percent]` | Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50). `from N percent` sets where a swipe on a target starts, counted from the edge it starts at (the bottom for up, the left for right): `swipe right on "Menu" from 2 percent` is an edge swipe for a drawer. Without it the swipe starts at the centre. It needs a target and a probe_agent that reports the `swipe_from` capability |
 | `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
 | `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |

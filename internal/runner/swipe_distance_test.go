@@ -16,7 +16,7 @@ type swipeRecorder struct {
 	calls     int
 }
 
-func (s *swipeRecorder) Swipe(ctx context.Context, direction string, sel *probelink.SelectorParam, percent int) error {
+func (s *swipeRecorder) Swipe(ctx context.Context, direction string, sel *probelink.SelectorParam, startPercent, percent int) error {
 	s.direction, s.percent = direction, percent
 	s.calls++
 	return nil

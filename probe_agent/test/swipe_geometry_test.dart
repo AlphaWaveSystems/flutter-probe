@@ -35,4 +35,39 @@ void main() {
     const size = Size(400, 800);
     expect(swipeDelta('up', size, swipeFraction(100)), const Offset(0, -800));
   });
+
+  // The target at (100, 200), 400 wide and 800 high: its centre is (300, 600).
+  const origin = Offset(100, 200);
+  const box = Size(400, 800);
+
+  test('a swipe with a start begins that percent in from the edge it starts at, on the centre of the other axis', () {
+    expect(swipeStart('up', origin, box, 10), const Offset(300, 920)); // 10 percent above the bottom edge
+    expect(swipeStart('down', origin, box, 10), const Offset(300, 280)); // 10 percent below the top edge
+    expect(swipeStart('left', origin, box, 10), const Offset(460, 600)); // 10 percent in from the right edge
+    expect(swipeStart('right', origin, box, 10), const Offset(140, 600)); // 10 percent in from the left edge
+  });
+
+  test('a start at 100 percent is kept half a pixel inside the far edge, where the hit test still reaches', () {
+    expect(swipeStart('up', origin, box, 100), const Offset(300, 200.5)); // the top edge, for a swipe up from the bottom
+    expect(swipeStart('down', origin, box, 100), const Offset(300, 999.5)); // the bottom edge, for a swipe down from the top
+    expect(swipeStart('right', origin, box, 100), const Offset(499.5, 600)); // the right edge, for a swipe right from the left
+    expect(swipeStart('left', origin, box, 100), const Offset(100.5, 600)); // the left edge, for a swipe left from the right
+  });
+
+  test('a start above 100 percent is clamped to 100 percent', () {
+    expect(swipeStart('right', origin, box, 150), swipeStart('right', origin, box, 100));
+  });
+
+  test('50 percent is the centre on the swipe axis', () {
+    expect(swipeStart('up', origin, box, 50), const Offset(300, 600));
+    expect(swipeStart('left', origin, box, 50), const Offset(300, 600));
+  });
+
+  test('a target under a logical pixel starts at its middle, so the start is inside it', () {
+    expect(swipeStart('right', Offset.zero, const Size(0.5, 0.5), 100), const Offset(0.25, 0.25));
+  });
+
+  test('an unknown direction is a right swipe, as swipeDelta treats it', () {
+    expect(swipeStart('sideways', origin, box, 2), swipeStart('right', origin, box, 2));
+  });
 }

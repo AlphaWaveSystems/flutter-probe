@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "4814a2f859a6811cba840e1bf3c7d9ce8004126ce122c41c5ab4e67f6e84afc6";
+export const SOURCE_SHA256 = "9b8b689c1f31adb133c295902cf9a1a4d6c2b530c600d2501d641de8c493e486";
 
 export const COMMANDS = [
   {
@@ -37,8 +37,8 @@ export const COMMANDS = [
   },
   {
     "command": "swipe",
-    "syntax": "swipe up/down/left/right [over N percent]",
-    "description": "Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50)",
+    "syntax": "swipe up/down/left/right [on \"X\" [from N percent]] [over N percent]",
+    "description": "Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50). `from N percent` sets where a swipe on a target starts, counted from the edge it starts at (the bottom for up, the left for right): `swipe right on \"Menu\" from 2 percent` is an edge swipe for a drawer. Without it the swipe starts at the centre. It needs a target and a probe_agent that reports the `swipe_from` capability",
     "category": "Actions"
   },
   {
