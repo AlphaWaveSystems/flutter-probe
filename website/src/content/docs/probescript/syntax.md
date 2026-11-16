@@ -418,7 +418,12 @@ after Flutter navigation.
 ## WebView content (Android)
 
 A WebView shows a web page inside the app, and the Flutter widget tree cannot see into it. Add `in webview` to
-`tap`, `type`, `see`, `don't see` and `wait until ... appears` to act on that page instead:
+`tap`, `type`, `see`, `don't see` and `wait until ... appears` to act on that page instead.
+
+**The app must host the probe agent.** WebView steps run through the same agent connection as every other step, so `probe test` connects to
+the agent first. A Flutter app with a WebView and `probe_agent` works; a plain native Android app, which has no agent, cannot be driven by a
+ProbeScript run (it fails at connect with "agent token not found"). The Go tests of `internal/runner` that call the executor directly
+(see `native-test-apps/android-webview/`) are the only way to exercise a plain native app.
 
 ```
 tap "Contact support" in webview
