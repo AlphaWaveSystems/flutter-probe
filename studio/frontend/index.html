@@ -237,6 +237,9 @@
             <span>Wait for a target</span>
             <input id="settings-implicit-wait" type="text" placeholder="off (e.g. 2s)" autocomplete="off" spellcheck="false" />
           </label>
+          <label class="settings-check" title="Wipe the app's data and relaunch it before every test, so each test starts from a clean state. You are asked once for the run; on a simulator or emulator your own setting can answer for you (Studio on this computer, below).">
+            <input id="settings-clear-each-test" type="checkbox" /> Clear the app's data before every test
+          </label>
           <label class="settings-row">
             <span>Preferred iOS UDID</span>
             <input id="settings-ios" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />

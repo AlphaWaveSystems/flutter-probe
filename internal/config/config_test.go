@@ -511,3 +511,17 @@ func TestLoadFile_DriverPort(t *testing.T) {
 		t.Fatal("driver_port 80 must be rejected")
 	}
 }
+
+// defaults.clear_data_before_each_test is read from probe.yaml and is off when absent.
+func TestClearDataBeforeEachTestKey(t *testing.T) {
+	dir := t.TempDir()
+	if cfg, err := config.Load(dir); err != nil || cfg.Defaults.ClearDataBeforeEachTest {
+		t.Fatalf("absent: %+v %v", cfg, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("project:\n  app: com.example.app\ndefaults:\n  clear_data_before_each_test: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := config.Load(dir); err != nil || !cfg.Defaults.ClearDataBeforeEachTest {
+		t.Fatalf("set: %+v %v", cfg, err)
+	}
+}

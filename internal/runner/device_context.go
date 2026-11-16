@@ -320,7 +320,7 @@ func (dc *DeviceContext) askWipe(what, reason, question string) error {
 	return nil
 }
 
-// AskClearData is the gate for a clear: the clear step, or the before-each question (perTest), which nothing on main asks yet. On an iOS
+// AskClearData is the gate for a clear: the clear step, or the before-each question (perTest: its text names the package and device cleaned to one line and says it happens before every test). On an iOS
 // simulator the question and the hint also say what the keychain reset takes with it.
 func (dc *DeviceContext) AskClearData(perTest bool) error {
 	what := "clear app data"
@@ -337,7 +337,7 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 		"  SharedPreferences, databases, and files will be wiped.%s Continue?", dc.AppID, dc.Serial, note)
 	if perTest {
 		question = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
-			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", dc.AppID, dc.Serial, note)
+			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80), note)
 	}
 	return dc.askWipe(what, reason, question)
 }
@@ -367,7 +367,19 @@ func (dc *DeviceContext) ClearAppData(ctx context.Context) error {
 	if err := dc.AskClearData(false); err != nil {
 		return err
 	}
+	return dc.clearAppData(ctx)
+}
 
+// ClearAppDataConfirmed wipes the app's data and relaunches without asking: the caller has already asked (AskClearData). Physical iOS is skipped, as in ClearAppData.
+func (dc *DeviceContext) ClearAppDataConfirmed(ctx context.Context) error {
+	if dc.Platform == device.PlatformIOS && dc.IsPhysical {
+		fmt.Println("    \033[33m⚠\033[0m  clear app data is not supported on physical iOS devices — skipping")
+		return nil
+	}
+	return dc.clearAppData(ctx)
+}
+
+func (dc *DeviceContext) clearAppData(ctx context.Context) error {
 	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", dc.AppID, dc.Serial)
 
 	switch dc.Platform {
