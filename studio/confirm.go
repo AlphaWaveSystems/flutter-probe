@@ -34,9 +34,10 @@ type ConfirmRequest struct {
 }
 
 type pendingConfirm struct {
-	id   string
-	run  context.Context
-	done chan bool
+	id     string
+	run    context.Context
+	done   chan bool
+	reason string // set, before a no is sent, when Studio denies the question itself (the device was disconnected)
 }
 
 type confirmState struct {
@@ -136,7 +137,24 @@ func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
 			a.emit("confirm:note", note)
 			return false
 		}
+		if !allow && p.reason != "" { // denied by Studio, not by the person
+			a.emit("confirm:note", p.reason)
+		}
 		return allow
+	}
+}
+
+// denyPendingConfirm says no to the question that is open, if any, and the dialog closes: the device it asks about is gone.
+func (a *App) denyPendingConfirm(reason string) {
+	a.confirm.mu.Lock()
+	p := a.confirm.pending
+	a.confirm.pending = nil
+	if p != nil {
+		p.reason = reason
+	}
+	a.confirm.mu.Unlock()
+	if p != nil {
+		p.done <- false
 	}
 }
 

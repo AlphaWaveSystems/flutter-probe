@@ -746,6 +746,7 @@ func (a *App) Disconnect() {
 	a.conn = nil
 	a.mu.Unlock()
 	if conn != nil {
+		a.denyPendingConfirm("Clear app data was not run: the device was disconnected")
 		stopConnection(conn)
 	}
 	if a.ctx != nil {
