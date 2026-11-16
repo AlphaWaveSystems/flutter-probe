@@ -91,11 +91,18 @@ const refusedWarnAfter = 5 * time.Second
 
 // refusedHint explains a dial that was refused for the whole DialTimeout: nothing
 // ever listened, which is a different problem from a slow or mismatched agent.
-func refusedHint(err error, timeout time.Duration) string {
+func refusedHint(err error) string {
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		return ""
 	}
-	return fmt.Sprintf(" — nothing listened on the agent port for %s: the app's agent never started (is it running and built with --dart-define=PROBE_AGENT=true? look for PROBE_TOKEN= in its log) or the port forward is gone (Android: `adb forward --list`)", timeout)
+	return " — nothing listened on the agent port: the app's agent never started (is it running and built with --dart-define=PROBE_AGENT=true? look for PROBE_TOKEN= in its log) or the port forward is gone (Android: `adb forward --list`)"
+}
+
+// dialGaveUpHint says how long the dial waited and which setting raises it. A
+// slow first start after install (a loaded host, a parallel build) otherwise
+// looks like a protocol fault such as "unexpected EOF" or "i/o timeout".
+func dialGaveUpHint(timeout time.Duration) string {
+	return fmt.Sprintf(" — gave up after %s waiting for the agent; raise the wait with --dial-timeout or agent.dial_timeout in probe.yaml (default 30s)", timeout)
 }
 
 // tokenRefreshWindow bounds how long a rejected auto-detected token is re-read
@@ -261,7 +268,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		select {
 		case <-dialCtx.Done():
 			opts.trace("probelink: dial deadline exceeded after %d attempt(s): %v", attempt, lastErr)
-			return nil, fmt.Errorf("probelink: dial %s: %w%s%s", safeURL, lastErr, portHolderHintFor(opts.Host, opts.Port, opts.OwnAdbForward), refusedHint(lastErr, opts.DialTimeout))
+			return nil, fmt.Errorf("probelink: dial %s: %w%s%s%s", safeURL, lastErr, portHolderHintFor(opts.Host, opts.Port, opts.OwnAdbForward), dialGaveUpHint(opts.DialTimeout), refusedHint(lastErr))
 		case <-time.After(retryInterval):
 		}
 	}
