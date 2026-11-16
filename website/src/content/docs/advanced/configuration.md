@@ -22,6 +22,7 @@ defaults:
   retry_failed_tests: 1
   grant_permissions_on_clear: true
   match: exact                 # text matching: exact (default) or loose (fold case, accents, apostrophes, whitespace); --match-loose overrides
+  crash_evidence: false        # Android: when a step loses its connection and the app died, print why (exit reason, crash text; masked) for the failed test. --crash-evidence turns it on for one run
   implicit_wait: 0s            # retry tap/type/see on "not found" for up to this long (Maestro-style); 0 = off. --implicit-wait overrides
 
 devices:

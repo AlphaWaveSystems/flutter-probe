@@ -175,6 +175,7 @@ type DefaultsConfig struct {
 	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
 	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation to 0.001 (animations end within a frame); 0 is not a valid Flutter value
 	Match                   string        `yaml:"match"`                      // text matching: "exact" (default, case-sensitive substring) or "loose" (fold case, accents, apostrophes, whitespace). Overridden by --match-loose.
+	CrashEvidence           bool          `yaml:"crash_evidence"`             // when a step loses its connection and the app died (Android), keep why: the exit reason and the crash text, masked, as one line for the failed test. --crash-evidence turns it on for a run. Off by default
 	ImplicitWait            time.Duration `yaml:"implicit_wait"`              // retry tap/type/see/... on "not found" for up to this long before failing (default: 0 = off). Overridden by --implicit-wait.
 }
 

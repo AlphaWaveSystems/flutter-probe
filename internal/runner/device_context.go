@@ -46,6 +46,12 @@ type DeviceContext struct {
 	CLIVersion              string        // running probe binary's version, sent during the reconnect handshake
 	Language                string        // app language set by `set language` / --locale ("" = device default)
 
+	// CrashEvidence turns on crash evidence for this run (defaults.crash_evidence, --crash-evidence): see crash_evidence.go. CrashADB runs its adb commands (nil uses
+	// Manager's adb) and CrashPoll is the wait between two looks at a device whose app has no process yet (zero means 300 ms); tests set fakes.
+	CrashEvidence bool
+	CrashADB      device.AdbRunner
+	CrashPoll     time.Duration
+
 	clip clipboardTaint // see clipboardTaint: the clipboard of this device holds a tainted value
 
 	sysMu     sync.Mutex

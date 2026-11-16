@@ -186,6 +186,7 @@ func (po *ParallelOrchestrator) deviceContext(ctx context.Context, dr *DeviceRun
 	dc.DevicePort = po.cfg.Agent.AgentDevicePort()
 	dc.AllowClearData = true
 	dc.GrantPermissionsOnClear = po.cfg.Defaults.GrantPermissionsOnClear
+	dc.CrashEvidence = po.cfg.Defaults.CrashEvidence
 	dc.ReconnectDelay = po.cfg.Agent.ReconnectDelay
 	dc.RestartDelay = po.cfg.Device.RestartDelay
 	dc.TokenReadTimeout = tokenTimeout
