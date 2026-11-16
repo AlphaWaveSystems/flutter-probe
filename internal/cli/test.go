@@ -94,6 +94,7 @@ func init() {
 	f.StringP("tag", "t", "", "run only tests matching this tag (e.g. @smoke, @critical)")
 	f.BoolP("watch", "w", false, "watch mode — re-run tests automatically on file changes")
 	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
+	f.String("shard-root", "", "directory a shard's file keys are taken relative to (default: the --config directory, or PROBE_SHARD_ROOT); give the same one in every shard job")
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.Bool("junit-attempts", false, "with --format junit: write one testcase per attempt of a test that was re-run (retry_failed_tests), failed attempts as failure/error, so flaky tests are visible to tools that track them; off by default because it adds failed cases to a run that finally passed")
 	f.Bool("junit-artifacts", false, "with --format junit: list the artifacts of each test (screenshots, the diff image of a failed compare screenshot, videos) as \"artifact: <path>\" lines in its <system-out>, relative to the report file's directory when it is written with -o, otherwise to the working directory; a path outside that directory is written as its file name only; at most 50 per test")
@@ -496,7 +497,11 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		if err != nil {
 			return err
 		}
-		files = runner.ShardFiles(files, shardBase(cmd), shardIdx, shardTotal)
+		base, err := shardBase(cmd)
+		if err != nil {
+			return err
+		}
+		files = runner.ShardFiles(files, base, shardIdx, shardTotal)
 		if len(files) == 0 {
 			fmt.Fprintf(statusW, "  Shard %s: no files assigned to this shard\n", shardStr)
 			return nil
@@ -504,10 +509,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		fmt.Fprintf(statusW, "  Shard %s: running %d files\n", shardStr, len(files))
 		if verbose {
 			for _, f := range files {
-				key, outside := runner.ShardKey(f, shardBase(cmd))
+				_, outside := runner.ShardKey(f, base)
 				fmt.Fprintf(statusW, "    %s\n", f)
 				if outside {
-					fmt.Fprintf(statusW, "      note: outside the repository and the config directory, so its shard uses its absolute path (%s)\n", key)
+					fmt.Fprintf(statusW, "      note: outside the repository and the shard root, so its shard uses its absolute path: %s\n", filepath.Base(f))
 				}
 			}
 		}
