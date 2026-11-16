@@ -100,7 +100,7 @@ revoke all permissions
 
 ### Auto-grant on clear
 
-When `grant_permissions_on_clear: true` is set in `probe.yaml` (or `-y` is used), all known permissions are automatically granted after `clear app data`. This prevents permission dialogs from appearing and blocking tests.
+When `grant_permissions_on_clear: true` is set in `probe.yaml` (or `-y` is used), all known permissions are automatically granted after `clear app data`. A parallel or composite run follows the same rule; `--no-grant-on-clear` turns it off. This prevents permission dialogs from appearing and blocking tests.
 
 ## Native UI Boundary
 

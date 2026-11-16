@@ -29,12 +29,21 @@ type ConfirmFunc func(message string) bool
 type ClearGate struct {
 	Yes  bool
 	Lane func(platform device.Platform, serial string) ConfirmFunc
+	// GrantOnClear is whether a lane grants the app's permissions again after a clear: GrantAfterClear decides it once per run.
+	GrantOnClear bool
+}
+
+// GrantAfterClear is whether the app's permissions are granted again after a clear: on when --yes or probe.yaml asks, and never with
+// --no-grant-on-clear. It is the one rule every device context follows: a single device, a parallel lane and a composite device.
+func GrantAfterClear(allowClearData, cfgGrant, noGrant bool) bool {
+	return (allowClearData || cfgGrant) && !noGrant
 }
 
 // ApplyClearGate sets how this context answers `clear app data` on a lane: --yes, and the lane's confirmation. It never prompts, and a
 // refused wipe is the hint. Every lane of a parallel or composite run gets its context from here, so the gate is set in one place.
 func (dc *DeviceContext) ApplyClearGate(g ClearGate) {
 	dc.AllowClearData = g.Yes
+	dc.GrantPermissionsOnClear = g.GrantOnClear
 	dc.NoPrompt = true
 	dc.Confirm = nil
 	if g.Lane != nil {
@@ -139,7 +148,7 @@ func NewConfiguredDeviceContext(ctx context.Context, m *device.Manager, cfg *con
 	dc.AgentHost = f.AgentHost
 	dc.AllowClearData = f.AllowClearData
 	dc.Confirm = f.Confirm
-	dc.GrantPermissionsOnClear = (f.AllowClearData || cfg.Defaults.GrantPermissionsOnClear) && !f.NoGrantOnClear
+	dc.GrantPermissionsOnClear = GrantAfterClear(f.AllowClearData, cfg.Defaults.GrantPermissionsOnClear, f.NoGrantOnClear)
 	dc.CrashEvidence = cfg.Defaults.CrashEvidence
 	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
 	dc.RestartDelay = cfg.Device.RestartDelay

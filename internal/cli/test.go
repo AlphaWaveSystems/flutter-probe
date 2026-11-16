@@ -126,7 +126,7 @@ func init() {
 	f.Bool("upload-local", false, "upload this run as a local run (Probe Cloud, preview): git facts instead of CI facts; unverified evidence, shown beside the CI result, that never counts toward a pull request's verdict. Opt-in: needs a probe_cloud license and a team that enabled local uploads. Never implied by --upload-report, and hosted.upload_report does not apply to it")
 	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
 	f.Bool("crash-evidence", false, "when a step loses its connection and the Android app died, print why (exit reason and crash text, masked) for the failed test; also defaults.crash_evidence")
-	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
+	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs); applies to parallel and composite runs too")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
@@ -624,7 +624,8 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		if clearPrefsWarning != "" {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
 		}
-		opts.ClearGate = clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking, cfg.Project.App)
+		opts.ClearGate = clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking,
+			runner.GrantAfterClear(autoYes, cfg.Defaults.GrantPermissionsOnClear, noGrantOnClear), cfg.Project.App)
 
 		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
 		results, orchErr := orch.Run(ctx)
@@ -1369,7 +1370,8 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		if clearPrefsWarning != "" {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
 		}
-		clearGate := clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking, cfg.Project.App)
+		clearGate := clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking,
+			runner.GrantAfterClear(autoYes, cfg.Defaults.GrantPermissionsOnClear, noGrantOnClear), cfg.Project.App)
 		cr, compositeCleanup, crErr := buildCompositeRunnerFn(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose, clearGate)
 		if crErr != nil {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite devices unavailable: %v\n", crErr)
