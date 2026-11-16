@@ -24,10 +24,7 @@ func (e *Executor) reconnectHint(ctx context.Context) string {
 	if dc == nil || dc.Platform != device.PlatformAndroid || !device.ValidPackageName(dc.AppID) || strings.TrimSpace(dc.Serial) == "" {
 		return ""
 	}
-	var runner device.AdbRunner = dc.CrashADB
-	if runner == nil && dc.Manager != nil {
-		runner = dc.Manager.ADB()
-	}
+	runner := dc.adbRunner()
 	if runner == nil || ctx.Err() != nil {
 		return ""
 	}
@@ -48,5 +45,37 @@ func (e *Executor) reconnectHint(ctx context.Context) string {
 			return fmt.Sprintf(" — the app %s is not running: it ended during this step (run with --crash-evidence to see why)", dc.AppID)
 		}
 	}
-	return device.ForwardHint(cctx, runner, dc.Port, dc.Serial)
+	return device.ConnectHint(cctx, runner, dc.Serial, dc.Port, dc.devicePort(), dc.AppID)
+}
+
+// adbRunner is the adb the looks of a failed connect use: the one a test set (CrashADB), else the manager's. Nil when there is none.
+func (dc *DeviceContext) adbRunner() device.AdbRunner {
+	if dc.CrashADB != nil {
+		return dc.CrashADB
+	}
+	if dc.Manager != nil {
+		return dc.Manager.ADB()
+	}
+	return nil
+}
+
+// tokenReadHint is appended to a failed token read after a restart (Android): which other app holds the agent port on the device when that can be read, else one
+// hedged line without names. It says nothing when the app is not running (the error already says so), on another platform, or when the run is cancelled. At most
+// three read-only adb calls, bounded to five seconds.
+func (dc *DeviceContext) tokenReadHint(ctx context.Context, readErr error) string {
+	if dc == nil || dc.Platform != device.PlatformAndroid || ctx.Err() != nil || readErr == nil || strings.Contains(readErr.Error(), "is not running") {
+		return ""
+	}
+	if h := device.PortOwnerHint(ctx, dc.adbRunner(), dc.Serial, dc.devicePort(), dc.AppID); h != "" {
+		return h
+	}
+	return device.NeutralPortHint
+}
+
+// devicePort is the agent's port on the device: DevicePort, or Port when none is set.
+func (dc *DeviceContext) devicePort() int {
+	if dc.DevicePort != 0 {
+		return dc.DevicePort
+	}
+	return dc.Port
 }
