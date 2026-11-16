@@ -36,6 +36,22 @@ run reports only the lost connection (`connection closed`). Not in any CI run: i
 On a shared emulator give the agent its own port: `--dart-define=PROBE_PORT=<n>` in the build, and `agent: port: <n>` in
 `probe.yaml`, the same number in both, since probe forwards that port to the device.
 
+## The load screen (sustained-load reproduction, PT-25)
+
+`probe-tests/load/sustained_load.probe` is the reproduction for the agent connection that drops (close 1006) when an app does sustained
+background work. The load screen (`PROBE_FIXTURE_LOAD=true`, key `load_ticks`, title "Load running") runs work that never stops while it is up:
+
+- `PROBE_FIXTURE_LOAD_MODE=ui` (the default): about 40 ms of every 50 ms of CPU work on the UI isolate, where the agent's socket is also served.
+- `PROBE_FIXTURE_LOAD_MODE=isolate`: the same work on a second isolate, leaving the UI isolate free.
+
+```bash
+flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_LOAD=true --dart-define=PROBE_FIXTURE_LOAD_MODE=ui
+probe test probe-tests/load/sustained_load.probe --config probe.yaml --device <serial>
+```
+
+The test takes about five minutes. A reproduction is a `Connection lost` line in the run output with `close 1006` (or `unexpected EOF`)
+within that time. Run it once per mode to tell whether the UI isolate has to be busy for the drop. This is a reproduction only: it does not change the agent.
+
 ## On a physical iPhone, over WiFi
 
 The app passes a `bonsoir`-based `ProbeAdvertiser` (`lib/probe_advertiser.dart`) to the agent when it is built with
