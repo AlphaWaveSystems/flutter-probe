@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
 
 // "Clear data before each test" asks once for the run: a yes holds for every test, a no is the error of every test, and nobody to ask names --yes.
@@ -205,5 +206,26 @@ func TestTheSettingWithNoDeviceSaysSoOnce(t *testing.T) {
 	})
 	if strings.Count(out, "clear-before-each-test has no effect here") != 1 {
 		t.Errorf("the notice appeared %d times: %q", strings.Count(out, "clear-before-each-test has no effect here"), out)
+	}
+}
+
+// The per-test question is built by the shared gate: on an iOS simulator it carries the keychain sentence of the clear question, on Android it does not,
+// and in both it names the package and device and says it happens before every test.
+func TestThePerTestQuestionCarriesTheSharedIOSKeychainSentence(t *testing.T) {
+	for _, tc := range []struct {
+		platform device.Platform
+		keychain bool
+	}{{device.PlatformIOS, true}, {device.PlatformAndroid, false}} {
+		var msg string
+		dc := &DeviceContext{AppID: "a.b", Serial: "s", Platform: tc.platform, Confirm: func(m string) bool { msg = m; return false }}
+		_ = dc.AskClearData(true)
+		if strings.Contains(msg, iosKeychainSentence) != tc.keychain || !strings.Contains(msg, "BEFORE EVERY TEST") || !strings.Contains(msg, "a.b") {
+			t.Errorf("%s: question = %q", tc.platform, msg)
+		}
+		// the refusal hint says it too on iOS
+		hint := (&DeviceContext{AppID: "a.b", Serial: "s", Platform: tc.platform}).AskClearData(true)
+		if hint == nil || strings.Contains(hint.Error(), "keychain") != tc.keychain {
+			t.Errorf("%s: hint = %v", tc.platform, hint)
+		}
 	}
 }
