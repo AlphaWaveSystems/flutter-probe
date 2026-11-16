@@ -32,14 +32,15 @@ test.describe("Studio UI (no device needed)", () => {
 
   test("04 settings overlay reads probe.yaml and saves a changed port", async ({ page }) => {
     const yamlPath = path.join(workspace, "probe.yaml");
-    // Start from a known file, and put it back afterwards even when the test fails half way.
-    const original = "app:\n  id: com.example.fixture\nagent:\n  port: 48686\ndefaults:\n  timeout: 30s\n";
-    fs.writeFileSync(yamlPath, original);
+    // The workspace file the script prepared (its app id and agent port belong to the device specs that run after this one): read it, and
+    // put it back byte for byte afterwards, even when the test fails half way.
+    const original = fs.readFileSync(yamlPath, "utf8");
+    const baselinePort = /port:\s*(\d+)/.exec(original)?.[1] ?? "48686";
     try {
       await openStudio(page);
       await page.click("#btn-settings");
       await expect(page.locator("#settings-overlay")).toBeVisible();
-      await expect(page.locator("#settings-port")).toHaveValue("48686"); // the baseline written above
+      await expect(page.locator("#settings-port")).toHaveValue(baselinePort); // what the file says
       await page.fill("#settings-port", "48777");
       await page.click("#btn-settings-save");
       await expect(page.locator("#toast-container")).toContainText("Saved probe.yaml");

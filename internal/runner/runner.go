@@ -96,6 +96,11 @@ type Runner struct {
 type RunOptions struct {
 	NewRecorder func(device string) StepRecorder // nil = no recording; called once per device
 
+	// OnClient, when set, is called with the new client each time a step reconnects the run after it restarted the app (restart the app,
+	// open the app, clear app data). The run uses the new client from then on and the old one is closed, so a caller that holds the
+	// connection (Studio's live view) takes the new client here, or it keeps using a connection that no longer exists.
+	OnClient func(probelink.ProbeClient)
+
 	// NewCompositeRecorder, when set, builds a composite run's recorders from the whole device, so each recorder can take
 	// the device's platform and OS version. It takes precedence over NewRecorder for composite runs.
 	NewCompositeRecorder func(d CompositeDevice) StepRecorder
@@ -161,6 +166,9 @@ func (r *Runner) SetCompositeRunner(cr *CompositeRunner) {
 func (r *Runner) newExecutor() *Executor {
 	exec := NewExecutor(r.client, r.deviceCtx, func(newClient probelink.ProbeClient) {
 		r.client = newClient
+		if r.opts.OnClient != nil {
+			r.opts.OnClient(newClient)
+		}
 	}, r.opts.Timeout, r.opts.Verbose)
 	exec.clip = &r.clip // a cloud run has no device context: the clipboard flag then lives as long as the Runner, not as long as one test attempt
 	exec.SetReconnectPolicy(r.cfg.Agent.ReconnectAttempts, r.cfg.Agent.ReconnectBackoff)

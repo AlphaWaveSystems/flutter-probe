@@ -22,6 +22,7 @@ if (seedExchangesPath) {
   fs.mkdirSync(path.dirname(seedExchangesPath), { recursive: true });
   fs.writeFileSync(seedExchangesPath, JSON.stringify(seedExchanges()));
 }
+const DEVICE_SPECS = /(^|\/)(device|physical)\.spec\.ts$|-device\.spec\.ts$/;
 const out = process.env.STUDIO_E2E_OUT ?? path.resolve(__dirname, "../../reports/studio-e2e-web");
 
 export default defineConfig({
@@ -31,6 +32,12 @@ export default defineConfig({
   workers: 1, // one Studio process holds one connection to one device
   fullyParallel: false,
   retries: 0,
+  // The device specs run last, in their own project. A real run on a device replaces the seeded failed run that the no-device specs of Explain and
+  // Suggest a fix read, so in one order (device first) those specs failed for a reason that had nothing to do with them.
+  projects: [
+    { name: "no-device", testIgnore: DEVICE_SPECS },
+    { name: "device", testMatch: DEVICE_SPECS, dependencies: ["no-device"] },
+  ],
   reporter: [["list"], ["html", { outputFolder: path.join(out, "html"), open: "never" }], ["json", { outputFile: path.join(out, "report.json") }]],
   outputDir: path.join(out, "artifacts"),
   use: {

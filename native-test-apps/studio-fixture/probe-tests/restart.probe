@@ -1,0 +1,9 @@
+test "restart resets the counter"
+  open the app
+  tap #nav_counter
+  tap "Tap Me"
+  see "Taps: 1"
+  restart the app
+  open the app
+  tap #nav_counter
+  see "Taps: 0"

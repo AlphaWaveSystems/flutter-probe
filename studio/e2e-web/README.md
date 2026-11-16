@@ -82,3 +82,5 @@ sf-20 and sf-21 check the place buttons on the Suggest a fix card and the Explai
 **`first-run.spec.ts` (fr-01 to fr-05).** First-run guidance, with no device. Each case starts its own headless Studio with a fresh HOME (`STUDIO_BIN`): no workspace (the next step, a button in the empty pane, a reason on every disabled primary button as a title and as an `aria-describedby` description), the button reachable from the keyboard, nothing said while the directory listing is held back and the line coming once after it, a workspace with files (the hint goes when a file is open), and text only.
 
 **`run-reason-device.spec.ts` (rd-01).** On the named simulator: while a run is held in flight, Run is disabled with the reason "A run is in progress." as its title and `aria-describedby` description, typing in the editor keeps it, and it goes when the run ends.
+
+**`restart-stream-device.spec.ts` (rs-01).** On the named simulator: a run with `restart the app` passes, the live view shows a frame rate again afterwards (not "no signal"), and a second run on the same connection passes. Uses `native-test-apps/studio-fixture/probe-tests/restart.probe`.

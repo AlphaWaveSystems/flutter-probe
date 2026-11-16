@@ -740,6 +740,33 @@ func (a *App) Disconnect() {
 	}
 }
 
+// adoptClient takes the client a run reconnected with (after a restart step) as the connection's client: the run has already left the
+// old one behind, so the live view and every later call use the new one. The streaming loop is stopped and started again on it, and
+// the old client is closed. A connection that was replaced or closed meanwhile is left alone.
+func (a *App) adoptClient(conn *connection, nc probelink.ProbeClient) {
+	a.mu.Lock()
+	if a.conn != conn || conn.client == nc {
+		a.mu.Unlock()
+		return
+	}
+	old, cancel, done := conn.client, conn.streamCancel, conn.streamDone
+	streamCtx, streamCancel := context.WithCancel(context.Background())
+	streamDone := make(chan struct{})
+	conn.client, conn.streamCancel, conn.streamDone = nc, streamCancel, streamDone
+	a.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+		}
+	}
+	_ = old.Close()
+	a.startFrameSource(streamCtx, streamDone, nc)
+}
+
 // stopConnection tears down a connection in dependency order: cancel the
 // streaming goroutine first (so it doesn't try to use a closed client),
 // wait for it to exit, then close the client and run device cleanup.
@@ -985,6 +1012,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 		Tags:      sel.tags,
 		Timeout:   conn.cfg.Defaults.Timeout,
 		Verbose:   false,
+		OnClient:  func(c probelink.ProbeClient) { a.adoptClient(conn, c) },
 	})
 	r.OnResult(func(res runner.TestResult) {
 		rr := toRunResult(res)
