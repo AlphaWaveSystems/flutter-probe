@@ -6,7 +6,7 @@ import { initDeviceStream, onElementSelected, startStream, stopStream } from "./
 import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
-import { clampLine, planJump, type JumpTarget } from "./goto-line";
+import { clampLine, placeLabel, planJump, type JumpTarget } from "./goto-line";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
@@ -698,9 +698,23 @@ function showExplainCard(r: ExplainResult): void {
     div.className = `explain-row explain-row-${row.kind}`;
     if (row.label) div.append(textEl("div", "explain-row-label", row.label));
     div.append(textEl("p", "explain-row-text", row.text));
+    const jump = placeButton(row.file, row.line);
+    if (jump) div.append(jump);
     card.append(div);
   }
   card.hidden = false;
+}
+
+// placeButton is the small button on a card that opens the place a failure is at, with the same click as a failing row in Results (the
+// jump decides what may open). It names the line (`L12`) and the file's name, never its folder; with no file it is nothing.
+function placeButton(file: string | undefined, line: number | undefined): HTMLElement | null {
+  const label = placeLabel(file, line);
+  if (!label) return null;
+  const btn = textEl("button", "btn-mini goto-place", label.text);
+  btn.setAttribute("type", "button");
+  btn.setAttribute("title", label.title);
+  btn.addEventListener("click", () => document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file, line } })));
+  return btn;
 }
 
 // confirmExplainSend shows what Explain would send and waits for Send or Cancel. Nothing is sent before Send.
@@ -812,6 +826,8 @@ function showFixCard(answer: FixAnswer, step: string): void {
     const div = document.createElement("div");
     div.className = `explain-row explain-row-${row.kind}`;
     div.append(textEl("div", "explain-row-label", row.label), textEl("p", "explain-row-text", row.text));
+    const jump = placeButton(row.file, row.line);
+    if (jump) div.append(jump);
     card.append(div);
   }
   if (canOfferReplace(answer)) {

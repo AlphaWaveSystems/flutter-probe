@@ -509,6 +509,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .explain-row { margin: 6px 0; }
 .explain-row-label { font-weight: 600; overflow-wrap: anywhere; }
 .explain-row-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.goto-place { margin-top: 4px; font-variant-numeric: tabular-nums; }
 .fix-verdict { margin-top: 8px; }
 .fix-verdict-passed .explain-row-text { color: var(--ok, #3fb950); font-weight: 600; }
 .fix-verdict-failed .explain-row-text { color: var(--err, #f85149); }

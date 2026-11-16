@@ -61,3 +61,15 @@ export function clampLine(line: number, lineCount: number): { line: number; note
   if (line > lineCount) return { line: lineCount, note: `The file has only ${lineCount} lines; showing the last one.` };
   return { line, note: "" };
 }
+
+/**
+ * The words on a button that opens a failing place: `L12` and `Open line 12 of login.probe`, or just the file when no line is known. The
+ * folder is never shown (only the file's name), and nothing is made of a place with no file.
+ */
+export function placeLabel(file: string | undefined, line: number | undefined): { text: string; title: string } | null {
+  if (!file) return null;
+  const name = file.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "";
+  if (!name) return null;
+  const n = Number.isInteger(line) && (line as number) >= 1 ? (line as number) : 0;
+  return n > 0 ? { text: `L${n}`, title: `Open line ${n} of ${name}` } : { text: name, title: `Open ${name}` };
+}

@@ -286,6 +286,8 @@ export namespace main {
 	export class ExplainNote {
 	    test: string;
 	    advice: string;
+	    file?: string;
+	    line?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExplainNote(source);
@@ -295,6 +297,8 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.test = source["test"];
 	        this.advice = source["advice"];
+	        this.file = source["file"];
+	        this.line = source["line"];
 	    }
 	}
 	export class ExplainOffer {
@@ -839,6 +843,8 @@ export namespace main {
 	    changed: boolean;
 	    attempt: number;
 	    maxAttempts: number;
+	    file?: string;
+	    line?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SelectorFix(source);
@@ -857,6 +863,8 @@ export namespace main {
 	        this.changed = source["changed"];
 	        this.attempt = source["attempt"];
 	        this.maxAttempts = source["maxAttempts"];
+	        this.file = source["file"];
+	        this.line = source["line"];
 	    }
 	}
 	export class SelectorFixAttempts {

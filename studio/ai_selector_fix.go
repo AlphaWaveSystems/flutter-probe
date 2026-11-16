@@ -61,6 +61,8 @@ type fixRequest struct {
 	state        string // what the request depends on, hashed: a change is a new preview
 	dest         string // where it goes, hashed
 	attemptKey   string // the failed step (file, line, test), hashed: what the attempts are counted for
+	stepFile     string // where the failed step is, for the window's jump to it: never sent to a provider
+	stepLine     int
 }
 
 type fixStored struct {
@@ -207,6 +209,7 @@ func (a *App) buildSelectorFix(fileContent string) (req fixRequest, err error) {
 		system: fixGate(system), user: user, label: d.label, hosted: d.hosted, dest: d.dest, state: d.state,
 		step:       capRunes(fmt.Sprintf("line %d of %q: %s", d.step.Line, test, desc), fixMaxFile),
 		attemptKey: sum(d.step.File, fmt.Sprint(d.step.Line), d.step.Test), // the same as failedStepKey
+		stepFile:   d.step.File, stepLine: d.step.Line,
 	}, nil
 }
 
@@ -350,6 +353,7 @@ func (a *App) SelectorFixPreviewed(id string) (SelectorFix, error) {
 		Destination:  p.req.label,
 		Hosted:       p.req.hosted,
 		Attempt:      attempt, MaxAttempts: fixMaxAttempts,
+		File: p.req.stepFile, Line: p.req.stepLine,
 	}, nil
 }
 

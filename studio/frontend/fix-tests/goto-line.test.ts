@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clampLine, normalizePath, planJump } from "../src/goto-line.ts";
+import { clampLine, normalizePath, placeLabel, planJump } from "../src/goto-line.ts";
 
 const ctx = { openFile: "/ws/probe-tests/login.probe", workspaceRoot: "/ws" };
 
@@ -63,5 +63,22 @@ describe("clampLine", () => {
     assert.deepEqual(clampLine(11, 10), { line: 10, note: "The file has only 10 lines; showing the last one." });
     assert.deepEqual(clampLine(0, 10), { line: 0, note: "" });
     assert.deepEqual(clampLine(-1, 10), { line: 0, note: "" });
+  });
+});
+
+describe("placeLabel", () => {
+  it("names the line and the file's name, never the folder", () => {
+    assert.deepEqual(placeLabel("/ws/probe-tests/login.probe", 12), { text: "L12", title: "Open line 12 of login.probe" });
+    assert.deepEqual(placeLabel("probe-tests\\login.probe", 3), { text: "L3", title: "Open line 3 of login.probe" });
+    assert.deepEqual(placeLabel("login.probe", 1), { text: "L1", title: "Open line 1 of login.probe" });
+  });
+  it("names only the file when no line is known, and nothing without a file", () => {
+    for (const line of [0, -1, 1.5, undefined, Number.NaN]) {
+      assert.deepEqual(placeLabel("/ws/a/b.probe", line as number | undefined), { text: "b.probe", title: "Open b.probe" });
+    }
+    assert.equal(placeLabel("", 4), null);
+    assert.equal(placeLabel(undefined, 4), null);
+    assert.equal(placeLabel("/", 4), null);
+    assert.equal(placeLabel("///", 4), null);
   });
 });

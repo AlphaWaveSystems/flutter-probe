@@ -212,4 +212,39 @@ test.describe("Fix round trip on a named simulator", () => {
     await expect(page.locator("#editor .active-line-number")).toHaveText("5"); // the mistyped tap
     expect(fs.readFileSync(file, "utf8")).toBe(mistyped); // nothing was written
   });
+
+  test("dg-06 after a real failed run, the suggestion card's line button opens the failing line from another file", async ({ page }) => {
+    test.setTimeout(300_000);
+    test.info().annotations.push({ type: "device", description: simName });
+    const f = await fakeProvider('```probe\ntap "Tap Me"\n```\nThe button is labelled "Tap Me".');
+    try {
+      const bundle = process.env.STUDIO_E2E_BUNDLE_ID ?? "com.alphawavesystems.studioFixture";
+      execFileSync("xcrun", ["simctl", "terminate", udid, bundle], { stdio: "ignore" });
+      execFileSync("xcrun", ["simctl", "launch", udid, bundle], { stdio: "ignore" });
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      fs.writeFileSync(file, mistyped);
+      fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: ${f.url}/v1\n  model: fake-model\nstudio:\n  ai_context:\n    run_results: true\n`);
+      await openStudio(page);
+      await connect(page);
+      await expect(page.locator("#status-text")).toContainText(simName); // the named device
+      await page.locator("#file-list li", { hasText: "probe-tests" }).first().click();
+      await page.locator("#file-list li", { hasText: "fix-roundtrip.probe" }).first().click();
+      await page.click("#btn-run");
+      await expect(page.locator("#results-list li.fail", { hasText: "fix round trip" })).toBeVisible({ timeout: 180_000 });
+      await expect(page.locator("#btn-run")).toBeEnabled({ timeout: 60_000 });
+      await page.click("#btn-fix");
+      await expect(page.locator("#fix-preview-overlay")).toBeVisible();
+      await page.click("#btn-fix-preview-send");
+      const place = page.locator("#fix-card button.goto-place");
+      await expect(place).toHaveText("L5"); // the mistyped tap
+      await page.locator("#file-list li", { hasText: "counter.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+      await place.click();
+      await expect(page.locator("#editor-filename")).toContainText("fix-roundtrip.probe");
+      await expect(page.locator("#editor .active-line-number")).toHaveText("5");
+      expect(fs.readFileSync(file, "utf8")).toBe(mistyped); // nothing was written
+    } finally {
+      await f.close();
+    }
+  });
 });
