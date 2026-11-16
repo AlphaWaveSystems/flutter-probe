@@ -402,6 +402,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 .overlay-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.confirm-card { width: min(460px, 92vw); }
+.confirm-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; }
+.confirm-facts dt { color: var(--fg-muted); }
+.confirm-facts dd { margin: 0; color: var(--fg-strong); overflow-wrap: anywhere; }
+.confirm-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+.btn-danger { color: var(--fail); border-color: var(--fail); }
 .overlay-header h2 { font-size: 14px; margin: 0; color: var(--fg-strong); }
 .shortcut-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .shortcut-table td { padding: 5px 0; vertical-align: top; }

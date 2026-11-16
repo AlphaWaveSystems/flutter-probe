@@ -8,6 +8,8 @@ export function AIChatLabelParts():Promise<main.ChatLabelParts>;
 
 export function AllowHost(arg1:string):Promise<void>;
 
+export function AnswerConfirm(arg1:string,arg2:boolean):Promise<boolean>;
+
 export function ApplyDeviceSetting(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function BuildCallStep(arg1:main.SaveStepInput):Promise<main.SavedStep>;

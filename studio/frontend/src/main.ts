@@ -12,6 +12,7 @@ import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, typ
 import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
+import { initConfirmDialog } from "./confirm-dialog";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -1713,6 +1714,7 @@ if (inspectorSearch) {
 
 initResults();
 initNetworkPanel();
+initConfirmDialog();
 // Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
 // Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
 // parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.

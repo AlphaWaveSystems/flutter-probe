@@ -1,0 +1,13 @@
+test "clear app data asks first, every time"
+  open the app
+  tap #nav_counter
+  tap "Tap Me"
+  see "Taps: 1"
+  clear app data
+  open the app
+  tap #nav_counter
+  see "Taps: 0"
+  clear app data
+  open the app
+  tap #nav_counter
+  see "Taps: 0"

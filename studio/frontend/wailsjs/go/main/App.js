@@ -14,6 +14,10 @@ export function AllowHost(arg1) {
   return window['go']['main']['App']['AllowHost'](arg1);
 }
 
+export function AnswerConfirm(arg1, arg2) {
+  return window['go']['main']['App']['AnswerConfirm'](arg1, arg2);
+}
+
 export function ApplyDeviceSetting(arg1, arg2, arg3) {
   return window['go']['main']['App']['ApplyDeviceSetting'](arg1, arg2, arg3);
 }

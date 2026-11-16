@@ -28,6 +28,7 @@ const (
 	catAIProvider    = "aiProvider"    // text sent to, or read from, an AI provider
 	catDevice        = "device"        // talks to a connected device or its agent
 	catRunControl    = "runControl"    // starts or stops a run or a recording
+	catConfirm       = "confirm"       // answers a question the window asked about a destructive step: only a person in the window may
 )
 
 var boundMethods = map[string]string{
@@ -35,7 +36,7 @@ var boundMethods = map[string]string{
 	"AIChatLabel": catUI, "AIChatLabelParts": catUI, "ExplainAvailability": catUI, "InitialWorkspace": catUI, "Lint": catUI, "RunState": catUI,
 	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, "SelectorFixAttempts": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
 	// the workspace
-	"ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
+	"AnswerConfirm": catConfirm, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
 	"WriteFile": catWritesWS, "SaveAISettings": catWritesWS, "SaveWorkspaceSettings": catWritesWS,
 	"SetWorkspace": catWorkspaceRoot, "PickWorkspace": catWorkspaceRoot,
 	// the keychain
@@ -63,7 +64,7 @@ var automationBackendMethods = []string{"CancelRun", "Connect", "ConnectWiFi", "
 
 // automationNever are the categories no automation method may belong to: a token for the automation endpoint grants what its methods do,
 // and none of these is something a script that drives a device should be able to do.
-var automationNever = map[string]bool{catWritesWS: true, catSecrets: true, catNetwork: true, catAIProvider: true, catWorkspaceRoot: true}
+var automationNever = map[string]bool{catConfirm: true, catWritesWS: true, catSecrets: true, catNetwork: true, catAIProvider: true, catWorkspaceRoot: true}
 
 func exportedMethods(t reflect.Type) []string {
 	var out []string
@@ -114,7 +115,7 @@ func TestEveryBoundMethodHasADecision(t *testing.T) {
 	}
 	for name, cat := range boundMethods {
 		switch cat {
-		case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl:
+		case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl, catConfirm:
 		default:
 			t.Errorf("%s has the unknown category %q", name, cat)
 		}
@@ -226,5 +227,26 @@ func TestTheAutomationEndpointReachesAnExplicitSet(t *testing.T) {
 	}
 	if !reflect.TypeOf(&App{}).Implements(iface) {
 		t.Error("App no longer satisfies the automation backend")
+	}
+}
+
+// The automation endpoint cannot answer a confirmation, under either spelling, and a decision table entry keeps the method out of its reach.
+func TestAutomationEndpointCannotAnswerAConfirmation(t *testing.T) {
+	if cat := boundMethods["AnswerConfirm"]; cat != catConfirm || !automationNever[cat] {
+		t.Errorf("AnswerConfirm is %q, which must be a category no automation method may have", cat)
+	}
+	s := &automationServer{backend: nil}
+	for _, name := range []string{"answer_confirm", "AnswerConfirm", "confirm", "answerConfirm"} {
+		func() {
+			defer func() { _ = recover() }() // an unknown name is refused before the backend is touched
+			if _, err := s.call(name, []byte(`{"id":"x","allow":true}`)); err == nil {
+				t.Errorf("the automation endpoint accepted %q", name)
+			}
+		}()
+	}
+	for _, m := range automationBackendMethods {
+		if m == "AnswerConfirm" {
+			t.Error("AnswerConfirm is reachable from the automation backend")
+		}
 	}
 }

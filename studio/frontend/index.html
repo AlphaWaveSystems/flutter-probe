@@ -399,6 +399,21 @@
       </div>
     </div>
 
+    <div id="confirm-overlay" class="overlay" hidden>
+      <div class="overlay-card confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-lead confirm-app confirm-device confirm-warning">
+        <div class="overlay-header"><h2 id="confirm-title"></h2></div>
+        <p id="confirm-lead"></p>
+        <dl class="confirm-facts">
+          <dt>App</dt><dd id="confirm-app"></dd>
+          <dt>Device</dt><dd id="confirm-device"></dd>
+        </dl>
+        <p id="confirm-warning" class="overlay-foot"></p>
+        <div class="confirm-buttons">
+          <button type="button" id="btn-confirm-cancel" class="btn btn-primary"></button>
+          <button type="button" id="btn-confirm-danger" class="btn btn-danger"></button>
+        </div>
+      </div>
+    </div>
     <div id="help-overlay" class="overlay" hidden>
       <div class="overlay-card">
         <div class="overlay-header">
