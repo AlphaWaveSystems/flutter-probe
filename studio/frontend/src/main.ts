@@ -643,7 +643,12 @@ function refreshPlainKeyNote(): void {
 $("settings-ai-provider").addEventListener("change", refreshPlainKeyNote);
 
 // The key is never in the form. probe.yaml names only the environment variable, and the keychain holds a saved key.
+// The AI form as it was loaded (or last saved). Save sends it back as `base`, so Studio writes only what the person changed from it and
+// notices a probe.yaml that changed on disk under the form.
+let loadedAI: main.AISettings | undefined;
+
 function fillAIForm(s: main.AISettings): void {
+  loadedAI = main.AISettings.createFrom({ ...s, base: undefined });
   ($("settings-ai-provider") as HTMLSelectElement).value = s.provider ?? "";
   ($("settings-ai-endpoint") as HTMLInputElement).value = s.endpoint ?? "";
   ($("settings-ai-model") as HTMLInputElement).value = s.model ?? "";
@@ -675,6 +680,7 @@ function readAIForm(): main.AISettings {
     vision: ($("settings-ai-vision") as HTMLInputElement).checked,
     allowRemoteEndpoint: ($("settings-ai-remote") as HTMLInputElement).checked,
     plainKeyInFile: false,
+    base: loadedAI,
   });
 }
 
@@ -1283,7 +1289,9 @@ $("btn-settings-save").addEventListener("click", async () => {
   aiError.hidden = true;
   let aiFailure: unknown = null;
   try {
-    await SaveAISettings(workspaceRoot, readAIForm());
+    const form = readAIForm();
+    await SaveAISettings(workspaceRoot, form);
+    loadedAI = main.AISettings.createFrom({ ...form, base: undefined }); // the file now has what the form shows (the form can stay open on an error)
   } catch (err) {
     aiFailure = err;
   }

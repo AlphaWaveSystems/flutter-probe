@@ -28,6 +28,9 @@ type AISettings struct {
 	Timeout             string `json:"timeout"`             // a Go duration such as "60s"; empty means the default
 	AllowRemoteEndpoint bool   `json:"allowRemoteEndpoint"` // confirms a local endpoint that is not this machine
 	PlainKeyInFile      bool   `json:"plainKeyInFile"`      // read-only: probe.yaml holds a plain key, which Studio refuses to use
+	// Base is the form as it was loaded. Save writes only the fields that differ from it, and refuses when probe.yaml has changed on disk since
+	// then for any of them (an editor, git or another window may have written it), so an untouched field is never put back to an old value.
+	Base *AISettings `json:"base,omitempty"`
 }
 
 var (
@@ -232,8 +235,17 @@ func (a *App) SaveAISettings(workspace string, s AISettings) error {
 	}
 	// A form that equals what the file already says changes nothing, so it is neither validated nor written. A setup the CLI
 	// accepts, such as OpenAI with a plain key, must not stop the rest of Settings from saving.
+	base := s.Base
+	s.Base = nil
 	if cur, err := readAISettings(workspace); err == nil {
 		s.PlainKeyInFile = cur.PlainKeyInFile // read-only: the form cannot change it
+		if base != nil {
+			merged, err := mergeAIForm(*base, s, cur)
+			if err != nil {
+				return err
+			}
+			s = merged
+		}
 		if s == cur {
 			return nil
 		}
@@ -333,4 +345,59 @@ func providerLabel(s aiProviderSettings) string {
 		return "OpenAI API, model " + s.Model
 	}
 	return "nothing: AI is off"
+}
+
+// mergeAIForm applies the form's changes to what the file says now. A field that differs from base (the form as it was loaded) is the person's
+// change and is taken from the form, unless the file changed that field since: then the save is refused, with a reload message, rather than
+// overwrite an edit made elsewhere. A field that does not differ keeps what the file says now, so an untouched field is never put back to the
+// value it had when the form was loaded. The key source and its variable name are one field.
+func mergeAIForm(base, form, disk AISettings) (AISettings, error) {
+	out := disk
+	out.Base = nil
+	refuse := func(name string) error {
+		return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", name)
+	}
+	if form.Provider != base.Provider {
+		if disk.Provider != base.Provider {
+			return AISettings{}, refuse("the AI provider")
+		}
+		out.Provider = form.Provider
+	}
+	if form.Endpoint != base.Endpoint {
+		if disk.Endpoint != base.Endpoint {
+			return AISettings{}, refuse("the endpoint")
+		}
+		out.Endpoint = form.Endpoint
+	}
+	if form.Model != base.Model {
+		if disk.Model != base.Model {
+			return AISettings{}, refuse("the model")
+		}
+		out.Model = form.Model
+	}
+	if form.KeySource != base.KeySource || form.KeyEnvName != base.KeyEnvName {
+		if disk.KeySource != base.KeySource || disk.KeyEnvName != base.KeyEnvName {
+			return AISettings{}, refuse("the key source")
+		}
+		out.KeySource, out.KeyEnvName = form.KeySource, form.KeyEnvName
+	}
+	if form.Timeout != base.Timeout {
+		if disk.Timeout != base.Timeout {
+			return AISettings{}, refuse("the timeout")
+		}
+		out.Timeout = form.Timeout
+	}
+	if form.Vision != base.Vision {
+		if disk.Vision != base.Vision {
+			return AISettings{}, refuse("the vision switch")
+		}
+		out.Vision = form.Vision
+	}
+	if form.AllowRemoteEndpoint != base.AllowRemoteEndpoint {
+		if disk.AllowRemoteEndpoint != base.AllowRemoteEndpoint {
+			return AISettings{}, refuse("the remote-endpoint switch")
+		}
+		out.AllowRemoteEndpoint = form.AllowRemoteEndpoint
+	}
+	return out, nil
 }
