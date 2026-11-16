@@ -75,6 +75,10 @@ func TestCancelledRunMakesNoCrashCall(t *testing.T) {
 	if len(a.calls) != 0 {
 		t.Errorf("a cancelled run must make no device call, made %d", len(a.calls))
 	}
+	// calls only counts the calls a live context let through, so it is 0 even when the look tried and was refused: attempted is what shows it never tried
+	if a.attempted != 0 {
+		t.Errorf("a cancelled run must not even try a device call, tried %d", a.attempted)
+	}
 	if e.CrashReport() != nil {
 		t.Errorf("a cancelled look must report nothing")
 	}

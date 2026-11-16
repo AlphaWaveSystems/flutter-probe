@@ -94,6 +94,7 @@ func init() {
 	f.StringP("tag", "t", "", "run only tests matching this tag (e.g. @smoke, @critical)")
 	f.BoolP("watch", "w", false, "watch mode — re-run tests automatically on file changes")
 	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
+	f.String("shard-root", "", "directory a shard's file keys are taken relative to (default: the --config directory, or PROBE_SHARD_ROOT); give the same one in every shard job")
 	f.String("format", "terminal", "output format: terminal | junit | json")
 	f.Bool("junit-attempts", false, "with --format junit: write one testcase per attempt of a test that was re-run (retry_failed_tests), failed attempts as failure/error, so flaky tests are visible to tools that track them; off by default because it adds failed cases to a run that finally passed")
 	f.Bool("junit-artifacts", false, "with --format junit: list the artifacts of each test (screenshots, the diff image of a failed compare screenshot, videos) as \"artifact: <path>\" lines in its <system-out>, relative to the report file's directory when it is written with -o, otherwise to the working directory; a path outside that directory is written as its file name only; at most 50 per test")
@@ -496,7 +497,11 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		if err != nil {
 			return err
 		}
-		files = runner.ShardFiles(files, shardBase(cmd), shardIdx, shardTotal)
+		base, err := shardBase(cmd)
+		if err != nil {
+			return err
+		}
+		files = runner.ShardFiles(files, base, shardIdx, shardTotal)
 		if len(files) == 0 {
 			fmt.Fprintf(statusW, "  Shard %s: no files assigned to this shard\n", shardStr)
 			return nil
@@ -504,10 +509,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		fmt.Fprintf(statusW, "  Shard %s: running %d files\n", shardStr, len(files))
 		if verbose {
 			for _, f := range files {
-				key, outside := runner.ShardKey(f, shardBase(cmd))
+				_, outside := runner.ShardKey(f, base)
 				fmt.Fprintf(statusW, "    %s\n", f)
 				if outside {
-					fmt.Fprintf(statusW, "      note: outside the repository and the config directory, so its shard uses its absolute path (%s)\n", key)
+					fmt.Fprintf(statusW, "      note: outside the repository and the shard root, so its shard uses its absolute path: %s\n", filepath.Base(f))
 				}
 			}
 		}
@@ -548,30 +553,22 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 		// Discover or parse devices
 		var deviceRuns []runner.DeviceRun
+		connected, err := listDevices(ctx, dm)
+		if err != nil {
+			return fmt.Errorf("list devices: %w", err)
+		}
 		if devicesStr != "" {
-			for _, serial := range strings.Split(devicesStr, ",") {
-				serial = strings.TrimSpace(serial)
-				if serial == "" {
-					continue
-				}
-				p := device.PlatformAndroid
-				// Simple heuristic: UUIDs with dashes are iOS
-				if strings.Count(serial, "-") >= 4 && len(serial) > 30 {
-					p = device.PlatformIOS
-				}
-				deviceRuns = append(deviceRuns, runner.DeviceRun{
-					DeviceID: serial,
-					Platform: p,
-					AppID:    runner.ResolveAppID(cfg.Project.App, p),
-				})
+			runs, err := devicesFlagRuns(devicesStr, cfg.Project.App, connected)
+			if err != nil {
+				return err
 			}
+			deviceRuns = runs
 		} else {
 			// Auto-discover all connected devices
-			devList, err := dm.List(ctx)
-			if err != nil || len(devList) < 2 {
-				return fmt.Errorf("parallel mode requires 2+ connected devices (found %d)", len(devList))
+			if len(connected) < 2 {
+				return fmt.Errorf("parallel mode requires 2+ connected devices (found %d)", len(connected))
 			}
-			for _, d := range devList {
+			for _, d := range connected {
 				deviceRuns = append(deviceRuns, runner.DeviceRun{
 					DeviceID:   d.ID,
 					DeviceName: d.Name,
@@ -579,6 +576,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 					AppID:      runner.ResolveAppID(cfg.Project.App, d.Platform),
 				})
 			}
+		}
+
+		if err := onePlatformError(deviceRuns, devicesStr != ""); err != nil {
+			return err
 		}
 
 		// Distribute files across devices
@@ -931,15 +932,16 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				}
 			}
 			if deviceSerial == "" {
-				devices, err := dm.List(ctx)
-				if err != nil || len(devices) == 0 {
+				devices, err := listDevices(ctx, dm)
+				first, ok := defaultDevice(devices)
+				if err != nil || !ok {
 					return noDeviceError(err)
 				}
-				deviceSerial = devices[0].ID
-				platform = devices[0].Platform
+				deviceSerial = first.ID
+				platform = first.Platform
 			} else {
 				// Detect platform from device list when serial is specified manually
-				devices, _ := dm.List(ctx)
+				devices, _ := listDevices(ctx, dm)
 				for _, d := range devices {
 					if d.ID == deviceSerial {
 						platform = d.Platform
@@ -1144,7 +1146,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {
 					connectFailed = true
-					return fmt.Errorf("connecting to ProbeAgent: %w", err)
+					return fmt.Errorf("connecting to ProbeAgent: %w%s", err, device.ForwardHint(ctx, dm.ADB(), cfg.Agent.Port, deviceSerial))
 				}
 				defer client.Close()
 			}
