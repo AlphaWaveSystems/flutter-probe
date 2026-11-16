@@ -1,6 +1,6 @@
 # FlutterProbe workspace config for the Studio fixture app.
-app:
-  id: com.alphawavesystems.studioFixture
+project:
+  app: com.alphawavesystems.studioFixture
 agent:
   port: 48686
 defaults:

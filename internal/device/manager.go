@@ -3,6 +3,7 @@ package device
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -465,6 +466,9 @@ func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Du
 	token, err := m.simctl.ReadToken(ctx, udid, timeout, bundleID...)
 	if err == nil {
 		return token, nil
+	}
+	if errors.Is(err, ios.ErrAmbiguousToken) {
+		return "", err // a simulator with two tokens is not a physical device: do not look for one in the device log
 	}
 
 	// Fallback: physical device via idevicesyslog

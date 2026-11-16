@@ -659,7 +659,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		}
 		// ReadTokenIOS tries simctl first (fast, file-based) then falls
 		// through to idevicesyslog for physical devices.
-		token, err := a.deviceMgr.ReadTokenIOS(a.ctx, deviceID, tokenTimeout, "")
+		token, err := a.deviceMgr.ReadTokenIOS(a.ctx, deviceID, tokenTimeout, cfg.Project.App)
 		if err != nil {
 			if cleanup != nil {
 				cleanup()
