@@ -11,6 +11,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/hosted"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
@@ -114,22 +115,19 @@ var deathKinds = map[device.ExitKind]bool{
 
 // judgeDeath decides dead or slow from what was seen. exits are newest first, deviceNow is the device's clock and window how long ago the test began, in the
 // device's time. An entry of an unexpected ending that is not older than the window belongs to this test: the app died, even if it has been started again since
-// (its pid changed). With no such entry, an app that has no process is gone, unless a recent force-stop explains it, and an app that has one is only slow. Without the device's clock nothing can be said.
-func judgeDeath(alive bool, exits []device.ExitRecord, deviceNow time.Time, window time.Duration) (dead bool, rec *device.ExitRecord) {
+// (its pid changed). With no such entry, an app that has no process is gone, unless the test stopped it on purpose (appStopped), and an app that has one is only slow. Without the device's clock nothing can be said.
+func judgeDeath(alive bool, exits []device.ExitRecord, deviceNow time.Time, window time.Duration, appStopped bool) (dead bool, rec *device.ExitRecord) {
 	if deviceNow.IsZero() {
 		return false, nil
 	}
-	stopped := false
 	for i := range exits {
 		if deathKinds[exits[i].Kind] && !exits[i].WallClock.Before(deviceNow.Add(-window)) {
 			return true, &exits[i]
 		}
-		if exits[i].Kind == device.ExitUserRequested && !exits[i].WallClock.Before(deviceNow.Add(-window)) {
-			stopped = true
-		}
 	}
-	// no process and a recent force-stop: the test (or its user) stopped the app, which is not a death
-	return !alive && !stopped, nil
+	// no process: gone, unless the test itself stopped the app (a kill step that no later step has launched again). A force-stop entry says nothing here: a restart
+	// leaves one too, and an app that is launched again and then dies has no process and no entry yet.
+	return !alive && !appStopped, nil
 }
 
 var (
@@ -165,7 +163,7 @@ func (p crashProbe) alive(ctx context.Context) bool {
 
 // collectCrash looks at the device after a lost connection and returns a report when the app died, nil when it did not or when nothing could be read. since is how
 // long ago the test attempt began.
-func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll time.Duration, seen *seenCrashes) *CrashReport {
+func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll time.Duration, seen *seenCrashes, appStopped bool) *CrashReport {
 	window := since + crashWindowGrace
 	if window > crashMaxWindow {
 		window = crashMaxWindow
@@ -184,7 +182,7 @@ func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll t
 			return nil
 		}
 		alive := p.alive(ctx)
-		dead, rec := judgeDeath(alive, seen.unseen(ev.Exits), now, window)
+		dead, rec := judgeDeath(alive, seen.unseen(ev.Exits), now, window, appStopped)
 		switch {
 		case dead && rec != nil:
 			seen.mark(*rec)
@@ -220,6 +218,8 @@ func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll t
 //   - It is once per test attempt in effect: it stops at the first report, and a slow app is looked at again at most crashMaxCollections times in all.
 //   - It is read-only, bounded (crashTotalTimeout, and the caller's context ends it at once) and never changes the step's error or any later behaviour; a failure
 //     to read the device leaves the report nil.
+//   - The context must be live. Every adb call honours it, so a caller whose context has already expired (a per-test timeout, say) silently gets nothing and
+//     uses up one of the looks: pass a fresh context with its own bound, derived from the run's context so that a cancelled run still stops it at once.
 func (e *Executor) collectCrashOnce(ctx context.Context) {
 	dc := e.deviceCtx
 	if dc == nil || !dc.CrashEvidence || dc.Platform != device.PlatformAndroid || !device.ValidPackageName(dc.AppID) || e.crashReport != nil || e.crashTries >= crashMaxCollections {
@@ -243,7 +243,7 @@ func (e *Executor) collectCrashOnce(ctx context.Context) {
 	if !e.startedAt.IsZero() {
 		since = time.Since(e.startedAt)
 	}
-	e.crashReport = collectCrash(cctx, crashProbe{runner: runner, serial: dc.Serial, app: dc.AppID}, since, poll, &dc.seenCrashes)
+	e.crashReport = collectCrash(cctx, crashProbe{runner: runner, serial: dc.Serial, app: dc.AppID}, since, poll, &dc.seenCrashes, e.appStopped)
 }
 
 // CrashReport is the evidence collected during this test attempt, or nil.
@@ -260,4 +260,19 @@ func failedTestCrash(e *Executor, runErr error) *CrashReport {
 		fmt.Printf("    \033[31m💥\033[0m  %s\n", c.Line())
 	}
 	return c
+}
+
+// noteAppState remembers whether the test has stopped the app on purpose: a kill step that succeeded does, a restart, clear or open step that succeeded launches it
+// again. With no process and no exit entry, the crash look takes the first for the test's own doing and the second for a death.
+func (e *Executor) noteAppState(step parser.Step, err error) {
+	a, ok := step.(parser.ActionStep)
+	if !ok || err != nil {
+		return
+	}
+	switch a.Verb {
+	case parser.VerbKill:
+		e.appStopped = true
+	case parser.VerbRestart, parser.VerbClearAppData, parser.VerbOpen:
+		e.appStopped = false
+	}
 }

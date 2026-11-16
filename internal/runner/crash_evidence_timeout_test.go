@@ -3,6 +3,8 @@ package runner
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +106,12 @@ func TestASlowAppIsNotReportedAfterATimeout(t *testing.T) {
 func TestATestsOwnForceStopIsNotADeath(t *testing.T) {
 	for name, pids := range map[string][]string{"app running again": {"4100"}, "app not running": {""}} {
 		a := &ceAdb{date: "2026-11-15 19:31:15", pidof: pids, exit: []string{ceSignalEntry("2026-11-15 19:31:12.000", "10")}}
-		e, _, err := runTimeoutStep(t, true, a, timeoutErr(), pressEnter)
+		e := ceExecutor(a, true)
+		e.appStopped = true // the test's own kill step
+		e.client = &ceTimeoutClient{err: timeoutErr()}
+		e.SetReconnectPolicy(1, time.Hour)
+		e.timeout = 80 * time.Millisecond
+		err := e.runStep(context.Background(), pressEnter)
 		if err == nil || e.CrashReport() != nil {
 			t.Errorf("%s: err %v, report %+v", name, err, e.CrashReport())
 		}
@@ -160,5 +167,95 @@ func TestTheLookIsBoundedPerAttempt(t *testing.T) {
 	}
 	if a.words("date") != crashMaxCollections {
 		t.Errorf("%d looks, want %d", a.words("date"), crashMaxCollections)
+	}
+}
+
+// The look needs a live context, and says nothing when it is given an expired one: a caller that ends an attempt on a timeout passes a fresh bounded context.
+func TestAnExpiredContextGetsNothingAndAFreshOneWorks(t *testing.T) {
+	a := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}, exit: []string{ceSignalEntry("2026-11-15 19:31:09.870", "2")}}
+	e := ceExecutor(a, true)
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	e.collectCrashOnce(expired)
+	if e.CrashReport() != nil {
+		t.Fatalf("an expired context found evidence: %+v", e.CrashReport())
+	}
+	// the same with an adb that honours the context while it waits
+	h := &ceHangAdb{}
+	e2 := ceExecutorWith(h)
+	start := time.Now()
+	e2.collectCrashOnce(expired)
+	if time.Since(start) > 3*time.Second || e2.CrashReport() != nil {
+		t.Errorf("expired context: took %v, report %v", time.Since(start), e2.CrashReport())
+	}
+	// a fresh bounded context, derived from the run's, works on the same executor
+	fresh, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	e.collectCrashOnce(fresh)
+	if e.CrashReport() == nil || e.CrashReport().Kind != device.ExitSignaled {
+		t.Errorf("a fresh context found nothing: %+v", e.CrashReport())
+	}
+}
+
+// failingAdbExecutor is an executor whose device manager runs an adb that always fails, so a restart, kill or clear step fails, while the crash look has its own
+// recording adb.
+func failingAdbExecutor(t *testing.T, crash *ceAdb) *Executor {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "adb")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho failure >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dc := &DeviceContext{Serial: ceSerial, Platform: device.PlatformAndroid, AppID: cePkg, CrashEvidence: true, CrashADB: crash, CrashPoll: time.Millisecond,
+		Manager: device.NewManagerWithPaths(device.ToolPaths{ADB: bin}), AllowClearData: true, RestartDelay: time.Millisecond}
+	e := NewExecutor(&ceTimeoutClient{err: nil}, dc, nil, 2*time.Second, false)
+	e.startedAt = time.Now()
+	return e
+}
+
+// A restart, kill or clear step that fails is never looked at: it stops or restarts the app on purpose, so an app with no process is expected there.
+func TestAFailingLifecycleStepMakesNoCrashLook(t *testing.T) {
+	for name, verb := range map[string]parser.ActionVerb{"restart": parser.VerbRestart, "kill": parser.VerbKill, "clear app data": parser.VerbClearAppData} {
+		a := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}, exit: []string{ceSignalEntry("2026-11-15 19:31:09.870", "2")}}
+		e := failingAdbExecutor(t, a)
+		err := e.runStep(context.Background(), parser.ActionStep{Verb: verb})
+		if err == nil {
+			t.Fatalf("%s: the step did not fail (the premise of the test)", name)
+		}
+		if len(a.calls) != 0 || e.CrashReport() != nil {
+			t.Errorf("%s: %d crash-look adb calls after a failing lifecycle step", name, len(a.calls))
+		}
+	}
+	// the control: the same executor and a failing step that is not a lifecycle step does look
+	a := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}, exit: []string{ceSignalEntry("2026-11-15 19:31:09.870", "2")}}
+	e := failingAdbExecutor(t, a)
+	e.client = &ceTimeoutClient{err: timeoutErr()}
+	if err := e.runStep(context.Background(), pressEnter); err == nil || a.words("date") == 0 {
+		t.Errorf("control: err %v, %d looks", err, a.words("date"))
+	}
+}
+
+// The look before a reconnect sees the app as it was when the connection was lost: a reconnect can relaunch the app, and then the process list says it is running.
+func TestTheLookBeforeAReconnectSeesTheAppAsItWas(t *testing.T) {
+	var log []string
+	a := &ceAdb{log: &log, date: "2026-11-15 19:31:15", exit: []string{ceSignalEntry("2026-11-15 19:31:09.870", "2")}, pidof: []string{""}, pidAfterClose: "4100"}
+	e := ceExecutor(a, true)
+	e.client = &ceClient{log: &log}
+	e.SetReconnectPolicy(1, time.Hour)
+	e.timeout = 80 * time.Millisecond
+	_ = e.runStep(context.Background(), pressEnter)
+	r := e.CrashReport()
+	if r == nil || !r.Gone || r.Kind != device.ExitSignaled {
+		t.Fatalf("the app was reported as it was after the reconnect: %+v", r)
+	}
+	closeAt := -1
+	for i, l := range log {
+		if l == "client close" && closeAt < 0 {
+			closeAt = i
+		}
+	}
+	for i, l := range log {
+		if strings.HasPrefix(l, "adb ") && i > closeAt && closeAt >= 0 && strings.Contains(l, "pidof") {
+			t.Errorf("a pidof was asked after the reconnect started: %v", log)
+		}
 	}
 }
