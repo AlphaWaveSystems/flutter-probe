@@ -323,6 +323,10 @@ hook-head = "before all tests" | "before all" | "after all tests" | "after all"
 `before each` and `after each` (with or without `test`) are the same hook; `before all` / `after all`
 likewise. Before 0.16.7 the forms without `test` were accepted but their body was silently discarded.
 
+A hook header is the whole line: no word may follow it. `before all test` and `after all test` (singular)
+are refused, and the message names the plural (`before all tests`), because the singular used to read as a
+hook with no body and its steps as a test with no name.
+
 ```probe
 before all tests
   open the app

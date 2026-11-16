@@ -1036,6 +1036,36 @@ func TestGrammarProductionCoverage(t *testing.T) {
 	}
 }
 
+// ---- hook-head: a hook header is the whole line ----
+
+// A hook header is the whole line. "before all test" (singular) is not a hook: it is refused with the plural named, since it used to read as a
+// hook with no body and an unnamed test. A word after any other header is refused too. The headers that are whole lines still parse.
+func TestGrammarHookHeadIsTheWholeLine(t *testing.T) {
+	t.Run("singular test after before all or after all is refused, naming the plural", func(t *testing.T) {
+		for _, head := range []string{"before all", "after all"} {
+			_, err := parser.ParseFile(head + " test\n  open the app\n\ntest \"t\"\n  open the app\n")
+			if err == nil || !strings.Contains(err.Error(), "did you mean \""+head+" tests\"") {
+				t.Errorf("%s test: want an error naming %q, got %v", head, head+" tests", err)
+			}
+		}
+	})
+	t.Run("a word after any other header is refused", func(t *testing.T) {
+		for _, head := range []string{"before each tests", "on failure now", "after each steps"} {
+			if _, err := parser.ParseFile(head + "\n  open the app\n\ntest \"t\"\n  open the app\n"); err == nil {
+				t.Errorf("%q: expected an error", head)
+			}
+		}
+	})
+	t.Run("the headers that are whole lines still parse", func(t *testing.T) {
+		for _, head := range []string{"before all tests", "after all tests", "before all", "after all", "before each test", "after each test", "before each", "on failure"} {
+			prog := mustParse(t, head+"\n  open the app\n\ntest \"t\"\n  open the app\n")
+			if len(prog.Hooks) != 1 || len(prog.Hooks[0].Body) != 1 {
+				t.Errorf("%q: want one hook with its body, got %+v", head, prog.Hooks)
+			}
+		}
+	})
+}
+
 // ---- docs-vs-parser divergences listed on the page stay true ----
 
 func TestGrammarPage_DocumentedDivergences(t *testing.T) {

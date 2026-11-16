@@ -267,6 +267,14 @@ func (p *Parser) parseHookFromLifecycle() (HookDef, error) {
 	default:
 		kind = HookOnFailure
 	}
+	// The header is the whole line. The lexer reads "before all" and "after all" as one token, so "before all test" used to end the hook
+	// here with no body, and the indented steps after it read as a test with no name. Say what was meant instead.
+	if next := p.peek(); next.Type != TOKEN_NEWLINE && next.Type != TOKEN_EOF {
+		if (kind == HookBeforeAll || kind == HookAfterAll) && strings.ToLower(next.Literal) == "test" {
+			return HookDef{}, fmt.Errorf("line %d: %q is not a hook: did you mean %q? Without the s, the line reads as a test with no name", line, lower+" test", lower+" tests")
+		}
+		return HookDef{}, fmt.Errorf("line %d: after %q the line must end: a hook header is the whole line, such as \"before all tests\" or \"before each test\", and %q is not part of it", line, lower, next.Literal)
+	}
 	p.consumeNewline()
 	body, err := p.parseBody()
 	if err != nil {
