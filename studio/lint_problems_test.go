@@ -3,10 +3,13 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 func lintWorkspace(t *testing.T) (*App, string) {
@@ -398,5 +401,124 @@ func TestLintProblemsFencesToTheEnvWorkspaceWhenNoneWasOpened(t *testing.T) {
 	}
 	if !refused {
 		t.Errorf("the outside use target was not refused: %+v", res.Problems)
+	}
+}
+
+// A workspace of / (or a drive) fences nothing: the lint says so in one line and reads nothing. A home folder is fine.
+func TestLintProblemsRefusesAFilesystemRootWorkspace(t *testing.T) {
+	for _, root := range []string{"/", "//"} {
+		a := &App{}
+		a.SetWorkspace(root)
+		res, err := a.LintProblems("/anything.probe", "test \"t\"\n  log \"x\"\n")
+		if err != nil || !strings.Contains(res.Unavailable, "root of the file system") || len(res.Problems) != 0 {
+			t.Errorf("root %q: %+v, %v", root, res, err)
+		}
+	}
+	home := t.TempDir() // a folder under the root, like a home folder, is a fine workspace
+	a := &App{}
+	a.SetWorkspace(home)
+	if err := os.WriteFile(filepath.Join(home, "a.probe"), []byte("test \"t\"\n  log \"x\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res, err := a.LintProblems(filepath.Join(home, "a.probe"), "test \"t\"\n  log \"x\"\n")
+	if err != nil || res.Unavailable != "" {
+		t.Errorf("a normal workspace was refused: %+v, %v", res, err)
+	}
+}
+
+// A drive root is a file system root only where drives exist: this case runs on Windows (on other systems C:\\ is a relative name).
+func TestIsFilesystemRootDrive(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("drive roots exist on Windows only")
+	}
+	for p, want := range map[string]bool{`C:\`: true, `C:\Users`: false} {
+		if got := isFilesystemRoot(p); got != want {
+			t.Errorf("isFilesystemRoot(%q) = %v, want %v", p, got, want)
+		}
+	}
+}
+
+func TestIsFilesystemRoot(t *testing.T) {
+	for p, want := range map[string]bool{"/": true, "//": true, "": false, "/Users": false, "/Users/me": false, "/Users/me/": false, "relative": false} {
+		if got := isFilesystemRoot(p); got != want {
+			t.Errorf("isFilesystemRoot(%q) = %v, want %v", p, got, want)
+		}
+	}
+}
+
+// The size cap is exactly 1 MiB: a text of that many bytes is checked, one byte more is not.
+func TestLintProblemsSizeCapBoundary(t *testing.T) {
+	a, file := lintWorkspace(t)
+	base := "test \"t\"\n  log \"x\"\n# "
+	atCap := base + strings.Repeat("x", maxLintBytes-len(base))
+	if len(atCap) != maxLintBytes {
+		t.Fatalf("fixture is %d bytes", len(atCap))
+	}
+	res, err := a.LintProblems(file, atCap)
+	if err != nil || res.Unavailable != "" {
+		t.Errorf("exactly 1 MiB was refused: %+v, %v", res.Unavailable, err)
+	}
+	res, err = a.LintProblems(file, atCap+"x")
+	if err != nil || !strings.Contains(res.Unavailable, "too large") {
+		t.Errorf("1 MiB + 1 byte was checked: %+v, %v", res, err)
+	}
+}
+
+// What the window shows for an error and for the findings of a report has no absolute path, whatever the engine put in the text.
+func TestLintTextsShownHaveNoAbsolutePath(t *testing.T) {
+	root := "/work/space"
+	got := lintUnavailable(errorString("open /work/space/tests/recipes: denied; also /etc/shadow"), root)
+	if strings.Contains(got, "/work/space") || strings.Contains(got, "/etc/shadow") || !strings.HasPrefix(got, "Not checked: ") {
+		t.Errorf("the Not checked line = %q", got)
+	}
+	rep := runner.LintReport{
+		References: []runner.LintFinding{{Line: 2, Message: "no file at /work/space/tests/x.probe or /secret/dir/y.csv"}},
+		Program:    []runner.LintFinding{{Line: 3, Warning: true, Message: "test \"t\" at /secret/dir/z.probe has no steps"}},
+	}
+	res := lintToProblems(rep, root)
+	if len(res.Problems) != 2 || res.Problems[0].Source != "reference" || res.Problems[1].Source != "program" {
+		t.Fatalf("problems = %+v", res.Problems)
+	}
+	for _, p := range res.Problems {
+		if strings.Contains(p.Message, "/secret") || strings.Contains(p.Message, "/work/space") {
+			t.Errorf("a finding shows a path: %q", p.Message)
+		}
+	}
+	if !strings.Contains(res.Problems[0].Message, "tests/x.probe") {
+		t.Errorf("a path inside the workspace should become a relative name: %q", res.Problems[0].Message)
+	}
+}
+
+type errorString string
+
+func (e errorString) Error() string { return string(e) }
+
+// Only real file system paths are replaced: URLs, relative names and plain slashes stay as they are.
+func TestWithoutPathsKeepsURLsAndRelativeNames(t *testing.T) {
+	keep := []string{
+		"see https://example.com/a/b for details",
+		"tap \"https://example.com/a/b?x=1\"",
+		"open the cart/checkout page",
+		"use \"recipes/open menu.probe\"",
+		"1/2 and a/b and tests/a.probe",
+		"ratio 3:/4",
+	}
+	for _, s := range keep {
+		if got := withoutPaths(s, "/work/space"); got != s {
+			t.Errorf("withoutPaths(%q) = %q, want it unchanged", s, got)
+		}
+	}
+	for _, c := range []struct{ in, mustNot string }{
+		{"file:///etc/passwd", "/etc/passwd"},
+		{"FILE:///Users/me/x.csv", "/Users/me"},
+		{"read /etc/passwd now", "/etc/passwd"},
+		{"x=/tmp/secret.txt", "/tmp/secret.txt"},
+		{"(\"/var/log/x\")", "/var/log"},
+		{"C:\\Users\\me\\y.csv failed", "Users"},
+		{"path: /home/me/.ssh/id_rsa", "/home/me"},
+	} {
+		if got := withoutPaths(c.in, "/work/space"); strings.Contains(got, c.mustNot) {
+			t.Errorf("withoutPaths(%q) = %q still shows %q", c.in, got, c.mustNot)
+		}
 	}
 }
