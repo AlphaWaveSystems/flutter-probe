@@ -212,8 +212,14 @@ func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll t
 	return gone
 }
 
-// collectCrashOnce is called when a step has failed with a lost connection, before the reconnect attempts. It does nothing unless the run asked for crash
-// evidence on an Android device, collects at most crashMaxCollections times per test attempt, and stops at the first death found.
+// collectCrashOnce looks at the device for the evidence of a dead app. Its contract, which other callers rely on and which must stay stable:
+//   - Signature: a method of *Executor taking the step's context, returning nothing. The result is read with CrashReport().
+//   - It is called when a step has failed with a lost connection (before the reconnect attempts) and when any other step has failed (after it failed, before it is
+//     reported); a caller that ends a test attempt for another reason, such as a per-test timeout, may call it once at that moment.
+//   - It does nothing unless the run asked for crash evidence (DeviceContext.CrashEvidence) on an Android device with a valid app id, a serial and an adb.
+//   - It is once per test attempt in effect: it stops at the first report, and a slow app is looked at again at most crashMaxCollections times in all.
+//   - It is read-only, bounded (crashTotalTimeout, and the caller's context ends it at once) and never changes the step's error or any later behaviour; a failure
+//     to read the device leaves the report nil.
 func (e *Executor) collectCrashOnce(ctx context.Context) {
 	dc := e.deviceCtx
 	if dc == nil || !dc.CrashEvidence || dc.Platform != device.PlatformAndroid || !device.ValidPackageName(dc.AppID) || e.crashReport != nil || e.crashTries >= crashMaxCollections {
