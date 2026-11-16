@@ -18,6 +18,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/record"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/scriptgen"
 	"github.com/spf13/cobra"
 )
 
@@ -213,13 +214,14 @@ func runRecord(cmd *cobra.Command, args []string) error {
 func printRecordedEvent(e recordedEvent) {
 	params := e.Params
 	action, _ := params["action"].(string)
-	sel := selectorFromParams(params)
+	sel := scriptgen.Selector(params)
 
 	switch action {
 	case "tap":
 		statusOK(os.Stdout, "tap %s", sel)
 	case "type":
-		if obscuredEvent(params) {
+		sel = scriptgen.TypeTarget(params) // never the typed text
+		if scriptgen.Obscured(params) {
 			// The agent sends no value for an obscured field, so there is nothing to show or record for it.
 			statusWarn(os.Stdout, "type into %s not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into it by hand.", sel)
 			break
@@ -240,7 +242,8 @@ func printRecordedEvent(e recordedEvent) {
 	}
 }
 
-// generateProbeScript converts recorded events into a .probe file string.
+// generateProbeScript converts recorded events into a .probe file string. The steps are the engine's (internal/scriptgen), the same ones
+// Studio's recorder writes; this adds the header, the test and the wait steps for long gaps.
 func generateProbeScript(events []recordedEvent) string {
 	var sb strings.Builder
 
@@ -250,103 +253,18 @@ func generateProbeScript(events []recordedEvent) string {
 	sb.WriteString("  open the app\n")
 
 	for i, e := range events {
-		// Insert wait step if >2s gap between actions
+		// Insert a wait step for a long gap between actions
 		if i > 0 {
-			gap := e.At.Sub(events[i-1].At)
-			if gap > 2*time.Second {
-				secs := int(gap.Seconds())
-				sb.WriteString(fmt.Sprintf("  wait %d seconds\n", secs))
+			if wait := scriptgen.GapStep(e.At.Sub(events[i-1].At)); wait != "" {
+				sb.WriteString(wait + "\n")
 			}
 		}
-
-		params := e.Params
-		switch params["action"] {
-		case "tap":
-			sel := selectorFromParams(params)
-			sb.WriteString(fmt.Sprintf("  tap %s\n", sel))
-		case "type":
-			sel := selectorFromParams(params)
-			if obscuredEvent(params) {
-				// The value of an obscured field is never written, so no type step is made for it. The comment names the
-				// lookup and tells the person what to add by hand.
-				sb.WriteString(fmt.Sprintf("  # type into %s was not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into %s by hand.\n", sel, sel))
-				break
-			}
-			text, _ := params["text"].(string)
-			if sel != "the element" {
-				sb.WriteString(fmt.Sprintf("  type %q into the %s field\n", text, sel))
-			} else {
-				sb.WriteString(fmt.Sprintf("  type %q\n", text))
-			}
-		case "swipe":
-			dir, _ := params["direction"].(string)
-			sb.WriteString(fmt.Sprintf("  swipe %s\n", dir))
-		case "scroll":
-			dir, _ := params["direction"].(string)
-			sb.WriteString(fmt.Sprintf("  scroll %s\n", dir))
-		case "long_press":
-			sel := selectorFromParams(params)
-			sb.WriteString(fmt.Sprintf("  long press on %s\n", sel))
-		case "see":
-			sel := selectorFromParams(params)
-			sb.WriteString(fmt.Sprintf("  see %s\n", sel))
-		case "navigate":
-			sb.WriteString("  go back\n")
-		default:
-			sb.WriteString(fmt.Sprintf("  # unknown event: %s\n", params["action"]))
+		if line := scriptgen.Step(e.Params); line != "" {
+			sb.WriteString(line + "\n")
 		}
 	}
 
 	return sb.String()
-}
-
-// obscuredEvent reports whether a recorded type event came from an obscured field. The agent sends no value for such a
-// field, so the event has no text that a recording may keep.
-func obscuredEvent(params map[string]interface{}) bool {
-	obscured, _ := params["obscured"].(bool)
-	return obscured
-}
-
-// sanitizeText removes newlines and excess whitespace from text that will
-// appear in generated .probe files (which use indentation-based syntax).
-func sanitizeText(s string) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\r", "")
-	return strings.TrimSpace(s)
-}
-
-// selectorFromParams extracts the best selector string from event params.
-// Handles both flat params (text/id) and nested selector maps from the agent.
-func selectorFromParams(params map[string]interface{}) string {
-	// Check for nested selector map from agent
-	if sel, ok := params["selector"].(map[string]interface{}); ok {
-		kind, _ := sel["kind"].(string)
-		text := sanitizeText(sel["text"].(string))
-		switch kind {
-		case "id":
-			if strings.HasPrefix(text, "#") {
-				return text
-			}
-			return "#" + text
-		case "text":
-			if text != "" {
-				return fmt.Sprintf("%q", text)
-			}
-		case "type":
-			if text != "" {
-				return fmt.Sprintf("the %s", text)
-			}
-		}
-	}
-
-	// Fallback: flat params
-	if text, ok := params["text"].(string); ok && text != "" {
-		return fmt.Sprintf("%q", sanitizeText(text))
-	}
-	if id, ok := params["id"].(string); ok && id != "" {
-		return "#" + sanitizeText(id)
-	}
-	return "the element"
 }
 
 // waitForInterrupt returns a channel that closes on SIGINT/SIGTERM.

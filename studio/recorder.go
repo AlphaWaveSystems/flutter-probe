@@ -1,89 +1,14 @@
 package main
 
 import (
-	"fmt"
-	"strings"
+	"github.com/alphawavesystems/flutter-probe/internal/scriptgen"
 )
 
-// eventToProbeScriptLine converts a single recorded agent event into a
-// ProbeScript step string (with leading 2-space indent), or "" to skip.
+// eventToProbeScriptLine converts a single recorded agent event into a ProbeScript step string (with leading 2-space indent), or "" to skip.
+// The mapping is the engine's (internal/scriptgen), the same one `probe record` uses.
 func eventToProbeScriptLine(params map[string]interface{}) string {
-	action, _ := params["action"].(string)
-	switch action {
-	case "tap":
-		return fmt.Sprintf("  tap %s", selectorFromRecordedParams(params))
-	case "type":
-		// An obscured field's value is never recorded: the agent sends none. The line names the lookup, as the CLI does.
-		if obscured, _ := params["obscured"].(bool); obscured {
-			sel := selectorFromRecordedParams(params)
-			return fmt.Sprintf("  # type into %s was not recorded: the value of an obscured field is not saved. Add type \"${VAR}\" into %s by hand.", sel, sel)
-		}
-		text, _ := params["text"].(string)
-		// The typed text is the value, never the selector: without this, an event that names no target would
-		// have produced `type "hi" into the "hi" field` (selectorFromRecordedParams falls back to params["text"]).
-		target := make(map[string]interface{}, len(params))
-		for k, v := range params {
-			if k != "text" {
-				target[k] = v
-			}
-		}
-		sel := selectorFromRecordedParams(target)
-		if sel != "the element" {
-			return fmt.Sprintf("  type %q into the %s field", text, sel)
-		}
-		return fmt.Sprintf("  type %q", text)
-	case "swipe":
-		dir, _ := params["direction"].(string)
-		return fmt.Sprintf("  swipe %s", dir)
-	case "scroll":
-		dir, _ := params["direction"].(string)
-		return fmt.Sprintf("  scroll %s", dir)
-	case "long_press":
-		return fmt.Sprintf("  long press on %s", selectorFromRecordedParams(params))
-	case "navigate":
-		return "  go back"
-	case "see":
-		return fmt.Sprintf("  see %s", selectorFromRecordedParams(params))
-	default:
-		if action != "" {
-			return fmt.Sprintf("  # %s", action)
-		}
-		return ""
-	}
+	return scriptgen.Step(params)
 }
 
-func selectorFromRecordedParams(params map[string]interface{}) string {
-	if sel, ok := params["selector"].(map[string]interface{}); ok {
-		kind, _ := sel["kind"].(string)
-		text, _ := sel["text"].(string)
-		text = sanitizeRecordedText(text)
-		switch kind {
-		case "id":
-			if !strings.HasPrefix(text, "#") {
-				return "#" + text
-			}
-			return text
-		case "text":
-			if text != "" {
-				return fmt.Sprintf("%q", text)
-			}
-		case "type":
-			if text != "" {
-				return "the " + text
-			}
-		}
-	}
-	if text, ok := params["text"].(string); ok && text != "" {
-		return fmt.Sprintf("%q", sanitizeRecordedText(text))
-	}
-	if id, ok := params["id"].(string); ok && id != "" {
-		return "#" + sanitizeRecordedText(id)
-	}
-	return "the element"
-}
-
-func sanitizeRecordedText(s string) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\r", "")
-	return strings.TrimSpace(s)
-}
+// sanitizeRecordedText makes recorded text safe for one ProbeScript line.
+func sanitizeRecordedText(s string) string { return scriptgen.Sanitize(s) }
