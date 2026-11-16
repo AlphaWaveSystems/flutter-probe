@@ -14,7 +14,12 @@ import (
 // a lint fenced to the workspace must never show. It returns the workspace and the outside folder.
 func confinedWorkspace(t *testing.T) (ws, outside string) {
 	t.Helper()
-	base := t.TempDir()
+	// The temporary folder is resolved first: on macOS it sits under a symlink (/var -> /private/var), and a lexical path that is not the
+	// resolved one would be refused for that reason alone, hiding the mutants that fall back to the lexical path.
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws = filepath.Join(base, "ws")
 	outside = filepath.Join(base, "outside")
 	for _, dir := range []string{

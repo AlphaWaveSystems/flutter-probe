@@ -97,6 +97,9 @@ func (c *lintConfinement) open(p string, line int, refusal string) (string, bool
 		return p, true
 	}
 	if resolved, inside := c.locate(p); inside {
+		if lintAfterCheck != nil {
+			lintAfterCheck(p)
+		}
 		return resolved, true
 	}
 	c.findings = append(c.findings, LintFinding{Line: line, Warning: true, Message: refusal})
@@ -113,6 +116,10 @@ func (c *lintConfinement) name(p string) string {
 	}
 	return filepath.Base(p)
 }
+
+// lintAfterCheck is a test seam. When set, it runs with each path the fence allows, after the check and before the read, so a test can
+// swap a symlink in that window and show that the read uses the path the check resolved. It is nil in every other run.
+var lintAfterCheck func(p string)
 
 // Refusal texts. Each is one warning per refused path, and none names a file. The first three refuse a recipe source, and each says in
 // the same line that it suppresses unknown-step errors (see recipesSkipped). The CSV source refusal suppresses nothing, so it does not.
