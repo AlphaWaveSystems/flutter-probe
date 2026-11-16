@@ -14,6 +14,8 @@ flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIX
 probe test probe-tests/list/list_scroll.probe --config probe.yaml --device <serial>
 ```
 
+`probe-tests/list/slider_drag.probe` swipes across the slider above the list (`#fixture_slider`, its value shown as `Value N`, starting at 50) and checks the value moved.
+
 The list has to stand alone. The agent's `scroll ... on <target>` moves the nearest scrollable above the target: inside the
 default screen's scroll view that is the outer page, so the list's own offset stayed at 0.0 when the list was placed there.
 

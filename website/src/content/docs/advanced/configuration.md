@@ -22,7 +22,7 @@ defaults:
   retry_failed_tests: 1
   grant_permissions_on_clear: true
   match: exact                 # text matching: exact (default) or loose (fold case, accents, apostrophes, whitespace); --match-loose overrides
-  crash_evidence: false        # Android: when a step loses its connection and the app died, print why (exit reason, crash text; masked) for the failed test. --crash-evidence turns it on for one run
+  crash_evidence: false        # Android: when a step loses its connection and the app died, print why (exit reason, crash text; masked) for the failed test; also for a test that ran past test_timeout. --crash-evidence turns it on for one run
   implicit_wait: 0s            # retry tap/type/see on "not found" for up to this long (Maestro-style); 0 = off. --implicit-wait overrides
 
 devices:
@@ -124,6 +124,7 @@ The agent is not part of the pin. `probe test` prints `probe CLI X / agent A` on
 | `screenshots` | string | `on_failure` | `always`, `on_failure`, or `never` |
 | `video` | bool | `false` | Enable video recording |
 | `retry_failed_tests` | int | `0` | Re-run a failing test up to this many extra times (0 = off); also `--retry-failed N` |
+| `test_timeout` | duration | `0` (off) | Wall-clock limit per test attempt, e.g. `90s`; a test that runs past it fails with `test exceeded 90s`. Each retry gets its own limit. Overridden by `--test-timeout`; a value below 1s, or negative, is an error. See [timeouts and retries](/advanced/timeouts-and-retries/#a-limit-for-each-test) |
 | `grant_permissions_on_clear` | bool | `false` | Auto-grant permissions after `clear app data` |
 
 ### devices

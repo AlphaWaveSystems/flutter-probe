@@ -45,24 +45,29 @@ type ceAdb struct {
 	dateErr       error
 	pidof         []string // one answer per call of pidof, the last repeated; "" means no process (exit status 1)
 	pidCalls      int
+	forward       string   // the answer to `forward --list`
 	pidAfterClose string   // when set, pidof answers this once the log shows the client was closed (a reconnect began)
 	exit          []string // one answer per call of exit-info, the last repeated
 	exitCalls     int
 	exitErr       error
 	buf           string
+	attempted     int // calls asked for, whether or not the context let them run
 }
 
 func (a *ceAdb) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
-	if err := ctx.Err(); err != nil { // like the real adb, which runs under the context: an expired one fails the call
-		return nil, err
-	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.attempted++                     // every call asked for, including one that a cancelled context refuses
+	if err := ctx.Err(); err != nil { // like the real adb, which runs under the context: an expired one fails the call and is not recorded in calls
+		return nil, err
+	}
 	a.calls = append(a.calls, append([]string(nil), args...))
 	if a.log != nil {
 		*a.log = append(*a.log, "adb "+strings.Join(args[2:], " "))
 	}
 	switch {
+	case len(args) >= 2 && args[0] == "forward" && args[1] == "--list":
+		return []byte(a.forward), nil
 	case len(args) > 3 && args[3] == "date":
 		return []byte(a.date + "\n"), a.dateErr
 	case len(args) > 3 && args[3] == "pidof":
@@ -421,20 +426,21 @@ func TestALostConnectionCollectsBeforeAnyReconnect(t *testing.T) {
 		if l == "client close" && closeAt < 0 {
 			closeAt = i
 		}
-		if strings.HasPrefix(l, "adb ") {
+		// the crash look is the only caller of exit-info and the crash buffer; the hint on a failed reconnect asks the clock and the process list, after it
+		if strings.HasPrefix(l, "adb ") && (strings.Contains(l, "exit-info") || strings.Contains(l, "logcat")) {
 			lastAdb = i
 		}
 	}
 	if closeAt < 0 || lastAdb < 0 || lastAdb > closeAt {
-		t.Errorf("the adb calls must all come before the first reconnect step: %v", log)
+		t.Errorf("the evidence reads must all come before the first reconnect step: %v", log)
 	}
-	// opt-in off: the same failure makes no adb call
+	// opt-in off: the same failure reads no exit entry and no crash buffer (the hint on the failed reconnect asks only the clock and the process list)
 	log = nil
 	a2 := &ceAdb{log: &log, date: "2026-11-15 19:31:12", pidof: []string{""}, exit: []string{ceSample(t, "exit-java.txt")}}
 	a = a2
 	e = run(false)
-	if len(a2.calls) != 0 || e.CrashReport() != nil {
-		t.Errorf("off: %d adb calls", len(a2.calls))
+	if a2.words("exit-info") != 0 || a2.words("logcat") != 0 || e.CrashReport() != nil {
+		t.Errorf("off: %d exit-info reads, %d crash-buffer reads", a2.words("exit-info"), a2.words("logcat"))
 	}
 }
 

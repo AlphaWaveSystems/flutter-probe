@@ -183,6 +183,7 @@ func (p *Parser) parseTest() (TestDef, error) {
 	// "with examples:"
 	var examples *ExamplesBlock
 	if p.peek().Type == TOKEN_EXAMPLES || p.peekSeq(TOKEN_WITH, TOKEN_EXAMPLES) {
+		statementLine := p.peek().Line
 		if p.peek().Type == TOKEN_WITH {
 			p.advance()
 		}
@@ -198,7 +199,8 @@ func (p *Parser) parseTest() (TestDef, error) {
 				source = p.advance().Literal
 			}
 			p.consumeNewline()
-			examples = &ExamplesBlock{Source: source, Line: p.peek().Line}
+			// The line of the with examples statement itself, not the line after it.
+			examples = &ExamplesBlock{Source: source, Line: statementLine}
 		} else {
 			p.consumeNewline()
 			ex, err := p.parseExamples()
@@ -265,12 +267,34 @@ func (p *Parser) parseHookFromLifecycle() (HookDef, error) {
 	default:
 		kind = HookOnFailure
 	}
+	// "before all test" and "after all test" (singular) are refused. The lexer reads "before all" as one token, so the singular used to end the
+	// hook with no body, and its indented steps then read as a test with no name. Any other word after a header is kept in Extra, and probe
+	// lint warns about it; the header is otherwise read as it always was, so a file that parsed before still parses.
+	if next := p.peek(); next.Type != TOKEN_STRING && strings.ToLower(next.Literal) == "test" && (kind == HookBeforeAll || kind == HookAfterAll) {
+		return HookDef{}, fmt.Errorf("line %d: %q is not a hook: did you mean %q? Without the s, the line reads as a test with no name", line, lower+" test", lower+" tests")
+	}
+	extra, runsAsTest := p.headerWords()
 	p.consumeNewline()
 	body, err := p.parseBody()
 	if err != nil {
 		return HookDef{}, err
 	}
-	return HookDef{Kind: kind, Body: body, Line: line}, nil
+	return HookDef{Kind: kind, Body: body, Line: line, Extra: extra, ExtraRunsAsTest: runsAsTest}, nil
+}
+
+// headerWords returns the words after a hook header on its line, without consuming them, and whether one of them is the keyword test. The
+// parser reads the header as it always did: a test keyword starts a test with no name, and the other words are skipped. probe lint reports
+// the words, and says which of the two happens to the steps under the header.
+func (p *Parser) headerWords() ([]string, bool) {
+	var words []string
+	runsAsTest := false
+	for i := p.pos; i < len(p.tokens) && p.tokens[i].Type != TOKEN_NEWLINE && p.tokens[i].Type != TOKEN_EOF; i++ {
+		words = append(words, p.tokens[i].Literal)
+		if p.tokens[i].Type == TOKEN_TEST {
+			runsAsTest = true
+		}
+	}
+	return words, runsAsTest
 }
 
 // ---- Body & step parsers ----

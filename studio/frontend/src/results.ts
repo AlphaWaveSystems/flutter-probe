@@ -10,6 +10,7 @@
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { groupByOutcome, type Outcome } from "./run-scope";
 import { triageRows, type StepTriage } from "./triage";
+import { resultNotes } from "./result-notes";
 
 type RunResult = {
   name: string;
@@ -19,6 +20,12 @@ type RunResult = {
   durationMs: number;
   error?: string;
   perf?: PerfMetrics[];
+  crash?: string; // why the app died (crash evidence), one cleaned line
+  timedOut?: boolean;
+  timeLimitSeconds?: number;
+  crashHint?: boolean; // a lost connection on Android with crash evidence off
+  attempts?: number; // how many times a retry ran the test, when more than once
+  earlierFailures?: { attempt: number; error: string }[];
 };
 
 export type RunStep = {
@@ -258,7 +265,9 @@ function appendResult(res: RunResult): void {
     const open = () => document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: target }));
     li.addEventListener("click", open);
     li.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") open();
+      if (e.key !== "Enter") return;
+      e.preventDefault(); // the jump moves focus to the editor: without this the same Enter would type a new line into the file
+      open();
     });
   }
 
@@ -290,6 +299,14 @@ function appendResult(res: RunResult): void {
     errLi.textContent = res.error;
     listEl.appendChild(errLi);
     rows.push(errLi);
+  }
+
+  for (const note of resultNotes(res)) {
+    const noteLi = document.createElement("li");
+    noteLi.classList.add("note", `note-${note.kind}`);
+    noteLi.textContent = note.text;
+    listEl.appendChild(noteLi);
+    rows.push(noteLi);
   }
 
   blocks.push({ outcome: status, rows });

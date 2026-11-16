@@ -1036,6 +1036,66 @@ func TestGrammarProductionCoverage(t *testing.T) {
 	}
 }
 
+// ---- hook-head: a hook header is the whole line ----
+
+// A hook header is the whole line. "before all test" (singular) is not a hook: it is refused with the plural named, since it used to read as a
+// hook with no body and an unnamed test. A word after any other header is refused too. The headers that are whole lines still parse.
+func TestGrammarHookHeadIsTheWholeLine(t *testing.T) {
+	t.Run("singular test after before all or after all is refused, naming the plural", func(t *testing.T) {
+		for _, head := range []string{"before all", "after all"} {
+			_, err := parser.ParseFile(head + " test\n  open the app\n\ntest \"t\"\n  open the app\n")
+			if err == nil || !strings.Contains(err.Error(), "did you mean \""+head+" tests\"") {
+				t.Errorf("%s test: want an error naming %q, got %v", head, head+" tests", err)
+			}
+		}
+	})
+	t.Run("a word after any other header is accepted and kept in Extra", func(t *testing.T) {
+		// The steps under the header are not the hook's. A test keyword among the words makes them a test with no name; any other words drop
+		// them, and they do not run. The parse is kept as it always was: the hook has no body.
+		for _, c := range []struct {
+			head   string
+			want   string
+			asTest bool
+		}{
+			{"before each tests", "tests", false},
+			{"on failure now", "now", false},
+			{"after each steps", "steps", false},
+			{"before all tests foo", "foo", false},
+			{"on failure test", "test", true},
+			{"on failure foo test", "foo test", true},
+		} {
+			prog, err := parser.ParseFile(c.head + "\n  open the app\n\ntest \"t\"\n  open the app\n")
+			if err != nil {
+				t.Errorf("%q: the parser must accept it as it always did, got %v", c.head, err)
+				continue
+			}
+			if len(prog.Hooks) != 1 || len(prog.Hooks[0].Body) != 0 || strings.Join(prog.Hooks[0].Extra, " ") != c.want || prog.Hooks[0].ExtraRunsAsTest != c.asTest {
+				t.Errorf("%q: want one hook with no body, Extra %q and ExtraRunsAsTest %t, got %+v", c.head, c.want, c.asTest, prog.Hooks)
+				continue
+			}
+			wantTests := 1
+			if c.asTest {
+				wantTests = 2
+			}
+			if len(prog.Tests) != wantTests {
+				t.Errorf("%q: want %d tests, got %+v", c.head, wantTests, prog.Tests)
+				continue
+			}
+			if c.asTest && (prog.Tests[0].Name != "" || len(prog.Tests[0].Body) != 1) {
+				t.Errorf("%q: the steps must run as a test with no name, got %+v", c.head, prog.Tests[0])
+			}
+		}
+	})
+	t.Run("the headers that are whole lines still parse", func(t *testing.T) {
+		for _, head := range []string{"before all tests", "after all tests", "before all", "after all", "before each test", "after each test", "before each", "on failure"} {
+			prog := mustParse(t, head+"\n  open the app\n\ntest \"t\"\n  open the app\n")
+			if len(prog.Hooks) != 1 || len(prog.Hooks[0].Body) != 1 {
+				t.Errorf("%q: want one hook with its body, got %+v", head, prog.Hooks)
+			}
+		}
+	})
+}
+
 // ---- docs-vs-parser divergences listed on the page stay true ----
 
 func TestGrammarPage_DocumentedDivergences(t *testing.T) {

@@ -36,6 +36,9 @@ type CompositeDeviceResult struct {
 // CompositeTestResult is the outcome of a single composite test. It maps each
 // device alias to an individual result, plus an overall pass/fail.
 type CompositeTestResult struct {
+	// TimedOut is set when the test ran past defaults.test_timeout: the devices that failed then carry the named error.
+	TimedOut      bool
+	TimeLimit     time.Duration
 	TestName      string
 	File          string
 	Passed        bool
@@ -181,7 +184,10 @@ func (cr *CompositeRunner) RunCompositeTest(ctx context.Context, test parser.Com
 	deviceSteps := partitionSteps(test.Body, cr.devices)
 
 	// Shared cancellable context — cancelled by the first device that fails.
-	compCtx, compCancel := context.WithCancel(ctx)
+	// defaults.test_timeout bounds the whole composite test: one budget shared by every device block.
+	budgetCtx, cancelBudget := attemptContext(ctx, cr.cfg.Defaults.TestTimeout)
+	defer cancelBudget()
+	compCtx, compCancel := context.WithCancel(budgetCtx)
 	defer compCancel()
 
 	type gorResult struct {
@@ -240,6 +246,18 @@ func (cr *CompositeRunner) RunCompositeTest(ctx context.Context, test parser.Com
 		result.DeviceResults[r.alias] = dr
 	}
 
+	// A device block that failed while the budget was spent failed on the limit: name it. A passing test is not marked.
+	limit := cr.cfg.Defaults.TestTimeout
+	result.TimeLimit = limit
+	if limit > 0 && budgetCtx.Err() != nil && ctx.Err() == nil {
+		for alias, dr := range result.DeviceResults {
+			if dr.Error != nil {
+				dr.Error = &testTimeoutError{limit: limit, cause: dr.Error}
+				result.DeviceResults[alias] = dr
+				result.TimedOut = true
+			}
+		}
+	}
 	result.Passed = true
 	for _, dr := range result.DeviceResults {
 		if !dr.Passed {

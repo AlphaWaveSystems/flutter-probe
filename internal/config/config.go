@@ -172,6 +172,7 @@ type DefaultsConfig struct {
 	Screenshots             string        `yaml:"screenshots"`                // always | on_failure | never
 	VideoEnabled            bool          `yaml:"video"`                      // enable video recording
 	RetryFailedTests        int           `yaml:"retry_failed_tests"`         // number of retries for failed tests
+	TestTimeout             time.Duration `yaml:"test_timeout"`               // wall-clock limit per test attempt (e.g. 90s); 0 = off. A test that runs past it fails with "test exceeded 90s". Overridden by --test-timeout.
 	GrantPermissionsOnClear bool          `yaml:"grant_permissions_on_clear"` // auto-grant all permissions after clear app data
 	DisableAnimations       bool          `yaml:"disable_animations"`         // set timeDilation to 0.001 (animations end within a frame); 0 is not a valid Flutter value
 	Match                   string        `yaml:"match"`                      // text matching: "exact" (default, case-sensitive substring) or "loose" (fold case, accents, apostrophes, whitespace). Overridden by --match-loose.
@@ -220,6 +221,12 @@ type VisualConfig struct {
 type DeviceEntry struct {
 	Name   string `yaml:"name"`
 	Serial string `yaml:"serial"` // emulator-5554 | auto
+}
+
+// Default returns the configuration `probe` runs with when there is no probe.yaml: the built-in defaults, and nothing from any folder.
+func Default() *Config {
+	cfg := defaultConfig
+	return &cfg
 }
 
 var defaultConfig = Config{

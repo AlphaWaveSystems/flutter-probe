@@ -14,6 +14,10 @@ export function AllowHost(arg1) {
   return window['go']['main']['App']['AllowHost'](arg1);
 }
 
+export function AnswerConfirm(arg1, arg2) {
+  return window['go']['main']['App']['AnswerConfirm'](arg1, arg2);
+}
+
 export function ApplyDeviceSetting(arg1, arg2, arg3) {
   return window['go']['main']['App']['ApplyDeviceSetting'](arg1, arg2, arg3);
 }
@@ -52,6 +56,10 @@ export function ConnectWiFiSaved(arg1, arg2, arg3) {
 
 export function DeleteAPIKey() {
   return window['go']['main']['App']['DeleteAPIKey']();
+}
+
+export function DeviceListNote() {
+  return window['go']['main']['App']['DeviceListNote']();
 }
 
 export function Disconnect() {
@@ -108,6 +116,10 @@ export function InitialWorkspace() {
 
 export function Lint(arg1) {
   return window['go']['main']['App']['Lint'](arg1);
+}
+
+export function LintProblems(arg1, arg2) {
+  return window['go']['main']['App']['LintProblems'](arg1, arg2);
 }
 
 export function ListAIModels() {
@@ -232,6 +244,10 @@ export function TestWiFi(arg1, arg2, arg3) {
 
 export function WiFiTokenSaved(arg1) {
   return window['go']['main']['App']['WiFiTokenSaved'](arg1);
+}
+
+export function WorkspaceNote() {
+  return window['go']['main']['App']['WorkspaceNote']();
 }
 
 export function WriteFile(arg1, arg2) {

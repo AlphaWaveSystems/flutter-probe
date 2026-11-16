@@ -47,6 +47,10 @@ type TestResult struct {
 	Proposal *SelectorProposal
 	// Crash is set on a failed test whose app died during it, when the run asked for crash evidence. It is held in memory and printed as one line; it is not in the reports yet.
 	Crash *CrashReport
+	// TimedOut is set on a failed test whose attempt ran past defaults.test_timeout (or --test-timeout). TimeLimit is that
+	// limit; both are zero when the limit is off, and the reports leave them out then.
+	TimedOut  bool
+	TimeLimit time.Duration
 }
 
 // DefName is the test's name as the file writes it. The result of a data-driven row carries " [row N]" after it, and
@@ -82,6 +86,7 @@ type Runner struct {
 	recipes         map[string]parser.RecipeDef
 	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
 	missingUses     []string                     // `use` targets that do not exist, for error messages
+	confine         *lintConfinement             // set by a lint given LintWithRoot; nil for runs and for the CLI's lint
 	visual          *visual.Comparator  // nil if visual regression is not configured
 	onResult        func(TestResult)    // optional per-result callback for streaming
 	recorder        StepRecorder
@@ -90,6 +95,8 @@ type Runner struct {
 	curFile         string              // attribution for StepEvents from newExecutor
 	curTest         string
 	curAttempt      int
+	restartHook     func(context.Context) error // tests only: replaces the restart step after a timed-out attempt
+	newVideo        func() videoRecorder        // tests only: replaces the device recorder; nil builds one from the device
 }
 
 // RunOptions configures a test run.
@@ -159,6 +166,27 @@ func (r *Runner) OnResult(cb func(TestResult)) {
 // in .probe files are executed instead of skipped.
 func (r *Runner) SetCompositeRunner(cr *CompositeRunner) {
 	r.compositeRunner = cr
+}
+
+// newAttemptExecutor is newExecutor for one attempt. With a guard, a reconnect that completes after the guard was released is
+// dropped (its client is closed), so an attempt that test_timeout cut short cannot replace the runner's client while the next
+// test runs. Without a guard it is newExecutor.
+func (r *Runner) newAttemptExecutor(guard *cleanupGuard) *Executor {
+	exec := r.newExecutor()
+	exec.testLimit = r.cfg.Defaults.TestTimeout
+	if guard != nil {
+		inner := exec.onReconnect
+		exec.onReconnect = func(newClient probelink.ProbeClient) {
+			if !guard.write(func() {
+				if inner != nil {
+					inner(newClient)
+				}
+			}) {
+				newClient.Close()
+			}
+		}
+	}
+	return exec
 }
 
 // newExecutor builds an Executor preconfigured with this Runner's reconnect
@@ -449,7 +477,19 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 
 func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
 	start := time.Now()
-	exec := r.newExecutor()
+	limit := r.cfg.Defaults.TestTimeout
+	guard := newCleanupGuard()
+	exec := r.newAttemptExecutor(guard)
+	// The step the attempt is on: the last one the executor started. A timeout names it. The observer still reaches r.onStep.
+	var current StepEvent
+	exec.OnStep(func(ev StepEvent) {
+		if ev.Status == StepStarted {
+			current = ev
+		}
+		if r.onStep != nil {
+			r.onStep(ev)
+		}
+	})
 	for name, rec := range r.recipes {
 		exec.RegisterRecipe(rec)
 		_ = name
@@ -462,27 +502,28 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	}
 
 	// Start video recording if enabled
-	var recorder *VideoRecorder
+	var recorder videoRecorder
 	if r.opts.VideoEnabled && r.deviceCtx != nil {
-		videoDir := r.opts.VideoDir
-		if videoDir == "" {
-			videoDir = "reports/videos"
-		}
-		recorder = NewVideoRecorder(r.deviceCtx.Manager, r.deviceCtx.Serial, r.deviceCtx.Platform, videoDir, r.cfg.Video)
-		if err := recorder.Start(ctx, t.Name); err != nil {
+		rec := r.newVideoRecorder()
+		if err := rec.Start(ctx, t.Name); err != nil {
 			fmt.Printf("    \033[33m⚠\033[0m  video recording failed to start: %v\n", err)
-			recorder = nil
+		} else {
+			recorder = rec
 		}
 	}
 
 	var runErr error
+
+	// test_timeout bounds this attempt: its before-each hooks and its body run under attemptCtx, not ctx. The run's own
+	// cancellation still reaches them through ctx.
+	attemptCtx, cancelAttempt := attemptContext(ctx, limit)
 
 	exec.beginHTTP(ctx) // each test starts with an empty request log and no mocks
 
 	// Run before-each hooks
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeEach {
-			if err := exec.RunBody(ctx, hook.Body); err != nil {
+			if err := exec.RunBody(attemptCtx, hook.Body); err != nil {
 				runErr = fmt.Errorf("before each: %w", err)
 				break
 			}
@@ -495,60 +536,31 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		if row >= 0 && t.Examples != nil {
 			window = fmt.Sprintf("%s [row %d]", t.Name, row+1)
 		}
-		if err := exec.startMeasuring(ctx, window); err != nil {
+		if err := exec.startMeasuring(attemptCtx, window); err != nil {
 			fmt.Printf("    \033[33m⚠\033[0m  --measure-all: %v\n", err)
 		}
 	}
 
 	// Run test body
 	if runErr == nil {
-		runErr = exec.RunBody(ctx, t.Body)
+		runErr = exec.RunBody(attemptCtx, t.Body)
+	}
+	// The attempt's own deadline ended it while the run was not cancelled: the failure is the limit, named for the step it was on. The
+	// step is read now, before the cleanup starts its own steps.
+	expired := limit > 0 && runErr != nil && attemptCtx.Err() != nil && ctx.Err() == nil
+	cancelAttempt()
+	var te *testTimeoutError
+	if expired {
+		te = &testTimeoutError{limit: limit, step: stepText(current), cause: runErr}
+		runErr = te
 	}
 
-	// Auto-screenshot on failure
-	if runErr != nil && r.client != nil {
-		shotCtx, shotCancel := context.WithTimeout(ctx, 10*time.Second)
-		shotName := fmt.Sprintf("failure_%s", sanitizeName(t.Name))
-		path, shotErr := r.client.Screenshot(shotCtx, shotName)
-		shotCancel()
-		if shotErr != nil {
-			fmt.Printf("    \033[33m⚠\033[0m  failure screenshot: %v\n", shotErr)
-		} else if path != "" {
-			exec.AddArtifact(path)
-			fmt.Printf("    \033[36m📸\033[0m  failure screenshot saved: %s\n", path)
+	// The recording stops at the end of the attempt. On a timeout it stops inside the cleanup's budget, with the other cleanup calls.
+	stopVideo := func(c context.Context) (string, error) {
+		if recorder == nil {
+			return "", nil
 		}
-	}
-
-	// Run on-failure hooks
-	if runErr != nil {
-		for _, hook := range prog.Hooks {
-			if hook.Kind == parser.HookOnFailure {
-				_ = exec.RunBody(ctx, hook.Body) // best-effort
-			}
-		}
-	}
-
-	// Run after-each hooks (always)
-	for _, hook := range prog.Hooks {
-		if hook.Kind == parser.HookAfterEach {
-			_ = exec.RunBody(ctx, hook.Body) // best-effort
-		}
-	}
-
-	// Stop video recording and add as artifact
-	if recorder != nil {
-		videoPath, err := recorder.Stop(ctx)
-		if err != nil {
-			fmt.Printf("    \033[33m⚠\033[0m  video recording stop: %v\n", err)
-		} else if videoPath != "" {
-			absPath, _ := filepath.Abs(videoPath)
-			if absPath != "" {
-				exec.AddArtifact(absPath)
-			} else {
-				exec.AddArtifact(videoPath)
-			}
-			fmt.Printf("    \033[36m🎬\033[0m  video saved: %s\n", videoPath)
-		}
+		return recorder.Stop(c)
 	}
 
 	name := t.Name
@@ -556,27 +568,98 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		name = rowName(t.Name, row)
 	}
 
-	exec.closePerf(ctx)
+	if te != nil {
+		grace := r.finishTimedOutAttempt(ctx, exec, guard, prog, t, te, stopVideo)
+		if grace.abandoned {
+			// The cleanup may still be writing into exec, so nothing is read from it: the attempt reports what it had before, and the crash
+			// evidence the look found before the cleanup started.
+			if grace.crash != nil {
+				fmt.Printf("    \033[31m💥\033[0m  %s\n", grace.crash.Line())
+				r.writeCrashFilesFor(grace.crash, file, name, r.curAttempt)
+			}
+			return TestResult{
+				TestName:   name,
+				File:       file,
+				Passed:     false,
+				Duration:   time.Since(start),
+				Error:      runErr,
+				Row:        row,
+				Tags:       t.Tags,
+				Crash:      grace.crash,
+				Artifacts:  grace.artifacts,
+				DeviceID:   r.opts.DeviceID,
+				DeviceName: r.opts.DeviceName,
+				StartedAt:  start,
+				TimedOut:   true,
+				TimeLimit:  limit,
+			}
+		}
+		reportVideo(grace.video, grace.videoErr, exec.AddArtifact)
+	} else {
+		r.finishAttempt(ctx, exec, prog, t, runErr, r.client, nil)
+		videoPath, videoErr := stopVideo(ctx)
+		reportVideo(videoPath, videoErr, exec.AddArtifact)
+		exec.closePerf(ctx)
+	}
+
+	artifacts := exec.Artifacts()
 
 	crash := failedTestCrash(exec, runErr)
 	r.writeCrashFilesFor(crash, file, name, r.curAttempt)
 
 	return TestResult{
-		Crash:      crash,
-		Perf:       nameUnnamed(exec.PerfResults()),
-		TestName:   name,
-		File:       file,
-		Passed:     runErr == nil,
-		Duration:   time.Since(start),
-		Error:      runErr,
+		Crash:          crash,
+		Perf:           nameUnnamed(exec.PerfResults()),
+		TestName:       name,
+		File:           file,
+		Passed:         runErr == nil,
+		Duration:       time.Since(start),
+		Error:          runErr,
 		FailedSelector: exec.FailedSelector(runErr),
-		Row:        row,
-		Tags:       t.Tags,
-		Artifacts:  exec.Artifacts(),
-		DeviceID:   r.opts.DeviceID,
-		DeviceName: r.opts.DeviceName,
-		StartedAt:  start,
+		Row:            row,
+		Tags:           t.Tags,
+		Artifacts:      artifacts,
+		TimedOut:       te != nil,
+		TimeLimit:      limit,
+		DeviceID:       r.opts.DeviceID,
+		DeviceName:     r.opts.DeviceName,
+		StartedAt:      start,
 	}
+}
+
+// videoRecorder is what an attempt needs from a recording: start it, and stop it for the file it wrote.
+type videoRecorder interface {
+	Start(ctx context.Context, name string) error
+	Stop(ctx context.Context) (string, error)
+}
+
+// newVideoRecorder returns the recorder an attempt uses: the device's, unless a test has replaced it.
+func (r *Runner) newVideoRecorder() videoRecorder {
+	if r.newVideo != nil {
+		return r.newVideo()
+	}
+	videoDir := r.opts.VideoDir
+	if videoDir == "" {
+		videoDir = "reports/videos"
+	}
+	return NewVideoRecorder(r.deviceCtx.Manager, r.deviceCtx.Serial, r.deviceCtx.Platform, videoDir, r.cfg.Video)
+}
+
+// reportVideo prints the outcome of a recording's stop, and records the file it wrote as an artifact through add.
+func reportVideo(path string, err error, add func(string)) {
+	if err != nil {
+		fmt.Printf("    \033[33m⚠\033[0m  video recording stop: %v\n", err)
+		return
+	}
+	if path == "" {
+		return
+	}
+	abs, _ := filepath.Abs(path)
+	if abs == "" {
+		abs = path
+	}
+	add(abs)
+	fmt.Printf("    \033[36m🎬\033[0m  video saved: %s\n", path)
 }
 
 // loadRecipes reads all .probe files from the recipes folder.
@@ -584,9 +667,18 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 	if r.cfg.Recipes == "" {
 		return nil
 	}
-	entries, err := os.ReadDir(r.cfg.Recipes)
+	dir, ok := r.confine.open(r.cfg.Recipes, 0, refuseRecipesFolder)
+	if !ok {
+		r.confine.skipRecipes = true
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			return nil
+		}
+		if r.confine != nil {
+			r.confine.unreadable(dir, 0)
 			return nil
 		}
 		return err
@@ -595,7 +687,12 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 		if !strings.HasSuffix(e.Name(), ".probe") {
 			continue
 		}
-		if err := r.loadRecipeFile(context.TODO(), filepath.Join(r.cfg.Recipes, e.Name())); err != nil {
+		path, ok := r.confine.open(filepath.Join(dir, e.Name()), 0, refuseRecipeFile)
+		if !ok {
+			r.confine.skipRecipes = true
+			continue
+		}
+		if err := r.loadRecipeFile(context.TODO(), path); err != nil {
 			return err
 		}
 	}
@@ -608,10 +705,18 @@ func (r *Runner) loadRecipeFile(_ context.Context, path string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
+		if r.confine != nil {
+			r.confine.unreadable(path, 0)
+			return nil
+		}
 		return err
 	}
 	prog, err := parser.ParseFile(string(src))
 	if err != nil {
+		if r.confine != nil {
+			r.confine.broken(path, err, 0)
+			return nil
+		}
 		return fmt.Errorf("parse recipe file %s: %w", path, err)
 	}
 	for _, rec := range prog.Recipes {
@@ -633,16 +738,29 @@ func (r *Runner) loadUse(ctx context.Context, from string, u parser.UseStmt, see
 		return nil
 	}
 	seen[abs] = true
-	src, err := os.ReadFile(target)
+	read, ok := r.confine.open(target, r.confine.lineOf(from, u.Line), refuseUseTarget)
+	if !ok {
+		r.confine.skipRecipes = true
+		return nil
+	}
+	src, err := os.ReadFile(read)
 	if err != nil {
 		if os.IsNotExist(err) {
 			r.missingUses = append(r.missingUses, fmt.Sprintf("%s:%d `use %q` -> %s", from, u.Line, u.Path, target))
+			return nil
+		}
+		if r.confine != nil {
+			r.confine.unreadable(read, r.confine.lineOf(from, u.Line))
 			return nil
 		}
 		return err
 	}
 	prog, err := parser.ParseFile(string(src))
 	if err != nil {
+		if r.confine != nil {
+			r.confine.broken(read, err, r.confine.lineOf(from, u.Line))
+			return nil
+		}
 		return fmt.Errorf("parse recipe file %s: %w", target, err)
 	}
 	for _, rec := range prog.Recipes {
