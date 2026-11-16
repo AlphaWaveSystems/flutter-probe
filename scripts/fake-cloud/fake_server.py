@@ -9,14 +9,21 @@ It records what arrived as one JSON line per request in --log, and keeps the las
 It never writes the license key or the identity token: only their scheme and length. It does not verify anything,
 so a token it hands out is a placeholder that a real server would reject.
 
-  python3 scripts/fake-cloud/fake_server.py --log /tmp/fake-cloud.log
+  python3 scripts/fake-cloud/fake_server.py          # the log goes to <system temp folder>/fake-cloud.log
+
+The log can only be written inside --log-dir (default: the system temp folder), and a request body over 1 MiB, or without a plain
+Content-Length, is refused unread (413, 411).
 """
 import argparse
 import http.server
 import json
+import os
+import sys
+import tempfile
 import urllib.parse
 
 args = None
+MAX_BODY = 1 << 20  # a report is at most 1 MB by the client's own rule; anything bigger is refused unread
 
 
 def log(entry):
@@ -42,7 +49,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        n = int(self.headers.get("Content-Length") or 0)
+        # never wait for a body of unknown length: no or invalid Content-Length is refused, and so is a chunked body
+        raw = self.headers.get("Content-Length")
+        if raw is None or not raw.isdigit() or self.headers.get("Transfer-Encoding"):
+            self.send_response(411)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        n = int(raw)
+        if n > MAX_BODY:
+            self.send_response(413)
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            return
         body = self.rfile.read(n) if n else b""
         auth = self.headers.get("Authorization") or ""
         attest = self.headers.get("X-Probe-Attestation") or ""
@@ -60,13 +80,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+def confined(path, root):
+    """True when path (links resolved) is inside root (links resolved)."""
+    path, root = os.path.realpath(path), os.path.realpath(root)
+    return os.path.commonpath([path, root]) == root
+
+
 def main():
     global args
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--port", type=int, default=48899)
-    p.add_argument("--log", default="fake-cloud.log", help="where to record the requests (one JSON line each)")
+    p.add_argument("--log-dir", default=tempfile.gettempdir(), help="the only folder the log may be written in (default: the system temp folder)")
+    p.add_argument("--log", default=None, help="where to record the requests (one JSON line each); default <log-dir>/fake-cloud.log")
     p.add_argument("--status", type=int, default=202, help="the status an upload is answered with (try 429, 503, 401)")
     args = p.parse_args()
+    if args.log is None:
+        args.log = os.path.join(args.log_dir, "fake-cloud.log")
+    for target in (args.log, args.log + ".body.json"):
+        if not confined(target, args.log_dir):
+            sys.exit(f"fake_server: refusing to write {target}: it is outside {os.path.realpath(args.log_dir)} (put --log inside it, or name another folder with --log-dir)")
     print(f"fake Probe Cloud on http://127.0.0.1:{args.port} (log: {args.log}); stop it with Ctrl-C", flush=True)
     http.server.HTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 

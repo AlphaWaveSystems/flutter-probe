@@ -16,7 +16,8 @@
 
 ```bash
 # 1. start the fake service (leave it running; Ctrl-C stops it)
-python3 scripts/fake-cloud/fake_server.py --log /tmp/fake-cloud.log
+LOG="${TMPDIR:-/tmp}/fake-cloud.log"
+python3 scripts/fake-cloud/fake_server.py --log "$LOG"
 
 # 2. in another terminal: a throwaway license that this probe will trust
 eval "$(go run ./scripts/fake-cloud/sign-test-license)"
@@ -31,8 +32,8 @@ export GITHUB_ACTIONS=true GITHUB_REPOSITORY=acme/app GITHUB_REF_NAME=main \
 probe test tests/ --device <id> --upload-report --upload-label local-sim
 
 # 5. see what arrived
-cat /tmp/fake-cloud.log                     # one JSON line per request
-python3 -m json.tool /tmp/fake-cloud.log.body.json   # the last body
+cat "$LOG"                                   # one JSON line per request
+python3 -m json.tool "$LOG.body.json"         # the last body
 ```
 
 For a pull request, set `GITHUB_EVENT_NAME=pull_request`, `GITHUB_REF_NAME=7/merge`, `GITHUB_HEAD_REF=<branch>`, `GITHUB_BASE_REF=main` and `GITHUB_EVENT_PATH=<a JSON file>` with `{"repository":{"default_branch":"main"},"pull_request":{"head":{"sha":"<40 hex>"}}}`.
@@ -53,9 +54,9 @@ For a pull request, set `GITHUB_EVENT_NAME=pull_request`, `GITHUB_REF_NAME=7/mer
 
 - **Verified runs.** The token the fake issuer returns is a placeholder. The real service checks identity tokens against GitHub's keys, so it would call such a run unattested. Auto-registration and verified verdicts need a real Actions run.
 - **The service itself.** The fake server verifies nothing, stores nothing and computes no verdict.
-- **The license.** The key pair is made for the test, and only your `PROBE_LICENSE_PUBKEY` makes it trusted. A released `probe` trusts none of it, and the private half is never printed or saved.
+- **The license.** The key pair is made for the test, and the private half is never printed or saved. The public half is trusted only because `PROBE_LICENSE_PUBKEY` names it. A released `probe` trusts none of it **while that variable is unset**: `internal/license` adds the keys it lists to the trusted set in every build, so anyone who controls a `probe` process's environment can make it trust a key of their own. That is local trust only (what the CLI will accept in that process), and the real service checks licenses itself. Keep the variable out of shells and CI jobs that talk to a real service.
 
-The fake server logs only the scheme and length of the license key and the identity token, never their values.
+The fake server logs only the scheme and length of the license key and the identity token, never their values. It binds `127.0.0.1` only, refuses a request body over 1 MiB (413) or without a plain `Content-Length` (411), and writes its log only inside `--log-dir` (default: the system temp folder), so a typo cannot overwrite a file elsewhere.
 
 ## Using `act`
 
