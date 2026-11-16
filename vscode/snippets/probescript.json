@@ -147,8 +147,8 @@
     "prefix": "onfail",
     "body": [
       "on failure",
-      "  take a screenshot called \"failure\"",
-      "  dump the widget tree",
+      "  take screenshot \"failure\"",
+      "  dump tree",
       "$0"
     ],
     "description": "On failure hook"
@@ -195,7 +195,7 @@
   },
   "Take screenshot": {
     "prefix": "screenshot",
-    "body": "take a screenshot called \"${1:name}\"",
+    "body": "take screenshot \"${1:name}\"",
     "description": "Capture a screenshot"
   },
   "See any of": {

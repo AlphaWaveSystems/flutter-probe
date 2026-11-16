@@ -193,7 +193,7 @@ test "checkout flow"
   type "john@example.com" into the "Email" field
   tap "Place Order"
   see "Order confirmed"
-  take a screenshot called "order_confirmation"
+  take screenshot "order_confirmation"
 ```
 
 ### Selectors
@@ -235,14 +235,14 @@ before each
   see "Home"
 
 after each
-  take a screenshot called "after"
+  take screenshot "after"
 
 on failure
-  take a screenshot called "failure"
-  dump the widget tree
+  take screenshot "failure"
+  dump tree
 
 after all
-  take a screenshot called "suite_final"
+  take screenshot "suite_final"
 ```
 
 ### Data-driven tests
@@ -699,7 +699,7 @@ Capture baseline screenshots and compare on every run:
 test "main screen looks correct"
   open the app
   wait 2 seconds
-  take a screenshot called "main_screen"   # first run: saves baseline
+  take screenshot "main_screen"   # first run: saves baseline
                                             # subsequent runs: compares
 ```
 
@@ -1073,8 +1073,8 @@ BrowserStack, Sauce Labs, AWS Device Farm and LambdaTest are implemented (throug
    `⚠` warning appears at 80% of the timeout — so you see a slow or stuck step well before
    it fails. Even without `-v`, a faint status line shows the current step on a TTY.
 2. Check failure screenshots in `reports/screenshots/`
-3. Add `pause` or `take a screenshot called "debug"` at the point of failure
-4. Use `dump the widget tree` to inspect what's on screen
+3. Add `pause` or `take screenshot "debug"` at the point of failure
+4. Use `dump tree` to inspect what's on screen
 
 ### What's the minimum Flutter version?
 
