@@ -40,6 +40,9 @@ func (m *Manager) IsDisposable(ctx context.Context, platform Platform, serial st
 	return disposableIn(devs, err, platform, serial)
 }
 
+// verifyTimeout bounds the whole of IsVerifiedDisposable: the device list and the property calls. A variable so tests do not wait it out.
+var verifyTimeout = 8 * time.Second
+
 // emulatorProps are the system properties an Android emulator sets to 1 and a phone does not.
 var emulatorProps = []string{"ro.kernel.qemu", "ro.boot.qemu"}
 
@@ -70,8 +73,8 @@ func verifiedDisposable(devs []Device, listErr error, platform Platform, serial 
 // (adb over a network can be given any name), so the prefix alone does not make a phone an emulator. An iOS device with no transport is a simulator from the
 // list. Any error, empty answer or timeout is false.
 func (m *Manager) IsVerifiedDisposable(ctx context.Context, platform Platform, serial string) bool {
-	devs, err := m.List(ctx)
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, verifyTimeout) // before the list: a hung adb, simctl or devicectl must not hang the question, it fails closed
 	defer cancel()
+	devs, err := m.List(ctx)
 	return verifiedDisposable(devs, err, platform, serial, func(prop string) (string, error) { return m.adb.GetProp(ctx, serial, prop) })
 }

@@ -68,6 +68,15 @@ func loadChecked() (Prefs, string) {
 	if err != nil {
 		return Prefs{}, ""
 	}
+	// The folder too: a link, or a folder that group or others can write, would let another user replace the file whatever its own mode is.
+	if dinfo, err := os.Lstat(filepath.Dir(path)); err == nil {
+		if !dinfo.IsDir() {
+			return Prefs{}, "your preferences folder is a link or not a folder, so the preferences file is not used (settings are off)"
+		}
+		if runtime.GOOS != "windows" && dinfo.Mode().Perm()&0o022 != 0 {
+			return Prefs{}, fmt.Sprintf("your preferences folder is writable by other users (mode %o), so the preferences file is not used (settings are off): chmod 700 it", dinfo.Mode().Perm())
+		}
+	}
 	info, err := os.Lstat(path)
 	if err != nil {
 		return Prefs{}, ""

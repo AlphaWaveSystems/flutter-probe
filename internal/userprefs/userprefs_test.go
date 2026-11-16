@@ -153,3 +153,47 @@ func TestNoPlaceForPreferencesIsOff(t *testing.T) {
 		t.Error("on with nowhere to keep preferences")
 	}
 }
+
+// The folder is checked as well as the file: a link, or a folder that group or others can write, makes the file untrusted (modes are not checked on Windows).
+func TestAnUntrustedPreferencesFolderMakesTheFileUntrusted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("modes are not checked on Windows")
+	}
+	dir := isolate(t)
+	if err := SetClearDataWithoutAsking(true); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []os.FileMode{0o770, 0o707, 0o777, 0o720, 0o702} {
+		if err := os.Chmod(dir, mode); err != nil {
+			t.Fatal(err)
+		}
+		p, w := Check()
+		if p.ClearDataWithoutAsking || !strings.Contains(w, "folder is writable by other users") || !strings.Contains(w, "chmod 700") {
+			t.Errorf("folder mode %o: %+v %q", mode, p, w)
+		}
+	}
+	// readable or searchable by others is not a way to change the file
+	for _, mode := range []os.FileMode{0o700, 0o750, 0o755, 0o705} {
+		if err := os.Chmod(dir, mode); err != nil {
+			t.Fatal(err)
+		}
+		if p, w := Check(); !p.ClearDataWithoutAsking || w != "" {
+			t.Errorf("folder mode %o: %+v %q", mode, p, w)
+		}
+	}
+	// a folder that is a link
+	_ = os.Chmod(dir, 0o700)
+	real := filepath.Join(t.TempDir(), "real")
+	_ = os.MkdirAll(real, 0o700)
+	_ = os.WriteFile(filepath.Join(real, "prefs.json"), []byte(`{"clearDataWithoutAsking": true}`), 0o600)
+	link := filepath.Join(t.TempDir(), "cfg-link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("no symlinks")
+	}
+	old := Dir
+	Dir = func() (string, error) { return link, nil }
+	t.Cleanup(func() { Dir = old })
+	if p, w := Check(); p.ClearDataWithoutAsking || !strings.Contains(w, "folder is a link") {
+		t.Errorf("a linked folder: %+v %q", p, w)
+	}
+}

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/userprefs"
 )
 
@@ -192,5 +195,52 @@ func TestTheFormSeesAWarningForAnUntrustedFile(t *testing.T) {
 	p := (&App{}).GetStudioPrefs()
 	if p.ClearDataWithoutAsking || !strings.Contains(p.Warning, "other users") {
 		t.Errorf("prefs = %+v", p)
+	}
+}
+
+// fakeAdbManager is a device manager whose adb lists one emulator and answers ro.kernel.qemu with qemu (a shell script).
+func fakeAdbManager(t *testing.T, qemu string) *device.Manager {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("a shell script stands in for adb")
+	}
+	script := "#!/bin/sh\ncase \"$*\" in\n  *devices*) echo \"List of devices attached\"; echo \"emulator-5554 device product:sdk model:Pixel\"; exit 0;;\n  *getprop*ro.kernel.qemu*) echo \"" + qemu + "\"; exit 0;;\n  *) exit 0;;\nesac\n"
+	path := filepath.Join(t.TempDir(), "adb")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return device.NewManagerWithPaths(device.ToolPaths{ADB: path})
+}
+
+// The production path, not the test seam: with the setting on and a connection the list calls an emulator, a device that does not say so itself is
+// still asked about, and one that does is not.
+func TestTheProductionDeviceCheckGatesTheShortcut(t *testing.T) {
+	withPrefs(t, true)
+	verifyDisposable = nil // the real check, through the manager and its adb
+	c := newConfirmApp(t, true)
+	c.a.deviceMgr = fakeAdbManager(t, "")
+	c.a.ctx = context.Background()
+	c.a.conn.disposable = true
+	c.a.conn.platform = device.PlatformAndroid
+	c.a.conn.deviceID = "emulator-5554"
+	answer := c.ask()
+	c.next(t, "confirm:request") // the question was shown
+	select {
+	case ok := <-answer:
+		t.Fatalf("a device that does not say it is an emulator was answered (%v) without the person", ok)
+	case <-time.After(200 * time.Millisecond):
+	}
+	c.cancel()
+	<-answer
+
+	withPrefs(t, true)
+	c2 := newConfirmApp(t, true)
+	c2.a.deviceMgr = fakeAdbManager(t, "1")
+	c2.a.ctx = context.Background()
+	c2.a.conn.disposable = true
+	c2.a.conn.platform = device.PlatformAndroid
+	c2.a.conn.deviceID = "emulator-5554"
+	if ok := answerOf(t, c2.ask()); !ok {
+		t.Error("an emulator that says so was asked about")
 	}
 }
