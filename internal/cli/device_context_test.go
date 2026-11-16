@@ -4,12 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // fakeXcrunList puts an xcrun stand-in first on PATH. It answers `simctl list devices --json` with listJSON, and every other
@@ -150,5 +152,33 @@ func TestLocaleDeviceContextAsksTheDevice(t *testing.T) {
 				t.Errorf("SetLanguage on a simulator: %v", err)
 			}
 		})
+	}
+}
+
+// TestSingleDeviceContextIsTheSharedConstructorOutput checks, field by field with a populated config, that the CLI wrapper adds nothing of
+// its own and drops nothing: its context equals the shared constructor's for the same facts. A field the wrapper overrides differently fails.
+func TestSingleDeviceContextIsTheSharedConstructorOutput(t *testing.T) {
+	ctx := context.Background()
+	dm := compositeFakeADB(t, "qcom")
+	cfg := &config.Config{}
+	cfg.Project.App = "com.example.app"
+	cfg.Agent.Port = 48690
+	cfg.Agent.DriverPort = 48691
+	cfg.Agent.ReconnectDelay = 3 * time.Second
+	cfg.Agent.TokenReadTimeout = 4 * time.Second
+	cfg.Agent.DialTimeout = 5 * time.Second
+	cfg.Device.RestartDelay = 6 * time.Second
+	cfg.Defaults.CrashEvidence = true
+	got := singleDeviceContext(ctx, dm, cfg, device.PlatformAndroid, "R58M123ABC", "192.168.1.20", true, false, nil)
+	want := runner.NewConfiguredDeviceContext(ctx, dm, cfg, device.PlatformAndroid, "R58M123ABC", runner.ConnFacts{AgentHost: "192.168.1.20", AllowClearData: true})
+	g, w := reflect.ValueOf(got).Elem(), reflect.ValueOf(want).Elem()
+	for i := 0; i < g.NumField(); i++ {
+		f := g.Type().Field(i)
+		if !f.IsExported() || f.Type.Kind() == reflect.Func {
+			continue
+		}
+		if !reflect.DeepEqual(g.Field(i).Interface(), w.Field(i).Interface()) {
+			t.Errorf("DeviceContext.%s: the CLI wrapper gives %v, the shared constructor %v", f.Name, g.Field(i).Interface(), w.Field(i).Interface())
+		}
 	}
 }
