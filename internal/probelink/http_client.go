@@ -158,7 +158,7 @@ func (c *HTTPClient) Handshake(ctx context.Context, clientVersion string) (*Hand
 	if err := json.Unmarshal(raw, &res); err != nil {
 		return nil, fmt.Errorf("handshake: decoding ping result: %w", err)
 	}
-	result := &HandshakeResult{AgentVersion: res.AgentVersion, Capabilities: res.Capabilities}
+	result := newHandshakeResult(res)
 	c.mu.Lock()
 	c.handshake = result
 	c.mu.Unlock()

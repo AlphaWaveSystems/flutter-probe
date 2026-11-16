@@ -63,7 +63,7 @@ func (dc *DeviceContext) adbRunner() device.AdbRunner {
 // hedged line without names. It says nothing when the app is not running (the error already says so), on another platform, or when the run is cancelled. At most
 // three read-only adb calls, bounded to five seconds.
 func (dc *DeviceContext) tokenReadHint(ctx context.Context, readErr error) string {
-	if dc == nil || dc.Platform != device.PlatformAndroid || ctx.Err() != nil || readErr == nil || strings.Contains(readErr.Error(), "is not running") {
+	if dc == nil || dc.Platform != device.PlatformAndroid || ctx.Err() != nil || readErr == nil || strings.Contains(readErr.Error(), device.AppNotRunningMarker) {
 		return ""
 	}
 	if h := device.PortOwnerHint(ctx, dc.adbRunner(), dc.Serial, dc.devicePort(), dc.AppID); h != "" {

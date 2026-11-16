@@ -175,7 +175,7 @@ func PortOwnerHint(ctx context.Context, runner AdbRunner, serial string, deviceP
 // can have other causes too, so it says "if".
 const NeutralPortHint = " — the agent did not answer: if another app on this device uses the same agent port (PROBE_PORT), stop it or set a different port"
 
-// ConnectHint is what is appended to a failed connect on Android once the app is known to be running: the agent port forwarded to another device (ForwardHint), or,
+// ConnectHint is what is appended to a failed connect on Android: the agent port forwarded to another device (ForwardHint), or,
 // when that is not the case, another app holding the port on the device (PortOwnerHint). At most one of them, the first that can name something.
 func ConnectHint(ctx context.Context, runner AdbRunner, serial string, hostPort, devicePort int, ownApp string) string {
 	if h := ForwardHint(ctx, runner, hostPort, serial); h != "" {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
@@ -91,7 +92,7 @@ func TestTokenReadHint(t *testing.T) {
 		t.Errorf("fallback: %q", h)
 	}
 	// the app is not running: that error says so already
-	if h := ownerExecutor(ownerAdb("")).deviceCtx.tokenReadHint(ctx, errors.New("android: probe token not found within 30s: the app process x is not running (it exited)")); h != "" {
+	if h := ownerExecutor(ownerAdb("")).deviceCtx.tokenReadHint(ctx, device.TokenAppNotRunningError(30*time.Second, "x")); h != "" {
 		t.Errorf("dead app: %q", h)
 	}
 	// not Android, no error, cancelled

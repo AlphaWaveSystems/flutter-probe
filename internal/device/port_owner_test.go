@@ -383,3 +383,15 @@ func TestBlocksLoopbackBind(t *testing.T) {
 		}
 	}
 }
+
+// The token error of a dead app and the marker the runner looks for are one text: a reword of one cannot silently change the other.
+func TestTokenAppNotRunningErrorCarriesTheMarker(t *testing.T) {
+	err := TokenAppNotRunningError(30*time.Second, "dev.probe.app")
+	if !strings.Contains(err.Error(), AppNotRunningMarker) || !strings.Contains(err.Error(), "dev.probe.app") || !strings.Contains(err.Error(), "30s") {
+		t.Errorf("error = %q", err)
+	}
+	// the token timeout of an app that does run does not say it is not running
+	if strings.Contains(NeutralPortHint, AppNotRunningMarker) {
+		t.Error("the hedged line must not look like the dead-app error")
+	}
+}
