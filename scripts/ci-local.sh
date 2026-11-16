@@ -216,6 +216,7 @@ fi'
   step frontend studio/frontend 'npm run test:first-run'
   step frontend studio/frontend 'npm run test:lint'
   step frontend studio/frontend 'npm run test:confirm'
+  step frontend studio/frontend 'npm run test:result-notes'
   step frontend studio/frontend 'npm run check:probescript'
 
   job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.10" "studio-ci.yml:studio-go"

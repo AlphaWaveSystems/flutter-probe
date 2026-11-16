@@ -712,6 +712,10 @@ export namespace main {
 	    durationMs: number;
 	    error?: string;
 	    perf?: perf.Metrics[];
+	    crash?: string;
+	    timedOut?: boolean;
+	    timeLimitSeconds?: number;
+	    crashHint?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -726,6 +730,10 @@ export namespace main {
 	        this.durationMs = source["durationMs"];
 	        this.error = source["error"];
 	        this.perf = this.convertValues(source["perf"], perf.Metrics);
+	        this.crash = source["crash"];
+	        this.timedOut = source["timedOut"];
+	        this.timeLimitSeconds = source["timeLimitSeconds"];
+	        this.crashHint = source["crashHint"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

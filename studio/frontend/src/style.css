@@ -716,3 +716,7 @@ kbd {
 #chat-provider { display: inline-flex; align-items: baseline; min-width: 0; max-width: 100%; white-space: pre; }
 #chat-provider .chat-provider-model { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: isolate; }
 #chat-provider .chat-provider-place { flex: none; }
+
+#results-list li.note { padding: 4px 12px 4px 28px; font-size: 12px; color: var(--fg-dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+#results-list li.note-crash { color: var(--fail); }
+#results-list li.note-timeout { color: var(--warn); }

@@ -10,6 +10,7 @@
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { groupByOutcome, type Outcome } from "./run-scope";
 import { triageRows, type StepTriage } from "./triage";
+import { resultNotes } from "./result-notes";
 
 type RunResult = {
   name: string;
@@ -19,6 +20,10 @@ type RunResult = {
   durationMs: number;
   error?: string;
   perf?: PerfMetrics[];
+  crash?: string; // why the app died (crash evidence), one cleaned line
+  timedOut?: boolean;
+  timeLimitSeconds?: number;
+  crashHint?: boolean; // a lost connection on Android with crash evidence off
 };
 
 export type RunStep = {
@@ -292,6 +297,14 @@ function appendResult(res: RunResult): void {
     errLi.textContent = res.error;
     listEl.appendChild(errLi);
     rows.push(errLi);
+  }
+
+  for (const note of resultNotes(res)) {
+    const noteLi = document.createElement("li");
+    noteLi.classList.add("note", `note-${note.kind}`);
+    noteLi.textContent = note.text;
+    listEl.appendChild(noteLi);
+    rows.push(noteLi);
   }
 
   blocks.push({ outcome: status, rows });
