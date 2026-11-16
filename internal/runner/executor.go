@@ -331,7 +331,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 			reconnErr := e.tryReconnect(reconnectCtx, attempt)
 			reconnectCancel()
 			if reconnErr != nil {
-				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
+				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)%s", err, attempt, reconnErr, e.reconnectHint(ctx))
 				break
 			}
 			// Retry the step with a fresh timeout. Issue #237: this used to

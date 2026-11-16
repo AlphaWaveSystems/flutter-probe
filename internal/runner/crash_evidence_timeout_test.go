@@ -78,7 +78,15 @@ func TestTheOptInChangesNoOutcome(t *testing.T) {
 		}
 		_, c1, err1 := runTimeoutStep(t, false, dead(), stepErr, pressEnter)
 		e2, c2, err2 := runTimeoutStep(t, true, dead(), stepErr, pressEnter)
-		if err1 == nil || err2 == nil || err1.Error() != err2.Error() {
+		// a failed reconnect carries the hint, which names the evidence flag differently with the opt-in on or off: compare what comes before it
+		m1, m2 := err1.Error(), err2.Error()
+		if i := strings.Index(m1, " — the app "); i >= 0 {
+			m1 = m1[:i]
+		}
+		if i := strings.Index(m2, " — the app "); i >= 0 {
+			m2 = m2[:i]
+		}
+		if err1 == nil || err2 == nil || m1 != m2 {
 			t.Errorf("%s: error off %q, on %q", name, err1, err2)
 		}
 		if c1.closes != c2.closes {
@@ -253,9 +261,10 @@ func TestTheLookBeforeAReconnectSeesTheAppAsItWas(t *testing.T) {
 			closeAt = i
 		}
 	}
+	// the evidence reads all come before the reconnect started (the hint afterwards asks only the clock and the process list)
 	for i, l := range log {
-		if strings.HasPrefix(l, "adb ") && i > closeAt && closeAt >= 0 && strings.Contains(l, "pidof") {
-			t.Errorf("a pidof was asked after the reconnect started: %v", log)
+		if strings.HasPrefix(l, "adb ") && i > closeAt && closeAt >= 0 && (strings.Contains(l, "exit-info") || strings.Contains(l, "logcat")) {
+			t.Errorf("evidence was read after the reconnect started: %v", log)
 		}
 	}
 }

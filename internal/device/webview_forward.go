@@ -175,3 +175,20 @@ func freeLoopbackPort() (int, error) {
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
+
+// ForwardSerial reports which device the `adb forward` for a host port belongs to, by reading `adb forward --list` (lines of "<serial> tcp:<host> tcp:<device>").
+// found is false when no forward uses the port or the list cannot be read. Read-only; it never changes or removes a forward.
+func ForwardSerial(ctx context.Context, runner AdbRunner, hostPort int) (serial string, found bool) {
+	out, err := runner.RunArgs(ctx, "forward", "--list")
+	if err != nil || len(out) > 1<<20 {
+		return "", false
+	}
+	rule := "tcp:" + strconv.Itoa(hostPort)
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 3 && f[1] == rule && len(f[0]) <= 64 {
+			return f[0], true
+		}
+	}
+	return "", false
+}

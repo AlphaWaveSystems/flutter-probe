@@ -439,3 +439,62 @@ func TestFallbackForwardUsesNoRebind(t *testing.T) {
 		t.Fatalf("the chosen-port forward = %v, want %v", chosen, want)
 	}
 }
+
+// ForwardSerial names the device a host port is forwarded for, and says nothing when it cannot tell.
+func TestForwardSerial(t *testing.T) {
+	list := "emulator-5554 tcp:48792 tcp:48792\nemulator-5600 tcp:50000 tcp:50001\n0123456789ABCDEF tcp:50002 localabstract:x\nnot a line\nlonely\ntwo tcp:1234\n\n"
+	for port, want := range map[int]string{48792: "emulator-5554", 50000: "emulator-5600", 50002: "0123456789ABCDEF"} {
+		if got, ok := ForwardSerial(context.Background(), forwardListRunner(list), port); !ok || got != want {
+			t.Errorf("port %d: %q %v, want %q", port, got, ok, want)
+		}
+	}
+	for name, c := range map[string]struct {
+		out  string
+		port int
+	}{"no forward for the port": {list, 1234}, "an empty list": {"", 48792}, "a prefix of a port is not the port": {list, 4879}} {
+		if got, ok := ForwardSerial(context.Background(), forwardListRunner(c.out), c.port); ok || got != "" {
+			t.Errorf("%s: %q %v", name, got, ok)
+		}
+	}
+	if _, ok := ForwardSerial(context.Background(), failingRunner{}, 48792); ok {
+		t.Error("an adb that failed gave an answer")
+	}
+	// an adb that fails but printed something is not believed either
+	if _, ok := ForwardSerial(context.Background(), partialRunner(list), 48792); ok {
+		t.Error("an adb that failed after printing gave an answer")
+	}
+	// only the listing is asked for: nothing that changes a forward
+	rec := &listRecorder{out: list}
+	ForwardSerial(context.Background(), rec, 48792)
+	if len(rec.calls) != 1 || strings.Join(rec.calls[0], " ") != "forward --list" {
+		t.Errorf("calls = %v", rec.calls)
+	}
+}
+
+type forwardListRunner string
+
+func (f forwardListRunner) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
+	return []byte(f), nil
+}
+
+type failingRunner struct{}
+
+func (failingRunner) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
+	return nil, errors.New("adb: no devices")
+}
+
+type listRecorder struct {
+	out   string
+	calls [][]string
+}
+
+func (l *listRecorder) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
+	l.calls = append(l.calls, append([]string(nil), args...))
+	return []byte(l.out), nil
+}
+
+type partialRunner string
+
+func (p partialRunner) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
+	return []byte(p), errors.New("adb: connection lost")
+}

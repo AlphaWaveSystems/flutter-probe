@@ -270,8 +270,8 @@ func TestAFailedTestWithADeadAppWritesItsEvidence(t *testing.T) {
 	before, _ := filepath.Glob(filepath.Join(reports, "crash", "*"))
 	res, a := run(false, "test \"other dies\"\n  press enter\n")
 	after, _ := filepath.Glob(filepath.Join(reports, "crash", "*"))
-	if res.Crash != nil || len(a.calls) != 0 || len(after) != len(before) {
-		t.Errorf("opt-in off: crash %v, %d adb calls, folders %d -> %d", res.Crash, len(a.calls), len(before), len(after))
+	if res.Crash != nil || a.words("exit-info") != 0 || a.words("logcat") != 0 || len(after) != len(before) {
+		t.Errorf("opt-in off: crash %v, %d exit-info reads, folders %d -> %d", res.Crash, a.words("exit-info"), len(before), len(after))
 	}
 }
 
