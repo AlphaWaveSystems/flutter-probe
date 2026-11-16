@@ -262,5 +262,14 @@
       "$0"
     ],
     "description": "Tap, type, wait and see inside the app's WebView (Android; the app needs WebView debugging on)"
+  },
+  "WebView read": {
+    "prefix": "webviewread",
+    "body": [
+      "store text of css:\"${1:#total}\" in webview as ${2:total}",
+      "see \"<${2:total}>\" in webview",
+      "$0"
+    ],
+    "description": "Read an element's text from the app's WebView into a variable (Android; the value can be typed and looked for, not used as a link, file or address)"
   }
 }
