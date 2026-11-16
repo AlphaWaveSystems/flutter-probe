@@ -1,0 +1,5 @@
+# Expected: warning, use "fixtures/missing.probe" has no file.
+use "fixtures/missing.probe"
+
+test "uses a missing file"
+  open the app

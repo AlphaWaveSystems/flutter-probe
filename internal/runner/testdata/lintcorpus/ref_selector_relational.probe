@@ -1,0 +1,4 @@
+# Expected: error, the below selector has no anchor text after it.
+test "no anchor"
+  open the app
+  tap "Name" below

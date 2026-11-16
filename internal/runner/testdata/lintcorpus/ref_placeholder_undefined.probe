@@ -1,0 +1,4 @@
+# Expected: warning, <name> is not defined.
+test "placeholder without a value"
+  open the app
+  tap "<name>"

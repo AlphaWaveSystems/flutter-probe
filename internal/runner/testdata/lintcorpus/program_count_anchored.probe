@@ -1,0 +1,5 @@
+# Expected: no count warnings. Both checks are anchored at both ends.
+test "anchored count"
+  open the app
+  see "0 items" matching "^0 items$"
+  wait until "3" appears matching "^3$"

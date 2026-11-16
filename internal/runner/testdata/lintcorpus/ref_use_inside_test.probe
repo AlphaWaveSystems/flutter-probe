@@ -1,0 +1,4 @@
+# Expected: error, a use statement must come before the first test.
+test "use inside a test"
+  open the app
+  use "recipes/open_menu.probe"

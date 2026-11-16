@@ -1,0 +1,4 @@
+# Expected: warning, swipe sideways is not up, down, left or right.
+test "swipe word"
+  open the app
+  swipe sideways

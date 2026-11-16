@@ -1,0 +1,7 @@
+# Expected: one count warning owned by "before each hook" (zero state).
+before each
+  open the app
+  see "None"
+
+test "after the hook"
+  tap "Continue"

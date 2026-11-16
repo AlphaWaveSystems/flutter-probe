@@ -1,0 +1,7 @@
+# Expected: two WebView count warnings (see "0" in webview, wait until "3" appears in webview). A WebView text
+# that is not a count is not flagged.
+test "webview count"
+  open the app
+  see "0" in webview
+  wait until "3" appears in webview
+  see "Getting Started" in webview

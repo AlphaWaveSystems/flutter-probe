@@ -1,0 +1,5 @@
+# Expected: no findings.
+test "clean"
+  open the app
+  tap "Continue"
+  see "Welcome"

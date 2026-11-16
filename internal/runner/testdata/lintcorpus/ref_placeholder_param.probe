@@ -1,0 +1,7 @@
+# Expected: no placeholder warning. The recipe parameter who defines it.
+recipe "greet" (who)
+  tap "<who>"
+
+test "calls greet"
+  open the app
+  greet "Ada"

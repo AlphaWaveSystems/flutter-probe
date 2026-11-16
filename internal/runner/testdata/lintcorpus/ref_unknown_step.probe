@@ -1,0 +1,4 @@
+# Expected: error, unknown step "frobnicate the gizmo".
+test "unknown step"
+  open the app
+  frobnicate the gizmo

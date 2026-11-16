@@ -1,0 +1,7 @@
+# Expected: one count warning owned by recipe "empty list".
+recipe "empty list"
+  see "0 items"
+
+test "calls the recipe"
+  open the app
+  empty list

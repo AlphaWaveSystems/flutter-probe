@@ -1,0 +1,7 @@
+# Expected: dart warning. One dart block in four steps is 25 percent.
+test "dart above the boundary"
+  open the app
+  tap "A"
+  tap "B"
+  run dart:
+    print('x')
