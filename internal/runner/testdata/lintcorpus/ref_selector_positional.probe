@@ -1,0 +1,4 @@
+# Expected: error, the container after "in" is empty.
+test "empty container"
+  open the app
+  tap "Buy" in ""

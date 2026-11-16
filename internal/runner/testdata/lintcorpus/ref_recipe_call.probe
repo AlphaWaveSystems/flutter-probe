@@ -1,0 +1,4 @@
+# Expected: without the recipes folder, error unknown step "open menu"; with it (recipes/open_menu.probe), no error.
+test "calls a recipe from the folder"
+  open the app
+  open menu

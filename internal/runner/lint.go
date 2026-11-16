@@ -166,6 +166,39 @@ func LintReferences(cfg *config.Config, path string) ([]LintFinding, error) {
 	return dedupeFindings(findings), nil
 }
 
+// LintReport is what LintFile found in one file. probe lint prints the References errors first, then Program, then the
+// References warnings, each line numbered where it has a line.
+type LintReport struct {
+	// Program holds the warnings of the program rules, as the text probe lint prints (each one names its test, hook or
+	// recipe and, where it has one, its line).
+	Program []string
+	// References holds the reference findings, in line order, as LintReferences returns them.
+	References []LintFinding
+}
+
+// LintFile lints the file at path without running anything: the program rules on its parse, and the reference rules against
+// cfg. It never touches a device.
+//
+// cfg decides where recipes come from. cfg.Recipes is used as given, so a relative path is relative to the working directory,
+// not to the probe.yaml it was read from. probe lint loads cfg from --config when it is set, and otherwise from the probe.yaml
+// in the working directory, falling back to the defaults (recipes_folder "tests/recipes") when there is none. A caller such as
+// Studio must load cfg the same way and run from the same working directory, or the same file can resolve different recipes.
+func LintFile(cfg *config.Config, path string) (LintReport, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return LintReport{}, err
+	}
+	prog, err := parser.ParseFile(string(src))
+	if err != nil {
+		return LintReport{}, err
+	}
+	refs, err := LintReferences(cfg, path)
+	if err != nil {
+		return LintReport{}, err
+	}
+	return LintReport{Program: lintProgram(prog), References: refs}, nil
+}
+
 // pressKeyTypo reports the word of a `press <word>` line that is within two edits of one of the keys press takes, so
 // `press tba` can be pointed at `tab`. Such a line is a recipe call; the warning only suggests the key.
 func pressKeyTypo(name string) (string, bool) {

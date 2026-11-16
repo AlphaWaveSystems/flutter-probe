@@ -1,0 +1,8 @@
+# Expected: no dart warning. One dart block in five steps is exactly 20 percent, and the rule warns above 20.
+test "dart at the boundary"
+  open the app
+  tap "A"
+  tap "B"
+  tap "C"
+  run dart:
+    print('x')

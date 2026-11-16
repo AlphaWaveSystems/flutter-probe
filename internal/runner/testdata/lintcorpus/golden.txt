@@ -1,0 +1,95 @@
+### none testdata/lintcorpus/clean.probe
+### none testdata/lintcorpus/program_count_anchored.probe
+### none testdata/lintcorpus/program_count_hook.probe
+program warning: before_each hook, line 4: "None" matches any longer text that contains it; for an exact count or zero-state check add matching "^None$"
+### none testdata/lintcorpus/program_count_negated.probe
+### none testdata/lintcorpus/program_count_recipe.probe
+program warning: recipe "empty list", line 3: "0 items" matches any longer text that contains it; for an exact count or zero-state check add matching "^0 items$"
+### none testdata/lintcorpus/program_count_unanchored.probe
+program warning: test "count text", line 4: "0 items" matches any longer text that contains it; for an exact count or zero-state check add matching "^0 items$"
+program warning: test "count text", line 5: "None" matches any longer text that contains it; for an exact count or zero-state check add matching "^None$"
+program warning: test "count text", line 6: "3" matches any longer text that contains it; for an exact count or zero-state check add matching "^3$"
+### none testdata/lintcorpus/program_dart_share_20.probe
+### none testdata/lintcorpus/program_dart_share_25.probe
+program warning: test "dart above the boundary": 25% dart blocks (consider ProbeScript instead)
+### none testdata/lintcorpus/program_no_steps.probe
+program warning: test "no steps yet" has no steps
+### none testdata/lintcorpus/program_webview_count.probe
+program warning: test "webview count", line 5: "0" in a WebView can match any longer element text that contains it; check the element with css:"..." instead of its count text
+program warning: test "webview count", line 6: "3" in a WebView can match any longer element text that contains it; check the element with css:"..." instead of its count text
+### none testdata/lintcorpus/recipes/open_menu.probe
+### none testdata/lintcorpus/ref_go_back_args.probe
+reference error: line 4: go back takes no arguments: the words after it on line 4 are read as a separate step "start"
+### none testdata/lintcorpus/ref_placeholder_csv.probe
+### none testdata/lintcorpus/ref_placeholder_examples.probe
+### none testdata/lintcorpus/ref_placeholder_param.probe
+### none testdata/lintcorpus/ref_placeholder_undefined.probe
+reference warning: line 4: <name> is not defined: no example column, recipe parameter or stored value has that name
+### none testdata/lintcorpus/ref_press_typo.probe
+reference error: line 4: unknown step "press tba": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+reference warning: line 4: unknown key 'tba'; keys: tab, escape, backspace, space, up, down, left, right; or define a recipe named 'press tba'
+### none testdata/lintcorpus/ref_recipe_call.probe
+reference error: line 4: unknown step "open menu": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+### none testdata/lintcorpus/ref_selector_ordinal.probe
+reference error: line 4: an ordinal selector needs a number and text, such as 2nd "Buy"
+### none testdata/lintcorpus/ref_selector_positional.probe
+reference error: line 4: the container after "in" is empty
+### none testdata/lintcorpus/ref_selector_relational.probe
+reference error: line 4: the below selector has no anchor text after it
+### none testdata/lintcorpus/ref_swipe_word.probe
+reference warning: line 4: swipe: "sideways" is not up, down, left or right, so the swipe runs down
+reference error: line 4: unknown step "sideways": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+### none testdata/lintcorpus/ref_unknown_step.probe
+reference error: line 4: unknown step "frobnicate the gizmo": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+### none testdata/lintcorpus/ref_use_inside_test.probe
+reference error: line 4: a use statement must come before the first test; inside a test it is not read
+### none testdata/lintcorpus/ref_use_missing.probe
+reference warning: line 2: use "fixtures/missing.probe": no file at testdata/lintcorpus/fixtures/missing.probe
+### none testdata/lintcorpus/ref_use_present.probe
+### rec testdata/lintcorpus/clean.probe
+### rec testdata/lintcorpus/program_count_anchored.probe
+### rec testdata/lintcorpus/program_count_hook.probe
+program warning: before_each hook, line 4: "None" matches any longer text that contains it; for an exact count or zero-state check add matching "^None$"
+### rec testdata/lintcorpus/program_count_negated.probe
+### rec testdata/lintcorpus/program_count_recipe.probe
+program warning: recipe "empty list", line 3: "0 items" matches any longer text that contains it; for an exact count or zero-state check add matching "^0 items$"
+### rec testdata/lintcorpus/program_count_unanchored.probe
+program warning: test "count text", line 4: "0 items" matches any longer text that contains it; for an exact count or zero-state check add matching "^0 items$"
+program warning: test "count text", line 5: "None" matches any longer text that contains it; for an exact count or zero-state check add matching "^None$"
+program warning: test "count text", line 6: "3" matches any longer text that contains it; for an exact count or zero-state check add matching "^3$"
+### rec testdata/lintcorpus/program_dart_share_20.probe
+### rec testdata/lintcorpus/program_dart_share_25.probe
+program warning: test "dart above the boundary": 25% dart blocks (consider ProbeScript instead)
+### rec testdata/lintcorpus/program_no_steps.probe
+program warning: test "no steps yet" has no steps
+### rec testdata/lintcorpus/program_webview_count.probe
+program warning: test "webview count", line 5: "0" in a WebView can match any longer element text that contains it; check the element with css:"..." instead of its count text
+program warning: test "webview count", line 6: "3" in a WebView can match any longer element text that contains it; check the element with css:"..." instead of its count text
+### rec testdata/lintcorpus/recipes/open_menu.probe
+### rec testdata/lintcorpus/ref_go_back_args.probe
+reference error: line 4: go back takes no arguments: the words after it on line 4 are read as a separate step "start"
+### rec testdata/lintcorpus/ref_placeholder_csv.probe
+### rec testdata/lintcorpus/ref_placeholder_examples.probe
+### rec testdata/lintcorpus/ref_placeholder_param.probe
+### rec testdata/lintcorpus/ref_placeholder_undefined.probe
+reference warning: line 4: <name> is not defined: no example column, recipe parameter or stored value has that name
+### rec testdata/lintcorpus/ref_press_typo.probe
+reference error: line 4: unknown step "press tba": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+reference warning: line 4: unknown key 'tba'; keys: tab, escape, backspace, space, up, down, left, right; or define a recipe named 'press tba'
+### rec testdata/lintcorpus/ref_recipe_call.probe
+### rec testdata/lintcorpus/ref_selector_ordinal.probe
+reference error: line 4: an ordinal selector needs a number and text, such as 2nd "Buy"
+### rec testdata/lintcorpus/ref_selector_positional.probe
+reference error: line 4: the container after "in" is empty
+### rec testdata/lintcorpus/ref_selector_relational.probe
+reference error: line 4: the below selector has no anchor text after it
+### rec testdata/lintcorpus/ref_swipe_word.probe
+reference warning: line 4: swipe: "sideways" is not up, down, left or right, so the swipe runs down
+reference error: line 4: unknown step "sideways": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+### rec testdata/lintcorpus/ref_unknown_step.probe
+reference error: line 4: unknown step "frobnicate the gizmo": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
+### rec testdata/lintcorpus/ref_use_inside_test.probe
+reference error: line 4: a use statement must come before the first test; inside a test it is not read
+### rec testdata/lintcorpus/ref_use_missing.probe
+reference warning: line 2: use "fixtures/missing.probe": no file at testdata/lintcorpus/fixtures/missing.probe
+### rec testdata/lintcorpus/ref_use_present.probe

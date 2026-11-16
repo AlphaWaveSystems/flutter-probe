@@ -1,0 +1,6 @@
+# Expected: no placeholder warning. The CSV header email defines it.
+test "placeholder from csv"
+  open the app
+  tap "<email>"
+
+with examples from "data/users.csv"
