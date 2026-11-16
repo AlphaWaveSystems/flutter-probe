@@ -92,9 +92,17 @@ func TestTheFakeServerRefusesWhatItCannotBound(t *testing.T) {
 	if resp, err := http.DefaultClient.Do(chunked); err != nil || resp.StatusCode != 411 {
 		t.Errorf("chunked: %v %v", resp, err)
 	}
-	big, _ := http.NewRequest("POST", "http://"+addr+"/v1/reports", strings.NewReader(strings.Repeat("x", 1<<20+1)))
-	if resp, err := http.DefaultClient.Do(big); err != nil || resp.StatusCode != 413 {
-		t.Errorf("1 MiB + 1: %v %v", resp, err)
+	// an oversize length is refused from the header alone, before any body is sent (so the answer cannot race with a write)
+	bc, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = bc.Write([]byte(fmt.Sprintf("POST /v1/reports HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", 1<<20+1)))
+	_ = bc.SetReadDeadline(time.Now().Add(3 * time.Second))
+	bigResp, _ := io.ReadAll(bc)
+	bc.Close()
+	if !strings.Contains(string(bigResp), " 413 ") {
+		t.Errorf("1 MiB + 1: %q", bigResp)
 	}
 	ok, _ := http.NewRequest("POST", "http://"+addr+"/v1/reports", strings.NewReader(strings.Repeat("x", 1<<20)))
 	if resp, err := http.DefaultClient.Do(ok); err != nil || resp.StatusCode != 202 {
