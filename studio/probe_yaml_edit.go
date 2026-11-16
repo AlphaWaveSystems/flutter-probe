@@ -1,12 +1,15 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,7 +29,23 @@ type probeYAML struct {
 	text    string
 	existed bool
 	mode    os.FileMode
-	eol     string
+	crlf    bool // most lines of the file end in CRLF: a line Studio adds does too
+	ops     []yamlOp
+	// check, when set, is run on the edited text before it is written (the engine's own reading of the file).
+	check func(text string) error
+}
+
+// yamlOp is one edit that was made, kept so the result can be verified against it.
+type yamlOp struct {
+	path   []string
+	remove bool
+	want   string // the scalar text written, when not a removal
+}
+
+// yline is a line of the file and whether it ended in CRLF; a file with mixed endings keeps each line's own.
+type yline struct {
+	text string
+	cr   bool
 }
 
 // openProbeYAML reads the workspace's probe.yaml for editing. A missing file is an empty one that save creates. A file that is not a plain
@@ -36,7 +55,7 @@ func openProbeYAML(workspace string) (*probeYAML, error) {
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace path is required")
 	}
-	y := &probeYAML{path: filepath.Join(workspace, "probe.yaml"), mode: 0o600, eol: "\n"}
+	y := &probeYAML{path: filepath.Join(workspace, "probe.yaml"), mode: 0o600}
 	info, err := os.Lstat(y.path)
 	if os.IsNotExist(err) {
 		return y, nil
@@ -57,9 +76,8 @@ func openProbeYAML(workspace string) (*probeYAML, error) {
 	}
 	y.existed, y.mode = true, info.Mode().Perm()
 	y.orig, y.text = string(data), string(data)
-	if strings.Contains(y.text, "\r\n") {
-		y.eol = "\r\n"
-	}
+	crlf := strings.Count(y.text, "\r\n")
+	y.crlf = crlf > 0 && crlf*2 >= strings.Count(y.text, "\n")
 	return y, nil
 }
 
@@ -148,23 +166,32 @@ func scalarText(v any) (string, error) {
 	return "", fmt.Errorf("unsupported value %T", v)
 }
 
-// lastLine is the last line (1-based) that node or anything under it occupies.
-func lastLine(n *yaml.Node) int {
-	last := n.Line
-	if n.Kind == yaml.ScalarNode && (n.Style&yaml.LiteralStyle != 0 || n.Style&yaml.FoldedStyle != 0) {
-		last += strings.Count(strings.TrimRight(n.Value, "\n"), "\n") + 1
-	}
-	for _, c := range n.Content {
-		if l := lastLine(c); l > last {
-			last = l
+func (y *probeYAML) lines() []yline {
+	parts := strings.Split(y.text, "\n")
+	out := make([]yline, len(parts))
+	for i, p := range parts {
+		if strings.HasSuffix(p, "\r") {
+			out[i] = yline{strings.TrimSuffix(p, "\r"), true}
+		} else {
+			out[i] = yline{p, false}
 		}
 	}
-	return last
+	return out
 }
 
-func (y *probeYAML) lines() []string { return strings.Split(y.text, y.eol) }
+func (y *probeYAML) setLines(ls []yline) {
+	parts := make([]string, len(ls))
+	for i, l := range ls {
+		parts[i] = l.text
+		if l.cr {
+			parts[i] += "\r"
+		}
+	}
+	y.text = strings.Join(parts, "\n")
+}
 
-func (y *probeYAML) setLines(l []string) { y.text = strings.Join(l, y.eol) }
+// newLine is a line Studio adds: it ends the way most of the file's lines do.
+func (y *probeYAML) newLine(text string) yline { return yline{text, y.crlf} }
 
 // set writes a scalar at path when it differs from what the file has. Missing keys are created under the nearest existing block mapping;
 // a path step that is not a block mapping is refused. A value already equal is left alone, so a save never rewrites a line it did not change.
@@ -178,19 +205,33 @@ func (y *probeYAML) set(v any, path ...string) error {
 			return nil
 		}
 	}
+	before := y.text
+	if err := y.doSet(text, path); err != nil {
+		y.text = before
+		return err
+	}
+	if y.text != before {
+		y.ops = append(y.ops, yamlOp{path: append([]string(nil), path...), want: text})
+	}
+	return nil
+}
+
+func (y *probeYAML) doSet(text string, path []string) error {
 	m, err := y.parse()
 	if err != nil {
 		return err
 	}
 	lines := y.lines()
 	if m == nil {
-		return y.appendChain(lines, path, text, 0)
+		return y.appendChain(path, text)
 	}
+	parentIndent := -1
 	// Walk down to the deepest existing mapping.
 	for i, key := range path {
 		k, val := pair(m, key)
 		if val == nil {
-			return y.insertChain(lines, m, path[i:], text)
+			y.insertChain(lines, m, parentIndent, path[i:], text)
+			return nil
 		}
 		if i == len(path)-1 {
 			return y.replaceValue(lines, k, val, text, key)
@@ -198,8 +239,10 @@ func (y *probeYAML) set(v any, path ...string) error {
 		switch {
 		case val.Kind == yaml.MappingNode && val.Style&yaml.FlowStyle == 0:
 			m = val
-		case isNull(val) && val.Line == k.Line && lineIsBareKey(lines[k.Line-1]):
-			return y.insertUnderBareKey(lines, k, path[i+1:], text)
+			parentIndent = k.Column - 1
+		case isNull(val) && val.Line == k.Line && lineIsBareKey(lines[k.Line-1].text):
+			y.insertAfter(lines, k.Line, chain(path[i+1:], text, k.Column-1+2), y.crlf)
+			return nil
 		default:
 			return notAMap(key)
 		}
@@ -208,11 +251,11 @@ func (y *probeYAML) set(v any, path ...string) error {
 }
 
 // replaceValue swaps the scalar on a key's line for text, keeping the key, the indentation and a trailing comment.
-func (y *probeYAML) replaceValue(lines []string, k, val *yaml.Node, text, key string) error {
+func (y *probeYAML) replaceValue(lines []yline, k, val *yaml.Node, text, key string) error {
 	if val.Kind != yaml.ScalarNode || val.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 || val.Line != k.Line {
 		return fmt.Errorf("probe.yaml has a %q key whose value is not a plain value; fix it by hand before saving settings that use it", key)
 	}
-	line := []rune(lines[k.Line-1])
+	line := []rune(lines[k.Line-1].text)
 	if isNull(val) { // "key:" or "key: ~": the value starts after the colon
 		colon := strings.Index(string(line), ":")
 		if colon < 0 {
@@ -223,7 +266,7 @@ func (y *probeYAML) replaceValue(lines []string, k, val *yaml.Node, text, key st
 		if i := strings.Index(rest, " #"); i >= 0 {
 			comment = rest[i:]
 		}
-		lines[k.Line-1] = string(line)[:colon+1] + " " + text + comment
+		lines[k.Line-1].text = string(line)[:colon+1] + " " + text + comment
 		y.setLines(lines)
 		return nil
 	}
@@ -266,7 +309,7 @@ func (y *probeYAML) replaceValue(lines []string, k, val *yaml.Node, text, key st
 	if end > len(line) {
 		end = len(line)
 	}
-	lines[k.Line-1] = string(line[:start]) + text + string(line[end:])
+	lines[k.Line-1].text = string(line[:start]) + text + string(line[end:])
 	y.setLines(lines)
 	return nil
 }
@@ -289,6 +332,12 @@ func indentOf(m *yaml.Node) int {
 	return 0
 }
 
+func indentWidth(s string) int { return len(s) - len(strings.TrimLeft(s, " \t")) }
+
+func isDocMarker(s string) bool {
+	return s == "---" || s == "..." || strings.HasPrefix(s, "--- ") || strings.HasPrefix(s, "... ")
+}
+
 // chain returns the lines that create path[0]: path[1]: ... : text at the indent, two spaces per level.
 func chain(path []string, text string, indent int) []string {
 	var out []string
@@ -303,40 +352,69 @@ func chain(path []string, text string, indent int) []string {
 	return out
 }
 
-func (y *probeYAML) insertAfter(lines []string, after int, add []string) {
-	out := append([]string{}, lines[:after]...)
-	out = append(out, add...)
+func (y *probeYAML) insertAfter(lines []yline, after int, add []string, cr bool) {
+	out := append([]yline{}, lines[:after]...)
+	for _, a := range add {
+		out = append(out, yline{a, cr})
+	}
 	out = append(out, lines[after:]...)
 	y.setLines(out)
 }
 
-// insertChain adds the missing part of a path after the last line of mapping m.
-func (y *probeYAML) insertChain(lines []string, m *yaml.Node, rest []string, text string) error {
-	y.insertAfter(lines, lastLine(m), chain(rest, text, indentOf(m)))
-	return nil
+// endOfBlock is the line (1-based) after which new children of a block mapping go: the last line of content that belongs to it, whatever
+// shape its last child has (a multi-line quoted or plain scalar, a flow collection, a nested block). Content belongs to the mapping while it is
+// indented deeper than the key that owns it (parentIndent, -1 for the top level) and before a document marker. Blank and comment-only lines
+// after the last content line are not part of it, so a comment that heads the next section stays with that section.
+func endOfBlock(lines []yline, lastChildKeyLine, parentIndent int) int {
+	end := lastChildKeyLine
+	for j := lastChildKeyLine; j < len(lines); j++ {
+		t := strings.TrimSpace(lines[j].text)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		if isDocMarker(lines[j].text) || indentWidth(lines[j].text) <= parentIndent {
+			break
+		}
+		end = j + 1
+	}
+	return end
 }
 
-// insertUnderBareKey adds children below a "key:" line that has no value yet.
-func (y *probeYAML) insertUnderBareKey(lines []string, k *yaml.Node, rest []string, text string) error {
-	y.insertAfter(lines, k.Line, chain(rest, text, k.Column-1+2))
-	return nil
+// insertChain adds the missing part of a path after the last line of mapping m.
+func (y *probeYAML) insertChain(lines []yline, m *yaml.Node, parentIndent int, rest []string, text string) {
+	last := m.Content[len(m.Content)-2].Line
+	y.insertAfter(lines, endOfBlock(lines, last, parentIndent), chain(rest, text, indentOf(m)), y.crlf)
 }
 
 // appendChain adds a whole path at the end of a file that has no top-level mapping yet.
-func (y *probeYAML) appendChain(lines []string, path []string, text string, indent int) error {
-	body := strings.TrimRight(y.text, "\r\n")
-	add := strings.Join(chain(path, text, indent), y.eol)
-	if body == "" {
-		y.text = add + y.eol
-		return nil
+func (y *probeYAML) appendChain(path []string, text string) error {
+	lines := y.lines()
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1].text) == "" {
+		lines = lines[:len(lines)-1]
 	}
-	y.text = body + y.eol + add + y.eol
+	for _, c := range chain(path, text, 0) {
+		lines = append(lines, y.newLine(c))
+	}
+	lines = append(lines, yline{"", false}) // the file ends with a newline
+	y.setLines(lines)
 	return nil
 }
 
 // remove deletes the scalar at path when it is there, and the parent keys that this leaves with nothing under them (when the parent's line
 // is only its key). A key that is not a plain value is left alone and refused.
 func (y *probeYAML) remove(path ...string) error {
+	before := y.text
+	if err := y.doRemove(path); err != nil {
+		y.text = before
+		return err
+	}
+	if y.text != before {
+		y.ops = append(y.ops, yamlOp{path: append([]string(nil), path...), remove: true})
+	}
+	return nil
+}
+
+func (y *probeYAML) doRemove(path []string) error {
 	m, err := y.parse()
 	if err != nil || m == nil {
 		return err
@@ -369,12 +447,12 @@ func (y *probeYAML) remove(path ...string) error {
 	// A parent whose only entry is the one removed goes too, when its own line holds nothing but the key.
 	for i := len(steps) - 2; i >= 0; i-- {
 		p := steps[i]
-		if len(p.v.Content) != 2 || !lineIsBareKey(lines[p.k.Line-1]) || strings.Contains(lines[p.k.Line-1], "#") {
+		if len(p.v.Content) != 2 || !lineIsBareKey(lines[p.k.Line-1].text) || strings.Contains(lines[p.k.Line-1].text, "#") {
 			break
 		}
 		drop[p.k.Line] = true
 	}
-	var out []string
+	var out []yline
 	for i, l := range lines {
 		if !drop[i+1] {
 			out = append(out, l)
@@ -384,18 +462,98 @@ func (y *probeYAML) remove(path ...string) error {
 	return nil
 }
 
-// save writes the edited text atomically: a temporary file in the same folder, then a rename over probe.yaml, keeping the file's mode.
-// Nothing is written when nothing changed.
+// flatten reads every document of a text into one map from a key path to its value, leaving out null values and empty maps (a key that is
+// there with nothing in it is the same as one that is not), so two texts can be compared by what the engine would read from them.
+func flatten(text string) (map[string]any, error) {
+	dec := yaml.NewDecoder(strings.NewReader(text))
+	out := map[string]any{}
+	for doc := 0; ; doc++ {
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			if errors.Is(err, io.EOF) {
+				return out, nil
+			}
+			return nil, err
+		}
+		walk(fmt.Sprintf("doc%d", doc), v, out)
+	}
+}
+
+func walk(prefix string, v any, out map[string]any) {
+	switch x := v.(type) {
+	case nil:
+	case map[string]any:
+		for k, c := range x {
+			walk(prefix+"\x00"+k, c, out)
+		}
+	default:
+		out[prefix] = x
+	}
+}
+
+// verify is the check that makes an edit safe whatever the shape of the file: the edited text must read, by the engine's parser, as the
+// original with exactly the keys that were edited changed and nothing else. A line splice that landed inside a multi-line value, split a
+// flow collection, or detached a key by a line ending shows up here, and then nothing is written.
+func (y *probeYAML) verify() error {
+	old, err := flatten(y.orig)
+	if err != nil {
+		return fmt.Errorf("the original probe.yaml cannot be read for the check: %w", err)
+	}
+	got, err := flatten(y.text)
+	if err != nil {
+		return fmt.Errorf("the edited probe.yaml would not parse (%v), so nothing was written. Edit probe.yaml by hand", err)
+	}
+	want := map[string]any{}
+	for k, v := range old {
+		want[k] = v
+	}
+	for _, op := range y.ops {
+		key := "doc0\x00" + strings.Join(op.path, "\x00")
+		if op.remove {
+			delete(want, key)
+			continue
+		}
+		var v any
+		if err := yaml.Unmarshal([]byte(op.want), &v); err != nil {
+			return err
+		}
+		want[key] = v
+	}
+	for k, v := range want {
+		if g, ok := got[k]; !ok || !reflect.DeepEqual(g, v) {
+			return fmt.Errorf("the edited probe.yaml would not keep %q as it is (this probe.yaml has a layout Studio cannot edit safely), so nothing was written. Edit probe.yaml by hand", strings.ReplaceAll(strings.TrimPrefix(k, "doc0\x00"), "\x00", "."))
+		}
+	}
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			return fmt.Errorf("the edited probe.yaml would have a %q that was not asked for (this probe.yaml has a layout Studio cannot edit safely), so nothing was written. Edit probe.yaml by hand", strings.ReplaceAll(strings.TrimPrefix(k, "doc0\x00"), "\x00", "."))
+		}
+	}
+	return nil
+}
+
+// renameFile is os.Rename; a test replaces it to make the last step fail.
+var renameFile = os.Rename
+
+// probeYAMLMu keeps two saves of probe.yaml from running at the same time, whichever form they come from.
+var probeYAMLMu sync.Mutex
+
+// save writes the edited text atomically: verified first, then a temporary file in the same folder, then a rename over probe.yaml that keeps
+// the file's mode. Nothing is written when nothing changed. A rename replaces the file, so a hard link to probe.yaml is not kept.
 func (y *probeYAML) save() error {
-	if y.text == y.orig && y.existed {
+	if y.text == y.orig && y.existed && len(y.ops) == 0 {
 		return nil
 	}
 	if !y.existed && strings.TrimSpace(y.text) == "" {
 		return nil
 	}
-	var check yaml.Node
-	if err := yaml.Unmarshal([]byte(y.text), &check); err != nil {
-		return fmt.Errorf("the edited probe.yaml would not parse (%v), so nothing was written", err)
+	if err := y.verify(); err != nil {
+		return err
+	}
+	if y.check != nil {
+		if err := y.check(y.text); err != nil {
+			return err
+		}
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(y.path), ".probe.yaml-*")
 	if err != nil {
@@ -403,7 +561,7 @@ func (y *probeYAML) save() error {
 	}
 	name := tmp.Name()
 	cleanup := func() { _ = os.Remove(name) }
-	if _, err := tmp.Write(bytes.NewBufferString(y.text).Bytes()); err != nil {
+	if _, err := tmp.WriteString(y.text); err != nil {
 		tmp.Close()
 		cleanup()
 		return fmt.Errorf("writing probe.yaml: %w", err)
@@ -422,7 +580,7 @@ func (y *probeYAML) save() error {
 		cleanup()
 		return fmt.Errorf("writing probe.yaml: %w", err)
 	}
-	if err := os.Rename(name, y.path); err != nil {
+	if err := renameFile(name, y.path); err != nil {
 		cleanup()
 		return fmt.Errorf("writing probe.yaml: %w", err)
 	}

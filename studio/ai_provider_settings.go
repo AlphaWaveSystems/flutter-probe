@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/alphawavesystems/flutter-probe/internal/ai"
+	"github.com/alphawavesystems/flutter-probe/internal/config"
 )
 
 // AISettings is the provider form in Settings. It maps onto probe.yaml's ai: block and studio.ai_allow_remote_endpoint.
@@ -145,9 +146,18 @@ func writeAISettings(workspace string, s AISettings) error {
 	// The edit is made on the file's own text (probe_yaml_edit.go): comments, blank lines and every key the form does not manage stay exactly
 	// as they were, only a changed line is touched, and the file is replaced atomically with its mode. A new probe.yaml is private to the
 	// user (0600); an existing one keeps its own mode. A key that is not a map is refused rather than overwritten.
+	probeYAMLMu.Lock()
+	defer probeYAMLMu.Unlock()
 	y, err := openProbeYAML(workspace)
 	if err != nil {
 		return err
+	}
+	y.check = func(text string) error {
+		var cfg config.Config
+		if err := yaml.Unmarshal([]byte(text), &cfg); err != nil {
+			return fmt.Errorf("the edited probe.yaml would not load (%v), so nothing was written", err)
+		}
+		return nil
 	}
 	set := func(value string, path ...string) error {
 		if strings.TrimSpace(value) == "" {

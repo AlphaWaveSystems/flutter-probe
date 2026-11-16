@@ -539,6 +539,7 @@ async function openSettingsOverlay() {
 
   try {
     const s = await LoadWorkspaceSettings(workspaceRoot);
+    loadedSettings = s; // what the form shows now: Save sends it back, and writes only what the person changed from it
     ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
     ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
     ($("settings-test-timeout") as HTMLInputElement).value = s.testTimeout ?? "";
@@ -553,6 +554,9 @@ async function openSettingsOverlay() {
     toast(`Cannot load settings: ${err}`, "error");
   }
 }
+
+// The settings the form was filled from, sent back with Save so that Studio writes only what changed since, and notices a probe.yaml that changed on disk.
+let loadedSettings: main.WorkspaceSettings | undefined;
 
 function closeSettingsOverlay() {
   $("settings-overlay").hidden = true;
@@ -1227,6 +1231,7 @@ $("btn-settings-save").addEventListener("click", async () => {
     return;
   }
   const settings = main.WorkspaceSettings.createFrom({
+    base: loadedSettings,
     agentPort: port,
     testTimeout: ($("settings-test-timeout") as HTMLInputElement).value.trim(),
     retryFailedTests: retries,
@@ -1249,6 +1254,7 @@ $("btn-settings-save").addEventListener("click", async () => {
   }
   try {
     await SaveWorkspaceSettings(workspaceRoot, settings);
+    loadedSettings = main.WorkspaceSettings.createFrom({ ...settings, base: undefined }); // the file now has what the form shows (the form can stay open on an AI error)
   } catch (err) {
     toast(`Save failed: ${err}`, "error");
     return;

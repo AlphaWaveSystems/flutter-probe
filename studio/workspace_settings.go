@@ -29,6 +29,10 @@ type WorkspaceSettings struct {
 	AndroidDeviceID     string `json:"androidDeviceId"`     // probe.yaml: device.android_device_id
 	AIContextRunResults bool   `json:"aiContextRunResults"` // probe.yaml: studio.ai_context.run_results (off unless set)
 	AIContextWidgetTree bool   `json:"aiContextWidgetTree"` // probe.yaml: studio.ai_context.widget_tree (off unless set)
+	// Base is the form as it was loaded. Save writes only the fields that differ from it, and refuses when probe.yaml has changed on disk
+	// since then for any of them (an editor, git or another window may have written it), so a field the person did not touch is never put
+	// back to an old value.
+	Base *WorkspaceSettings `json:"base,omitempty"`
 }
 
 // LoadWorkspaceSettings reads probe.yaml from the workspace and returns
@@ -60,50 +64,86 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 }
 
 // SaveWorkspaceSettings writes the managed fields back to probe.yaml, and only the ones that changed: a field equal to what the form was
-// loaded with leaves its line alone. The edit is made on the file's own text (probe_yaml_edit.go), so comments, blank lines, the order of the
-// keys and every unmanaged key stay exactly as they were, and the file is replaced atomically with its mode. A probe.yaml that does not parse
-// is refused and never overwritten. Creates the file if missing. Everything is validated here, in Go, before anything is written.
+// loaded with (s.Base) leaves its line alone. The edit is made on the file's own text (probe_yaml_edit.go), so comments, blank lines, the order
+// of the keys and every unmanaged key stay exactly as they were, the result is checked against the original before anything is written, and the
+// file is replaced atomically with its mode. A probe.yaml that does not parse is refused and never overwritten. If probe.yaml changed on disk
+// since the form was loaded, for a field being written, Save refuses and asks for a reload. Creates the file if missing. Everything is validated
+// here, in Go, before anything is written.
 func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace path is required")
 	}
-	// Validate before touching the file (and before reading it): the duration strings must round-trip.
-	if s.DefaultsTimeout != "" {
-		if _, err := time.ParseDuration(s.DefaultsTimeout); err != nil {
-			return fmt.Errorf("defaultsTimeout %q is not a valid Go duration: %w", s.DefaultsTimeout, err)
-		}
-	}
-	if s.AgentPort < 0 || s.AgentPort > 65535 {
-		return fmt.Errorf("agentPort %d is outside the valid TCP port range", s.AgentPort)
-	}
+	probeYAMLMu.Lock()
+	defer probeYAMLMu.Unlock()
 	y, err := openProbeYAML(workspace)
 	if err != nil {
 		return err
 	}
-	// What the form was loaded with: a value beyond the form's bounds that is already in probe.yaml stays, and only a changed value is
-	// held to them. A probe.yaml the engine cannot read leaves nothing to compare with, so every field counts as changed.
-	var loaded WorkspaceSettings
+	// What the file says now, as the form shows it. A probe.yaml the engine cannot read leaves nothing to compare with.
+	var disk WorkspaceSettings
 	if cur, err := a.LoadWorkspaceSettings(workspace); err == nil {
-		loaded = cur
+		disk = cur
 	}
-	if err := validateRunKnobs(s, loaded); err != nil {
+	base := disk
+	if s.Base != nil {
+		base = *s.Base
+	}
+	// Validate before touching the file: only a value that is being changed is held to the rules, so a hand-written value that is outside
+	// them never blocks the save of another field.
+	if s.DefaultsTimeout != base.DefaultsTimeout && s.DefaultsTimeout != "" {
+		if _, err := time.ParseDuration(s.DefaultsTimeout); err != nil {
+			return fmt.Errorf("defaultsTimeout %q is not a valid Go duration: %w", s.DefaultsTimeout, err)
+		}
+	}
+	if s.AgentPort != base.AgentPort && (s.AgentPort < 0 || s.AgentPort > 65535) {
+		return fmt.Errorf("agentPort %d is outside the valid TCP port range", s.AgentPort)
+	}
+	if err := validateRunKnobs(s, base); err != nil {
 		return err
 	}
 	type edit struct {
+		name    string
 		changed bool
+		onDisk  bool // the file still has what the form was loaded with
 		value   any
 		path    []string
 	}
 	for _, e := range []edit{
-		{s.AgentPort != loaded.AgentPort, s.AgentPort, []string{"agent", "port"}},
-		{s.DefaultsTimeout != loaded.DefaultsTimeout, strings.TrimSpace(s.DefaultsTimeout), []string{"defaults", "timeout"}},
-		{s.TestTimeout != loaded.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
-		{s.RetryFailedTests != loaded.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
-		{s.ImplicitWait != loaded.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
-		{s.IOSDeviceID != loaded.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
-		{s.AndroidDeviceID != loaded.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
-		{s.AIContextRunResults != loaded.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
-		{s.AIContextWidgetTree != loaded.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
+		{"the agent port", s.AgentPort != base.AgentPort, disk.AgentPort == base.AgentPort, s.AgentPort, []string{"agent", "port"}},
+		{"the default step timeout", s.DefaultsTimeout != base.DefaultsTimeout, disk.DefaultsTimeout == base.DefaultsTimeout, strings.TrimSpace(s.DefaultsTimeout), []string{"defaults", "timeout"}},
+		{"the test time limit", s.TestTimeout != base.TestTimeout, disk.TestTimeout == base.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
+		{"the retries", s.RetryFailedTests != base.RetryFailedTests, disk.RetryFailedTests == base.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
+		{"the wait for a target", s.ImplicitWait != base.ImplicitWait, disk.ImplicitWait == base.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{"the iOS device", s.IOSDeviceID != base.IOSDeviceID, disk.IOSDeviceID == base.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
+		{"the Android device", s.AndroidDeviceID != base.AndroidDeviceID, disk.AndroidDeviceID == base.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
+		{"the AI run results switch", s.AIContextRunResults != base.AIContextRunResults, disk.AIContextRunResults == base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
+		{"the AI widget tree switch", s.AIContextWidgetTree != base.AIContextWidgetTree, disk.AIContextWidgetTree == base.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
+	} {
+		if e.changed && !e.onDisk {
+			return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", e.name)
+		}
+	}
+	y.check = func(text string) error {
+		var cfg config.Config
+		if err := yaml.Unmarshal([]byte(text), &cfg); err != nil {
+			return fmt.Errorf("the edited probe.yaml would not load (%v), so nothing was written", err)
+		}
+		return nil
+	}
+	for _, e := range []struct {
+		changed bool
+		value   any
+		path    []string
+	}{
+		{s.AgentPort != base.AgentPort, s.AgentPort, []string{"agent", "port"}},
+		{s.DefaultsTimeout != base.DefaultsTimeout, strings.TrimSpace(s.DefaultsTimeout), []string{"defaults", "timeout"}},
+		{s.TestTimeout != base.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
+		{s.RetryFailedTests != base.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
+		{s.ImplicitWait != base.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{s.IOSDeviceID != base.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
+		{s.AndroidDeviceID != base.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
+		{s.AIContextRunResults != base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
+		{s.AIContextWidgetTree != base.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
 	} {
 		if !e.changed {
 			continue
@@ -136,9 +176,10 @@ func durationText(d time.Duration) string {
 }
 
 // validateRunKnobs checks test_timeout, retry_failed_tests and implicit_wait with the rules the CLI applies (runner.ValidateTestTimeout for the
-// limit), plus the upper bounds above for a value that is being changed. It refuses before anything is written.
+// limit), plus the upper bounds above, for a value that differs from current (the form as loaded). A value that was already in probe.yaml is
+// not checked, so one outside the rules never blocks the save of another field. It refuses before anything is written.
 func validateRunKnobs(s, current WorkspaceSettings) error {
-	if strings.TrimSpace(s.TestTimeout) != "" {
+	if strings.TrimSpace(s.TestTimeout) != strings.TrimSpace(current.TestTimeout) && strings.TrimSpace(s.TestTimeout) != "" {
 		d, err := time.ParseDuration(strings.TrimSpace(s.TestTimeout))
 		if err != nil {
 			return fmt.Errorf("testTimeout %q is not a valid duration (for example 90s or 2m): %w", s.TestTimeout, err)
@@ -147,15 +188,15 @@ func validateRunKnobs(s, current WorkspaceSettings) error {
 			return err
 		}
 	}
-	if s.RetryFailedTests < 0 || (s.RetryFailedTests > maxRetryFailedTests && s.RetryFailedTests != current.RetryFailedTests) {
+	if s.RetryFailedTests != current.RetryFailedTests && (s.RetryFailedTests < 0 || s.RetryFailedTests > maxRetryFailedTests) {
 		return fmt.Errorf("retryFailedTests %d is outside 0 to %d (0 = off)", s.RetryFailedTests, maxRetryFailedTests)
 	}
-	if strings.TrimSpace(s.ImplicitWait) != "" {
+	if strings.TrimSpace(s.ImplicitWait) != strings.TrimSpace(current.ImplicitWait) && strings.TrimSpace(s.ImplicitWait) != "" {
 		d, err := time.ParseDuration(strings.TrimSpace(s.ImplicitWait))
 		if err != nil {
 			return fmt.Errorf("implicitWait %q is not a valid duration (for example 2s): %w", s.ImplicitWait, err)
 		}
-		if d < 0 || (d > maxImplicitWait && strings.TrimSpace(s.ImplicitWait) != current.ImplicitWait) {
+		if d < 0 || d > maxImplicitWait {
 			return fmt.Errorf("implicitWait %s is outside 0 to %s (0 = off)", d, maxImplicitWait)
 		}
 	}
