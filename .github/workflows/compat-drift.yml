@@ -1,0 +1,134 @@
+# Compatibility drift check (docs/compat/README.md, rule 5).
+#
+# Once a week, and on demand, this reads Flutter's official release manifest for the newest stable release. It fails when that release is
+# not the newest entry in docs/compat/RELEASES.md, and when tools/flutter-catalog -check finds that docs/compat/catalog.json differs from
+# that SDK. A failure opens or updates one open issue labelled compat-drift, then fails the run. It uses only the workflow's GITHUB_TOKEN.
+
+name: Compat drift
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compat-drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    name: Catalog and release log
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      - name: Read the newest stable release from Flutter's manifest
+        id: manifest
+        run: |
+          set -euo pipefail
+          manifest=$(curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json)
+          hash=$(jq -r '.current_release.stable' <<<"$manifest")
+          line=$(jq -r --arg h "$hash" '[.releases[] | select(.hash == $h and .channel == "stable")][0] | "\(.version) \(.dart_sdk_version)"' <<<"$manifest")
+          version=${line%% *}
+          dart=${line#* }
+          if [ -z "$version" ] || [ -z "$dart" ]; then
+            echo "The manifest has no stable release for its current_release.stable hash"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "dart=$dart" >> "$GITHUB_OUTPUT"
+          echo "Newest stable: Flutter $version (Dart $dart)"
+
+      - name: Install that Flutter release
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: ${{ steps.manifest.outputs.version }}
+          cache: false
+
+      - name: The catalog matches the installed SDK
+        id: catalog
+        continue-on-error: true
+        env:
+          WANT: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -eo pipefail
+          installed=$(flutter --version --machine | jq -r '.frameworkVersion')
+          if [ "$installed" != "$WANT" ]; then
+            echo "The installed Flutter is $installed, not the stable release $WANT"
+            exit 1
+          fi
+          sdk=$(dirname "$(dirname "$(readlink -f "$(command -v flutter)")")")
+          go run ./tools/flutter-catalog -sdk "$sdk" -check 2>&1 | tee "$RUNNER_TEMP/catalog-check.txt"
+
+      - name: The newest stable release is in RELEASES.md
+        id: log
+        continue-on-error: true
+        env:
+          STABLE: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -euo pipefail
+          logged=$(grep -m1 -E '^## Flutter [0-9]' docs/compat/RELEASES.md | sed -E 's/^## Flutter ([0-9.]+).*/\1/')
+          echo "Newest entry in docs/compat/RELEASES.md: $logged"
+          newest=$(printf '%s\n%s\n' "$logged" "$STABLE" | sort -V | tail -n1)
+          if [ "$newest" != "$logged" ]; then
+            echo "The stable Flutter $STABLE is not in docs/compat/RELEASES.md"
+            exit 1
+          fi
+
+      - name: Open or update the compat-drift issue
+        if: steps.catalog.outcome == 'failure' || steps.log.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE: ${{ steps.manifest.outputs.version }}
+          DART: ${{ steps.manifest.outputs.dart }}
+          CATALOG: ${{ steps.catalog.outcome }}
+          LOG: ${{ steps.log.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create compat-drift --color D93F0B --description "Flutter or Dart compatibility catalog or release log is behind" 2>/dev/null || true
+          body="$RUNNER_TEMP/compat-drift-body.md"
+          {
+            echo "The weekly compatibility check (docs/compat/README.md, rule 5) failed."
+            echo
+            echo "- Newest stable Flutter (Flutter's release manifest): $STABLE (Dart $DART)"
+            echo "- Catalog matches that SDK: $CATALOG"
+            echo "- docs/compat/RELEASES.md has that release: $LOG"
+            echo
+            if [ -s "$RUNNER_TEMP/catalog-check.txt" ]; then
+              echo '```'
+              cat "$RUNNER_TEMP/catalog-check.txt"
+              echo '```'
+              echo
+            fi
+            echo "Run: $RUN_URL"
+            echo
+            echo "To close this: regenerate docs/compat/catalog.json from that SDK and review the diff, and add the release to docs/compat/RELEASES.md. Each failing run adds a comment here until the catalog and the log match."
+          } > "$body"
+          number=$(gh issue list --label compat-drift --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$body"
+            echo "Commented on issue #$number"
+          else
+            gh issue create --title "Flutter compatibility catalog or release log is behind" --label compat-drift --body-file "$body"
+          fi
+
+      - name: Fail the run when a check failed
+        if: steps.catalog.outcome == 'failure' || steps.log.outcome == 'failure'
+        run: exit 1

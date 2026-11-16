@@ -20,9 +20,10 @@ rendering or accessibility, and either break the agent or leave new components u
 4. **Every stable release** of Flutter, the Dart SDK that ships with it, and each tool FlutterProbe depends on: read its release notes and breaking-change
    list, add an entry to `RELEASES.md` (version, date, what changed, what was done or must be done), regenerate `catalog.json` and review the diff
    (added, removed, renamed and deprecated widgets), and run the fixture suite on that version. Dart language changes and deprecations go in the same log.
-5. **No silent drift.** A scheduled check that regenerates the catalog and fails or files an issue when it differs from the committed one, or when a newer
-   stable release is not in the log, is planned and is not part of this folder yet. Until it exists, whoever touches the repo and sees a newer stable release
-   records it in `RELEASES.md` before finishing.
+5. **No silent drift.** `.github/workflows/compat-drift.yml` runs every Monday at 06:00 UTC, and on demand. It reads Flutter's official release manifest for the
+   newest stable release and fails when that release is not the newest entry in `RELEASES.md`. It also installs that release and runs
+   `tools/flutter-catalog -check` against it. A failure opens or updates one open issue labelled `compat-drift`, and the run fails. The check does not run
+   the fixture suite. Whoever touches the repo and sees a newer stable release still records it in `RELEASES.md` before finishing.
 
 ## Regenerating the catalog
 
