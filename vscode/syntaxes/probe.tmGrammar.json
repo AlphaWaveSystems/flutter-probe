@@ -37,7 +37,7 @@
       }
     },
     "hook": {
-      "match": "^(before each test|after each test|on failure)",
+      "match": "^(before (each|all)( test)?|after (each|all)( test)?|on failure)\\b",
       "name": "keyword.control.hook.probe"
     },
     "action-keyword": {
