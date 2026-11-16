@@ -7,7 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
-import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
+import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -19,6 +19,7 @@ import { toast } from "./toast";
 import {
   CancelRun,
   CheckReplaceLine,
+  SelectorFixAttempts,
   Chat,
   Connect,
   ConnectWiFi,
@@ -784,6 +785,7 @@ function dropFixView(): void {
 // showFixCard writes the advisory card. It sits beside the results and never touches them: the pass and fail counts and the rows stay as
 // the run left them. Nothing in it is applied to the file.
 function showFixCard(answer: FixAnswer, step: string): void {
+  fixRerun = null; // a new suggestion replaces the card of the replacement before it
   const model = fixCardModel(answer, step);
   hideExplainCard(); // one advisory card at a time
   const card = $("fix-card");
@@ -941,6 +943,26 @@ async function rerunFixedTest(): Promise<void> {
   verdictEl.className = `fix-verdict fix-verdict-${verdict.kind}`;
   verdictEl.append(textEl("p", "explain-row-text", verdict.text));
   if (verdict.stale) verdictEl.append(textEl("p", "dim", STALE_VERDICT_NOTE));
+  if (verdict.kind === "failed") {
+    // Still failing: offer another suggestion, for as long as Studio allows one for this step. It is a button, never automatic.
+    let live: { used: number; max: number } | null = null;
+    try {
+      live = await SelectorFixAttempts(); // Studio's own count for the step that failed, which is not what the replaced answer said
+    } catch {
+      live = null; // no count: the offer is there, and Studio still refuses past its cap
+    }
+    if (fixRerun !== target) return; // the card went while the count was read
+    const offer = againOffer(live?.used, live?.max);
+    const bar = document.createElement("div");
+    bar.className = "explain-actions";
+    const again = textEl("button", "btn", offer.label) as HTMLButtonElement;
+    again.setAttribute("type", "button");
+    again.id = "btn-fix-again";
+    again.disabled = !offer.enabled;
+    again.addEventListener("click", () => void askForFix());
+    bar.append(again, textEl("span", "dim", offer.note));
+    verdictEl.append(bar);
+  }
   refreshRerun();
 }
 
@@ -949,7 +971,7 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   const overlay = $("fix-preview-overlay");
   const send = $("btn-fix-preview-send");
   const cancel = $("btn-fix-preview-cancel");
-  $("fix-preview-note").textContent = fixPreviewNote(p.hosted);
+  $("fix-preview-note").textContent = fixPreviewNote(p.hosted, p.attempt, p.maxAttempts);
   $("fix-preview-text").textContent = p.text;
   const opener = document.activeElement as HTMLElement | null;
   overlay.hidden = false;
@@ -976,7 +998,11 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   });
 }
 
-$("btn-fix").addEventListener("click", async () => {
+$("btn-fix").addEventListener("click", () => void askForFix());
+
+// askForFix is Suggest a fix, from the button next to Explain and from the card after a re-run that still failed: the preview first, the
+// confirmation when Studio asks for it, then the one request. Studio counts the attempts and refuses a fourth for the same failed step.
+async function askForFix(): Promise<void> {
   const btn = $("btn-fix") as HTMLButtonElement;
   const status = $("explain-status");
   btn.disabled = true;
@@ -999,7 +1025,7 @@ $("btn-fix").addEventListener("click", async () => {
     btn.disabled = fixSession.running; // a newer suggestion that is in flight keeps its button disabled
   }
   if (!fixSession.running) status.textContent = "";
-});
+}
 
 // confirmFirstChatSend shows what the next chat message carries and waits for Send or Cancel. Nothing is sent before Send.
 function confirmFirstChatSend(preview: string): Promise<boolean> {

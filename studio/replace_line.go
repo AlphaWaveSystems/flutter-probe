@@ -41,6 +41,13 @@ type fixResult struct {
 	created                    time.Time
 }
 
+// resetFixAttempts forgets how many suggestions were asked for each failed step.
+func (a *App) resetFixAttempts() {
+	a.fix.mu.Lock()
+	a.fix.attempts = nil
+	a.fix.mu.Unlock()
+}
+
 // rememberFix records a suggestion that can be put in the editor, and returns its id ("" when there is no place for it).
 func (a *App) rememberFix(p fixStored, suggestion string, changed bool) string {
 	if p.line < 1 || p.original == "" {

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FIX_DISCLAIMER, FixSession, canOfferReplace, cleanVerdictError, enclosingTest, fixCardModel, fixPreviewNote, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
+import { FIX_DISCLAIMER, FixSession, againOffer, canOfferReplace, cleanVerdictError, enclosingTest, fixCardModel, fixPreviewNote, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
 
 const preview = (extra: Partial<FixPreview> = {}): FixPreview => ({ id: "id-1", destination: "qwen3-coder:30b, on this machine", hosted: false, needsConfirm: true, step: 'line 4 of "sign in": tap "Sign in"', text: "Sent to: x", ...extra });
 const answer: FixAnswer = { suggestion: 'tap "Sign in now"', rationale: "The label changed.", destination: "qwen3-coder:30b, on this machine", hosted: false };
@@ -274,5 +274,38 @@ describe("a skipped test next to a passed one", () => {
     assert.deepEqual(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: false, skipped: true }], false), { kind: "passed", text: "Passed: a", stale: false });
     assert.equal(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: true, skipped: false }, { name: "c", passed: false, skipped: true }], false).text, "Passed: 2 tests");
     assert.equal(rerunVerdict([{ name: "a", passed: false, skipped: true }, { name: "b", passed: false, skipped: true }], false).kind, "skipped");
+  });
+});
+
+describe("Suggest a fix again", () => {
+  it("says how many suggestions are left for the step, and stops at the last", () => {
+    assert.deepEqual(againOffer(1, 3), { enabled: true, label: "Suggest a fix again", note: "Suggestion 1 of 3 was used; 2 left for this step." });
+    assert.equal(againOffer(2, 3).enabled, true);
+    assert.match(againOffer(2, 3).note, /1 left/);
+    const last = againOffer(3, 3);
+    assert.equal(last.enabled, false);
+    assert.match(last.note, /All 3 suggestions for this step are used/);
+    assert.equal(againOffer(4, 3).enabled, false);
+    // an answer that carries no count (an older Studio): the offer is there, and Studio still refuses past its cap
+    assert.equal(againOffer(undefined, undefined).enabled, true);
+  });
+  it("numbers the card from the second suggestion on", () => {
+    assert.equal(fixCardModel({ ...answer, attempt: 1, maxAttempts: 3 }, "s").title, "Suggested fix");
+    assert.equal(fixCardModel({ ...answer, attempt: 2, maxAttempts: 3 }, "s").title, "Suggested fix (2 of 3)");
+    assert.equal(fixCardModel({ ...answer, attempt: 3, maxAttempts: 3 }, "s").title, "Suggested fix (3 of 3)");
+    assert.equal(fixCardModel({ ...answer }, "s").title, "Suggested fix");
+    assert.equal(fixCardModel({ ...answer, attempt: 2 }, "s").title, "Suggested fix"); // no maximum: no count
+    assert.equal(fixCardModel({ ...answer, maxAttempts: 3 }, "s").title, "Suggested fix");
+  });
+});
+
+describe("the preview dialog says which suggestion it is", () => {
+  it("names the attempt and the maximum when Studio sends them", () => {
+    assert.match(fixPreviewNote(false, 2, 3), /^This would be suggestion 2 of 3 for this step\. /);
+    assert.match(fixPreviewNote(true, 1, 3), /suggestion 1 of 3/);
+    assert.doesNotMatch(fixPreviewNote(false), /This would be suggestion/);
+    assert.doesNotMatch(fixPreviewNote(false, 2, undefined), /This would be suggestion/);
+    // the rest of the note is unchanged
+    assert.match(fixPreviewNote(false, 2, 3), /Nothing is sent until you press Send/);
   });
 });

@@ -152,6 +152,7 @@ func TestALocalDestinationIsConfirmedOncePerSessionAndAgainAfterAChange(t *testi
 			t.Fatal(err)
 		}
 		rewriteYAML(t, a, yaml)
+		a.resetFixAttempts() // this test is about confirmation, not the cap of three per failed step
 		if p3, err := a.PreviewSelectorFix(""); err != nil || !p3.NeedsConfirm {
 			t.Errorf("%s: %+v %v", name, p3, err)
 		}
