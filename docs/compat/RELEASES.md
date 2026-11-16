@@ -7,7 +7,7 @@ entry says "not assessed" for what was not done. The newest `## Flutter <version
 How the facts below were gathered, so they can be checked: **release date, Dart version and revision** come from Flutter's official release manifest
 (`https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json`); **release-note items** were read in the release-notes pages themselves
 (`https://docs.flutter.dev/release/release-notes/release-notes-<version>`), which are lists of pull-request titles and carry **no release date and no
-minimum-requirements section**; **Dart changes** were read in the Dart SDK's own changelog (`https://github.com/dart-lang/sdk/blob/main/CHANGELOG.md`); **tool requirements** were read in the Flutter tool's source of each release (`packages/flutter_tools`), not in prose; the **catalog
+minimum-requirements section**; **Dart changes** were read in the Dart SDK's own changelog at the release tag (`https://github.com/dart-lang/sdk/blob/3.14.0/CHANGELOG.md`, and `.../blob/3.13.7/CHANGELOG.md` for 3.13); **tool requirements** were read in the Flutter tool's source at each release's tag commit (`packages/flutter_tools`), not in prose; the **catalog
 diff** is `docs/compat/catalog.json` between the two releases. Anything not in one of those is not claimed.
 
 ## Flutter 3.50.0 (stable) with Dart 3.14.0
@@ -47,16 +47,21 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
 
   Xcode required by the tool: 15 [15]. Highest Gradle, AGP and KGP the tool knows: 9.5.0, 9.4, 2.4.20 [9.3.1, 9.1, 2.3.20].
 - **What this means for FlutterProbe**
-  - **The Android fixture apps are below the new minimums.** `native-test-apps/flutter` and `native-test-apps/studio-fixture` use Gradle 9.1.0, AGP 9.0.1 and Kotlin 2.3.20: under 3.50.0's error values for
-    all three (9.3.1, 9.1.1, 2.4.10). By the tool's own constants they will not build on 3.50.0 until raised. **Not yet verified by a build.**
+  - **The Android fixture apps were below the new minimums, and the build proved it.** `native-test-apps/flutter` and `native-test-apps/studio-fixture` used Gradle 9.1.0, AGP 9.0.1 and Kotlin 2.3.20: under 3.50.0's
+    error values (9.3.1, 9.1.1, 2.4.10). **Measured (2026-11-16):** `flutter build apk --debug` of the unchanged `native-test-apps/flutter` on 3.50.0 stops with "Your project's Gradle version (9.1.0) is lower than Flutter's
+    minimum supported version of 9.3.1". After raising both fixtures to Gradle 9.5.0, AGP 9.3.1 and Kotlin 2.4.20 (the 3.50.0 template values), both fixtures **build on 3.50.0 and on 3.44.8** (debug APKs, each in a private
+    SDK folder and scratch Gradle home); the only warning is the existing one that the `bonsoir_android` plugin applies the Kotlin Gradle plugin.
   - **Nothing the agent uses is removed or renamed in these notes:** `probe_agent/lib` and the Flutter fixture use none of `ignoreSemantics`, `describeEnum`, `WillPopScope`, `ButtonBar`, `RawKeyboardListener`,
     `FlutterVersion` or `DropdownButtonFormField`. The agent's only `cacheExtent` use is in two of its own tests (`test/scroll_until_anchor_test.dart`, `test/scroll_into_view_test.dart`); `cacheExtent` is deprecated
     ("deprecated after v3.41.0-0.0.pre", use `scrollCacheExtent`) and is still present in 3.50.0, so it is a note, not a removal risk.
-  - **CI pins:** `.github/workflows/ci.yml` uses Flutter `3.29.x` and `.github/workflows/e2e.yml` `3.41.4`; both predate AGP 9 and are not 3.50.0. Aligning them to one recorded version is a separate change, after the
-    fixture suite has run on that version.
-- **Fixture suite on 3.50.0:** not run.
+  - **CI pins:** `.github/workflows/ci.yml` uses Flutter `3.29.x` and `.github/workflows/e2e.yml` `3.41.4`; both predate AGP 9 and are not 3.50.0. Neither workflow builds the fixtures in this repository: `ci.yml` runs the agent's own tests, and `e2e.yml` builds the app it checks out into `e2e-app` from
+    another repository, whose Gradle, AGP and Kotlin versions are not these fixtures' and were not read here; it will need 3.50.0's minimums when its pin moves. Aligning the two pins to one recorded version is a separate
+    change.
+- **Fixture suite on 3.50.0:** run (2026-11-16) on emulator-5600, AVD `ProbeWebViewSpike` (Android 15, API 35): `native-test-apps/flutter/probe-tests/flutter_suite.probe`, **5 of 5 passed** with the app built by Flutter 3.50.0 and the
+  raised Gradle, AGP and Kotlin; the same suite with the app built by 3.44.8 and the same fixture files also passed 5 of 5. Only that suite was run: not the list, crash, load or WebView scenarios, and not iOS. The CLI was a
+  development build, which prints "version mismatch" against the agent.
 - **Release notes and breaking-change pages:** read as above; the individual breaking-change pages and the blog post were not.
-- **Dart 3.14.0 changes** (`https://github.com/dart-lang/sdk/blob/main/CHANGELOG.md`, the section for 3.14.0, which that file still marks "Unreleased"): `dart:isolate` unships the experimental synchronous
+- **Dart 3.14.0 changes** (`https://github.com/dart-lang/sdk/blob/3.14.0/CHANGELOG.md`, the section for 3.14.0; the file at that tag still marks it "Unreleased", so the date is the manifest's): `dart:isolate` unships the experimental synchronous
   isolate APIs that 3.13 exposed by accident (`Isolate.runSync` and related; breaking); `Float32x4`/`Int32x4`/`Float64x2` `toString()` returns `'V128'` and `min`/`max` follow IEEE 754 (breaking);
   `dart:mirrors` is marked `@deprecated`; `dart:io` Mac process spawning uses `posix_spawn`; new `dart migrate` command. Nothing in it concerns the agent: it uses none of those APIs.
 
@@ -86,7 +91,7 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
 - **Breaking-change pages listed for 3.47** (titles; not read in full): OpenGL ES render-to-texture content stored top-down; update of the semantics header and `headingLevel` behaviour on iOS and Android
   (`.../breaking-changes/semantics-header-heading-level`); removal of `describeEnum` (`.../breaking-changes/remove-describeEnum`). The index also links a page about deprecating the `value` of `DropdownButtonFormField`
   (`.../breaking-changes/deprecate-dropdownbuttonformfield-value`), whose release group was not read.
-- **Dart 3.13** (same CHANGELOG): 3.13.0 (2026-08-12) adds primary constructors (needs `sdk: '^3.13.0'`) and has breaking changes (no `final`/`var` on non-declaring parameters; a type-promotion change; `dart:io`
+- **Dart 3.13** (`https://github.com/dart-lang/sdk/blob/3.13.7/CHANGELOG.md`): 3.13.0 (2026-08-12) adds primary constructors (needs `sdk: '^3.13.0'`) and has breaking changes (no `final`/`var` on non-declaring parameters; a type-promotion change; `dart:io`
   `NetworkInterface.addresses` returns `List<InterfaceAddress>`); 3.13.1 to 3.13.7 are fixes (3.13.2 "Deprecates the legacy analyzer plugin system"; 3.13.7 (2026-10-22) uses the Android 14+ Conscrypt root certificate store).
   Dates of the 3.13.x patches are as that file prints them, not the manifest's.
 - **What this means for FlutterProbe:** the agent uses none of the removed or deprecated APIs named above. The tool requirements of 3.47 were not read. **Fixture suite on 3.47.x:** not run. **Assessed:** no.
@@ -95,6 +100,6 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
 
 - **Source:** the SDK installed on the machine that made the first `catalog.json` (framework commit dated 2026-07-23, revision `058e0af2c2b57e369d905a03ac9748b0ebf543c6`). 3.44.9 (2026-08-06, Dart 3.12.2, `6b182d2c75`) followed it; not assessed.
 - **Catalog:** 570 widgets (widgets 321, material 191, cupertino 58); 30 abstract; 3 marked deprecated (`ButtonBar`, `RawKeyboardListener`, `WillPopScope`).
-- **Tool requirements (tool source):** Gradle 8.7.0 error / 8.14.0 warn / 9.1.0 template; AGP 8.6.0 / 8.11.1 / 9.0.1; Kotlin Gradle plugin 2.0.0 / 2.2.20 / 2.3.20; Java 17; `minSdk` 23 / 24; Xcode 15.
-- **Release notes and breaking changes:** not assessed. **Fixture suite on this version:** not assessed (the fixtures' AGP, Gradle and Kotlin versions are the template defaults of this release).
+- **Tool requirements (tool source at the 3.44.8 tag commit, `058e0af2c2b57e369d905a03ac9748b0ebf543c6`, which a scratch clone of the tag has):** Gradle 8.7.0 error / 8.14.0 warn / 9.1.0 template; AGP 8.6.0 / 8.11.1 / 9.0.1; Kotlin Gradle plugin 2.0.0 / 2.2.20 / 2.3.20; Java 17; `minSdk` 23 / 24; Xcode 15.
+- **Release notes and breaking changes:** not assessed. **Fixture suite on this version:** run on the fixtures as raised for 3.50.0 (Gradle 9.5.0, AGP 9.3.1, Kotlin 2.4.20): 5 of 5 on emulator-5600 (see the 3.50.0 entry). The fixtures as they were before the raise (the template defaults of this release) were not built here.
 - **Dart 3.12.2 changes:** not assessed.
