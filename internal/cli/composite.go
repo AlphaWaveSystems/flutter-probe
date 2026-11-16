@@ -55,6 +55,7 @@ func setupCompositeDevices(
 	specs map[string]string,
 	timeout time.Duration,
 	verbose bool,
+	clearGate runner.ClearGate,
 ) ([]runner.CompositeDevice, func(), error) {
 	if len(specs) == 0 {
 		return nil, func() {}, nil
@@ -70,7 +71,7 @@ func setupCompositeDevices(
 	}
 
 	for alias, spec := range specs {
-		dev, client, err := connectCompositeDevice(ctx, cfg, dm, alias, spec, verbose)
+		dev, client, err := connectCompositeDevice(ctx, cfg, dm, alias, spec, verbose, clearGate)
 		if err != nil {
 			cleanup()
 			return nil, func() {}, fmt.Errorf("composite device %s=%q: %w", alias, spec, err)
@@ -84,8 +85,9 @@ func setupCompositeDevices(
 
 // compositeAndroidContext is the device context of one Android device of a composite run. Whether the device is physical
 // is asked of the device, the same check a single-device run makes, so a physical device is never taken for an emulator.
-func compositeAndroidContext(ctx context.Context, cfg *config.Config, dm *device.Manager, spec string) *runner.DeviceContext {
+func compositeAndroidContext(ctx context.Context, cfg *config.Config, dm *device.Manager, spec string, clearGate runner.ClearGate) *runner.DeviceContext {
 	dc := runner.NewDeviceContext(ctx, dm, device.PlatformAndroid, spec)
+	dc.ApplyClearGate(clearGate)
 	dc.AppID = cfg.Project.App
 	dc.Port = cfg.Agent.Port
 	dc.DevicePort = cfg.Agent.AgentDevicePort()
@@ -105,6 +107,7 @@ func connectCompositeDevice(
 	dm *device.Manager,
 	alias, spec string,
 	verbose bool,
+	clearGate runner.ClearGate,
 ) (runner.CompositeDevice, probelink.ProbeClient, error) {
 	// WiFi/HTTP format: "host:port/token"
 	if idx := strings.Index(spec, "/"); idx > 0 {
@@ -192,6 +195,7 @@ func connectCompositeDevice(
 	switch platform {
 	case device.PlatformIOS:
 		devCtx = runner.NewDeviceContext(ctx, dm, platform, spec)
+		devCtx.ApplyClearGate(clearGate)
 		isPhysical := devCtx.IsPhysical
 		if isPhysical {
 			// Physical iOS: set up iproxy
@@ -240,7 +244,7 @@ func connectCompositeDevice(
 		if err != nil {
 			return runner.CompositeDevice{}, nil, fmt.Errorf("dial: %w%s", err, device.ConnectHint(ctx, dm.ADB(), spec, cfg.Agent.Port, cfg.Agent.AgentDevicePort(), cfg.Project.App))
 		}
-		devCtx = compositeAndroidContext(ctx, cfg, dm, spec)
+		devCtx = compositeAndroidContext(ctx, cfg, dm, spec, clearGate)
 	}
 
 	warning, err := probelink.CheckHandshake(ctx, client, cfg.CLIVersion)
@@ -274,6 +278,7 @@ func buildCompositeRunner(
 	flags []string,
 	timeout time.Duration,
 	verbose bool,
+	clearGate runner.ClearGate,
 ) (*runner.CompositeRunner, func(), error) {
 	specs := parseCompositeDeviceSpecs(flags, cfg.Composite.Devices)
 	if len(specs) == 0 {
@@ -281,7 +286,7 @@ func buildCompositeRunner(
 	}
 
 	fmt.Printf("  \033[36mℹ\033[0m  Setting up %d composite device(s)...\n", len(specs))
-	devices, cleanup, err := setupCompositeDevices(ctx, cfg, dm, specs, timeout, verbose)
+	devices, cleanup, err := setupCompositeDevices(ctx, cfg, dm, specs, timeout, verbose, clearGate)
 	if err != nil {
 		return nil, func() {}, err
 	}

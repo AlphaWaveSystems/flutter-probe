@@ -372,11 +372,12 @@ Key flags for the flags parameter:
   --ai-heal                   optional: add an advisory selector_proposal to each selector step that ran into its timeout in the JSON report
                                (needs ai: in probe.yaml; not applied, not verified; the step stays failed)
   --disable-animations       set timeDilation to 0.001 so Flutter animations end within a frame
-  -y                          auto-approve destructive operations (CI/CD mode)
   --video                     record device screen during the run
   --stream                    emit one ndjson line per test as it completes (requires --format json)
 
 For composite multi-device tests use the composite_devices parameter.
+
+Clearing app data (the clear app data step, or defaults.clear_data_before_each_test) in a parallel or composite run needs the consent that the --yes flag gives. This tool does not carry that consent: a run started here (--parallel, composite_devices, several devices) refuses the clear on every device unless that device is one the person has allowed to be wiped without a question in their own settings (probe prefs). A --yes or -y in any argument is refused. The refused step fails with the hint to pass --yes, which the person runs from a terminal.
 
 This call blocks until the run ends. For multi-device runs (--parallel, composite_devices, several devices) or any run that may outlast your tool timeout, use start_tests instead: it returns a job_id at once and you poll test_status.`,
 		InputSchema: mcpSchema{
@@ -388,7 +389,7 @@ This call blocks until the run ends. For multi-device runs (--parallel, composit
 		Name: "start_tests",
 		Description: `Start FlutterProbe tests in the background and return a job_id immediately, instead of blocking like run_tests. Use it for multi-device runs (--parallel, composite_devices, several devices), large suites, --retry-failed, or anything that may outlast your tool timeout: a blocking call that times out is reported as failed even though the run continues.
 
-Takes the same arguments as run_tests (see its description for the flags). Then poll test_status (state, elapsed time, the last lines of output), call test_result once the state is passed, failed or cancelled, and call cancel_tests to stop a run. Jobs live in this server process: they are killed when it exits and forgotten if it restarts.`,
+Takes the same arguments as run_tests (see its description for the flags), including the rule that a multi-device run refuses to clear app data unless the person's own settings allow it: there is no yes option here. Then poll test_status (state, elapsed time, the last lines of output), call test_result once the state is passed, failed or cancelled, and call cancel_tests to stop a run. Jobs live in this server process: they are killed when it exits and forgotten if it restarts.`,
 		InputSchema: mcpSchema{
 			Type:       "object",
 			Properties: testRunProps,
@@ -853,11 +854,38 @@ func refusedHostedFlag(flags string) error {
 	return nil
 }
 
+// refusedConsentFlag refuses a --yes that would reach the CLI through any argument: -y, --yes, and a short-flag cluster that holds a y. --yes
+// is the person's consent to a destructive step (clear app data), and an AI-driven tool must not be able to carry it. Every value that becomes
+// a CLI argument is checked, so a -y in paths, tag, device or composite_devices is refused as well as one in flags.
+func refusedConsentFlag(values ...string) error {
+	for _, v := range values {
+		for _, f := range strings.Fields(v) {
+			if isConsentFlag(f) {
+				return fmt.Errorf("--yes is not available through MCP (%s): it is the person's consent to a destructive step; a run that needs it is started from a terminal with probe test --yes", f)
+			}
+		}
+	}
+	return nil
+}
+
+func isConsentFlag(tok string) bool {
+	if tok == "--yes" || strings.HasPrefix(tok, "--yes=") {
+		return true
+	}
+	if strings.HasPrefix(tok, "--") || !strings.HasPrefix(tok, "-") {
+		return false
+	}
+	return strings.ContainsRune(tok[1:], 'y')
+}
+
 func (s *Server) runScript(id any, script, flags, deviceID string) *mcpResponse {
 	if script == "" {
 		return errResp(id, -32602, "script is required")
 	}
 	if err := refusedHostedFlag(flags); err != nil {
+		return textResp(id, err.Error(), err)
+	}
+	if err := refusedConsentFlag(flags, deviceID); err != nil {
 		return textResp(id, err.Error(), err)
 	}
 	out, err := s.runInlineScript(script, flags, deviceID)
@@ -878,6 +906,9 @@ var testRunProps = map[string]mcpProp{
 // to a background run exactly as it does to a blocking one.
 func buildTestArgs(args map[string]string) ([]string, error) {
 	if err := refusedHostedFlag(args["flags"]); err != nil {
+		return nil, err
+	}
+	if err := refusedConsentFlag(args["paths"], args["tag"], args["flags"], args["device"], args["composite_devices"]); err != nil {
 		return nil, err
 	}
 	cmdArgs := []string{"test"}

@@ -616,6 +616,13 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			Grant:       grantPerms,
 		}
 
+		// The person's setting is read once for the run, and every lane answers `clear app data` from that one reading.
+		clearPrefs, clearPrefsWarning := userprefs.Check()
+		if clearPrefsWarning != "" {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
+		}
+		opts.ClearGate = clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking, cfg.Project.App)
+
 		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
 		results, orchErr := orch.Run(ctx)
 
@@ -1354,7 +1361,13 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// Set up composite runner if --composite-device flags or probe.yaml composite.devices are present.
 	compositeDeviceFlags, _ := cmd.Flags().GetStringArray("composite-device")
 	if len(compositeDeviceFlags) > 0 || len(cfg.Composite.Devices) > 0 {
-		cr, compositeCleanup, crErr := buildCompositeRunner(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose)
+		// The composite devices have nobody to ask either: the same clear gate as a parallel run, with the setting read once here.
+		clearPrefs, clearPrefsWarning := userprefs.Check()
+		if clearPrefsWarning != "" {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
+		}
+		clearGate := clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking, cfg.Project.App)
+		cr, compositeCleanup, crErr := buildCompositeRunner(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose, clearGate)
 		if crErr != nil {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite devices unavailable: %v\n", crErr)
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite tests will be skipped\n")
