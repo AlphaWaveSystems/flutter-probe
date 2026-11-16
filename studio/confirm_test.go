@@ -446,3 +446,67 @@ func TestExecuteRunSetsTheRunItsConfirmationsBelongTo(t *testing.T) {
 	cancelNow()
 	<-doneNow
 }
+
+// Disconnect while a question is open says no to it and closes the dialog, with a note.
+func TestDisconnectDeniesAPendingQuestionAndClosesTheDialog(t *testing.T) {
+	c := newConfirmApp(t, true)
+	c.a.mu.Lock()
+	c.a.conn.client = &closeFake{}
+	c.a.mu.Unlock()
+	out := c.ask()
+	req := c.next(t, "confirm:request")[0].(ConfirmRequest)
+	c.a.Disconnect()
+	if answerOf(t, out) {
+		t.Error("a disconnected device's question was allowed")
+	}
+	if id := c.next(t, "confirm:close")[0].(string); id != req.ID {
+		t.Errorf("the dialog that closed was %q, want %q", id, req.ID)
+	}
+	if note := c.next(t, "confirm:note")[0].(string); !strings.Contains(note, "device was disconnected") {
+		t.Errorf("note = %q", note)
+	}
+	if c.a.AnswerConfirm(req.ID, true) {
+		t.Error("an answer after the disconnect was accepted")
+	}
+	// a Disconnect with no question open changes nothing about confirmations
+	c2 := newConfirmApp(t, true)
+	c2.a.mu.Lock()
+	c2.a.conn.client = &closeFake{}
+	c2.a.mu.Unlock()
+	c2.a.Disconnect()
+}
+
+// A run gives the run slot back when it ends: after it a second run starts and Connect is not refused for a run. (A run that kept the slot
+// would refuse Connect for good and make every later run say "a run is already in progress".)
+func TestARunReleasesTheRunSlot(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.probe")
+	if err := os.WriteFile(file, []byte("test \"t\"\n  log \"hi\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{ctx: context.Background(), hub: newEventHub()}
+	a.SetWorkspace(dir)
+	cfg := &config.Config{}
+	cfg.Defaults.Timeout = 2 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	conn := &connection{client: &runFake{}, cfg: cfg, streamCancel: cancel, streamDone: done}
+	a.conn = conn
+	go a.streamLoop(ctx, done, &closeFake{frameFake: frameFake{shot: []byte("s")}})
+	for i := 1; i <= 2; i++ {
+		if _, err := a.RunFile(file); err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+		if a.runActive() {
+			t.Fatalf("run %d still holds the run slot after it ended", i)
+		}
+	}
+	if _, err := a.Connect(""); err == nil || strings.Contains(err.Error(), "a run is in progress") {
+		t.Errorf("after the runs, Connect says %v", err)
+	}
+	a.mu.Lock()
+	cancelNow, doneNow := conn.streamCancel, conn.streamDone
+	a.mu.Unlock()
+	cancelNow()
+	<-doneNow
+}
