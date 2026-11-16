@@ -274,6 +274,10 @@ type lintSettings struct {
 //     errors of the linted text itself are returned as before.
 //
 // An empty root is an error, so a caller cannot lint unfenced by accident.
+//
+// The check and the read are two steps, and the read uses the path the check resolved, so the file read is the one checked. A symlink
+// that is replaced between the two is not caught: the window is the time of one check, and nothing in the lint writes the workspace.
+// A hard link to a file outside the root cannot be told from a file inside it, so it is read.
 func LintWithRoot(root string) LintOption {
 	return func(s *lintSettings) {
 		s.rootSet = true

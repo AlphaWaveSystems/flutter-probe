@@ -387,6 +387,58 @@ export namespace main {
 	        this.isDir = source["isDir"];
 	    }
 	}
+	export class LintProblem {
+	    line: number;
+	    warning: boolean;
+	    message: string;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LintProblem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.warning = source["warning"];
+	        this.message = source["message"];
+	        this.source = source["source"];
+	    }
+	}
+	export class LintProblemsResult {
+	    problems: LintProblem[];
+	    unavailable?: string;
+	    stale?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LintProblemsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.problems = this.convertValues(source["problems"], LintProblem);
+	        this.unavailable = source["unavailable"];
+	        this.stale = source["stale"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LocalModels {
 	    endpoint: string;
 	    host: string;

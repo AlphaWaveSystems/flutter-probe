@@ -92,11 +92,16 @@ const view: NetView = {
 // What is shown and what may still be shown is decided in network.ts; this file only draws.
 const controller = new NetController(api, view);
 
-function show(network: boolean): void {
+export type Tab = "results" | "network" | "problems";
+
+// showTab shows one of the three panels under the editor and marks its tab.
+export function showTab(tab: Tab): void {
+  const network = tab === "network";
   controller.setActive(network);
-  $("results-panel").hidden = network;
+  $("results-panel").hidden = tab !== "results";
   $("network-panel").hidden = !network;
-  for (const [id, on] of [["tab-results", !network], ["tab-network", network]] as const) {
+  $("problems-panel").hidden = tab !== "problems";
+  for (const [id, on] of [["tab-results", tab === "results"], ["tab-network", network], ["tab-problems", tab === "problems"]] as const) {
     $(id).classList.toggle("active", on);
     $(id).setAttribute("aria-selected", String(on));
   }
@@ -109,8 +114,9 @@ function filterChanged(): void {
 }
 
 export function initNetworkPanel(): void {
-  $("tab-results").addEventListener("click", () => show(false));
-  $("tab-network").addEventListener("click", () => show(true));
+  $("tab-results").addEventListener("click", () => showTab("results"));
+  $("tab-network").addEventListener("click", () => showTab("network"));
+  $("tab-problems").addEventListener("click", () => showTab("problems"));
   $("btn-net-refresh").addEventListener("click", () => void controller.refresh(false));
   for (const id of ["net-method", "net-status"]) $(id).addEventListener("change", filterChanged);
   $("net-text").addEventListener("input", filterChanged);

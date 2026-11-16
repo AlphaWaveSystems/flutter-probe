@@ -113,12 +113,13 @@
       <section id="results-pane">
         <div class="pane-title">
           <span class="pane-tabs" role="tablist">
-            <button type="button" id="tab-results" class="pane-tab active" role="tab" aria-selected="true">Results</button>
-            <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" title="The requests and responses the app made, with credentials hidden">Network</button>
+            <button type="button" id="tab-results" class="pane-tab active" role="tab" aria-selected="true" aria-controls="results-panel">Results</button>
+            <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" aria-controls="network-panel" title="The requests and responses the app made, with credentials hidden">Network</button>
+            <button type="button" id="tab-problems" class="pane-tab" role="tab" aria-selected="false" aria-controls="problems-panel" title="What the lint rules find in the open file: a recipe or a data file that is not there, a test with no steps">Problems</button>
           </span>
           <span id="results-summary" class="dim"></span>
         </div>
-        <div id="results-panel" class="pane-panel">
+        <div id="results-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-results">
         <div id="explain-bar" class="explain-bar" hidden>
           <button type="button" id="btn-explain" class="btn-mini" title="Ask the AI provider for advice on the failed tests of the last run. You see what is sent first.">Explain failures</button>
           <button type="button" id="btn-fix" class="btn-mini" title="Ask the AI provider for one ProbeScript line to replace the failed step. You see what is sent first.">Suggest a fix</button>
@@ -128,7 +129,11 @@
         <section id="fix-card" class="explain-card" aria-label="Suggested fix" hidden></section>
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
         </div>
-        <div id="network-panel" class="pane-panel" hidden>
+        <div id="problems-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-problems" hidden>
+          <p id="problems-status" class="dim problems-status" role="status"></p>
+          <ul id="problems-list" class="problems-list" aria-label="Problems in the open file"></ul>
+        </div>
+        <div id="network-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-network" hidden>
           <div class="net-toolbar">
             <select id="net-method" aria-label="Method">
               <option value="">Any method</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>

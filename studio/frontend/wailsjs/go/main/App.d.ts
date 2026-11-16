@@ -56,6 +56,8 @@ export function InitialWorkspace():Promise<string>;
 
 export function Lint(arg1:string):Promise<Array<main.Diagnostic>>;
 
+export function LintProblems(arg1:string,arg2:string):Promise<main.LintProblemsResult>;
+
 export function ListAIModels():Promise<Array<string>>;
 
 export function ListDevices():Promise<Array<main.DeviceInfo>>;
