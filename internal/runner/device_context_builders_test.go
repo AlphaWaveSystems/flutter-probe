@@ -27,7 +27,7 @@ var buildRoots = []string{"..", "../../cmd", "../../studio"}
 var builderFuncs = []struct{ dir, file, fn string }{
 	{"../cli", "composite.go", "compositeAndroidContext"},
 	{"../cli", "composite.go", "connectCompositeDevice"},
-	{"../cli", "test.go", "singleDeviceContext"},
+	{"../runner", "device_context.go", "NewConfiguredDeviceContext"}, // the one constructor of `probe test` and Studio (singleDeviceContext and newStudioDeviceContext call it)
 	{"../cli", "test.go", "localeDeviceContext"},
 	{"../runner", "orchestrator.go", "deviceContext"},
 }

@@ -222,22 +222,9 @@ func resolveDeviceAppID(written string, platform device.Platform, installed func
 // clear data, permissions) and the settings steps read. NewDeviceContext asks whether the device is physical, and a physical
 // device takes the HTTP fallback. A platform the run does not know counts as physical, so no emulator-only step runs on it.
 func singleDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Config, platform device.Platform, serial, agentHost string, autoYes, noGrantOnClear bool, confirm runner.ConfirmFunc) *runner.DeviceContext {
-	dc := runner.NewDeviceContext(ctx, dm, platform, serial)
-	dc.UseHTTP = dc.IsPhysical // physical devices use HTTP fallback
-	dc.DriverPort = cfg.Agent.DriverPort
-	dc.AppID = cfg.Project.App
-	dc.Port = cfg.Agent.Port
-	dc.DevicePort = cfg.Agent.AgentDevicePort()
-	dc.AgentHost = agentHost // device IP for WiFi mode
-	dc.AllowClearData = autoYes
-	dc.Confirm = confirm
-	dc.GrantPermissionsOnClear = (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear
-	dc.CrashEvidence = cfg.Defaults.CrashEvidence
-	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
-	dc.RestartDelay = cfg.Device.RestartDelay
-	dc.TokenReadTimeout = cfg.Agent.TokenReadTimeout
-	dc.DialTimeout = cfg.Agent.DialTimeout
-	return dc
+	return runner.NewConfiguredDeviceContext(ctx, dm, cfg, platform, serial, runner.ConnFacts{
+		AgentHost: agentHost, AllowClearData: autoYes, NoGrantOnClear: noGrantOnClear, Confirm: confirm,
+	})
 }
 
 // localeDeviceContext builds the device context of the --locale step: the app's language is set through it, and the app is

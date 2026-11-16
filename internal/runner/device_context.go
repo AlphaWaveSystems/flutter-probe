@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/devsettings"
 	"github.com/alphawavesystems/flutter-probe/internal/locale"
@@ -82,6 +83,49 @@ func NewDeviceContext(ctx context.Context, m *device.Manager, platform device.Pl
 		Platform:   platform,
 		IsPhysical: isPhysical,
 	}
+}
+
+// ConnFacts is what the caller of NewConfiguredDeviceContext knows about this connection that probe.yaml does not. It carries no
+// secret (no token, no key): its String form is safe to log.
+type ConnFacts struct {
+	AgentHost      string      // device IP for Wi-Fi mode ("" = local)
+	Port           int         // host-side agent port; 0 takes cfg.Agent.Port
+	DevicePort     int         // on-device agent port; 0 takes cfg.Agent.AgentDevicePort()
+	AllowClearData bool        // skip the confirmation for clear app data (--yes)
+	NoGrantOnClear bool        // --no-grant-on-clear
+	Confirm        ConfirmFunc // asks before a destructive step; nil denies unless AllowClearData
+}
+
+// String lists the facts without the callback's identity, so a log line never holds more than the host, the ports and the two flags.
+func (f ConnFacts) String() string {
+	return fmt.Sprintf("host=%q port=%d devicePort=%d allowClearData=%v noGrantOnClear=%v confirm=%v", f.AgentHost, f.Port, f.DevicePort, f.AllowClearData, f.NoGrantOnClear, f.Confirm != nil)
+}
+
+// NewConfiguredDeviceContext builds the device context of one connection from probe.yaml and the facts of the connection. It is the one
+// place that maps configuration to a DeviceContext: `probe test` and Studio both call it, so a field set for one is set for the other.
+func NewConfiguredDeviceContext(ctx context.Context, m *device.Manager, cfg *config.Config, platform device.Platform, serial string, f ConnFacts) *DeviceContext {
+	dc := NewDeviceContext(ctx, m, platform, serial)
+	dc.UseHTTP = dc.IsPhysical // physical devices use the HTTP fallback
+	dc.DriverPort = cfg.Agent.DriverPort
+	dc.AppID = cfg.Project.App
+	dc.Port = cfg.Agent.Port
+	if f.Port != 0 {
+		dc.Port = f.Port
+	}
+	dc.DevicePort = cfg.Agent.AgentDevicePort()
+	if f.DevicePort != 0 {
+		dc.DevicePort = f.DevicePort
+	}
+	dc.AgentHost = f.AgentHost
+	dc.AllowClearData = f.AllowClearData
+	dc.Confirm = f.Confirm
+	dc.GrantPermissionsOnClear = (f.AllowClearData || cfg.Defaults.GrantPermissionsOnClear) && !f.NoGrantOnClear
+	dc.CrashEvidence = cfg.Defaults.CrashEvidence
+	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
+	dc.RestartDelay = cfg.Device.RestartDelay
+	dc.TokenReadTimeout = cfg.Agent.TokenReadTimeout
+	dc.DialTimeout = cfg.Agent.DialTimeout
+	return dc
 }
 
 // SystemDriver returns the run's shared system-dialog driver, creating it on
