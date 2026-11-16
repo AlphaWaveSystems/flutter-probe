@@ -339,13 +339,15 @@ func fixProfile(s parser.Step) (string, bool) {
 		if !fixVerbs[st.Verb] || st.WebView != nil || st.DeepLink || st.To != nil || st.Until != nil || st.Direction != "" || st.DirectionWord != "" || st.Percent != 0 || st.Name != "" {
 			return "", false
 		}
-		return fmt.Sprintf("action:%s:optional=%t:ifvisible=%t:text=%t", st.Verb, st.Optional, st.IfVisible, st.Text != ""), true
+		// The target's shape (a step with a target, or without) is part of the profile, and so is the text a `type` types: only the
+		// selector may change, never what is typed, and `type "bob" into "Email"` is neither `type "bob"` nor `type "pw" into "Email"`.
+		return fmt.Sprintf("action:%s:optional=%t:ifvisible=%t:target=%t:typed=%q", st.Verb, st.Optional, st.IfVisible, st.Sel != nil, st.Text), true
 	case parser.AssertStep:
 		if st.WithAI || st.Native || st.WebView != nil {
 			return "", false
 		}
-		return fmt.Sprintf("assert:negated=%t:count=%t:check=%d:checkval=%t:pattern=%t:optional=%t:any=%t",
-			st.Negated, st.Count != 0, st.Check, st.CheckVal != "", st.Pattern != "", st.Optional, len(st.Any) > 0), true
+		return fmt.Sprintf("assert:negated=%t:count=%t:check=%d:checkval=%q:pattern=%t:optional=%t:any=%t",
+			st.Negated, st.Count != 0, st.Check, st.CheckVal, st.Pattern != "", st.Optional, len(st.Any) > 0), true
 	case parser.WaitStep:
 		if !fixWaits[st.Kind] || st.WebView != nil || st.Duration != 0 {
 			return "", false

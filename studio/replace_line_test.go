@@ -368,3 +368,72 @@ func TestReplaceLineRefusesInACompositeTest(t *testing.T) {
 		t.Errorf("the reason: %q", got.Reason)
 	}
 }
+
+// `type` keeps what it types and its target: only the field's selector may change.
+func TestReplaceLineKeepsWhatIsTypedAndTheTarget(t *testing.T) {
+	body := "test \"x\"\n  type \"bob\" into \"Email\"\n  tap \"Go\"\n"
+	orig := `  type "bob" into "Email"`
+	if got := replaceAt(body, 2, orig, `type "bob" into "E-mail"`); !got.OK {
+		t.Errorf("another field label: %+v", got)
+	}
+	if got := replaceAt(body, 2, orig, `type "bob" into #email_field`); !got.OK {
+		t.Errorf("a key selector: %+v", got)
+	}
+	for name, sg := range map[string]string{
+		"the target dropped":       `type "bob"`,
+		"another typed value":      `type "pw" into "Email"`,
+		"the value in the target":  `type "Email" into "bob"`,
+		"a longer typed value":     `type "bob2" into "Email"`,
+		"an empty typed value":     `type "" into "Email"`,
+		"a typed env form":         `type "${PASSWORD}" into "Email"`,
+		"the field label as a tap": `tap "Email"`,
+		"typed and optional":       `type "bob" into "Email" optional`,
+	} {
+		if got := replaceAt(body, 2, orig, sg); got.OK || got.Reason == "" {
+			t.Errorf("%s: %q was accepted: %+v", name, sg, got)
+		}
+	}
+	// a type with no target stays a type with no target
+	body2 := "test \"x\"\n  type \"bob\"\n"
+	if got := replaceAt(body2, 2, `  type "bob"`, `type "bob" into "Email"`); got.OK {
+		t.Errorf("a target added: %+v", got)
+	}
+	// a tap keeps having a target
+	if got := replaceAt(body, 3, `  tap "Go"`, `tap "Go now"`); !got.OK {
+		t.Errorf("a tap: %+v", got)
+	}
+}
+
+// An assertion keeps its `matching` pattern form: a pattern is not added or dropped, and the regular expression itself is not the profile.
+func TestReplaceLineKeepsThePatternForm(t *testing.T) {
+	body := "test \"x\"\n  see \"A\" matching \"^a\"\n  see \"B\"\n  wait until \"0 ml\" appears matching \"^0 ml$\"\n"
+	if got := replaceAt(body, 2, `  see "A" matching "^a"`, `see "A" matching "^b"`); !got.OK {
+		t.Errorf("another pattern: %+v", got)
+	}
+	if got := replaceAt(body, 2, `  see "A" matching "^a"`, `see "A"`); got.OK {
+		t.Errorf("the pattern dropped: %+v", got)
+	}
+	if got := replaceAt(body, 3, `  see "B"`, `see "B" matching "^b"`); got.OK {
+		t.Errorf("a pattern added: %+v", got)
+	}
+	if got := replaceAt(body, 4, `  wait until "0 ml" appears matching "^0 ml$"`, `wait until "0 ml" appears`); got.OK {
+		t.Errorf("a wait pattern dropped: %+v", got)
+	}
+	if got := replaceAt(body, 4, `  wait until "0 ml" appears matching "^0 ml$"`, `wait until "0 litres" appears matching "^0 l$"`); !got.OK {
+		t.Errorf("a wait pattern kept: %+v", got)
+	}
+}
+
+// An assertion's expected value (`contains "b"`) is part of what it asserts: it is not changed by a selector fix.
+func TestReplaceLineKeepsTheExpectedValueOfAContainsCheck(t *testing.T) {
+	body := "test \"x\"\n  see \"A\" contains \"b\"\n"
+	orig := `  see "A" contains "b"`
+	if got := replaceAt(body, 2, orig, `see "Total" contains "b"`); !got.OK {
+		t.Errorf("another target: %+v", got)
+	}
+	for name, sg := range map[string]string{"another value": `see "A" contains "c"`, "no check": `see "A"`, "another check": `see "A" is enabled`, "an empty value": `see "A" contains ""`} {
+		if got := replaceAt(body, 2, orig, sg); got.OK {
+			t.Errorf("%s: %+v", name, got)
+		}
+	}
+}
