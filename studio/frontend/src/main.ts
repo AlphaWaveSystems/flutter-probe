@@ -541,6 +541,9 @@ async function openSettingsOverlay() {
     const s = await LoadWorkspaceSettings(workspaceRoot);
     ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
     ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
+    ($("settings-test-timeout") as HTMLInputElement).value = s.testTimeout ?? "";
+    ($("settings-retry") as HTMLInputElement).value = s.retryFailedTests ? String(s.retryFailedTests) : "";
+    ($("settings-implicit-wait") as HTMLInputElement).value = s.implicitWait ?? "";
     ($("settings-ios") as HTMLInputElement).value = s.iosDeviceId ?? "";
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
     ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
@@ -1217,8 +1220,17 @@ $("btn-settings-save").addEventListener("click", async () => {
     toast("Agent port must be a number.", "error");
     return;
   }
+  const retryRaw = ($("settings-retry") as HTMLInputElement).value.trim();
+  const retries = retryRaw === "" ? 0 : Number(retryRaw);
+  if (!Number.isInteger(retries)) {
+    toast("Retries must be a whole number.", "error");
+    return;
+  }
   const settings = main.WorkspaceSettings.createFrom({
     agentPort: port,
+    testTimeout: ($("settings-test-timeout") as HTMLInputElement).value.trim(),
+    retryFailedTests: retries,
+    implicitWait: ($("settings-implicit-wait") as HTMLInputElement).value.trim(),
     defaultsTimeout: ($("settings-timeout") as HTMLInputElement).value.trim(),
     iosDeviceId: ($("settings-ios") as HTMLInputElement).value.trim(),
     androidDeviceId: ($("settings-android") as HTMLInputElement).value.trim(),

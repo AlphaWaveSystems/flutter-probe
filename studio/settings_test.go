@@ -93,3 +93,87 @@ func TestSaveWorkspaceSettingsRefusesBadInputBeforeTouchingTheFile(t *testing.T)
 		t.Error("the unparsable file must be left as it was")
 	}
 }
+
+// The three run knobs are written under defaults, read back, and removed when cleared; everything else in probe.yaml stays.
+func TestSaveWorkspaceSettingsWritesTheRunKnobs(t *testing.T) {
+	dir := t.TempDir()
+	original := "project:\n  app: com.example.demo\ndefaults:\n  platform: ios\n  screenshots: on_failure\n"
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{}
+	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{TestTimeout: "90s", RetryFailedTests: 2, ImplicitWait: "2s"}); err != nil {
+		t.Fatal(err)
+	}
+	d := readYAML(t, dir)["defaults"].(map[string]any)
+	if d["test_timeout"] != "90s" || d["retry_failed_tests"] != 2 || d["implicit_wait"] != "2s" || d["platform"] != "ios" || d["screenshots"] != "on_failure" {
+		t.Errorf("defaults = %v", d)
+	}
+	got, err := a.LoadWorkspaceSettings(dir)
+	if err != nil || got.TestTimeout != "1m30s" || got.RetryFailedTests != 2 || got.ImplicitWait != "2s" {
+		t.Errorf("load = %+v, %v", got, err)
+	}
+	if err := a.SaveWorkspaceSettings(dir, WorkspaceSettings{}); err != nil {
+		t.Fatal(err)
+	}
+	d2, _ := readYAML(t, dir)["defaults"].(map[string]any)
+	for _, k := range []string{"test_timeout", "retry_failed_tests", "implicit_wait"} {
+		if _, ok := d2[k]; ok {
+			t.Errorf("%s was not removed when cleared: %v", k, d2)
+		}
+	}
+	if d2["platform"] != "ios" {
+		t.Errorf("a sibling key was lost: %v", d2)
+	}
+}
+
+// What the form refuses is refused before anything is written, with the CLI's own rules for the time limit.
+func TestSaveWorkspaceSettingsRefusesBadRunKnobs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		s    WorkspaceSettings
+		want string
+	}{
+		"a limit that is not a duration": {WorkspaceSettings{TestTimeout: "ninety"}, "not a valid duration"},
+		"a negative limit":               {WorkspaceSettings{TestTimeout: "-5s"}, "cannot be negative"},
+		"a limit under a second":         {WorkspaceSettings{TestTimeout: "500ms"}, "at least 1s"},
+		"negative retries":               {WorkspaceSettings{RetryFailedTests: -1}, "outside 0 to 10"},
+		"too many retries":               {WorkspaceSettings{RetryFailedTests: 11}, "outside 0 to 10"},
+		"a wait that is not a duration":  {WorkspaceSettings{ImplicitWait: "soon"}, "not a valid duration"},
+		"a negative wait":                {WorkspaceSettings{ImplicitWait: "-1s"}, "outside 0 to"},
+		"a wait past five minutes":       {WorkspaceSettings{ImplicitWait: "6m"}, "outside 0 to"},
+	} {
+		dir := t.TempDir()
+		err := (&App{}).SaveWorkspaceSettings(dir, tc.s)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "probe.yaml")); statErr == nil {
+			t.Errorf("%s: probe.yaml was written", name)
+		}
+	}
+}
+
+// A probe.yaml set by hand beyond the form's bounds still saves other settings; only changing the value is held to the bounds.
+func TestSaveWorkspaceSettingsKeepsAValueBeyondTheFormsBounds(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("defaults:\n  retry_failed_tests: 15\n  implicit_wait: 10m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{}
+	loaded, err := a.LoadWorkspaceSettings(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded.AgentPort = 48800
+	if err := a.SaveWorkspaceSettings(dir, loaded); err != nil {
+		t.Fatalf("saving an unrelated change was refused: %v", err)
+	}
+	d := readYAML(t, dir)["defaults"].(map[string]any)
+	if d["retry_failed_tests"] != 15 || d["implicit_wait"] != "10m0s" {
+		t.Errorf("defaults = %v", d)
+	}
+	loaded.RetryFailedTests = 16
+	if err := a.SaveWorkspaceSettings(dir, loaded); err == nil {
+		t.Error("a changed value beyond the bounds was accepted")
+	}
+}

@@ -10,17 +10,21 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // WorkspaceSettings is the JSON shape the Studio settings form binds to.
-// It exposes a deliberately small subset of probe.yaml — the four knobs
-// most users actually touch, and the two switches that let the AI chat send
+// It exposes a deliberately small subset of probe.yaml — the knobs
+// most users actually touch (the three that decide how a run behaves among them), and the two switches that let the AI chat send
 // the last run and the screen. Other probe.yaml fields are preserved on save
 // (loaded as raw map, only the managed keys are overwritten), so a power user
 // with complex config doesn't lose anything by using the UI.
 type WorkspaceSettings struct {
 	AgentPort           int    `json:"agentPort"`           // probe.yaml: agent.port
 	DefaultsTimeout     string `json:"defaultsTimeout"`     // probe.yaml: defaults.timeout (Go duration string, e.g. "30s")
+	TestTimeout         string `json:"testTimeout"`         // probe.yaml: defaults.test_timeout (wall-clock limit per test attempt; "" = off)
+	RetryFailedTests    int    `json:"retryFailedTests"`    // probe.yaml: defaults.retry_failed_tests (extra attempts of a failing test; 0 = off)
+	ImplicitWait        string `json:"implicitWait"`        // probe.yaml: defaults.implicit_wait (how long tap/type/see wait for a target; "" = off)
 	IOSDeviceID         string `json:"iosDeviceId"`         // probe.yaml: device.ios_device_id
 	AndroidDeviceID     string `json:"androidDeviceId"`     // probe.yaml: device.android_device_id
 	AIContextRunResults bool   `json:"aiContextRunResults"` // probe.yaml: studio.ai_context.run_results (off unless set)
@@ -45,6 +49,9 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 	return WorkspaceSettings{
 		AgentPort:           cfg.Agent.Port,
 		DefaultsTimeout:     cfg.Defaults.Timeout.String(),
+		TestTimeout:         durationText(cfg.Defaults.TestTimeout),
+		RetryFailedTests:    cfg.Defaults.RetryFailedTests,
+		ImplicitWait:        durationText(cfg.Defaults.ImplicitWait),
 		IOSDeviceID:         cfg.Device.IOSDeviceID,
 		AndroidDeviceID:     cfg.Device.AndroidDeviceID,
 		AIContextRunResults: ai.RunResults,
@@ -65,6 +72,14 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 		if _, err := time.ParseDuration(s.DefaultsTimeout); err != nil {
 			return fmt.Errorf("defaultsTimeout %q is not a valid Go duration: %w", s.DefaultsTimeout, err)
 		}
+	}
+	// A value that is already in probe.yaml (set by hand, beyond the form's bounds) can stay: only a changed value is held to them.
+	var current WorkspaceSettings
+	if cfg, err := config.Load(workspace); err == nil {
+		current = WorkspaceSettings{RetryFailedTests: cfg.Defaults.RetryFailedTests, ImplicitWait: durationText(cfg.Defaults.ImplicitWait)}
+	}
+	if err := validateRunKnobs(s, current); err != nil {
+		return err
 	}
 	if s.AgentPort < 0 || s.AgentPort > 65535 {
 		return fmt.Errorf("agentPort %d is outside the valid TCP port range", s.AgentPort)
@@ -88,6 +103,9 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 
 	mergeKey(raw, "agent", "port", s.AgentPort)
 	mergeKey(raw, "defaults", "timeout", s.DefaultsTimeout)
+	mergeKey(raw, "defaults", "test_timeout", s.TestTimeout)
+	mergeKey(raw, "defaults", "retry_failed_tests", s.RetryFailedTests)
+	mergeKey(raw, "defaults", "implicit_wait", s.ImplicitWait)
 	mergeKey(raw, "device", "ios_device_id", s.IOSDeviceID)
 	mergeKey(raw, "device", "android_device_id", s.AndroidDeviceID)
 	if err := setAIContextFlags(raw, s); err != nil {
@@ -100,6 +118,48 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 	}
 	if err := os.WriteFile(path, out, 0o644); err != nil {
 		return fmt.Errorf("writing probe.yaml: %w", err)
+	}
+	return nil
+}
+
+// The largest values Studio's form accepts for the run knobs. The CLI takes any; a typo such as 300 for 3 attempts, or "90m" for "90s", would
+// make a run that never ends look like a hang, so the form refuses what is surely a slip. A value outside them can still be set in probe.yaml.
+const (
+	maxRetryFailedTests = 10
+	maxImplicitWait     = 5 * time.Minute
+)
+
+// durationText is a duration as probe.yaml and the form show it: "" for zero (off).
+func durationText(d time.Duration) string {
+	if d == 0 {
+		return ""
+	}
+	return d.String()
+}
+
+// validateRunKnobs checks test_timeout, retry_failed_tests and implicit_wait with the rules the CLI applies (runner.ValidateTestTimeout for the
+// limit), plus the upper bounds above for a value that is being changed. It refuses before anything is written.
+func validateRunKnobs(s, current WorkspaceSettings) error {
+	if strings.TrimSpace(s.TestTimeout) != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(s.TestTimeout))
+		if err != nil {
+			return fmt.Errorf("testTimeout %q is not a valid duration (for example 90s or 2m): %w", s.TestTimeout, err)
+		}
+		if err := runner.ValidateTestTimeout(d); err != nil {
+			return err
+		}
+	}
+	if s.RetryFailedTests < 0 || (s.RetryFailedTests > maxRetryFailedTests && s.RetryFailedTests != current.RetryFailedTests) {
+		return fmt.Errorf("retryFailedTests %d is outside 0 to %d (0 = off)", s.RetryFailedTests, maxRetryFailedTests)
+	}
+	if strings.TrimSpace(s.ImplicitWait) != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(s.ImplicitWait))
+		if err != nil {
+			return fmt.Errorf("implicitWait %q is not a valid duration (for example 2s): %w", s.ImplicitWait, err)
+		}
+		if d < 0 || (d > maxImplicitWait && strings.TrimSpace(s.ImplicitWait) != current.ImplicitWait) {
+			return fmt.Errorf("implicitWait %s is outside 0 to %s (0 = off)", d, maxImplicitWait)
+		}
 	}
 	return nil
 }

@@ -1153,6 +1153,9 @@ export namespace main {
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;
+	    testTimeout: string;
+	    retryFailedTests: number;
+	    implicitWait: string;
 	    iosDeviceId: string;
 	    androidDeviceId: string;
 	    aiContextRunResults: boolean;
@@ -1166,6 +1169,9 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.agentPort = source["agentPort"];
 	        this.defaultsTimeout = source["defaultsTimeout"];
+	        this.testTimeout = source["testTimeout"];
+	        this.retryFailedTests = source["retryFailedTests"];
+	        this.implicitWait = source["implicitWait"];
 	        this.iosDeviceId = source["iosDeviceId"];
 	        this.androidDeviceId = source["androidDeviceId"];
 	        this.aiContextRunResults = source["aiContextRunResults"];
