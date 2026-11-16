@@ -94,4 +94,7 @@ func TestConnFactsStringHoldsNoCallbackOrSecret(t *testing.T) {
 	if !strings.Contains(s, "confirm=true") || !strings.Contains(s, "10.0.0.2") {
 		t.Errorf("String = %s", s)
 	}
+	if none := (ConnFacts{}).String(); !strings.Contains(none, "confirm=false") {
+		t.Errorf("String without a callback = %s", none)
+	}
 }
