@@ -26,6 +26,10 @@ export function BuildCallStep(arg1) {
   return window['go']['main']['App']['BuildCallStep'](arg1);
 }
 
+export function CanExportRunResults() {
+  return window['go']['main']['App']['CanExportRunResults']();
+}
+
 export function CancelRun() {
   return window['go']['main']['App']['CancelRun']();
 }
@@ -76,6 +80,10 @@ export function ExplainLastRun() {
 
 export function ExplainPreviewed(arg1) {
   return window['go']['main']['App']['ExplainPreviewed'](arg1);
+}
+
+export function ExportRunResults(arg1) {
+  return window['go']['main']['App']['ExportRunResults'](arg1);
 }
 
 export function FindLocalModels(arg1) {
