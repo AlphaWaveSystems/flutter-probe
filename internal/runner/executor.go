@@ -803,9 +803,6 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.client.DeviceAction(ctx, "press_enter", "")
 
 	case parser.VerbPressKey:
-		if e.deviceCtx != nil && e.deviceCtx.Platform == device.PlatformIOS {
-			return fmt.Errorf("press %s is not supported on iOS yet: only press enter works there (not verified on a simulator)", a.Name)
-		}
 		return e.client.DeviceAction(ctx, "press_key", a.Name)
 
 	case parser.VerbClose:

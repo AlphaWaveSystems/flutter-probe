@@ -22,7 +22,7 @@ func (k *keyRecorder) DeviceAction(ctx context.Context, action, value string) er
 }
 
 // TestPressKeyReachesTheAgent checks that a `press <key>` step reaches the agent as the press_key device action with the key
-// name. On iOS the step is refused before anything is sent: the agent's key handling is not verified there yet.
+// name. On iOS it is sent the same way: the agent does the key in the Flutter focus system, with no platform branch (checked on an iOS simulator for all eight keys).
 func TestPressKeyReachesTheAgent(t *testing.T) {
 	rec := &keyRecorder{}
 	e := &Executor{client: rec, vars: map[string]string{}}
@@ -45,10 +45,10 @@ func TestPressKeyReachesTheAgent(t *testing.T) {
 
 	ios := &keyRecorder{}
 	e = &Executor{client: ios, vars: map[string]string{}, deviceCtx: &DeviceContext{Platform: device.PlatformIOS}}
-	if err := e.runAction(context.Background(), parser.ActionStep{Verb: parser.VerbPressKey, Name: "tab"}); err == nil {
-		t.Error("press tab on iOS: want a refusal")
+	if err := e.runAction(context.Background(), parser.ActionStep{Verb: parser.VerbPressKey, Name: "tab"}); err != nil {
+		t.Errorf("press tab on iOS: %v", err)
 	}
-	if ios.calls != 0 {
-		t.Errorf("press tab on iOS sent %d device actions, want none", ios.calls)
+	if ios.calls != 1 || ios.action != "press_key" || ios.value != "tab" {
+		t.Errorf("press tab on iOS sent %q %q (%d calls), want press_key tab", ios.action, ios.value, ios.calls)
 	}
 }

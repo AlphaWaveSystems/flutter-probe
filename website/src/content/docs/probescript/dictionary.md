@@ -20,7 +20,7 @@ Commands that interact with the app's UI.
 | `scroll` | `scroll up/down` | Scroll within a scrollable widget (`down` reveals later content) |
 | `scroll until` | `scroll down until "Item" appears` | Keep scrolling until the target is on screen; stops at the end of the list |
 | `drag` | `drag #source to #target` | Drag one widget to another |
-| `press <key>` | `press tab` | Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Not on iOS yet. The agent must report the `press_key` capability: a probe_agent up to 0.27.0 does not, and the step fails with a message to update it. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call. |
+| `press <key>` | `press tab` | Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Android and iOS. The agent must report the `press_key` capability: a probe_agent up to 0.27.0 does not, and the step fails with a message to update it. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call. |
 | `press enter` | `press enter` | Press the keyboard action key (done / go / search / send) on the focused text field; warns if no field has focus |
 | `go back` | `go back` | Pop the current route. At the root route it does nothing and warns (it never exits the app; use `close the app`) |
 | `open` | `open the app` | Launch the app (CLI-side) and reconnect |
