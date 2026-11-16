@@ -40,6 +40,8 @@ export function ExplainLastRun():Promise<main.ExplainResult>;
 
 export function ExplainPreviewed(arg1:string):Promise<main.ExplainResult>;
 
+export function ExportRunResults(arg1:string):Promise<main.ExportOutcome>;
+
 export function FindLocalModels(arg1:string):Promise<main.LocalModels>;
 
 export function ForgetWiFiToken(arg1:string):Promise<void>;

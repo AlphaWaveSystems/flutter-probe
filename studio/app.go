@@ -66,6 +66,9 @@ type App struct {
 	// confirmRun is the context of the run in progress, and confirm the pending confirmation of a destructive step (see confirm.go).
 	confirmRun context.Context
 	confirm    confirmState
+	// export holds the engine's results of the last finished run, for ExportRunResults; savePathFn replaces the native save dialog in tests.
+	export     exportSource
+	savePathFn func(defaultName, label, pattern string) (string, error)
 
 	track   runTracker        // what the current/last run looks like, for automation and the UI
 	fix     selectorFixState  // previews of selector-fix requests and what this session confirmed; see ai_selector_fix.go
@@ -1159,6 +1162,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	a.setConfirmRun(runCtx)
 	defer a.clearConfirmRun()
 	a.track.begin(path, plan)
+	a.export.clear() // a new run leaves nothing of the last one to export until it finishes
 	a.emit("run:started", path)
 	a.emit("run:plan", plan)
 
@@ -1175,6 +1179,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	})
 	results, err := r.Run(runCtx)
 	a.failures.record(path, results)
+	a.keepForExport(conn, results)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))

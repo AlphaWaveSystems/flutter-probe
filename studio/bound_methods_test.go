@@ -30,6 +30,7 @@ const (
 	catAIProvider    = "aiProvider"    // text sent to, or read from, an AI provider
 	catDevice        = "device"        // talks to a connected device or its agent
 	catRunControl    = "runControl"    // starts or stops a run or a recording
+	catWritesOutside = "writesOutside" // writes a file outside the workspace, to a path a person picked in a native dialog
 	catConfirm       = "confirm"       // answers a question the window asked about a destructive step: only a person in the window may
 )
 
@@ -38,7 +39,7 @@ var boundMethods = map[string]string{
 	"AIChatLabel": catUI, "AIChatLabelParts": catUI, "ExplainAvailability": catUI, "InitialWorkspace": catUI, "Lint": catUI, "RunState": catUI,
 	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, "SelectorFixAttempts": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
 	// the workspace
-	"AnswerConfirm": catConfirm, "WorkspaceNote": catReadsWS, "DeviceListNote": catDevice, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
+	"AnswerConfirm": catConfirm, "ExportRunResults": catWritesOutside, "WorkspaceNote": catReadsWS, "DeviceListNote": catDevice, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
 	"WriteFile": catWritesWS, "SaveAISettings": catWritesWS, "SaveWorkspaceSettings": catWritesWS,
 	"SetWorkspace": catWorkspaceRoot, "PickWorkspace": catWorkspaceRoot,
 	// the keychain
@@ -58,7 +59,7 @@ var boundMethods = map[string]string{
 }
 
 // bridgeBlocked are the methods the headless bridge refuses by name (headless.go methodsNotOverHTTP): they need a native window.
-var bridgeBlocked = []string{"AnswerConfirm", "PickWorkspace"}
+var bridgeBlocked = []string{"AnswerConfirm", "ExportRunResults", "PickWorkspace"}
 
 // automationRPC are the method names the automation endpoint accepts, and automationBackendMethods the methods of App it can reach.
 var automationRPC = []string{"cancel", "connect", "connect_wifi", "disconnect", "list_devices", "list_dir", "open_workspace", "read_file", "results", "run_file", "run_state", "screenshot", "status", "test_wifi", "ui_state", "widget_tree"}
@@ -66,7 +67,7 @@ var automationBackendMethods = []string{"CancelRun", "Connect", "ConnectWiFi", "
 
 // automationNever are the categories no automation method may belong to: a token for the automation endpoint grants what its methods do,
 // and none of these is something a script that drives a device should be able to do.
-var automationNever = map[string]bool{catConfirm: true, catWritesWS: true, catSecrets: true, catNetwork: true, catAIProvider: true, catWorkspaceRoot: true}
+var automationNever = map[string]bool{catConfirm: true, catWritesWS: true, catSecrets: true, catNetwork: true, catAIProvider: true, catWorkspaceRoot: true, catWritesOutside: true}
 
 func exportedMethods(t reflect.Type) []string {
 	var out []string
@@ -117,7 +118,7 @@ func TestEveryBoundMethodHasADecision(t *testing.T) {
 	}
 	for name, cat := range boundMethods {
 		switch cat {
-		case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl, catConfirm:
+		case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl, catConfirm, catWritesOutside:
 		default:
 			t.Errorf("%s has the unknown category %q", name, cat)
 		}

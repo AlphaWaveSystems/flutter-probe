@@ -78,6 +78,10 @@ export function ExplainPreviewed(arg1) {
   return window['go']['main']['App']['ExplainPreviewed'](arg1);
 }
 
+export function ExportRunResults(arg1) {
+  return window['go']['main']['App']['ExportRunResults'](arg1);
+}
+
 export function FindLocalModels(arg1) {
   return window['go']['main']['App']['FindLocalModels'](arg1);
 }
