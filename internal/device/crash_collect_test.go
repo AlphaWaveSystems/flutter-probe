@@ -827,3 +827,46 @@ func TestOnlyTheFirstEntriesAreLookedAt(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanOneLine(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain text é 日本":            "plain text é 日本",
+		"  leading and trailing   ":  "leading and trailing",
+		"a\x1b[2Jb":                  "a [2Jb",
+		"a\rb\nc\r\nd":               "a b c d",
+		"a\x00b":                     "a b",
+		"a\u202eb\u200bc\u2066d":     "a b c d",
+		"a\u2028b\u2029c":            "a b c",
+		"a\t\t \u00a0b":              "a b",
+		"x\u3164\u2800\ufe0f\ufffcy": "x y",
+		"":                           "",
+		"\x1b\r\n":                   "",
+	} {
+		if got := CleanOneLine(in, 100); got != want {
+			t.Errorf("CleanOneLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := CleanOneLine(strings.Repeat("ab ", 100), 10); utf8.RuneCountInString(got) != 10 || !strings.HasSuffix(got, "…") {
+		t.Errorf("cut = %q", got)
+	}
+	if got := CleanOneLine("日本語日本語", 3); got != "日本…" {
+		t.Errorf("rune cut = %q", got)
+	}
+}
+
+func TestEveryExitReasonHasItsKind(t *testing.T) {
+	want := map[int]ExitKind{0: ExitUnknown, 1: ExitSelf, 2: ExitSignaled, 3: ExitLowMemory, 4: ExitCrash, 5: ExitNativeCrash, 6: ExitANR, 7: ExitInitFailure, 8: ExitSystemChange, 9: ExitResource,
+		10: ExitUserRequested, 11: ExitUserRequested, 12: ExitDependency, 13: ExitOther, 14: ExitSystemChange, 15: ExitSystemChange, 16: ExitSystemChange, 17: ExitOther, 999: ExitOther}
+	for reason, kind := range want {
+		text := exitEntry(crashPkg, "user=0")
+		text = strings.Replace(text, "reason=4", "reason="+strconv.Itoa(reason), 1)
+		recs := ParseExitInfo(text, crashPkg)
+		if len(recs) != 1 || recs[0].Kind != kind {
+			t.Errorf("reason %d: %+v, want %s", reason, recs, kind)
+		}
+	}
+	// a reason number that does not fit three digits is not an entry
+	if recs := ParseExitInfo(strings.Replace(exitEntry(crashPkg, "user=0"), "reason=4", "reason=1000", 1), crashPkg); len(recs) != 0 {
+		t.Errorf("a four-digit reason was read: %+v", recs)
+	}
+}

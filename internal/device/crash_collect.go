@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
@@ -51,13 +52,17 @@ const (
 	ExitNativeCrash   ExitKind = "native_crash"   // a native crash with a signal
 	ExitANR           ExitKind = "anr"            // the app did not respond
 	ExitUserRequested ExitKind = "user_requested" // force-stop or swipe away
-	ExitOther         ExitKind = "other"
+	ExitInitFailure   ExitKind = "init_failure"   // the process could not start
+	ExitResource      ExitKind = "resource"       // the system killed it for using too much of something
+	ExitDependency    ExitKind = "dependency"     // a process it depended on died
+	ExitSystemChange  ExitKind = "system_change"  // the system ended it for a change of permission, package state, package version, or by freezing it: not a failure of the app
+	ExitOther         ExitKind = "other"          // an unlisted reason, or "other kills by system": not enough to call it a death
 )
 
 // exitKinds maps android.app.ApplicationExitInfo REASON_* numbers.
 var exitKinds = map[int]ExitKind{
 	0: ExitUnknown, 1: ExitSelf, 2: ExitSignaled, 3: ExitLowMemory, 4: ExitCrash, 5: ExitNativeCrash, 6: ExitANR,
-	7: ExitOther, 8: ExitOther, 9: ExitOther, 10: ExitUserRequested, 11: ExitUserRequested, 12: ExitOther, 13: ExitOther, 14: ExitOther, 15: ExitOther, 16: ExitOther,
+	7: ExitInitFailure, 8: ExitSystemChange, 9: ExitResource, 10: ExitUserRequested, 11: ExitUserRequested, 12: ExitDependency, 13: ExitOther, 14: ExitSystemChange, 15: ExitSystemChange, 16: ExitSystemChange,
 }
 
 // ExitRecord is one entry of `dumpsys activity exit-info <package>` that belongs to the app's own processes.
@@ -520,4 +525,26 @@ func capBytes(s string, n int) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// CleanOneLine returns s as one line that is safe to print to a terminal or put in a report: every control character (escape, carriage return, new line, tab,
+// NUL), line and paragraph separator and every hidden character (hiddenRune) becomes a space, runs of whitespace collapse to one space, the ends are trimmed, and
+// at most maxRunes runes are kept (a cut is marked with an ellipsis). Visible text is unchanged.
+func CleanOneLine(s string, maxRunes int) string {
+	var b strings.Builder
+	space := true // so leading spaces are dropped
+	for len(s) > 0 {
+		r, n := utf8.DecodeRuneInString(s)
+		s = s[n:]
+		if hiddenRune(r) || unicode.IsSpace(r) {
+			if !space {
+				b.WriteByte(' ')
+				space = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		space = false
+	}
+	return cutRunes(strings.TrimRight(b.String(), " "), maxRunes)
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
@@ -22,10 +24,56 @@ const (
 	crashMaxCollections = 3                      // collections tried in one test attempt (a slow app that later dies is looked at again)
 	crashPolls          = 4                      // looks at a device whose app has no process yet and no exit entry (the entry appears within about 300 ms)
 	crashPollEvery      = 300 * time.Millisecond // between two such looks
-	crashTotalTimeout   = 20 * time.Second       // for everything one collection does
+	crashMaxLineRunes   = 240                    // the printed line
 	crashWindowGrace    = 10 * time.Second       // an exit entry may be this much older than the start of the test and still belong to it
 	crashMaxWindow      = 6 * time.Hour
 )
+
+// crashTotalTimeout bounds everything one collection does. It is a variable only so a test can shorten it; nothing else changes it.
+var crashTotalTimeout = 20 * time.Second
+
+// crashLedger remembers which exit entries a run has already looked at, so that the crash of one test is never blamed on the next: an entry is marked when a
+// collection chooses it, whether or not that test went on to fail. The zero value is ready; a nil ledger remembers nothing.
+type crashLedger struct {
+	mu   sync.Mutex
+	seen map[string]bool
+}
+
+func exitKey(r device.ExitRecord) string {
+	return strconv.Itoa(r.PID) + "@" + r.WallClock.Format("2006-01-02 15:04:05.000")
+}
+
+func (l *crashLedger) has(r device.ExitRecord) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.seen[exitKey(r)]
+}
+
+func (l *crashLedger) mark(r device.ExitRecord) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.seen == nil {
+		l.seen = map[string]bool{}
+	}
+	l.seen[exitKey(r)] = true
+}
+
+// unseen returns the entries the ledger has not marked, in their order.
+func (l *crashLedger) unseen(exits []device.ExitRecord) []device.ExitRecord {
+	var out []device.ExitRecord
+	for _, r := range exits {
+		if !l.has(r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
 
 // CrashReport is what a failed test carries when its app died during it.
 type CrashReport struct {
@@ -51,12 +99,15 @@ func (c *CrashReport) Line() string {
 	if c.Evidence.Summary != "" {
 		what += ": " + c.Evidence.Summary
 	}
-	return "the app died during this test: " + what
+	// one line of plain text whatever the evidence holds: nothing from the device can move the cursor, clear the screen or start a second line
+	return device.CleanOneLine("the app died during this test: "+what, crashMaxLineRunes)
 }
 
-// deathKinds are the exit reasons that mean the app ended without being asked to. A force-stop (user requested) and an unknown reason are not.
+// deathKinds are the exit reasons that mean the app ended without being asked to and not because of a change the system made around it. A force-stop (user
+// requested), a change of permission or package or freezing (system_change), "other kills by system" and an unknown reason are not.
 var deathKinds = map[device.ExitKind]bool{
-	device.ExitSelf: true, device.ExitSignaled: true, device.ExitLowMemory: true, device.ExitCrash: true, device.ExitNativeCrash: true, device.ExitANR: true, device.ExitOther: true,
+	device.ExitSelf: true, device.ExitSignaled: true, device.ExitLowMemory: true, device.ExitCrash: true, device.ExitNativeCrash: true, device.ExitANR: true,
+	device.ExitInitFailure: true, device.ExitResource: true, device.ExitDependency: true,
 }
 
 // judgeDeath decides dead or slow from what was seen. exits are newest first, deviceNow is the device's clock and window how long ago the test began, in the
@@ -107,11 +158,8 @@ func (p crashProbe) alive(ctx context.Context) bool {
 
 // collectCrash looks at the device after a lost connection and returns a report when the app died, nil when it did not or when nothing could be read. since is how
 // long ago the test attempt began.
-func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll time.Duration) *CrashReport {
+func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll time.Duration, ledger *crashLedger) *CrashReport {
 	window := since + crashWindowGrace
-	if window < 30*time.Second {
-		window = 30 * time.Second
-	}
 	if window > crashMaxWindow {
 		window = crashMaxWindow
 	}
@@ -129,15 +177,17 @@ func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll t
 			return nil
 		}
 		alive := p.alive(ctx)
-		dead, rec := judgeDeath(alive, ev.Exits, now, window)
+		dead, rec := judgeDeath(alive, ledger.unseen(ev.Exits), now, window)
 		switch {
 		case dead && rec != nil:
-			if len(ev.Exits) > 0 && rec != &ev.Exits[0] { // the newest entry is not the death (a later force-stop, say): read the crash text of the process that died
+			ledger.mark(*rec)
+			if len(ev.Exits) > 0 && exitKey(*rec) != exitKey(ev.Exits[0]) { // the newest entry is not the death (a later force-stop, say): read the crash text of the process that died
 				opts.PID = rec.PID
 				if again, err := device.CollectCrashEvidence(ctx, p.runner, p.serial, p.app, opts); err == nil {
 					ev = again
 				}
 			}
+			ev.Summary = device.CleanOneLine(ev.Summary, 160)
 			return &CrashReport{Gone: !alive, Kind: rec.Kind, Evidence: ev}
 		case dead:
 			gone = &CrashReport{Gone: true, Kind: device.ExitUnknown, Evidence: ev}
@@ -180,7 +230,7 @@ func (e *Executor) collectCrashOnce(ctx context.Context) {
 	if !e.startedAt.IsZero() {
 		since = time.Since(e.startedAt)
 	}
-	e.crashReport = collectCrash(cctx, crashProbe{runner: runner, serial: dc.Serial, app: dc.AppID}, since, poll)
+	e.crashReport = collectCrash(cctx, crashProbe{runner: runner, serial: dc.Serial, app: dc.AppID}, since, poll, &dc.crashLedger)
 }
 
 // CrashReport is the evidence collected during this test attempt, or nil.
