@@ -1,0 +1,40 @@
+# Needs the selection build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=selection (see README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+
+before each test
+  restart the app
+
+test "a checkbox turns on and off"
+  see "Terms: off"
+  don't see "Accept terms" is checked
+  toggle "Accept terms"
+  see "Terms: on"
+  see "Accept terms" is checked
+  toggle "Accept terms"
+  see "Terms: off"
+  don't see "Accept terms" is checked
+
+test "a switch turns on"
+  see "Notifications: off"
+  toggle "Notifications"
+  see "Notifications: on"
+  see "Notifications" is checked
+
+# `see "Medium" is checked` is not asserted here: with the RadioGroup API the agent reads a Radio's group value from the Radio, where it is
+# no longer kept, so the check fails for a radio that is on. It is a finding with its own fix (docs/compat/MATRIX.md), not a thing to hide.
+test "a radio group takes one choice at a time"
+  see "Size: small"
+  tap "Medium"
+  see "Size: medium"
+  tap "Large"
+  see "Size: large"
+
+test "a swipe across a slider moves its value"
+  see "Volume: 50"
+  swipe right on #wf_slider
+  see "Volume" matching "Volume: (5[1-9]|[6-9][0-9]|100)"
+
+test "a Cupertino switch turns on"
+  see "Cupertino switch: off"
+  toggle #wf_cupertino_switch
+  see "Cupertino switch: on"

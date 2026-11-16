@@ -25,6 +25,13 @@ rendering or accessibility, and either break the agent or leave new components u
    `tools/flutter-catalog -check` against it. A failure opens or updates one open issue labelled `compat-drift`, and the run fails. The check does not run
    the fixture suite. Whoever touches the repo and sees a newer stable release still records it in `RELEASES.md` before finishing.
 
+## The test app follows the catalog
+
+The Flutter fixture app (`native-test-apps/flutter`) is where the matrix gets its results. A widget family gets (1) a screen, selected by `--dart-define=PROBE_FIXTURE_WIDGETS=<family>` (`lib/widget_families.dart`), whose elements
+carry a semantics identifier and a key of the same name and show their state as text; (2) a ProbeScript test in `probe-tests/widgets/`; (3) its rows in `MATRIX.md`, set from a run of that test on a named device and Flutter version.
+When a new stable Flutter changes the catalog (an added, removed, renamed or deprecated widget), the families that the change touches are checked against the diff: a new widget of a family gets an element on that family's
+screen, a removed or renamed one is taken off it, and the test is run again on the new release. A family with no screen yet stays "not assessed".
+
 ## When a new stable Flutter comes out
 
 1. Get that SDK from the official source only, and check it: the release manifest (`https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json`) names the stable release and its

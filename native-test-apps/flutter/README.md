@@ -3,6 +3,18 @@
 Flutter twin of the native fixture apps in `../android` and `../ios` — see the parent
 `native-test-apps/README.md` for the shared element table and cross-framework story.
 
+## The widget family screens
+
+One screen per widget family of the compatibility catalog (`docs/compat/MATRIX.md`), chosen at build time. Every element has a semantics identifier and a key of the same name (`wf_...`) and shows its state as text.
+
+```bash
+flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=selection   # or textinput
+probe test probe-tests/widgets/selection.probe --config probe.yaml --device <serial>
+```
+
+Families so far: `selection` (checkbox, switch, radio group, slider, Cupertino switch) and `textinput` (plain, form, obscured, multi-line and Cupertino fields). A screen is something to test against: it is not a claim that
+FlutterProbe supports a widget, and the matrix cell for it changes only from a test that ran. On a shared emulator give the agent its own port, as for the other screens.
+
 ## The list screen (scroll checks)
 
 The default app is the 8-element surface the native fixtures share, and it stays that way. The scroll checks in
