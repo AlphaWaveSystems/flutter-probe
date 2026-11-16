@@ -585,23 +585,28 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 	if r.cfg.Recipes == "" {
 		return nil
 	}
-	if !r.confine.allow(r.cfg.Recipes, 0, refuseRecipesFolder) {
+	dir, ok := r.confine.open(r.cfg.Recipes, 0, refuseRecipesFolder)
+	if !ok {
 		r.confine.skipRecipes = true
 		return nil
 	}
-	entries, err := os.ReadDir(r.cfg.Recipes)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return r.readError(r.cfg.Recipes, err)
+		if r.confine != nil {
+			r.confine.unreadable(dir, 0)
+			return nil
+		}
+		return err
 	}
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), ".probe") {
 			continue
 		}
-		path := filepath.Join(r.cfg.Recipes, e.Name())
-		if !r.confine.allow(path, 0, refuseRecipeFile) {
+		path, ok := r.confine.open(filepath.Join(dir, e.Name()), 0, refuseRecipeFile)
+		if !ok {
 			r.confine.skipRecipes = true
 			continue
 		}
@@ -618,7 +623,11 @@ func (r *Runner) loadRecipeFile(_ context.Context, path string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return r.readError(path, err)
+		if r.confine != nil {
+			r.confine.unreadable(path, 0)
+			return nil
+		}
+		return err
 	}
 	prog, err := parser.ParseFile(string(src))
 	if err != nil {
@@ -647,22 +656,27 @@ func (r *Runner) loadUse(ctx context.Context, from string, u parser.UseStmt, see
 		return nil
 	}
 	seen[abs] = true
-	if !r.confine.allow(target, r.confine.lineOf(from, u.Line), refuseUseTarget) {
+	read, ok := r.confine.open(target, r.confine.lineOf(from, u.Line), refuseUseTarget)
+	if !ok {
 		r.confine.skipRecipes = true
 		return nil
 	}
-	src, err := os.ReadFile(target)
+	src, err := os.ReadFile(read)
 	if err != nil {
 		if os.IsNotExist(err) {
 			r.missingUses = append(r.missingUses, fmt.Sprintf("%s:%d `use %q` -> %s", from, u.Line, u.Path, target))
 			return nil
 		}
-		return r.readError(target, err)
+		if r.confine != nil {
+			r.confine.unreadable(read, r.confine.lineOf(from, u.Line))
+			return nil
+		}
+		return err
 	}
 	prog, err := parser.ParseFile(string(src))
 	if err != nil {
 		if r.confine != nil {
-			r.confine.broken(target, err, r.confine.lineOf(from, u.Line))
+			r.confine.broken(read, err, r.confine.lineOf(from, u.Line))
 			return nil
 		}
 		return fmt.Errorf("parse recipe file %s: %w", target, err)

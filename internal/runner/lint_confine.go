@@ -1,17 +1,20 @@
 package runner
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
 // lintConfinement is the workspace fence of a lint given LintWithRoot. Under it a lint reads a file only when the file, with its
-// symlinks resolved, lies inside the workspace root. A file outside is not read, and the report names it by its base name. A
-// file inside that does not parse is named by its relative path and the parser's line, never by its text: the parser's message
-// quotes the file. A nil *lintConfinement is the CLI's behaviour: every method here allows the read and records nothing.
+// symlinks resolved, lies inside the workspace root. A file outside is not read, and the refusal names no file. A file inside that
+// does not parse, or cannot be read, is named by its relative path and the parser's line, never by its text. A nil *lintConfinement
+// is the CLI's behaviour: every method here allows the read as it is written and records nothing.
 type lintConfinement struct {
 	root        string        // the root, with its symlinks resolved
 	linted      string        // the absolute path of the linted file, to tell its own use statements from those of other files
@@ -39,31 +42,65 @@ func newLintConfinement(root, path string) (*lintConfinement, error) {
 	return &lintConfinement{root: resolved, linted: linted}, nil
 }
 
-// locate returns p with its symlinks resolved, as far as they exist, and whether that lies inside the root. A path that does not
-// exist is judged by where it is written; nothing is read from it either way.
+// errLink is what resolveLinks returns for a symlink that does not resolve: a dangling link, or one in a loop. Such a link is refused
+// whatever it points to. Refusing it the same way whether its target exists or not means a lint reveals nothing about the disk.
+var errLink = errors.New("symlink does not resolve")
+
+// resolveLinks returns p with the symlinks in it resolved, as far as they exist. A component that does not exist is kept as it is
+// written, so a missing file is judged by where it is written. A symlink that does not resolve is errLink.
+func resolveLinks(p string) (string, error) {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved, nil
+	}
+	if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", errLink
+	}
+	parent := filepath.Dir(p)
+	if parent == p {
+		return p, nil
+	}
+	resolvedParent, err := resolveLinks(parent)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(resolvedParent, filepath.Base(p)), nil
+}
+
+// within reports whether path, both absolute and clean, lies inside root. A sibling whose name starts with root's name is outside.
+func within(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
+// locate returns p with its symlinks resolved, and whether that lies inside the root. A symlink that does not resolve is outside.
 func (c *lintConfinement) locate(p string) (string, bool) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return p, false
 	}
-	resolved := resolveExisting(abs)
-	rel, err := filepath.Rel(c.root, resolved)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return resolved, false
+	resolved, err := resolveLinks(abs)
+	if err != nil {
+		return abs, false
 	}
-	return resolved, true
+	return resolved, within(c.root, resolved)
 }
 
-// resolveExisting resolves the symlinks of the longest prefix of p that exists, and appends the rest as it is written.
-func resolveExisting(p string) string {
-	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		return resolved
+// open decides whether a read of p may happen, and returns the path to read. The path returned is p with its symlinks resolved, so the
+// read opens the file the check looked at. A path outside the workspace, or a symlink that does not resolve, is refused: the refusal is
+// one warning at line with the fixed text refusal. Line is the line of the statement in the linted file that names p, or 0 when another
+// file names it. A nil fence allows the read of p as it is written.
+func (c *lintConfinement) open(p string, line int, refusal string) (string, bool) {
+	if c == nil {
+		return p, true
 	}
-	parent := filepath.Dir(p)
-	if parent == p {
-		return p
+	if resolved, inside := c.locate(p); inside {
+		return resolved, true
 	}
-	return filepath.Join(resolveExisting(parent), filepath.Base(p))
+	c.findings = append(c.findings, LintFinding{Line: line, Warning: true, Message: refusal})
+	return "", false
 }
 
 // name is how a report names p: relative to the root when p lies inside it, and the base name when it does not, so a report never
@@ -75,20 +112,6 @@ func (c *lintConfinement) name(p string) string {
 		}
 	}
 	return filepath.Base(p)
-}
-
-// allow reports whether a read of p may happen. A path outside the workspace is refused: the refusal is recorded as one warning
-// with the fixed text refusal, at line. Line is the line of the statement in the linted file that names p, or 0 when another
-// file names it. The text names nothing, so a report never shows a path outside the workspace.
-func (c *lintConfinement) allow(p string, line int, refusal string) bool {
-	if c == nil {
-		return true
-	}
-	if _, inside := c.locate(p); inside {
-		return true
-	}
-	c.findings = append(c.findings, LintFinding{Line: line, Warning: true, Message: refusal})
-	return false
 }
 
 // Refusal texts. Each is one warning per refused path, and none names a file. The first three refuse a recipe source, and each says in
@@ -121,6 +144,12 @@ func (c *lintConfinement) broken(p string, err error, line int) {
 	c.findings = append(c.findings, LintFinding{Line: line, Message: msg})
 }
 
+// unreadable records that a file the fence allowed could not be read, as an error named by its relative path. The read error is not
+// shown: it names the path the read opened, which is the absolute one.
+func (c *lintConfinement) unreadable(p string, line int) {
+	c.findings = append(c.findings, LintFinding{Line: line, Message: fmt.Sprintf("%s cannot be read", c.name(p))})
+}
+
 // lineOf is line when from is the linted file, and 0 otherwise: a statement in another file has no line in the linted file.
 func (c *lintConfinement) lineOf(from string, line int) int {
 	if c == nil {
@@ -141,11 +170,17 @@ func csvFile(path, source string) string {
 	return filepath.Join(filepath.Dir(path), source)
 }
 
-// readError is the error for a file the lint could not read. With a fence it names the file relatively, so the error does not show
-// a path outside the workspace. Without one it is err.
-func (r *Runner) readError(p string, err error) error {
-	if r.confine == nil {
-		return err
+// loadCSVSource reads the CSV of a `with examples from` source for a lint. Without a fence it is loadCSVExamples as it always was.
+// With one, the file is read at the path the fence checked, and only when the fence allows it.
+func loadCSVSource(conf *lintConfinement, path string, source string, line int) (*parser.ExamplesBlock, bool) {
+	if conf == nil {
+		csv, err := loadCSVExamples(filepath.Dir(path), source)
+		return csv, err == nil
 	}
-	return fmt.Errorf("%s cannot be read", r.confine.name(p))
+	read, ok := conf.open(csvFile(path, source), line, refuseCSVSource)
+	if !ok {
+		return nil, false
+	}
+	csv, err := loadCSVExamples("", read)
+	return csv, err == nil
 }

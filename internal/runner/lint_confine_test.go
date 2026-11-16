@@ -3,6 +3,7 @@ package runner
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -432,5 +433,145 @@ func TestRefusalTextsSayWhatTheySuppress(t *testing.T) {
 	}
 	if strings.Contains(refuseCSVSource, "recipes") {
 		t.Errorf("the CSV refusal suppresses nothing; it must not mention recipes: %q", refuseCSVSource)
+	}
+}
+
+// A dangling symlink is refused whatever its target: the findings are the same whether the target exists or not, so a lint shows
+// nothing about the disk. The live link to an existing outside file is the control.
+func TestDanglingSymlinkIsRefusedWhateverItsTarget(t *testing.T) {
+	ws, outside := confinedWorkspace(t)
+	tests := filepath.Join(ws, "tests")
+	if err := os.Symlink(filepath.Join(outside, "absent.probe"), filepath.Join(tests, "dangling.probe")); err != nil {
+		t.Skipf("symlinks are not available: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret.probe"), filepath.Join(tests, "live.probe")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(tests, "login.probe")
+	lint := func(link string) LintReport {
+		rep, err := LintSource(&config.Config{}, path, "use \""+link+"\"\n\ntest \"t\"\n  open the app\n", LintWithRoot(ws))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep
+	}
+	dangling, live := lint("dangling.probe"), lint("live.probe")
+	if len(findingsWith(dangling.References, refuseUseTarget)) != 1 {
+		t.Errorf("a dangling link must be refused, got %+v", dangling.References)
+	}
+	if !reflect.DeepEqual(dangling.References, live.References) {
+		t.Errorf("a dangling link and a link to an existing target must give the same findings:\n  dangling %+v\n  live     %+v", dangling.References, live.References)
+	}
+	assertNoLeak(t, dangling, confinedLeaks(ws, outside)...)
+	assertNoLeak(t, live, confinedLeaks(ws, outside)...)
+}
+
+// Whether a path outside the workspace exists does not change the findings: a refusal depends on where a path is, not on what is there.
+// A use target and a CSV source, each existing and missing, are the controls.
+func TestOutsidePathExistenceDoesNotChangeTheFindings(t *testing.T) {
+	ws, outside := confinedWorkspace(t)
+	path := filepath.Join(ws, "tests", "login.probe")
+	uses := func(target string) string {
+		return "use \"" + target + "\"\n\ntest \"t\"\n  open the app\n  open the vault\n"
+	}
+	csvs := func(source string) string {
+		return "test \"t\"\n  open the app\n  tap \"<guessedheader>\"\n\nwith examples from \"" + source + "\"\n"
+	}
+	cases := []struct{ name, exists, missing string }{
+		{"use target", uses("../../outside/secret.probe"), uses("../../outside/absent.probe")},
+		{"CSV source", csvs(filepath.Join(outside, "secret.csv")), csvs(filepath.Join(outside, "absent.csv"))},
+	}
+	for _, c := range cases {
+		a, err := LintSource(&config.Config{}, path, c.exists, LintWithRoot(ws))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := LintSource(&config.Config{}, path, c.missing, LintWithRoot(ws))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(a.References) == 0 {
+			t.Errorf("%s: the outside path must be refused, got no findings", c.name)
+		}
+		if !reflect.DeepEqual(a.References, b.References) {
+			t.Errorf("%s: an existing and a missing outside path must give the same findings:\n  exists  %+v\n  missing %+v", c.name, a.References, b.References)
+		}
+		assertNoLeak(t, a, confinedLeaks(ws, outside)...)
+		assertNoLeak(t, b, confinedLeaks(ws, outside)...)
+	}
+}
+
+// The workspace is not a prefix of its neighbours: a sibling folder whose name starts with the workspace's name is outside it.
+func TestSiblingFolderWithTheSamePrefixIsOutside(t *testing.T) {
+	ws, outside := confinedWorkspace(t)
+	sibling := filepath.Join(filepath.Dir(ws), "ws2")
+	if err := os.MkdirAll(sibling, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sibling, "sibling.probe"), []byte("recipe \"sibling\"\n  tap \"Menu\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(ws, "tests", "login.probe")
+	content := "use \"../../ws2/sibling.probe\"\n\ntest \"t\"\n  open the app\n  open the sibling\n"
+	fenced, err := LintSource(&config.Config{}, path, content, LintWithRoot(ws))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findingsWith(fenced.References, refuseUseTarget)) != 1 {
+		t.Errorf("a sibling folder must be refused like any outside path, got %+v", fenced.References)
+	}
+	for _, f := range fenced.References {
+		if !f.Warning {
+			t.Errorf("no unknown-step error while a use target is refused; got line %d %q", f.Line, f.Message)
+		}
+	}
+	assertNoLeak(t, fenced, confinedLeaks(ws, outside)...)
+}
+
+// name is relative to the workspace inside it, and the base name outside it: a report never shows a directory outside the workspace.
+func TestNameIsRelativeInsideAndBaseOutside(t *testing.T) {
+	ws, outside := confinedWorkspace(t)
+	c, err := newLintConfinement(ws, filepath.Join(ws, "tests", "login.probe"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.name(filepath.Join(ws, "parts", "broken.probe")); got != "parts/broken.probe" {
+		t.Errorf("inside: name = %q, want the relative path", got)
+	}
+	if got := c.name(filepath.Join(outside, "recipes", "vault.probe")); got != "vault.probe" {
+		t.Errorf("outside: name = %q, want the base name only", got)
+	}
+	if got := c.name(filepath.Join(outside, "absent.probe")); got != "absent.probe" {
+		t.Errorf("outside and missing: name = %q, want the base name only", got)
+	}
+}
+
+// A file inside the workspace that cannot be read is a finding named by its relative path, not an error that ends the lint. The
+// read error itself names the absolute path, so it is not shown. Without the fence the read error comes back as it always did.
+func TestUnreadableFileInsideIsAFinding(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("a root user reads a file whatever its mode")
+	}
+	ws, outside := confinedWorkspace(t)
+	locked := filepath.Join(ws, "parts", "locked.probe")
+	if err := os.WriteFile(locked, []byte("recipe \"locked\"\n  tap \"Menu\"\n"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o644) })
+	path := filepath.Join(ws, "tests", "login.probe")
+	content := "use \"../parts/locked.probe\"\n\ntest \"t\"\n  open the app\n"
+
+	fenced, err := LintSource(&config.Config{}, path, content, LintWithRoot(ws))
+	if err != nil {
+		t.Fatalf("an unreadable file inside the workspace is a finding, not an error: %v", err)
+	}
+	found := findingsWith(fenced.References, "parts/locked.probe cannot be read")
+	if len(found) != 1 || found[0].Line != 1 || found[0].Warning {
+		t.Errorf("want one error for the unreadable file at the use line, got %+v", fenced.References)
+	}
+	assertNoLeak(t, fenced, confinedLeaks(ws, outside)...)
+
+	if _, err := LintSource(&config.Config{}, path, content); err == nil {
+		t.Errorf("without the fence the read error is returned, as before")
 	}
 }

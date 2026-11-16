@@ -71,19 +71,19 @@ func lintReferencesSource(cfg *config.Config, path, content string, conf *lintCo
 	var findings []LintFinding
 	for _, u := range prog.Uses {
 		target := filepath.Join(filepath.Dir(path), u.Path)
+		stat, shown := target, target
 		if conf != nil {
-			// A target outside the workspace was refused when loadUse reached it, and is not checked again here.
-			if _, inside := conf.locate(target); !inside {
+			// A target outside the workspace was refused when loadUse reached it, and is not checked again here. A missing one is
+			// named relative to the workspace, as the linted text writes it.
+			resolved, inside := conf.locate(target)
+			if !inside {
 				continue
 			}
+			stat, shown = resolved, conf.name(target)
 		}
-		if _, err := os.Stat(target); os.IsNotExist(err) {
+		if _, err := os.Stat(stat); os.IsNotExist(err) {
 			// A missing file is a warning: a run only fails when a call needs one of its recipes, and that call is
 			// reported as an unknown step.
-			shown := target
-			if conf != nil {
-				shown = conf.name(target)
-			}
 			findings = append(findings, LintFinding{Line: u.Line, Warning: true, Message: fmt.Sprintf("use %q: no file at %s", u.Path, shown)})
 		}
 	}
@@ -115,8 +115,8 @@ func lintReferencesSource(cfg *config.Config, path, content string, conf *lintCo
 			continue
 		}
 		headers := t.Examples.Headers
-		if t.Examples.Source != "" && conf.allow(csvFile(path, t.Examples.Source), t.Examples.Line, refuseCSVSource) {
-			if csv, err := loadCSVExamples(filepath.Dir(path), t.Examples.Source); err == nil {
+		if t.Examples.Source != "" {
+			if csv, ok := loadCSVSource(conf, path, t.Examples.Source, t.Examples.Line); ok {
 				headers = csv.Headers
 			}
 		}
