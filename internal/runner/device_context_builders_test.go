@@ -26,10 +26,10 @@ var buildRoots = []string{"..", "../../cmd", "../../studio"}
 // NewDeviceContext, the one helper that asks whether the device is physical.
 var builderFuncs = []struct{ dir, file, fn string }{
 	{"../cli", "composite.go", "compositeAndroidContext"},
-	{"../cli", "composite.go", "compositeIOSContext"}, // the iOS builder of a composite run; connectCompositeDevice only delegates to it and to compositeAndroidContext
+	{"../cli", "composite.go", "compositeIOSContext"},                // the iOS builder of a composite run; connectCompositeDevice only delegates to it and to compositeAndroidContext
 	{"../runner", "device_context.go", "NewConfiguredDeviceContext"}, // the one constructor of `probe test` and Studio (singleDeviceContext and newStudioDeviceContext call it)
 	{"../cli", "test.go", "localeDeviceContext"},
-	{"../runner", "orchestrator.go", "deviceContext"},
+	{"../runner", "orchestrator.go", "NewLaneContext"},
 }
 
 // legacyLiterals are the functions that still build a DeviceContext outside the helper, named as deviceContextSites
