@@ -46,6 +46,19 @@ var (
 // of the open workspace. path must be a .probe file inside the workspace (the check ReadFile makes) and only resolves the recipes and data
 // files the text names; content is the text to check, saved or not. It reads files in the workspace and writes nothing.
 func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
+	a.mu.Lock()
+	ws := a.workspace
+	a.mu.Unlock()
+	root := ws
+	if root == "" {
+		if roots := a.automationRoots(); len(roots) > 0 {
+			root = roots[0]
+		}
+	}
+	// A fence around the whole file system fences nothing: with a root of / (or a drive) the lint says so and reads nothing.
+	if isFilesystemRoot(root) {
+		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: the open workspace is the root of the file system, so the lint cannot tell inside from outside. Open your project folder."}, nil
+	}
 	if hasDotDotSegment(path) {
 		return LintProblemsResult{}, fmt.Errorf("path traversal rejected: %s", path)
 	}
@@ -56,20 +69,11 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	if len(content) > maxLintBytes {
 		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: the file is too large (over 1 MiB)"}, nil
 	}
-	a.mu.Lock()
-	ws := a.workspace
-	a.mu.Unlock()
 	cfg := a.workspaceConfig()
 	// The recipes folder is given relative to the workspace, like the CLI run from there; a relative one would otherwise resolve against
 	// whatever folder Studio was started in.
 	if ws != "" && cfg.Recipes != "" && !filepath.IsAbs(cfg.Recipes) {
 		cfg.Recipes = filepath.Join(ws, cfg.Recipes)
-	}
-	root := ws
-	if root == "" {
-		if roots := a.automationRoots(); len(roots) > 0 {
-			root = roots[0]
-		}
 	}
 	ticket := lintSeq.Add(1)
 	lintMu.Lock()
@@ -81,8 +85,18 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	rep, err := runner.LintSource(cfg, real, content, runner.LintWithRoot(root))
 	lintMu.Unlock()
 	if err != nil {
-		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: " + oneLine(withoutPaths(err.Error(), root))}, nil
+		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: lintUnavailable(err, root)}, nil
 	}
+	return lintToProblems(rep, root), nil
+}
+
+// lintUnavailable is the one line shown when the text could not be checked.
+func lintUnavailable(err error, root string) string {
+	return "Not checked: " + oneLine(withoutPaths(err.Error(), root))
+}
+
+// lintToProblems turns a report into the rows the window shows, every text made safe (no absolute path, one line, bounded).
+func lintToProblems(rep runner.LintReport, root string) LintProblemsResult {
 	out := LintProblemsResult{Problems: []LintProblem{}}
 	for _, f := range rep.References {
 		out.Problems = append(out.Problems, LintProblem{Line: f.Line, Warning: f.Warning, Message: oneLine(withoutPaths(f.Message, root)), Source: "reference"})
@@ -90,11 +104,24 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	for _, f := range rep.Program {
 		out.Problems = append(out.Problems, LintProblem{Line: f.Line, Warning: f.Warning, Message: oneLine(withoutPaths(f.Message, root)), Source: "program"})
 	}
-	return out, nil
+	return out
+}
+
+// isFilesystemRoot says whether p is the top of a file system: "/" or a drive root such as C:\. An empty path is not one (no workspace is
+// a different case: there is nothing to lint inside of).
+func isFilesystemRoot(p string) bool {
+	if p == "" {
+		return false
+	}
+	clean := filepath.Clean(p)
+	return filepath.Dir(clean) == clean
 }
 
 // absPath matches a path that starts at the root of the file system; a finding shows no such path, whatever the engine put in it.
-var absPath = regexp.MustCompile(`(^|[\s"'(=:])((?:[A-Za-z]:)?[/\\][^\s"'<>|]+)`)
+var absPath = regexp.MustCompile(`(^|[\s"'(=])((?:[A-Za-z]:)?[/\\][^\s"'<>|]+)`)
+
+// fileURL matches a file:// URL, which is an absolute path in another spelling.
+var fileURL = regexp.MustCompile(`(?i)file://(/[^\s"'<>|]*)`)
 
 // withoutPaths is a last guard on text shown in the window: the workspace folder is dropped from it and any other absolute path becomes
 // "<path>". The engine's findings name files relative to the workspace and never by a path outside it; this keeps a message from the parser
@@ -106,6 +133,7 @@ func withoutPaths(s, root string) string {
 			s = strings.ReplaceAll(s, strings.TrimRight(real, "/")+"/", "")
 		}
 	}
+	s = fileURL.ReplaceAllString(s, "file://<path>")
 	return absPath.ReplaceAllString(s, "${1}<path>")
 }
 
@@ -116,7 +144,7 @@ func oneLine(s string) string {
 		switch {
 		case r == '\n' || r == '\r' || r == '\t':
 			out = append(out, ' ')
-		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == ' ' || r == ' ':
+		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029':
 			continue
 		default:
 			out = append(out, r)

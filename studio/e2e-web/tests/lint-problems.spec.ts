@@ -149,6 +149,25 @@ test.describe("Problems panel", () => {
     }
   });
 
+  test("lp-10 an answer marked stale (a newer request replaced it) is not drawn: no rows, no error marker", async ({ page }) => {
+    let calls = 0;
+    await page.route("**/__headless/call", async (route) => {
+      if ((route.request().postData() ?? "").includes('"method":"LintProblems"')) {
+        calls++;
+        return route.fulfill({ json: { result: { problems: [{ line: 1, warning: false, message: "SHOULD NOT BE DRAWN", source: "reference" }], stale: true } } });
+      }
+      await route.continue();
+    });
+    await openStudio(page);
+    await openFile(page, "lp-fixture.probe");
+    await expect.poll(() => calls).toBeGreaterThan(0);
+    await page.waitForTimeout(500);
+    await expect(page.locator("#tab-problems")).toHaveText("Problems");
+    await page.click("#tab-problems");
+    await expect(rows(page)).toHaveCount(0);
+    await expect(page.locator("#editor .squiggly-error")).toHaveCount(0); // the stale finding was an error; the old parse lint only warns
+  });
+
   test("lp-08 findings are text: a recipe name that looks like markup is not interpreted", async ({ page }) => {
     fs.writeFileSync(file(), 'use "recipes/<img src=x onerror=alert(1)>.probe"\n\ntest "t"\n  log "x"\n');
     await openStudio(page);
