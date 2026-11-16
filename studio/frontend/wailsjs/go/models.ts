@@ -408,6 +408,7 @@ export namespace main {
 	export class LintProblemsResult {
 	    problems: LintProblem[];
 	    unavailable?: string;
+	    stale?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LintProblemsResult(source);
@@ -417,6 +418,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.problems = this.convertValues(source["problems"], LintProblem);
 	        this.unavailable = source["unavailable"];
+	        this.stale = source["stale"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func lintWorkspace(t *testing.T) (*App, string) {
@@ -144,10 +145,65 @@ func TestLintProblemsUnderConcurrentCalls(t *testing.T) {
 				text = "use \"recipes/missing.probe\"\n\ntest \"e\"\n"
 			}
 			res, err := a.LintProblems(file, text)
+			if res.Stale {
+				return // a newer call replaced it before it ran
+			}
 			if err != nil || (i%2 == 0) != (len(res.Problems) > 0) {
 				t.Errorf("call %d: %+v, %v", i, res, err)
 			}
 		}(i)
 	}
 	wg.Wait()
+}
+
+// A text over 1 MiB is not linted: one line says so, at once.
+func TestLintProblemsSkipsAHugeText(t *testing.T) {
+	a, file := lintWorkspace(t)
+	res, err := a.LintProblems(file, "test \"t\"\n  log \""+strings.Repeat("x", maxLintBytes)+"\"\n")
+	if err != nil || !strings.Contains(res.Unavailable, "too large") || len(res.Problems) != 0 {
+		t.Errorf("result = %+v, %v", res, err)
+	}
+	ok, err := a.LintProblems(file, "test \"t\"\n  log \"x\"\n")
+	if err != nil || ok.Unavailable != "" {
+		t.Errorf("a normal text was refused: %+v, %v", ok, err)
+	}
+}
+
+// A burst of requests queued behind a running lint: only the newest runs; the others come back stale without checking anything.
+func TestLintProblemsCoalescesAQueueOfStaleRequests(t *testing.T) {
+	a, file := lintWorkspace(t)
+	const n = 6
+	start := lintSeq.Load()
+	lintMu.Lock() // a lint is "running"
+	results := make([]LintProblemsResult, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i], _ = a.LintProblems(file, "use \"recipes/missing.probe\"\n\ntest \"e\"\n")
+		}(i)
+		for lintSeq.Load() < start+uint64(i+1) { // this request has its ticket before the next one starts
+			time.Sleep(time.Millisecond)
+		}
+	}
+	lintMu.Unlock()
+	wg.Wait()
+	stale, ran := 0, 0
+	for _, r := range results {
+		if r.Stale {
+			stale++
+			if len(r.Problems) != 0 {
+				t.Error("a stale request returned findings")
+			}
+		} else {
+			ran++
+			if len(r.Problems) == 0 {
+				t.Error("the newest request did not run")
+			}
+		}
+	}
+	if ran != 1 || stale != n-1 {
+		t.Errorf("%d ran, %d stale; want 1 and %d", ran, stale, n-1)
+	}
 }

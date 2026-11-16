@@ -258,7 +258,9 @@ function appendResult(res: RunResult): void {
     const open = () => document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: target }));
     li.addEventListener("click", open);
     li.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") open();
+      if (e.key !== "Enter") return;
+      e.preventDefault(); // the jump moves focus to the editor: without this the same Enter would type a new line into the file
+      open();
     });
   }
 

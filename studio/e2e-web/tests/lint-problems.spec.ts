@@ -130,6 +130,25 @@ test.describe("Problems panel", () => {
     await expect(rows(page)).toHaveCount(0);
   });
 
+  test("lp-09 the three tabs are a tablist: each tab controls its panel, only the shown one is selected, and each panel is labelled by its tab", async ({ page }) => {
+    await openStudio(page);
+    const tabs = [["tab-results", "results-panel"], ["tab-network", "network-panel"], ["tab-problems", "problems-panel"]] as const;
+    await expect(page.locator(".pane-tabs")).toHaveAttribute("role", "tablist");
+    for (const [tab, panel] of tabs) {
+      await expect(page.locator(`#${tab}`)).toHaveAttribute("aria-controls", panel);
+      await expect(page.locator(`#${panel}`)).toHaveAttribute("role", "tabpanel");
+      await expect(page.locator(`#${panel}`)).toHaveAttribute("aria-labelledby", tab);
+    }
+    for (const [shown] of tabs) {
+      await page.click(`#${shown}`);
+      for (const [tab, panel] of tabs) {
+        await expect(page.locator(`#${tab}`)).toHaveAttribute("aria-selected", String(tab === shown));
+        if (tab === shown) await expect(page.locator(`#${panel}`)).toBeVisible();
+        else await expect(page.locator(`#${panel}`)).toBeHidden();
+      }
+    }
+  });
+
   test("lp-08 findings are text: a recipe name that looks like markup is not interpreted", async ({ page }) => {
     fs.writeFileSync(file(), 'use "recipes/<img src=x onerror=alert(1)>.probe"\n\ntest "t"\n  log "x"\n');
     await openStudio(page);

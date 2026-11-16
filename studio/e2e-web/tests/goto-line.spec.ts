@@ -201,6 +201,17 @@ test.describe("Open the failing line", () => {
     await expect(filename(page)).toContainText("form.probe");
   });
 
+  test("gl-08 Enter on a failed test row of the open file goes to its line and does not also type a new line into it", async ({ page }) => {
+    await open(page, "counter.probe");
+    const before = await page.locator("#editor .view-lines").innerText();
+    await fireFailedRun(page, { file: path.join(tests, "counter.probe"), test: "counter fails", line: 5, description: 'tap "x"' });
+    await page.locator("#results-list li.goto", { hasText: "counter fails" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#editor .active-line-number")).toHaveText("5");
+    await expect(page.locator("#editor-dirty")).not.toContainText("unsaved");
+    expect(await page.locator("#editor .view-lines").innerText()).toBe(before);
+  });
+
   test("gl-07 a passing test row is not a jump", async ({ page }) => {
     await open(page, "counter.probe");
     await page.evaluate(() => {

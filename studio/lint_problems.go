@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"unicode"
 
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
@@ -23,12 +24,21 @@ type LintProblem struct {
 type LintProblemsResult struct {
 	Problems    []LintProblem `json:"problems"`
 	Unavailable string        `json:"unavailable,omitempty"`
+	// Stale says a newer request came while this one waited: nothing was checked, and the window ignores the answer.
+	Stale bool `json:"stale,omitempty"`
 }
 
 const maxProblemText = 400
 
-// lintMu keeps the lint of Studio to one call at a time: the editor asks again on every pause in typing.
-var lintMu sync.Mutex
+// maxLintBytes is the largest text Studio lints: above it the answer is one line, not a pause while the editor types.
+const maxLintBytes = 1 << 20
+
+// lintMu keeps the lint of Studio to one call at a time. A call takes a ticket first; one that finds a newer ticket when its turn comes does
+// not run (the editor already has newer text), so a burst of requests never queues stale lints behind the running one.
+var (
+	lintMu  sync.Mutex
+	lintSeq atomic.Uint64
+)
 
 // LintProblems checks the editor's text of an open file with the same rules `probe lint` uses (runner.LintSource), against the probe.yaml
 // of the open workspace. path must be a .probe file inside the workspace (the check ReadFile makes) and only resolves the recipes and data
@@ -41,6 +51,9 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	if err != nil {
 		return LintProblemsResult{}, err
 	}
+	if len(content) > maxLintBytes {
+		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: the file is too large (over 1 MiB)"}, nil
+	}
 	a.mu.Lock()
 	ws := a.workspace
 	a.mu.Unlock()
@@ -50,7 +63,12 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	if ws != "" && cfg.Recipes != "" && !filepath.IsAbs(cfg.Recipes) {
 		cfg.Recipes = filepath.Join(ws, cfg.Recipes)
 	}
+	ticket := lintSeq.Add(1)
 	lintMu.Lock()
+	if lintSeq.Load() != ticket {
+		lintMu.Unlock()
+		return LintProblemsResult{Problems: []LintProblem{}, Stale: true}, nil
+	}
 	rep, err := runner.LintSource(cfg, real, content)
 	lintMu.Unlock()
 	if err != nil {

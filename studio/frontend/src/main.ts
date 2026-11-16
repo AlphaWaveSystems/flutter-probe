@@ -213,6 +213,7 @@ async function runProblems() {
   let note = "";
   try {
     const res = await LintProblems(path, content);
+    if (res?.stale) return; // a newer request replaced this one before it ran
     problems = res?.problems ?? [];
     note = res?.unavailable ?? "";
   } catch (err) {
