@@ -735,15 +735,11 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		return nil, fmt.Errorf("line %d: swipe from needs a target before it, for example: swipe right on \"Menu\" from 2 percent", line)
 	}
 	p.skipFillers()
-	// A bare word where the direction goes is not one of the four: parseDirection runs the swipe down and leaves the word
-	// unread, so it parses as the next step. Record it here, without consuming it, so lint can say so.
-	dirWord := ""
-	if w := p.peek(); w.Type == TOKEN_IDENT {
-		switch strings.ToLower(w.Literal) {
-		case "up", "down", "left", "right":
-		default:
-			dirWord = w.Literal
-		}
+	// The direction slot holds a direction, or nothing. The next token may also start the target (a quoted name or #id), start the distance
+	// (over), or end the line. Any other token is refused: parseDirection would run the swipe down and leave the token to parse as the next
+	// step, a silent down swipe.
+	if t := p.peek(); !swipeSlotAccepts(t) {
+		return nil, fmt.Errorf(`line %d: swipe %q is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "Menu"`, line, t.Literal)
 	}
 	dir := p.parseDirection()
 	if p.peek().Type == TOKEN_FROM {
@@ -806,7 +802,7 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		percent = n
 	}
 	p.consumeNewline()
-	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, StartPercent: startPercent, DirectionWord: dirWord, Line: line}, nil
+	return ActionStep{Verb: VerbSwipe, Direction: dir, Sel: sel, Percent: percent, StartPercent: startPercent, Line: line}, nil
 }
 
 func (p *Parser) parseActionScroll() (Step, error) {
@@ -1953,6 +1949,21 @@ func (p *Parser) parseSelector() Selector {
 
 	// Fallback
 	return Selector{Kind: SelectorText, Text: ""}
+}
+
+// swipeSlotAccepts reports whether a token may stand where a swipe's direction goes. Left and right have tokens of their own, and up and
+// down are words. A quoted name, an #id, over or the end of the line may come there instead of a direction.
+func swipeSlotAccepts(t Token) bool {
+	switch t.Type {
+	case TOKEN_LEFT, TOKEN_RIGHT, TOKEN_STRING, TOKEN_ID, TOKEN_OVER, TOKEN_NEWLINE, TOKEN_DEDENT, TOKEN_EOF:
+		return true
+	case TOKEN_IDENT:
+		switch strings.ToLower(t.Literal) {
+		case "up", "down":
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Parser) parseDirection() SwipeDirection {
