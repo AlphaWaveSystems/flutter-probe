@@ -238,7 +238,7 @@ func connectCompositeDevice(
 		dialOpts.Token = token
 		client, err = probelink.DialWithOptions(ctx, dialOpts)
 		if err != nil {
-			return runner.CompositeDevice{}, nil, fmt.Errorf("dial: %w", err)
+			return runner.CompositeDevice{}, nil, fmt.Errorf("dial: %w%s", err, device.ForwardHint(ctx, dm.ADB(), cfg.Agent.Port, spec))
 		}
 		devCtx = compositeAndroidContext(ctx, cfg, dm, spec)
 	}
