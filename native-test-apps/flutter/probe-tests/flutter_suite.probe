@@ -14,7 +14,7 @@
 # against this same screen passes reliably). Not yet root-caused — flagging
 # rather than silently working around it.
 
-before each test:
+before each test
   restart the app
 
 test "see by visible text and by id"
