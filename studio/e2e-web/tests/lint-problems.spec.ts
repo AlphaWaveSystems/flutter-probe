@@ -168,6 +168,20 @@ test.describe("Problems panel", () => {
     await expect(page.locator("#editor .squiggly-error")).toHaveCount(0); // the stale finding was an error; the old parse lint only warns
   });
 
+  test("lp-11 a ${NAME} that Studio's environment does not have is a warning with the name and the way out; a set one and a comment say nothing", async ({ page }) => {
+    fs.writeFileSync(file(), 'test "t"\n  type "${LP_SURELY_UNSET_VARIABLE_42}" into the "email" field\n  type "${HOME}" into the "home" field\n  # tap "${LP_IN_A_COMMENT}"\n  log "x"\n');
+    await openStudio(page);
+    await openFile(page, "lp-fixture.probe");
+    await expect(page.locator("#tab-problems")).toHaveText("Problems (1)");
+    await page.click("#tab-problems");
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).first()).toContainText("line 2: ${LP_SURELY_UNSET_VARIABLE_42} is not set in Studio's environment");
+    await expect(rows(page).first()).toContainText("start Studio from a terminal where LP_SURELY_UNSET_VARIABLE_42 is set");
+    await expect(rows(page).first()).not.toContainText("LP_IN_A_COMMENT");
+    await expect(rows(page).first()).toContainText("warning");
+    await expect(page.locator("#editor .squiggly-warning").first()).toBeVisible();
+  });
+
   test("lp-08 findings are text: a recipe name that looks like markup is not interpreted", async ({ page }) => {
     fs.writeFileSync(file(), 'use "recipes/<img src=x onerror=alert(1)>.probe"\n\ntest "t"\n  log "x"\n');
     await openStudio(page);
