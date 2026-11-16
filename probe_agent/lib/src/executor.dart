@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoSwitch;
+import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoRadio, CupertinoSwitch;
 import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, CheckboxListTile, ChoiceChip, Dialog, FilterChip, FloatingActionButton, GestureDetector, IconButton, InkResponse, Radio, RadioListTile, Scaffold, Switch, SwitchListTile, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
@@ -1952,7 +1952,8 @@ class ProbeExecutor {
   /// itself, a control nested inside it (a SwitchListTile builds a Switch), or the
   /// control that encloses it (the Text label of a tile). null = not checkable.
   bool? _checkedState(Element e) {
-    bool? own(Widget w) {
+    bool? own(Element el) {
+      final w = el.widget;
       if (w is Switch) return w.value;
       if (w is SwitchListTile) return w.value;
       if (w is CupertinoSwitch) return w.value;
@@ -1960,23 +1961,16 @@ class ProbeExecutor {
       if (w is CheckboxListTile) return w.value ?? false;
       if (w is FilterChip) return w.selected;
       if (w is ChoiceChip) return w.selected;
-      if (w is Radio || w is RadioListTile) {
-        try {
-          final dyn = w as dynamic;
-          return dyn.value == dyn.groupValue;
-        } catch (_) {
-          return null;
-        }
-      }
+      if (w is Radio || w is RadioListTile || w is CupertinoRadio) return _radioChecked(el);
       return null;
     }
 
-    final self = own(e.widget);
+    final self = own(e);
     if (self != null) return self;
     bool? below;
     void visit(Element c) {
       if (below != null) return;
-      final v = own(c.widget);
+      final v = own(c);
       if (v != null) {
         below = v;
         return;
@@ -1988,7 +1982,7 @@ class ProbeExecutor {
     bool? above;
     var depth = 0;
     e.visitAncestorElements((a) {
-      final v = own(a.widget);
+      final v = own(a);
       if (v != null) {
         above = v;
         return false;
@@ -1996,6 +1990,48 @@ class ProbeExecutor {
       return ++depth < 40;
     });
     return above;
+  }
+
+  /// Whether a radio (a [Radio], a [RadioListTile] or a [CupertinoRadio]) is the selected one of its group; null when that cannot be told.
+  ///
+  /// Two APIs keep the group value in two places. Before the `RadioGroup` API each radio carried its own `groupValue` (and `onChanged`); with it the
+  /// group value is kept by the nearest `RadioGroup` above the radio and the radio's own `groupValue` is deprecated and null. So:
+  ///  - the radio has its own group value: the old API applies, the radio is checked when its value equals it (this wins over any group above);
+  ///  - it has none and a `RadioGroup` is above it: checked when the group has a selection and the radio's value equals it (a group with none selects nothing);
+  ///  - it has none and no `RadioGroup` is found: null, "not a checkable control". The agent cannot tell an old-API radio with nothing selected from a
+  ///    group it did not recognise, and a wrong "not checked" for a radio that is on is worse than saying it cannot tell.
+  ///
+  /// `RadioGroup` does not exist before Flutter 3.32, so it is found by its class name and read dynamically, which compiles on every Flutter this package
+  /// supports. The limits that follow: a build that renames classes (an obfuscated profile or release build) does not find it, which gives null; a widget
+  /// of an app that is itself called `RadioGroup` and has a `groupValue` is read as a group; one without a `groupValue` makes the reading fail, which gives
+  /// null. A reading that fails never turns into a yes or a no.
+  bool? _radioChecked(Element el) {
+    try {
+      final w = el.widget as dynamic;
+      final Object? value = w.value;
+      Object? own;
+      try {
+        own = w.groupValue; // deprecated since the RadioGroup API; null under it
+      } catch (_) {
+        own = null;
+      }
+      if (own != null) return value == own;
+      var grouped = false;
+      Object? group;
+      el.visitAncestorElements((a) {
+        final name = a.widget.runtimeType.toString();
+        if (name == 'RadioGroup' || name.startsWith('RadioGroup<')) {
+          grouped = true;
+          group = (a.widget as dynamic).groupValue;
+          return false;
+        }
+        return true;
+      });
+      if (!grouped) return null;
+      return group != null && value == group;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// The disabled state of a widget, or of the control it labels: the element a text

@@ -21,14 +21,17 @@ test "a switch turns on"
   see "Notifications: on"
   see "Notifications" is checked
 
-# `see "Medium" is checked` is not asserted here: with the RadioGroup API the agent reads a Radio's group value from the Radio, where it is
-# no longer kept, so the check fails for a radio that is on. It is a finding with its own fix (docs/compat/MATRIX.md), not a thing to hide.
+# `is checked` on a radio needs a probe_agent that reads the group value of a RadioGroup (docs/compat/MATRIX.md): an older agent fails the `is checked` steps.
 test "a radio group takes one choice at a time"
   see "Size: small"
   tap "Medium"
   see "Size: medium"
+  see "Medium" is checked
+  don't see "Small" is checked
   tap "Large"
   see "Size: large"
+  see "Large" is checked
+  don't see "Medium" is checked
 
 test "a swipe across a slider moves its value"
   see "Volume: 50"

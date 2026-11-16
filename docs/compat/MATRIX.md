@@ -34,13 +34,15 @@ How a result was obtained is under the tables. What the tests do **not** show is
 |---|---|---|---|---|
 | `Checkbox` in a `CheckboxListTile` (`wf_checkbox`) | pass (text) | pass (`toggle`) | pass (`see ... is checked`, on and off) | pass |
 | `Switch` in a `SwitchListTile` (`wf_switch`) | pass (text) | pass (`toggle`) | pass (`see ... is checked`) | pass |
-| `Radio` in a `RadioListTile` under a `RadioGroup` (`wf_radio_small`, `_medium`, `_large`) | pass (text) | pass (`tap`; the group's state text changes) | **fail**: `see "Medium" is checked` is refused ("not checked") for a radio that is on | **fail** (finding, below) |
+| `Radio` in a `RadioListTile` under a `RadioGroup` (`wf_radio_small`, `_medium`, `_large`) | pass (text) | pass (`tap`; the group's state text changes) | pass with the fixed agent (`see ... is checked` on the chosen radio, `don't see ... is checked` on the others); **fail** with an agent from before the fix (finding, below) | pass (needs `probe_agent` with the fix) |
 | `Slider` (`wf_slider`) | pass (`#id`) | pass (`swipe right on` moves the value) | not assessed (the value is read through its mirror text) | partly |
 | `CupertinoSwitch` (`wf_cupertino_switch`) | pass (`#id`) | pass (`toggle`) | not assessed (mirror text only; `is checked` was not tried) | partly |
 
-**Finding: a radio under `RadioGroup` is never "checked" to the agent.** Since the `RadioGroup` API the group value is kept by the `RadioGroup`, not by each `Radio`; the agent
-decides `is checked` for a radio by comparing the radio's `value` with its own `groupValue` (`probe_agent/lib/src/executor.dart`, `_checkedState`), so it answers "not checked" for a radio that is on. The tap itself works
-(the fixture's state text moves to `Size: medium`). Reproduced on a build by 3.50.0 and on a build by 3.44.8. The agent's own unit test uses the older `groupValue:` form of `Radio`, which is why it did not show. A fix is a separate change.
+**Finding, fixed: a radio under `RadioGroup` was never "checked" to the agent.** Since the `RadioGroup` API the group value is kept by the `RadioGroup`, not by each `Radio`; the agent
+decided `is checked` for a radio by comparing the radio's `value` with its own `groupValue` (`probe_agent/lib/src/executor.dart`), so it answered "not checked" for a radio that was on. The tap itself worked
+(the fixture's state text moves to `Size: medium`). Reproduced on a build by 3.50.0 and on a build by 3.44.8; the agent's own unit test used the older `groupValue:` form of `Radio`, which is why it did not show. The agent now reads
+the radio's own group value when it has one and otherwise the nearest `RadioGroup` above it (`Radio`, `RadioListTile`, `CupertinoRadio`). The row above is the result with the fixed agent on a build by each Flutter version
+(`selection.probe`, 5 of 5 on emulator-5600); an app that still runs an agent from before the fix keeps the old answer until it takes a `probe_agent` release with the fix.
 
 ### Text input (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=textinput`, `probe-tests/widgets/textinput.probe`)
 
