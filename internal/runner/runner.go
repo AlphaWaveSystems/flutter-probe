@@ -96,7 +96,7 @@ type Runner struct {
 	curTest         string
 	curAttempt      int
 	restartHook     func(context.Context) error // tests only: replaces the restart step after a timed-out attempt
-	newVideo        func() videoRecorder       // tests only: replaces the device recorder; nil builds one from the device
+	newVideo        func() videoRecorder        // tests only: replaces the device recorder; nil builds one from the device
 }
 
 // RunOptions configures a test run.
@@ -608,22 +608,22 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	r.writeCrashFilesFor(crash, file, name, r.curAttempt)
 
 	return TestResult{
-		Crash:      crash,
-		Perf:       nameUnnamed(exec.PerfResults()),
-		TestName:   name,
-		File:       file,
-		Passed:     runErr == nil,
-		Duration:   time.Since(start),
-		Error:      runErr,
+		Crash:          crash,
+		Perf:           nameUnnamed(exec.PerfResults()),
+		TestName:       name,
+		File:           file,
+		Passed:         runErr == nil,
+		Duration:       time.Since(start),
+		Error:          runErr,
 		FailedSelector: exec.FailedSelector(runErr),
-		Row:        row,
-		Tags:       t.Tags,
-		Artifacts:  artifacts,
+		Row:            row,
+		Tags:           t.Tags,
+		Artifacts:      artifacts,
 		TimedOut:       te != nil,
 		TimeLimit:      limit,
-		DeviceID:   r.opts.DeviceID,
-		DeviceName: r.opts.DeviceName,
-		StartedAt:  start,
+		DeviceID:       r.opts.DeviceID,
+		DeviceName:     r.opts.DeviceName,
+		StartedAt:      start,
 	}
 }
 

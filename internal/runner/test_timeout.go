@@ -146,6 +146,9 @@ var cleanupOut io.Writer = os.Stdout
 // client is the client the screenshot uses, read by the caller. guard, when set, decides whether the prints and the artifact
 // writes still happen: a grace phase that was abandoned must not write to the output or to the attempt after the next test began.
 func (r *Runner) finishAttempt(ctx context.Context, exec *Executor, prog *parser.Program, t parser.TestDef, runErr error, client probelink.ProbeClient, guard *cleanupGuard) {
+	// The cleanup is outside the attempt's budget: its hooks run without the wait limit, so a wait in an after-each or on-failure hook runs to its
+	// end. The limit has only ever applied to the test's own steps and its before-each hooks.
+	exec.testLimit = 0
 	emit := func(f func()) {
 		if guard == nil {
 			f()
@@ -178,7 +181,9 @@ func (r *Runner) finishAttempt(ctx context.Context, exec *Executor, prog *parser
 				if guard != nil && ctx.Err() != nil {
 					break
 				}
-				_ = exec.RunBody(ctx, hook.Body) // best-effort
+				if err := exec.RunBody(ctx, hook.Body); err != nil {
+					hookWarning(emit, "on failure hook", err) // best-effort: the result stands, but the error is shown
+				}
 			}
 		}
 	}
@@ -189,9 +194,17 @@ func (r *Runner) finishAttempt(ctx context.Context, exec *Executor, prog *parser
 			if guard != nil && ctx.Err() != nil {
 				break
 			}
-			_ = exec.RunBody(ctx, hook.Body) // best-effort
+			if err := exec.RunBody(ctx, hook.Body); err != nil {
+				hookWarning(emit, "after each hook", err)
+			}
 		}
 	}
+}
+
+// hookWarning prints the error of a cleanup hook. A cleanup hook is best-effort, so its error does not change the result, but it is never
+// dropped silently: a wait refused or a step that failed in a hook shows here.
+func hookWarning(emit func(func()), what string, err error) {
+	emit(func() { fmt.Fprintf(cleanupOut, "    \033[33m⚠\033[0m  %s: %v\n", what, err) })
 }
 
 // graceOutcome is what the cleanup after a timed-out attempt left behind.
