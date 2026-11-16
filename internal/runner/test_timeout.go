@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -117,6 +119,10 @@ func (g *cleanupGuard) release() {
 // body of this function.
 func (e *Executor) collectCrashAfterTimeout(ctx context.Context) {}
 
+// cleanupOut is where the failure screenshot's lines are printed. It is os.Stdout; a test replaces it to see what a cleanup that was
+// abandoned still prints after the budget.
+var cleanupOut io.Writer = os.Stdout
+
 // finishAttempt runs the failure screenshot, the on-failure hooks and the after-each hooks of an attempt that ended on its own
 // terms. It is the code the attempt always ran after its body; runErr says whether the attempt failed.
 //
@@ -138,11 +144,11 @@ func (r *Runner) finishAttempt(ctx context.Context, exec *Executor, prog *parser
 		path, shotErr := client.Screenshot(shotCtx, shotName)
 		shotCancel()
 		if shotErr != nil {
-			emit(func() { fmt.Printf("    \033[33m⚠\033[0m  failure screenshot: %v\n", shotErr) })
+			emit(func() { fmt.Fprintf(cleanupOut, "    \033[33m⚠\033[0m  failure screenshot: %v\n", shotErr) })
 		} else if path != "" {
 			emit(func() {
 				exec.AddArtifact(path)
-				fmt.Printf("    \033[36m📸\033[0m  failure screenshot saved: %s\n", path)
+				fmt.Fprintf(cleanupOut, "    \033[36m📸\033[0m  failure screenshot saved: %s\n", path)
 			})
 		}
 	}

@@ -236,6 +236,19 @@ func TestEachRetryGetsAFreshBudget(t *testing.T) {
 			t.Errorf("attempt %d lasted %v; each attempt must get the whole limit", i+1, a.Duration)
 		}
 	}
+	// The duration alone does not show a limit: an attempt with none can also run long. So each attempt's tap is checked for the deadline
+	// it had: it must have had nearly the whole limit left when it started.
+	client.mu.Lock()
+	remain := append([]time.Duration(nil), client.slowRemain...)
+	client.mu.Unlock()
+	if len(remain) != 2 {
+		t.Fatalf("want the slow tap on both attempts, got %d", len(remain))
+	}
+	for i, left := range remain {
+		if left <= 800*time.Millisecond || left > time.Second {
+			t.Errorf("attempt %d: the tap had %v left of a %v limit; every attempt must run under the limit", i+1, left, time.Second)
+		}
+	}
 }
 
 // Each data row gets its own budget: a row that runs to the limit does not cut the next row short. The rows are run with their own

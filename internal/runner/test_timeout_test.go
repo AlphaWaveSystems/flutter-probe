@@ -26,6 +26,22 @@ type slowClient struct {
 	release   chan struct{}
 	probeLive []bool // a tap on "Probe" records whether its context was still live when it was called
 	closed    bool   // Close was called on this client
+
+	slowRemain    []time.Duration // a tap on "Slow" records how long its context had left (0 when it had no deadline)
+	probeRemain   []time.Duration // a tap on "Probe" records the same
+	tokenLive     []bool          // SetNextToken records whether its context was still live
+	summaryCalls  int             // VisibleSummary calls: the step-timeout annotation asks the agent for the screen
+	perfStarts    int
+	perfStops     int
+	shotDone      chan struct{} // closed when a screenshot returns, if set
+}
+
+// remainingOf is how long until ctx's deadline, or 0 when it has none.
+func remainingOf(ctx context.Context) time.Duration {
+	if d, ok := ctx.Deadline(); ok {
+		return time.Until(d)
+	}
+	return 0
 }
 
 func newSlowClient() *slowClient {
@@ -43,17 +59,64 @@ func (c *slowClient) Tap(ctx context.Context, sel probelink.SelectorParam) error
 	c.mu.Unlock()
 	switch sel.Text {
 	case "Slow":
-		<-ctx.Done()
-		return ctx.Err()
+		c.mu.Lock()
+		c.slowRemain = append(c.slowRemain, remainingOf(ctx))
+		c.mu.Unlock()
+		// With no deadline on ctx this tap ends after 3 seconds, with an error: a test that expects the limit to cut it fails, not hangs.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(3 * time.Second):
+			return errors.New("no limit cut this tap")
+		}
+	case "Drop":
+		return errors.New("probelink: write: broken pipe")
 	case "Hang":
 		<-c.release
 		return nil
 	case "Probe":
 		c.mu.Lock()
 		c.probeLive = append(c.probeLive, ctx.Err() == nil)
+		c.probeRemain = append(c.probeRemain, remainingOf(ctx))
 		c.mu.Unlock()
 	}
 	return nil
+}
+
+// SetNextToken records whether its context was live: a restart calls it first, with the context the restart runs on.
+func (c *slowClient) SetNextToken(ctx context.Context, token string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tokenLive = append(c.tokenLive, ctx.Err() == nil)
+	return nil
+}
+
+// VisibleSummary is what the step-timeout annotation asks for: the test records the call and answers with nothing.
+func (c *slowClient) VisibleSummary(ctx context.Context) (probelink.VisibleSummaryResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.summaryCalls++
+	return probelink.VisibleSummaryResult{}, nil
+}
+
+// HTTPLog answers with an error: the perf window then has no request count to start from, and the window still opens.
+func (c *slowClient) HTTPLog(ctx context.Context, p probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
+	return probelink.HTTPLogResult{}, errors.New("no http log in this test")
+}
+
+// PerfStart and PerfStop count the perf window's calls.
+func (c *slowClient) PerfStart(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.perfStarts++
+	return nil
+}
+
+func (c *slowClient) PerfStop(ctx context.Context) (probelink.PerfSnapshot, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.perfStops++
+	return probelink.PerfSnapshot{}, nil
 }
 
 // Close records that the client was closed: a reconnect that the guard drops closes the client it was given.
@@ -70,6 +133,9 @@ func (c *slowClient) Screenshot(ctx context.Context, name string) (string, error
 	c.mu.Unlock()
 	if c.shotDelay > 0 {
 		time.Sleep(c.shotDelay)
+	}
+	if c.shotDone != nil {
+		close(c.shotDone)
 	}
 	return "/tmp/" + name + ".png", nil
 }

@@ -117,12 +117,29 @@ func (vr *VideoRecorder) startScrcpy(_ context.Context, safeName string) error {
 	return nil
 }
 
-func (vr *VideoRecorder) stopScrcpy(_ context.Context) (string, error) {
+// stopScrcpy asks scrcpy to finish the file and waits for it. When ctx's deadline ends first (the cleanup budget of a test that ran past
+// its limit), the process is killed and the stop returns, so an abandoned stop does not outlive its budget. A cancel (Ctrl-C) does not
+// kill it: the stop waits for the file, as it always did.
+func (vr *VideoRecorder) stopScrcpy(ctx context.Context) (string, error) {
 	if vr.cmd == nil || vr.cmd.Process == nil {
 		return "", fmt.Errorf("video: no scrcpy process")
 	}
 	_ = vr.cmd.Process.Signal(syscall.SIGINT)
-	_ = vr.cmd.Wait()
+	done := make(chan struct{})
+	go func() {
+		_ = vr.cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			_ = vr.cmd.Process.Kill()
+			<-done
+			return "", fmt.Errorf("video: scrcpy did not stop within the cleanup budget")
+		}
+		<-done
+	}
 	if err := verifyFile(vr.localPath); err != nil {
 		return "", err
 	}

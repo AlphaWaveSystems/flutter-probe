@@ -315,10 +315,10 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// Auto-reconnect: if the step failed due to a connection error and this
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
 	// Uses exponential backoff with jitter — see tryReconnect for the formula.
-	// Not when ctx has ended: the call failed because the attempt's limit or the
-	// run's cancel ended the step, and reconnecting would spend the cleanup budget
-	// (test_timeout, Ctrl-C) on an adb round trip.
-	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil && ctx.Err() == nil {
+	// Not when a limit (test_timeout) ended ctx: the call failed because the attempt ran past its limit, and a
+	// reconnect would spend the cleanup budget on an adb round trip. A deadline is the limit's only signal; a Ctrl-C
+	// (a cancel) still reconnects as it always did, so a run without the limit behaves as before.
+	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil && ctx.Err() != context.DeadlineExceeded {
 		e.collectCrashOnce(ctx) // before anything reconnects or relaunches; does nothing unless the run asked for crash evidence
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {
@@ -367,8 +367,9 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// step and what the screen showed. Skipped for lifecycle actions (restart/
 	// kill/clear), where the agent is intentionally gone and can't be asked.
 	if !isLifecycleAction {
-		// A limit that ended the enclosing context is not a step timeout: the snapshot the annotation asks the agent for could outlive the grace budget.
-		if ctx.Err() == nil {
+		// A limit (a deadline on the enclosing context) is not a step timeout: the snapshot the annotation asks the agent for could outlive the
+		// grace budget. A cancel (Ctrl-C) is not a deadline, so it is annotated as it always was.
+		if ctx.Err() != context.DeadlineExceeded {
 			err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
 		}
 	}
