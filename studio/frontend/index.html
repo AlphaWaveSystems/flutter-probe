@@ -120,6 +120,10 @@
             <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" aria-controls="network-panel" title="The requests and responses the app made, with credentials hidden">Network</button>
             <button type="button" id="tab-problems" class="pane-tab" role="tab" aria-selected="false" aria-controls="problems-panel" title="What the lint rules find in the open file: a recipe or a data file that is not there, a test with no steps">Problems</button>
           </span>
+          <span id="export-bar" class="export-bar">
+            <button type="button" id="btn-export-json" class="btn-mini" disabled title="Save the results of the last run as a JSON report (the same file probe test --format json writes). You choose where.">Export JSON</button>
+            <button type="button" id="btn-export-junit" class="btn-mini" disabled title="Save the results of the last run as a JUnit XML report (the same file probe test --format junit writes). You choose where.">Export JUnit</button>
+          </span>
           <span id="results-summary" class="dim"></span>
         </div>
         <div id="results-panel" class="pane-panel" role="tabpanel" aria-labelledby="tab-results">

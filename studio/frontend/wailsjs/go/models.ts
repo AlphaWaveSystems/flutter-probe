@@ -387,6 +387,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ExportOutcome {
+	    saved: boolean;
+	    name?: string;
+	    tests: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportOutcome(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.saved = source["saved"];
+	        this.name = source["name"];
+	        this.tests = source["tests"];
+	    }
+	}
 	export class FileEntry {
 	    name: string;
 	    path: string;

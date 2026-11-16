@@ -97,7 +97,8 @@ Available permissions: `notifications`, `camera`, `location`, `microphone`, `sto
 
 `tap`, `type`, `see`, `don't see` and `wait until ... appears` with `in webview` reach the page inside an app's WebView
 over the WebView's own debugging socket (Chrome DevTools Protocol), through `adb forward` to a loopback port that probe
-removes after every step. The app must have `WebView.setWebContentsDebuggingEnabled(true)`. Only the app under test's own
+removes after every step. The app must have `WebView.setWebContentsDebuggingEnabled(true)`, and it must host the probe agent: the steps run through
+the agent connection like every other step, so a plain native app (no `probe_agent`) cannot be driven by `probe test`. Only the app under test's own
 socket is used. See [WebView content](/probescript/syntax/#webview-content-android) for the syntax, the limits (top document
 only, no shadow DOM or iframes, an element that cannot take typed text, such as a read-only or disabled field or a checkbox, is refused) and an example.
 

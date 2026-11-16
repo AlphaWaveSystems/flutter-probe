@@ -33,6 +33,8 @@ import {
   ConnectWiFiSaved,
   DeleteAPIKey,
   Disconnect,
+  CanExportRunResults,
+  ExportRunResults,
   ForgetWiFiToken,
   GetAPIKey,
   InitialWorkspace,
@@ -920,10 +922,43 @@ EventsOn("run:started", () => {
   fixSession.invalidate(); // nor a suggested fix for a step of the previous run
   if (!rerunInFlight) dropFixView(); // the re-run of a replaced line is the one run that keeps its card, to show the verdict there
 });
-EventsOn("run:finished", () => {
+EventsOn("run:finished", (results: unknown[]) => {
   stopWaitTimer();
   void refreshExplainOffer();
+  setExportEnabled(Array.isArray(results) && results.length > 0);
 });
+EventsOn("run:started", () => setExportEnabled(false)); // the results of the last run are gone from the export until this one ends
+
+// ---- Export the results of the last run (a JSON or JUnit report), to a place you choose -------------
+
+// syncExportButtons asks Studio whether there is a finished run to export and no run going. It is asked after a dialog and when the window
+// loads, so a reload that kept the results, or a run that started during the dialog, shows the true state.
+async function syncExportButtons(): Promise<void> {
+  try {
+    setExportEnabled(await CanExportRunResults());
+  } catch {
+    setExportEnabled(false);
+  }
+}
+void syncExportButtons();
+
+function setExportEnabled(on: boolean): void {
+  for (const id of ["btn-export-json", "btn-export-junit"]) ($(id) as HTMLButtonElement).disabled = !on;
+}
+
+async function exportResults(format: "json" | "junit"): Promise<void> {
+  setExportEnabled(false); // one save dialog at a time
+  try {
+    const out = await ExportRunResults(format);
+    if (out.saved) toast(`Saved ${out.name} (${out.tests} test${out.tests === 1 ? "" : "s"})`, "success");
+  } catch (err) {
+    toast(`Export failed: ${err}`, "error", 6000);
+  } finally {
+    await syncExportButtons(); // what the buttons do follows what Studio holds now, not what they were before the dialog
+  }
+}
+$("btn-export-json").addEventListener("click", () => void exportResults("json"));
+$("btn-export-junit").addEventListener("click", () => void exportResults("junit"));
 
 // ---- Suggest a fix: one ProbeScript line for the failed step of the last run ------------
 
