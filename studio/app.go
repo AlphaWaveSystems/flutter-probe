@@ -551,7 +551,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		platform:     device.PlatformIOS,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
-		deviceCtx:    newStudioDeviceContext(a, device.PlatformIOS, deviceID, port),
+		deviceCtx:    newStudioDeviceContext(a, cfg, device.PlatformIOS, deviceID, port, host),
 	}
 
 	a.mu.Lock()
@@ -706,7 +706,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		platform:     dev.Platform,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
-		deviceCtx:    newStudioDeviceContext(a, dev.Platform, deviceID, port),
+		deviceCtx:    newStudioDeviceContext(a, cfg, dev.Platform, deviceID, port, ""),
 	}
 
 	// Replace any existing connection (and shut down its stream first).
@@ -1200,10 +1200,10 @@ func physicalHint(d device.Device, kind string) string {
 	return ""
 }
 
-// newStudioDeviceContext builds the device context of a Studio connection with runner.NewDeviceContext, so the physical question is asked in one place (a Wi-Fi iOS device and a local one alike), and then sets the agent port.
-func newStudioDeviceContext(a *App, platform device.Platform, serial string, port int) *runner.DeviceContext {
-	dc := runner.NewDeviceContext(a.ctx, a.deviceMgr, platform, serial)
-	dc.Port = port
-	dc.DevicePort = port
-	return dc
+// newStudioDeviceContext builds the device context of a Studio connection with runner.NewConfiguredDeviceContext, the constructor
+// `probe test` uses too, so a Studio run reads probe.yaml the same way (app id, timings, crash evidence, the HTTP fallback of a physical
+// device). The port is the one Studio forwarded or found, and host is the device's address for a Wi-Fi connection. Destructive steps stay
+// refused: no Confirm callback and AllowClearData off (a window confirmation is a later change).
+func newStudioDeviceContext(a *App, cfg *config.Config, platform device.Platform, serial string, port int, host string) *runner.DeviceContext {
+	return runner.NewConfiguredDeviceContext(a.ctx, a.deviceMgr, cfg, platform, serial, runner.ConnFacts{AgentHost: host, Port: port, DevicePort: port})
 }

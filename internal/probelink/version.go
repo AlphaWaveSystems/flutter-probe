@@ -23,11 +23,28 @@ type HandshakeResult struct {
 // An agent without it answers that action with ok and presses nothing, so the CLI refuses the step before it sends it.
 const CapabilityPressKey = "press_key"
 
+// CapabilitySwipeFrom is reported by an agent that starts a swipe on a target at the point start_percent gives, not the
+// centre. An agent without it swipes from the centre, so the CLI refuses a swipe with a start rather than swipe from the
+// wrong place.
+const CapabilitySwipeFrom = "swipe_from"
+
 // checkPressKey returns the refusal for a `press <key>` step when the agent's handshake does not report CapabilityPressKey,
-// and nil when it does. Without a handshake, or from an agent that predates the field, the agent is unknown and is refused
-// too: such an agent cannot press keys.
+// and nil when it does.
 func checkPressKey(h *HandshakeResult) error {
-	if h != nil && slices.Contains(h.Capabilities, CapabilityPressKey) {
+	return checkCapability(h, CapabilityPressKey, "press <key>", "the release that adds press <key>")
+}
+
+// checkSwipeFrom returns the refusal for a swipe that starts away from the centre when the agent's handshake does not report
+// CapabilitySwipeFrom, and nil when it does.
+func checkSwipeFrom(h *HandshakeResult) error {
+	return checkCapability(h, CapabilitySwipeFrom, "swipe from", "the release that adds swipe from")
+}
+
+// checkCapability returns the refusal for a step that needs capability when the agent's handshake does not report it, and nil
+// when it does. Without a handshake, or from an agent that predates the field, the agent is unknown and is refused too: such
+// an agent cannot do the step.
+func checkCapability(h *HandshakeResult, capability, step, release string) error {
+	if h != nil && slices.Contains(h.Capabilities, capability) {
 		return nil
 	}
 	running := "an agent that did not complete the version handshake"
@@ -36,8 +53,8 @@ func checkPressKey(h *HandshakeResult) error {
 	} else if h != nil {
 		running = "a probe_agent that predates the version handshake"
 	}
-	return fmt.Errorf("press <key> needs a probe_agent that presses keys, and this app runs %s, which does not: "+
-		"update probe_agent to the release that adds press <key> and rebuild the app", running)
+	return fmt.Errorf("%s needs a probe_agent that supports it, and this app runs %s, which does not: "+
+		"update probe_agent to %s and rebuild the app", step, running, release)
 }
 
 // majorVersion extracts the leading numeric major-version component from a

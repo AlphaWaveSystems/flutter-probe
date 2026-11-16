@@ -28,6 +28,29 @@ typedef SendFn = void Function(String message);
 /// it is 0 (the step left the distance out). Anything above 100 is clamped, since the parser already refuses it.
 double swipeFraction(int percent) => (percent <= 0 ? 50 : percent.clamp(1, 100).toInt()) / 100;
 
+/// Where a swipe with a start begins, for a target at [origin] with [size]: [startPercent] of the way in from the edge the
+/// swipe starts at, along the swipe axis, and the centre of the other axis. The edge is the bottom for up, the top for down,
+/// the right for left and the left for right. The parser allows a start only on a target, and refuses anything outside 1 to 100.
+Offset swipeStart(String direction, Offset origin, Size size, int startPercent) {
+  final fraction = startPercent.clamp(1, 100).toInt() / 100;
+  final centre = size.center(origin);
+  switch (direction) {
+    case 'up':
+      return Offset(centre.dx, origin.dy + _insideSpan(size.height - size.height * fraction, size.height));
+    case 'down':
+      return Offset(centre.dx, origin.dy + _insideSpan(size.height * fraction, size.height));
+    case 'left':
+      return Offset(origin.dx + _insideSpan(size.width - size.width * fraction, size.width), centre.dy);
+    case 'right':
+    default:
+      return Offset(origin.dx + _insideSpan(size.width * fraction, size.width), centre.dy);
+  }
+}
+
+/// [offset] from the start edge of a span of [span], kept inside it. Flutter's hit test does not reach a point on the far
+/// edge, so a start on that edge would be a pointer-down that hits nothing; a span under a logical pixel starts at its middle.
+double _insideSpan(double offset, double span) => span < 1 ? span / 2 : offset.clamp(0.5, span - 0.5).toDouble();
+
 /// The pointer's total movement for a swipe in [direction] across [size] at [fraction] of it. Above 50 percent the finger
 /// ends outside the element or the screen: the swipe starts at the centre, so 50 percent ends at the edge.
 Offset swipeDelta(String direction, Size size, double fraction) {
@@ -194,7 +217,8 @@ class ProbeExecutor {
         final dir = req.params['direction'] as String;
         final sel = req.params['selector'] as Map<String, dynamic>?;
         final percent = (req.params['percent'] as num?)?.toInt() ?? 0;
-        await _swipe(dir, sel, percent: percent);
+        final startPercent = (req.params['start_percent'] as num?)?.toInt() ?? 0;
+        await _swipe(dir, sel, percent: percent, startPercent: startPercent);
         await _sync.waitForSettled();
         _lastScrollAt = DateTime.now();
         return {'ok': true};
@@ -1376,15 +1400,18 @@ class ProbeExecutor {
 
   /// [percent] is how far the swipe travels, as a percent of the element or the screen. 0 is the default, 50. The parser
   /// refuses anything outside 1 to 100; the agent clamps it again rather than trust the wire.
-  Future<void> _swipe(String direction, Map<String, dynamic>? sel, {int percent = 0}) async {
+  /// [startPercent] is where it starts, see [swipeStart]. 0 is the centre, the default.
+  Future<void> _swipe(String direction, Map<String, dynamic>? sel, {int percent = 0, int startPercent = 0}) async {
     final fraction = swipeFraction(percent);
     Offset center;
+    Offset origin = Offset.zero;
     Size size;
 
     if (sel != null) {
       final element = _requireElement(sel);
       final box = element.renderObject as RenderBox;
       center = box.localToGlobal(box.size.center(Offset.zero));
+      origin = box.localToGlobal(Offset.zero);
       size = box.size;
     } else {
       final view = WidgetsBinding.instance.platformDispatcher.implicitView;
@@ -1397,6 +1424,8 @@ class ProbeExecutor {
     }
 
     final delta = swipeDelta(direction, size, fraction);
+    // A swipe with a start begins that far in from its edge; without one it begins at the centre, as it always has.
+    final start = startPercent > 0 ? swipeStart(direction, origin, size, startPercent) : center;
 
     // PT-03: a single giant PointerMoveEvent covering the whole delta in one
     // jump can fail to register as a scroll at all — reproduced against a
@@ -1406,7 +1435,7 @@ class ProbeExecutor {
     // Likely cause: gesture-arena resolution (and scroll physics, which
     // apply delta per pointer-move event) expect a sequence of small moves
     // building up displacement, not one large jump.
-    final gesture = await _createGesture(center);
+    final gesture = await _createGesture(start);
     const steps = 10;
     for (var i = 1; i <= steps; i++) {
       await gesture.moveBy(delta / steps.toDouble(),

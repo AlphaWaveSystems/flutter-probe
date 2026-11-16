@@ -279,6 +279,7 @@ function firstRunInput(): FirstRunInput {
     deviceSelected: select.value !== "",
     deviceBooted: selectedDeviceIsBooted(),
     connected,
+    running: runInProgress,
   };
 }
 
@@ -1011,6 +1012,7 @@ async function rerunFixedTest(): Promise<void> {
   rerunInFlight = true;
   setRunning(true);
   ($("btn-run") as HTMLButtonElement).disabled = true;
+  refreshFirstRun(); // Run is disabled because a re-run is in flight, and says so (also while the person types: setDirty reads the state, not the button)
   let verdict;
   try {
     // The test that holds the replaced line, once. Nothing is saved first: the gate has already refused a file with unsaved changes.
@@ -1025,7 +1027,7 @@ async function rerunFixedTest(): Promise<void> {
   } finally {
     rerunInFlight = false;
     setRunning(false);
-    ($("btn-run") as HTMLButtonElement).disabled = !connected || !currentPath;
+    updateRunButton();
   }
   if (fixRerun !== target) return; // the card was closed or replaced while the test ran
   verdictEl.className = `fix-verdict fix-verdict-${verdict.kind}`;
@@ -1723,13 +1725,14 @@ $("btn-run").addEventListener("click", async () => {
   const btn = $("btn-run") as HTMLButtonElement;
   btn.disabled = true;
   setRunning(true);
+  refreshFirstRun();
   try {
     await RunFileScoped(currentPath, scope.args.line, scope.args.tag, scope.args.failedOnly);
   } catch (err) {
     toast(`Run failed: ${err}`, "error", 6000);
   } finally {
     setRunning(false);
-    btn.disabled = !connected || !currentPath;
+    updateRunButton();
   }
 });
 

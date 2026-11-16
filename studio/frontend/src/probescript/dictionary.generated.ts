@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "4814a2f859a6811cba840e1bf3c7d9ce8004126ce122c41c5ab4e67f6e84afc6";
+export const SOURCE_SHA256 = "80d0cbe8b5fa9c8fb220d72332a2f22c6596522baf00f1e529998c5385fde015";
 
 export const COMMANDS = [
   {
@@ -37,8 +37,8 @@ export const COMMANDS = [
   },
   {
     "command": "swipe",
-    "syntax": "swipe up/down/left/right [over N percent]",
-    "description": "Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50)",
+    "syntax": "swipe up/down/left/right [on \"X\" [from N percent]] [over N percent]",
+    "description": "Swipe gesture on screen or widget; `over N percent` sets how far it travels, 1 to 100 percent of the element or screen (default 50). `from N percent` sets where a swipe on a target starts, counted from the edge it starts at (the bottom for up, the left for right): `swipe right on \"Menu\" from 2 percent` is an edge swipe for a drawer. Without it the swipe starts at the centre. It needs a target and a probe_agent that reports the `swipe_from` capability. The start is in the target's own coordinates, so a target under a scale transform starts at the wrong point",
     "category": "Actions"
   },
   {
@@ -62,7 +62,7 @@ export const COMMANDS = [
   {
     "command": "press <key>",
     "syntax": "press tab",
-    "description": "Press tab, escape, backspace, space, up, down, left or right: tab and the arrows move the focus, escape leaves the field, backspace and space edit the focused text field; warns if nothing has focus. Android and iOS. The agent must report the `press_key` capability: a probe_agent up to 0.27.0 does not, and the step fails with a message to update it. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
+    "description": "Press tab, escape, backspace, space, up, down, left or right. With a field focused: tab and the arrows move the focus, escape leaves the field, backspace deletes the character before the caret and space inserts a space. With nothing focused: tab moves the focus to the first focusable widget (no warning, and nothing happens when there is none); escape does nothing (no warning); an arrow moves the focus into a field in its direction when one exists, and does nothing otherwise (no warning); backspace and space warn that no text field has focus. With a field focused, an arrow with nothing in its direction warns that there is nothing to move the focus to. Android and iOS. The agent must report the `press_key` capability in its handshake: an agent that does not report it fails the step with a message to update it, whatever its version number. A recipe named exactly one of these keys is shadowed by the step; a `press` line with another word is a recipe call.",
     "category": "Actions"
   },
   {

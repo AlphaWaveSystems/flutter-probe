@@ -168,6 +168,11 @@
     "body": "swipe ${1|up,down,left,right|} over ${2:40} percent",
     "description": "Swipe that travels a percent of the element or screen"
   },
+  "Swipe from an edge of a target": {
+    "prefix": "swipe from",
+    "body": "swipe ${1|up,down,left,right|} on \"${2:Menu}\" from ${3:2} percent",
+    "description": "Swipe that starts a percent in from the edge it starts at (an edge swipe for a drawer)"
+  },
   "Scroll until visible": {
     "prefix": "scroll",
     "body": "scroll down until \"${1:element}\" appears",

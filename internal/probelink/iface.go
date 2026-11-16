@@ -27,7 +27,7 @@ type ProbeClient interface {
 	TypeText(ctx context.Context, sel SelectorParam, text string) error
 	See(ctx context.Context, params SeeParams) error
 	Wait(ctx context.Context, params WaitParams) error
-	Swipe(ctx context.Context, direction string, sel *SelectorParam, percent int) error
+	Swipe(ctx context.Context, direction string, sel *SelectorParam, startPercent, percent int) error
 	Scroll(ctx context.Context, direction string, sel *SelectorParam) error
 	LongPress(ctx context.Context, sel SelectorParam) error
 	DoubleTap(ctx context.Context, sel SelectorParam) error

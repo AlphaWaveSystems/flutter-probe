@@ -223,6 +223,9 @@ type ActionStep struct {
 	Text      string      // for "type" — the text to enter
 	Direction SwipeDirection // for swipe / scroll
 	Percent   int            // for swipe: how far it travels, as a percent of the element or screen; 0 means the default, 50
+	// for swipe: where it starts, as a percent counted from the edge the swipe starts at (the bottom for up, the top for down,
+	// the right for left, the left for right); 0 means the centre. Only a swipe on a target has one (`swipe right on "Menu" from 2 percent`).
+	StartPercent int `json:",omitempty"` // omitted at 0, so the AST of every other step serializes as before
 	// for swipe: a word where a direction was expected that is not up, down, left or right. The swipe runs down, and the
 	// word is left to parse as the next step, as it always has; lint warns about it.
 	DirectionWord string
