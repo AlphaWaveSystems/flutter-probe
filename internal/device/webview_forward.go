@@ -176,6 +176,26 @@ func freeLoopbackPort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
+// forwardHintTimeout bounds the one adb call of ForwardHint.
+const forwardHintTimeout = 5 * time.Second
+
+// ForwardHint says, for a failed connect on Android, that the agent port is forwarded to a DIFFERENT device, naming it and the command that removes the forward.
+// It speaks only when `adb forward --list` shows this exact host port mapped to another plain serial; with no mapping, an unreadable list or this device's own
+// forward it returns "" (never a guess, never a pid). One read-only adb call, bounded by forwardHintTimeout and by ctx. The result starts with " — " to be
+// appended to an error.
+func ForwardHint(ctx context.Context, runner AdbRunner, hostPort int, ownSerial string) string {
+	if runner == nil || ctx.Err() != nil {
+		return ""
+	}
+	cctx, cancel := context.WithTimeout(ctx, forwardHintTimeout)
+	defer cancel()
+	other, ok := ForwardSerial(cctx, runner, hostPort)
+	if !ok || other == ownSerial {
+		return ""
+	}
+	return fmt.Sprintf(" — agent port %d is forwarded to another device (%s): remove that forward with `adb -s %s forward --remove tcp:%d`, or pick another port with --agent-port", hostPort, other, other, hostPort)
+}
+
 var forwardSerialRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`)
 
 // ForwardSerial reports which device the `adb forward` for a host port belongs to, by reading `adb forward --list` (lines of "<serial> tcp:<host> tcp:<device>").
