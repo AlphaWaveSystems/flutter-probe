@@ -474,6 +474,8 @@ see "<total>" in webview
 type "<total>" into css:"#search" in webview
 ```
 
+The last line is the usual typing form (`type "text" into css:"..." in webview`) with the stored value as the text.
+
 `store text of css:"..." in webview ["page"] as name` reads the visible text of the first visible element that matches the CSS selector into a
 variable. It takes a CSS selector only: with a quoted text the value would be the operand itself, so that is a parse error. The page name works as in
 the other WebView steps, and `as name` ends the step.
