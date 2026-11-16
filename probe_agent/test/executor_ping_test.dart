@@ -60,5 +60,29 @@ void main() {
       final decoded = jsonDecode(lastSent!) as Map<String, dynamic>;
       expect(decoded.containsKey('error'), isFalse);
     });
+
+    test('carries the build info fields, plain text, next to the existing ones', () async {
+      await executor.dispatch(ProbeRequest(
+        jsonrpc: '2.0',
+        id: 4,
+        method: ProbeMethods.ping,
+        params: const {},
+      ));
+
+      final result = decodeResult();
+      // the shape older CLIs read is unchanged
+      expect(result['ok'], isTrue);
+      expect(result['agent_version'], equals(probeAgentVersion));
+      expect(result['capabilities'], equals(probeAgentCapabilities));
+      // the new fields are optional: when present they are plain version text, and nothing else is added
+      const known = {'ok', 'agent_version', 'capabilities', 'flutter_version', 'flutter_channel', 'framework_revision', 'dart_version'};
+      expect(known.containsAll(result.keys), isTrue, reason: '${result.keys}');
+      for (final k in ['flutter_version', 'flutter_channel', 'framework_revision', 'dart_version']) {
+        if (result.containsKey(k)) {
+          expect(RegExp(r'^[A-Za-z0-9.+-]{1,64}$').hasMatch(result[k] as String), isTrue, reason: '$k=${result[k]}');
+        }
+      }
+      expect(result['dart_version'], isNotNull);
+    });
   });
 }
