@@ -103,6 +103,7 @@ func (r *Reporter) StreamResult(res TestResult) {
 		DeviceID:   res.DeviceID,
 		DeviceName: res.DeviceName,
 		Perf:       res.Perf,
+		Crash:      crashJSON(res.Crash, r.outputDir),
 	}
 	if res.Attempts > 1 {
 		jr.Attempts = res.Attempts
@@ -216,6 +217,7 @@ type jsonResult struct {
 	Perf       []perf.Metrics `json:"perf,omitempty"` // `start measuring` windows of the test
 	Attempts   int      `json:"attempts,omitempty"` // only when a failed test was re-run (retry_failed_tests)
 	SelectorProposal *SelectorProposal `json:"selector_proposal,omitempty"` // advisory, only with --ai-heal
+	Crash *jsonCrash `json:"crash,omitempty"` // only for a failed test whose app died, with --crash-evidence
 }
 
 type jsonReport struct {
@@ -271,6 +273,7 @@ func (r *Reporter) buildJSONReport(results []TestResult) jsonReport {
 			DeviceName: res.DeviceName,
 			Perf:       res.Perf,
 			SelectorProposal: res.Proposal,
+			Crash:      crashJSON(res.Crash, r.outputDir),
 		}
 		if res.Attempts > 1 {
 			jr.Attempts = res.Attempts

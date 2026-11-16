@@ -550,8 +550,11 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 
 	exec.closePerf(ctx)
 
+	crash := failedTestCrash(exec, runErr)
+	r.writeCrashFilesFor(crash, t.Name)
+
 	return TestResult{
-		Crash:      failedTestCrash(exec, runErr),
+		Crash:      crash,
 		Perf:       nameUnnamed(exec.PerfResults()),
 		TestName:   name,
 		File:       file,

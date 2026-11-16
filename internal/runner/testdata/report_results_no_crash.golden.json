@@ -1,0 +1,38 @@
+[
+  {
+    "name": "passes",
+    "file": "a.probe",
+    "passed": true,
+    "skipped": false,
+    "duration_ms": 1500,
+    "row": -1,
+    "tags": [
+      "smoke"
+    ],
+    "artifacts": [
+      "shot.png",
+      "rel.png"
+    ],
+    "device_id": "emulator-5600",
+    "device_name": "Pixel",
+    "attempts": 2
+  },
+  {
+    "name": "fails",
+    "file": "b.probe",
+    "passed": false,
+    "skipped": false,
+    "duration_ms": 2000,
+    "error": "step failed",
+    "row": 1,
+    "device_id": "emulator-5600"
+  },
+  {
+    "name": "skipped",
+    "file": "c.probe",
+    "passed": false,
+    "skipped": true,
+    "duration_ms": 0,
+    "row": -1
+  }
+]

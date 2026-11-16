@@ -83,6 +83,8 @@ type CrashReport struct {
 	Kind device.ExitKind
 	// Evidence is the cleaned and masked evidence of the chosen process: the exit entry, the crash text and a one-line summary.
 	Evidence device.CrashEvidence
+	// Files are the files written for this report (absolute paths), set by the runner when the test failed; empty when none were.
+	Files []string
 }
 
 // Line is the one line printed for a failed test. It holds only masked text and is cut by the collector.
