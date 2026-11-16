@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -45,7 +46,13 @@ func (s Simulator) HumanRuntime() string {
 type SimCtl struct {
 	mu         sync.Mutex
 	launchArgs map[string][]string // udid+"/"+bundle -> extra `simctl launch` arguments
+	// containerOf resolves the data container of an app; nil means `simctl get_app_container`. A test sets it.
+	containerOf func(ctx context.Context, udid, bundleID string) string
 }
+
+// ErrAmbiguousToken is returned by ReadToken when no app id was given and more than one app container on the simulator holds a Probe
+// token: which one to use cannot be told, and the first one is not a safe guess (it is as likely another app's).
+var ErrAmbiguousToken = errors.New("ios: more than one app on this simulator has a Probe token")
 
 func New() *SimCtl { return &SimCtl{} }
 
@@ -262,9 +269,12 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	// where multiple installs exist and get_app_container returns a stale container
 	// that doesn't match the one the currently running app is writing to.
 	allContainerGlob := filepath.Join(s.simDataPath(udid), "Containers", "Data", "Application", "*", "tmp", "probe", "token")
+	var globbed []string
 	if matches, err := filepath.Glob(allContainerGlob); err == nil {
+		globbed = matches
 		tokenPaths = append(tokenPaths, matches...)
 	}
+	noApp := len(bundleID) == 0 || bundleID[0] == ""
 
 	// Fallback: device-level tmp (legacy path)
 	tokenPaths = append(tokenPaths, s.simDataPath(udid)+"/tmp/probe/token")
@@ -280,6 +290,14 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 				if len(tokenPaths) == 0 || tokenPaths[0] != newPath {
 					tokenPaths = append([]string{newPath}, tokenPaths...)
 				}
+			}
+		}
+
+		// With no app id, the containers on the simulator are all candidates, and more than one is not a choice Studio or the CLI can
+		// make: the first match is as likely another app's token, which the agent then refuses (HTTP 401). Say so instead.
+		if noApp {
+			if n := countValidTokens(globbed); n > 1 {
+				return "", fmt.Errorf("%w (%d): set app.id in probe.yaml so the right one is read, or remove the other app's token", ErrAmbiguousToken, n)
 			}
 		}
 
@@ -301,8 +319,22 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	}
 }
 
+// countValidTokens counts the files that hold a token (at least 16 characters).
+func countValidTokens(paths []string) int {
+	n := 0
+	for _, p := range paths {
+		if data, err := os.ReadFile(p); err == nil && len(strings.TrimSpace(string(data))) >= 16 {
+			n++
+		}
+	}
+	return n
+}
+
 // appContainerDataPath returns the data container path for an app on the simulator.
 func (s *SimCtl) appContainerDataPath(ctx context.Context, udid, bundleID string) string {
+	if s.containerOf != nil {
+		return s.containerOf(ctx, udid, bundleID)
+	}
 	out, err := s.run(ctx, "get_app_container", udid, bundleID, "data")
 	if err != nil {
 		return ""
