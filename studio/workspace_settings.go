@@ -59,67 +59,65 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 	}, nil
 }
 
-// SaveWorkspaceSettings writes the managed fields back to probe.yaml.
-// Reads the existing file as a raw map so other keys (recipes_folder,
-// cloud, plugins, etc.) survive untouched. Creates the file if missing.
+// SaveWorkspaceSettings writes the managed fields back to probe.yaml, and only the ones that changed: a field equal to what the form was
+// loaded with leaves its line alone. The edit is made on the file's own text (probe_yaml_edit.go), so comments, blank lines, the order of the
+// keys and every unmanaged key stay exactly as they were, and the file is replaced atomically with its mode. A probe.yaml that does not parse
+// is refused and never overwritten. Creates the file if missing. Everything is validated here, in Go, before anything is written.
 func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error {
 	if workspace == "" {
 		return fmt.Errorf("workspace path is required")
 	}
-
-	// Validate the duration string round-trips before touching disk.
+	// Validate before touching the file (and before reading it): the duration strings must round-trip.
 	if s.DefaultsTimeout != "" {
 		if _, err := time.ParseDuration(s.DefaultsTimeout); err != nil {
 			return fmt.Errorf("defaultsTimeout %q is not a valid Go duration: %w", s.DefaultsTimeout, err)
 		}
 	}
-	// A value that is already in probe.yaml (set by hand, beyond the form's bounds) can stay: only a changed value is held to them.
-	var current WorkspaceSettings
-	if cfg, err := config.Load(workspace); err == nil {
-		current = WorkspaceSettings{RetryFailedTests: cfg.Defaults.RetryFailedTests, ImplicitWait: durationText(cfg.Defaults.ImplicitWait)}
-	}
-	if err := validateRunKnobs(s, current); err != nil {
-		return err
-	}
 	if s.AgentPort < 0 || s.AgentPort > 65535 {
 		return fmt.Errorf("agentPort %d is outside the valid TCP port range", s.AgentPort)
 	}
-
-	path := filepath.Join(workspace, "probe.yaml")
-	raw := map[string]any{}
-	existing, err := os.ReadFile(path)
-	if err == nil {
-		if err := yaml.Unmarshal(existing, &raw); err != nil {
-			return fmt.Errorf("parsing existing probe.yaml: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("reading probe.yaml: %w", err)
-	}
-
-	// Mutate only the keys we manage; leave the rest of the user's YAML alone.
-	setNestedString(raw, "agent", "port", "")           // ensure parent map exists
-	setNestedString(raw, "device", "ios_device_id", "") // ensure parent map exists
-	setNestedString(raw, "defaults", "timeout", "")     // ensure parent map exists
-
-	mergeKey(raw, "agent", "port", s.AgentPort)
-	mergeKey(raw, "defaults", "timeout", s.DefaultsTimeout)
-	mergeKey(raw, "defaults", "test_timeout", s.TestTimeout)
-	mergeKey(raw, "defaults", "retry_failed_tests", s.RetryFailedTests)
-	mergeKey(raw, "defaults", "implicit_wait", s.ImplicitWait)
-	mergeKey(raw, "device", "ios_device_id", s.IOSDeviceID)
-	mergeKey(raw, "device", "android_device_id", s.AndroidDeviceID)
-	if err := setAIContextFlags(raw, s); err != nil {
+	y, err := openProbeYAML(workspace)
+	if err != nil {
 		return err
 	}
-
-	out, err := yaml.Marshal(raw)
-	if err != nil {
-		return fmt.Errorf("encoding probe.yaml: %w", err)
+	// What the form was loaded with: a value beyond the form's bounds that is already in probe.yaml stays, and only a changed value is
+	// held to them. A probe.yaml the engine cannot read leaves nothing to compare with, so every field counts as changed.
+	var loaded WorkspaceSettings
+	if cur, err := a.LoadWorkspaceSettings(workspace); err == nil {
+		loaded = cur
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return fmt.Errorf("writing probe.yaml: %w", err)
+	if err := validateRunKnobs(s, loaded); err != nil {
+		return err
 	}
-	return nil
+	type edit struct {
+		changed bool
+		value   any
+		path    []string
+	}
+	for _, e := range []edit{
+		{s.AgentPort != loaded.AgentPort, s.AgentPort, []string{"agent", "port"}},
+		{s.DefaultsTimeout != loaded.DefaultsTimeout, strings.TrimSpace(s.DefaultsTimeout), []string{"defaults", "timeout"}},
+		{s.TestTimeout != loaded.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
+		{s.RetryFailedTests != loaded.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
+		{s.ImplicitWait != loaded.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{s.IOSDeviceID != loaded.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
+		{s.AndroidDeviceID != loaded.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
+		{s.AIContextRunResults != loaded.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
+		{s.AIContextWidgetTree != loaded.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
+	} {
+		if !e.changed {
+			continue
+		}
+		if isZero(e.value) { // a cleared field leaves probe.yaml: the file lists only what the person set
+			err = y.remove(e.path...)
+		} else {
+			err = y.set(e.value, e.path...)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return y.save()
 }
 
 // The largest values Studio's form accepts for the run knobs. The CLI takes any; a typo such as 300 for 3 attempts, or "90m" for "90s", would
@@ -202,87 +200,6 @@ func readAIContext(workspace string) (aiContextSettings, error) {
 		WidgetTree:          doc.Studio.AIContext.WidgetTree,
 		AllowRemoteEndpoint: doc.Studio.AllowRemoteEndpoint,
 	}, nil
-}
-
-// setAIContextFlags writes the two switches under studio.ai_context. A switch that is off is removed, as mergeKey does for
-// the other managed keys, and maps left empty are removed with it. A studio or ai_context key that is not a map is refused
-// rather than overwritten, because that would discard the user's own value.
-func setAIContextFlags(raw map[string]any, s WorkspaceSettings) error {
-	studio, err := mapAt(raw, "studio")
-	if err != nil {
-		return err
-	}
-	ai, err := mapAt(studio, "ai_context")
-	if err != nil {
-		return err
-	}
-	setSwitch(ai, "run_results", s.AIContextRunResults)
-	setSwitch(ai, "widget_tree", s.AIContextWidgetTree)
-	if len(ai) == 0 {
-		delete(studio, "ai_context")
-	}
-	if len(studio) == 0 {
-		delete(raw, "studio")
-	}
-	return nil
-}
-
-// mapAt returns the map stored under key, creating it when the key is absent. A value that is not a map is an error.
-func mapAt(m map[string]any, key string) (map[string]any, error) {
-	v, ok := m[key]
-	if !ok {
-		created := map[string]any{}
-		m[key] = created
-		return created, nil
-	}
-	if inner, isMap := v.(map[string]any); isMap {
-		return inner, nil
-	}
-	return nil, fmt.Errorf("probe.yaml has a %q key that is not a map; fix it by hand before saving settings that use it", key)
-}
-
-func setSwitch(m map[string]any, key string, on bool) {
-	if on {
-		m[key] = true
-		return
-	}
-	delete(m, key)
-}
-
-// mergeKey writes value at raw[parent][key]. If value is the zero value
-// for its type, the key is removed instead — preserving the convention
-// that probe.yaml only lists fields the user has explicitly set.
-func mergeKey(raw map[string]any, parent, key string, value any) {
-	parentMap := ensureMap(raw, parent)
-	if isZero(value) {
-		delete(parentMap, key)
-		// Drop the empty parent map too so we don't litter probe.yaml with
-		// `agent: {}` when the user clears every field under it.
-		if len(parentMap) == 0 {
-			delete(raw, parent)
-		}
-		return
-	}
-	parentMap[key] = value
-}
-
-func ensureMap(raw map[string]any, key string) map[string]any {
-	if existing, ok := raw[key].(map[string]any); ok {
-		return existing
-	}
-	// yaml.v3 Unmarshal produces map[string]interface{} for object values,
-	// but Marshal accepts both shapes. Coerce to keep the writeback path
-	// consistent.
-	m := map[string]any{}
-	raw[key] = m
-	return m
-}
-
-// setNestedString is a no-op nudge that ensures the parent map exists
-// without overriding any value the user already set there. Useful as
-// a defensive prelude before mergeKey when we're about to delete keys.
-func setNestedString(raw map[string]any, parent, _, _ string) {
-	ensureMap(raw, parent)
 }
 
 func isZero(v any) bool {

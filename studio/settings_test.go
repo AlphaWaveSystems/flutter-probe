@@ -169,7 +169,7 @@ func TestSaveWorkspaceSettingsKeepsAValueBeyondTheFormsBounds(t *testing.T) {
 		t.Fatalf("saving an unrelated change was refused: %v", err)
 	}
 	d := readYAML(t, dir)["defaults"].(map[string]any)
-	if d["retry_failed_tests"] != 15 || d["implicit_wait"] != "10m0s" {
+	if d["retry_failed_tests"] != 15 || d["implicit_wait"] != "10m" {
 		t.Errorf("defaults = %v", d)
 	}
 	loaded.RetryFailedTests = 16
