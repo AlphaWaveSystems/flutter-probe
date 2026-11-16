@@ -2,16 +2,16 @@ package cli
 
 import "os"
 
-// stdinIsTerminal reports whether stdin is an interactive terminal, the only place a question can be answered. A character device is
-// not enough: /dev/null is one, and it answers every question with end of file, which read as "cancelled by user" instead of the hint
-// to pass --yes. So the null device is excluded first, and the platform check asks the terminal itself.
+// stdinIsTerminal reports whether stdin is an interactive terminal, the only place a question can be answered. The terminal driver answers
+// that itself: TIOCGETA on darwin, TCGETS on linux, GetConsoleMode on windows. A pipe, /dev/null and /dev/zero are not terminals, and the
+// query refuses each of them, so no separate device check is needed. Other systems have no query and fail closed (stdin_terminal_other.go).
 func stdinIsTerminal() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(fi, null) {
-		return false
-	}
 	return fdIsTerminal(os.Stdin.Fd())
+}
+
+// terminalAnswer turns a terminal query into the answer stdin needs. A query that cannot be made is not a terminal: the answer fails closed,
+// and no prompt is shown, even if the query reported true alongside its error.
+func terminalAnswer(query func(fd uintptr) (bool, error), fd uintptr) bool {
+	is, err := query(fd)
+	return err == nil && is
 }
