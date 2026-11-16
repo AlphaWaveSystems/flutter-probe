@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -119,4 +120,22 @@ func logLength(t *testing.T, log string) int {
 		t.Fatal(err)
 	}
 	return len(b)
+}
+
+// TestAutoLineSaysWhatWasAnswered: a clear the setting answers without a question says what it answered, the keychain reset of an iOS
+// simulator included, so the line never reads as a clear of app data alone.
+func TestAutoLineSaysWhatWasAnswered(t *testing.T) {
+	var out bytes.Buffer
+	question := "This will permanently delete ALL app data for com.example.app on SIM-UDID-1.\n" +
+		"  SharedPreferences, databases, and files will be wiped. It also resets the keychain of ALL apps on this simulator. Continue?"
+	if !confirmWithPrefs(nil, true, func() bool { return true }, &out, "com.example.app", "SIM-UDID-1")(question) {
+		t.Fatal("a verified simulator with the setting on must answer yes")
+	}
+	line := out.String()
+	if !strings.Contains(line, "also resets the keychain of ALL apps on this simulator") {
+		t.Errorf("the automatic line must name the keychain reset, got %q", line)
+	}
+	if strings.Contains(line, "Continue?") {
+		t.Errorf("the automatic line states what was answered; it must not read as a question, got %q", line)
+	}
 }
