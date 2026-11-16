@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -68,5 +72,83 @@ func TestAConnectionKeepsWhatTheHandshakeReported(t *testing.T) {
 	}
 	if want := "App built with Flutter 3.44.8 (stable), Dart 3.12.2 · framework revision 1a2b3c4d5e"; st.AppBuild != want || a.Status().AppBuild != want {
 		t.Errorf("connect = %q, status = %q, want %q", st.AppBuild, a.Status().AppBuild, want)
+	}
+}
+
+// Hostile values: the Go side drops anything that is not plain version text, so what the fake agent sends as markup, bidi or an over-long string
+// never reaches the line, and the valid parts are shown alone. (Through the real handshake and its validation.)
+func TestAHostileBuildReportShowsOnlyItsValidParts(t *testing.T) {
+	agent := newFakeAgent(t)
+	agent.pingExtra = map[string]any{
+		"flutter_version":    "<img src=x onerror=alert(1)>",
+		"flutter_channel":    "stable\u202e",
+		"dart_version":       strings.Repeat("9", 65),
+		"framework_revision": "ok1234",
+	}
+	a := NewApp()
+	a.ctx = context.Background()
+	t.Cleanup(func() { a.shutdown(context.Background()) })
+	st, err := a.ConnectWiFi("127.0.0.1", agent.port, "abcdefgh1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.AppBuild != "Framework revision ok1234" {
+		t.Errorf("the line is %q: only the valid part may show", st.AppBuild)
+	}
+	// only a channel is valid: the line says so, as the parts the app reported
+	agent.mu.Lock()
+	agent.pingExtra = map[string]any{"flutter_version": "<b>3</b>", "flutter_channel": "stable"}
+	agent.mu.Unlock()
+	a.Disconnect()
+	st, err = a.ConnectWiFi("127.0.0.1", agent.port, "abcdefgh1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.AppBuild != "App built with Flutter channel stable" {
+		t.Errorf("the line is %q", st.AppBuild)
+	}
+}
+
+// Both ways of connecting (a device by id, and WiFi) keep what the handshake reported: every place that builds a connection with a client sets
+// appBuild. The USB path needs a real device manager and a port forward, so this reads the source.
+func TestEveryConnectionKeepsTheBuildReport(t *testing.T) {
+	fset := token.NewFileSet()
+	files, _ := filepath.Glob("*.go")
+	found := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		src, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(src, func(n ast.Node) bool {
+			lit, ok := n.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			if id, ok := lit.Type.(*ast.Ident); !ok || id.Name != "connection" {
+				return true
+			}
+			keys := map[string]bool{}
+			for _, e := range lit.Elts {
+				if kv, ok := e.(*ast.KeyValueExpr); ok {
+					if k, ok := kv.Key.(*ast.Ident); ok {
+						keys[k.Name] = true
+					}
+				}
+			}
+			if keys["client"] && keys["deviceID"] {
+				found++
+				if !keys["appBuild"] {
+					t.Errorf("%s: a connection is built without appBuild (the handshake result is dropped)", fset.Position(lit.Pos()))
+				}
+			}
+			return true
+		})
+	}
+	if found != 2 {
+		t.Errorf("found %d places that build a connection with a client, want 2 (USB and WiFi): update this test if a path was added", found)
 	}
 }

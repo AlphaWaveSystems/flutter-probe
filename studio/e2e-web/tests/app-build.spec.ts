@@ -52,7 +52,7 @@ test.describe("The build of the app under test", () => {
     await connectWith(page, "App built with Flutter 3.44.8 (stable), Dart 3.12.2 · framework revision 1a2b3c4d5e");
     await expect(line(page)).toBeVisible();
     await expect(line(page)).toHaveText("App built with Flutter 3.44.8 (stable), Dart 3.12.2 · framework revision 1a2b3c4d5e");
-    await expect(line(page)).toHaveAttribute("title", /A fork or a custom embedder/);
+    await expect(line(page)).toHaveAttribute("title", /Only the parts the app reported are shown.*a fork or a custom embedder/);
   });
 
   test("bv-02 a connection whose app reported nothing shows nothing: no placeholder", async ({ page }) => {
