@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoSwitch;
+import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoRadio, CupertinoSwitch;
 import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, CheckboxListTile, ChoiceChip, Dialog, FilterChip, FloatingActionButton, GestureDetector, IconButton, InkResponse, Radio, RadioListTile, Scaffold, Switch, SwitchListTile, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
@@ -1941,7 +1941,8 @@ class ProbeExecutor {
   /// itself, a control nested inside it (a SwitchListTile builds a Switch), or the
   /// control that encloses it (the Text label of a tile). null = not checkable.
   bool? _checkedState(Element e) {
-    bool? own(Widget w) {
+    bool? own(Element el) {
+      final w = el.widget;
       if (w is Switch) return w.value;
       if (w is SwitchListTile) return w.value;
       if (w is CupertinoSwitch) return w.value;
@@ -1949,23 +1950,16 @@ class ProbeExecutor {
       if (w is CheckboxListTile) return w.value ?? false;
       if (w is FilterChip) return w.selected;
       if (w is ChoiceChip) return w.selected;
-      if (w is Radio || w is RadioListTile) {
-        try {
-          final dyn = w as dynamic;
-          return dyn.value == dyn.groupValue;
-        } catch (_) {
-          return null;
-        }
-      }
+      if (w is Radio || w is RadioListTile || w is CupertinoRadio) return _radioChecked(el);
       return null;
     }
 
-    final self = own(e.widget);
+    final self = own(e);
     if (self != null) return self;
     bool? below;
     void visit(Element c) {
       if (below != null) return;
-      final v = own(c.widget);
+      final v = own(c);
       if (v != null) {
         below = v;
         return;
@@ -1977,7 +1971,7 @@ class ProbeExecutor {
     bool? above;
     var depth = 0;
     e.visitAncestorElements((a) {
-      final v = own(a.widget);
+      final v = own(a);
       if (v != null) {
         above = v;
         return false;
@@ -1985,6 +1979,41 @@ class ProbeExecutor {
       return ++depth < 40;
     });
     return above;
+  }
+
+  /// Whether a radio (a [Radio], a [RadioListTile] or a [CupertinoRadio]) is the selected one of its group.
+  ///
+  /// Two APIs keep the group value in two places. Before the `RadioGroup` API each radio carried its own `groupValue` (and `onChanged`); with it the
+  /// group value is kept by the nearest `RadioGroup` above the radio and the radio's own `groupValue` is deprecated and null. So: a radio's own
+  /// group value when it has one, else the group value of the nearest `RadioGroup` ancestor, else the radio's own (null) one. `RadioGroup` does not
+  /// exist before Flutter 3.32, so it is found by its class name and read dynamically, which compiles on every Flutter this package supports; a
+  /// reading that fails (a member that is gone in a later Flutter) answers null, "not checkable", and never a wrong yes or no.
+  bool? _radioChecked(Element el) {
+    try {
+      final w = el.widget as dynamic;
+      final Object? value = w.value;
+      Object? own;
+      try {
+        own = w.groupValue; // deprecated since the RadioGroup API; null under it
+      } catch (_) {
+        own = null;
+      }
+      if (own != null) return value == own;
+      var grouped = false;
+      Object? group;
+      el.visitAncestorElements((a) {
+        final name = a.widget.runtimeType.toString();
+        if (name == 'RadioGroup' || name.startsWith('RadioGroup<')) {
+          grouped = true;
+          group = (a.widget as dynamic).groupValue;
+          return false;
+        }
+        return true;
+      });
+      return grouped ? value == group : value == own;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// The disabled state of a widget, or of the control it labels: the element a text

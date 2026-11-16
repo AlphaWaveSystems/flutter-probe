@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: `see "..." is checked` read a radio under Flutter's `RadioGroup` API as never checked. Since that API the group value is kept by the `RadioGroup` above the radios, and the agent compared a radio's value with its own `groupValue`, which is null there. It now uses the radio's own group value when it has one (the older form still works) and otherwise the group value of the nearest `RadioGroup` above it, for `Radio`, `RadioListTile` and `CupertinoRadio`. A group whose value cannot be read makes the radio "not a checkable control", never a wrong yes or no.
+
 - Added: `probe.ping` also reports, when the app's build knows them, `flutter_version`, `flutter_channel`, `framework_revision` and `dart_version`: the Flutter and Dart that BUILT THE APP (the Flutter tool puts them into every app build as compile-time defines, which the agent reads directly), not the Flutter that published this package. Each is left out when unknown, empty or not plain version text (letters, digits, dots, dashes and plus signs, at most 64 characters); the Dart version falls back to the running VM's. An older CLI ignores the fields and an older agent sends none. A fork or a custom embedder can report values that are not the real ones.
 
 ## 0.27.0 - 2026-11-11
