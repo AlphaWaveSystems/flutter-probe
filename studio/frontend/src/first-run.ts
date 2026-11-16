@@ -14,13 +14,18 @@ export interface FirstRunInput {
   deviceBooted: boolean; // the selected device can be connected
   connected: boolean;
   running: boolean; // a run or a re-run is in flight
+  listing: "unknown" | "files" | "empty" | "failed"; // what the Workspace pane's last listing found
 }
 
 /** The one thing to do next, or "" when nothing is in the way (or while loading). The order is the order of a first run. */
 export function nextStep(i: FirstRunInput): string {
   if (i.loading) return "";
   if (!i.workspaceOpen) return "Open your project folder to start: press the folder button in the Workspace pane.";
-  if (!i.fileOpen) return "Open a .probe file from the Workspace pane.";
+  if (!i.fileOpen) {
+    if (i.listing === "failed") return "This folder cannot be read: open another folder with the folder button.";
+    if (i.listing === "empty") return "There are no .probe files in this folder: open another folder with the folder button.";
+    return "Open a .probe file from the Workspace pane.";
+  }
   if (i.connected) return "";
   if (!i.devicesLoaded) return "";
   if (i.deviceCount === 0) return "No device found: boot a simulator or plug in a phone, then press the refresh button.";
@@ -58,8 +63,9 @@ export function connectReason(i: FirstRunInput, deviceHint = ""): string {
 }
 
 /** The line in an empty Workspace pane: null while loading or when the pane has files. */
-export function workspacePaneText(i: Pick<FirstRunInput, "loading" | "workspaceOpen">, entries: number): { text: string; action: boolean } | null {
+export function workspacePaneText(i: Pick<FirstRunInput, "loading" | "workspaceOpen">, entries: number, failed = false): { text: string; action: boolean } | null {
   if (i.loading) return null;
+  if (i.workspaceOpen && failed) return { text: "This folder cannot be read (it may have moved or been deleted). Open another folder.", action: true };
   if (!i.workspaceOpen) return { text: "No workspace open. Pick your project folder (the one with probe.yaml).", action: true };
   if (entries === 0) return { text: "No .probe files here. Open another folder, or add tests to this one.", action: false };
   return null;

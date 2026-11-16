@@ -204,7 +204,7 @@ let dirty = false;
 // before its first listing has arrived.
 let bootLoading = true;
 let devicesLoaded = false;
-let lastEntryCount = -1;
+let listing: FirstRunInput["listing"] = "unknown";
 // The replaced line the card can re-run, whether that re-run is ours, and whether a run is going (declared here: setDirty reads them at start-up).
 let fixRerun: RerunTarget | null = null;
 let rerunInFlight = false;
@@ -225,7 +225,7 @@ async function refreshFiles(dir: string = currentDir) {
   clearChildren(list);
   try {
     const entries = await ListDir(dir);
-    lastEntryCount = entries.length;
+    listing = entries.length === 0 ? "empty" : "files";
     for (const e of entries) {
       const li = document.createElement("li");
       li.textContent = e.name;
@@ -242,15 +242,17 @@ async function refreshFiles(dir: string = currentDir) {
     if (entries.length === 0) renderEmptyPane(list);
   } catch (err) {
     console.error("ListDir failed", err);
+    listing = "failed";
     toast(`Cannot read ${dir}: ${err}`, "error");
+    renderEmptyPane(list, true);
   }
   refreshFirstRun();
 }
 
 // renderEmptyPane says what an empty Workspace pane needs: a workspace to open, or .probe files to add. It says nothing while the workspace
 // is loading (no flash), and the line is plain text.
-function renderEmptyPane(list: HTMLElement): void {
-  const say = workspacePaneText({ loading: bootLoading, workspaceOpen: workspaceRoot !== "" }, 0);
+function renderEmptyPane(list: HTMLElement, failed = false): void {
+  const say = workspacePaneText({ loading: bootLoading, workspaceOpen: workspaceRoot !== "" }, 0, failed);
   if (!say) return;
   const li = document.createElement("li");
   li.classList.add("empty", "pane-empty");
@@ -280,6 +282,7 @@ function firstRunInput(): FirstRunInput {
     deviceBooted: selectedDeviceIsBooted(),
     connected,
     running: runInProgress,
+    listing,
   };
 }
 
@@ -1958,9 +1961,9 @@ initDeviceSettings();
 function finishBoot(): void {
   bootLoading = false;
   const list = $("file-list");
-  if (lastEntryCount === 0 && !list.querySelector("li.pane-empty")) {
+  if ((listing === "empty" || listing === "failed") && !list.querySelector("li.pane-empty")) {
     clearChildren(list);
-    renderEmptyPane(list);
+    renderEmptyPane(list, listing === "failed");
   }
   refreshFirstRun();
 }

@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The converter (`probe-convert`, and `probe migrate`) writes a screenshot in the dictionary spelling: `take screenshot "name"`, not `take a screenshot called "name"`.** The converter's help table and its golden files show the same spelling. Both spellings parse, so no existing suite changes; the old spelling still works in a hand-written suite.
 
 ### Fixed
+- **Studio: a remembered folder that is gone, or has no `.probe` files, is named as the next step.** Studio reopens the last workspace at start. When that folder had moved or been deleted, the Workspace pane stayed blank and the line under the toolbar still said "Open a .probe file from the Workspace pane", with nothing to open. Now the pane says "This folder cannot be read (it may have moved or been deleted). Open another folder." with an **Open workspace** button, an empty folder says it has no `.probe` files, and the line under the toolbar names the folder as the next step in both cases. Found by driving the real window.
 - **Studio: Run keeps saying why it is disabled while a run is in flight.** The first-run guidance read the button's own state, so typing in the editor during a run or a re-run left Run disabled with no reason (`aria-describedby` gone, the title back to "Run the open file"). The reason is now derived from the window's state: "A run is in progress." while a run or a re-run is in flight, and it goes when the run ends. The guidance is also re-read when a run starts and ends.
 
 ### Security

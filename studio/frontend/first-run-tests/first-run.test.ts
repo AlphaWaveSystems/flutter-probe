@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { connectReason, nextStep, recordReason, runReason, saveReason, workspacePaneText, type FirstRunInput } from "../src/first-run.ts";
 
-const ready: FirstRunInput = { loading: false, workspaceOpen: true, fileOpen: true, dirty: false, devicesLoaded: true, deviceCount: 1, bootedCount: 1, deviceSelected: true, deviceBooted: true, connected: false, running: false };
+const ready: FirstRunInput = { loading: false, workspaceOpen: true, fileOpen: true, dirty: false, devicesLoaded: true, deviceCount: 1, bootedCount: 1, deviceSelected: true, deviceBooted: true, connected: false, running: false, listing: "files" };
 const at = (extra: Partial<FirstRunInput>): FirstRunInput => ({ ...ready, ...extra });
 
 describe("nextStep", () => {
@@ -23,6 +23,22 @@ describe("nextStep", () => {
     assert.equal(nextStep(at({ devicesLoaded: false, deviceCount: 0, bootedCount: 0 })), "");
     // connected without a file: the file is still the next step
     assert.match(nextStep(at({ connected: true, fileOpen: false })), /Open a \.probe file/);
+  });
+});
+
+describe("nextStep when the folder has no files, or cannot be read", () => {
+  it("names the folder, not a file, as the next step", () => {
+    assert.match(nextStep(at({ fileOpen: false, listing: "empty" })), /no \.probe files in this folder/);
+    assert.match(nextStep(at({ fileOpen: false, listing: "failed" })), /cannot be read/);
+    assert.match(nextStep(at({ fileOpen: false, listing: "files" })), /Open a \.probe file/);
+    assert.match(nextStep(at({ fileOpen: false, listing: "unknown" })), /Open a \.probe file/);
+  });
+  it("says nothing of it while loading", () => {
+    assert.equal(nextStep(at({ loading: true, fileOpen: false, listing: "failed" })), "");
+  });
+  it("the pane says the folder cannot be read, with a button", () => {
+    assert.deepEqual(workspacePaneText({ loading: false, workspaceOpen: true }, 0, true), { text: "This folder cannot be read (it may have moved or been deleted). Open another folder.", action: true });
+    assert.equal(workspacePaneText({ loading: true, workspaceOpen: true }, 0, true), null);
   });
 });
 
