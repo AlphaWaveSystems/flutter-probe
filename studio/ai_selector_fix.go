@@ -206,7 +206,7 @@ func (a *App) buildSelectorFix(fileContent string) (req fixRequest, err error) {
 	return fixRequest{
 		system: fixGate(system), user: user, label: d.label, hosted: d.hosted, dest: d.dest, state: d.state,
 		step:       capRunes(fmt.Sprintf("line %d of %q: %s", d.step.Line, test, desc), fixMaxFile),
-		attemptKey: sum(d.step.File, fmt.Sprint(d.step.Line), d.step.Test), // the same as failedStepKey // the same as failedStepKey
+		attemptKey: sum(d.step.File, fmt.Sprint(d.step.Line), d.step.Test), // the same as failedStepKey
 	}, nil
 }
 
