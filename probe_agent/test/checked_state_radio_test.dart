@@ -129,13 +129,41 @@ void main() {
     expect(await _checked(tester, '#other_a'), isTrue);
   });
 
-  testWidgets('a radio with neither a group value nor a RadioGroup is not checked, and is still a checkable control', (tester) async {
+  testWidgets('a radio with neither a group value nor a RadioGroup above it says it cannot be read, never "not checked"', (tester) async {
+    // The agent cannot tell an old-API radio with nothing selected from a group it did not recognise (a build that renames classes), so it does not guess.
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(body: Radio<String>(key: const ValueKey('lone'), value: 'a', groupValue: null, onChanged: (_) {})),
     ));
     final res = await _see(tester, '#lone');
     expect(res['error'], isNotNull);
-    expect(jsonEncode(res['error']), isNot(contains('not a checkable control')), reason: 'it is checkable, just not on');
+    expect(jsonEncode(res['error']), contains('not a checkable control'));
+  });
+
+  testWidgets('the radio\'s own group value wins over a RadioGroup above it', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RadioGroup<String>(
+          groupValue: 'b',
+          // ignore: deprecated_member_use
+          child: Radio<String>(key: const ValueKey('own_a'), value: 'a', groupValue: 'a', onChanged: (_) {}),
+        ),
+      ),
+    ));
+    expect(await _checked(tester, '#own_a'), isTrue, reason: 'its own group value says a; the group above says b');
+  });
+
+  testWidgets('a radio with a null value is not checked by a group with nothing selected', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RadioGroup<String?>(
+          groupValue: null,
+          child: Radio<String?>(key: const ValueKey('null_value'), value: null, groupValue: null, onChanged: (_) {}),
+        ),
+      ),
+    ));
+    final res = await _see(tester, '#null_value');
+    expect(res['error'], isNotNull, reason: 'null equals null, but a group with nothing selected selects nothing');
+    expect(jsonEncode(res['error']), contains('is not checked'));
   });
 
   testWidgets('the nearest RadioGroup decides, even when it has nothing selected and an outer one has', (tester) async {

@@ -1981,13 +1981,19 @@ class ProbeExecutor {
     return above;
   }
 
-  /// Whether a radio (a [Radio], a [RadioListTile] or a [CupertinoRadio]) is the selected one of its group.
+  /// Whether a radio (a [Radio], a [RadioListTile] or a [CupertinoRadio]) is the selected one of its group; null when that cannot be told.
   ///
   /// Two APIs keep the group value in two places. Before the `RadioGroup` API each radio carried its own `groupValue` (and `onChanged`); with it the
-  /// group value is kept by the nearest `RadioGroup` above the radio and the radio's own `groupValue` is deprecated and null. So: a radio's own
-  /// group value when it has one, else the group value of the nearest `RadioGroup` ancestor, else the radio's own (null) one. `RadioGroup` does not
-  /// exist before Flutter 3.32, so it is found by its class name and read dynamically, which compiles on every Flutter this package supports; a
-  /// reading that fails (a member that is gone in a later Flutter) answers null, "not checkable", and never a wrong yes or no.
+  /// group value is kept by the nearest `RadioGroup` above the radio and the radio's own `groupValue` is deprecated and null. So:
+  ///  - the radio has its own group value: the old API applies, the radio is checked when its value equals it (this wins over any group above);
+  ///  - it has none and a `RadioGroup` is above it: checked when the group has a selection and the radio's value equals it (a group with none selects nothing);
+  ///  - it has none and no `RadioGroup` is found: null, "not a checkable control". The agent cannot tell an old-API radio with nothing selected from a
+  ///    group it did not recognise, and a wrong "not checked" for a radio that is on is worse than saying it cannot tell.
+  ///
+  /// `RadioGroup` does not exist before Flutter 3.32, so it is found by its class name and read dynamically, which compiles on every Flutter this package
+  /// supports. The limits that follow: a build that renames classes (an obfuscated profile or release build) does not find it, which gives null; a widget
+  /// of an app that is itself called `RadioGroup` and has a `groupValue` is read as a group; one without a `groupValue` makes the reading fail, which gives
+  /// null. A reading that fails never turns into a yes or a no.
   bool? _radioChecked(Element el) {
     try {
       final w = el.widget as dynamic;
@@ -2010,7 +2016,8 @@ class ProbeExecutor {
         }
         return true;
       });
-      return grouped ? value == group : value == own;
+      if (!grouped) return null;
+      return group != null && value == group;
     } catch (_) {
       return null;
     }
