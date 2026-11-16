@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 	"github.com/alphawavesystems/flutter-probe/internal/visual"
+	"golang.org/x/text/unicode/norm"
 )
 
 // DeviceRun tracks a parallel test execution on a single device.
@@ -381,9 +384,10 @@ func DistributeFiles(files []string, n int) [][]string {
 	return buckets
 }
 
-// ShardFiles returns the subset of files for shard index/total.
-// Uses deterministic hash so the same files always go to the same shard.
-func ShardFiles(files []string, index, total int) []string {
+// ShardFiles returns the subset of files for shard index/total. A file's shard comes from its path relative to base, the directory of the
+// config (the working directory when base is empty), so the same file lands in the same shard however the run spells it: relative, with
+// ./, absolute, with a trailing separator, under a symbolic link to the checkout, or with Windows separators.
+func ShardFiles(files []string, base string, index, total int) []string {
 	if total <= 1 {
 		return files
 	}
@@ -394,13 +398,88 @@ func ShardFiles(files []string, index, total int) []string {
 
 	var result []string
 	for _, f := range sorted {
-		h := sha256.Sum256([]byte(f))
+		key, _ := ShardKey(f, base)
+		h := sha256.Sum256([]byte(key))
 		bucket := int(h[0]) % total
 		if bucket == index {
 			result = append(result, f)
 		}
 	}
 	return result
+}
+
+// ShardKey is the path a file is hashed by. It is the file's path relative to the repository root, the nearest ancestor of base that holds
+// a .git, or relative to base when there is no repository. A file inside neither keeps its absolute path, and outside reports it, so the
+// caller can say so. A typed relative path is taken from the working directory, and base is the config directory (the working directory
+// when empty). Every path has its symbolic links resolved where they exist, is cleaned, has forward slashes, is in Unicode NFC, and is
+// lower-cased: the same checkout hashes the same wherever it is and on any file system. Two files can collide; they then share a shard.
+func ShardKey(file, base string) (key string, outside bool) {
+	if base == "" {
+		base = "."
+	}
+	if b, err := filepath.Abs(base); err == nil {
+		base = b
+	}
+	base = resolvePath(base)
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		abs = file
+	}
+	abs = resolvePath(abs)
+	root := gitRepoRoot(base)
+	if root == "" {
+		root = base
+	}
+	if rel, ok := relInside(root, abs); ok {
+		return normalizeShardKey(rel), false
+	}
+	if rel, ok := relInside(base, abs); ok {
+		return normalizeShardKey(rel), false
+	}
+	return normalizeShardKey(abs), true
+}
+
+// relInside returns the path of p relative to root, and whether p is inside root.
+func relInside(root, p string) (string, bool) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
+}
+
+// gitRepoRoot returns the nearest directory at or above dir that holds a .git, or "" when there is none.
+func gitRepoRoot(dir string) string {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// normalizeShardKey makes a key the same on every platform: cleaned, with forward slashes, in Unicode NFC (macOS names files in NFD), and
+// lower-cased (case-insensitive file systems).
+func normalizeShardKey(key string) string {
+	k := strings.ReplaceAll(filepath.ToSlash(filepath.Clean(key)), `\`, "/")
+	return strings.ToLower(norm.NFC.String(k))
+}
+
+// resolvePath resolves the symbolic links of p. A path that does not exist (a file that is named but not there) resolves through its
+// nearest existing parent, so it is spelled the same way as a path that exists under the same checkout.
+func resolvePath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	parent := filepath.Dir(p)
+	if parent == p {
+		return p
+	}
+	return filepath.Join(resolvePath(parent), filepath.Base(p))
 }
 
 // ParseShard parses "N/M" format into zero-based index and total.
