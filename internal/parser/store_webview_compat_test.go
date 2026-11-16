@@ -9,8 +9,9 @@ import (
 
 // storeCompatCases are lines around `store` and the words text, of, css and webview, as ordinary words, recipe names, other steps and blocks. Their parse trees are
 // recorded from the parser as it was before `store text of css:"..." in webview as name` existed (testdata/store_webview_compat.golden.json); the test says that every
-// one of them still parses exactly as it did, except the lines listed in storeChanged. compatSource and compatDump are the helpers of the V1 corpus.
+// one of them still parses exactly as it did, except the lines of the new form, which are in store_webview_steps_test.go. compatSource and compatDump are the helpers of the V1 corpus.
 var storeCompatCases = []string{
+	`store text of css:x in webview as y`,
 	`store text of css = "x" in webview as y`,
 	`store text of css x "y" in webview as t`,
 	`store text of css "x" in webview as y`,

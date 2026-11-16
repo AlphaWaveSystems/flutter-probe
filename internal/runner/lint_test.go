@@ -126,11 +126,12 @@ func TestLintReferencesWarnsAboutAPlaceholderNothingDefines(t *testing.T) {
 
 func TestLintReferencesAcceptsPlaceholdersThatAValueDefines(t *testing.T) {
 	cases := map[string]string{
-		"example column": "test \"login\"\n  type \"<email>\" into the \"Email\" field\n\nwith examples:\n  email\n  \"a@b.c\"\n",
-		"stored value":   "test \"login\"\n  store \"abc\" as token\n  type \"<token>\" into the \"Field\"\n",
-		"recipe param":   "recipe \"sign in\" (email)\n  type \"<email>\" into the \"Email\" field\n\ntest \"login\"\n  sign in \"a@b.c\"\n",
-		"runtime value":  "test \"status\"\n  see \"<response.status>\"\n",
-		"random value":   "test \"gen\"\n  see \"<random.int>\"\n",
+		"example column":      "test \"login\"\n  type \"<email>\" into the \"Email\" field\n\nwith examples:\n  email\n  \"a@b.c\"\n",
+		"stored value":        "test \"login\"\n  store \"abc\" as token\n  type \"<token>\" into the \"Field\"\n",
+		"recipe param":        "recipe \"sign in\" (email)\n  type \"<email>\" into the \"Email\" field\n\ntest \"login\"\n  sign in \"a@b.c\"\n",
+		"runtime value":       "test \"status\"\n  see \"<response.status>\"\n",
+		"read from a webview": "test \"t\"\n  store text of css:\"#total\" in webview as total\n  see \"<total>\"\n",
+		"random value":        "test \"gen\"\n  see \"<random.int>\"\n",
 	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {

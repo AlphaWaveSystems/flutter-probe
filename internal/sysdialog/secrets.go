@@ -72,6 +72,21 @@ func NoteEnvValue(name, v string) {
 	NoteSecret(v)
 }
 
+// NoteNamedSecret records a value for masking only when the NAME of the variable it was put into marks it as a credential (a whole token such as password,
+// token, secret, pin, key; see NameTokens). Unlike NoteEnvValue it never notes a value because of its length: it is for text whose content is not chosen by the
+// script author (read from a page), where an ordinary text of eight characters or more, such as "Total: 42.00", must not be masked wherever it shows up.
+func NoteNamedSecret(name, v string) {
+	if len(v) < minNamedSecretLen || plainWords[strings.ToLower(v)] {
+		return
+	}
+	for _, tok := range NameTokens(name) {
+		if envSecretWords[tok] {
+			NoteSecret(v)
+			return
+		}
+	}
+}
+
 // envValueIsSecret reports whether a value is noted for masking, by its length, its plainness and the words of its name.
 func envValueIsSecret(name, v string) bool {
 	if len(v) >= minEnvSecretLen {

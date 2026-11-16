@@ -66,3 +66,28 @@ func TestSecretLikeNameNotesValuesOfThreeCharacters(t *testing.T) {
 		t.Fatalf("ScrubKnown = %q, want %q", got, want)
 	}
 }
+
+func TestNoteNamedSecretMasksByNameOnly(t *testing.T) {
+	for name, tc := range map[string]struct {
+		value  string
+		masked bool
+	}{
+		"password":      {"hunter2-page-Zq", true},
+		"token":         {"abc", true},
+		"user_token":    {"tok-12345", true},
+		"apiKey":        {"key-value-1", true},
+		"pin":           {"1234", true},
+		"total":         {"Order 4711 total 42.00", false}, // long, but an ordinary name
+		"heading":       {"Getting Started", false},
+		"spinner":       {"abc-def-ghi", false}, // spinner is not a secret word
+		"password_note": {"ab", false},          // shorter than three characters
+		"secret":        {"true", false},        // a plain word
+	} {
+		before := ScrubKnown(tc.value)
+		NoteNamedSecret(name, tc.value)
+		got := ScrubKnown(tc.value)
+		if (got != before) != tc.masked || (tc.masked && got == tc.value) {
+			t.Errorf("%s=%q: masked = %v, want %v (%q)", name, tc.value, got != tc.value, tc.masked, got)
+		}
+	}
+}

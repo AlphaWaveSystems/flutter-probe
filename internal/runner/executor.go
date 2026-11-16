@@ -584,7 +584,7 @@ func (e *Executor) stepDescription(step parser.Step) string {
 			if t.Page != "" {
 				line += " " + strconv.Quote(t.Page)
 			}
-			return line + " as " + s.Name
+			return line + " as " + strconv.Quote(capShown(s.Name))
 		case parser.VerbTapWebView:
 			return "tap " + e.webViewShown(s.WebView).String()
 		case parser.VerbTypeWebView:
@@ -1122,7 +1122,7 @@ func (e *Executor) runAction(ctx context.Context, a parser.ActionStep) error {
 		return e.deviceCtx.AddMedia(ctx, media)
 
 	case parser.VerbStoreWebView:
-		return errStoreWebViewNotImplemented
+		return e.runStoreWebView(ctx, a)
 
 	case parser.VerbTapWebView:
 		return e.runWebViewTap(ctx, a)

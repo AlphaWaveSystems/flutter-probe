@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // The lookups inside a WebView page are fixed pieces of JavaScript that live here and nowhere else. A selector or a text from a script is NEVER part of the JavaScript: it travels as a JSON value in the
@@ -56,14 +57,17 @@ const findFunction = `function (kind, query, maxText, mode) {
   var r = found.getBoundingClientRect();
   return { count: list.length, visible: true, focused: focused,
     tag: tag.slice(0, 20), inputType: tag === 'input' ? String(found.type || '').toLowerCase().slice(0, 20) : '',
-    readOnly: found.readOnly === true, disabled: disabled, editable: found.isContentEditable === true, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight, text: label(found).slice(0, maxText) };
+    readOnly: found.readOnly === true, disabled: disabled, editable: found.isContentEditable === true, x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight, text: label(found).slice(0, maxText), textLength: label(found).length };
 }`
 
 const (
 	// maxQueryChars is the longest selector or text accepted; a longer one is refused before it is sent.
 	maxQueryChars = 2048
-	// maxElementText is the longest element text read back.
+	// maxElementText is the longest element text read back for a message.
 	maxElementText = 80
+	// MaxReadChars is the longest text a read step keeps; the lookup fetches up to readFetchChars so that what is cut as hidden characters does not eat into it.
+	MaxReadChars   = 1000
+	readFetchChars = 4000
 	// maxTypedChars is the longest text typed in one step.
 	maxTypedChars = 8192
 	// maxShownChars is the longest piece of page or script text repeated in an error message.
@@ -108,6 +112,10 @@ type ElementInfo struct {
 	X, Y                         float64 // the centre, in CSS pixels of the page's viewport
 	W, H                         float64
 	Text                         string // at most maxElementText printable characters
+	// TextLength is the length of the element's whole text (in UTF-16 units, as the page counts); Read is its text as the page gave it, only for a read lookup (mode "read"),
+	// up to readFetchChars: it is not cleaned or masked, the caller does that (see ReadText).
+	TextLength int
+	Read       string
 }
 
 // WebViewError is a failure with a stable kind, for the runner to turn into a step result.
@@ -156,6 +164,10 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mod
 	if err := checkQuery(sel); err != nil {
 		return ElementInfo{}, err
 	}
+	maxText := maxElementText
+	if mode == "read" {
+		maxText = readFetchChars
+	}
 	win, err := s.conn.Call(ctx, "Runtime.evaluate", map[string]any{"expression": "window", "returnByValue": false})
 	if err != nil {
 		return ElementInfo{}, s.callError(ctx, err)
@@ -171,7 +183,7 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mod
 	res, err := s.conn.Call(ctx, "Runtime.callFunctionOn", map[string]any{
 		"objectId":            w.Result.ObjectID,
 		"functionDeclaration": findFunction,
-		"arguments":           []map[string]any{{"value": string(sel.Kind)}, {"value": query}, {"value": maxElementText}, {"value": mode}},
+		"arguments":           []map[string]any{{"value": string(sel.Kind)}, {"value": query}, {"value": maxText}, {"value": mode}},
 		"returnByValue":       true,
 		"awaitPromise":        false,
 	})
@@ -192,6 +204,7 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mod
 				VW       float64 `json:"vw"`
 				VH       float64 `json:"vh"`
 				Text     string  `json:"text"`
+				TextLen  int     `json:"textLength"`
 				Tag      string  `json:"tag"`
 				Type     string  `json:"inputType"`
 				ReadOnly bool    `json:"readOnly"`
@@ -216,7 +229,14 @@ func (s *WebViewSession) callFindFunction(ctx context.Context, sel Selector, mod
 	if v.Visible && !sane(v.X, v.Y, v.W, v.H, v.VW, v.VH) {
 		return ElementInfo{}, &WebViewError{Kind: "page error", Message: "the WebView page reported a position outside its viewport"}
 	}
-	return ElementInfo{Count: v.Count, Visible: v.Visible, Focused: v.Focused, X: v.X, Y: v.Y, W: v.W, H: v.H, Text: shown(s.redact(v.Text)),
+	if v.TextLen < 0 || v.TextLen > maxPixels {
+		return ElementInfo{}, &WebViewError{Kind: "page error", Message: "the WebView page reported an impossible text length"}
+	}
+	read := ""
+	if mode == "read" {
+		read = v.Text
+	}
+	return ElementInfo{TextLength: v.TextLen, Read: read, Count: v.Count, Visible: v.Visible, Focused: v.Focused, X: v.X, Y: v.Y, W: v.W, H: v.H, Text: shown(s.redact(v.Text)),
 		Tag: kindWord(v.Tag), InputType: kindWord(v.Type), ReadOnly: v.ReadOnly, Disabled: v.Disabled, Editable: v.Editable}, nil
 }
 
@@ -407,4 +427,55 @@ func (s *WebViewSession) WaitFor(ctx context.Context, sel Selector, timeout time
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// ReadResult is the text of one element, ready to be stored: cleaned of hidden characters and cut at MaxReadChars characters.
+type ReadResult struct {
+	Text   string
+	Length int  // the length of the element's whole text before cleaning and cutting, in UTF-16 units
+	Cut    bool // the text was longer than MaxReadChars (after cleaning) and was cut
+}
+
+// ReadText reads the visible text of the first visible element that matches sel (the same lookup as Tap, so the same messages when there is none). The text is
+// the page's: it is not masked here, and it is never put in an error or a log by this package. Hidden characters (control and format characters, bidi controls,
+// zero-width characters, line separators, non-characters, invalid UTF-8) are dropped, then at most MaxReadChars characters are kept.
+func (s *WebViewSession) ReadText(ctx context.Context, sel Selector) (ReadResult, error) {
+	info, err := s.locate(ctx, sel, "read")
+	if err != nil {
+		return ReadResult{}, err
+	}
+	text := cleanPageText(info.Read)
+	res := ReadResult{Length: info.TextLength}
+	if r := []rune(text); len(r) > MaxReadChars {
+		text, res.Cut = string(r[:MaxReadChars]), true
+	}
+	if info.TextLength > readFetchChars {
+		res.Cut = true // the page's text was longer than what the lookup fetches
+	}
+	res.Text = text
+	return res, nil
+}
+
+// cleanPageText drops the characters a reader of a log or a report cannot see or that change how text is shown: control and format characters (zero-width,
+// bidi controls, the byte order mark), line and paragraph separators, private-use characters, non-characters, the replacement character, bytes that are not UTF-8, and the
+// characters that show nothing but are not whitespace (variation selectors, Hangul fillers, the braille blank, the combining grapheme joiner, Mongolian free variation
+// selectors, the object replacement character). A no-break space and the ideographic space are kept: they show as spaces.
+func cleanPageText(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		switch {
+		case r == utf8.RuneError,
+			unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.Is(unicode.Co, r), unicode.Is(unicode.Cs, r),
+			r == '\u2028', r == '\u2029',
+			r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF, // variation selectors
+			r == '\u3164', r == '\u115F', r == '\uFFA0', // Hangul fillers: blank letters
+			r == '\u2800', r == '\u034F', r >= 0x180B && r <= 0x180F, r == '\uFFFC', // braille blank, combining grapheme joiner, Mongolian free variation selectors, object replacement
+			r >= 0xFDD0 && r <= 0xFDEF, r&0xFFFE == 0xFFFE:
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

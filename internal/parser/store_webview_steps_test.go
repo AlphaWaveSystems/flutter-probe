@@ -121,3 +121,43 @@ recipe "r"
 		t.Fatalf("recipe body = %v", describeAll(r))
 	}
 }
+
+func TestStoreTextOfAnElementRefusesAnEmptyOrManagedName(t *testing.T) {
+	for line, want := range map[string]string{
+		`store text of css:"#a" in webview as ""`:                "not empty",
+		`store text of css:"#a" in webview as " "`:               "not empty",
+		`store text of css:"#a" in webview as clipboard`:         "another step manages",
+		`store text of css:"#a" in webview as "Clipboard"`:       "another step manages",
+		`store text of css:"#a" in webview as response`:          "another step manages",
+		`store text of css:"#a" in webview as "response.body"`:   "another step manages",
+		`store text of css:"#a" in webview as "response.status"`: "another step manages",
+		`store text of css:"#a" in webview as "RESPONSE.x"`:      "another step manages",
+	} {
+		_, err := parser.ParseFile("test \"t\"\n  " + line + "\n")
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%.80q: err = %v, want %q", line, err, want)
+		}
+	}
+	// near misses are ordinary names
+	for _, ok := range []string{`as clipboard2`, `as "my clipboard"`, `as responses`, `as responseTotal`, `as total`} {
+		storeStep(t, `store text of css:"#a" in webview `+ok)
+	}
+}
+
+// A variable name can hold a new line or be very long: the messages quote it and cut it, so a name never puts a real new line in an error.
+func TestStoreTextErrorsQuoteAndCapTheVariableName(t *testing.T) {
+	long := strings.Repeat("n", 500)
+	for _, line := range []string{
+		"store text of css:\"#a\" in webview as \"a\\nb\" extra",
+		`store text of css:"#a" in webview as "` + long + `" extra`,
+		"store text of css:\"#a\" in webview as \"clip\\nboard\" extra",
+	} {
+		_, err := parser.ParseFile("test \"t\"\n  " + line + "\n")
+		if err == nil {
+			t.Fatalf("%.60q parsed", line)
+		}
+		if strings.ContainsAny(err.Error(), "\n\r") || len(err.Error()) > 300 {
+			t.Errorf("%.40q: the error has a raw new line or is %d long: %q", line, len(err.Error()), err.Error())
+		}
+	}
+}
