@@ -1,5 +1,7 @@
 # Build artifacts
 bin/
+# the made-up SDK of the catalog tool's tests needs its bin/cache/flutter.version.json
+!tools/flutter-catalog/testdata/sdk/bin/
 coverage.out
 *.exe
 *.test
