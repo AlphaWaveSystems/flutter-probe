@@ -1,17 +1,16 @@
 {
   "schema": 1,
   "flutter": {
-    "version": "3.44.8",
-    "channel": "stable",
-    "revision": "058e0af2c2b57e369d905a03ac9748b0ebf543c6",
-    "dart": "3.12.2"
+    "version": "3.50.0",
+    "revision": "ab2912035e160d9cad6306df307576da6128ebdb",
+    "dart": "3.14.0"
   },
   "counts": {
-    "total": 570,
+    "total": 572,
     "by_library": {
       "cupertino": 58,
       "material": 191,
-      "widgets": 321
+      "widgets": 323
     },
     "abstract": 30,
     "deprecated": 3
@@ -1264,6 +1263,16 @@
       "name": "SliverAnimatedOpacity",
       "library": "widgets",
       "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "SliverClipRRect",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverClipRect",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
     },
     {
       "name": "SliverConstrainedCrossAxis",

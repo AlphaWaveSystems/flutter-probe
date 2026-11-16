@@ -29,10 +29,11 @@ type Catalog struct {
 	Widgets []Widget `json:"widgets"`
 }
 
-// Versions is the stamp of the SDK the catalog was made from.
+// Versions is the stamp of the SDK the catalog was made from: the release (Flutter version, framework revision, Dart version). The channel is not recorded: it
+// says how an SDK was installed (a clone of a tag reports "[user-branch]", an installed stable release "stable"), not which release it is, so it would make two
+// installs of the same release produce different files.
 type Versions struct {
 	Version  string `json:"version"`
-	Channel  string `json:"channel,omitempty"`
 	Revision string `json:"revision,omitempty"`
 	Dart     string `json:"dart"`
 }
@@ -181,7 +182,6 @@ func readVersions(root string) (Versions, error) {
 	}
 	var raw struct {
 		FrameworkVersion  string `json:"frameworkVersion"`
-		Channel           string `json:"channel"`
 		FrameworkRevision string `json:"frameworkRevision"`
 		DartSdkVersion    string `json:"dartSdkVersion"`
 	}
@@ -191,7 +191,7 @@ func readVersions(root string) (Versions, error) {
 	if raw.FrameworkVersion == "" || raw.DartSdkVersion == "" {
 		return Versions{}, fmt.Errorf("%s has no frameworkVersion or dartSdkVersion", filepath.ToSlash(versionFile))
 	}
-	return Versions{Version: raw.FrameworkVersion, Channel: raw.Channel, Revision: raw.FrameworkRevision, Dart: raw.DartSdkVersion}, nil
+	return Versions{Version: raw.FrameworkVersion, Revision: raw.FrameworkRevision, Dart: raw.DartSdkVersion}, nil
 }
 
 // export is one `export 'src/...'` line of a library file: the file it exports and the names it limits that to.
