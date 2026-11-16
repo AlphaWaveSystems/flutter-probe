@@ -79,15 +79,18 @@ func (a *App) windowReady() bool {
 	return false
 }
 
-// confirmClearData is the runner.ConfirmFunc of a Studio connection. The text the engine passes is not used: the window shows Studio's own.
-func (a *App) confirmClearData() runner.ConfirmFunc {
+// confirmClearData is the runner.ConfirmFunc of the connection whose device context is dc. The text the engine passes is not used: the window
+// shows Studio's own. The question is for the device that dc wipes: the app id comes from dc and the device name from the connection that owns
+// dc, and if the window has moved to another connection since (a.conn no longer owns dc) the step is not run, so the dialog never names one
+// device while another is wiped.
+func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
 	return func(string) bool {
 		a.mu.Lock()
 		run := a.confirmRun
 		conn := a.conn
 		a.mu.Unlock()
-		if run == nil || run.Err() != nil || conn == nil {
-			return false // no run to ask for
+		if run == nil || run.Err() != nil || conn == nil || dc == nil || conn.deviceCtx != dc {
+			return false // no run to ask for, or the window is on another connection than the one this step would wipe
 		}
 		if !a.windowReady() {
 			return false // nobody to ask: the step is not run
@@ -108,10 +111,7 @@ func (a *App) confirmClearData() runner.ConfirmFunc {
 		a.confirm.mu.Lock()
 		a.confirm.pending = p
 		a.confirm.mu.Unlock()
-		appID := ""
-		if conn.deviceCtx != nil {
-			appID = conn.deviceCtx.AppID
-		}
+		appID := dc.AppID
 		a.emit("confirm:request", ConfirmRequest{ID: p.id, Kind: kindClearData, AppID: dialogText(appID), DeviceName: dialogText(conn.deviceName)})
 
 		timer := time.NewTimer(confirmTimeout)

@@ -85,6 +85,7 @@ test.describe("Confirm before clear app data", () => {
   test("cd-03 Enter on Cancel says no, and Enter on Clear data does nothing: only a click or Space says yes", async ({ page }) => {
     const seen = answers(page);
     await fire(page, "confirm:request", request("c"));
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled(); // armed after half a second
     await page.keyboard.press("Tab"); // Cancel -> Clear data
     await expect(page.locator("#btn-confirm-danger")).toBeFocused();
     await page.keyboard.press("Enter");
@@ -127,6 +128,52 @@ test.describe("Confirm before clear app data", () => {
     await fire(page, "confirm:request", { id: "g", kind: "format-disk", appId: "a", deviceName: "d" });
     await expect(overlay(page)).toBeHidden();
     await expect.poll(() => seen.some(([id, allow]) => id === "g" && allow === false)).toBe(true);
+  });
+
+  test("cd-07 the dialog keeps the keys: after a click on the dark area (or on the page behind) Tab stays inside, Escape still says no, and typed keys do not reach the editor", async ({ page }) => {
+    const seen = answers(page);
+    await page.locator("#file-list li", { hasText: "probe-tests" }).first().click();
+    await page.locator("#file-list li", { hasText: "counter.probe" }).first().click();
+    await expect(page.locator("#editor .view-lines")).toContainText("counter increments");
+    const before = await page.locator("#editor .view-lines").innerText();
+    await fire(page, "confirm:request", request("i"));
+    await page.mouse.click(5, 5); // the dark area
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => !!document.activeElement?.closest(".confirm-card"))).toBe(true);
+    await page.locator("#editor .view-line").first().click({ force: true }); // a click aimed at the editor behind the dialog
+    expect(await page.evaluate(() => !!document.activeElement?.closest(".confirm-card"))).toBe(true);
+    await page.evaluate(() => (document.querySelector("#editor textarea") as HTMLElement | null)?.focus()); // focus pushed to the editor by script
+    expect(await page.evaluate(() => !!document.activeElement?.closest(".confirm-card"))).toBe(true);
+    await page.keyboard.type("zzz"); // Enter is left out: on Cancel it is a no, which cd-03 shows
+    expect(await page.locator("#editor .view-lines").innerText()).toBe(before); // nothing reached the editor
+    await expect(page.locator("#editor-dirty")).not.toContainText("unsaved");
+    expect(seen).toEqual([]);
+    await page.mouse.click(5, 5);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["i", false]);
+    await expect(overlay(page)).toBeHidden();
+  });
+
+  test("cd-08 Clear data cannot be pressed for the first half second: a click or a key that was already on its way does not wipe", async ({ page }) => {
+    const seen = answers(page);
+    await fire(page, "confirm:request", request("j"));
+    await expect(page.locator("#btn-confirm-danger")).toBeDisabled();
+    await page.locator("#btn-confirm-danger").click({ force: true }); // a click inside the first moments
+    await page.keyboard.press(" ");
+    await page.waitForTimeout(150);
+    expect(seen).toEqual([]);
+    await expect(overlay(page)).toBeVisible();
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled({ timeout: 3000 });
+    await page.click("#btn-confirm-danger");
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["j", true]);
+  });
+
+  test("cd-09 the app is labelled as coming from probe.yaml", async ({ page }) => {
+    await fire(page, "confirm:request", request("k"));
+    await expect(page.locator("#confirm-app-label")).toHaveText("App (from probe.yaml)");
+    await page.keyboard.press("Escape");
   });
 
   test("cd-06 a click on the dark area around the card is not an answer", async ({ page }) => {

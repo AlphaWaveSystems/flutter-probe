@@ -22,7 +22,7 @@ ProbeScript tests with embedded simulator/emulator views. Built on
 > - A click on a failing row, a failed test, a card or a note opens the failing line in the right file
 > - Problems (tab under the editor): what `probe lint` finds in the open file, from the editor's text, saved or not (a recipe or data file that is not there, a test with no steps, a count check), marked on its line and listed; read only from inside the workspace
 > - First-run guidance: a line under the toolbar names the one next step (open a workspace, open a `.probe` file, boot a device, pick one, Connect), every disabled primary button says why, and a gone or empty folder is named
-> - Runs like `probe test`: the device context comes from the same code and the workspace `probe.yaml`, so `restart the app` works and the live view follows it; `clear app data` asks in a dialog that names the app and the device (default Cancel, a second step asks again, no answer in 60 s is a no)
+> - Runs like `probe test`: the device context comes from the same code and the workspace `probe.yaml`, so `restart the app` works and the live view follows it; `clear app data` asks in a dialog that names the app (from `probe.yaml`) and the device (default Cancel, Clear data armed after half a second, a second step asks again, no answer in 60 s is a no; Connect is refused during a run)
 > - Keyboard shortcuts, toast notifications, dark theme
 >
 > Stability is "beta" — expect rough edges, especially around physical

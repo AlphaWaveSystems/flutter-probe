@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { confirmCopy, keyAction } from "../src/confirm-copy.ts";
+import { CONFIRM_ARM_MS, confirmCopy, keyAction } from "../src/confirm-copy.ts";
 
 describe("confirmCopy", () => {
   it("names the app and the device, and says nothing is deleted unless Clear data is pressed", () => {
@@ -10,6 +10,7 @@ describe("confirmCopy", () => {
     assert.equal(c.device, "Pixel 8");
     assert.match(c.warning, /cannot be undone/);
     assert.match(c.warning, /unless you press Clear data/);
+    assert.equal(c.appLabel, "App (from probe.yaml)");
     assert.equal(c.cancel, "Cancel");
     assert.equal(c.danger, "Clear data");
   });
@@ -21,6 +22,12 @@ describe("confirmCopy", () => {
   });
   it("has no question for a kind it does not know", () => {
     assert.equal(confirmCopy({ id: "x", kind: "format-disk", appId: "a", deviceName: "d" }), null);
+  });
+});
+
+describe("arming", () => {
+  it("Clear data waits half a second before it can be pressed", () => {
+    assert.equal(CONFIRM_ARM_MS, 500);
   });
 });
 

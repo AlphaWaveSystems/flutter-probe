@@ -61,6 +61,17 @@ test.describe("Clear app data asks in the window", () => {
     await page.locator("#file-list li", { hasText: "clear-data.probe" }).first().click();
     await page.click("#btn-run");
     await expect(page.locator("#confirm-overlay")).toBeVisible({ timeout: 60_000 });
+    // connecting to a device while the run is going is refused, so the dialog cannot name one device while another is wiped
+    const refused = await page.evaluate(async (id) => {
+      try {
+        await (window as any).go.main.App.Connect(id);
+        return "connected";
+      } catch (err) {
+        return String(err);
+      }
+    }, udid);
+    expect(refused).toContain("a run is in progress");
+    await expect(page.locator("#confirm-overlay")).toBeVisible(); // still the same question
     await app(page, "CancelRun"); // the dialog covers the toolbar, so the run is cancelled the way a script or the menu would
     await expect(page.locator("#confirm-overlay")).toBeHidden({ timeout: 15_000 });
     await expect(page.locator("#toast-container .toast", { hasText: "Clear app data was not run" })).toBeVisible();

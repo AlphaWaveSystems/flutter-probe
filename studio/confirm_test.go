@@ -17,6 +17,7 @@ import (
 // confirmApp is a connected App with a page listening on the hub, and a run in progress.
 type confirmApp struct {
 	a      *App
+	dc     *runner.DeviceContext
 	events chan hubEvent
 	run    context.Context
 	cancel context.CancelFunc
@@ -27,7 +28,7 @@ func newConfirmApp(t *testing.T, withPage bool) *confirmApp {
 	a := &App{hub: newEventHub()}
 	dc := &runner.DeviceContext{AppID: "com.example.app\u202e", Platform: device.PlatformAndroid, Serial: "emu-1"}
 	a.conn = &connection{deviceName: "Pixel\nTest " + strings.Repeat("x", 200), deviceCtx: dc, cfg: &config.Config{}}
-	c := &confirmApp{a: a}
+	c := &confirmApp{a: a, dc: dc}
 	if withPage {
 		ch, unsub := a.hub.subscribe()
 		t.Cleanup(unsub)
@@ -58,7 +59,7 @@ func (c *confirmApp) next(t *testing.T, name string) []any {
 // ask runs the step's callback in the background and returns where its answer will be.
 func (c *confirmApp) ask() chan bool {
 	out := make(chan bool, 1)
-	go func() { out <- c.a.confirmClearData()("the engine's own text: EVIL") }()
+	go func() { out <- c.a.confirmClearData(c.dc)("the engine's own text: EVIL") }()
 	return out
 }
 
@@ -226,7 +227,7 @@ func TestConfirmAnswerIsBoundToItsRun(t *testing.T) {
 func TestConfirmWithNobodyToAskDenies(t *testing.T) {
 	noPage := newConfirmApp(t, false)
 	start := time.Now()
-	if noPage.a.confirmClearData()("x") {
+	if noPage.a.confirmClearData(noPage.dc)("x") {
 		t.Error("a headless Studio with no page allowed a wipe")
 	}
 	if time.Since(start) > time.Second {
@@ -234,14 +235,14 @@ func TestConfirmWithNobodyToAskDenies(t *testing.T) {
 	}
 	noRun := newConfirmApp(t, true)
 	noRun.a.clearConfirmRun()
-	if noRun.a.confirmClearData()("x") {
+	if noRun.a.confirmClearData(noRun.dc)("x") {
 		t.Error("a step outside a run was allowed")
 	}
 	noConn := newConfirmApp(t, true)
 	noConn.a.mu.Lock()
 	noConn.a.conn = nil
 	noConn.a.mu.Unlock()
-	if noConn.a.confirmClearData()("x") {
+	if noConn.a.confirmClearData(noConn.dc)("x") {
 		t.Error("a step with no connection was allowed")
 	}
 	if (&App{}).AnswerConfirm("anything", true) {
@@ -308,3 +309,140 @@ func TestStudioClearAppDataReachesTheDeviceOnlyOnAYes(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// The question is about the device its step would wipe. If the window moved to another connection since the run started, the step is not run
+// and no dialog names the other device.
+func TestConfirmForAConnectionThatIsNoLongerCurrentDeniesAndNamesNothing(t *testing.T) {
+	c := newConfirmApp(t, true)
+	// the window connected to device B while the run (started on A) goes on
+	other := &runner.DeviceContext{AppID: "com.other.app", Platform: device.PlatformAndroid, Serial: "emu-2"}
+	c.a.mu.Lock()
+	c.a.conn = &connection{deviceName: "Device B", deviceCtx: other, cfg: &config.Config{}}
+	c.a.mu.Unlock()
+	start := time.Now()
+	if c.a.confirmClearData(c.dc)("x") {
+		t.Error("a step of the old connection was allowed after the window moved to another")
+	}
+	if time.Since(start) > time.Second {
+		t.Error("the step waited for an answer about a device it is not on")
+	}
+	select {
+	case ev := <-c.events:
+		if ev.Name == "confirm:request" {
+			t.Errorf("a dialog was shown for a step of another connection: %+v", ev.Data)
+		}
+	case <-time.After(100 * time.Millisecond):
+	}
+	// and the step of the connection that IS current names that connection's device and app
+	out := make(chan bool, 1)
+	go func() { out <- c.a.confirmClearData(other)("x") }()
+	req := c.next(t, "confirm:request")[0].(ConfirmRequest)
+	if req.DeviceName != "Device B" || req.AppID != "com.other.app" {
+		t.Errorf("request = %+v, want Device B and com.other.app", req)
+	}
+	c.a.AnswerConfirm(req.ID, false)
+	answerOf(t, out)
+}
+
+// Connect refuses while a run is going: the run keeps its device, and a second device would be named by the dialog and not wiped.
+func TestConnectIsRefusedWhileARunIsActive(t *testing.T) {
+	a := &App{ctx: context.Background()}
+	_, cancel, err := a.claimRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Connect("some-device"); err == nil || !strings.Contains(err.Error(), "a run is in progress") {
+		t.Errorf("Connect during a run = %v", err)
+	}
+	if _, err := a.ConnectWiFi("192.168.1.20", 48686, "token"); err == nil || !strings.Contains(err.Error(), "a run is in progress") {
+		t.Errorf("ConnectWiFi during a run = %v", err)
+	}
+	a.releaseRun(cancel)
+	if _, err := a.Connect(""); err == nil || strings.Contains(err.Error(), "a run is in progress") {
+		t.Errorf("after the run, Connect says %v", err)
+	}
+}
+
+// The bridge of the headless build refuses AnswerConfirm (a local script must not approve a wipe), unless the test server says its page is the window.
+func TestAnswerConfirmIsRefusedOverHTTPUnlessTheTestEnvSaysSo(t *testing.T) {
+	t.Setenv("PROBE_STUDIO_E2E_ALLOW_CONFIRM_OVER_HTTP", "")
+	if !methodRefusedOverHTTP("AnswerConfirm") || !methodRefusedOverHTTP("PickWorkspace") {
+		t.Error("the bridge allows a method that needs the window")
+	}
+	if _, err := callAppMethod(&App{}, "AnswerConfirm", nil); err == nil || !strings.Contains(err.Error(), "not available without a window") {
+		t.Errorf("AnswerConfirm over the bridge = %v", err)
+	}
+	t.Setenv("PROBE_STUDIO_E2E_ALLOW_CONFIRM_OVER_HTTP", "1")
+	if methodRefusedOverHTTP("AnswerConfirm") {
+		t.Error("the test server's environment did not open AnswerConfirm")
+	}
+	if !methodRefusedOverHTTP("PickWorkspace") {
+		t.Error("the test environment opened more than AnswerConfirm")
+	}
+	t.Setenv("PROBE_STUDIO_E2E_ALLOW_CONFIRM_OVER_HTTP", "true")
+	if !methodRefusedOverHTTP("AnswerConfirm") {
+		t.Error("anything but 1 opened AnswerConfirm")
+	}
+}
+
+// A real run sets the run the question belongs to: a `clear app data` step of executeRun is asked about, and a yes reaches the device.
+func TestExecuteRunSetsTheRunItsConfirmationsBelongTo(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "adb.log")
+	script := filepath.Join(dir, "adb")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho \"$@\" >> "+log+"\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "a.probe")
+	if err := os.WriteFile(file, []byte("test \"t\"\n  clear app data\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{ctx: context.Background(), hub: newEventHub(), deviceMgr: device.NewManagerWithPaths(device.ToolPaths{ADB: script})}
+	cfg := &config.Config{}
+	cfg.Project.App = "com.example.app"
+	cfg.Defaults.Timeout = 5 * time.Second
+	cfg.Agent.TokenReadTimeout = 200 * time.Millisecond // the agent of this fake device never comes back: the reconnect after the wipe gives up soon
+	cfg.Agent.DialTimeout = 200 * time.Millisecond
+	cfg.Agent.ReconnectDelay = time.Millisecond
+	cfg.Agent.ReconnectAttempts = 1
+	dc := newStudioDeviceContext(a, cfg, device.PlatformAndroid, "emu-1", 48686, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	conn := &connection{client: &runFake{}, deviceName: "Pixel", deviceCtx: dc, cfg: cfg, streamCancel: cancel, streamDone: done}
+	a.conn = conn
+	go a.streamLoop(ctx, done, &closeFake{frameFake: frameFake{shot: []byte("s")}})
+	events, unsub := a.hub.subscribe()
+	defer unsub()
+	asked := make(chan ConfirmRequest, 1)
+	go func() {
+		for ev := range events {
+			if ev.Name == "confirm:request" {
+				req := ev.Data[0].(ConfirmRequest)
+				asked <- req
+				a.AnswerConfirm(req.ID, true)
+				return
+			}
+		}
+	}()
+	_, _ = a.executeRun(context.Background(), file, runSelection{}, RunPlan{})
+	select {
+	case req := <-asked:
+		if req.AppID != "com.example.app" || req.DeviceName != "Pixel" {
+			t.Errorf("the question = %+v", req)
+		}
+	default:
+		t.Fatal("the run's `clear app data` step never asked: the run did not set the run its confirmations belong to")
+	}
+	if out, _ := os.ReadFile(log); !strings.Contains(string(out), "pm clear") {
+		t.Errorf("a yes did not reach the device (adb log %q)", out)
+	}
+	a.mu.Lock()
+	left := a.confirmRun
+	cancelNow, doneNow := conn.streamCancel, conn.streamDone
+	a.mu.Unlock()
+	if left != nil {
+		t.Error("the finished run is still the run confirmations belong to")
+	}
+	cancelNow()
+	<-doneNow
+}

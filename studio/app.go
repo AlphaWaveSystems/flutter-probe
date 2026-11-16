@@ -509,6 +509,9 @@ func (a *App) StopWiFiDiscovery() {
 // Use the values from a wifi:device-found event, plus the token the user
 // reads from their app's logs (PROBE_TOKEN=...).
 func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus, error) {
+	if a.runActive() {
+		return ConnectionStatus{}, errConnectDuringRun
+	}
 	host, token = strings.TrimSpace(host), strings.TrimSpace(token)
 	if host == "" || port == 0 || token == "" {
 		return ConnectionStatus{}, fmt.Errorf("host, port, and token are all required")
@@ -585,6 +588,9 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 	if deviceID == "" {
 		return ConnectionStatus{}, fmt.Errorf("deviceID is required")
+	}
+	if a.runActive() {
+		return ConnectionStatus{}, errConnectDuringRun
 	}
 
 	// Find the device.
@@ -1322,5 +1328,7 @@ func physicalHint(d device.Device, kind string) string {
 // device). The port is the one Studio forwarded or found, and host is the device's address for a Wi-Fi connection. Destructive steps ask in the
 // window (confirmClearData) and are never allowed without it: AllowClearData is off.
 func newStudioDeviceContext(a *App, cfg *config.Config, platform device.Platform, serial string, port int, host string) *runner.DeviceContext {
-	return runner.NewConfiguredDeviceContext(a.ctx, a.deviceMgr, cfg, platform, serial, runner.ConnFacts{AgentHost: host, Port: port, DevicePort: port, Confirm: a.confirmClearData()})
+	dc := runner.NewConfiguredDeviceContext(a.ctx, a.deviceMgr, cfg, platform, serial, runner.ConnFacts{AgentHost: host, Port: port, DevicePort: port})
+	dc.Confirm = a.confirmClearData(dc) // bound to this context: it asks about the device this context wipes
+	return dc
 }

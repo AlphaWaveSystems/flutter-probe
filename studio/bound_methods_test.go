@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -56,7 +58,7 @@ var boundMethods = map[string]string{
 }
 
 // bridgeBlocked are the methods the headless bridge refuses by name (headless.go methodsNotOverHTTP): they need a native window.
-var bridgeBlocked = []string{"PickWorkspace"}
+var bridgeBlocked = []string{"AnswerConfirm", "PickWorkspace"}
 
 // automationRPC are the method names the automation endpoint accepts, and automationBackendMethods the methods of App it can reach.
 var automationRPC = []string{"cancel", "connect", "connect_wifi", "disconnect", "list_devices", "list_dir", "open_workspace", "read_file", "results", "run_file", "run_state", "screenshot", "status", "test_wifi", "ui_state", "widget_tree"}
@@ -230,23 +232,29 @@ func TestTheAutomationEndpointReachesAnExplicitSet(t *testing.T) {
 	}
 }
 
-// The automation endpoint cannot answer a confirmation, under either spelling, and a decision table entry keeps the method out of its reach.
+// The automation endpoint cannot answer a confirmation: it refuses every spelling by name, before any backend method is reached, and the
+// method is in a category and outside the lists that keep it out of the endpoint's reach.
+type untouchableBackend struct{ automationBackend } // every method panics if it is called: a refused name must never reach the backend
+
 func TestAutomationEndpointCannotAnswerAConfirmation(t *testing.T) {
 	if cat := boundMethods["AnswerConfirm"]; cat != catConfirm || !automationNever[cat] {
 		t.Errorf("AnswerConfirm is %q, which must be a category no automation method may have", cat)
 	}
-	s := &automationServer{backend: nil}
-	for _, name := range []string{"answer_confirm", "AnswerConfirm", "confirm", "answerConfirm"} {
-		func() {
-			defer func() { _ = recover() }() // an unknown name is refused before the backend is touched
-			if _, err := s.call(name, []byte(`{"id":"x","allow":true}`)); err == nil {
-				t.Errorf("the automation endpoint accepted %q", name)
-			}
-		}()
+	s := &automationServer{backend: untouchableBackend{}}
+	for _, name := range []string{"answer_confirm", "AnswerConfirm", "confirm", "answerConfirm", "confirm:answer"} {
+		_, err := s.call(name, []byte(`{"id":"x","allow":true}`))
+		if err == nil || err.Error() != fmt.Sprintf("unknown method %q", name) {
+			t.Errorf("the endpoint's answer to %q = %v, want the plain unknown-method refusal", name, err)
+		}
 	}
 	for _, m := range automationBackendMethods {
 		if m == "AnswerConfirm" {
 			t.Error("AnswerConfirm is reachable from the automation backend")
+		}
+	}
+	for _, m := range automationRPC {
+		if strings.Contains(strings.ToLower(m), "confirm") {
+			t.Errorf("the automation endpoint accepts %q", m)
 		}
 	}
 }
