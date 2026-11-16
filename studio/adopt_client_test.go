@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
 // closeFake is a frame source that counts Close.
@@ -13,7 +15,11 @@ type closeFake struct {
 	closed atomic.Int32
 }
 
-func (c *closeFake) Close() error { c.closed.Add(1); return nil }
+func (c *closeFake) Close() error    { c.closed.Add(1); return nil }
+func (c *closeFake) Connected() bool { return c.closed.Load() == 0 }
+func (c *closeFake) HTTPLog(context.Context, probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
+	return probelink.HTTPLogResult{}, nil
+}
 
 func newAdoptConn(old *closeFake) (*App, *connection) {
 	a := &App{}

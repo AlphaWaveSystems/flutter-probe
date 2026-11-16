@@ -6,7 +6,7 @@ Run of the matrix in `MATRIX.md`. Newest first.
 
 - **Build under test:** `origin/main` at 07aeb43 (after #643, #645, #647), plus the two fixes below as they were made.
 - **Window:** the real desktop app (`wails build`), driven through the screen.
-- **Device:** simulator `ProbeStudioParity-iPhone17` (UDID 9E0BD0DC-CBDA-4EF6-B3A4-C8F30231E179), iOS 26, own agent port 48694.
+- **Device:** simulator `ProbeStudioParity-iPhone17`, iOS 26, own agent port 48694.
 - **App:** `native-test-apps/studio-fixture`, rebuilt from the same commit (`--dart-define=PROBE_AGENT=true PROBE_PORT=48694`).
 - **Workspace:** a copy of the fixture's `probe-tests` plus `restart.probe`, opened through the native folder dialog.
 
@@ -41,4 +41,4 @@ Run of the matrix in `MATRIX.md`. Newest first.
 
 ### Full suite (headless + device) at the end
 
-`scripts/studio-e2e-web.sh` on the same simulator, fixture app and ports, on the branch with fixes 2, 3 and 4 (fix 1 is its own PR, with its own spec fr-06): **141 passed, 5 skipped, 0 failed** (4.2 min). The 5 skipped are the physical-phone specs (`physical.spec.ts`), which need a phone and were not run. Before fix 3 and 4 the same command gave 25 failures, all from the two order problems above (fixes 3 and 4).
+A **manual run** on 2026-11-15 on the simulator `ProbeStudioParity-iPhone17` (not committed evidence: nothing in CI reproduces it, the logs are not kept): `scripts/studio-e2e-web.sh` on the same simulator, fixture app and ports, on the branch with fixes 2, 3 and 4 (fix 1 is its own PR, with its own spec fr-06): **141 passed, 5 skipped, 0 failed** (4.2 min). The 5 skipped are the physical-phone specs (`physical.spec.ts`), which need a phone and were not run. Before fix 3 and 4 the same command gave 25 failures, all from the two order problems above (fixes 3 and 4).
