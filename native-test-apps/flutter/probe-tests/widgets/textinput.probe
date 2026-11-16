@@ -19,11 +19,14 @@ test "a form field shows its validation error until it has text"
   tap "Validate"
   see "Form error: none"
 
-# Observed, not asserted: `see "secret"` also finds the typed value of an obscured field (the agent never echoes it in its output, but it
-# does match it). Whether that is intended is a question for the owner; this test only checks that the field takes the text.
-test "a password field takes typed text"
+# The value of an obscured field is never a match target: `don't see "secret"` is a real check here, because with an older probe_agent (before this was
+# a rule) `see "secret"` found the field by the text it holds. The field itself is still found by its id.
+test "a password field takes typed text and its value is not searchable"
   type "secret" into #wf_password
   see "Password length: 6"
+  see #wf_password
+  don't see "secret"
+  don't see "sec"
 
 test "a multi-line field takes typed text"
   type "line one" into #wf_multiline

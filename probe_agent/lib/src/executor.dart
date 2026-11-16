@@ -1167,7 +1167,7 @@ class ProbeExecutor {
       }
       throw ProbeError(
         ProbeError.assertFailed,
-        'Expected to see "${_selDesc(sel)}" but it was not found',
+        'Expected to see "${_selDesc(sel)}" but it was not found${_secretNote()}',
       );
     }
 
@@ -1911,6 +1911,16 @@ class ProbeExecutor {
     return elements.first;
   }
 
+  /// " — an obscured field's value is never searched" when an obscured field is on screen, whatever was asked: a failure message must not tell whether the
+  /// asked text would have matched the value. Empty otherwise, and when the screen cannot be read.
+  String _secretNote() {
+    try {
+      return _finder.hasSecretField() ? " — an obscured field's value is never searched" : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   /// FP-13: " — visible: texts [...] keys [...]" suffix for failure messages,
   /// so a failed step says what the screen actually showed instead of only
   /// what was missing. Empty if the summary itself can't be built.
@@ -1919,10 +1929,11 @@ class ProbeExecutor {
       final s = _finder.visibleSummary(max: 15);
       final texts = s['texts']!;
       final keys = s['keys']!;
-      if (texts.isEmpty && keys.isEmpty) return '';
+      final secret = _secretNote();
+      if (texts.isEmpty && keys.isEmpty) return secret;
       // Not cut: the CLI masks resolved values before it prints, and a cut could print the start of one.
       String fmt(List<String> l) => l.map((v) => '"$v"').join(', ');
-      return ' — visible texts: [${fmt(texts)}], keys: [${fmt(keys)}]';
+      return ' — visible texts: [${fmt(texts)}], keys: [${fmt(keys)}]$secret';
     } catch (_) {
       return '';
     }
