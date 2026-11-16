@@ -60,16 +60,89 @@ func TestLintWaitLimitIsOffWithoutATestTimeout(t *testing.T) {
 	}
 }
 
-// Hooks and recipes of the file are checked, as the attempt that calls them runs them under the limit.
-func TestLintWaitLimitReadsHooksAndRecipes(t *testing.T) {
-	src := "before each\n  wait 20 seconds\n\nrecipe \"settle\"\n  wait 20 seconds\n\ntest \"t\"\n  open the app\n"
+// lintWaitLimitCount returns how many wait-limit warnings src gets under a 15 second limit.
+func lintWaitLimitCount(t *testing.T, src string) int {
+	t.Helper()
+	rep, err := LintSource(limitedConfig(15*time.Second), "t.probe", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(waitLimitFindings(rep))
+}
+
+// The steps the attempt runs under the limit warn: a test body, a before-each hook, and a recipe that one of them calls, directly or
+// through another recipe. The runtime refuses the wait in each of these, so each is a warning.
+func TestLintWaitLimitWarnsWhereTheRuntimeRefuses(t *testing.T) {
+	const settle = "recipe \"settle\"\n  wait 20 seconds\n\n"
+	cases := map[string]string{
+		"test body":               "test \"t\"\n  wait 20 seconds\n",
+		"before each":             "before each test\n  wait 20 seconds\n\ntest \"t\"\n  open the app\n",
+		"recipe from a test":      settle + "test \"t\"\n  settle\n",
+		"recipe from before each": settle + "before each test\n  settle\n\ntest \"t\"\n  open the app\n",
+		"recipe through a recipe": settle + "recipe \"outer\"\n  settle\n\ntest \"t\"\n  outer\n",
+	}
+	for name, src := range cases {
+		if got := lintWaitLimitCount(t, src); got != 1 {
+			t.Errorf("%s: want one warning, got %d for:\n%s", name, got, src)
+		}
+	}
+}
+
+// The steps that run where the limit is cleared, or with none, do not warn when they are the wait itself: the after-each and on-failure
+// hooks, and before-all and after-all, since the runtime lets their wait run to its end.
+func TestLintWaitLimitDoesNotWarnWhereTheLimitIsCleared(t *testing.T) {
+	const body = "test \"t\"\n  open the app\n"
+	cases := map[string]string{
+		"after each": body + "\nafter each test\n  wait 20 seconds\n",
+		"on failure": body + "\non failure\n  wait 20 seconds\n",
+		"before all": "before all tests\n  wait 20 seconds\n\n" + body,
+		"after all":  body + "\nafter all tests\n  wait 20 seconds\n",
+	}
+	for name, src := range cases {
+		if got := lintWaitLimitCount(t, src); got != 0 {
+			t.Errorf("%s: a wait the runtime lets run must not warn, got %d for:\n%s", name, got, src)
+		}
+	}
+}
+
+// A recipe that no test body or before-each hook of this file reaches is warned with its condition, since a test in another file may call
+// it under the limit: a recipe only an after-each hook calls, and a recipe nothing here calls. The message names the calls that fail.
+func TestLintWaitLimitWarnsAnUnreachedRecipeWithItsCondition(t *testing.T) {
+	const settle = "recipe \"settle\"\n  wait 20 seconds\n\n"
+	const body = "test \"t\"\n  open the app\n"
+	cases := map[string]string{
+		"recipe from after each": settle + body + "\nafter each test\n  settle\n",
+		"recipe nothing calls":   settle + body,
+	}
+	for name, src := range cases {
+		rep, err := LintSource(limitedConfig(15*time.Second), "t.probe", src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := waitLimitFindings(rep)
+		if len(got) != 1 {
+			t.Errorf("%s: want one conditional warning, got %d for:\n%s", name, len(got), src)
+			continue
+		}
+		if !strings.Contains(got[0].Message, "a test that calls the recipe in its body or in a before each hook fails at once there") {
+			t.Errorf("%s: the warning must name the calls that fail, got %q", name, got[0].Message)
+		}
+	}
+}
+
+// A recipe that a test body or a before-each hook reaches is warned unconditionally: the wait fails at once there.
+func TestLintWaitLimitWarnsAReachedRecipeUnconditionally(t *testing.T) {
+	src := "recipe \"settle\"\n  wait 20 seconds\n\ntest \"t\"\n  settle\n"
 	rep, err := LintSource(limitedConfig(15*time.Second), "t.probe", src)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := waitLimitFindings(rep)
-	if len(got) != 2 {
-		t.Fatalf("want a warning in the hook and one in the recipe, got %+v", got)
+	if len(got) != 1 {
+		t.Fatalf("want one warning, got %+v", got)
+	}
+	if !strings.Contains(got[0].Message, "the test fails at once when it runs") {
+		t.Errorf("a recipe a test reaches must be warned unconditionally, got %q", got[0].Message)
 	}
 }
 
