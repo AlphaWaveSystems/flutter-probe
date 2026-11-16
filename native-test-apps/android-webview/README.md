@@ -4,8 +4,10 @@ One Android activity with one WebView (debugging on) that shows `assets/page.htm
 (`see`, `tap`, `type`, `wait until ... appears`, `store text of ... in webview`) and of the three opt-in real-device tests that
 check them. It is plain Java built with the Android SDK command-line tools: no Gradle, no dependencies, no APK in the repository.
 
-The app is **not** a ProbeAgent host. The WebView steps reach the page through the WebView's own DevTools socket (`adb forward`),
-so the tests below drive the executor directly and need no agent.
+The app is **not** a ProbeAgent host. It has no probe agent, so `probe test` cannot run a ProbeScript against it: the CLI connects to the agent
+first and fails with "agent token not found". The WebView steps reach the page through the WebView's own DevTools socket (`adb forward`), so the
+tests below drive the executor directly and need no agent; they need `PROBE_WEBVIEW_SERIAL` and `PROBE_WEBVIEW_APP`. To run ProbeScript WebView
+steps through `probe test`, use a Flutter app with a WebView and `probe_agent`.
 
 ## Build and install
 
