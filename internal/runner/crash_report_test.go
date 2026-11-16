@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -136,7 +137,7 @@ func TestTheCrashObjectInTheJSONReport(t *testing.T) {
 
 func TestWritingTheCrashFiles(t *testing.T) {
 	dir := t.TempDir()
-	files, err := writeCrashFiles(dir, "checkout / the \"buy\" step", hostileCrash())
+	files, err := writeCrashFiles(dir, "a.probe", "checkout / the \"buy\" step", 1, hostileCrash())
 	if err != nil || len(files) != 2 {
 		t.Fatalf("files %v, err %v", files, err)
 	}
@@ -162,10 +163,10 @@ func TestWritingTheCrashFiles(t *testing.T) {
 	}
 	// nothing to write: no files, no folder
 	empty := t.TempDir()
-	if f, err := writeCrashFiles(empty, "t", &CrashReport{Gone: true, Kind: device.ExitUnknown}); err != nil || len(f) != 0 {
+	if f, err := writeCrashFiles(empty, "a.probe", "t", 1, &CrashReport{Gone: true, Kind: device.ExitUnknown}); err != nil || len(f) != 0 {
 		t.Errorf("empty evidence wrote %v (%v)", f, err)
 	}
-	if f, err := writeCrashFiles(empty, "t", nil); f != nil || err != nil {
+	if f, err := writeCrashFiles(empty, "a.probe", "t", 1, nil); f != nil || err != nil {
 		t.Errorf("nil report: %v %v", f, err)
 	}
 }
@@ -174,7 +175,7 @@ func TestWritingTheCrashFiles(t *testing.T) {
 func TestCrashFolderNamesAreNeverPaths(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"../../etc/passwd", "/abs/path", "..", "", "a/b\\c", "\x00\x1b", strings.Repeat("x", 500)} {
-		files, err := writeCrashFiles(dir, name, hostileCrash())
+		files, err := writeCrashFiles(dir, "a.probe", name, 1, hostileCrash())
 		if err != nil || len(files) == 0 {
 			t.Fatalf("%q: %v %v", name, files, err)
 		}
@@ -185,10 +186,10 @@ func TestCrashFolderNamesAreNeverPaths(t *testing.T) {
 			}
 		}
 	}
-	if got := crashFileName(""); got != "test" {
+	if got := crashFolderName("f", "", 1); !strings.HasPrefix(got, "test-") {
 		t.Errorf("empty name = %q", got)
 	}
-	if got := crashFileName(strings.Repeat("x", 500)); len(got) > 60 {
+	if got := crashFolderName("f", strings.Repeat("x", 500), 1); len(got) > 60+9 {
 		t.Errorf("long name = %d characters", len(got))
 	}
 }
@@ -202,7 +203,7 @@ func TestAnUnwritableCrashFolderIsOnlyAWarning(t *testing.T) {
 	}
 	r := &Runner{cfg: &config.Config{Reports: blocker}}
 	c := hostileCrash()
-	r.writeCrashFilesFor(c, "t")
+	r.writeCrashFilesFor(c, "a.probe", "t", 1)
 	if len(c.Files) != 0 {
 		t.Errorf("files recorded after a failed write: %v", c.Files)
 	}
@@ -212,11 +213,11 @@ func TestAnUnwritableCrashFolderIsOnlyAWarning(t *testing.T) {
 	// and the usual case: the folder is <reports>/crash
 	ok := &Runner{cfg: &config.Config{Reports: filepath.Join(dir, "out")}}
 	c2 := hostileCrash()
-	ok.writeCrashFilesFor(c2, "my test")
-	if len(c2.Files) != 2 || !strings.HasPrefix(c2.Files[0], filepath.Join(dir, "out", "crash", "my_test")) {
+	ok.writeCrashFilesFor(c2, "a.probe", "my test", 1)
+	if len(c2.Files) != 2 || !strings.HasPrefix(c2.Files[0], filepath.Join(dir, "out", "crash", "my_test-")) {
 		t.Errorf("files = %v", c2.Files)
 	}
-	ok.writeCrashFilesFor(nil, "x") // a test with no evidence writes nothing and does not panic
+	ok.writeCrashFilesFor(nil, "a.probe", "x", 1) // a test with no evidence writes nothing and does not panic
 }
 
 // The hosted upload never carries the crash object.
@@ -253,7 +254,7 @@ func TestAFailedTestWithADeadAppWritesItsEvidence(t *testing.T) {
 		t.Fatalf("result = passed %v, crash %+v", res.Passed, res.Crash)
 	}
 	for _, f := range res.Crash.Files {
-		if !strings.HasPrefix(f, filepath.Join(reports, "crash", "checkout_dies")) {
+		if !strings.HasPrefix(f, filepath.Join(reports, "crash", "checkout_dies-")) {
 			t.Errorf("file %s is not under <reports>/crash/<test>/", f)
 		}
 		if _, err := os.Stat(f); err != nil {
@@ -262,7 +263,7 @@ func TestAFailedTestWithADeadAppWritesItsEvidence(t *testing.T) {
 	}
 	rep := &Reporter{outputDir: reports}
 	b, _ := json.Marshal(rep.buildJSONReport([]TestResult{res}))
-	if !strings.Contains(string(b), `"files":["crash/checkout_dies/exit.txt","crash/checkout_dies/crash.txt"]`) {
+	if !strings.Contains(string(b), `"files":["crash/checkout_dies-`+crashFolderName("x.probe", "checkout dies", 1)[len("checkout_dies-"):]+`/exit.txt","crash/checkout_dies-`+crashFolderName("x.probe", "checkout dies", 1)[len("checkout_dies-"):]+`/crash.txt"]`) {
 		t.Errorf("report = %s", b)
 	}
 	// opt-in off: no evidence, no folder entry for this test beyond the first run's
@@ -271,5 +272,136 @@ func TestAFailedTestWithADeadAppWritesItsEvidence(t *testing.T) {
 	after, _ := filepath.Glob(filepath.Join(reports, "crash", "*"))
 	if res.Crash != nil || len(a.calls) != 0 || len(after) != len(before) {
 		t.Errorf("opt-in off: crash %v, %d adb calls, folders %d -> %d", res.Crash, len(a.calls), len(before), len(after))
+	}
+}
+
+// Two things that must not share a folder never do, and the same thing always does.
+func TestCrashFoldersAreUniquePerFileNameRowAndAttempt(t *testing.T) {
+	type key struct {
+		file, name string
+		attempt    int
+	}
+	cases := []key{
+		{"a.probe", "ログイン", 1}, {"a.probe", "支払い", 1}, // both reduce to no letters at all
+		{"a.probe", "Login", 1}, {"a.probe", "login", 1}, {"a.probe", "LOGIN", 1}, // a disk that ignores case would merge these
+		{"a.probe", "t [row 1]", 1}, {"a.probe", "t [row 2]", 1}, {"a.probe", "t [row 10]", 1}, // rows of a data-driven test
+		{"a.probe", "t", 1}, {"a.probe", "t", 2}, {"a.probe", "t", 3}, // attempts of a retry
+		{"b.probe", "t", 1},                                                 // the same name in another file
+		{"a.probe", "a b", 1}, {"a.probe", "a_b", 1}, {"a.probe", "a-b", 1}, // reduce to the same letters
+		{"a.probe", "CON", 1}, {"a.probe", "NUL", 1}, {"a.probe", "aux", 1}, // names Windows reserves
+	}
+	seen := map[string]key{}
+	lower := map[string]key{}
+	for _, c := range cases {
+		f := crashFolderName(c.file, c.name, c.attempt)
+		if other, dup := seen[f]; dup {
+			t.Errorf("%v and %v share the folder %q", c, other, f)
+		}
+		seen[f] = c
+		if other, dup := lower[strings.ToLower(f)]; dup {
+			t.Errorf("%v and %v share a folder on a disk that ignores case: %q", c, other, f)
+		}
+		lower[strings.ToLower(f)] = c
+		if f != crashFolderName(c.file, c.name, c.attempt) {
+			t.Errorf("%v: the folder name is not stable", c)
+		}
+		// base, a dash, eight hex digits: never equal to a reserved device name, which Windows only reserves without a suffix
+		i := strings.LastIndex(f, "-")
+		if i < 1 || len(f)-i-1 != 8 || strings.Trim(f[i+1:], "0123456789abcdef") != "" {
+			t.Errorf("%v: folder %q is not <name>-<8 hex>", c, f)
+		}
+		if strings.ContainsAny(f, "/\\:*?\"<>| ") || strings.HasPrefix(f, ".") {
+			t.Errorf("%v: folder %q is not a plain name", c, f)
+		}
+	}
+}
+
+// Two attempts and two rows of one test, and two tests with non-ASCII names, each keep their own evidence on disk, and the report points at what was written.
+func TestEvidenceOfSimilarTestsIsKeptApart(t *testing.T) {
+	dir := t.TempDir()
+	written := map[string]string{}
+	for i, c := range []struct {
+		name    string
+		attempt int
+	}{{"ログイン", 1}, {"支払い", 1}, {"t [row 1]", 1}, {"t [row 2]", 1}, {"t", 1}, {"t", 2}, {"Login", 1}, {"login", 1}} {
+		rep := hostileCrash()
+		rep.Evidence.Summary = "evidence number " + strconv.Itoa(i)
+		files, err := writeCrashFiles(dir, "a.probe", c.name, c.attempt, rep)
+		if err != nil || len(files) != 2 {
+			t.Fatalf("%v: %v %v", c, files, err)
+		}
+		for _, f := range files {
+			if prev, dup := written[f]; dup {
+				t.Fatalf("%v overwrote the file of %s: %s", c, prev, f)
+			}
+			written[f] = c.name
+		}
+		if b, _ := os.ReadFile(files[1]); !strings.Contains(string(b), "evidence number "+strconv.Itoa(i)) {
+			t.Errorf("%v: crash.txt holds %q", c, b)
+		}
+	}
+	if len(written) != 16 {
+		t.Errorf("%d files for 8 attempts", len(written))
+	}
+}
+
+// Through the runner: the attempts of a retried test, and the rows of a data-driven one, each get a folder of their own.
+func TestRetriedAttemptsAndRowsWriteTheirOwnFolders(t *testing.T) {
+	reports := t.TempDir()
+	var log []string
+	a := &ceAdb{log: &log, date: "2026-11-15 19:31:12", pidof: []string{""},
+		exit: []string{ceEntry("3567", "2026-11-15 19:31:09.870", "5"), ceEntry("3999", "2026-11-15 19:31:10.500", "5"), ceEntry("4100", "2026-11-15 19:31:11.100", "5")}}
+	dc := &DeviceContext{Serial: ceSerial, Platform: device.PlatformAndroid, AppID: cePkg, CrashEvidence: true, CrashADB: a, CrashPoll: time.Millisecond}
+	cfg := &config.Config{Reports: reports}
+	cfg.Agent.ReconnectAttempts = 1
+	cfg.Defaults.RetryFailedTests = 1
+	r := New(cfg, &ceClient{log: &log}, dc, RunOptions{Timeout: 80 * time.Millisecond})
+	prog, err := parser.ParseFile("test \"t\"\n  press enter\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := r.runSingleTest(context.Background(), prog, prog.Tests[0], "x.probe", nil, -1)
+	if res.Passed || res.Attempts != 2 || res.Crash == nil {
+		t.Fatalf("result = passed %v, attempts %d, crash %v", res.Passed, res.Attempts, res.Crash)
+	}
+	folders, _ := filepath.Glob(filepath.Join(reports, "crash", "t-*"))
+	if len(folders) != 2 {
+		t.Errorf("two attempts left %d folders: %v", len(folders), folders)
+	}
+	if want := filepath.Join(reports, "crash", crashFolderName("x.probe", "t", 2)); !strings.HasPrefix(res.Crash.Files[0], want) {
+		t.Errorf("the report points at %s, want it under %s", res.Crash.Files[0], want)
+	}
+	// the rows of a data-driven test: the row-suffixed name decides the folder
+	if crashFolderName("x.probe", rowName("t", 0), 1) == crashFolderName("x.probe", rowName("t", 1), 1) {
+		t.Error("two rows share a folder")
+	}
+}
+
+// The rows of a data-driven test: each row's folder is made from its own result name ("t [row 2]"), so the rows keep their evidence apart.
+func TestDataRowsWriteTheirOwnFolders(t *testing.T) {
+	reports := t.TempDir()
+	var log []string
+	a := &ceAdb{log: &log, date: "2026-11-15 19:31:12", pidof: []string{""},
+		exit: []string{ceEntry("3567", "2026-11-15 19:31:09.870", "5"), ceEntry("3999", "2026-11-15 19:31:10.500", "5")}}
+	dc := &DeviceContext{Serial: ceSerial, Platform: device.PlatformAndroid, AppID: cePkg, CrashEvidence: true, CrashADB: a, CrashPoll: time.Millisecond}
+	cfg := &config.Config{Reports: reports}
+	cfg.Agent.ReconnectAttempts = 1
+	r := New(cfg, &ceClient{log: &log}, dc, RunOptions{Timeout: 80 * time.Millisecond})
+	prog, err := parser.ParseFile("test \"t\"\n  press enter\n\nwith examples:\n  x\n  \"a\"\n  \"b\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := r.runTest(context.Background(), prog, prog.Tests[0], "x.probe")
+	if err != nil || len(results) != 2 {
+		t.Fatalf("%v, %d results", err, len(results))
+	}
+	folders, _ := filepath.Glob(filepath.Join(reports, "crash", "t_row_*"))
+	if len(folders) != 2 {
+		t.Errorf("two rows left %d folders: %v", len(folders), folders)
+	}
+	for i, res := range results {
+		if res.Crash == nil || len(res.Crash.Files) == 0 || !strings.HasPrefix(res.Crash.Files[0], filepath.Join(reports, "crash", crashFolderName("x.probe", rowName("t", i), 1))) {
+			t.Errorf("row %d: %+v", i+1, res.Crash)
+		}
 	}
 }

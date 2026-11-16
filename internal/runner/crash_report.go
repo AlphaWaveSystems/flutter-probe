@@ -1,9 +1,12 @@
 package runner
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
@@ -60,22 +63,27 @@ func crashJSON(c *CrashReport, outputDir string) *jsonCrash {
 	return j
 }
 
-// crashFileName is a folder name made of the test's name: letters and digits only, never empty, never a path.
-func crashFileName(testName string) string {
-	if s := sanitizeName(testName); s != "" {
-		return s
+// crashFolderName is the folder of one attempt of one test: the test's name reduced to ASCII letters and digits (a name with none, such as a Japanese one, gives
+// "test"), a dash and eight hex digits of a hash of the file, the full result name (the row included) and the attempt. The hash keeps apart tests whose names
+// reduce to the same text, names that differ only in case (a case-insensitive disk would merge them), the rows of a data-driven test and the attempts of a retry; it
+// also means the name is never one Windows reserves (CON, NUL, ...), which are only reserved without a suffix. It is never a path.
+func crashFolderName(file, name string, attempt int) string {
+	base := sanitizeName(name)
+	if base == "" {
+		base = "test"
 	}
-	return "test"
+	sum := sha256.Sum256([]byte(file + "\x00" + name + "\x00" + strconv.Itoa(attempt)))
+	return base + "-" + hex.EncodeToString(sum[:4])
 }
 
-// writeCrashFiles writes the evidence of one failed test under dir/<test>/ and returns the paths it wrote: exit.txt (one line per exit entry of the app) and, when
+// writeCrashFiles writes the evidence of one failed test attempt under dir/<folder>/ (see crashFolderName) and returns the paths it wrote: exit.txt (one line per exit entry of the app) and, when
 // the crash buffer held anything, crash.txt (its lines). Everything written is cleaned line by line. An error leaves whatever was already written in place and is
 // returned for the caller to print; the report then simply lists no files.
-func writeCrashFiles(dir, testName string, c *CrashReport) ([]string, error) {
+func writeCrashFiles(dir, file, name string, attempt int, c *CrashReport) ([]string, error) {
 	if c == nil {
 		return nil, nil
 	}
-	base, err := filepath.Abs(filepath.Join(dir, crashFileName(testName)))
+	base, err := filepath.Abs(filepath.Join(dir, crashFolderName(file, name, attempt)))
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +125,7 @@ func writeCrashFiles(dir, testName string, c *CrashReport) ([]string, error) {
 
 // writeCrashFilesFor writes the files of a failed test's crash evidence under <reports folder>/crash and records them on the report. A failure to write is
 // printed as a warning and the test result is not changed by it.
-func (r *Runner) writeCrashFilesFor(c *CrashReport, testName string) {
+func (r *Runner) writeCrashFilesFor(c *CrashReport, file, name string, attempt int) {
 	if c == nil {
 		return
 	}
@@ -125,7 +133,7 @@ func (r *Runner) writeCrashFilesFor(c *CrashReport, testName string) {
 	if r.cfg != nil && r.cfg.Reports != "" {
 		dir = filepath.Join(r.cfg.Reports, "crash")
 	}
-	files, err := writeCrashFiles(dir, testName, c)
+	files, err := writeCrashFiles(dir, file, name, attempt, c)
 	if err != nil {
 		fmt.Printf("    \033[33m⚠\033[0m  crash evidence files: %v\n", err)
 	}
