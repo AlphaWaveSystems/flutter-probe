@@ -570,7 +570,12 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	if te != nil {
 		grace := r.finishTimedOutAttempt(ctx, exec, guard, prog, t, te, stopVideo)
 		if grace.abandoned {
-			// The cleanup may still be writing into exec, so nothing is read from it: the attempt reports what it had before.
+			// The cleanup may still be writing into exec, so nothing is read from it: the attempt reports what it had before, and the crash
+			// evidence the look found before the cleanup started.
+			if grace.crash != nil {
+				fmt.Printf("    \033[31m💥\033[0m  %s\n", grace.crash.Line())
+				r.writeCrashFilesFor(grace.crash, file, name, r.curAttempt)
+			}
 			return TestResult{
 				TestName:   name,
 				File:       file,
@@ -579,6 +584,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 				Error:      runErr,
 				Row:        row,
 				Tags:       t.Tags,
+				Crash:      grace.crash,
 				Artifacts:  grace.artifacts,
 				DeviceID:   r.opts.DeviceID,
 				DeviceName: r.opts.DeviceName,
