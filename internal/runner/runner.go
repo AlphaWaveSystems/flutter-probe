@@ -47,6 +47,10 @@ type TestResult struct {
 	Proposal *SelectorProposal
 	// Crash is set on a failed test whose app died during it, when the run asked for crash evidence. It is held in memory and printed as one line; it is not in the reports yet.
 	Crash *CrashReport
+	// TimedOut is set on a failed test whose attempt ran past defaults.test_timeout (or --test-timeout). TimeLimit is that
+	// limit; both are zero when the limit is off, and the reports leave them out then.
+	TimedOut  bool
+	TimeLimit time.Duration
 }
 
 // DefName is the test's name as the file writes it. The result of a data-driven row carries " [row N]" after it, and
@@ -159,6 +163,26 @@ func (r *Runner) OnResult(cb func(TestResult)) {
 // in .probe files are executed instead of skipped.
 func (r *Runner) SetCompositeRunner(cr *CompositeRunner) {
 	r.compositeRunner = cr
+}
+
+// newAttemptExecutor is newExecutor for one attempt. With a guard, a reconnect that completes after the guard was released is
+// dropped (its client is closed), so an attempt that test_timeout cut short cannot replace the runner's client while the next
+// test runs. Without a guard it is newExecutor.
+func (r *Runner) newAttemptExecutor(guard *cleanupGuard) *Executor {
+	exec := r.newExecutor()
+	if guard != nil {
+		inner := exec.onReconnect
+		exec.onReconnect = func(newClient probelink.ProbeClient) {
+			if !guard.write(func() {
+				if inner != nil {
+					inner(newClient)
+				}
+			}) {
+				newClient.Close()
+			}
+		}
+	}
+	return exec
 }
 
 // newExecutor builds an Executor preconfigured with this Runner's reconnect
@@ -449,7 +473,9 @@ func (r *Runner) runSingleTest(ctx context.Context, prog *parser.Program, t pars
 
 func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t parser.TestDef, file string, vars map[string]string, row int) TestResult {
 	start := time.Now()
-	exec := r.newExecutor()
+	limit := r.cfg.Defaults.TestTimeout
+	guard := newCleanupGuard()
+	exec := r.newAttemptExecutor(guard)
 	for name, rec := range r.recipes {
 		exec.RegisterRecipe(rec)
 		_ = name
@@ -477,12 +503,16 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 
 	var runErr error
 
+	// test_timeout bounds this attempt: its before-each hooks and its body run under attemptCtx, not ctx. The run's own
+	// cancellation still reaches them through ctx.
+	attemptCtx, cancelAttempt := attemptContext(ctx, limit)
+
 	exec.beginHTTP(ctx) // each test starts with an empty request log and no mocks
 
 	// Run before-each hooks
 	for _, hook := range prog.Hooks {
 		if hook.Kind == parser.HookBeforeEach {
-			if err := exec.RunBody(ctx, hook.Body); err != nil {
+			if err := exec.RunBody(attemptCtx, hook.Body); err != nil {
 				runErr = fmt.Errorf("before each: %w", err)
 				break
 			}
@@ -495,43 +525,38 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		if row >= 0 && t.Examples != nil {
 			window = fmt.Sprintf("%s [row %d]", t.Name, row+1)
 		}
-		if err := exec.startMeasuring(ctx, window); err != nil {
+		if err := exec.startMeasuring(attemptCtx, window); err != nil {
 			fmt.Printf("    \033[33m⚠\033[0m  --measure-all: %v\n", err)
 		}
 	}
 
 	// Run test body
 	if runErr == nil {
-		runErr = exec.RunBody(ctx, t.Body)
+		runErr = exec.RunBody(attemptCtx, t.Body)
+	}
+	// The attempt's own deadline ended it while the run was not cancelled: the failure is the limit, named.
+	expired := limit > 0 && runErr != nil && attemptCtx.Err() != nil && ctx.Err() == nil
+	cancelAttempt()
+	var te *testTimeoutError
+	if expired {
+		te = &testTimeoutError{limit: limit, cause: runErr}
+		runErr = te
 	}
 
-	// Auto-screenshot on failure
-	if runErr != nil && r.client != nil {
-		shotCtx, shotCancel := context.WithTimeout(ctx, 10*time.Second)
-		shotName := fmt.Sprintf("failure_%s", sanitizeName(t.Name))
-		path, shotErr := r.client.Screenshot(shotCtx, shotName)
-		shotCancel()
-		if shotErr != nil {
-			fmt.Printf("    \033[33m⚠\033[0m  failure screenshot: %v\n", shotErr)
-		} else if path != "" {
-			exec.AddArtifact(path)
-			fmt.Printf("    \033[36m📸\033[0m  failure screenshot saved: %s\n", path)
-		}
+	var artifacts []string
+	abandoned := false
+	if te != nil {
+		artifacts, abandoned = r.finishTimedOutAttempt(ctx, exec, guard, prog, t, te)
+	} else {
+		r.finishAttempt(ctx, exec, prog, t, runErr, r.client, nil)
 	}
-
-	// Run on-failure hooks
-	if runErr != nil {
-		for _, hook := range prog.Hooks {
-			if hook.Kind == parser.HookOnFailure {
-				_ = exec.RunBody(ctx, hook.Body) // best-effort
-			}
-		}
-	}
-
-	// Run after-each hooks (always)
-	for _, hook := range prog.Hooks {
-		if hook.Kind == parser.HookAfterEach {
-			_ = exec.RunBody(ctx, hook.Body) // best-effort
+	// After an abandoned grace phase the attempt's executor may still be written by its goroutine, so its artifacts are kept apart
+	// and exec is not read again.
+	addArtifact := func(p string) {
+		if abandoned {
+			artifacts = append(artifacts, p)
+		} else {
+			exec.AddArtifact(p)
 		}
 	}
 
@@ -543,9 +568,9 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		} else if videoPath != "" {
 			absPath, _ := filepath.Abs(videoPath)
 			if absPath != "" {
-				exec.AddArtifact(absPath)
+				addArtifact(absPath)
 			} else {
-				exec.AddArtifact(videoPath)
+				addArtifact(videoPath)
 			}
 			fmt.Printf("    \033[36m🎬\033[0m  video saved: %s\n", videoPath)
 		}
@@ -555,6 +580,26 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	if row >= 0 && t.Examples != nil {
 		name = rowName(t.Name, row)
 	}
+
+	if abandoned {
+		// The grace phase was abandoned, so exec may still be in use by its goroutine: nothing is read from it.
+		return TestResult{
+			TestName:   name,
+			File:       file,
+			Passed:     false,
+			Duration:   time.Since(start),
+			Error:      runErr,
+			Row:        row,
+			Tags:       t.Tags,
+			Artifacts:  artifacts,
+			DeviceID:   r.opts.DeviceID,
+			DeviceName: r.opts.DeviceName,
+			StartedAt:  start,
+			TimedOut:   true,
+			TimeLimit:  limit,
+		}
+	}
+	artifacts = exec.Artifacts()
 
 	exec.closePerf(ctx)
 
@@ -572,7 +617,9 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 		FailedSelector: exec.FailedSelector(runErr),
 		Row:        row,
 		Tags:       t.Tags,
-		Artifacts:  exec.Artifacts(),
+		Artifacts:  artifacts,
+		TimedOut:   te != nil,
+		TimeLimit:  limit,
 		DeviceID:   r.opts.DeviceID,
 		DeviceName: r.opts.DeviceName,
 		StartedAt:  start,

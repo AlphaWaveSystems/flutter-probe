@@ -106,6 +106,7 @@ func init() {
 	f.Duration("implicit-wait", 0, "retry tap/type/see steps whose target is not on screen yet for up to this long before failing (Maestro-style implicit waiting); 0 uses probe.yaml defaults.implicit_wait, default off")
 	f.String("locale", "", `run the app in this language (BCP-47, e.g. "de", "pt-BR", "ar"; "system" = device default). Android 13+ and iOS simulators; the device language itself is unchanged`)
 	f.String("locales", "", `run the whole suite once per language (comma-separated, e.g. "de,ja,ar"), each in its own run; -o report files get the tag in their name`)
+	f.Duration("test-timeout", 0, "wall-clock limit per test attempt (also defaults.test_timeout): a test that runs past it fails with \"test exceeded <limit>\" and the run goes on. 0 turns it off. Each retry and each data-driven row gets its own limit")
 	f.Int("retry-failed", 0, "re-run a failing test up to N extra times before reporting it failed (also defaults.retry_failed_tests); a pass on a retry is reported with its attempt count")
 	f.String("perf-baseline", "", "compare every `start measuring` window with this baseline file; a test whose memory/CPU/frames/data got worse than the tolerance fails (create it with --perf-update-baseline)")
 	f.Float64("perf-tolerance", 20, "percent a measured number may exceed its baseline by before it counts as a regression (small absolute changes are ignored)")
@@ -406,6 +407,14 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		cfg.Visual.PixelDelta = visualPixelDelta
 	}
 
+	// --test-timeout overrides defaults.test_timeout when it is given; either way the value is checked before the run starts.
+	if cmd.Flags().Changed("test-timeout") {
+		d, _ := cmd.Flags().GetDuration("test-timeout")
+		cfg.Defaults.TestTimeout = d
+	}
+	if err := runner.ValidateTestTimeout(cfg.Defaults.TestTimeout); err != nil {
+		return err
+	}
 	if n, _ := cmd.Flags().GetInt("retry-failed"); n > 0 {
 		cfg.Defaults.RetryFailedTests = n
 	}

@@ -364,7 +364,10 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// step and what the screen showed. Skipped for lifecycle actions (restart/
 	// kill/clear), where the agent is intentionally gone and can't be asked.
 	if !isLifecycleAction {
-		err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
+		// A limit that ended the enclosing context is not a step timeout: the snapshot the annotation asks the agent for could outlive the grace budget.
+		if ctx.Err() == nil {
+			err = annotateStepTimeout(e.client, step, desc, stepTimeout, err)
+		}
 	}
 	err = annotateStepError(step, desc, err)
 	err = e.scrubEnv(err)

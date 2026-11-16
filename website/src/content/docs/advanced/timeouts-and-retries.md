@@ -71,6 +71,14 @@ right tool for an action whose result is checked afterwards. For flaky tests as 
 failing test again up to that many extra times before reporting it failed. A test that passes on a retry counts as passed and is
 marked (`passed on attempt 2` in the terminal, `"attempts": 2` in the JSON report), so flakiness stays visible. Off by default.
 
+## A limit for each test
+
+A step timeout bounds one step; a test of many steps can still run for a long time. `defaults.test_timeout: 90s` (or `probe test --test-timeout 90s`, which wins over the file) is a wall-clock limit for one attempt of a test. The file's value is used when the flag is not given, and no value means no limit. A value below one second, or a negative one, stops the run before it starts.
+
+When an attempt runs past the limit it fails with `test exceeded 90s`, and the run goes on. Its cleanup, which has a 30 second total budget, runs the failure screenshot, the on-failure hooks and the after-each hooks; a call that never returns is given up at that budget. Then the app is restarted, so the next test starts clean. The restart has its own bound, `agent.launch_timeout`. The JSON report marks the test with `timed_out` and `time_limit_seconds`; without the limit those fields are absent.
+
+Each retry (`retry_failed_tests`) and each data-driven row gets its own budget. A composite test has one budget for all its device blocks. In a composite test the device blocks stop together at the limit, but their cleanup (the screenshot, the hooks and the restart) is not run yet.
+
 ## Choosing
 
 | The thing is... | Use |
