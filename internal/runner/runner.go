@@ -97,6 +97,7 @@ type Runner struct {
 	curAttempt      int
 	restartHook     func(context.Context) error // tests only: replaces the restart step after a timed-out attempt
 	newVideo        func() videoRecorder        // tests only: replaces the device recorder; nil builds one from the device
+	autoClear       autoClearState              // the once-per-run answer to "clear data before each test"
 }
 
 // RunOptions configures a test run.
@@ -552,8 +553,18 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 
 	exec.beginHTTP(ctx) // each test starts with an empty request log and no mocks
 
+	// defaults.clear_data_before_each_test: the app starts every test from a clean state. It is asked once for the run, and a no stops the tests.
+	if r.cfg.Defaults.ClearDataBeforeEachTest && r.deviceCtx != nil {
+		if err := r.clearBeforeTest(attemptCtx, exec); err != nil {
+			runErr = err
+		}
+	}
+
 	// Run before-each hooks
 	for _, hook := range prog.Hooks {
+		if runErr != nil {
+			break
+		}
 		if hook.Kind == parser.HookBeforeEach {
 			if err := exec.RunBody(attemptCtx, hook.Body); err != nil {
 				runErr = fmt.Errorf("before each: %w", err)
