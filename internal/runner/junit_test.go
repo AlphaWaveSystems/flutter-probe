@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,5 +149,71 @@ func TestJUnitStructure(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "/Users/") || strings.Contains(string(raw), "/work/") {
 		t.Errorf("an absolute path leaked into the report:\n%s", raw)
+	}
+}
+
+// TestJUnitConnectFailureWritesErrorCases: an agent that refuses the connection at startup still leaves a
+// valid JUnit file, with one <error> testcase per planned file carrying the connect error.
+func TestJUnitConnectFailureWritesErrorCases(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close() // nothing listens on this port now
+	_, dialErr := net.Dial("tcp", addr)
+	if dialErr == nil {
+		t.Fatal("expected the closed port to refuse the connection")
+	}
+	cause := fmt.Errorf("connecting to ProbeAgent: %w", dialErr)
+
+	out := filepath.Join(t.TempDir(), "reports", "results.xml")
+	if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := runner.NewReporter(runner.FormatJUnit, f, false)
+	files := []string{"tests/a.probe", "tests/sub/b.probe"}
+	err = report.ReportConnectFailure(files, cause)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("junit file was not written: %v", err)
+	}
+	var doc struct {
+		Tests  int `xml:"tests,attr"`
+		Errors int `xml:"errors,attr"`
+		Suites []struct {
+			File  string `xml:"file,attr"`
+			Cases []struct {
+				Name  string `xml:"name,attr"`
+				Error *struct {
+					Message string `xml:"message,attr"`
+				} `xml:"error"`
+			} `xml:"testcase"`
+		} `xml:"testsuite"`
+	}
+	if err := xml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("junit file does not parse: %v\n%s", err, raw)
+	}
+	if doc.Tests != 2 || doc.Errors != 2 {
+		t.Errorf("want 2 tests and 2 errors, got tests=%d errors=%d\n%s", doc.Tests, doc.Errors, raw)
+	}
+	if len(doc.Suites) != 2 {
+		t.Fatalf("want one suite per planned file, got %d\n%s", len(doc.Suites), raw)
+	}
+	for i, s := range doc.Suites {
+		if len(s.Cases) != 1 || s.Cases[0].Error == nil {
+			t.Fatalf("suite %d: want one <error> testcase\n%s", i, raw)
+		}
+		if !strings.Contains(s.Cases[0].Error.Message, "connecting to ProbeAgent") {
+			t.Errorf("suite %d: error message does not carry the connect error: %q", i, s.Cases[0].Error.Message)
+		}
 	}
 }

@@ -236,7 +236,7 @@ func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Co
 	return lc
 }
 
-func runTests(cmd *cobra.Command, args []string) error {
+func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
 	if err != nil {
@@ -438,6 +438,18 @@ func runTests(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// A JUnit run whose local agent connection fails at startup still writes its report (one <error> per
+	// planned file, carrying the connect error), so CI has a file to publish. The exit status is unchanged.
+	var connectFailed bool
+	defer func() {
+		if retErr == nil || !connectFailed || format != string(runner.FormatJUnit) {
+			return
+		}
+		if err := writeConnectFailureReport(cmd, files, outFile, verbose, retErr); err != nil {
+			fmt.Fprintln(cmd.ErrOrStderr(), "Error: writing JUnit report:", err)
+		}
+	}()
+
 	// Fail fast, before any device connection, if a test uses "with ai" but
 	// no AI provider is configured. Never a silent no-op or implicit cloud call.
 	if err := validateAIConfig(files, cfg); err != nil {
@@ -624,7 +636,6 @@ func runTests(cmd *cobra.Command, args []string) error {
 	var cloudProviderImpl cloud.CloudProvider // saved for artifact collection
 	var sessionStopped bool                   // prevents double-stop in defer
 	if !dryRun {
-
 		if cloudProvider != "" {
 			// ── Cloud device farm path ──────────────────────────────────────
 			// Build credentials map from CLI flags and probe.yaml
@@ -1041,6 +1052,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 					client, err = probelink.DialWithOptions(ctx, dialOpts)
 				}
 				if err != nil {
+					connectFailed = true
 					return fmt.Errorf("connecting to ProbeAgent: %w", err)
 				}
 				defer client.Close()
@@ -1108,6 +1120,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 				}
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {
+					connectFailed = true
 					return fmt.Errorf("connecting to ProbeAgent: %w", err)
 				}
 				defer client.Close()
@@ -1631,6 +1644,26 @@ func runPropertiesFromFlags(cmd *cobra.Command) (map[string]string, error) {
 }
 
 // junitOptionsFromFlags reads the --junit-* flags of `probe test`.
+// writeConnectFailureReport writes the JUnit file of a run whose local agent connection failed at startup,
+// to outFile or to stdout when outFile is empty.
+func writeConnectFailureReport(cmd *cobra.Command, files []string, outFile string, verbose bool, cause error) error {
+	out := io.Writer(os.Stdout)
+	if outFile != "" {
+		if err := os.MkdirAll(filepath.Dir(outFile), 0755); err != nil {
+			return err
+		}
+		f, err := os.Create(outFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		out = f
+	}
+	report := runner.NewReporter(runner.FormatJUnit, out, verbose)
+	report.SetJUnitOptions(junitOptionsFromFlags(cmd))
+	return report.ReportConnectFailure(files, cause)
+}
+
 func junitOptionsFromFlags(cmd *cobra.Command) runner.JUnitOptions {
 	attempts, _ := cmd.Flags().GetBool("junit-attempts")
 	suffix, _ := cmd.Flags().GetString("junit-suffix")
