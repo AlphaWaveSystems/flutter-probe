@@ -91,3 +91,48 @@ func TestSimulatorUDID(t *testing.T) {
 		t.Error("non-simulator commands have no UDID")
 	}
 }
+
+// What lsof printed comes from another process: it is cleaned to one short plain line before it reaches a message, and a pid or simulator id that is not what it
+// should be is not printed as it came.
+func TestHolderTextIsCleanedBeforeItIsPrinted(t *testing.T) {
+	long := strings.Repeat("é", 200)
+	for name, c := range map[string]struct{ in, want string }{
+		"plain":            {"python3", "python3"},
+		"escape sequence":  {"\x1b[31mred\x1b[0m", "[31mred [0m"},
+		"newline and tab":  {"a\nb\tc", "a b c"},
+		"bidi and zero":    {"ab‮​cd", "ab cd"},
+		"runs of spaces":   {"  a   b  ", "a b"},
+		"invalid utf8":     {"ab\xffcd", "ab cd"},
+		"empty":            {"", ""},
+		"only hidden text": {"​‮", ""},
+	} {
+		if got := cleanHolderText(c.in, 48); got != c.want {
+			t.Errorf("%s: got %q, want %q", name, got, c.want)
+		}
+	}
+	got := cleanHolderText(long, 48)
+	if r := []rune(got); len(r) != 48 || r[47] != '…' {
+		t.Errorf("a long name must be cut to 48 runes ending in an ellipsis, got %d runes: %q", len([]rune(got)), got)
+	}
+	if holderPID("4242") != "4242" || holderPID("42\n42") != "?" || holderPID("") != "?" || holderPID("12345678901") != "?" || holderPID("\x1b[2J") != "?" {
+		t.Error("a pid is only digits, at most 10")
+	}
+	if !validUDID("11111111-2222-3333-4444-555555555555") || validUDID("../x") || validUDID("11111111-2222-3333-4444-55555555555;") || validUDID("") {
+		t.Error("a simulator id is a UUID")
+	}
+
+	hostile := describeHolders(48686, []Holder{{PID: "9\x1b[2J", Name: "ru\x1b[31mn\nner‮" + long}})
+	for _, bad := range []string{"\x1b", "\n", "‮", long} {
+		if strings.Contains(hostile, bad) {
+			t.Errorf("a hostile holder name or pid reached the message: %q", hostile)
+		}
+	}
+	if !strings.Contains(hostile, "pid ?") {
+		t.Errorf("a pid that is not digits is shown as ?: %q", hostile)
+	}
+	// a path that only looks like a simulator one, with a made-up id: not described as a simulator app, and the id is not printed
+	fake := describeHolders(48686, []Holder{{PID: "9", Name: "Runner", Command: "/x/CoreSimulator/Devices/x;rm -rf ~/data/Containers/Runner"}})
+	if strings.Contains(fake, "simctl") || strings.Contains(fake, "rm -rf") {
+		t.Errorf("an id that is not a UUID must not reach a command line: %q", fake)
+	}
+}

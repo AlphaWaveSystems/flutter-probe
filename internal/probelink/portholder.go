@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // PortHolder describes the process listening on a loopback TCP port, e.g.
@@ -125,17 +128,60 @@ func describeHolders(port int, hs []Holder) string {
 			// port when it is the CLI's own forward. Its pid says nothing, and "a forward" may be wrong (the list may show no forward for the port), so it is not
 			// named here. Whose forward it is comes from `adb forward --list` (device.ForwardHint), which can say it.
 			continue
-		case simulatorUDID(h.Command) != "":
+		case validUDID(simulatorUDID(h.Command)):
 			udid := simulatorUDID(h.Command)
-			parts = append(parts, fmt.Sprintf("an iOS simulator app %q (pid %s, simulator %s) — probably left over from an iOS run: stop it with `xcrun simctl terminate %s <bundle-id>` or shut the simulator down", h.Name, h.PID, udid, udid))
+			parts = append(parts, fmt.Sprintf("an iOS simulator app %q (pid %s, simulator %s) — probably left over from an iOS run: stop it with `xcrun simctl terminate %s <bundle-id>` or shut the simulator down", cleanHolderText(h.Name, holderNameRunes), holderPID(h.PID), udid, udid))
 		default:
-			parts = append(parts, fmt.Sprintf("pid %s (%s)", h.PID, h.Name))
+			parts = append(parts, fmt.Sprintf("pid %s (%s)", holderPID(h.PID), cleanHolderText(h.Name, holderNameRunes)))
 		}
 	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return fmt.Sprintf(" — agent port %d is held by %s; if that is not the app under test, stop it or pick another port with --agent-port", port, strings.Join(parts, "; "))
+}
+
+const holderNameRunes = 48
+
+var (
+	udidRE = regexp.MustCompile(`^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$`)
+	pidRE  = regexp.MustCompile(`^[0-9]{1,10}$`)
+)
+
+// validUDID reports whether s is a simulator id (a UUID). It goes into a command line the message tells the user to run, so nothing else is accepted.
+func validUDID(s string) bool { return udidRE.MatchString(s) }
+
+// holderPID is the pid as lsof printed it when that is only digits, else "?".
+func holderPID(s string) string {
+	if pidRE.MatchString(s) {
+		return s
+	}
+	return "?"
+}
+
+// cleanHolderText makes the name lsof printed for a process safe to put in a message: every control, format (bidi, zero-width), private-use, surrogate, separator
+// and invalid character and every space becomes one space, runs collapse, the ends are trimmed and at most maxRunes runes are kept (a cut ends in an ellipsis).
+// It is a small copy of the rules of device.CleanOneLine: this package cannot import device (device imports this package).
+func cleanHolderText(s string, maxRunes int) string {
+	var b strings.Builder
+	space := true
+	for _, r := range s {
+		if r == utf8.RuneError || unicode.IsControl(r) || unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Co, r) || unicode.Is(unicode.Cs, r) ||
+			r == '\u2028' || r == '\u2029' || (r >= 0xFE00 && r <= 0xFE0F) || r == '\u3164' || r == '\u115F' || r == '\uFFA0' || r == '\u2800' || r == '\uFFFC' {
+			if !space {
+				b.WriteByte(' ')
+				space = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		space = false
+	}
+	out := []rune(strings.TrimRight(b.String(), " "))
+	if len(out) > maxRunes {
+		out = append(out[:maxRunes-1], '…')
+	}
+	return string(out)
 }
 
 // portHolderHint is appended to dial errors: what already owns the agent
