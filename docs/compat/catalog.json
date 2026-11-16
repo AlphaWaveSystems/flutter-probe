@@ -1,0 +1,2904 @@
+{
+  "schema": 1,
+  "flutter": {
+    "version": "3.44.8",
+    "channel": "stable",
+    "revision": "058e0af2c2b57e369d905a03ac9748b0ebf543c6",
+    "dart": "3.12.2"
+  },
+  "counts": {
+    "total": 570,
+    "by_library": {
+      "cupertino": 58,
+      "material": 191,
+      "widgets": 321
+    },
+    "abstract": 30,
+    "deprecated": 3
+  },
+  "widgets": [
+    {
+      "name": "AbsorbPointer",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "AbstractLayoutBuilder",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "ActionListener",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Actions",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Align",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "AlignTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "AndroidView",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AndroidViewSurface",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AnimatedAlign",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedBuilder",
+      "library": "widgets",
+      "base": "ListenableBuilder"
+    },
+    {
+      "name": "AnimatedContainer",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedCrossFade",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AnimatedDefaultTextStyle",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedFractionallySizedBox",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedGrid",
+      "library": "widgets",
+      "base": "_AnimatedScrollView"
+    },
+    {
+      "name": "AnimatedList",
+      "library": "widgets",
+      "base": "_AnimatedScrollView"
+    },
+    {
+      "name": "AnimatedModalBarrier",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "AnimatedOpacity",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedPadding",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedPhysicalModel",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedPositioned",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedPositionedDirectional",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedRotation",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedScale",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedSize",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AnimatedSlide",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AnimatedSwitcher",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AnimatedWidget",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "AnnotatedRegion",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "AppKitView",
+      "library": "widgets",
+      "base": "_DarwinView"
+    },
+    {
+      "name": "AspectRatio",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "AutocompleteHighlightedOption",
+      "library": "widgets",
+      "base": "InheritedNotifier"
+    },
+    {
+      "name": "AutofillGroup",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AutomaticKeepAlive",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "BackButtonListener",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "BackdropFilter",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "BackdropGroup",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "Banner",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Baseline",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "BlockSemantics",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "BoxScrollView",
+      "library": "widgets",
+      "base": "ScrollView",
+      "abstract": true
+    },
+    {
+      "name": "Builder",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CallbackShortcuts",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Center",
+      "library": "widgets",
+      "base": "Align"
+    },
+    {
+      "name": "CheckedModeBanner",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ClipOval",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ClipPath",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ClipRRect",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ClipRSuperellipse",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ClipRect",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ColorFiltered",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ColoredBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Column",
+      "library": "widgets",
+      "base": "Flex"
+    },
+    {
+      "name": "CompositedTransformFollower",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "CompositedTransformTarget",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ConstrainedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ConstrainedLayoutBuilder",
+      "library": "widgets",
+      "base": "AbstractLayoutBuilder",
+      "abstract": true
+    },
+    {
+      "name": "ConstraintsTransformBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Container",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CustomMultiChildLayout",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "CustomPaint",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "CustomScrollView",
+      "library": "widgets",
+      "base": "ScrollView"
+    },
+    {
+      "name": "CustomSingleChildLayout",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "DecoratedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "DecoratedBoxTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "DecoratedSliver",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "DefaultAssetBundle",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "DefaultSelectionStyle",
+      "library": "widgets",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "DefaultTextEditingShortcuts",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DefaultTextHeightBehavior",
+      "library": "widgets",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "DefaultTextStyle",
+      "library": "widgets",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "DefaultTextStyleTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "DeviceOrientationBuilder",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Directionality",
+      "library": "widgets",
+      "base": "_UbiquitousInheritedWidget"
+    },
+    {
+      "name": "DisableWidgetInspectorScope",
+      "library": "widgets",
+      "base": "ProxyWidget"
+    },
+    {
+      "name": "Dismissible",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DisplayFeatureSubScreen",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DragBoundary",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "DragTarget",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Draggable",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DraggableScrollableActuator",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DraggableScrollableSheet",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DualTransitionBuilder",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "EditableText",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "EnableWidgetInspectorScope",
+      "library": "widgets",
+      "base": "ProxyWidget"
+    },
+    {
+      "name": "ErrorWidget",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "ExcludeFocus",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ExcludeFocusTraversal",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ExcludeSemantics",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Expanded",
+      "library": "widgets",
+      "base": "Flexible"
+    },
+    {
+      "name": "Expansible",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FadeInImage",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FadeTransition",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "FittedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Flex",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "Flexible",
+      "library": "widgets",
+      "base": "ParentDataWidget"
+    },
+    {
+      "name": "Flow",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "FlutterLogo",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Focus",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FocusScope",
+      "library": "widgets",
+      "base": "Focus"
+    },
+    {
+      "name": "FocusTraversalGroup",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FocusTraversalOrder",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "FocusableActionDetector",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Form",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FormField",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FractionalTranslation",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "FractionallySizedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "FutureBuilder",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "GestureDetector",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "GlowingOverscrollIndicator",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "GridPaper",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "GridView",
+      "library": "widgets",
+      "base": "BoxScrollView"
+    },
+    {
+      "name": "Hero",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "HeroControllerScope",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "HeroMode",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "HtmlElementView",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Icon",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "IconTheme",
+      "library": "widgets",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "IgnoreBaseline",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "IgnorePointer",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Image",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ImageFiltered",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ImageIcon",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ImplicitlyAnimatedWidget",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "IndexedSemantics",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "IndexedStack",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "InheritedModel",
+      "library": "widgets",
+      "base": "InheritedWidget",
+      "abstract": true
+    },
+    {
+      "name": "InheritedNotifier",
+      "library": "widgets",
+      "base": "InheritedWidget",
+      "abstract": true
+    },
+    {
+      "name": "InheritedTheme",
+      "library": "widgets",
+      "base": "InheritedWidget",
+      "abstract": true
+    },
+    {
+      "name": "InheritedWidget",
+      "library": "widgets",
+      "base": "ProxyWidget",
+      "abstract": true
+    },
+    {
+      "name": "InspectorButton",
+      "library": "widgets",
+      "base": "StatelessWidget",
+      "abstract": true
+    },
+    {
+      "name": "InteractiveViewer",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "IntrinsicHeight",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "IntrinsicWidth",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "KeepAlive",
+      "library": "widgets",
+      "base": "ParentDataWidget"
+    },
+    {
+      "name": "KeyboardListener",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "KeyedSubtree",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "LayoutBuilder",
+      "library": "widgets",
+      "base": "ConstrainedLayoutBuilder"
+    },
+    {
+      "name": "LayoutId",
+      "library": "widgets",
+      "base": "ParentDataWidget"
+    },
+    {
+      "name": "LeafRenderObjectWidget",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "LimitedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ListBody",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "ListView",
+      "library": "widgets",
+      "base": "BoxScrollView"
+    },
+    {
+      "name": "ListWheelScrollView",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ListWheelViewport",
+      "library": "widgets",
+      "base": "RenderObjectWidget"
+    },
+    {
+      "name": "ListenableBuilder",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "Listener",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Localizations",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "LongPressDraggable",
+      "library": "widgets",
+      "base": "Draggable"
+    },
+    {
+      "name": "LookupBoundary",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "MatrixTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "MediaQuery",
+      "library": "widgets",
+      "base": "InheritedModel"
+    },
+    {
+      "name": "MergeSemantics",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "MetaData",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "ModalBarrier",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "MouseRegion",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "MultiChildRenderObjectWidget",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "NavigationToolbar",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Navigator",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "NavigatorPopHandler",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "NestedScrollView",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "NestedScrollViewViewport",
+      "library": "widgets",
+      "base": "Viewport"
+    },
+    {
+      "name": "NotificationListener",
+      "library": "widgets",
+      "base": "ProxyWidget"
+    },
+    {
+      "name": "Offstage",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Opacity",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "OrientationBuilder",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "OverflowBar",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "OverflowBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Overlay",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "OverlayPortal",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Padding",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "PageStorage",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "PageView",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ParentDataWidget",
+      "library": "widgets",
+      "base": "ProxyWidget",
+      "abstract": true
+    },
+    {
+      "name": "PerformanceOverlay",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "PhysicalModel",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "PhysicalShape",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "PinnedHeaderSliver",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Placeholder",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "PlatformMenuBar",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "PlatformViewLink",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "PlatformViewSurface",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "PopScope",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Positioned",
+      "library": "widgets",
+      "base": "ParentDataWidget"
+    },
+    {
+      "name": "PositionedDirectional",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "PositionedTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "PreferredSize",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "PrimaryScrollController",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "ProxyWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "RadioGroup",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawAutocomplete",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawGestureDetector",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawImage",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "RawKeyboardListener",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "deprecated": true
+    },
+    {
+      "name": "RawMagnifier",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "RawMenuAnchor",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawMenuAnchorGroup",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawRadio",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawScrollbar",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawTooltip",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawView",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "RelativePositionedTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "RenderObjectToWidgetAdapter",
+      "library": "widgets",
+      "base": "RenderObjectWidget"
+    },
+    {
+      "name": "RenderObjectWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "ReorderableDelayedDragStartListener",
+      "library": "widgets",
+      "base": "ReorderableDragStartListener"
+    },
+    {
+      "name": "ReorderableDragStartListener",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ReorderableList",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RepaintBoundary",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "RepeatingAnimationBuilder",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RestorationScope",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RichText",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "RootRestorationScope",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RootWidget",
+      "library": "widgets",
+      "base": "Widget"
+    },
+    {
+      "name": "RotatedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "RotationTransition",
+      "library": "widgets",
+      "base": "MatrixTransition"
+    },
+    {
+      "name": "Router",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Row",
+      "library": "widgets",
+      "base": "Flex"
+    },
+    {
+      "name": "SafeArea",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ScaleTransition",
+      "library": "widgets",
+      "base": "MatrixTransition"
+    },
+    {
+      "name": "ScrollConfiguration",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "ScrollNotificationObserver",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ScrollView",
+      "library": "widgets",
+      "base": "StatelessWidget",
+      "abstract": true
+    },
+    {
+      "name": "Scrollable",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SelectableRegion",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SelectableRegionSelectionStatusScope",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "SelectionContainer",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SelectionListener",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SelectionRegistrarScope",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "Semantics",
+      "library": "widgets",
+      "base": "_SemanticsBase"
+    },
+    {
+      "name": "SemanticsDebugger",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SensitiveContent",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ShaderMask",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SharedAppData",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ShortcutRegistrar",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Shortcuts",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ShrinkWrappingViewport",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "SingleChildRenderObjectWidget",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "SingleChildScrollView",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SizeChangedLayoutNotifier",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SizeTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "SizedBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SizedOverflowBox",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SlideTransition",
+      "library": "widgets",
+      "base": "AnimatedWidget"
+    },
+    {
+      "name": "SliverAnimatedGrid",
+      "library": "widgets",
+      "base": "_SliverAnimatedMultiBoxAdaptor"
+    },
+    {
+      "name": "SliverAnimatedList",
+      "library": "widgets",
+      "base": "_SliverAnimatedMultiBoxAdaptor"
+    },
+    {
+      "name": "SliverAnimatedOpacity",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "SliverConstrainedCrossAxis",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverCrossAxisExpanded",
+      "library": "widgets",
+      "base": "ParentDataWidget"
+    },
+    {
+      "name": "SliverCrossAxisGroup",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverEnsureSemantics",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverFadeTransition",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverFillRemaining",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverFillViewport",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverFixedExtentList",
+      "library": "widgets",
+      "base": "SliverMultiBoxAdaptorWidget"
+    },
+    {
+      "name": "SliverFloatingHeader",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SliverGrid",
+      "library": "widgets",
+      "base": "SliverMultiBoxAdaptorWidget"
+    },
+    {
+      "name": "SliverIgnorePointer",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverLayoutBuilder",
+      "library": "widgets",
+      "base": "ConstrainedLayoutBuilder"
+    },
+    {
+      "name": "SliverList",
+      "library": "widgets",
+      "base": "SliverMultiBoxAdaptorWidget"
+    },
+    {
+      "name": "SliverMainAxisGroup",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverMultiBoxAdaptorWidget",
+      "library": "widgets",
+      "base": "SliverWithKeepAliveWidget",
+      "abstract": true
+    },
+    {
+      "name": "SliverOffstage",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverOpacity",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverOverlapAbsorber",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverOverlapInjector",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverPadding",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverPersistentHeader",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverPrototypeExtentList",
+      "library": "widgets",
+      "base": "SliverMultiBoxAdaptorWidget"
+    },
+    {
+      "name": "SliverReorderableList",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SliverResizingHeader",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverSafeArea",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverSemantics",
+      "library": "widgets",
+      "base": "_SemanticsBase"
+    },
+    {
+      "name": "SliverToBoxAdapter",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "SliverVariedExtentList",
+      "library": "widgets",
+      "base": "SliverMultiBoxAdaptorWidget"
+    },
+    {
+      "name": "SliverVisibility",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SliverWithKeepAliveWidget",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "SlottedMultiChildRenderObjectWidget",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "SnapshotWidget",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Spacer",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Stack",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "StatefulBuilder",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "StatefulWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "StatelessWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "StatusTransitionWidget",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "StreamBuilder",
+      "library": "widgets",
+      "base": "StreamBuilderBase"
+    },
+    {
+      "name": "StreamBuilderBase",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "StretchEffect",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "StretchingOverscrollIndicator",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SystemContextMenu",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Table",
+      "library": "widgets",
+      "base": "RenderObjectWidget"
+    },
+    {
+      "name": "TableCell",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "TapRegion",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "TapRegionSurface",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "Text",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "TextFieldTapRegion",
+      "library": "widgets",
+      "base": "TapRegion"
+    },
+    {
+      "name": "TextSelectionGestureDetector",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Texture",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "TickerMode",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Title",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Transform",
+      "library": "widgets",
+      "base": "SingleChildRenderObjectWidget"
+    },
+    {
+      "name": "TreeSliver",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TweenAnimationBuilder",
+      "library": "widgets",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "TwoDimensionalScrollView",
+      "library": "widgets",
+      "base": "StatelessWidget",
+      "abstract": true
+    },
+    {
+      "name": "TwoDimensionalScrollable",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TwoDimensionalViewport",
+      "library": "widgets",
+      "base": "RenderObjectWidget",
+      "abstract": true
+    },
+    {
+      "name": "UiKitView",
+      "library": "widgets",
+      "base": "_DarwinView"
+    },
+    {
+      "name": "UnconstrainedBox",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "UndoHistory",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "UniqueWidget",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "UnmanagedRestorationScope",
+      "library": "widgets",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "ValueListenableBuilder",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "View",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ViewAnchor",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ViewCollection",
+      "library": "widgets",
+      "base": "_MultiChildComponentWidget"
+    },
+    {
+      "name": "Viewport",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "Visibility",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "WidgetInspector",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "WidgetToRenderBoxAdapter",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "WidgetsApp",
+      "library": "widgets",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "WillPopScope",
+      "library": "widgets",
+      "base": "StatefulWidget",
+      "deprecated": true
+    },
+    {
+      "name": "Wrap",
+      "library": "widgets",
+      "base": "MultiChildRenderObjectWidget"
+    },
+    {
+      "name": "AboutDialog",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "AboutListTile",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ActionChip",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ActionIconTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "AdaptiveTextSelectionToolbar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "AlertDialog",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "AnimatedTheme",
+      "library": "material",
+      "base": "ImplicitlyAnimatedWidget"
+    },
+    {
+      "name": "AppBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "AppBarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Autocomplete",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "BackButton",
+      "library": "material",
+      "base": "_ActionButton"
+    },
+    {
+      "name": "BackButtonIcon",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Badge",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "BadgeTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "BottomAppBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "BottomAppBarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "BottomNavigationBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "BottomNavigationBarTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "BottomSheet",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ButtonBar",
+      "library": "material",
+      "base": "StatelessWidget",
+      "deprecated": true
+    },
+    {
+      "name": "ButtonBarTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "ButtonStyleButton",
+      "library": "material",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "ButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "CalendarDatePicker",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Card",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CardTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "CarouselView",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CarouselViewTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Checkbox",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CheckboxListTile",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CheckboxMenuButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CheckboxTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "CheckedPopupMenuItem",
+      "library": "material",
+      "base": "PopupMenuItem"
+    },
+    {
+      "name": "Chip",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ChipTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "ChoiceChip",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CircleAvatar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CircularProgressIndicator",
+      "library": "material",
+      "base": "ProgressIndicator"
+    },
+    {
+      "name": "CloseButton",
+      "library": "material",
+      "base": "_ActionButton"
+    },
+    {
+      "name": "CloseButtonIcon",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DataTable",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DataTableTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "DatePickerDialog",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DatePickerTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "DateRangePickerDialog",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DefaultTabController",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DesktopTextSelectionToolbar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DesktopTextSelectionToolbarButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Dialog",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DialogTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Divider",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DividerTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Drawer",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DrawerButton",
+      "library": "material",
+      "base": "_ActionButton"
+    },
+    {
+      "name": "DrawerButtonIcon",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DrawerController",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DrawerHeader",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "DrawerTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "DropdownButton",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DropdownButtonFormField",
+      "library": "material",
+      "base": "FormField"
+    },
+    {
+      "name": "DropdownButtonHideUnderline",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "DropdownMenu",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "DropdownMenuFormField",
+      "library": "material",
+      "base": "FormField"
+    },
+    {
+      "name": "DropdownMenuItem",
+      "library": "material",
+      "base": "_DropdownMenuItemContainer"
+    },
+    {
+      "name": "DropdownMenuTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "ElevatedButton",
+      "library": "material",
+      "base": "ButtonStyleButton"
+    },
+    {
+      "name": "ElevatedButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "EndDrawerButton",
+      "library": "material",
+      "base": "_ActionButton"
+    },
+    {
+      "name": "EndDrawerButtonIcon",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ExpandIcon",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ExpansionPanelList",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ExpansionTile",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ExpansionTileTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "FilledButton",
+      "library": "material",
+      "base": "ButtonStyleButton"
+    },
+    {
+      "name": "FilledButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "FilterChip",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "FlexibleSpaceBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "FlexibleSpaceBarSettings",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "FloatingActionButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "FloatingActionButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "GridTile",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "GridTileBar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "IconButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "IconButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Ink",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "InkResponse",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "InkWell",
+      "library": "material",
+      "base": "InkResponse"
+    },
+    {
+      "name": "InputChip",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "InputDatePickerFormField",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "InputDecorationTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "InputDecorator",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "LicensePage",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "LinearProgressIndicator",
+      "library": "material",
+      "base": "ProgressIndicator"
+    },
+    {
+      "name": "ListTile",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ListTileTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Magnifier",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Material",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "MaterialApp",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "MaterialBanner",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "MaterialBannerTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "MaterialButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "MenuAcceleratorCallbackBinding",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "MenuAcceleratorLabel",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "MenuAnchor",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "MenuBar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "MenuBarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "MenuButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "MenuItemButton",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "MenuTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "MergeableMaterial",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "NavigationBar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "NavigationBarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "NavigationDestination",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "NavigationDrawer",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "NavigationDrawerDestination",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "NavigationDrawerTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "NavigationIndicator",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "NavigationRail",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "NavigationRailTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "OutlinedButton",
+      "library": "material",
+      "base": "ButtonStyleButton"
+    },
+    {
+      "name": "OutlinedButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "PaginatedDataTable",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "PopupMenuButton",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "PopupMenuDivider",
+      "library": "material",
+      "base": "PopupMenuEntry"
+    },
+    {
+      "name": "PopupMenuEntry",
+      "library": "material",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "PopupMenuItem",
+      "library": "material",
+      "base": "PopupMenuEntry"
+    },
+    {
+      "name": "PopupMenuTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "ProgressIndicator",
+      "library": "material",
+      "base": "StatefulWidget",
+      "abstract": true
+    },
+    {
+      "name": "ProgressIndicatorTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Radio",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RadioListTile",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RadioMenuButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "RadioTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "RangeSlider",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawChip",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RawMaterialButton",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RefreshIndicator",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "RefreshProgressIndicator",
+      "library": "material",
+      "base": "CircularProgressIndicator"
+    },
+    {
+      "name": "ReorderableListView",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Scaffold",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "ScaffoldMessenger",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Scrollbar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ScrollbarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "SearchAnchor",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SearchBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SearchBarTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "SearchViewTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "SegmentedButton",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SegmentedButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "SelectableText",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SelectionArea",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SimpleDialog",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SimpleDialogOption",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Slider",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SliderTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "SliverAppBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SnackBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SnackBarAction",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SnackBarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "SpellCheckSuggestionsToolbar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Stepper",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "SubmenuButton",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "Switch",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SwitchListTile",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "SwitchTheme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "Tab",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "TabBar",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TabBarTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "TabBarView",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TabPageSelector",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TabPageSelectorIndicator",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "TableRowInkWell",
+      "library": "material",
+      "base": "InkResponse"
+    },
+    {
+      "name": "TextButton",
+      "library": "material",
+      "base": "ButtonStyleButton"
+    },
+    {
+      "name": "TextButtonTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "TextField",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TextFormField",
+      "library": "material",
+      "base": "FormField"
+    },
+    {
+      "name": "TextMagnifier",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TextSelectionTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "TextSelectionToolbar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "TextSelectionToolbarTextButton",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Theme",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "TimePickerDialog",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TimePickerTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "ToggleButtons",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ToggleButtonsTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "Tooltip",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "TooltipTheme",
+      "library": "material",
+      "base": "InheritedTheme"
+    },
+    {
+      "name": "TooltipVisibility",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "UserAccountsDrawerHeader",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "VerticalDivider",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "YearPicker",
+      "library": "material",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoActionSheet",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoActionSheetAction",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoActivityIndicator",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoAdaptiveTextSelectionToolbar",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoAlertDialog",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoApp",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoButton",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoCheckbox",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoContextMenu",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoContextMenuAction",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoDatePicker",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoDesktopTextSelectionToolbar",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoDesktopTextSelectionToolbarButton",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoDialogAction",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoExpansionTile",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoFocusHalo",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoFormRow",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoFormSection",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoFullscreenDialogTransition",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoLinearActivityIndicator",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoListSection",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoListTile",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoListTileChevron",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoMagnifier",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoMenuAnchor",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoMenuDivider",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoMenuItem",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoNavigationBar",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoNavigationBarBackButton",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoPageScaffold",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoPageScaffoldBackgroundColor",
+      "library": "cupertino",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "CupertinoPageTransition",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoPicker",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoPickerDefaultSelectionOverlay",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoPopupSurface",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoRadio",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoScrollbar",
+      "library": "cupertino",
+      "base": "RawScrollbar"
+    },
+    {
+      "name": "CupertinoSearchTextField",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSegmentedControl",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSheetTransition",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSlider",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSlidingSegmentedControl",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSliverNavigationBar",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSliverRefreshControl",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoSpellCheckSuggestionsToolbar",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoSwitch",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoTabBar",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoTabScaffold",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoTabView",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoTextField",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoTextFormFieldRow",
+      "library": "cupertino",
+      "base": "FormField"
+    },
+    {
+      "name": "CupertinoTextMagnifier",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoTextSelectionToolbar",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoTextSelectionToolbarButton",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoTheme",
+      "library": "cupertino",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "CupertinoTimerPicker",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    },
+    {
+      "name": "CupertinoUserInterfaceLevel",
+      "library": "cupertino",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "InheritedCupertinoTheme",
+      "library": "cupertino",
+      "base": "InheritedTheme"
+    }
+  ]
+}

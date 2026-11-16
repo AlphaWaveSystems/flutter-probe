@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "flutter": {
+    "version": "9.9.9",
+    "channel": "stable",
+    "revision": "0000000000000000000000000000000000000000",
+    "dart": "9.0.1"
+  },
+  "counts": {
+    "total": 19,
+    "by_library": {
+      "cupertino": 2,
+      "material": 8,
+      "widgets": 9
+    },
+    "abstract": 6,
+    "deprecated": 2
+  },
+  "widgets": [
+    {
+      "name": "ErrorWidget",
+      "library": "widgets",
+      "base": "LeafRenderObjectWidget"
+    },
+    {
+      "name": "InheritedWidget",
+      "library": "widgets",
+      "base": "ProxyWidget",
+      "abstract": true
+    },
+    {
+      "name": "LeafRenderObjectWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "Padding",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "ProxyWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "StatefulWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "StatelessWidget",
+      "library": "widgets",
+      "base": "Widget",
+      "abstract": true
+    },
+    {
+      "name": "Text",
+      "library": "widgets",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "Wrapper",
+      "library": "widgets",
+      "base": "_WrapperBase"
+    },
+    {
+      "name": "ButtonStyleButton",
+      "library": "material",
+      "base": "StatelessWidget",
+      "abstract": true
+    },
+    {
+      "name": "Chip",
+      "library": "material",
+      "base": "_ChipBase"
+    },
+    {
+      "name": "ElevatedButton",
+      "library": "material",
+      "base": "ButtonStyleButton"
+    },
+    {
+      "name": "NewBar",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "NotOld",
+      "library": "material",
+      "base": "StatelessWidget"
+    },
+    {
+      "name": "OldBar",
+      "library": "material",
+      "base": "StatelessWidget",
+      "deprecated": true
+    },
+    {
+      "name": "OldestBar",
+      "library": "material",
+      "base": "StatelessWidget",
+      "deprecated": true
+    },
+    {
+      "name": "Theme",
+      "library": "material",
+      "base": "InheritedWidget"
+    },
+    {
+      "name": "CupertinoOnlyHere",
+      "library": "cupertino",
+      "base": "Widget"
+    },
+    {
+      "name": "CupertinoSwitch",
+      "library": "cupertino",
+      "base": "StatefulWidget"
+    }
+  ]
+}
