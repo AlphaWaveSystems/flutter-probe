@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -91,11 +92,13 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 			defer wg.Done()
 			start := time.Now()
 
-			// Retry up to 2 times on connection failure
+			// Retry up to 2 times, and only a failure to connect: a lane that has connected ran its files once, and a retry would run the
+			// completed ones again. Its results so far are kept with its error.
 			maxRetries := 2
 			for attempt := 0; attempt <= maxRetries; attempt++ {
 				dr.Results, dr.Error = po.runOnDevice(ctx, dr)
-				if dr.Error == nil {
+				var ce *connectError
+				if dr.Error == nil || !errors.As(dr.Error, &ce) {
 					break
 				}
 				if attempt < maxRetries {
@@ -105,6 +108,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 				}
 			}
 
+			addNotRun(dr)
 			dr.Duration = time.Since(start)
 			if dr.Error != nil {
 				fmt.Printf("  \033[31m✗\033[0m  [%s] all attempts failed: %v\n",
@@ -117,13 +121,20 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 	return po.mergeResults(), po.summaryError()
 }
 
+// connectError is a failure before a lane runs its first file: the port forward, the token, the dial or the handshake. Only these are retried.
+// A failure after the lane has connected is a run error, and its results are kept.
+type connectError struct{ err error }
+
+func (e *connectError) Error() string { return e.err.Error() }
+func (e *connectError) Unwrap() error { return e.err }
+
 // runOnDevice connects to a single device and runs its assigned files.
 func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) ([]TestResult, error) {
 	// Setup port forward for Android
 	if dr.Platform == device.PlatformAndroid {
 		devPort := po.cfg.Agent.AgentDevicePort()
 		if err := po.manager.ForwardPort(ctx, dr.DeviceID, dr.Port, devPort); err != nil {
-			return nil, fmt.Errorf("[%s] port forward: %w", dr.DeviceID, err)
+			return nil, &connectError{fmt.Errorf("[%s] port forward: %w", dr.DeviceID, err)}
 		}
 		defer po.manager.RemoveForward(ctx, dr.DeviceID, dr.Port)
 	}
@@ -148,7 +159,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("[%s] token: %w", dr.DeviceID, err)
+		return nil, &connectError{fmt.Errorf("[%s] token: %w", dr.DeviceID, err)}
 	}
 
 	// Connect WebSocket
@@ -164,13 +175,13 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("[%s] connect: %w", dr.DeviceID, err)
+		return nil, &connectError{fmt.Errorf("[%s] connect: %w", dr.DeviceID, err)}
 	}
 	defer client.Close()
 
 	warning, err := probelink.CheckHandshake(ctx, client, po.cfg.CLIVersion)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)
+		return nil, &connectError{fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)}
 	}
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(warning))
@@ -219,6 +230,25 @@ func (po *ParallelOrchestrator) mergeResults() []TestResult {
 		all = append(all, dr.Results...)
 	}
 	return all
+}
+
+// addNotRun gives a failed result to each file of a lane that stopped with an error before the file ran, so a lane that never connected
+// shows its files in the report. A file the runner reached already has its results and is not added again.
+func addNotRun(dr *DeviceRun) {
+	if dr.Error == nil {
+		return
+	}
+	named := map[string]bool{}
+	for _, r := range dr.Results {
+		named[r.File] = true
+	}
+	var missing []string
+	for _, f := range dr.Files {
+		if !named[f] {
+			missing = append(missing, f)
+		}
+	}
+	dr.Results = append(dr.Results, notRunAll(missing, dr.Error)...)
 }
 
 // summaryError returns an error if any device failed to connect.

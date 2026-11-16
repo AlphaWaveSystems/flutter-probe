@@ -43,6 +43,16 @@ func failedRunError(results []runner.TestResult, failed error) error {
 	return fmt.Errorf("%s", runner.Summary(results))
 }
 
+// parallelRunError is the exit status of a parallel run. A lane error (a device that did not connect, a file that stopped its lane) fails
+// the run even when every result that ran passed: the files the lane did not reach are failed results in the report, and the error names
+// the device. Without a lane error the run fails when a result failed, as in a single-device run.
+func parallelRunError(results []runner.TestResult, orchErr error) error {
+	if orchErr != nil {
+		return orchErr
+	}
+	return failedRunError(results, nil)
+}
+
 // maybeAIHeal implements `probe test --ai-heal`. It runs after the results are final and before the report is written,
 // and it only sets the advisory Proposal of a failed result: it never changes Passed, Skipped or Error, never writes a
 // test file, and cannot return an error. With no ai: block it makes no request. At most one request per failed selector
