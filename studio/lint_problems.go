@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"unicode"
@@ -63,25 +65,48 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	if ws != "" && cfg.Recipes != "" && !filepath.IsAbs(cfg.Recipes) {
 		cfg.Recipes = filepath.Join(ws, cfg.Recipes)
 	}
+	root := ws
+	if root == "" {
+		if roots := a.automationRoots(); len(roots) > 0 {
+			root = roots[0]
+		}
+	}
 	ticket := lintSeq.Add(1)
 	lintMu.Lock()
 	if lintSeq.Load() != ticket {
 		lintMu.Unlock()
 		return LintProblemsResult{Problems: []LintProblem{}, Stale: true}, nil
 	}
-	rep, err := runner.LintSource(cfg, real, content)
+	// The lint is fenced to the workspace: the editor's text and the probe.yaml of an opened folder are not trusted to name files outside it.
+	rep, err := runner.LintSource(cfg, real, content, runner.LintWithRoot(root))
 	lintMu.Unlock()
 	if err != nil {
-		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: " + oneLine(err.Error())}, nil
+		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: " + oneLine(withoutPaths(err.Error(), root))}, nil
 	}
 	out := LintProblemsResult{Problems: []LintProblem{}}
 	for _, f := range rep.References {
-		out.Problems = append(out.Problems, LintProblem{Line: f.Line, Warning: f.Warning, Message: oneLine(f.Message), Source: "reference"})
+		out.Problems = append(out.Problems, LintProblem{Line: f.Line, Warning: f.Warning, Message: oneLine(withoutPaths(f.Message, root)), Source: "reference"})
 	}
 	for _, f := range rep.Program {
-		out.Problems = append(out.Problems, LintProblem{Line: f.Line, Warning: f.Warning, Message: oneLine(f.Message), Source: "program"})
+		out.Problems = append(out.Problems, LintProblem{Line: f.Line, Warning: f.Warning, Message: oneLine(withoutPaths(f.Message, root)), Source: "program"})
 	}
 	return out, nil
+}
+
+// absPath matches a path that starts at the root of the file system; a finding shows no such path, whatever the engine put in it.
+var absPath = regexp.MustCompile(`(^|[\s"'(=:])((?:[A-Za-z]:)?[/\\][^\s"'<>|]+)`)
+
+// withoutPaths is a last guard on text shown in the window: the workspace folder is dropped from it and any other absolute path becomes
+// "<path>". The engine's findings name files relative to the workspace and never by a path outside it; this keeps a message from the parser
+// or the file system from showing one.
+func withoutPaths(s, root string) string {
+	if root != "" {
+		s = strings.ReplaceAll(s, strings.TrimRight(root, "/")+"/", "")
+		if real, err := filepath.EvalSymlinks(root); err == nil {
+			s = strings.ReplaceAll(s, strings.TrimRight(real, "/")+"/", "")
+		}
+	}
+	return absPath.ReplaceAllString(s, "${1}<path>")
 }
 
 // oneLine makes text from a finding safe to show: one line, no control or invisible characters, a bounded length.

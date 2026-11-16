@@ -203,6 +203,7 @@ test.describe("Open the failing line", () => {
 
   test("gl-08 Enter on a failed test row of the open file goes to its line and does not also type a new line into it", async ({ page }) => {
     await open(page, "counter.probe");
+    await expect(page.locator("#editor .view-lines")).toContainText("counter increments"); // rendered
     const before = await page.locator("#editor .view-lines").innerText();
     await fireFailedRun(page, { file: path.join(tests, "counter.probe"), test: "counter fails", line: 5, description: 'tap "x"' });
     await page.locator("#results-list li.goto", { hasText: "counter fails" }).focus();
