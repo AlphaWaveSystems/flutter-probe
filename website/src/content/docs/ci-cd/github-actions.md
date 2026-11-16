@@ -182,6 +182,8 @@ jobs:
       - run: probe test tests/ --shard ${{ matrix.shard }} --device $DEVICE_UDID -v -y
 ```
 
+A file's shard comes from its path inside the repository, so every job that checks the repository out gets the same shards. If the config is in a subfolder of the repository (a monorepo), that holds only when every job is a git checkout. A job that runs from a tarball or an export without `.git` must pin the base: give the same `--shard-root <dir>` (or set `PROBE_SHARD_ROOT`) in every shard job, to the directory the keys are taken from. `--verbose` lists the files each shard runs, so a job can be checked against another.
+
 ## Docker (Self-Hosted)
 
 A Docker setup is available in `docker/` for self-hosted CI with Android emulators. This is useful for teams running their own CI infrastructure.

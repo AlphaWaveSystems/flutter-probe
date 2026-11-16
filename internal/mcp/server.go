@@ -352,6 +352,7 @@ Key flags for the flags parameter:
   --dry-run                   validate syntax without connecting to a device
   --parallel                  distribute tests across all connected devices
   --shard 1/3                 run 1/3 of test files (for CI matrix builds)
+  --shard-root <dir>          directory the shard keys are taken from (the same in every shard job)
   --host <ip> --token <tok>   WiFi mode for physical devices
   --agent-port 48700          agent port (alias of --port); pair with the app's
                                --dart-define=PROBE_PORT=48700 so simulators don't collide
