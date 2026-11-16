@@ -16,8 +16,8 @@ func lintTextWarnings(t *testing.T, step string) []string {
 	}
 	var got []string
 	for _, w := range lintProgram(prog) {
-		if strings.Contains(w, "matches any longer text") {
-			got = append(got, w)
+		if strings.Contains(w.Message, "matches any longer text") {
+			got = append(got, w.Message)
 		}
 	}
 	return got
@@ -92,7 +92,7 @@ func TestLintProgramFlagsUnanchoredCountAndZeroStateChecks(t *testing.T) {
 			}
 			warns := lintProgram(prog)
 			if got := len(warns) > 0; got != c.warn {
-				t.Errorf("lintProgram warned = %t, want %t: %q", got, c.warn, warns)
+				t.Errorf("lintProgram warned = %t, want %t: %+v", got, c.warn, warns)
 			}
 		})
 	}

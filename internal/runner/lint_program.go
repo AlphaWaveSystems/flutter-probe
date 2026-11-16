@@ -9,23 +9,24 @@ import (
 )
 
 // lintProgram runs static checks on a parsed program and returns warnings. It needs only the parse, so it is the part of
-// probe lint that reads no file but the one it was given.
-func lintProgram(prog *parser.Program) []string {
-	var warns []string
+// probe lint that reads no file but the one it was given. Each finding carries the line the parser has for it: the test's line
+// for a test with no steps and for a dart share, the step's line for a count check.
+func lintProgram(prog *parser.Program) []LintFinding {
+	var warns []LintFinding
 
 	// Check: each test has at least one step
 	for _, t := range prog.Tests {
 		if len(t.Body) == 0 {
-			warns = append(warns, fmt.Sprintf("test %q has no steps", t.Name))
+			warns = append(warns, LintFinding{Line: t.Line, Warning: true, Message: fmt.Sprintf("test %q has no steps", t.Name)})
 		}
 		// Check: dart usage > 20% of steps
 		dartCount := countDartBlocks(t.Body)
 		total := len(t.Body)
 		if total > 0 && dartCount*100/total > 20 {
-			warns = append(warns, fmt.Sprintf(
+			warns = append(warns, LintFinding{Line: t.Line, Warning: true, Message: fmt.Sprintf(
 				"test %q: %.0f%% dart blocks (consider ProbeScript instead)",
 				t.Name, float64(dartCount*100)/float64(total),
-			))
+			)})
 		}
 	}
 
@@ -57,8 +58,8 @@ var (
 // anchored at both ends. A substring match passes "0 items" on "10 items", so the check should be anchored. A negated
 // check is not flagged, because its substring match fails loudly rather than passing by accident. A pattern anchored at
 // both ends already compares the whole text; any other pattern is still a substring match, so it is flagged.
-func substringCountWarnings(owner string, steps []parser.Step) []string {
-	var warns []string
+func substringCountWarnings(owner string, steps []parser.Step) []LintFinding {
+	var warns []LintFinding
 	for _, s := range steps {
 		switch st := s.(type) {
 		case parser.AssertStep:
@@ -100,24 +101,24 @@ func anchoredPattern(pattern string) bool {
 
 // appendWebViewCountWarning is appendSubstringCountWarning for a text in a WebView. The text is matched exactly first, then as a part of
 // an element's text, and a WebView step has no `matching` form to anchor it, so the warning says what to do instead.
-func appendWebViewCountWarning(warns []string, owner string, line int, text string) []string {
+func appendWebViewCountWarning(warns []LintFinding, owner string, line int, text string) []LintFinding {
 	text = strings.TrimSpace(text)
 	if !countOrZeroText.MatchString(text) && !zeroStateText.MatchString(text) {
 		return warns
 	}
-	return append(warns, fmt.Sprintf(
+	return append(warns, LintFinding{Line: line, Warning: true, Message: fmt.Sprintf(
 		"%s, line %d: %q in a WebView can match any longer element text that contains it; check the element with css:\"...\" instead of its count text",
-		owner, line, text))
+		owner, line, text)})
 }
 
-func appendSubstringCountWarning(warns []string, owner string, line int, text string) []string {
+func appendSubstringCountWarning(warns []LintFinding, owner string, line int, text string) []LintFinding {
 	text = strings.TrimSpace(text)
 	if !countOrZeroText.MatchString(text) && !zeroStateText.MatchString(text) {
 		return warns
 	}
-	return append(warns, fmt.Sprintf(
+	return append(warns, LintFinding{Line: line, Warning: true, Message: fmt.Sprintf(
 		"%s, line %d: %q matches any longer text that contains it; for an exact count or zero-state check add matching \"^%s$\"",
-		owner, line, text, text))
+		owner, line, text, text)})
 }
 
 func countDartBlocks(steps []parser.Step) int {

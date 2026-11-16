@@ -61,7 +61,11 @@ var lintCmd = &cobra.Command{
 					problems = append(problems, line)
 				}
 			}
-			warnings = append(report.Program, warnings...)
+			var program []string
+			for _, p := range report.Program {
+				program = append(program, p.Message)
+			}
+			warnings = append(program, warnings...)
 			if len(problems) == 0 && len(warnings) == 0 {
 				statusOK(os.Stdout, "%s  (%d test(s))", f, len(prog.Tests))
 				continue
