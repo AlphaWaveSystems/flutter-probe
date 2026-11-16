@@ -508,8 +508,9 @@
   "scripts": {
     "vscode:prepublish": "npm run copy-device-view && npm run compile",
     "copy-device-view": "node scripts/copy-device-view.js",
-    "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
+    "test": "npm run compile && node --test \"out/test/**/*.test.js\" scripts/gen-keywords.test.mjs",
     "compile": "tsc -p ./",
+    "gen:keywords": "node scripts/gen-keywords.mjs",
     "watch": "tsc -watch -p ./",
     "lint": "tsc --noEmit -p ./",
     "package": "vsce package"
