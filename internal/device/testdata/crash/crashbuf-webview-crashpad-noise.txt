@@ -1,0 +1,20 @@
+--------- beginning of crash
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: FATAL EXCEPTION: main
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: Process: com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0, PID: 2965
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: android.app.RemoteServiceException$CrashedByAdbException: shell-induced crash
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.app.ActivityThread.throwRemoteServiceException(ActivityThread.java:2257)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.app.ActivityThread.-$$Nest$mthrowRemoteServiceException(Unknown Source:0)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2557)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:107)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:232)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:317)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:8705)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:580)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at com.android.internal.os.ChildZygoteInit.runZygoteServer(ChildZygoteInit.java:136)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at com.android.internal.os.WebViewZygoteInit.main(WebViewZygoteInit.java:147)
+11-15 19:03:46.574  2965  2965 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+11-15 19:03:48.043  3067  3067 F crashpad: -----BEGIN CRASHPAD MINIDUMP-----
+11-15 19:03:48.050  3067  3067 F crashpad: -----BEGIN CRASHPAD MINIDUMP-----
+11-15 19:03:48.050  3067  3067 F crashpad: )iyJ\'eU=sUL3<3ZW8\,]Z'3a<:e>GxIsGM[Q8b?Q{cRW,r99'mc0s]lgX;_cQa<0PF9L0a<0Pc=s<d+M[Y>kQ?[[tlg?I<CH;oLakpazot+Nj6f5D<UJr`tEUlswVd&:GMc]D4!;#IuEswC;6G-p>-3WL}wXP?!{*WL/T-Gs"'TWL"_o6wZCb"!{BCbQtq6v!Q)lg0+(#?(Cbp$szZ*I5%??
+11-15 19:03:48.050  3067  3067 F crashpad: rJ$a5K%7/4AO;17:76gP;9*M'XC%c^r`X#U_<$/P^wUs;P.&',9!W*GuIv47"x?uHt/e4:_,U)I9E9%uk#LW&mO#QA_i{uG0f"Sx#,NDNG1vLLv\oL{++c$*7z=m3#D\A!'&X<zhj[y`nbDmJ2o>z6cIIA,wFW\?N(X3Fn0xkEHvzT)!S&]L-wrMQ?;m0\x\GqEWHJ2TO75HCevho"9i5R\6S
