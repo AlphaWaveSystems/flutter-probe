@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -90,7 +91,42 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	if err != nil {
 		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: lintUnavailable(err, root)}, nil
 	}
-	return lintToProblems(rep, root), nil
+	out := lintToProblems(rep, root)
+	out.Problems = append(out.Problems, unsetEnvProblems(content)...)
+	return out, nil
+}
+
+// envIsSet says whether the environment Studio was started with has a variable. It is a variable so tests can say which names are set; it answers
+// existence only: no value is read into anything Studio shows or keeps.
+var envIsSet = func(name string) bool {
+	_, ok := os.LookupEnv(name)
+	return ok
+}
+
+// maxEnvProblems is how many unset-variable warnings one file lists.
+const maxEnvProblems = 20
+
+// unsetEnvProblems turns the ${NAME} references of the text that are not set in Studio's environment into warnings. A run would use the text as
+// written, where `probe test` read the variable from the shell it was started in: a Studio opened from the Dock or Finder does not have the shell's
+// variables. Only names appear in the message, never a value.
+func unsetEnvProblems(content string) []LintProblem {
+	refs, err := runner.UnsetEnvRefs(content, envIsSet)
+	if err != nil {
+		return nil
+	}
+	var out []LintProblem
+	for _, r := range refs {
+		if len(out) == maxEnvProblems {
+			break
+		}
+		out = append(out, LintProblem{
+			Line:    r.Line,
+			Warning: true,
+			Message: "${" + r.Name + "} is not set in Studio's environment, so this step uses the text as written. Studio does not read your shell: start Studio from a terminal where " + r.Name + " is set (`probe test` reads it from the shell it runs in).",
+			Source:  "environment",
+		})
+	}
+	return out
 }
 
 // lintUnavailable is the one line shown when the text could not be checked.
