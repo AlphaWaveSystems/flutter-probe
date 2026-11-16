@@ -170,6 +170,25 @@ test.describe("Confirm before clear app data", () => {
     expect(seen[0]).toEqual(["j", true]);
   });
 
+  test("cd-10 every dialog opens with the focus on Cancel, also a second one right after the first was answered with a click on Clear data, with the pointer still over it", async ({ page }) => {
+    const seen = answers(page);
+    await fire(page, "confirm:request", request("first"));
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled({ timeout: 3000 });
+    await page.click("#btn-confirm-danger");
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["first", true]);
+    await expect(overlay(page)).toBeHidden();
+    // the pointer stays where Clear data was; the next dialog opens under it
+    await fire(page, "confirm:request", request("second"));
+    await expect(overlay(page)).toBeVisible();
+    await expect(page.locator("#btn-confirm-cancel")).toBeFocused();
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("btn-confirm-cancel");
+    expect(await page.locator("#btn-confirm-danger").evaluate((el) => el.matches(":focus"))).toBe(false);
+    await page.keyboard.press("Enter"); // Enter on the focused Cancel is a no
+    await expect.poll(() => seen.length).toBe(2);
+    expect(seen[1]).toEqual(["second", false]);
+  });
+
   test("cd-09 the app is labelled as coming from probe.yaml", async ({ page }) => {
     await fire(page, "confirm:request", request("k"));
     await expect(page.locator("#confirm-app-label")).toHaveText("App (from probe.yaml)");

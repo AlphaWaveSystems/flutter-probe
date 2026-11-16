@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/userprefs"
 	"os"
 
 	"github.com/wailsapp/wails/v2"
@@ -30,6 +31,9 @@ func main() {
 	app.send.headless = headless
 	app.send.testAllowLocal = parseTestAllowLocal(headless, os.Getenv("PROBE_STUDIO_TEST_ALLOW_LOCAL"))
 	app.send.maxPerMinute = parseTestSendRate(headless, os.Getenv("PROBE_STUDIO_TEST_SEND_RATE"))
+	if dir := testUserConfigDir(headless, os.Getenv("PROBE_STUDIO_TEST_USER_CONFIG_DIR")); dir != "" {
+		userprefs.Dir = func() (string, error) { return dir, nil } // the browser suite keeps the person's preferences in a folder of its own
+	}
 	endpoint, note := localDiscoveryEndpoint(headless, os.Getenv("PROBE_STUDIO_LOCAL_ENDPOINT"))
 	localDiscoveryTarget = endpoint
 	if note != "" {

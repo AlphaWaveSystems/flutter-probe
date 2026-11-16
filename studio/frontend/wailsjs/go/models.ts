@@ -1146,6 +1146,20 @@ export namespace main {
 		}
 	}
 	
+	export class StudioPrefs {
+	    clearDataWithoutAsking: boolean;
+	    warning?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudioPrefs(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.clearDataWithoutAsking = source["clearDataWithoutAsking"];
+	        this.warning = source["warning"];
+	    }
+	}
 	export class TargetInfo {
 	    host: string;
 	    label?: string;

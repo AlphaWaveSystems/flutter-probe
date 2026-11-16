@@ -33,6 +33,8 @@ import {
   ConnectWiFiSaved,
   DeleteAPIKey,
   Disconnect,
+  GetStudioPrefs,
+  SetClearDataWithoutAsking,
   CanExportRunResults,
   ExportRunResults,
   ForgetWiFiToken,
@@ -539,6 +541,7 @@ async function openSettingsOverlay() {
   }
   noWorkspace.hidden = true;
   form.hidden = false;
+  void loadStudioPrefs();
 
   try {
     const s = await LoadWorkspaceSettings(workspaceRoot);
@@ -560,6 +563,32 @@ async function openSettingsOverlay() {
 
 // The settings the form was filled from, sent back with Save so that Studio writes only what changed since, and notices a probe.yaml that changed on disk.
 let loadedSettings: main.WorkspaceSettings | undefined;
+
+// The person's own Studio preferences (not in probe.yaml). The box is saved the moment it is pressed, and put back if Studio refuses.
+async function loadStudioPrefs(): Promise<void> {
+  const box = $("settings-clear-data-sim") as HTMLInputElement;
+  const warning = $("settings-prefs-warning");
+  try {
+    const prefs = await GetStudioPrefs();
+    box.checked = prefs.clearDataWithoutAsking === true;
+    warning.textContent = prefs.warning ?? ""; // text, never markup
+    warning.hidden = !prefs.warning;
+  } catch {
+    box.checked = false;
+    warning.hidden = true;
+  }
+}
+$("settings-clear-data-sim").addEventListener("change", async (e) => {
+  const box = e.target as HTMLInputElement;
+  const want = box.checked;
+  try {
+    await SetClearDataWithoutAsking(want);
+    toast(want ? "clear app data now runs without asking on simulators and emulators" : "clear app data asks again", "info", 4000);
+  } catch (err) {
+    box.checked = !want;
+    toast(`Not saved: ${err}`, "error", 6000);
+  }
+});
 
 function closeSettingsOverlay() {
   $("settings-overlay").hidden = true;
