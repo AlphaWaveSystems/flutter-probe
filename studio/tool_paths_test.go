@@ -261,3 +261,88 @@ func TestNothingReadsTheDeviceManagerFieldDirectly(t *testing.T) {
 		}
 	}
 }
+
+// A workspace is often a subfolder of a repository: a program anywhere in that repository came with it. An adb outside the repository (an SDK place)
+// is accepted; one in a sibling folder of the same checkout is refused. With no .git above, only the workspace folder is off limits.
+func TestWorkspaceADBRefusesAnythingInsideTheRepositoryTheWorkspaceBelongsTo(t *testing.T) {
+	adbOutside, _ := markerAdb(t) // an SDK place, outside any repo
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ws := filepath.Join(repo, "app")
+	if err := os.MkdirAll(ws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(repo, "tools")
+	_ = os.MkdirAll(sibling, 0o755)
+	inSibling := filepath.Join(sibling, adbName(runtime.GOOS))
+	_ = os.WriteFile(inSibling, []byte("#!/bin/sh\n"), 0o755)
+	inWorkspace := filepath.Join(ws, adbName(runtime.GOOS))
+	_ = os.WriteFile(inWorkspace, []byte("#!/bin/sh\n"), 0o755)
+	linkIn := filepath.Join(t.TempDir(), adbName(runtime.GOOS))
+	_ = os.Symlink(inSibling, linkIn) // outside by its own place, inside the repo by where it leads
+	for name, p := range map[string]string{"a sibling folder of the same checkout": inSibling, "the workspace folder": inWorkspace, "a link that leads into the repo": linkIn} {
+		got, err := workspaceADB(p, ws, runtime.GOOS)
+		if err == nil || got != "" || !strings.Contains(err.Error(), "inside the repository this folder belongs to") || strings.Contains(err.Error(), repo) {
+			t.Errorf("%s: %q, %v", name, got, err)
+		}
+	}
+	if got, err := workspaceADB(adbOutside, ws, runtime.GOOS); err != nil || got == "" {
+		t.Errorf("an adb outside the repository was refused: %q, %v", got, err)
+	}
+	// a .git that is a file (a worktree or a submodule) marks the root as well
+	wt := t.TempDir()
+	_ = os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: /elsewhere\n"), 0o644)
+	wtWs := filepath.Join(wt, "sub")
+	_ = os.MkdirAll(wtWs, 0o755)
+	wtAdb := filepath.Join(wt, "bin", adbName(runtime.GOOS))
+	_ = os.MkdirAll(filepath.Dir(wtAdb), 0o755)
+	_ = os.WriteFile(wtAdb, []byte("#!/bin/sh\n"), 0o755)
+	if _, err := workspaceADB(wtAdb, wtWs, runtime.GOOS); err == nil || !strings.Contains(err.Error(), "repository") {
+		t.Errorf("a repository marked by a .git file: %v", err)
+	}
+	// with no .git above, only the workspace folder itself is off limits
+	plain := t.TempDir()
+	plainWs := filepath.Join(plain, "app")
+	_ = os.MkdirAll(plainWs, 0o755)
+	plainSibling := filepath.Join(plain, "tools", adbName(runtime.GOOS))
+	_ = os.MkdirAll(filepath.Dir(plainSibling), 0o755)
+	_ = os.WriteFile(plainSibling, []byte("#!/bin/sh\n"), 0o755)
+	plainInside := filepath.Join(plainWs, adbName(runtime.GOOS))
+	_ = os.WriteFile(plainInside, []byte("#!/bin/sh\n"), 0o755)
+	if _, err := workspaceADB(plainSibling, plainWs, runtime.GOOS); err != nil {
+		t.Errorf("with no .git, a sibling folder was refused: %v", err)
+	}
+	if _, err := workspaceADB(plainInside, plainWs, runtime.GOOS); err == nil || !strings.Contains(err.Error(), "inside this folder") {
+		t.Errorf("with no .git, the workspace folder itself must be refused: %v", err)
+	}
+}
+
+// An adb that is reachable only through "." (the working directory) in PATH is not run: exec.LookPath refuses it (ErrDot), so it counts as not
+// found, the note says so, and nothing runs. (The repository, or the folder Studio was started in, may hold a program called adb.)
+func TestAnAdbFoundOnlyThroughADotInPathIsNotRun(t *testing.T) {
+	adb, marker := markerAdb(t)
+	cwdDir := filepath.Dir(adb)
+	here, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(here) })
+	if err := os.Chdir(cwdDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", ".:/usr/bin:/bin")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ANDROID_HOME", "")
+	t.Setenv("ANDROID_SDK_ROOT", "")
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	if runtime.GOOS == "windows" {
+		t.Skip("PATH lookups of the working directory differ on Windows")
+	}
+	a := NewApp()
+	if note := a.DeviceListNote(); !strings.Contains(note, "adb was not found") {
+		t.Errorf("note = %q: an adb in the working directory counted as found", note)
+	}
+	_, _ = a.ListDevices()
+	if ran(marker) != "" {
+		t.Errorf("the adb in the working directory was run: %q", ran(marker))
+	}
+}

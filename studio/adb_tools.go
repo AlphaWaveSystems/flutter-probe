@@ -91,7 +91,8 @@ func newDefaultManager() *device.Manager {
 
 // workspaceADB checks the tools.adb of the workspace's probe.yaml for an explicit Connect. It returns "" when none is set, the path to use when
 // it passes, and an error that says why not. It must be an absolute path to a regular, executable file named adb (adb.exe on Windows), outside
-// the workspace folder (a program the repository carries is what an untrusted repository would name), after symlinks are resolved. A relative
+// the repository the workspace belongs to (the folder above it that holds a .git; with none, outside the workspace folder), because a program the
+// repository carries is what an untrusted repository would name, whichever folder of it the workspace is. Symlinks are resolved first. A relative
 // path is never resolved against the workspace or the working directory.
 func workspaceADB(configured, workspace, goos string) (string, error) {
 	if configured == "" {
@@ -119,11 +120,36 @@ func workspaceADB(configured, workspace, goos string) (string, error) {
 		if real, err := filepath.EvalSymlinks(workspace); err == nil {
 			ws = real
 		}
-		if rel, err := filepath.Rel(ws, resolved); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if root := repoRoot(ws); root != "" {
+			if isUnder(root, resolved) {
+				return fail("it is inside the repository this folder belongs to")
+			}
+		} else if isUnder(ws, resolved) {
 			return fail("it is inside this folder")
 		}
 	}
 	return resolved, nil
+}
+
+// repoRoot is the folder above (or at) dir that holds a .git entry, a directory or a file (a worktree or a submodule has a file), or "" when there
+// is none. A workspace is often a subfolder of a repository: a program anywhere in that repository came with the repository.
+func repoRoot(dir string) string {
+	for d := filepath.Clean(dir); ; {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			return d
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return ""
+		}
+		d = parent
+	}
+}
+
+// isUnder says whether p is root or inside it.
+func isUnder(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // adbNote is the one line that says why Android devices would be missing: adb was not found where Studio looks. It names what was searched
