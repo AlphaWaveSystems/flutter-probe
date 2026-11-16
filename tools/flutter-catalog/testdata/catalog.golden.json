@@ -2,7 +2,6 @@
   "schema": 1,
   "flutter": {
     "version": "9.9.9",
-    "channel": "stable",
     "revision": "0000000000000000000000000000000000000000",
     "dart": "9.0.1"
   },
