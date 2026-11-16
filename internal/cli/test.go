@@ -1666,7 +1666,7 @@ func validateAIConfig(files []string, cfg *config.Config) error {
 // a terminal (CI, a script, an agent): there is nobody to answer, so the step fails
 // at once with a hint to pass --yes instead of blocking on a prompt.
 func confirmFunc() func(string) bool {
-	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+	if !stdinIsTerminal() {
 		return nil
 	}
 	return promptUserConfirm
