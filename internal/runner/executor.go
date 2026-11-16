@@ -62,6 +62,7 @@ type Executor struct {
 	startedAt            time.Time          // when this executor (one test attempt) was made
 	crashReport          *CrashReport       // set by collectCrashOnce when the app died during the test
 	crashTries           int                // collections tried so far
+	appStopped           bool               // the test stopped the app on purpose (a kill step) and has not launched it again
 	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64      // incremented on each successful reconnect
@@ -295,6 +296,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	}
 
 	err := e.dispatchStep(ctx, stepCtx, step)
+	e.noteAppState(step, err)
 
 	// Implicit wait: the target of a tap/type/see is often not there yet (a sign-in is
 	// still in flight, a screen is still animating in). Retry "not found" until the
@@ -393,6 +395,12 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		fmt.Printf("    \033[33m⚠\033[0m  optional step failed, continuing: %v\n", err)
 		e.emitStep(step, desc, StepSkipped, time.Since(start), err)
 		return nil
+	}
+
+	// Crash evidence (opt-in, read-only): a step that failed for any other reason, such as a timeout while the app died during a wait, gets one look at whether the
+	// app is dead. It changes nothing about the step's outcome or message; a lost connection was looked at before its reconnect attempts, above.
+	if err != nil && !isLifecycleAction && ctx.Err() == nil {
+		e.collectCrashOnce(ctx)
 	}
 
 	if err != nil {

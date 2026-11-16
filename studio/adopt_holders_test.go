@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -296,4 +300,153 @@ func TestAdoptClientCarriesARecordingThatIsOn(t *testing.T) {
 	a.mu.Unlock()
 	cancel()
 	<-done
+}
+
+// runFake answers whatever a short run asks of the client; any other method fails the test by panicking on the nil embedded client.
+type runFake struct {
+	probelink.ProbeClient
+	closed atomic.Int32
+	calls  atomic.Int32
+}
+
+func (r *runFake) Call(context.Context, string, any) (json.RawMessage, error) {
+	r.calls.Add(1)
+	return json.RawMessage(`{}`), nil
+}
+func (r *runFake) ScreenshotBytes(context.Context, string) ([]byte, error) { return []byte("s"), nil }
+func (r *runFake) DumpWidgetTree(context.Context) (string, error)          { return "", nil }
+func (r *runFake) HTTPClear(context.Context, bool) error                   { return nil }
+func (r *runFake) HTTPLog(context.Context, probelink.HTTPLogParams) (probelink.HTTPLogResult, error) {
+	return probelink.HTTPLogResult{}, nil
+}
+func (r *runFake) Ping(context.Context) error { return nil }
+func (r *runFake) Connected() bool            { return r.closed.Load() == 0 }
+func (r *runFake) Close() error               { r.closed.Add(1); return nil }
+
+// executeRun reads the connection's client through clientOf: a run that starts while another reconnect swaps the client does not race with it
+// (run with -race; reading conn.client directly is a data race with adoptClient's write).
+func TestExecuteRunReadsTheClientThroughTheLockedAccessor(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.probe")
+	if err := os.WriteFile(file, []byte("test \"t\"\n  log \"hi\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{ctx: context.Background(), hub: newEventHub()}
+	first := &runFake{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	cfg := &config.Config{}
+	cfg.Defaults.Timeout = 2 * time.Second
+	conn := &connection{client: first, streamCancel: cancel, streamDone: done, cfg: cfg}
+	a.conn = conn
+	go a.streamLoop(ctx, done, &closeFake{frameFake: frameFake{shot: []byte("s")}})
+
+	stop := make(chan struct{})
+	swapped := make(chan struct{})
+	go func() {
+		defer close(swapped)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				a.adoptClient(conn, &runFake{})
+			}
+		}
+	}()
+	for i := 0; i < 5; i++ {
+		_, _ = a.executeRun(context.Background(), file, runSelection{}, RunPlan{})
+	}
+	close(stop)
+	<-swapped
+	a.mu.Lock()
+	cancelNow, doneNow := conn.streamCancel, conn.streamDone
+	a.mu.Unlock()
+	cancelNow()
+	<-doneNow
+}
+
+// ---- the recording hand-over: interleavings ----
+
+func newRecordingApp(t *testing.T) (*App, *probelink.Client, *probelink.Client, *fakeAgent, *fakeAgent) {
+	t.Helper()
+	agent1, agent2 := newFakeAgent(t), newFakeAgent(t)
+	c1, c2 := agent1.dial(t), agent2.dial(t)
+	a := &App{ctx: context.Background(), hub: newEventHub()}
+	a.conn = &connection{client: c1}
+	if err := a.StartRecording(); err != nil {
+		t.Fatal(err)
+	}
+	return a, c1, c2, agent1, agent2
+}
+
+// StartRecording sets the handler, the client it is on and the active flag together.
+func TestStartRecordingSetsTheHandlerBeforeItMarksTheRecordingActive(t *testing.T) {
+	a, c1, _, agent1, _ := newRecordingApp(t)
+	a.recMu.Lock()
+	defer a.recMu.Unlock()
+	if !a.recActive || a.recHandler == nil || a.recClient != c1 || c1.OnNotify == nil {
+		t.Errorf("recorder state after Start: active %v, handler set %v, client ok %v, OnNotify set %v", a.recActive, a.recHandler != nil, a.recClient == c1, c1.OnNotify != nil)
+	}
+	if agent1.asked(probelink.MethodStartRecording) != 1 {
+		t.Error("the agent was not asked to record")
+	}
+}
+
+// A Stop between the move of the handler and the start call: the new agent is not asked to record, and no handler is left on the new client.
+func TestStopRecordingBetweenTheMoveAndTheStartCallSkipsTheStart(t *testing.T) {
+	a, c1, c2, _, agent2 := newRecordingApp(t)
+	a.mu.Lock()
+	a.conn.client = c1 // Stop's own call goes to the old agent here, so the new agent only sees what the carry sends
+	a.mu.Unlock()
+	carryHook = func(step string) {
+		if step == carryMoved {
+			_, _ = a.StopRecording()
+		}
+	}
+	defer func() { carryHook = nil }()
+	a.carryRecording(c1, c2)
+	if agent2.asked(probelink.MethodStartRecording) != 0 {
+		t.Error("the new agent was asked to record after the recording had ended")
+	}
+	if c2.OnNotify != nil || c1.OnNotify != nil {
+		t.Error("a handler was left on a client")
+	}
+	if a.recActive {
+		t.Error("the recording is still active")
+	}
+}
+
+// A Stop while the start call is out: the new agent was told to record, so it is told to stop, and no handler is left.
+func TestStopRecordingDuringTheStartCallStopsTheNewAgent(t *testing.T) {
+	a, c1, c2, _, agent2 := newRecordingApp(t)
+	carryHook = func(step string) {
+		if step == carryStarted {
+			_, _ = a.StopRecording() // sends its own stop to the connection's client, which is the old agent (c1) here
+		}
+	}
+	defer func() { carryHook = nil }()
+	a.carryRecording(c1, c2)
+	if agent2.asked(probelink.MethodStartRecording) != 1 || agent2.asked(probelink.MethodStopRecording) != 1 {
+		t.Errorf("new agent: %d start, %d stop; want 1 and 1", agent2.asked(probelink.MethodStartRecording), agent2.asked(probelink.MethodStopRecording))
+	}
+	if c2.OnNotify != nil {
+		t.Error("a handler was left on the new client")
+	}
+}
+
+// The restart is not a pause of the person's: no "wait N seconds" line is written for the gap, and the next event is recorded.
+func TestACarriedRecordingWritesNoWaitLineForTheRestartGap(t *testing.T) {
+	a, c1, c2, _, _ := newRecordingApp(t)
+	a.recMu.Lock()
+	a.recLastAt = time.Now().Add(-10 * time.Second)
+	a.recMu.Unlock()
+	a.carryRecording(c1, c2)
+	c2.OnNotify(probelink.NotifyRecordedEvent, json.RawMessage(`{"action":"tap","text":"Go"}`))
+	a.recMu.Lock()
+	lines := append([]string(nil), a.recLines...)
+	a.recMu.Unlock()
+	if len(lines) != 1 || strings.Contains(lines[0], "wait") {
+		t.Errorf("recorded lines = %q, want one tap and no wait", lines)
+	}
 }
