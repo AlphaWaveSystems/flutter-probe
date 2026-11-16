@@ -69,7 +69,10 @@ func (a *App) LintProblems(path, content string) (LintProblemsResult, error) {
 	if len(content) > maxLintBytes {
 		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: the file is too large (over 1 MiB)"}, nil
 	}
-	cfg := a.workspaceConfig()
+	cfg, cfgErr := a.workspaceConfig()
+	if cfgErr != nil {
+		return LintProblemsResult{Problems: []LintProblem{}, Unavailable: "Not checked: " + cfgErr.Error()}, nil
+	}
 	// The recipes folder is given relative to the workspace, like the CLI run from there; a relative one would otherwise resolve against
 	// whatever folder Studio was started in.
 	if ws != "" && cfg.Recipes != "" && !filepath.IsAbs(cfg.Recipes) {

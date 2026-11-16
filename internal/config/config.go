@@ -223,6 +223,12 @@ type DeviceEntry struct {
 	Serial string `yaml:"serial"` // emulator-5554 | auto
 }
 
+// Default returns the configuration `probe` runs with when there is no probe.yaml: the built-in defaults, and nothing from any folder.
+func Default() *Config {
+	cfg := defaultConfig
+	return &cfg
+}
+
 var defaultConfig = Config{
 	Defaults: DefaultsConfig{
 		Platform:         "android",
