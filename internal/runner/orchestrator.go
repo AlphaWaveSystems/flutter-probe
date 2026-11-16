@@ -38,6 +38,23 @@ type ParallelOrchestrator struct {
 	opts     RunOptions
 	portBase int
 	verbose  bool
+
+	// dial opens a device's agent connection. It is nil in production, which dials with probelink.DialWithOptions; a test sets it to reach a
+	// fake agent. It is the only seam of the orchestrator.
+	dial func(ctx context.Context, opts probelink.DialOptions) (probelink.ProbeClient, error)
+}
+
+// dialAgent opens a device's agent connection with po.dial, or with probelink.DialWithOptions when po.dial is nil. A failed dial returns a
+// nil client, never a typed nil inside a non-nil interface.
+func (po *ParallelOrchestrator) dialAgent(ctx context.Context, opts probelink.DialOptions) (probelink.ProbeClient, error) {
+	if po.dial != nil {
+		return po.dial(ctx, opts)
+	}
+	c, err := probelink.DialWithOptions(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // NewParallelOrchestrator creates an orchestrator for parallel test execution.
@@ -140,7 +157,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		dialTimeout = 30 * time.Second
 	}
 
-	client, err := probelink.DialWithOptions(ctx, probelink.DialOptions{
+	client, err := po.dialAgent(ctx, probelink.DialOptions{
 		Host:        "127.0.0.1",
 		Port:        dr.Port,
 		Token:       token,
