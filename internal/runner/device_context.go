@@ -39,6 +39,13 @@ func GrantAfterClear(allowClearData, cfgGrant, noGrant bool) bool {
 	return (allowClearData || cfgGrant) && !noGrant
 }
 
+// AnswersWithoutQuestion is the one rule that answers a clear without asking: the person's setting for simulators and emulators is on, and the
+// device is verified as one. disposable is called only when the setting is on, so the device is checked only when a question would be asked.
+// A physical device, a Wi-Fi connection and a device that cannot be classified are never answered this way.
+func AnswersWithoutQuestion(setting bool, disposable func() bool) bool {
+	return setting && disposable()
+}
+
 // ApplyClearGate sets how this context answers `clear app data` on a lane: --yes, and the lane's confirmation. It never prompts, and a
 // refused wipe is the hint. Every lane of a parallel or composite run gets its context from here, so the gate is set in one place.
 func (dc *DeviceContext) ApplyClearGate(g ClearGate) {
