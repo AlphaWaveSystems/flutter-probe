@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-// The dial sites of an Android run name a forward to another device through device.ForwardHint. The sites need a device to run, so they are checked from the
+// The dial sites of an Android run name a forward to another device through device.ConnectHint. The sites need a device to run, so they are checked from the
 // syntax tree: where each call sits, not only that it exists. A call in the iOS branch would run `adb forward --list` for an iOS failure (up to 5 s, and adb may
 // not be installed), and a call missing from the Android branch would leave the main case without the hint.
 
-// forwardHintCalls returns, for each call of device.ForwardHint in file, the chain of nodes that enclose it (outermost first).
+// forwardHintCalls returns, for each call of device.ConnectHint in file, the chain of nodes that enclose it (outermost first).
 func forwardHintCalls(t *testing.T, file string) (*token.FileSet, [][]ast.Node) {
 	t.Helper()
 	fset := token.NewFileSet()
@@ -31,7 +31,7 @@ func forwardHintCalls(t *testing.T, file string) (*token.FileSet, [][]ast.Node) 
 		stack = append(stack, n)
 		if call, ok := n.(*ast.CallExpr); ok {
 			if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
-				if id, ok := sel.X.(*ast.Ident); ok && id.Name == "device" && sel.Sel.Name == "ForwardHint" {
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == "device" && sel.Sel.Name == "ConnectHint" {
 					calls = append(calls, append([]ast.Node(nil), stack...))
 				}
 			}
@@ -51,7 +51,7 @@ func exprText(e ast.Expr) string { return types.ExprString(e) }
 func TestSingleDeviceForwardHintIsOnTheAndroidDialFailure(t *testing.T) {
 	_, calls := forwardHintCalls(t, "test.go")
 	if len(calls) != 1 {
-		t.Fatalf("test.go has %d calls of device.ForwardHint, want 1", len(calls))
+		t.Fatalf("test.go has %d calls of device.ConnectHint, want 1", len(calls))
 	}
 	chain := calls[0]
 	var inElseOfIOS, inIOSBody, inFailedDial bool
@@ -75,13 +75,13 @@ func TestSingleDeviceForwardHintIsOnTheAndroidDialFailure(t *testing.T) {
 		}
 	}
 	if inIOSBody {
-		t.Error("device.ForwardHint is in the iOS branch of the single-device run: an iOS failure would run adb")
+		t.Error("device.ConnectHint is in the iOS branch of the single-device run: an iOS failure would run adb")
 	}
 	if !inElseOfIOS {
-		t.Error("device.ForwardHint is not in the Android (else) branch of the single-device run")
+		t.Error("device.ConnectHint is not in the Android (else) branch of the single-device run")
 	}
 	if !inFailedDial {
-		t.Error("device.ForwardHint is not in the `if err != nil` that sets connectFailed")
+		t.Error("device.ConnectHint is not in the `if err != nil` that sets connectFailed")
 	}
 }
 
@@ -101,7 +101,7 @@ func nodeText(n ast.Node) string {
 func TestCompositeForwardHintIsInTheAndroidCase(t *testing.T) {
 	_, calls := forwardHintCalls(t, "composite.go")
 	if len(calls) != 1 {
-		t.Fatalf("composite.go has %d calls of device.ForwardHint, want 1", len(calls))
+		t.Fatalf("composite.go has %d calls of device.ConnectHint, want 1", len(calls))
 	}
 	var inDefault, inIOS bool
 	for i, n := range calls[0] {
@@ -120,10 +120,10 @@ func TestCompositeForwardHintIsInTheAndroidCase(t *testing.T) {
 		}
 	}
 	if inIOS {
-		t.Error("device.ForwardHint is in the iOS case of the composite dial")
+		t.Error("device.ConnectHint is in the iOS case of the composite dial")
 	}
 	if !inDefault {
-		t.Error("device.ForwardHint is not in the default (Android) case of `switch platform`")
+		t.Error("device.ConnectHint is not in the default (Android) case of `switch platform`")
 	}
 }
 

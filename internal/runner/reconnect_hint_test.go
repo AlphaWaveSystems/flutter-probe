@@ -421,9 +421,9 @@ func TestOrchestratorConnectFailureUsesTheSharedForwardHint(t *testing.T) {
 	}
 	// the hint is asked for in the block just above that message, behind the Android check and nowhere else
 	block := strings.Join(strings.Fields(src[max(0, i-400):i]), " ")
-	want := `hint := "" if dr.Platform == device.PlatformAndroid { hint = device.ForwardHint(ctx, po.manager.ADB(), dr.Port, dr.DeviceID) }`
+	want := `hint := "" if dr.Platform == device.PlatformAndroid { hint = device.ConnectHint(ctx, po.manager.ADB(), dr.DeviceID, dr.Port, po.cfg.Agent.AgentDevicePort(), appID) }`
 	if !strings.Contains(block, want) {
-		t.Errorf("the connect failure must ask for the hint only on Android, through device.ForwardHint; the block above the message is:\n%s", block)
+		t.Errorf("the connect failure must ask for the hint only on Android, through device.ConnectHint; the block above the message is:\n%s", block)
 	}
 	for _, f := range []string{"orchestrator.go", "reconnect_hint.go"} {
 		b, _ := os.ReadFile(f)

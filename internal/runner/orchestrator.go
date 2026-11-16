@@ -180,7 +180,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	if err != nil {
 		hint := ""
 		if dr.Platform == device.PlatformAndroid {
-			hint = device.ForwardHint(ctx, po.manager.ADB(), dr.Port, dr.DeviceID)
+			hint = device.ConnectHint(ctx, po.manager.ADB(), dr.DeviceID, dr.Port, po.cfg.Agent.AgentDevicePort(), appID)
 		}
 		return nil, &connectError{fmt.Errorf("[%s] connect: %w%s", dr.DeviceID, err, hint)}
 	}
