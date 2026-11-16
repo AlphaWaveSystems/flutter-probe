@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
+	"github.com/alphawavesystems/flutter-probe/internal/userprefs"
 	"io"
 	"os"
 	"os/exec"
@@ -1273,7 +1274,12 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
-		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear, confirmFunc())
+		prefs, prefsWarning := userprefs.Check()
+		if prefsWarning != "" {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", prefsWarning)
+		}
+		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear,
+			confirmWithPrefs(confirmFunc(), prefs.ClearDataWithoutAsking, func() bool { return dm.IsVerifiedDisposable(ctx, platform, deviceSerial) }, os.Stderr, cfg.Project.App, deviceSerial))
 		if devCtx.IsPhysical {
 			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
 		}
@@ -1652,6 +1658,26 @@ func confirmFunc() func(string) bool {
 		return nil
 	}
 	return promptUserConfirm
+}
+
+// confirmWithPrefs is the confirmation a run uses: the terminal prompt (or none), except that when the person has turned on "clear app data without
+// asking" (`probe prefs`, or Studio's settings; a setting on this computer, never in a project) and the device is verified to be a simulator or an
+// emulator (disposable is asked only now, when a step is about to ask), the question is answered yes and a line names what was wiped and where. A
+// physical device, and a device that cannot be told, still ask.
+func confirmWithPrefs(ask func(string) bool, allowOnDisposable bool, disposable func() bool, w io.Writer, appID, serial string) func(string) bool {
+	if !allowOnDisposable {
+		return ask
+	}
+	return func(message string) bool {
+		if !disposable() {
+			if ask == nil {
+				return false
+			}
+			return ask(message)
+		}
+		fmt.Fprintf(w, "  \033[36mℹ\033[0m  cleared data of %s on %s (no question: your setting for simulators and emulators, probe prefs)\n", device.CleanOneLine(appID, 80), device.CleanOneLine(serial, 80))
+		return true
+	}
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.
