@@ -253,7 +253,7 @@ func LintSource(cfg *config.Config, path string, content string, opts ...LintOpt
 	if err != nil {
 		return LintReport{}, err
 	}
-	return LintReport{Program: lintProgram(prog), References: refs}, nil
+	return LintReport{Program: append(lintProgram(prog), lintWaitLimit(cfg, prog)...), References: refs}, nil
 }
 
 // LintOption changes what LintSource and LintFile read. Without options they read exactly as the CLI does.

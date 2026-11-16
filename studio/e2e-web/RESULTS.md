@@ -2,6 +2,27 @@
 
 Run of the matrix in `MATRIX.md`. Newest first.
 
+## 2026-11-16 — mutants of the confirmation dialog, run by hand
+
+A manual run (not committed evidence: nothing in CI mutates the code), on `origin/main` after #672, with the headless suite without a device (`STUDIO_E2E_NO_DEVICE=1 scripts/studio-e2e-web.sh confirm-dialog`, the node suite `npm run test:confirm` for the first node row, and `go test -race` in `studio/` for the Go rows). Each row changes one line, runs the named spec, and puts the line back. The browser rows exist because the dialog's DOM behaviour is only seen by the browser specs.
+
+| Mutant (one line changed) | Spec that fails | Result |
+|---|---|---|
+| Disconnect leaves the question open | Go TestDisconnectDeniesAPendingQuestion... | killed |
+| a run keeps the run slot | Go TestARunReleasesTheRunSlot | killed |
+| no note for a Studio-side deny | Go TestDisconnectDenies... | killed |
+| focus on Clear data instead of Cancel | cd-01 | killed |
+| Enter presses Clear data | node keyAction + cd-03 | killed |
+| a key-made click answers yes | cd-03 | killed |
+| app id as html | cd-05 | killed |
+| an unknown kind is not refused | cd-05 | killed |
+| no key trap | cd-07 | killed |
+| no focus guard | cd-07 | killed |
+| a press on the dark area takes the focus | cd-07 | killed |
+| Clear data is never disabled | cd-08 | killed |
+| Clear data is never armed | cd-08 | killed |
+| the app label loses 'from probe.yaml' | cd-09 | killed |
+
 ## 2026-11-15 — window run on a named simulator, then the full suite
 
 - **Build under test:** `origin/main` at 07aeb43 (after #643, #645, #647), plus the two fixes below as they were made.

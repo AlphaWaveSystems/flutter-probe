@@ -245,9 +245,14 @@ func (r *Reporter) junitCases(res TestResult, path string) []timedCase {
 			if err != nil {
 				msg = err.Error()
 			}
-			if isInfraError(err) {
+			te := timeoutError(err)
+			switch {
+			case isInfraError(err):
 				c.Error = &junitFail{Type: "error", Message: msg, Text: msg}
-			} else {
+			case te != nil:
+				// A test that ran past its limit: the type says so, the message names the limit, and the text keeps the step and the cause.
+				c.Failure = &junitFail{Type: "test_timeout", Message: "test exceeded " + formatLimit(te.limit), Text: msg}
+			default:
 				c.Failure = &junitFail{Message: msg, Text: msg}
 			}
 		}

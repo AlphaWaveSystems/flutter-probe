@@ -1,0 +1,6 @@
+# Needs the list build: flutter build apk --dart-define=PROBE_FIXTURE_LIST=true (see README).
+test "a swipe across the slider moves its value"
+  restart the app
+  see "Value 50"
+  swipe right on #fixture_slider
+  see "Value" matching "Value (5[1-9]|[6-9][0-9]|100)"

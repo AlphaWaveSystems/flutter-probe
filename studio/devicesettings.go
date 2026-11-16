@@ -58,7 +58,7 @@ func (a *App) GetDeviceSettings() (DeviceSettingsInfo, error) {
 	if conn == nil {
 		return DeviceSettingsInfo{Reason: "Connect a simulator or emulator first."}, nil
 	}
-	devs, err := a.deviceMgr.List(a.ctx)
+	devs, err := a.mgr().List(a.ctx)
 	if err != nil {
 		return DeviceSettingsInfo{}, fmt.Errorf("listing devices: %w", err)
 	}

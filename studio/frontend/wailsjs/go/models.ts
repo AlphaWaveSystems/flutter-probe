@@ -105,6 +105,20 @@ export namespace main {
 	        this.plainKeyInFile = source["plainKeyInFile"];
 	    }
 	}
+	export class AttemptNote {
+	    attempt: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttemptNote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attempt = source["attempt"];
+	        this.error = source["error"];
+	    }
+	}
 	export class ChatLabelParts {
 	    prefix: string;
 	    model: string;
@@ -162,6 +176,7 @@ export namespace main {
 	    deviceId: string;
 	    deviceName: string;
 	    platform: string;
+	    toolsNote?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionStatus(source);
@@ -173,6 +188,7 @@ export namespace main {
 	        this.deviceId = source["deviceId"];
 	        this.deviceName = source["deviceName"];
 	        this.platform = source["platform"];
+	        this.toolsNote = source["toolsNote"];
 	    }
 	}
 	export class DeviceInfo {
@@ -712,6 +728,12 @@ export namespace main {
 	    durationMs: number;
 	    error?: string;
 	    perf?: perf.Metrics[];
+	    crash?: string;
+	    timedOut?: boolean;
+	    timeLimitSeconds?: number;
+	    crashHint?: boolean;
+	    attempts?: number;
+	    earlierFailures?: AttemptNote[];
 	
 	    static createFrom(source: any = {}) {
 	        return new RunResult(source);
@@ -726,6 +748,12 @@ export namespace main {
 	        this.durationMs = source["durationMs"];
 	        this.error = source["error"];
 	        this.perf = this.convertValues(source["perf"], perf.Metrics);
+	        this.crash = source["crash"];
+	        this.timedOut = source["timedOut"];
+	        this.timeLimitSeconds = source["timeLimitSeconds"];
+	        this.crashHint = source["crashHint"];
+	        this.attempts = source["attempts"];
+	        this.earlierFailures = this.convertValues(source["earlierFailures"], AttemptNote);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1106,6 +1134,20 @@ export namespace main {
 	        this.classes = source["classes"];
 	        this.local = source["local"];
 	        this.refused = source["refused"];
+	    }
+	}
+	export class WorkspaceNote {
+	    kind: string;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceNote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.text = source["text"];
 	    }
 	}
 	export class WorkspaceSettings {

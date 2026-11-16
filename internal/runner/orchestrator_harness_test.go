@@ -54,6 +54,56 @@ func newHarnessADB(t *testing.T) string {
 	return bin
 }
 
+// newHarnessADBGated writes a fake adb that fails every call whose arguments contain failOn for as long as the gate file exists. A test
+// removes the gate to let the call succeed on a later attempt, or keeps it so the call fails every time. Every other call answers as
+// newHarnessADB does.
+func newHarnessADBGated(t *testing.T, failOn, gate string) string {
+	t.Helper()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "adb")
+	log := filepath.Join(dir, "adb.log")
+	pattern := strings.ReplaceAll(failOn, " ", "\\ ") // a space in a case pattern is escaped, so the pattern matches it literally
+	script := "#!/bin/sh\n" +
+		"echo \"$@\" >> '" + log + "'\n" +
+		"if [ -f '" + gate + "' ]; then\n" +
+		"  case \"$*\" in\n" +
+		"    *" + pattern + "*) exit 1 ;;\n" +
+		"  esac\n" +
+		"fi\n" +
+		"case \"$*\" in\n" +
+		"  *run-as*cat*cache/probe/token*) printf '" + harnessToken + "' ;;\n" +
+		"esac\n" +
+		"exit 0\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// writeHarnessGate creates the gate file newHarnessADBGated reads, and returns its path.
+func writeHarnessGate(t *testing.T) string {
+	t.Helper()
+	gate := filepath.Join(t.TempDir(), "gate")
+	if err := os.WriteFile(gate, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return gate
+}
+
+// releaseGate removes the gate after d, so a call that failed on the first attempt succeeds on the retry.
+func releaseGate(gate string, d time.Duration) {
+	time.AfterFunc(d, func() { os.Remove(gate) })
+}
+
+// handshakeRefused is a client whose handshake the agent refuses, as an agent of another version refuses one.
+type handshakeRefused struct {
+	probelink.ProbeClient
+}
+
+func (c *handshakeRefused) Handshake(ctx context.Context, clientVersion string) (*probelink.HandshakeResult, error) {
+	return nil, errors.New("handshake refused")
+}
+
 // writeHarnessFile writes a .probe file into dir and returns its path.
 func writeHarnessFile(t *testing.T, dir, name, src string) string {
 	t.Helper()
@@ -85,9 +135,15 @@ type harnessRun struct {
 // starts with "emulator-", so it is read as an emulator without a device, and every call goes through the fake adb.
 func newHarnessRun(t *testing.T, cfg *config.Config, lanes [][]string) *harnessRun {
 	t.Helper()
+	return newHarnessRunADB(t, cfg, lanes, newHarnessADB(t))
+}
+
+// newHarnessRunADB is newHarnessRun with the fake adb given.
+func newHarnessRunADB(t *testing.T, cfg *config.Config, lanes [][]string, adb string) *harnessRun {
+	t.Helper()
 	cfg.Project.App = "com.example.app"
 	cfg.CLIVersion = harnessCLIVersion
-	manager := device.NewManagerWithPaths(device.ToolPaths{ADB: newHarnessADB(t)})
+	manager := device.NewManagerWithPaths(device.ToolPaths{ADB: adb})
 
 	const basePort = 47100
 	agents := map[int]*harnessAgent{}
@@ -337,8 +393,197 @@ func TestHarnessLaneRetryDoesNotRerunCompletedTests(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "bad.probe") {
 		t.Errorf("the lane's parse error must be reported, got %v", err)
 	}
-	if len(results) != 1 || results[0].TestName != "fine" || !results[0].Passed {
+	if len(results) != 2 || results[0].TestName != "fine" || !results[0].Passed || results[1].File != bad || results[1].Passed {
 		t.Errorf("the completed test's result must be kept, got %+v", results)
+	}
+}
+
+// The connect steps are each retried: a port forward, a token read or a handshake that fails on the first attempt succeeds on the retry, and
+// the test runs once. Each is a step a retry must keep, so each has its own test.
+func TestHarnessForwardFailureIsRetried(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	gate := writeHarnessGate(t)
+	h := newHarnessRunADB(t, harnessConfig(), [][]string{{fine}}, newHarnessADBGated(t, "forward", gate))
+	releaseGate(gate, time.Second)
+
+	results, err := h.po.Run(context.Background())
+
+	if err != nil {
+		t.Fatalf("a forward that succeeds on the retry is not an error, got %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Errorf("the test must run after the retry forwards, got %+v", results)
+	}
+	if n := countOf(h.taps(0), "Fine"); n != 1 {
+		t.Errorf("the test ran %d times, want 1", n)
+	}
+}
+
+func TestHarnessTokenFailureIsRetried(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	gate := writeHarnessGate(t)
+	h := newHarnessRunADB(t, harnessConfig(), [][]string{{fine}}, newHarnessADBGated(t, "run-as", gate))
+	releaseGate(gate, time.Second)
+
+	results, err := h.po.Run(context.Background())
+
+	if err != nil {
+		t.Fatalf("a token read that succeeds on the retry is not an error, got %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Errorf("the test must run after the retry reads the token, got %+v", results)
+	}
+	if n := countOf(h.taps(0), "Fine"); n != 1 {
+		t.Errorf("the test ran %d times, want 1", n)
+	}
+}
+
+func TestHarnessHandshakeFailureIsRetried(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{fine}})
+	dial := h.po.dial
+	refused := false
+	h.po.dial = func(ctx context.Context, opts probelink.DialOptions) (probelink.ProbeClient, error) {
+		c, err := dial(ctx, opts)
+		if err != nil || refused {
+			return c, err
+		}
+		refused = true
+		return &handshakeRefused{ProbeClient: c}, nil
+	}
+
+	results, err := h.po.Run(context.Background())
+
+	if err != nil {
+		t.Fatalf("a handshake that succeeds on the retry is not an error, got %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed {
+		t.Errorf("the test must run after the retry handshakes, got %+v", results)
+	}
+	if n := countOf(h.taps(0), "Fine"); n != 1 {
+		t.Errorf("the test ran %d times, want 1", n)
+	}
+}
+
+// A lane that never connects is an error, and each of its files is reported as not run: a report shows what the lane did not reach.
+func TestHarnessNeverConnectingLaneReportsItsFilesNotRun(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	other := writeHarnessFile(t, dir, "other.probe", "test \"other\"\n  tap \"Other\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{fine, other}})
+	h.po.dial = func(ctx context.Context, opts probelink.DialOptions) (probelink.ProbeClient, error) {
+		return nil, errors.New("connection refused")
+	}
+
+	results, err := h.po.Run(context.Background())
+
+	if err == nil {
+		t.Fatal("a lane that never connects is an error")
+	}
+	if len(results) != 2 {
+		t.Fatalf("both files of the lane must be reported, got %+v", results)
+	}
+	for _, r := range results {
+		if r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "not run") {
+			t.Errorf("%s must be a failed result that says it did not run, got %+v", r.File, r)
+		}
+	}
+	if n := countOf(h.taps(0), "Fine") + countOf(h.taps(0), "Other"); n != 0 {
+		t.Errorf("no test of a lane that never connected may run, ran %d", n)
+	}
+}
+
+// A file that does not parse stops its lane: the completed file keeps its result, the bad file is a failed result, and the file after it
+// is reported as not run and does not run.
+func TestHarnessParseErrorMidLaneKeepsCompletedAndReportsTheRest(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	bad := writeHarnessFile(t, dir, "bad.probe", "test \"bad\"\n  tap <name>\n")
+	never := writeHarnessFile(t, dir, "never.probe", "test \"never\"\n  tap \"Never\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{fine, bad, never}})
+
+	results, err := h.po.Run(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "bad.probe") {
+		t.Errorf("the lane's parse error must be reported, got %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("want the completed test, the failed file and the file not run, got %+v", results)
+	}
+	if r := results[0]; r.File != fine || !r.Passed {
+		t.Errorf("the completed test must be kept and pass, got %+v", r)
+	}
+	if r := results[1]; r.File != bad || r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "parse") {
+		t.Errorf("the file that does not parse must be a failed result that says so, got %+v", r)
+	}
+	if r := results[2]; r.File != never || r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "not run") {
+		t.Errorf("the file after the error must be a failed not-run result, got %+v", r)
+	}
+	if n := countOf(h.taps(0), "Never"); n != 0 {
+		t.Errorf("the file after the error must not run, ran %d times", n)
+	}
+}
+
+// A CSV that cannot be read stops its file at the test that names it: the tests the file completed before it are kept, and the rest of the
+// lane is reported as not run.
+func TestHarnessCSVErrorKeepsTheCompletedTestsOfItsFile(t *testing.T) {
+	dir := t.TempDir()
+	csvFile := writeHarnessFile(t, dir, "csv.probe", "test \"first\"\n  tap \"Fine\"\n\ntest \"second\"\n  tap \"Fine\"\n\nwith examples from \"missing.csv\"\n")
+	after := writeHarnessFile(t, dir, "after.probe", "test \"after\"\n  tap \"Never\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{csvFile, after}})
+
+	results, err := h.po.Run(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "csv.probe") {
+		t.Errorf("the CSV error must be reported, got %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("want the completed test, the failed file and the file not run, got %+v", results)
+	}
+	if r := results[0]; r.File != csvFile || !r.Passed || r.TestName != "first" {
+		t.Errorf("the test completed before the CSV error must be kept, got %+v", r)
+	}
+	if r := results[1]; r.File != csvFile || r.Passed || r.Error == nil {
+		t.Errorf("the file must be a failed result, got %+v", r)
+	}
+	if r := results[2]; r.File != after || r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "not run") {
+		t.Errorf("the file after the error must be a failed not-run result, got %+v", r)
+	}
+	if n := countOf(h.taps(0), "Fine"); n != 1 {
+		t.Errorf("only the first test runs before the CSV error, got %d Fine taps", n)
+	}
+	if n := countOf(h.taps(0), "Never"); n != 0 {
+		t.Errorf("the file after the error must not run, ran %d times", n)
+	}
+}
+
+// A --grant that names no permission stops the lane before any file runs: each file is reported as not run, with the grant that failed. (A
+// grant the device refuses on Android is a warning, not an error: some permissions do not exist on older API levels.)
+func TestHarnessGrantErrorReportsTheLaneNotRun(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	other := writeHarnessFile(t, dir, "other.probe", "test \"other\"\n  tap \"Other\"\n")
+	h := newHarnessRun(t, harnessConfig(), [][]string{{fine, other}})
+	h.po.opts.Grant = []string{"no-such-permission"}
+
+	results, err := h.po.Run(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "--grant no-such-permission") {
+		t.Errorf("the grant error must be reported, got %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("both files of the lane must be reported, got %+v", results)
+	}
+	for _, r := range results {
+		if r.Passed || r.Error == nil || !strings.Contains(r.Error.Error(), "--grant no-such-permission") {
+			t.Errorf("%s must be a failed result that names the grant, got %+v", r.File, r)
+		}
+	}
+	if n := countOf(h.taps(0), "Fine") + countOf(h.taps(0), "Other"); n != 0 {
+		t.Errorf("no test may run after a grant failed, ran %d", n)
 	}
 }
 

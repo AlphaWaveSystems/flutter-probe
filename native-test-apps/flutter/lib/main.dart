@@ -146,7 +146,8 @@ final _abort = DynamicLibrary.process().lookupFunction<Void Function(), void Fun
 void _abortProcess() => _abort();
 
 /// The list screen for the scroll checks: a full-height ListView with no other scrollable around it, and its offset in the app
-/// bar. Keys: fixture_list (the list) and fixture_row_N (its rows).
+/// bar, and a slider above it. Keys: fixture_list (the list), fixture_row_N (its rows), fixture_slider (the slider) and
+/// fixture_slider_value (its value, shown as "Value N"). The slider is not a scrollable, so the list still stands alone.
 class FixtureListScreen extends StatefulWidget {
   const FixtureListScreen({super.key});
 
@@ -157,6 +158,7 @@ class FixtureListScreen extends StatefulWidget {
 class _FixtureListScreenState extends State<FixtureListScreen> {
   final _controller = ScrollController();
   double _offset = 0;
+  double _slider = 50;
 
   @override
   void initState() {
@@ -174,14 +176,37 @@ class _FixtureListScreenState extends State<FixtureListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Offset ${_offset.toStringAsFixed(1)}')),
-      body: ListView.builder(
-        key: const ValueKey('fixture_list'),
-        controller: _controller,
-        itemCount: 200,
-        itemBuilder: (context, i) => SizedBox(
-          height: 56,
-          child: ListTile(key: ValueKey('fixture_row_$i'), title: Text('Row $i')),
-        ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    key: const ValueKey('fixture_slider'),
+                    min: 0,
+                    max: 100,
+                    value: _slider,
+                    onChanged: (v) => setState(() => _slider = v),
+                  ),
+                ),
+                Text('Value ${_slider.round()}', key: const ValueKey('fixture_slider_value')),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              key: const ValueKey('fixture_list'),
+              controller: _controller,
+              itemCount: 200,
+              itemBuilder: (context, i) => SizedBox(
+                height: 56,
+                child: ListTile(key: ValueKey('fixture_row_$i'), title: Text('Row $i')),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

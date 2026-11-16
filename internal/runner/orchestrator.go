@@ -108,6 +108,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 				}
 			}
 
+			addNotRun(dr)
 			dr.Duration = time.Since(start)
 			if dr.Error != nil {
 				fmt.Printf("  \033[31m✗\033[0m  [%s] all attempts failed: %v\n",
@@ -229,6 +230,25 @@ func (po *ParallelOrchestrator) mergeResults() []TestResult {
 		all = append(all, dr.Results...)
 	}
 	return all
+}
+
+// addNotRun gives a failed result to each file of a lane that stopped with an error before the file ran, so a lane that never connected
+// shows its files in the report. A file the runner reached already has its results and is not added again.
+func addNotRun(dr *DeviceRun) {
+	if dr.Error == nil {
+		return
+	}
+	named := map[string]bool{}
+	for _, r := range dr.Results {
+		named[r.File] = true
+	}
+	var missing []string
+	for _, f := range dr.Files {
+		if !named[f] {
+			missing = append(missing, f)
+		}
+	}
+	dr.Results = append(dr.Results, notRunAll(missing, dr.Error)...)
 }
 
 // summaryError returns an error if any device failed to connect.

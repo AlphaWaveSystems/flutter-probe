@@ -27,13 +27,13 @@ type slowClient struct {
 	probeLive []bool // a tap on "Probe" records whether its context was still live when it was called
 	closed    bool   // Close was called on this client
 
-	slowRemain    []time.Duration // a tap on "Slow" records how long its context had left (0 when it had no deadline)
-	probeRemain   []time.Duration // a tap on "Probe" records the same
-	tokenLive     []bool          // SetNextToken records whether its context was still live
-	summaryCalls  int             // VisibleSummary calls: the step-timeout annotation asks the agent for the screen
-	perfStarts    int
-	perfStops     int
-	shotDone      chan struct{} // closed when a screenshot returns, if set
+	slowRemain   []time.Duration // a tap on "Slow" records how long its context had left (0 when it had no deadline)
+	probeRemain  []time.Duration // a tap on "Probe" records the same
+	tokenLive    []bool          // SetNextToken records whether its context was still live
+	summaryCalls int             // VisibleSummary calls: the step-timeout annotation asks the agent for the screen
+	perfStarts   int
+	perfStops    int
+	shotDone     chan struct{} // closed when a screenshot returns, if set
 }
 
 // remainingOf is how long until ctx's deadline, or 0 when it has none.
@@ -71,6 +71,8 @@ func (c *slowClient) Tap(ctx context.Context, sel probelink.SelectorParam) error
 		}
 	case "Drop":
 		return errors.New("probelink: write: broken pipe")
+	case "Refuse":
+		return errors.New("the agent refused the tap")
 	case "Hang":
 		<-c.release
 		return nil

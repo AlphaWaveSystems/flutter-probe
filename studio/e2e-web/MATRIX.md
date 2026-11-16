@@ -18,6 +18,7 @@ Status column (filled by a run; see `RESULTS.md` for the dated record): ✅ pass
 | S-03 | Workspace still loading | nothing said, strip hidden, then the pane line exactly once | B | fr-03 |
 | S-04 | Workspace with files | no pane hint; strip asks for a file; goes once a file is open; Save's reason goes when edited | B | fr-04 |
 | S-05 | Guidance is text only | no child element in strip or reasons | B | fr-05 |
+| S-10 | Workspace note about probe.yaml | no file; no project.app; unreadable (no path, one line); good file says nothing; refresh re-reads; text only | B | workspace-note wn-01..06, Go workspace_note_test |
 | S-06 | Empty workspace folder | "No .probe files here" | B | fr-03 |
 | S-07 | Run while a run is in flight | Run disabled with "A run is in progress."; typing keeps it; goes at the end | D | rd-01 |
 | S-08 | Fresh start of the desktop app | window opens, toolbar visible, no error toast, editor placeholder is the scratch note | W | W-01 |
@@ -66,6 +67,10 @@ Status column (filled by a run; see `RESULTS.md` for the dated record): ✅ pass
 |---|---|---|---|---|
 | E-01 | Syntax and lint | ProbeScript highlighting; lint marks an unknown step | B | ui, probescript tests |
 | E-06 | Problems tab (lint) | rows + markers with lines; click/Enter goes to the line without typing; lints unsaved text; 400 ms debounce; stale answer dropped; lint failure is one line; unparsable text "Not checked"; findings are text | B | lint-problems lp-01..08 |
+| E-07 | Confirm before `clear app data` | dialog names app + device; Cancel focused; Escape/Cancel deny; Enter never presses Clear data; second step asks again; timeout / no window / cancelled run deny; unknown kind refused; ids single-use and bound to the run; automation cannot answer | B/D | confirm-dialog cd-01..06, confirm-device cd-10/11, Go confirm_test |
+| R-11 | A run that takes long | elapsed time after 3 s; still-waiting line after 10 s (not before, stable text, gone with the step/run); no signal next to Cancel; text only; live regions | B/D | still-waiting sw-01..06, still-waiting-device sw-10 |
+| R-10 | Retried test notes | flaky pass with earlier failures in order; failure on every attempt; none for a single run; capped at five; text only; not sent to a provider | B/D | result-notes rn-07..09, retry-device rt-01, Go run_result_test |
+| R-09 | Result notes (crash line, timeout, hint) | crash line under the error; timeout + limit; hint only with a lost connection on Android and evidence off; none for passed/skipped; markup is text; not sent to a provider | B | result-notes rn-01..06, Go run_result_test |
 | E-02 | Record | disabled without device (reason shown); records taps into the editor | B/W | ui 24, W-13 |
 | E-03 | Insert tap | + tap writes a selector; refuses control characters (U+2028/2029 and hidden set tracked, see PR queue) | B | device-stream tests |
 | E-04 | Inspector / widget tree | loads after connect; refresh | D/W | device.spec, W-14 |

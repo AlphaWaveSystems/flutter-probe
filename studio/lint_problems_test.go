@@ -522,3 +522,77 @@ func TestWithoutPathsKeepsURLsAndRelativeNames(t *testing.T) {
 		}
 	}
 }
+
+// A ${NAME} that is not set in Studio's environment is a warning on its step's line: names only, and only existence is asked.
+func TestLintProblemsWarnsAboutUnsetEnvironmentVariables(t *testing.T) {
+	asked := map[string]int{}
+	old := envIsSet
+	envIsSet = func(name string) bool { asked[name]++; return name == "SET_ONE" }
+	defer func() { envIsSet = old }()
+	a, file := lintWorkspace(t)
+	text := "test \"login\"\n  open the app\n  type \"${USER_EMAIL}\" into the \"email\" field\n  type \"${SET_ONE}\" into the \"x\" field\n  # tap \"${IN_A_COMMENT}\"\n"
+	res, err := a.LintProblems(file, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env []LintProblem
+	for _, p := range res.Problems {
+		if p.Source == "environment" {
+			env = append(env, p)
+		}
+	}
+	if len(env) != 1 || env[0].Line != 3 || !env[0].Warning {
+		t.Fatalf("environment problems = %+v, want one warning on line 3", env)
+	}
+	m := env[0].Message
+	if !strings.Contains(m, "${USER_EMAIL} is not set in Studio's environment") || !strings.Contains(m, "start Studio from a terminal where USER_EMAIL is set") {
+		t.Errorf("message = %q", m)
+	}
+	if asked["IN_A_COMMENT"] != 0 {
+		t.Error("a variable in a comment was looked up")
+	}
+}
+
+// Only a name is ever looked up and shown: the real environment holds a value, and it is in no finding.
+func TestLintProblemsNeverShowsAnEnvironmentValue(t *testing.T) {
+	const secret = "VALUE-must-not-appear-7c1e"
+	t.Setenv("STUDIO_TEST_SET_VAR", secret)
+	a, file := lintWorkspace(t)
+	text := "test \"t\"\n  type \"${STUDIO_TEST_SET_VAR}\" into the \"a\" field\n  type \"${STUDIO_TEST_UNSET_VAR_93}\" into the \"b\" field\n"
+	res, err := a.LintProblems(file, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env int
+	for _, p := range res.Problems {
+		if strings.Contains(p.Message, secret) {
+			t.Errorf("a finding shows an environment value: %q", p.Message)
+		}
+		if p.Source == "environment" {
+			env++
+			if !strings.Contains(p.Message, "STUDIO_TEST_UNSET_VAR_93") || strings.Contains(p.Message, "STUDIO_TEST_SET_VAR}") {
+				t.Errorf("message = %q", p.Message)
+			}
+		}
+	}
+	if env != 1 {
+		t.Errorf("%d environment warnings, want one (the set variable has none)", env)
+	}
+}
+
+func TestUnsetEnvProblemsAreCappedAndSilentOnATextThatDoesNotParse(t *testing.T) {
+	old := envIsSet
+	envIsSet = func(string) bool { return false }
+	defer func() { envIsSet = old }()
+	var b strings.Builder
+	b.WriteString("test \"t\"\n")
+	for i := 0; i < 40; i++ {
+		b.WriteString("  tap \"${V" + string(rune('A'+i%26)) + string(rune('a'+i/26)) + "}\"\n")
+	}
+	if got := unsetEnvProblems(b.String()); len(got) != maxEnvProblems {
+		t.Errorf("%d warnings, want the cap of %d", len(got), maxEnvProblems)
+	}
+	if got := unsetEnvProblems("test \"t\"\n  tap \"unterminated ${X}\n"); got != nil {
+		t.Errorf("a text that does not parse gave %+v", got)
+	}
+}

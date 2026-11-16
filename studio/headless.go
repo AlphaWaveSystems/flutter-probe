@@ -77,8 +77,18 @@ type headlessServer struct {
 	files http.Handler
 }
 
-// methodsNotOverHTTP need the native window.
-var methodsNotOverHTTP = map[string]bool{"PickWorkspace": true}
+// methodsNotOverHTTP need the native window. AnswerConfirm answers the question before a wipe, which only a person in the desktop window may
+// do: the bridge refuses it, unless a test server says in its environment that its page is the window (the E2E Playwright config,
+// studio/e2e-web/playwright.config.ts, sets PROBE_STUDIO_E2E_ALLOW_CONFIRM_OVER_HTTP=1 for the server it starts).
+var methodsNotOverHTTP = map[string]bool{"PickWorkspace": true, "AnswerConfirm": true}
+
+// methodRefusedOverHTTP says whether the bridge refuses a method by name.
+func methodRefusedOverHTTP(name string) bool {
+	if name == "AnswerConfirm" && os.Getenv("PROBE_STUDIO_E2E_ALLOW_CONFIRM_OVER_HTTP") == "1" {
+		return false
+	}
+	return methodsNotOverHTTP[name]
+}
 
 func startHeadless(a *App, assets fs.FS) (*headlessServer, error) {
 	raw := make([]byte, 24)
@@ -185,7 +195,7 @@ func (s *headlessServer) handleCall(w http.ResponseWriter, r *http.Request) {
 // callAppMethod calls an exported App method by name with JSON arguments, the way Wails does for the
 // window: the results are the value (if any) and an error (if the method returns one).
 func callAppMethod(app *App, name string, args []json.RawMessage) (any, error) {
-	if name == "" || methodsNotOverHTTP[name] {
+	if name == "" || methodRefusedOverHTTP(name) {
 		return nil, fmt.Errorf("%s is not available without a window", name)
 	}
 	m := reflect.ValueOf(app).MethodByName(name)

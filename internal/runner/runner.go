@@ -96,7 +96,7 @@ type Runner struct {
 	curTest         string
 	curAttempt      int
 	restartHook     func(context.Context) error // tests only: replaces the restart step after a timed-out attempt
-	newVideo        func() videoRecorder       // tests only: replaces the device recorder; nil builds one from the device
+	newVideo        func() videoRecorder        // tests only: replaces the device recorder; nil builds one from the device
 }
 
 // RunOptions configures a test run.
@@ -173,6 +173,7 @@ func (r *Runner) SetCompositeRunner(cr *CompositeRunner) {
 // test runs. Without a guard it is newExecutor.
 func (r *Runner) newAttemptExecutor(guard *cleanupGuard) *Executor {
 	exec := r.newExecutor()
+	exec.testLimit = r.cfg.Defaults.TestTimeout
 	if guard != nil {
 		inner := exec.onReconnect
 		exec.onReconnect = func(newClient probelink.ProbeClient) {
@@ -215,7 +216,7 @@ func (r *Runner) newExecutor() *Executor {
 func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 	// Load recipes
 	if err := r.loadRecipes(ctx); err != nil {
-		return nil, fmt.Errorf("runner: loading recipes: %w", err)
+		return notRunAll(r.opts.Files, err), fmt.Errorf("runner: loading recipes: %w", err)
 	}
 	r.baseRecipes = make(map[string]parser.RecipeDef, len(r.recipes))
 	for k, v := range r.recipes {
@@ -224,7 +225,7 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 
 	stopGrants, err := r.applyGrants(ctx)
 	if err != nil {
-		return nil, err
+		return notRunAll(r.opts.Files, err), err
 	}
 	defer func() {
 		stopGrants()
@@ -234,14 +235,33 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 	}()
 
 	var results []TestResult
-	for _, file := range r.opts.Files {
+	for i, file := range r.opts.Files {
 		fileResults, err := r.runFile(ctx, file)
+		// The tests the file completed before the error ran, so they are kept with the file's own failure. The files after it
+		// did not run: they are reported as failed, so a run that stopped early cannot look like a run of every file.
+		results = append(results, fileResults...)
 		if err != nil {
+			results = append(results, fileFailure(file, err))
+			results = append(results, notRunAll(r.opts.Files[i+1:], err)...)
 			return results, fmt.Errorf("runner: %s: %w", file, err)
 		}
-		results = append(results, fileResults...)
 	}
 	return results, nil
+}
+
+// fileFailure is the failed result of the file an error came from, when the error is not one test's: a file that cannot be read, parsed
+// or set up, or a test that cannot load its examples. Every report shows it.
+func fileFailure(file string, err error) TestResult {
+	return TestResult{TestName: filepath.Base(file), File: file, Passed: false, Row: -1, Error: err}
+}
+
+// notRunAll gives every file in files a failed result: the run stopped on err before it reached them. The error names what stopped it.
+func notRunAll(files []string, err error) []TestResult {
+	var out []TestResult
+	for _, f := range files {
+		out = append(out, TestResult{TestName: filepath.Base(f), File: f, Passed: false, Row: -1, Error: fmt.Errorf("not run: %w", err)})
+	}
+	return out
 }
 
 // loadFileRecipes makes the recipes that path can call available to its tests: those of the recipes folder, those of
@@ -607,22 +627,22 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	r.writeCrashFilesFor(crash, file, name, r.curAttempt)
 
 	return TestResult{
-		Crash:      crash,
-		Perf:       nameUnnamed(exec.PerfResults()),
-		TestName:   name,
-		File:       file,
-		Passed:     runErr == nil,
-		Duration:   time.Since(start),
-		Error:      runErr,
+		Crash:          crash,
+		Perf:           nameUnnamed(exec.PerfResults()),
+		TestName:       name,
+		File:           file,
+		Passed:         runErr == nil,
+		Duration:       time.Since(start),
+		Error:          runErr,
 		FailedSelector: exec.FailedSelector(runErr),
-		Row:        row,
-		Tags:       t.Tags,
-		Artifacts:  artifacts,
+		Row:            row,
+		Tags:           t.Tags,
+		Artifacts:      artifacts,
 		TimedOut:       te != nil,
 		TimeLimit:      limit,
-		DeviceID:   r.opts.DeviceID,
-		DeviceName: r.opts.DeviceName,
-		StartedAt:  start,
+		DeviceID:       r.opts.DeviceID,
+		DeviceName:     r.opts.DeviceName,
+		StartedAt:      start,
 	}
 }
 

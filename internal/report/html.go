@@ -53,6 +53,8 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		Shots    []string `json:"shots,omitempty"`
 		Tags     []string `json:"tags,omitempty"`
 		Perf     []perf.Metrics `json:"perf,omitempty"`
+		TimedOut  bool           `json:"timed_out,omitempty"`          // the test ran past its limit
+		TimeLimit float64        `json:"time_limit_seconds,omitempty"` // the limit it ran under, only when set
 	}
 	var rows []resultJSON
 	for _, r := range results {
@@ -76,6 +78,10 @@ func (h *HTMLReport) Write(results []runner.TestResult, artifacts map[string][]s
 		}
 		if r.Error != nil {
 			rj.Error = r.Error.Error()
+		}
+		rj.TimedOut = r.TimedOut
+		if r.TimeLimit > 0 {
+			rj.TimeLimit = r.TimeLimit.Seconds()
 		}
 		// Convert absolute artifact paths to relative paths from the report directory
 		reportDir, _ := filepath.Abs(filepath.Dir(h.OutputPath))
@@ -241,7 +247,7 @@ header{background:linear-gradient(135deg,#1a1a2e,#0f0f1e);padding:32px 40px;bord
 .test-detail.open{display:block}
 .error-msg{background:#1a0808;border:1px solid #3a1818;border-radius:6px;padding:12px;font-family:monospace;font-size:13px;color:#f88;margin-top:10px;white-space:pre-wrap}
 .shots{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.tags{margin-left:8px}.tag{display:inline-block;font-size:11px;padding:1px 8px;margin-right:4px;border-radius:10px;background:#2a2f3a;color:#9db4d6}
+.tags{margin-left:8px}.tag{display:inline-block;font-size:11px;padding:1px 8px;margin-right:4px;border-radius:10px;background:#2a2f3a;color:#9db4d6}.tag.timeout{background:#3d2a10;color:#f0b35a}
 #run-props{margin:0 0 12px;font-size:12px;color:#888}.prop{display:inline-block;margin-right:14px}
 .shots img{max-height:160px;border-radius:6px;border:1px solid #333}
 .shots video{max-height:160px;border-radius:6px;border:1px solid #333}
@@ -327,6 +333,7 @@ function render(results) {
       '<div class="test-header" onclick="toggle('+i+')">' +
         '<span class="status-dot '+dot+'"></span>' +
         '<span class="test-name">'+escHtml(r.name)+'</span>' +
+        (r.timed_out ? '<span class="tag timeout">timed out after '+r.time_limit_seconds+'s</span>' : '') +
         '<span class="tags" id="tags-'+i+'"></span>' +
         '<span class="test-file">'+escHtml(r.file)+'</span>' +
         '<span class="test-dur">'+r.dur_ms+'ms</span>' +

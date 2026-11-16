@@ -60,6 +60,7 @@ type Executor struct {
 	resolvedSelectors    []resolvedSelector // selectors the running step resolved, cleared when the step ends
 	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
 	startedAt            time.Time          // when this executor (one test attempt) was made
+	testLimit            time.Duration      // the attempt's per-test limit (defaults.test_timeout); zero is off. A literal wait at or above it fails at once
 	crashReport          *CrashReport       // set by collectCrashOnce when the app died during the test
 	crashTries           int                // collections tried so far
 	appStopped           bool               // the test stopped the app on purpose (a kill step) and has not launched it again
@@ -1560,6 +1561,12 @@ func (e *Executor) runWait(ctx context.Context, w parser.WaitStep) error {
 	// ECONNREFUSED, so PT-18's relaunch heuristic never fired either).
 	// Waiting for wall-clock time needs no device at all — sleep CLI-side.
 	if w.Kind == parser.WaitDuration {
+		// A wait at or above the test's limit can only end in the limit: the test would be cut before the wait is over, and it would be reported
+		// as a timeout at the limit's place. It fails here, at once, with its own message. The limit is zero when it is off.
+		if d := time.Duration(w.Duration * float64(time.Second)); e.testLimit > 0 && d >= e.testLimit {
+			return fmt.Errorf("wait %s seconds is at or above test_timeout (%s): the test would be cut before the wait ends; wait until the screen shows what the test needs, or raise test_timeout",
+				strconv.FormatFloat(w.Duration, 'f', -1, 64), formatLimit(e.testLimit))
+		}
 		select {
 		case <-time.After(time.Duration(w.Duration * float64(time.Second))):
 			return nil
@@ -1807,6 +1814,10 @@ func (e *Executor) runRecipeCall(ctx context.Context, rc parser.RecipeCall) erro
 }
 
 // ---- Auto-Reconnect ----
+
+// IsConnectionLost says whether err is the kind of failure a lost agent connection gives (a closed socket, a broken pipe, a reset), so a caller
+// can tell a test that failed that way from one that failed on a step. It is the check the runner makes before it tries to reconnect.
+func IsConnectionLost(err error) bool { return isConnectionError(err) }
 
 // isConnectionError returns true if the error indicates a broken WebSocket connection.
 func isConnectionError(err error) bool {

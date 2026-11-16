@@ -314,7 +314,9 @@ with examples from "fixtures/users.csv"
 ### Hooks
 
 ```ebnf
-hook-def  = hook-head , NEWLINE , body ;
+hook-def  = hook-head , NEWLINE , body
+          | hook-head , ignored-word , { ignored-word } , NEWLINE ;   (* a header with a word after it: the parser drops the words, the hook has no body, and the indented lines after it are not its steps: a test keyword among the words makes them a test with no name, otherwise they are dropped and do not run; probe lint says which *)
+ignored-word = ? any token except NEWLINE and EOF, and except the word "test" right after "before all" or "after all" ? ;   (* that one is an error: "before all test" is refused, see below *)
 hook-head = "before all tests" | "before all" | "after all tests" | "after all"
           | "before each test" | "after each test" | "before each" | "after each" | "on failure"
           | ( "before" | "after" ) , fillers ;       (* bare form: a before-each / after-each hook *)
@@ -322,6 +324,12 @@ hook-head = "before all tests" | "before all" | "after all tests" | "after all"
 
 `before each` and `after each` (with or without `test`) are the same hook; `before all` / `after all`
 likewise. Before 0.16.7 the forms without `test` were accepted but their body was silently discarded.
+
+A word after a hook header is accepted: the parser drops it, and `probe lint` warns with "unexpected word(s) after
+the hook header are ignored". The indented lines under such a header are never the hook's: a test keyword among the words makes them a test with no name, and any other words drop them. Write the header on
+its own line. The singular `before all test` and `after all test` is an error, because it used to read as a hook
+with no body and its steps as a test with no name; write `before all tests`. A file that used the singular form
+must be changed to the plural.
 
 ```probe
 before all tests

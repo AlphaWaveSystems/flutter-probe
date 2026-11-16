@@ -92,6 +92,15 @@ jobs:
       - name: Problems panel tests
         working-directory: studio/frontend
         run: npm run test:lint
+      - name: Confirm dialog tests
+        working-directory: studio/frontend
+        run: npm run test:confirm
+      - name: Result notes tests
+        working-directory: studio/frontend
+        run: npm run test:result-notes
+      - name: Still waiting tests
+        working-directory: studio/frontend
+        run: npm run test:still-waiting
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
