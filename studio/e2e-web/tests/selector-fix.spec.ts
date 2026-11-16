@@ -417,7 +417,8 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await expect(lines(page)).toContainText('tap "Sign in now"');
       await expect(lines(page)).not.toContainText('tap "Sign in"\n');
       await expect(page.locator("#explain-status")).toContainText("not saved and not run");
-      await expect(card(page)).toBeHidden();
+      await expect(card(page)).toBeVisible(); // the card stays, with the Re-run button
+      await expect(page.locator("#btn-fix-rerun")).toBeVisible();
       expect(fs.readFileSync(loginFile(), "utf8")).toBe(loginText); // the file on disk is untouched
       expect(calls.WriteFile ?? 0).toBe(0);
       expect(calls.RunFile ?? 0).toBe(0);
@@ -483,6 +484,94 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await page.keyboard.press("ControlOrMeta+z");
       await expect(lines(page)).not.toContainText("Sign in now");
       await expect(lines(page)).toContainText('see "Home"x'); // the earlier typing is still there
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("rr-01 after a replacement Re-run waits for an explicit Save and a device, and Replace itself writes and runs nothing", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      const calls = countCalls(page);
+      await page.click("#btn-fix-replace");
+      await expect(page.locator("#btn-fix-rerun")).toBeVisible();
+      await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Save the file first"); // the replacement is unsaved
+      expect(calls.WriteFile ?? 0).toBe(0);
+      expect(calls.RunFileScoped ?? 0).toBe(0);
+      expect(calls.RunFile ?? 0).toBe(0);
+      // the person saves: that is the only write
+      await page.click("#btn-save");
+      await expect.poll(() => calls.WriteFile ?? 0).toBe(1);
+      expect(fs.readFileSync(loginFile(), "utf8")).toContain('tap "Sign in now"');
+      // no device in this suite: the next reason is the missing connection, and still nothing runs
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Connect a device");
+      await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
+      await page.locator("#btn-fix-rerun").click({ force: true }); // a disabled button does nothing
+      await page.waitForTimeout(300);
+      expect(calls.RunFileScoped ?? 0).toBe(0);
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("rr-04 the card with the Re-run button survives the Explain offer going away (what a passing re-run causes)", async ({ page }) => {
+    await captureRunStarted(page); // keeps the handlers the page registers, so the test can fire run:finished as the bridge would
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await expect(page.locator("#btn-fix-rerun")).toBeVisible();
+      fs.writeFileSync(yamlPath, `${original}ai:\n  provider: none\n`); // AI is off (whatever key an earlier spec left): the Explain offer is gone, as it is after a run with no failed test
+      await page.evaluate(() => (((window as any).__handlers["run:finished"]) || []).forEach((cb: (p?: unknown) => void) => cb()));
+      await expect(page.locator("#explain-bar")).toBeHidden();
+      await expect(page.locator("#btn-fix-rerun")).toBeVisible();
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("rr-02 editing the replaced line takes the re-run away: it would not test the replacement", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await page.click("#btn-save");
+      await lines(page).locator(".view-line", { hasText: "Sign in now" }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.type("!");
+      await expect(page.locator("#fix-rerun-hint")).toContainText("edited after it was replaced");
+      await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("rr-03 a re-run is for the file that was changed", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await page.click("#btn-save");
+      await page.locator("#file-list li", { hasText: "counter.probe" }).first().click(); // another file in the same folder
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Open the file that was changed");
+      await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("rr-05 a line added elsewhere in the file takes the re-run away: the replaced line is no longer where it was recorded", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await page.click("#btn-save");
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Connect a device"); // saved: only the missing device is in the way
+      await lines(page).locator(".view-line", { hasText: 'see "Home"' }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.press("Enter"); // one more line, below the replaced one: its text and number are unchanged
+      await page.keyboard.type("  tap \"Extra\"");
+      await page.click("#btn-save");
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Lines were added or removed");
+      await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
     } finally {
       await f.close();
     }

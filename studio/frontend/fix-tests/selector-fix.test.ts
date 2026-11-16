@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FIX_DISCLAIMER, FixSession, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
+import { FIX_DISCLAIMER, FixSession, canOfferReplace, cleanVerdictError, enclosingTest, fixCardModel, fixPreviewNote, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixDeps, type FixPreview } from "../src/selector-fix.ts";
 
 const preview = (extra: Partial<FixPreview> = {}): FixPreview => ({ id: "id-1", destination: "qwen3-coder:30b, on this machine", hosted: false, needsConfirm: true, step: 'line 4 of "sign in": tap "Sign in"', text: "Sent to: x", ...extra });
 const answer: FixAnswer = { suggestion: 'tap "Sign in now"', rationale: "The label changed.", destination: "qwen3-coder:30b, on this machine", hosted: false };
@@ -161,5 +161,118 @@ describe("replacing the line", () => {
     for (const bad of [{ ...ok, text: "a\nb" }, { ...ok, text: "a\rb" }, { ...ok, text: "" }, { ...ok, line: 0 }, { ...ok, line: -1 }, { ...ok, line: 1.5 }]) {
       assert.equal(planReplace(bad, "f", "f").kind, "refuse");
     }
+  });
+});
+
+describe("re-running the failed test after a replacement", () => {
+  const header = { line: 1, text: 'test "sign in"' };
+  const target = { file: "tests/login.probe", line: 4, text: '  tap "Sign in now"', lineCount: 7, header };
+  const ok = { openFile: "tests/login.probe", dirty: false, connected: true, running: false, lineText: '  tap "Sign in now"', lineCount: 7, header };
+  it("is enabled only when saved, connected, idle, in the same file, with the replaced line as it was", () => {
+    assert.deepEqual(rerunGate(target, ok), { enabled: true, reason: "" });
+    assert.equal(rerunGate(target, { ...ok, dirty: true }).enabled, false);
+    assert.match(rerunGate(target, { ...ok, dirty: true }).reason, /Save the file first/);
+    assert.equal(rerunGate(target, { ...ok, connected: false }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, running: true }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, openFile: "tests/other.probe" }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, openFile: null }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, lineText: '  tap "Sign in now!"' }).enabled, false);
+    assert.match(rerunGate(target, { ...ok, lineText: '  tap "Sign in now!"' }).reason, /edited after it was replaced/);
+    assert.equal(rerunGate(target, { ...ok, lineText: null }).enabled, false);
+    assert.equal(rerunGate(null, ok).enabled, false);
+  });
+  it("names the reason in the order a person can act on it", () => {
+    // another file first, then an edited line, then a run in progress, then unsaved, then no device
+    assert.match(rerunGate(target, { ...ok, openFile: "x", dirty: true, connected: false }).reason, /Open the file/);
+    assert.match(rerunGate(target, { ...ok, lineText: "x", dirty: true }).reason, /edited after/);
+    assert.match(rerunGate(target, { ...ok, running: true, dirty: true }).reason, /in progress/);
+    assert.match(rerunGate(target, { ...ok, dirty: true, connected: false }).reason, /Save the file first/);
+    assert.match(rerunGate(target, { ...ok, connected: false }).reason, /Connect a device/);
+  });
+  it("says what the run found", () => {
+    assert.deepEqual(rerunVerdict([{ name: "sign in", passed: true, skipped: false }], false), { kind: "passed", text: "Passed: sign in", stale: false });
+    assert.equal(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: true, skipped: false }], false).text, "Passed: 2 tests");
+    const failed = rerunVerdict([{ name: "sign in", passed: false, skipped: false, error: 'no widget with text "Sign in now"' }], false);
+    assert.equal(failed.kind, "failed");
+    assert.equal(failed.text, 'Still failing: sign in: no widget with text "Sign in now"');
+    assert.equal(rerunVerdict([{ name: "x", passed: false, skipped: false }], false).text, "Still failing: x");
+    assert.equal(rerunVerdict([{ name: "x", passed: false, skipped: true }], false).kind, "skipped");
+    assert.equal(rerunVerdict([], false).kind, "none");
+    // a passed test next to a failed one is a failure
+    assert.equal(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: false, skipped: false, error: "e" }], false).kind, "failed");
+  });
+  it("bounds a long error and marks a verdict for a file that changed during the run", () => {
+    const long = rerunVerdict([{ name: "t", passed: false, skipped: false, error: "e".repeat(1000) }], false);
+    assert.ok(long.text.length < 340 && long.text.endsWith("…"));
+    assert.equal(rerunVerdict([{ name: "t", passed: true, skipped: false }], true).stale, true);
+    assert.equal(rerunVerdict([{ name: "t", passed: true, skipped: false }], false).stale, false);
+  });
+});
+
+describe("the re-run is for the same test, in the same file shape", () => {
+  const header = { line: 1, text: 'test "sign in"' };
+  const target = { file: "f.probe", line: 4, text: '  tap "x"', lineCount: 7, header };
+  const ok = { openFile: "f.probe", dirty: false, connected: true, running: false, lineText: '  tap "x"', lineCount: 7, header };
+  it("refuses when lines were added or removed, even if the line text is the same", () => {
+    assert.equal(rerunGate(target, { ...ok, lineCount: 8 }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, lineCount: 6 }).enabled, false);
+    assert.match(rerunGate(target, { ...ok, lineCount: 8 }).reason, /Lines were added or removed/);
+  });
+  it("refuses when the test header moved or changed, with the line count the same", () => {
+    // a line inserted above the test and another removed below it: the same count, the same text on line 4, another test around it
+    assert.equal(rerunGate(target, { ...ok, header: { line: 2, text: 'test "sign in"' } }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, header: { line: 1, text: 'test "sign out"' } }).enabled, false);
+    assert.equal(rerunGate(target, { ...ok, header: null }).enabled, false);
+    assert.equal(rerunGate({ ...target, header: null }, { ...ok, header: null }).enabled, true);
+    assert.equal(rerunGate({ ...target, header: null }, ok).enabled, false);
+  });
+  it("finds the test that holds a line", () => {
+    const lines = ['test "a"', "  tap 1", 'test "b"', "  tap 2", "  tap 3", 'composite test "c"', "  tap 4"];
+    assert.deepEqual(enclosingTest(lines, 2), { line: 1, text: 'test "a"' });
+    assert.deepEqual(enclosingTest(lines, 3), { line: 3, text: 'test "b"' });
+    assert.deepEqual(enclosingTest(lines, 5), { line: 3, text: 'test "b"' });
+    assert.deepEqual(enclosingTest(lines, 7), { line: 6, text: 'composite test "c"' });
+    assert.equal(enclosingTest(["recipe r", "  tap 1"], 2), null);
+    assert.deepEqual(enclosingTest(lines, 99), { line: 6, text: 'composite test "c"' });
+  });
+});
+
+describe("the verdict's error text", () => {
+  it("drops control, bidirectional, zero-width and other hidden characters", () => {
+    assert.equal(cleanVerdictError("a\u0007b\u202ec\u2066d\u2069e\u200bf\ufeffg\u00adh\u2028i\u2029j"), "abcdefghij");
+    assert.equal(cleanVerdictError("line one\nline two\r\n\tline three"), "line one line two line three");
+    assert.equal(cleanVerdictError("a\u00a0\u00a0b\u3000c"), "a b c");
+  });
+  it("masks a home folder", () => {
+    assert.equal(cleanVerdictError("cannot open /Users/alice/dev/app/x.dart: nope"), "cannot open ~/dev/app/x.dart: nope");
+    assert.equal(cleanVerdictError("see /home/carol/x and C:\\Users\\bob\\y"), "see ~/x and ~\\y");
+    assert.equal(cleanVerdictError("route /users/list is fine"), "route /users/list is fine");
+  });
+  it("cuts on a character boundary, never inside a surrogate pair", () => {
+    // 299 letters then an emoji (two UTF-16 units) then more: the cut keeps whole characters only
+    const text = "a".repeat(299) + "\u{1F600}" + "b".repeat(50);
+    const out = cleanVerdictError(text);
+    assert.ok(out.endsWith("…"));
+    assert.equal(Array.from(out).length, 300);
+    assert.ok(!/[\ud800-\udbff]$/.test(out.slice(0, -1)), "no lone high surrogate before the ellipsis");
+    for (let n = 296; n <= 302; n++) {
+      const t = "a".repeat(n - 1) + "\u{1F600}".repeat(5);
+      assert.ok(!/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(cleanVerdictError(t)), `a lone surrogate at ${n}`);
+    }
+    // a short text is not cut, and is not given an ellipsis
+    assert.equal(cleanVerdictError("short"), "short");
+    assert.equal(cleanVerdictError("a".repeat(300)), "a".repeat(300));
+  });
+  it("is what the verdict shows, for the error and the test name", () => {
+    const v = rerunVerdict([{ name: "sign\u202e in", passed: false, skipped: false, error: "boom\u200b at /Users/alice/x" }], false);
+    assert.equal(v.text, "Still failing: sign in: boom at ~/x");
+  });
+});
+
+describe("a skipped test next to a passed one", () => {
+  it("is a pass, with the ran tests counted", () => {
+    assert.deepEqual(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: false, skipped: true }], false), { kind: "passed", text: "Passed: a", stale: false });
+    assert.equal(rerunVerdict([{ name: "a", passed: true, skipped: false }, { name: "b", passed: true, skipped: false }, { name: "c", passed: false, skipped: true }], false).text, "Passed: 2 tests");
+    assert.equal(rerunVerdict([{ name: "a", passed: false, skipped: true }, { name: "b", passed: false, skipped: true }], false).kind, "skipped");
   });
 });

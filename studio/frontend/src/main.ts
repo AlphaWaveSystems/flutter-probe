@@ -7,7 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
-import { FixSession, REPLACE_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, planReplace, type FixAnswer, type FixPreview } from "./selector-fix";
+import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
@@ -197,11 +197,16 @@ let currentDir = "tests";
 // settings overlay and the chat line read the same file. currentDir moves when the file pane is browsed; this does not.
 let workspaceRoot = "";
 let dirty = false;
+// The replaced line the card can re-run, whether that re-run is ours, and whether a run is going (declared here: setDirty reads them at start-up).
+let fixRerun: RerunTarget | null = null;
+let rerunInFlight = false;
+let runInProgress = false;
 
 function setDirty(d: boolean) {
   dirty = d;
   $("editor-dirty").textContent = d ? "● unsaved" : "";
   ($("btn-save") as HTMLButtonElement).disabled = !d || !currentPath;
+  refreshRerun();
 }
 
 async function refreshFiles(dir: string = currentDir) {
@@ -627,13 +632,14 @@ const refreshExplainOffer = latestWins(
     $("explain-bar").hidden = offer.available !== true;
     if (offer.available !== true) {
       hideExplainCard();
-      hideFixCard();
+      // A passing re-run leaves no failed test, so the offer goes; the card that shows its verdict stays until the person closes it.
+      if (!fixRerun) hideFixCard();
     }
   },
   () => {
     $("explain-bar").hidden = true;
     hideExplainCard();
-    hideFixCard();
+    if (!fixRerun) hideFixCard();
   },
 );
 
@@ -749,7 +755,7 @@ EventsOn("run:started", () => {
   explainSession.invalidate(); // an Explain of the previous run must not show for this one
   dropExplainView();
   fixSession.invalidate(); // nor a suggested fix for a step of the previous run
-  dropFixView();
+  if (!rerunInFlight) dropFixView(); // the re-run of a replaced line is the one run that keeps its card, to show the verdict there
 });
 EventsOn("run:finished", () => void refreshExplainOffer());
 
@@ -761,6 +767,7 @@ const fixSession = new FixSession();
 let dismissFixConfirm: (() => void) | null = null;
 
 function hideFixCard(): void {
+  fixRerun = null;
   const card = $("fix-card");
   card.hidden = true;
   card.replaceChildren();
@@ -828,12 +835,113 @@ async function replaceFailedLine(answer: FixAnswer, btn: HTMLButtonElement): Pro
     editor.pushUndoStop();
     editor.revealLineInCenterIfOutsideViewport(plan.line);
     status.textContent = `Line ${plan.line} replaced in the editor. It is not saved and not run; Undo restores it.`;
-    hideFixCard();
+    showReplacedCard({ file: currentPath, line: plan.line, text: plan.text, lineCount: model.getLineCount(), header: enclosingTest(editorLines(), plan.line) });
   } catch (err) {
     status.textContent = `Not replaced: ${err instanceof Error ? err.message : String(err)}`;
   } finally {
     btn.disabled = false;
   }
+}
+
+// ---- After a replacement: Re-run the failed test ------------------------------------------------------------------------------------
+//
+// The card stays, with one button. It never saves (the person saves: Save, or Cmd+S) and it runs the replaced line's test only, once per
+// click. It is for that line in that file: see rerunGate.
+
+function editorLines(): string[] {
+  return model.getLinesContent();
+}
+
+function rerunContext() {
+  const lines = model.getLineCount();
+  return {
+    lineCount: lines,
+    header: fixRerun ? enclosingTest(editorLines(), fixRerun.line) : null,
+    openFile: currentPath,
+    dirty,
+    connected,
+    running: runInProgress,
+    lineText: fixRerun && fixRerun.line >= 1 && fixRerun.line <= lines ? model.getLineContent(fixRerun.line) : null,
+  };
+}
+
+// refreshRerun enables or disables the button and says why. It runs whenever something it depends on changes.
+function refreshRerun(): void {
+  const btn = document.getElementById("btn-fix-rerun") as HTMLButtonElement | null;
+  const hint = document.getElementById("fix-rerun-hint");
+  if (!btn || !hint) return;
+  const gate = rerunGate(fixRerun, rerunContext());
+  btn.disabled = !gate.enabled;
+  hint.textContent = gate.reason;
+}
+
+function showReplacedCard(target: RerunTarget): void {
+  fixRerun = target;
+  hideExplainCard();
+  const card = $("fix-card");
+  card.replaceChildren();
+  const head = document.createElement("div");
+  head.className = "explain-card-head";
+  const close = textEl("button", "btn-mini explain-card-close", "✕");
+  close.setAttribute("type", "button");
+  close.setAttribute("title", "Close");
+  close.addEventListener("click", hideFixCard);
+  head.append(textEl("span", "explain-card-title", "Suggested fix"), close);
+  const row = document.createElement("div");
+  row.className = "explain-row";
+  row.append(textEl("div", "explain-row-label", "Replaced"), textEl("p", "explain-row-text", `Line ${target.line} is replaced in the editor. It is not saved and not run: save the file, then re-run its test.`));
+  const bar = document.createElement("div");
+  bar.className = "explain-actions";
+  const btn = textEl("button", "btn btn-primary", "Re-run the failed test") as HTMLButtonElement;
+  btn.setAttribute("type", "button");
+  btn.id = "btn-fix-rerun";
+  btn.addEventListener("click", () => void rerunFixedTest());
+  const hint = textEl("span", "dim", "");
+  hint.id = "fix-rerun-hint";
+  bar.append(btn, hint);
+  const verdict = document.createElement("div");
+  verdict.id = "fix-verdict";
+  verdict.setAttribute("role", "status");
+  verdict.setAttribute("aria-live", "polite");
+  card.append(head, row, bar, verdict);
+  card.hidden = false;
+  refreshRerun();
+}
+
+async function rerunFixedTest(): Promise<void> {
+  const target = fixRerun;
+  if (!target || !currentPath || rerunInFlight) return;
+  if (!rerunGate(target, rerunContext()).enabled) {
+    refreshRerun();
+    return;
+  }
+  const startedWith = model.getValue();
+  const verdictEl = $("fix-verdict");
+  verdictEl.replaceChildren();
+  rerunInFlight = true;
+  setRunning(true);
+  ($("btn-run") as HTMLButtonElement).disabled = true;
+  let verdict;
+  try {
+    // The test that holds the replaced line, once. Nothing is saved first: the gate has already refused a file with unsaved changes.
+    const results = await RunFileScoped(currentPath, target.line, "", false);
+    const changed = model.getValue() !== startedWith || dirty;
+    verdict = rerunVerdict(
+      results.map((r) => ({ name: r.name, passed: r.passed, skipped: r.skipped, error: r.error })),
+      changed,
+    );
+  } catch (err) {
+    verdict = rerunVerdict([{ name: "the test", passed: false, skipped: false, error: String(err) }], false);
+  } finally {
+    rerunInFlight = false;
+    setRunning(false);
+    ($("btn-run") as HTMLButtonElement).disabled = !connected || !currentPath;
+  }
+  if (fixRerun !== target) return; // the card was closed or replaced while the test ran
+  verdictEl.className = `fix-verdict fix-verdict-${verdict.kind}`;
+  verdictEl.append(textEl("p", "explain-row-text", verdict.text));
+  if (verdict.stale) verdictEl.append(textEl("p", "dim", STALE_VERDICT_NOTE));
+  refreshRerun();
 }
 
 // confirmFixSend shows what the suggestion would send and waits for Send or Cancel. Nothing is sent before Send.
@@ -1188,6 +1296,7 @@ function setStatus(
   dot.title = tip;
   $("status-text").title = tip;
   connected = state === "connected";
+  refreshRerun();
   updateRunButton();
   updateRecordButton();
   const inspectorStatus = document.getElementById("inspector-status");
@@ -1524,6 +1633,8 @@ let stepsDone = 0;
 let stepsTotal = 0;
 
 function setRunning(active: boolean) {
+  runInProgress = active;
+  refreshRerun();
   const cancel = $("btn-cancel") as HTMLButtonElement;
   cancel.hidden = !active;
   cancel.disabled = !active;

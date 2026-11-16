@@ -103,7 +103,7 @@ test.describe("Settings AI section (fake provider on 127.0.0.1)", () => {
       expect(written).toContain("provider: local");
       expect(written).toMatch(/endpoint:\s*"?http:\/\/127\.0\.0\.1:\d+\/v1"?/);
       expect(written).toContain("model: fake-model");
-      const appId = /\bid:\s*(\S+)/.exec(original)?.[1]; // a key the form does not manage, read from the file as it was
+      const appId = /\bapp:\s*(\S+)/.exec(original)?.[1]; // a key the form does not manage (project.app), read from the file as it was
       expect(appId).toBeTruthy();
       expect(written).toContain(appId!); // it is still there
       expect(written).not.toMatch(/api_key/); // Settings never writes a key
