@@ -349,6 +349,7 @@ type "hi" into css:"#message" in webview
 see "Getting Started" in webview
 don't see css:".error" in webview
 wait until "Message sent" appears in webview
+store text of css:"#total" in webview as total
 scroll down until "Item" appears
 wait for idle
 tap "Allow" in system dialog       # OS permission alerts / sign-in sheets

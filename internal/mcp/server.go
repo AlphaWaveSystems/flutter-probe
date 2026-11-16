@@ -293,6 +293,12 @@ Supports the full ProbeScript syntax:
                      app's own WebView (Android; the app needs WebView debugging on).
                      A quoted string is element text, css:"…" a CSS selector; an
                      optional quoted page name after "in webview" picks one page.
+                   store text of css:"…" in webview ["page"] as name — reads an
+                     element's visible text (max 1000 characters) into a variable.
+                     A value read from a page can be typed, looked for and used in
+                     selectors, but open link, add media, set language, type native,
+                     screenshot names, call, mock, start measuring and system
+                     dialog steps refuse it. Android only.
   Device media:    add media "path/to/photo.jpg" — seeds a file into the camera
                      roll/gallery (Android + iOS simulator).
   GPS routes:      travel to — indented "lat, lng" waypoints followed by a sibling

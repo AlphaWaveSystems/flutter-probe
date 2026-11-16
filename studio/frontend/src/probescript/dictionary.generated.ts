@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "dcb766fa93222d29a8f4e3363defc627f017017f044ac464198a717ef19574d6";
+export const SOURCE_SHA256 = "5e3877dc488d91bce4bf34e102dd99706290bcb4912d7108014899741842a214";
 
 export const COMMANDS = [
   {
@@ -141,6 +141,12 @@ export const COMMANDS = [
     "command": "store",
     "syntax": "store \"value\" as myVar",
     "description": "Store a literal or `<var>` value for use in later steps",
+    "category": "Actions"
+  },
+  {
+    "command": "store text of ... in webview",
+    "syntax": "store text of css:\"#total\" in webview as total or store text of css:\"#total\" in webview \"checkout\" as total",
+    "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but `open link`, `add media`, `set language`, `type native`, screenshot names, `call`, `mock`, `start measuring` and system dialog steps refuse it. Needs a local Android device; see [Reading text from a WebView](/probescript/syntax/#reading-text-from-a-webview)",
     "category": "Actions"
   },
   {

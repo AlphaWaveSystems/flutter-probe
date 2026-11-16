@@ -9,7 +9,7 @@ const PROBESCRIPT_KEYWORDS = [
   'wait until', 'wait for', 'wait',
   'swipe up', 'swipe down', 'swipe left', 'swipe right',
   'swipe up over 40 percent', 'press tab', 'press backspace',
-  'tap "" in webview', 'type "" into css:"" in webview', 'see "" in webview', 'don\'t see "" in webview', 'wait until "" appears in webview',
+  'tap "" in webview', 'type "" into css:"" in webview', 'see "" in webview', 'don\'t see "" in webview', 'wait until "" appears in webview', 'store text of css:"" in webview as',
   'scroll up', 'scroll down', 'scroll up until', 'scroll down until',
   'go back', 'long press', 'double tap',
   'take a screenshot called', 'dump the widget tree',
