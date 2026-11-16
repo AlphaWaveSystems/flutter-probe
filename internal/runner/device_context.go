@@ -51,7 +51,7 @@ type DeviceContext struct {
 	CrashEvidence bool
 	CrashADB      device.AdbRunner
 	CrashPoll     time.Duration
-	crashLedger   crashLedger // the exit entries this run has already looked at
+	seenCrashes   seenCrashes // the exit entries this run has already looked at
 
 	clip clipboardTaint // see clipboardTaint: the clipboard of this device holds a tainted value
 

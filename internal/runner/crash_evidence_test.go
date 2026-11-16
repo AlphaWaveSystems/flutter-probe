@@ -595,19 +595,19 @@ func TestEveryExitReasonIsOrIsNotADeath(t *testing.T) {
 
 // The crash of one test is not blamed on the next: an entry a collection has chosen is not chosen again.
 func TestAnEarlierTestsCrashIsNotBlamedOnTheNextOne(t *testing.T) {
-	var ledger crashLedger
+	var seen seenCrashes
 	exit := ceSample(t, "exit-java.txt")
 	// test A: its app died and the evidence was collected
 	a := &ceAdb{date: "2026-11-15 19:31:12", pidof: []string{""}, exit: []string{exit}, buf: ceSample(t, "crashbuf-java.txt")}
-	if r := collectCrash(context.Background(), ceProbe(a), time.Minute, time.Millisecond, &ledger); r == nil || r.Evidence.Exit.PID != 3567 {
+	if r := collectCrash(context.Background(), ceProbe(a), time.Minute, time.Millisecond, &seen); r == nil || r.Evidence.Exit.PID != 3567 {
 		t.Fatalf("test A: %+v", r)
 	}
 	// test B starts five seconds later, loses its connection to a slow app: the same entry is still in the list and still inside its window
 	b := &ceAdb{date: "2026-11-15 19:31:17", pidof: []string{"3700"}, exit: []string{exit}, buf: ceSample(t, "crashbuf-java.txt")}
-	if r := collectCrash(context.Background(), ceProbe(b), 6*time.Second, time.Millisecond, &ledger); r != nil {
+	if r := collectCrash(context.Background(), ceProbe(b), 6*time.Second, time.Millisecond, &seen); r != nil {
 		t.Errorf("test B was blamed for test A's crash: %+v", r)
 	}
-	// without the ledger the entry would be blamed: the test above is about the ledger
+	// without the seen the entry would be blamed: the test above is about the seen
 	b2 := &ceAdb{date: "2026-11-15 19:31:17", pidof: []string{"3700"}, exit: []string{exit}, buf: ceSample(t, "crashbuf-java.txt")}
 	if r := collectCrash(context.Background(), ceProbe(b2), 6*time.Second, time.Millisecond, nil); r == nil {
 		t.Error("the control case did not report: the test proves nothing")
@@ -615,10 +615,10 @@ func TestAnEarlierTestsCrashIsNotBlamedOnTheNextOne(t *testing.T) {
 	// a new crash in test B is its own
 	newer := ceEntry("3800", "2026-11-15 19:31:15.000", "5") + strings.Replace(exit, "ApplicationExitInfo #0", "ApplicationExitInfo #1", 1)
 	c := &ceAdb{date: "2026-11-15 19:31:17", pidof: []string{""}, exit: []string{newer}, buf: ceSample(t, "crashbuf-segv.txt")}
-	if r := collectCrash(context.Background(), ceProbe(c), 6*time.Second, time.Millisecond, &ledger); r == nil || r.Evidence.Exit.PID != 3800 || r.Kind != device.ExitNativeCrash {
+	if r := collectCrash(context.Background(), ceProbe(c), 6*time.Second, time.Millisecond, &seen); r == nil || r.Evidence.Exit.PID != 3800 || r.Kind != device.ExitNativeCrash {
 		t.Errorf("test B's own crash: %+v", r)
 	}
-	// the same through the executor: two attempts of one device share the ledger, and an attempt that collected for a test that then passed still marks it
+	// the same through the executor: two attempts of one device share the seen, and an attempt that collected for a test that then passed still marks it
 	dc := &DeviceContext{Serial: ceSerial, Platform: device.PlatformAndroid, AppID: cePkg, CrashEvidence: true, CrashPoll: time.Millisecond}
 	first := &ceAdb{date: "2026-11-15 19:31:12", pidof: []string{""}, exit: []string{exit}, buf: ceSample(t, "crashbuf-java.txt")}
 	dc.CrashADB = first
@@ -701,15 +701,15 @@ func ceExecutorWith(a device.AdbRunner) *Executor {
 
 // A pid can come back: a later crash of a process with the same number is a different entry.
 func TestAReusedPidIsANewEntry(t *testing.T) {
-	var ledger crashLedger
+	var seen seenCrashes
 	first := ceEntry("3567", "2026-11-15 19:31:09.870", "4")
 	a := &ceAdb{date: "2026-11-15 19:31:12", pidof: []string{"3700"}, exit: []string{first}, buf: ceSample(t, "crashbuf-java.txt")}
-	if collectCrash(context.Background(), ceProbe(a), time.Minute, time.Millisecond, &ledger) == nil {
+	if collectCrash(context.Background(), ceProbe(a), time.Minute, time.Millisecond, &seen) == nil {
 		t.Fatal("the first crash was not reported")
 	}
 	again := ceEntry("3567", "2026-11-15 19:40:00.000", "5")
 	b := &ceAdb{date: "2026-11-15 19:40:03", pidof: []string{"3700"}, exit: []string{again}, buf: ceSample(t, "crashbuf-java.txt")}
-	if r := collectCrash(context.Background(), ceProbe(b), time.Minute, time.Millisecond, &ledger); r == nil || r.Kind != device.ExitNativeCrash {
+	if r := collectCrash(context.Background(), ceProbe(b), time.Minute, time.Millisecond, &seen); r == nil || r.Kind != device.ExitNativeCrash {
 		t.Errorf("a new crash with a reused pid was taken for the old one: %+v", r)
 	}
 }

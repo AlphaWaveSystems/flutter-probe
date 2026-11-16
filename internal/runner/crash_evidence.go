@@ -32,9 +32,9 @@ const (
 // crashTotalTimeout bounds everything one collection does. It is a variable only so a test can shorten it; nothing else changes it.
 var crashTotalTimeout = 20 * time.Second
 
-// crashLedger remembers which exit entries a run has already looked at, so that the crash of one test is never blamed on the next: an entry is marked when a
-// collection chooses it, whether or not that test went on to fail. The zero value is ready; a nil ledger remembers nothing.
-type crashLedger struct {
+// seenCrashes remembers which exit entries a run has already looked at, so that the crash of one test is never blamed on the next: an entry is marked when a
+// collection chooses it, whether or not that test went on to fail. The zero value is ready; a nil value remembers nothing.
+type seenCrashes struct {
 	mu   sync.Mutex
 	seen map[string]bool
 }
@@ -43,7 +43,7 @@ func exitKey(r device.ExitRecord) string {
 	return strconv.Itoa(r.PID) + "@" + r.WallClock.Format("2006-01-02 15:04:05.000")
 }
 
-func (l *crashLedger) has(r device.ExitRecord) bool {
+func (l *seenCrashes) has(r device.ExitRecord) bool {
 	if l == nil {
 		return false
 	}
@@ -52,7 +52,7 @@ func (l *crashLedger) has(r device.ExitRecord) bool {
 	return l.seen[exitKey(r)]
 }
 
-func (l *crashLedger) mark(r device.ExitRecord) {
+func (l *seenCrashes) mark(r device.ExitRecord) {
 	if l == nil {
 		return
 	}
@@ -64,8 +64,8 @@ func (l *crashLedger) mark(r device.ExitRecord) {
 	l.seen[exitKey(r)] = true
 }
 
-// unseen returns the entries the ledger has not marked, in their order.
-func (l *crashLedger) unseen(exits []device.ExitRecord) []device.ExitRecord {
+// unseen returns the entries that are not marked yet, in their order.
+func (l *seenCrashes) unseen(exits []device.ExitRecord) []device.ExitRecord {
 	var out []device.ExitRecord
 	for _, r := range exits {
 		if !l.has(r) {
@@ -158,7 +158,7 @@ func (p crashProbe) alive(ctx context.Context) bool {
 
 // collectCrash looks at the device after a lost connection and returns a report when the app died, nil when it did not or when nothing could be read. since is how
 // long ago the test attempt began.
-func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll time.Duration, ledger *crashLedger) *CrashReport {
+func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll time.Duration, seen *seenCrashes) *CrashReport {
 	window := since + crashWindowGrace
 	if window > crashMaxWindow {
 		window = crashMaxWindow
@@ -177,10 +177,10 @@ func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll t
 			return nil
 		}
 		alive := p.alive(ctx)
-		dead, rec := judgeDeath(alive, ledger.unseen(ev.Exits), now, window)
+		dead, rec := judgeDeath(alive, seen.unseen(ev.Exits), now, window)
 		switch {
 		case dead && rec != nil:
-			ledger.mark(*rec)
+			seen.mark(*rec)
 			if len(ev.Exits) > 0 && exitKey(*rec) != exitKey(ev.Exits[0]) { // the newest entry is not the death (a later force-stop, say): read the crash text of the process that died
 				opts.PID = rec.PID
 				if again, err := device.CollectCrashEvidence(ctx, p.runner, p.serial, p.app, opts); err == nil {
@@ -230,7 +230,7 @@ func (e *Executor) collectCrashOnce(ctx context.Context) {
 	if !e.startedAt.IsZero() {
 		since = time.Since(e.startedAt)
 	}
-	e.crashReport = collectCrash(cctx, crashProbe{runner: runner, serial: dc.Serial, app: dc.AppID}, since, poll, &dc.crashLedger)
+	e.crashReport = collectCrash(cctx, crashProbe{runner: runner, serial: dc.Serial, app: dc.AppID}, since, poll, &dc.seenCrashes)
 }
 
 // CrashReport is the evidence collected during this test attempt, or nil.
