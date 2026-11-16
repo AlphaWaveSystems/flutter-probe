@@ -19,7 +19,7 @@ const maxStringLen = 2000
 // droppedKeys are never sent: screenshots, videos and logs stay on the machine, and a device id
 // (a UDID or serial) identifies hardware.
 var droppedKeys = map[string]bool{
-	"artifacts": true, "screenshots": true, "videos": true, "video_url": true, "logs": true, "device_id": true,
+	"artifacts": true, "screenshots": true, "videos": true, "video_url": true, "logs": true, "device_id": true, "crash": true,
 }
 
 // pathKeys hold file paths that must be relative.

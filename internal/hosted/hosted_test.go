@@ -435,3 +435,29 @@ func TestRetriesInTheEnvelopeAreRelativeAndScrubbed(t *testing.T) {
 	}
 	walk(any_)
 }
+
+// The real request body of an upload never carries the crash object of a failed test, whatever it holds.
+func TestUploadNeverSendsTheCrashObject(t *testing.T) {
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+	o := baseOpts(`{"total_tests":1,"results":[{"name":"t","file":"/work/a.probe","passed":false,"error":"step failed","crash":{"kind":"native_crash","gone":true,"pid":3277,"process":"dev.probe.app","summary":"Fatal signal 6 (SIGABRT) distinctive-crash-text","exit_description":"distinctive-description","files":["crash/t-1234abcd/crash.txt"]}}]}`)
+	o.BaseURL = srv.URL
+	if err := Upload(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	if len(gotBody) == 0 {
+		t.Fatal("nothing was sent")
+	}
+	for _, leak := range []string{"crash", "distinctive-crash-text", "distinctive-description", "SIGABRT", "3277"} {
+		if bytes.Contains(gotBody, []byte(leak)) {
+			t.Errorf("the upload carries %q: %s", leak, gotBody)
+		}
+	}
+	if !bytes.Contains(gotBody, []byte("step failed")) {
+		t.Errorf("the rest of the result was lost: %s", gotBody)
+	}
+}
