@@ -14,6 +14,8 @@ export function ApplyDeviceSetting(arg1:string,arg2:string,arg3:string):Promise<
 
 export function BuildCallStep(arg1:main.SaveStepInput):Promise<main.SavedStep>;
 
+export function CanExportRunResults():Promise<boolean>;
+
 export function CancelRun():Promise<void>;
 
 export function Chat(arg1:Array<main.ChatMessage>,arg2:string):Promise<main.ChatResponse>;
@@ -39,6 +41,8 @@ export function ExplainAvailability():Promise<main.ExplainOffer>;
 export function ExplainLastRun():Promise<main.ExplainResult>;
 
 export function ExplainPreviewed(arg1:string):Promise<main.ExplainResult>;
+
+export function ExportRunResults(arg1:string):Promise<main.ExportOutcome>;
 
 export function FindLocalModels(arg1:string):Promise<main.LocalModels>;
 
