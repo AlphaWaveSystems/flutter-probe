@@ -78,6 +78,28 @@ test("every documented command with an argument has a hand-written snippet, a sk
   assert.deepEqual(missing, [], "these documented commands have no snippet and no reason in gen-snippets.mjs");
 });
 
+// The spellings the dictionary does not use. The parser still accepts them (`take a screenshot called`, `dump the widget tree`), so
+// they are not errors; the docs and the snippets teach the dictionary spelling (`take screenshot "name"`, `dump tree`).
+const OFF_DICTIONARY_SPELLINGS = /take a screenshot called|dump the widget tree/;
+
+test("the hand-written snippets and the README and wiki use the dictionary spellings of screenshot and dump", () => {
+  const handWritten = readFileSync(HAND_WRITTEN_PATH, "utf8");
+  const docs = ["../../README.md", "../../docs/wiki/Troubleshooting.md"].map((path) => ({
+    path,
+    text: readFileSync(resolve(here, path), "utf8"),
+  }));
+  const wrong = [];
+  if (OFF_DICTIONARY_SPELLINGS.test(handWritten)) {
+    wrong.push("vscode/snippets/probescript.json");
+  }
+  for (const { path, text } of docs) {
+    if (OFF_DICTIONARY_SPELLINGS.test(text)) {
+      wrong.push(path);
+    }
+  }
+  assert.deepEqual(wrong, [], "these files teach a spelling the dictionary does not use: take screenshot and dump tree");
+});
+
 test("the generated snippet file is listed under contributes.snippets for ProbeScript", () => {
   const pkg = JSON.parse(readFileSync(resolve(here, "../package.json"), "utf8"));
   const listed = pkg.contributes.snippets.map((entry) => `${entry.language} ${entry.path}`);

@@ -134,7 +134,7 @@ If you must use USB: FlutterProbe v0.5.0+ uses HTTP POST transport (not WebSocke
 1. Add `wait until "text" appears` before `see "text"` for dynamic content
 2. Use `wait N seconds` if the content needs time to load
 3. Check the exact text — it's case-sensitive and must match the widget's text exactly
-4. Use `dump the widget tree` to see what's actually rendered
+4. Use `dump tree` to see what's actually rendered
 
 ### Tags Not Being Filtered
 

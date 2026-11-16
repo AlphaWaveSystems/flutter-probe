@@ -52,7 +52,6 @@
   "store response": "test",
   "store text of ... in webview": "test",
   "sync": "composite",
-  "take screenshot": "test",
   "tap if visible": "test",
   "tap native": "test",
   "tap optional": "test",

@@ -264,11 +264,6 @@
     "body": "sync \"${1:label}\"",
     "description": "Cross-device barrier — every device's steps block here until all arrive"
   },
-  "take screenshot": {
-    "prefix": "take screenshot \"name\"",
-    "body": "take screenshot \"${1:name}\"",
-    "description": "Save a PNG screenshot"
-  },
   "tap if visible": {
     "prefix": "tap \"OK\" if visible",
     "body": "tap \"${1:OK}\" if visible",
