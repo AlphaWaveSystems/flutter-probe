@@ -1687,9 +1687,15 @@ func confirmWithPrefs(ask func(string) bool, allowOnDisposable bool, disposable 
 			}
 			return ask(message)
 		}
-		fmt.Fprintf(w, "  \033[36mℹ\033[0m  cleared data of %s on %s (no question: your setting for simulators and emulators, probe prefs)\n", device.CleanOneLine(appID, 80), device.CleanOneLine(serial, 80))
+		fmt.Fprintf(w, "  \033[36mℹ\033[0m  no question for %s on %s (your setting for simulators and emulators, probe prefs): %s\n",
+			device.CleanOneLine(appID, 80), device.CleanOneLine(serial, 80), device.CleanOneLine(answeredLine(message), 400))
 		return true
 	}
+}
+
+// answeredLine is a question as one line, for the line that says a clear was answered without asking.
+func answeredLine(message string) string {
+	return strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(message), "Continue?")), " ")
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.

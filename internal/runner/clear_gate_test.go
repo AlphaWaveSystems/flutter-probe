@@ -168,3 +168,55 @@ func TestLaneContextRefusesEveryClearWithoutYes(t *testing.T) {
 		t.Errorf("a refused lane must not reach pm clear; the adb log says:\n%s", log)
 	}
 }
+
+// TestIOSSimulatorClearNamesTheKeychainReset: an iOS simulator's clear says what its keychain reset takes with it, in the question and in
+// the hint. An Android clear says nothing about the keychain.
+func TestIOSSimulatorClearNamesTheKeychainReset(t *testing.T) {
+	const phrase = "also resets the keychain of ALL apps on this simulator"
+	asked := ""
+	ios := &DeviceContext{Platform: device.PlatformIOS, AppID: "com.example.app", Serial: "SIM-UDID-1",
+		Confirm: func(m string) bool { asked = m; return false }}
+	err := ios.AskClearData(false)
+	if !strings.Contains(asked, phrase) {
+		t.Errorf("the iOS question must name the keychain reset, got %q", asked)
+	}
+	if err == nil {
+		t.Errorf("a person's no must refuse the clear, got %v", err)
+	}
+	ios.Confirm = nil
+	ios.NoPrompt = true
+	if err := ios.AskClearData(false); err == nil || !strings.Contains(err.Error(), phrase) {
+		t.Errorf("the iOS hint for a lane must name the keychain reset, got %v", err)
+	}
+
+	android := &DeviceContext{Platform: device.PlatformAndroid, AppID: "com.example.app", Serial: "emulator-5590",
+		Confirm: func(m string) bool { asked = m; return false }}
+	_ = android.AskClearData(false)
+	if strings.Contains(asked, "keychain") {
+		t.Errorf("an Android clear must not mention the keychain, got %q", asked)
+	}
+}
+
+// TestReinstallForNotificationsIsGated: the reinstall that resets an iOS simulator's notification decision asks the way a clear does. A
+// lane without --yes refuses it with the hint, the person's no is cancelled, and --yes lets it through. The question says what is wiped and
+// what is kept.
+func TestReinstallForNotificationsIsGated(t *testing.T) {
+	asked := ""
+	lane := &DeviceContext{Platform: device.PlatformIOS, AppID: "com.example.app", Serial: "SIM-UDID-1", NoPrompt: true}
+	if err := lane.AskReinstallForNotifications(); err == nil || !strings.Contains(err.Error(), "pass --yes (-y)") ||
+		!strings.Contains(err.Error(), "its keychain items are kept") {
+		t.Errorf("a lane without --yes must refuse the reinstall with the hint, got %v", err)
+	}
+	person := &DeviceContext{Platform: device.PlatformIOS, AppID: "com.example.app", Serial: "SIM-UDID-1",
+		Confirm: func(m string) bool { asked = m; return false }}
+	if err := person.AskReinstallForNotifications(); err == nil || !strings.Contains(err.Error(), "deny notifications: cancelled by user") {
+		t.Errorf("a person's no must cancel the reinstall, got %v", err)
+	}
+	if !strings.Contains(asked, "reinstall com.example.app on SIM-UDID-1 to reset its notification decision") || !strings.Contains(asked, "Its keychain items are kept") {
+		t.Errorf("the question must say what the reinstall does and what it keeps, got %q", asked)
+	}
+	yes := &DeviceContext{Platform: device.PlatformIOS, AppID: "com.example.app", Serial: "SIM-UDID-1", AllowClearData: true}
+	if err := yes.AskReinstallForNotifications(); err != nil {
+		t.Errorf("--yes must let the reinstall go ahead, got %v", err)
+	}
+}

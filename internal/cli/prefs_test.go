@@ -40,7 +40,7 @@ func TestConfirmWithPrefs(t *testing.T) {
 	if !confirmWithPrefs(ask, true, yes, &out, "com.example.app", "emulator-5554")("clear app data") || asked != 0 {
 		t.Error("setting on and a verified emulator did not answer yes without asking")
 	}
-	for _, want := range []string{"cleared data of com.example.app on emulator-5554", "no question", "your setting"} {
+	for _, want := range []string{"no question for com.example.app on emulator-5554", "no question", "your setting"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the line lacks %q: %q", want, out.String())
 		}
