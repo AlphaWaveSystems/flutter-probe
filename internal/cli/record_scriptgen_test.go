@@ -44,3 +44,24 @@ func TestAnEventWithASelectorWithoutTextDoesNotPanic(t *testing.T) {
 	}
 	printRecordedEvent(events[0]) // the live line takes the same path
 }
+
+// The live line (what `probe record` prints as events arrive) takes the same target as the script: a type event with no target does not use the
+// typed text as the field, and an obscured field's value is never printed, whatever else the event carries.
+func TestLiveLineUsesTheSharedTypeTarget(t *testing.T) {
+	const secret = "quorvex-secret-123"
+	out := captureStdoutForTest(t, func() {
+		printRecordedEvent(recordedEvent{At: time.Now(), Params: map[string]interface{}{"action": "type", "text": "hi"}})
+		printRecordedEvent(recordedEvent{At: time.Now(), Params: map[string]interface{}{"action": "type", "text": "hi", "id": "name"}})
+		printRecordedEvent(recordedEvent{At: time.Now(), Params: map[string]interface{}{"action": "type", "text": secret, "obscured": true}})
+		printRecordedEvent(recordedEvent{At: time.Now(), Params: map[string]interface{}{"action": "tap", "text": secret, "obscured": true}})
+	})
+	if strings.Contains(out, `into "hi"`) || !strings.Contains(out, `type "hi"`) {
+		t.Errorf("a type event with no target used the typed text as the field:\n%s", out)
+	}
+	if !strings.Contains(out, `type "hi" into #name`) {
+		t.Errorf("a type event with a flat id lost its target:\n%s", out)
+	}
+	if strings.Contains(out, secret) && strings.Contains(out, "type into") {
+		t.Errorf("an obscured field's value was printed as its target:\n%s", out)
+	}
+}

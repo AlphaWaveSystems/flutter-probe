@@ -10,7 +10,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 )
+
+// MaxNameRunes is the longest an unknown action's name, or a swipe or scroll direction, may be in a recorded step: longer is cut to this many runes, the last of them an
+// ellipsis that marks the cut.
+const MaxNameRunes = 48
 
 // GapPause is the idle time between two events above which a recording gets a wait step.
 const GapPause = 2 * time.Second
@@ -20,11 +26,7 @@ const GapPause = 2 * time.Second
 // An unknown action becomes a comment that names only the action, sanitized: no other value of the event is ever written into a comment. The
 // typed text of an obscured field is never written anywhere (see Obscured).
 func Step(params map[string]interface{}) string {
-	if Obscured(params) {
-		// Whatever text an obscured event carries is dropped before anything is built from it, for every action: it must not become a
-		// selector (`tap "<value>"`) any more than a typed value.
-		params = withoutText(params)
-	}
+	params = Scrub(params)
 	action, _ := params["action"].(string)
 	switch action {
 	case "tap":
@@ -43,10 +45,10 @@ func Step(params map[string]interface{}) string {
 		return fmt.Sprintf("  type %q", text)
 	case "swipe":
 		dir, _ := params["direction"].(string)
-		return fmt.Sprintf("  swipe %s", Sanitize(dir))
+		return fmt.Sprintf("  swipe %s", cleanName(dir))
 	case "scroll":
 		dir, _ := params["direction"].(string)
-		return fmt.Sprintf("  scroll %s", Sanitize(dir))
+		return fmt.Sprintf("  scroll %s", cleanName(dir))
 	case "long_press":
 		return fmt.Sprintf("  long press on %s", Selector(params))
 	case "navigate":
@@ -54,11 +56,20 @@ func Step(params map[string]interface{}) string {
 	case "see":
 		return fmt.Sprintf("  see %s", Selector(params))
 	default:
-		if name := Sanitize(action); name != "" {
+		if name := cleanName(action); name != "" {
 			return "  # " + name
 		}
 		return ""
 	}
+}
+
+// Scrub is the event as it may be shown: for an obscured event the flat text is dropped, for every action, so it can never become a selector
+// (`tap "<value>"`) any more than a typed value. Anything that prints or records an event takes it through Scrub first (Step does).
+func Scrub(params map[string]interface{}) map[string]interface{} {
+	if Obscured(params) {
+		return withoutText(params)
+	}
+	return params
 }
 
 // GapStep is the wait step for an idle gap between two events: "  wait N seconds" (whole seconds) for a gap longer than GapPause, "" for a
@@ -123,6 +134,11 @@ func Selector(params map[string]interface{}) string {
 	}
 	return "the element"
 }
+
+// cleanName makes a word the agent sent that is not text from the screen (an unknown action, a direction) safe for a line: the engine's one-line
+// cleaning (line and paragraph separators, control, invisible and bidirectional characters become one space, runs of space collapse, trimmed) and
+// at most MaxNameRunes runes (a cut ends with an ellipsis).
+func cleanName(s string) string { return device.CleanOneLine(s, MaxNameRunes) }
 
 // Sanitize makes text from the screen safe for a ProbeScript line: no line breaks (they would end the step), trimmed.
 func Sanitize(s string) string {

@@ -212,7 +212,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 
 // printRecordedEvent prints a real-time feedback line for a recorded event.
 func printRecordedEvent(e recordedEvent) {
-	params := e.Params
+	params := scriptgen.Scrub(e.Params)
 	action, _ := params["action"].(string)
 	sel := scriptgen.Selector(params)
 

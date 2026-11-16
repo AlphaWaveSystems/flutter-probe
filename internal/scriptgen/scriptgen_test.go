@@ -103,7 +103,7 @@ func TestAnUnknownActionEchoesNoValues(t *testing.T) {
 	if got != "  # drag" {
 		t.Errorf("got %q", got)
 	}
-	if got := Step(ev{"action": "ev\nil\r# x"}); got != "  # ev il# x" || strings.ContainsAny(got, "\r\n") {
+	if got := Step(ev{"action": "ev\nil\r# x"}); got != "  # ev il # x" || strings.ContainsAny(got, "\r\n") {
 		t.Errorf("a sanitized name: %q", got)
 	}
 }
@@ -168,11 +168,11 @@ func TestRandomEventsNeverBreakTheRules(t *testing.T) {
 }
 
 // The recorded `type` selectors are Flutter widget class names. A name the catalog no longer has (a rename in a new Flutter) fails here with
-// the name, which is the point: recorded steps like `tap the <Name>` would stop matching. It skips when the catalog is not in the checkout.
+// the name, which is the point: recorded steps like `tap the <Name>` would stop matching. It fails, with a message, when the catalog cannot be read: a test that skips would not notice.
 func TestRecordedTypeNamesAreInTheWidgetCatalog(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "compat", "catalog.json"))
 	if err != nil {
-		t.Skipf("docs/compat/catalog.json is not in this checkout: %v", err)
+		t.Fatalf("docs/compat/catalog.json cannot be read (%v): this test notices a Flutter rename or removal of a widget the recorder writes steps for, so it needs the catalog", err)
 	}
 	var doc struct {
 		Widgets []struct{ Name string } `json:"widgets"`
@@ -189,5 +189,38 @@ func TestRecordedTypeNamesAreInTheWidgetCatalog(t *testing.T) {
 		if !have[name] {
 			t.Errorf("%s is used as a recorded type selector (`tap the %s`) and is not in docs/compat/catalog.json: was it renamed or removed in the Flutter the catalog was made from?", name, name)
 		}
+	}
+}
+
+// Names the agent sends that are not screen text (an unknown action, a direction) get the engine's one-line cleaning: every kind of line break,
+// control and invisible character becomes a space, and the name is cut at MaxNameRunes (the cut is marked with an ellipsis).
+func TestNamesAreCleanedLikeEverywhereElseInTheEngine(t *testing.T) {
+	for name, sep := range map[string]string{
+		"LF": "\n", "CR": "\r", "CRLF": "\r\n", "NEL": "\u0085", "line separator": "\u2028", "paragraph separator": "\u2029", "vertical tab": "\v",
+		"form feed": "\f", "NUL": "\x00", "an escape": "\x1b", "a C1 control": "\u009b", "a bidi override": "\u202e", "a zero-width space": "\u200b", "a BOM": "\ufeff",
+	} {
+		for _, p := range []ev{{"action": "pi" + sep + "nch"}, {"action": "swipe", "direction": "le" + sep + "ft"}, {"action": "scroll", "direction": "do" + sep + "wn"}} {
+			got := Step(p)
+			if strings.ContainsAny(got, "\r\n\v\f\x00\x1b\u0085\u2028\u2029\u202e\u200b\ufeff\u009b") {
+				t.Errorf("%s: %q still holds a separator or a control character", name, got)
+			}
+			if !strings.HasPrefix(got, "  ") || strings.Count(got, "\n") != 0 {
+				t.Errorf("%s: %q", name, got)
+			}
+		}
+	}
+	if got := Step(ev{"action": "pi\u2028nch"}); got != "  # pi nch" {
+		t.Errorf("got %q", got)
+	}
+	long := strings.Repeat("é", 200)
+	got := Step(ev{"action": long})
+	if want := "  # " + strings.Repeat("é", MaxNameRunes-1) + "…"; got != want {
+		t.Errorf("a long action was not cut to %d runes: %q", MaxNameRunes, got)
+	}
+	if got := Step(ev{"action": "swipe", "direction": long}); got != "  swipe "+strings.Repeat("é", MaxNameRunes-1)+"…" {
+		t.Errorf("a long direction was not cut: %q", got)
+	}
+	if got := Step(ev{"action": "swipe", "direction": "  left  "}); got != "  swipe left" {
+		t.Errorf("a direction is trimmed: %q", got)
 	}
 }
