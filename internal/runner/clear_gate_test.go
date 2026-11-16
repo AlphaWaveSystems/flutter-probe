@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -139,5 +141,30 @@ func TestLaneContextsTakeTheClearGate(t *testing.T) {
 	}
 	if dc.AllowClearData || !dc.NoPrompt || dc.Confirm != nil {
 		t.Errorf("a lane with a nil confirmation must refuse with the hint: AllowClearData=%v NoPrompt=%v Confirm=%v", dc.AllowClearData, dc.NoPrompt, dc.Confirm != nil)
+	}
+}
+
+// TestLaneContextRefusesEveryClearWithoutYes is the regression for a repo that sets clear data before each test on a parallel run: a lane
+// context, built the way the orchestrator builds it, refuses every clear that is not --yes. That covers the clear step and the question asked
+// before a run's wipes, and a refused clear never reaches adb's pm clear.
+func TestLaneContextRefusesEveryClearWithoutYes(t *testing.T) {
+	dir := t.TempDir()
+	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")
+	adb := newHarnessADB(t)
+	h := newHarnessRunADB(t, harnessConfig(), [][]string{{fine}}, adb)
+	po := h.po
+	po.opts.ClearGate = ClearGate{Yes: false} // no --yes, no lane confirmation
+	dc := po.deviceContext(context.Background(), &po.devices[0], "com.example.app", time.Second, time.Second)
+	for _, perTest := range []bool{false, true} {
+		if err := dc.AskClearData(perTest); err == nil || !strings.Contains(err.Error(), "pass --yes") {
+			t.Errorf("perTest=%v: a lane without --yes must refuse with the hint, got %v", perTest, err)
+		}
+	}
+	if err := dc.ClearAppData(context.Background()); err == nil || !strings.Contains(err.Error(), "pass --yes") {
+		t.Errorf("the clear step on a lane without --yes must refuse with the hint, got %v", err)
+	}
+	log, _ := os.ReadFile(filepath.Join(filepath.Dir(adb), "adb.log"))
+	if strings.Contains(string(log), "pm clear") {
+		t.Errorf("a refused lane must not reach pm clear; the adb log says:\n%s", log)
 	}
 }
