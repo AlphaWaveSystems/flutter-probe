@@ -576,4 +576,50 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await f.close();
     }
   });
+
+  test("sf-18 a failed step gets three suggestions, numbered, and a fourth is refused before anything is sent", async ({ page }) => {
+    const f = await fakeProvider('```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      useProvider(f);
+      const calls = countCalls(page);
+      await openStudio(page);
+      for (let n = 1; n <= 3; n++) {
+        await page.click("#btn-fix");
+        if (n === 1) {
+          await expect(overlay(page)).toBeVisible(); // a destination on this machine is confirmed once per session
+          await page.click("#btn-fix-preview-send");
+        }
+        await expect(card(page).locator(".explain-card-title")).toHaveText(n === 1 ? "Suggested fix" : `Suggested fix (${n} of 3)`);
+        await expect.poll(() => f.requests()).toBe(n); // one request per attempt, never more
+        await page.waitForTimeout(150);
+      }
+      // the fourth: Studio refuses at the preview, and the provider is not asked
+      const previews = calls.PreviewSelectorFix ?? 0;
+      await page.click("#btn-fix");
+      await expect(page.locator("#explain-status")).toContainText("3 suggestions were already asked for this step");
+      expect(f.requests()).toBe(3);
+      expect(calls.PreviewSelectorFix ?? 0).toBe(previews + 1);
+      expect(calls.SelectorFixPreviewed ?? 0).toBe(3); // and nothing was sent for it
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-19 a new suggestion after a replacement is an ordinary suggestion card: it goes when the Explain offer goes", async ({ page }) => {
+    await captureRunStarted(page);
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await expect(page.locator("#btn-fix-rerun")).toBeVisible();
+      await page.click("#btn-fix"); // another suggestion, while the card of the replacement is on screen
+      await expect(card(page).locator(".explain-card-title")).toHaveText("Suggested fix (2 of 3)");
+      await expect(page.locator("#btn-fix-rerun")).toHaveCount(0);
+      fs.writeFileSync(yamlPath, `${original}ai:\n  provider: none\n`);
+      await page.evaluate(() => (((window as any).__handlers["run:finished"]) || []).forEach((cb: (p?: unknown) => void) => cb()));
+      await expect(page.locator("#explain-bar")).toBeHidden();
+      await expect(card(page)).toBeHidden(); // not kept alive by the replacement before it
+    } finally {
+      await f.close();
+    }
+  });
 });

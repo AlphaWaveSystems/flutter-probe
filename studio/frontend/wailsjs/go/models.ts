@@ -837,6 +837,8 @@ export namespace main {
 	    destination: string;
 	    hosted: boolean;
 	    changed: boolean;
+	    attempt: number;
+	    maxAttempts: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SelectorFix(source);
@@ -853,6 +855,8 @@ export namespace main {
 	        this.destination = source["destination"];
 	        this.hosted = source["hosted"];
 	        this.changed = source["changed"];
+	        this.attempt = source["attempt"];
+	        this.maxAttempts = source["maxAttempts"];
 	    }
 	}
 	export class SelectorFixPreview {
@@ -862,6 +866,8 @@ export namespace main {
 	    needsConfirm: boolean;
 	    step: string;
 	    text: string;
+	    attempt: number;
+	    maxAttempts: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SelectorFixPreview(source);
@@ -875,6 +881,8 @@ export namespace main {
 	        this.needsConfirm = source["needsConfirm"];
 	        this.step = source["step"];
 	        this.text = source["text"];
+	        this.attempt = source["attempt"];
+	        this.maxAttempts = source["maxAttempts"];
 	    }
 	}
 	export class SendHeader {

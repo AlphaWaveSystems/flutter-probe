@@ -10,6 +10,8 @@ export interface FixPreview {
   id: string;
   destination: string; // the provider and model, never an endpoint
   hosted: boolean;
+  attempt?: number; // which suggestion for this failed step this would be, and how many a session allows
+  maxAttempts?: number;
   needsConfirm: boolean; // Studio's decision: show the preview and ask before sending
   step: string; // the failed step, in one line
   text: string;
@@ -22,6 +24,8 @@ export interface FixAnswer {
   hosted: boolean;
   changed?: boolean; // Studio removed personal text or a credential from the suggestion
   id?: string; // names the suggestion for CheckReplaceLine; empty when there is no line to replace
+  attempt?: number; // which suggestion this is for the failed step (1 to maxAttempts)
+  maxAttempts?: number;
 }
 
 export type FixOutcome = { kind: "cancelled" } | { kind: "stale" } | { kind: "answer"; answer: FixAnswer; step: string };
@@ -107,7 +111,8 @@ export function fixCardModel(answer: FixAnswer, step: string): FixCardModel {
     rows.splice(1, 0, { kind: "changed", label: "Changed", text: "personal text or a credential was removed from this suggestion or its reason, so it may not say what the model meant. Check it before you run it." });
   }
   if (answer.rationale) rows.push({ kind: "why", label: "Why", text: answer.rationale });
-  return { title: "Suggested fix", destination: answer.destination, place: answer.hosted ? "hosted" : "local", disclaimer: FIX_DISCLAIMER, rows };
+  const n = answer.attempt && answer.maxAttempts && answer.attempt > 1 ? ` (${answer.attempt} of ${answer.maxAttempts})` : "";
+  return { title: `Suggested fix${n}`, destination: answer.destination, place: answer.hosted ? "hosted" : "local", disclaimer: FIX_DISCLAIMER, rows };
 }
 
 /** The wording of the preview dialog. */
@@ -159,6 +164,9 @@ export interface RerunTarget {
   lineCount: number;
   /** The `test "..."` line that holds the replaced line, with its line number, or null when there is none. */
   header: TestHeader | null;
+  /** Which suggestion this replacement came from, and how many a session allows: what "Suggest a fix again" can still ask for. */
+  attempt?: number;
+  maxAttempts?: number;
 }
 
 export interface TestHeader {
@@ -269,3 +277,23 @@ function cleanVerdictName(name: string): string {
 }
 
 export const STALE_VERDICT_NOTE = "The file changed while the test ran, so this may not be the result of the replaced line.";
+
+export interface AgainOffer {
+  enabled: boolean;
+  label: string;
+  note: string;
+}
+
+/**
+ * What the card offers after a re-run that still failed: another suggestion, while the session allows one more for this step. The count is
+ * Studio's (it refuses a fourth ask whatever the window does); this only says so before the person presses.
+ */
+export function againOffer(attempt: number | undefined, maxAttempts: number | undefined): AgainOffer {
+  const label = "Suggest a fix again";
+  if (!attempt || !maxAttempts) return { enabled: true, label, note: "" };
+  if (attempt >= maxAttempts) {
+    return { enabled: false, label, note: `All ${maxAttempts} suggestions for this step are used: edit the line by hand.` };
+  }
+  const left = maxAttempts - attempt;
+  return { enabled: true, label, note: `Suggestion ${attempt} of ${maxAttempts} was used; ${left} left for this step.` };
+}

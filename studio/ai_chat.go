@@ -276,6 +276,9 @@ type SelectorFix struct {
 	Hosted       bool    `json:"hosted"`
 	// Changed is set when personal text or a credential was removed from the suggestion: it may not say what the model meant.
 	Changed bool `json:"changed"`
+	// Attempt is which suggestion this is for the failed step (1 to MaxAttempts), counted when the request went out.
+	Attempt     int `json:"attempt"`
+	MaxAttempts int `json:"maxAttempts"`
 }
 
 const selectorFixPrompt = `You repair ProbeScript selectors. A step of a test failed because its selector does not match what is on the screen.
