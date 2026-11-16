@@ -1,0 +1,34 @@
+# Needs the text input build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=textinput (see README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+
+before each test
+  restart the app
+
+test "a plain text field takes typed text and can be cleared"
+  see "Plain: (empty)"
+  type "hello" into #wf_textfield
+  see "Plain: hello"
+  clear #wf_textfield
+  see "Plain: (empty)"
+
+test "a form field shows its validation error until it has text"
+  see "Form error: none"
+  tap "Validate"
+  see "Form error: Required"
+  type "x" into #wf_formfield
+  tap "Validate"
+  see "Form error: none"
+
+# Observed, not asserted: `see "secret"` also finds the typed value of an obscured field (the agent never echoes it in its output, but it
+# does match it). Whether that is intended is a question for the owner; this test only checks that the field takes the text.
+test "a password field takes typed text"
+  type "secret" into #wf_password
+  see "Password length: 6"
+
+test "a multi-line field takes typed text"
+  type "line one" into #wf_multiline
+  see "Lines: 1"
+
+test "a Cupertino text field takes typed text"
+  type "hello" into #wf_cupertino_field
+  see "Cupertino: hello"

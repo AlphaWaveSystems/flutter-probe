@@ -23,6 +23,11 @@ characters, an empty and a long element, and one element of each input kind). It
 `android-webview/build.sh` (no Gradle, no APK committed) and is the target of the opt-in real-device tests of the WebView steps. It is
 not a ProbeAgent host. See `android-webview/README.md`.
 
+## Widget families (in `flutter/`)
+
+The Flutter app also has one screen per widget family from the compatibility catalog (`docs/compat/`), built with `--dart-define=PROBE_FIXTURE_WIDGETS=<family>`, and a test per family in `flutter/probe-tests/widgets/`. The results are in
+`docs/compat/MATRIX.md`. See `flutter/README.md`.
+
 ## flutter/ — same surface, driven through probe's normal (Dart-agent) verbs
 
 Standard Flutter app, `ProbeAgent.start()` gated behind `--dart-define=PROBE_AGENT=true` (same

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_probe_agent/flutter_probe_agent.dart';
 
 import 'probe_advertiser.dart';
+import 'widget_families.dart';
 
 /// Flutter twin of the native fixture apps (native-test-apps/android and
 /// native-test-apps/ios): the identical 8-element surface with the identical
@@ -37,6 +38,14 @@ class FixtureApp extends StatelessWidget {
     // PROBE_FIXTURE_LOAD=true builds the load screen (used by probe-tests/load/): sustained background work, the kind a real
     // app's SDKs do (PT-25). See FixtureLoadScreen.
     const loadScreen = bool.fromEnvironment('PROBE_FIXTURE_LOAD', defaultValue: false);
+    // PROBE_FIXTURE_WIDGETS=<family> builds the screen of one widget family (see widget_families.dart, used by probe-tests/widgets/).
+    const widgetFamily = String.fromEnvironment('PROBE_FIXTURE_WIDGETS');
+    if (widgetFamily.isNotEmpty) {
+      return MaterialApp(
+        title: 'Probe Fixture (Flutter)',
+        home: widgetFamilyScreen(widgetFamily) ?? Scaffold(body: Center(child: Text('No widget family named $widgetFamily (known: ${widgetFamilies.join(', ')})'))),
+      );
+    }
     return MaterialApp(
       title: 'Probe Fixture (Flutter)',
       home: listScreen
