@@ -71,6 +71,16 @@ type ExplainPreview struct {
 type ExplainNote struct {
 	Test   string `json:"test"`
 	Advice string `json:"advice"`
+	// File and Line are where the test failed (its first failed step), for the window's jump to it: they are never sent to a provider. Line
+	// is 0 when no failed step is known, and both are empty when the run reported no file.
+	File string `json:"file,omitempty"`
+	Line int    `json:"line,omitempty"`
+}
+
+// explainPlace is where a failed test failed: the file and line of its first failed step, or only its file.
+type explainPlace struct {
+	file string
+	line int
 }
 
 // ExplainResult is the analysis of the last run's failures. It is advice only and changes nothing about the run.
@@ -348,19 +358,22 @@ func explainField(s, key string, keepLines bool, max int) string {
 type explainInput struct {
 	settings aiProviderSettings
 	failures []ai.Failure
-	noText   int // failed tests with no error text
-	repeats  int // failures identical to one already listed
+	noText   int                     // failed tests with no error text
+	repeats  int                     // failures identical to one already listed
+	places   map[string]explainPlace // where each test in failures failed, by the test name as it is sent
 }
 
 // explainFailures turns the failed tests of the last run into what ai.Triage reads. Every field goes through explainField. A
 // file is shown relative to the workspace, or by its name alone, so an absolute path never leaves the machine. A failed test with
 // no error text is counted and not sent, and an identical failure is sent once.
-func (a *App) explainFailures(key string) (out []ai.Failure, noText, repeats int) {
+func (a *App) explainFailures(key string) (out []ai.Failure, noText, repeats int, places map[string]explainPlace) {
 	a.mu.Lock()
 	ws := a.workspace
 	a.mu.Unlock()
 	seen := map[ai.Failure]bool{}
-	for _, r := range a.track.snapshot().Results {
+	places = map[string]explainPlace{}
+	st := a.track.snapshot()
+	for _, r := range st.Results {
 		if r.Passed || r.Skipped {
 			continue
 		}
@@ -383,9 +396,22 @@ func (a *App) explainFailures(key string) (out []ai.Failure, noText, repeats int
 		default:
 			seen[f] = true
 			out = append(out, f)
+			if _, ok := places[f.Test]; !ok {
+				places[f.Test] = failedPlace(st, r)
+			}
 		}
 	}
-	return out, noText, repeats
+	return out, noText, repeats, places
+}
+
+// failedPlace is where a failed test failed: the file and line of its first failed step in the run, or just its file.
+func failedPlace(st RunState, r RunResult) explainPlace {
+	for _, s := range st.Steps {
+		if s.Status == "failed" && s.Test == r.Name && s.Line > 0 && (s.File == r.File || r.File == "") {
+			return explainPlace{file: s.File, line: s.Line}
+		}
+	}
+	return explainPlace{file: r.File}
 }
 
 // explainDestination names where an Explain would go, with the label the chat header uses, and whether it is not this machine.
@@ -410,14 +436,14 @@ func (a *App) explainSetup() (in explainInput, err error) {
 	if err != nil {
 		return explainInput{}, err
 	}
-	failures, noText, repeats := a.explainFailures(s.APIKey)
+	failures, noText, repeats, places := a.explainFailures(s.APIKey)
 	if len(failures) == 0 {
 		if noText > 0 {
 			return explainInput{}, fmt.Errorf("the failed tests of the last run have no error text to explain")
 		}
 		return explainInput{}, fmt.Errorf("the last run has no failed test: run the test first")
 	}
-	return explainInput{settings: s, failures: failures, noText: noText, repeats: repeats}, nil
+	return explainInput{settings: s, failures: failures, noText: noText, repeats: repeats, places: places}, nil
 }
 
 // omitted says in one sentence what was left out of an Explain, or "" when nothing was.
@@ -532,7 +558,8 @@ func (a *App) explainRun(in explainInput) (ExplainResult, error) {
 		Notes:       make([]ExplainNote, 0, len(notes)),
 	}
 	for _, n := range notes {
-		out.Notes = append(out.Notes, ExplainNote{Test: n.Test, Advice: cleanAdvice(n.Advice, s.APIKey)})
+		p := in.places[n.Test]
+		out.Notes = append(out.Notes, ExplainNote{Test: n.Test, Advice: cleanAdvice(n.Advice, s.APIKey), File: p.file, Line: p.line})
 	}
 	return out, nil
 }

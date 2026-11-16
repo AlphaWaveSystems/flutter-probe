@@ -164,8 +164,10 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       expect(await page.locator("#results-list").innerHTML()).toBe(listBefore);
       expect(await page.locator("#results-summary").innerText()).toBe(summaryBefore);
       // The card closes, and it is never offered a way to change the file.
-      await expect(card(page).locator("button")).toHaveCount(1);
-      await card(page).locator("button").click();
+      // the controls on the card: the close button and the button that opens the failing line, which opens a place and changes no result
+      await expect(card(page).locator("button")).toHaveCount(2);
+      await expect(card(page).locator("button.goto-place")).toHaveCount(1);
+      await card(page).locator("button:not(.goto-place)").click();
       await expect(card(page)).toBeHidden();
     } finally {
       await f.close();
@@ -618,6 +620,55 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await page.evaluate(() => (((window as any).__handlers["run:finished"]) || []).forEach((cb: (p?: unknown) => void) => cb()));
       await expect(page.locator("#explain-bar")).toBeHidden();
       await expect(card(page)).toBeHidden(); // not kept alive by the replacement before it
+    } finally {
+      await f.close();
+    }
+  });
+
+  const activeLine = (page: Page) => page.locator("#editor .active-line-number");
+
+  test("sf-20 the fix card names the failed step's line, and the same click as a failing row opens it", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      const place = card(page).locator("button.goto-place");
+      await expect(place).toHaveText("L4");
+      await expect(place).toHaveAttribute("title", "Open line 4 of login.probe"); // the file's name, not its folder
+      await page.locator("#file-list li", { hasText: "counter.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+      await place.click();
+      await expect(page.locator("#editor-filename")).toContainText("login.probe");
+      await expect(activeLine(page)).toHaveText("4");
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-21 an Explain note names where its test failed; a place outside the workspace is refused, and nothing moves", async ({ page }) => {
+    const f = await fakeProvider("Check the label.");
+    try {
+      useProvider(f);
+      fs.mkdirSync(path.dirname(loginFile()), { recursive: true });
+      fs.writeFileSync(loginFile(), loginText);
+      await openStudio(page);
+      await page.locator("#file-list li", { hasText: "probe-tests" }).first().click();
+      await page.locator("#file-list li", { hasText: "counter.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+      await page.click("#btn-explain");
+      await expect(page.locator("#explain-preview-overlay")).toBeVisible();
+      await page.click("#btn-explain-preview-send");
+      const explain = page.locator("#explain-card");
+      await expect(explain).toBeVisible();
+      // the failed test with a failed step: its line; the other (a path outside the workspace): its file's name only
+      await expect(explain.locator(".explain-row", { hasText: "sign in" }).locator("button.goto-place")).toHaveText("L4");
+      const outside = explain.locator(".explain-row", { hasText: "sign out" }).locator("button.goto-place");
+      await expect(outside).toHaveText("logout.probe");
+      await outside.click();
+      await expect(page.locator("#toast-container .toast", { hasText: "outside the open workspace" })).toBeVisible();
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe"); // nothing moved
+      await explain.locator(".explain-row", { hasText: "sign in" }).locator("button.goto-place").click();
+      await expect(page.locator("#editor-filename")).toContainText("login.probe");
+      await expect(activeLine(page)).toHaveText("4");
+      expect(f.bodies().join("\n")).not.toContain(workspace); // no path of the workspace went to the provider
     } finally {
       await f.close();
     }

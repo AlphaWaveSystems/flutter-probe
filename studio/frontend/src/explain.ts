@@ -15,6 +15,8 @@ export interface ExplainPreview {
 export interface ExplainNote {
   test: string;
   advice: string;
+  file?: string; // where the test failed, for the jump to it
+  line?: number;
 }
 
 export interface ExplainResult {
@@ -101,7 +103,7 @@ export class ExplainSession {
   }
 }
 
-export type CardRow = { kind: "note" | "stopped" | "omitted" | "empty"; label?: string; text: string };
+export type CardRow = { kind: "note" | "stopped" | "omitted" | "empty"; label?: string; text: string; file?: string; line?: number };
 
 export interface CardModel {
   title: string; // always "Advisory"
@@ -115,7 +117,7 @@ export const ADVISORY_DISCLAIMER = "Written by a model from the failure text. It
 
 /** What the card shows. Every string in it is set with textContent. */
 export function explainCardModel(r: ExplainResult): CardModel {
-  const rows: CardRow[] = r.notes.map((n) => ({ kind: "note", label: n.test, text: n.advice }));
+  const rows: CardRow[] = r.notes.map((n) => ({ kind: "note", label: n.test, text: n.advice, file: n.file, line: n.line }));
   if (r.stopped) rows.push({ kind: "stopped", text: r.stopped });
   if (r.omitted) rows.push({ kind: "omitted", text: r.omitted });
   if (rows.length === 0) rows.push({ kind: "empty", text: "The model gave no advice." });

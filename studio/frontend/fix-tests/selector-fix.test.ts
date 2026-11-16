@@ -309,3 +309,13 @@ describe("the preview dialog says which suggestion it is", () => {
     assert.match(fixPreviewNote(false, 2, 3), /Nothing is sent until you press Send/);
   });
 });
+
+describe("the cards carry the place of the failure", () => {
+  it("the fix card's failed-step row has the file and the line", () => {
+    const row = fixCardModel({ ...answer, file: "/ws/t/login.probe", line: 4 }, "step").rows[0];
+    assert.equal(row.kind, "step");
+    assert.equal(row.file, "/ws/t/login.probe");
+    assert.equal(row.line, 4);
+    assert.equal(fixCardModel({ ...answer }, "step").rows[0].file, undefined);
+  });
+});
