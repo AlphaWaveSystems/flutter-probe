@@ -739,9 +739,10 @@ func TestParser_SwipeFrom(t *testing.T) {
 	}
 }
 
-// TestParser_SwipeDirectionWord checks the word where a swipe's direction goes: up, down, left or right in any case, or nothing, which is a
-// down swipe. Any other word is a parse error that lists the four directions, and it is not read as the next step: before, `swipe sideways`
-// ran a down swipe and the word became a step of its own. An element name must be quoted, so a bare name is refused the same way.
+// TestParser_SwipeDirectionWord checks the token where a swipe's direction goes: up, down, left or right in any case, or nothing, which is a
+// down swipe. A quoted name, an #id, over or the end of the line may come there instead. Any other token is a parse error that lists the
+// four directions. It is not read as the next step: before, `swipe sideways` and `swipe 5` ran a down swipe and the token became a step of
+// its own. An element name must be quoted, so a bare name is refused the same way.
 func TestParser_SwipeDirectionWord(t *testing.T) {
 	for _, tc := range []struct {
 		src       string
@@ -749,6 +750,8 @@ func TestParser_SwipeDirectionWord(t *testing.T) {
 	}{
 		{`swipe`, parser.SwipeDown},
 		{`swipe up`, parser.SwipeUp},
+		{`swipe Up`, parser.SwipeUp},
+		{`swipe DOWN`, parser.SwipeDown},
 		{`swipe Left`, parser.SwipeLeft},
 		{`swipe RIGHT on "Menu"`, parser.SwipeRight},
 		{`swipe down over 30 percent`, parser.SwipeDown},
@@ -758,19 +761,31 @@ func TestParser_SwipeDirectionWord(t *testing.T) {
 			t.Errorf("%q: verb %q, direction %q; want swipe, %q", tc.src, a.Verb, a.Direction, tc.direction)
 		}
 	}
+	// Each of these is a token that used to run a down swipe and parse as the next step, or a word that is not a direction. Numbers, keywords
+	// and a word followed by a target are all refused in the direction slot.
 	for _, src := range []string{
 		`swipe sideways`,
+		`swipe sideways on "x"`,
+		`swipe sideways "x"`,
 		`swipe upward`,
 		`swipe Menu`,
 		`swipe login`,
+		`swipe 5`,
+		`swipe 5 3 times`,
+		`swipe 1st`,
+		`swipe back`,
+		`swipe tap`,
+		`swipe scroll`,
+		`swipe if`,
+		`swipe until "x"`,
 	} {
 		_, err := parser.ParseFile(testBody(src))
 		if err == nil {
 			t.Errorf("%q: want a parse error", src)
 			continue
 		}
-		if !strings.Contains(err.Error(), "up, down, left or right") {
-			t.Errorf("%q: the error must list the four directions, got %v", src, err)
+		if !strings.Contains(err.Error(), "is not a direction") || !strings.Contains(err.Error(), "up, down, left or right") {
+			t.Errorf("%q: the error must say the token is not a direction and list the four, got %v", src, err)
 		}
 	}
 }

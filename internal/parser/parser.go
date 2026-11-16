@@ -735,14 +735,11 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		return nil, fmt.Errorf("line %d: swipe from needs a target before it, for example: swipe right on \"Menu\" from 2 percent", line)
 	}
 	p.skipFillers()
-	// A bare word where the direction goes must be one of the four. parseDirection would run the swipe down and leave the word unread,
-	// so the word would parse as the next step: a silent down swipe. Refuse it, and say what to write.
-	if w := p.peek(); w.Type == TOKEN_IDENT {
-		switch strings.ToLower(w.Literal) {
-		case "up", "down", "left", "right":
-		default:
-			return nil, fmt.Errorf(`line %d: swipe %q is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "%s"`, line, w.Literal, w.Literal)
-		}
+	// The direction slot holds a direction, or nothing. The next token may also start the target (a quoted name or #id), start the distance
+	// (over), or end the line. Any other token is refused: parseDirection would run the swipe down and leave the token to parse as the next
+	// step, a silent down swipe.
+	if t := p.peek(); !swipeSlotAccepts(t) {
+		return nil, fmt.Errorf(`line %d: swipe %q is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "Menu"`, line, t.Literal)
 	}
 	dir := p.parseDirection()
 	if p.peek().Type == TOKEN_FROM {
@@ -1952,6 +1949,21 @@ func (p *Parser) parseSelector() Selector {
 
 	// Fallback
 	return Selector{Kind: SelectorText, Text: ""}
+}
+
+// swipeSlotAccepts reports whether a token may stand where a swipe's direction goes. Left and right have tokens of their own, and up and
+// down are words. A quoted name, an #id, over or the end of the line may come there instead of a direction.
+func swipeSlotAccepts(t Token) bool {
+	switch t.Type {
+	case TOKEN_LEFT, TOKEN_RIGHT, TOKEN_STRING, TOKEN_ID, TOKEN_OVER, TOKEN_NEWLINE, TOKEN_DEDENT, TOKEN_EOF:
+		return true
+	case TOKEN_IDENT:
+		switch strings.ToLower(t.Literal) {
+		case "up", "down":
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Parser) parseDirection() SwipeDirection {

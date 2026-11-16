@@ -37,7 +37,7 @@ reference error: line 4: the container after "in" is empty
 ### none testdata/lintcorpus/ref_selector_relational.probe
 reference error: line 4: the below selector has no anchor text after it
 ### none testdata/lintcorpus/ref_swipe_word.probe
-error: line 4: swipe "sideways" is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "sideways"
+error: line 4: swipe "sideways" is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "Menu"
 ### none testdata/lintcorpus/ref_unknown_step.probe
 reference error: line 4: unknown step "frobnicate the gizmo": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
 ### none testdata/lintcorpus/ref_use_inside_test.probe
@@ -83,7 +83,7 @@ reference error: line 4: the container after "in" is empty
 ### rec testdata/lintcorpus/ref_selector_relational.probe
 reference error: line 4: the below selector has no anchor text after it
 ### rec testdata/lintcorpus/ref_swipe_word.probe
-error: line 4: swipe "sideways" is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "sideways"
+error: line 4: swipe "sideways" is not a direction: write up, down, left or right, or nothing (a bare swipe runs down); an element name goes in quotes, for example: swipe up on "Menu"
 ### rec testdata/lintcorpus/ref_unknown_step.probe
 reference error: line 4: unknown step "frobnicate the gizmo": not a built-in step and no recipe with that name is defined (check the use statements and the recipes folder)
 ### rec testdata/lintcorpus/ref_use_inside_test.probe
