@@ -66,3 +66,30 @@ func TestBuildTestArgsRefusesConsentInEveryField(t *testing.T) {
 		}
 	}
 }
+
+// TestRunScriptRefusesConsentFlag: run_script takes the flags and the device of an inline script. A --yes in either is refused by the real
+// handler, with the refusal as the text the client gets back. A run that was not refused would instead answer with the CLI's own output,
+// so the text is what tells the two apart.
+func TestRunScriptRefusesConsentFlag(t *testing.T) {
+	s := &Server{}
+	for _, tc := range []struct{ flags, device string }{
+		{"--yes", ""},
+		{"-y", ""},
+		{"--timeout 10s -vy", ""},
+		{"", "-y"},
+	} {
+		resp := s.runScript(1, `test "x"`, tc.flags, tc.device)
+		result, ok := resp.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("flags %q device %q: result is %T, want a map", tc.flags, tc.device, resp.Result)
+		}
+		content, _ := result["content"].([]map[string]any)
+		text := ""
+		if len(content) > 0 {
+			text, _ = content[0]["text"].(string)
+		}
+		if !strings.Contains(text, "--yes is not available through MCP") {
+			t.Errorf("flags %q device %q: a --yes must be refused with the MCP refusal, got %q", tc.flags, tc.device, text)
+		}
+	}
+}

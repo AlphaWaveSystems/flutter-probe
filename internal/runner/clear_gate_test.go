@@ -95,7 +95,7 @@ func TestLaneGateAnswersEveryLaneTheSameWay(t *testing.T) {
 			for _, l := range lanes {
 				dc := &DeviceContext{Platform: l.platform, Serial: l.serial, AppID: "com.example.app"}
 				dc.ApplyClearGate(tc.gate)
-				// the clear step and the question asked once before a run's wipes (clear data before each test) answer the same way
+				// the clear step and the before-each question (perTest) answer the same way
 				for _, perTest := range []bool{false, true} {
 					wiped := dc.AskClearData(perTest) == nil
 					if wiped != tc.wipes[l.serial] {
@@ -144,9 +144,9 @@ func TestLaneContextsTakeTheClearGate(t *testing.T) {
 	}
 }
 
-// TestLaneContextRefusesEveryClearWithoutYes is the regression for a repo that sets clear data before each test on a parallel run: a lane
-// context, built the way the orchestrator builds it, refuses every clear that is not --yes. That covers the clear step and the question asked
-// before a run's wipes, and a refused clear never reaches adb's pm clear.
+// TestLaneContextRefusesEveryClearWithoutYes is the regression for the before-each question on a parallel run: a lane context, built the
+// way the orchestrator builds it, refuses every clear that is not --yes. That covers the clear step and the per-test question, and a refused
+// clear never reaches adb's pm clear.
 func TestLaneContextRefusesEveryClearWithoutYes(t *testing.T) {
 	dir := t.TempDir()
 	fine := writeHarnessFile(t, dir, "fine.probe", "test \"fine\"\n  tap \"Fine\"\n")

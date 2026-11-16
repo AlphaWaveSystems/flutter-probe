@@ -377,7 +377,7 @@ Key flags for the flags parameter:
 
 For composite multi-device tests use the composite_devices parameter.
 
-Clearing app data (the clear app data step, or defaults.clear_data_before_each_test) in a parallel or composite run needs the consent that the --yes flag gives. This tool does not carry that consent: a run started here (--parallel, composite_devices, several devices) refuses the clear on every device unless that device is one the person has allowed to be wiped without a question in their own settings (probe prefs). A --yes or -y in any argument is refused. The refused step fails with the hint to pass --yes, which the person runs from a terminal.
+Clearing app data (the clear app data step) in a parallel or composite run needs the consent that the --yes flag gives. This tool does not carry that consent: a run started here (--parallel, composite_devices, several devices) refuses the clear on every device unless that device is one the person has allowed to be wiped without a question in their own settings (probe prefs). A --yes or -y in any argument is refused. The refused step fails with the hint to pass --yes, which the person runs from a terminal.
 
 This call blocks until the run ends. For multi-device runs (--parallel, composite_devices, several devices) or any run that may outlast your tool timeout, use start_tests instead: it returns a job_id at once and you poll test_status.`,
 		InputSchema: mcpSchema{

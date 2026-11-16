@@ -249,6 +249,9 @@ func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Co
 	return lc
 }
 
+// buildCompositeRunnerFn is buildCompositeRunner. It is a variable so a test can see the clear gate a composite run is given.
+var buildCompositeRunnerFn = buildCompositeRunner
+
 func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
@@ -1367,7 +1370,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
 		}
 		clearGate := clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking, cfg.Project.App)
-		cr, compositeCleanup, crErr := buildCompositeRunner(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose, clearGate)
+		cr, compositeCleanup, crErr := buildCompositeRunnerFn(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose, clearGate)
 		if crErr != nil {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite devices unavailable: %v\n", crErr)
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite tests will be skipped\n")

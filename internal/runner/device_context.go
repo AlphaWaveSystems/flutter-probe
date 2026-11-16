@@ -284,7 +284,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 }
 
 // AskClearData is the gate for a data wipe: nil when the wipe may go ahead, otherwise the error to fail with. It answers every clear, a step
-// or the question asked once before a run's wipes (perTest). --yes (AllowClearData) lets it through. Otherwise a context with a confirmation
+// or the before-each question (perTest), which no code on main asks yet. --yes (AllowClearData) lets it through. Otherwise a context with a confirmation
 // asks, and a refused answer is "cancelled by user", or the hint to pass --yes when NoPrompt says nobody is there to ask. A context with no
 // confirmation fails with the hint.
 func (dc *DeviceContext) AskClearData(perTest bool) error {

@@ -99,6 +99,13 @@ func compositeAndroidContext(ctx context.Context, cfg *config.Config, dm *device
 	return dc
 }
 
+// compositeIOSContext is the device context of one iOS device of a composite run: the same clear gate as an Android one.
+func compositeIOSContext(ctx context.Context, dm *device.Manager, spec string, clearGate runner.ClearGate) *runner.DeviceContext {
+	dc := runner.NewDeviceContext(ctx, dm, device.PlatformIOS, spec)
+	dc.ApplyClearGate(clearGate)
+	return dc
+}
+
 // connectCompositeDevice connects to a single composite device by spec and
 // returns a CompositeDevice along with the underlying client (for cleanup).
 func connectCompositeDevice(
@@ -194,8 +201,7 @@ func connectCompositeDevice(
 
 	switch platform {
 	case device.PlatformIOS:
-		devCtx = runner.NewDeviceContext(ctx, dm, platform, spec)
-		devCtx.ApplyClearGate(clearGate)
+		devCtx = compositeIOSContext(ctx, dm, spec, clearGate)
 		isPhysical := devCtx.IsPhysical
 		if isPhysical {
 			// Physical iOS: set up iproxy
