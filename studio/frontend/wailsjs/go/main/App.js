@@ -110,6 +110,10 @@ export function Lint(arg1) {
   return window['go']['main']['App']['Lint'](arg1);
 }
 
+export function LintProblems(arg1, arg2) {
+  return window['go']['main']['App']['LintProblems'](arg1, arg2);
+}
+
 export function ListAIModels() {
   return window['go']['main']['App']['ListAIModels']();
 }

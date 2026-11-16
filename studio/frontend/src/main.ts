@@ -11,6 +11,8 @@ import { connectReason, nextStep, recordReason, runReason, saveReason, workspace
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
+import { renderProblems } from "./problems-panel";
+import { LintSession, toMarkers, type Problem } from "./lint-problems";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
@@ -33,6 +35,7 @@ import {
   InitialWorkspace,
   SetWorkspace,
   Lint,
+  LintProblems,
   ListAIModels,
   ListDevices,
   ListDir,
@@ -187,8 +190,42 @@ async function runLint() {
   );
 }
 
+// The project's lint rules (recipes, data files, program rules) for the open file, from the editor's text. It never blocks Run: a failure is a
+// line in the Problems panel. The call waits 400 ms after the last change, and an answer for text that has changed since is dropped.
+const problemsSession = new LintSession();
+let problemsHandle: number | undefined;
+function scheduleProblems() {
+  if (problemsHandle !== undefined) clearTimeout(problemsHandle);
+  problemsSession.cancel(); // what is on the way is for older text
+  problemsHandle = window.setTimeout(runProblems, 400);
+}
+
+async function runProblems() {
+  const path = currentPath;
+  const content = model.getValue();
+  if (!path) {
+    monaco.editor.setModelMarkers(model, "probescript-lint", []);
+    renderProblems(null, [], "");
+    return;
+  }
+  const token = problemsSession.begin();
+  let problems: Problem[] = [];
+  let note = "";
+  try {
+    const res = await LintProblems(path, content);
+    problems = res?.problems ?? [];
+    note = res?.unavailable ?? "";
+  } catch (err) {
+    note = "Lint unavailable: " + String(err);
+  }
+  if (!problemsSession.accept(token, content, model.getValue()) || currentPath !== path) return; // the text or the file changed meanwhile
+  monaco.editor.setModelMarkers(model, "probescript-lint", toMarkers(problems, model.getLineCount(), (l) => model.getLineMaxColumn(l)));
+  renderProblems(path, problems, note);
+}
+
 editor.onDidChangeModelContent(() => {
   scheduleLint();
+  scheduleProblems();
   setDirty(true);
 });
 
@@ -330,6 +367,7 @@ async function openProbeFile(path: string): Promise<boolean> {
     $("editor-filename").textContent = path;
     setDirty(false);
     runLint();
+    scheduleProblems();
     document
       .querySelectorAll("#file-list li")
       .forEach((li) =>

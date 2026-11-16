@@ -115,6 +115,7 @@
           <span class="pane-tabs" role="tablist">
             <button type="button" id="tab-results" class="pane-tab active" role="tab" aria-selected="true">Results</button>
             <button type="button" id="tab-network" class="pane-tab" role="tab" aria-selected="false" title="The requests and responses the app made, with credentials hidden">Network</button>
+            <button type="button" id="tab-problems" class="pane-tab" role="tab" aria-selected="false" title="What the lint rules find in the open file: a recipe or a data file that is not there, a test with no steps">Problems</button>
           </span>
           <span id="results-summary" class="dim"></span>
         </div>
@@ -127,6 +128,10 @@
         <section id="explain-card" class="explain-card" aria-label="Advisory" hidden></section>
         <section id="fix-card" class="explain-card" aria-label="Suggested fix" hidden></section>
         <ul id="results-list"><li class="empty">No run yet. Click Run to execute the open file.</li></ul>
+        </div>
+        <div id="problems-panel" class="pane-panel" hidden>
+          <p id="problems-status" class="dim problems-status" role="status"></p>
+          <ul id="problems-list" class="problems-list" aria-label="Problems in the open file"></ul>
         </div>
         <div id="network-panel" class="pane-panel" hidden>
           <div class="net-toolbar">

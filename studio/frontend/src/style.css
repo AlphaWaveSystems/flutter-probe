@@ -539,6 +539,16 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .pane-tab.active { color: var(--fg); border-bottom-color: var(--accent, #4aa3ff); }
 .pane-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .pane-panel[hidden] { display: none; }
+.problems-status { margin: 0; padding: 6px 12px; font-size: 12px; }
+.problems-status:empty { display: none; }
+.problems-list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; font-size: 12px; }
+.problem { display: flex; gap: 10px; padding: 4px 12px; border-bottom: 1px solid var(--border); }
+.problem.goto { cursor: pointer; }
+.problem.goto:hover, .problem.goto:focus { background: var(--bg-3); outline: none; }
+.problem-kind { flex: none; width: 56px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; padding-top: 2px; }
+.problem.error .problem-kind { color: var(--fail); }
+.problem.warn .problem-kind { color: var(--warn); }
+.problem-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 #results-panel #results-list { flex: 1; min-height: 0; }
 .net-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; padding: 3px 10px; border-bottom: 1px solid var(--border); }
 .net-toolbar select, .net-toolbar input { font-size: 11px; background: var(--bg-2); color: var(--fg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1px 4px; }
