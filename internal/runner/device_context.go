@@ -92,6 +92,11 @@ type DeviceContext struct {
 
 	clip clipboardTaint // see clipboardTaint: the clipboard of this device holds a tainted value
 
+	// Follower follows the agent to the port the app under test listens on (Android). The connect that made the context sets it, else it is made on first use
+	// (portFollower). Guarded by followMu.
+	Follower *device.PortFollower
+	followMu sync.Mutex
+
 	sysMu     sync.Mutex
 	sysDriver sysdialog.Driver // lazily created by SystemDriver, shared by all steps of the run
 
@@ -207,8 +212,36 @@ func (dc *DeviceContext) reconnectDialOptions(token string) probelink.DialOption
 		Token:            token,
 		DialTimeout:      dc.dialTimeoutVal(),
 		OnConnectRefused: dc.reforwardHook(),
+		OnPortSuspect:    dc.portSuspectHook(),
 		OwnAdbForward:    dc.ownAdbForward(),
 	}
+}
+
+// portFollower returns the follower of this connection's agent port, made on first use from the configured device port when the connect that made the context did not
+// set one. Nil off Android, without a device manager and for an HTTP agent: they have no adb forward to move.
+func (dc *DeviceContext) portFollower() *device.PortFollower {
+	if dc.Platform != device.PlatformAndroid || dc.Manager == nil || dc.UseHTTP {
+		return nil
+	}
+	dc.followMu.Lock()
+	defer dc.followMu.Unlock()
+	if dc.Follower == nil {
+		base := dc.DevicePort
+		if base == 0 {
+			base = dc.Port
+		}
+		dc.Follower = device.NewPortFollower(dc.Manager.ADB(), dc.Manager, dc.Serial, dc.AppID, dc.Port, base,
+			func(msg string) { fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", dc.Serial, msg) }, nil)
+	}
+	return dc.Follower
+}
+
+// portSuspectHook is the dial hook that looks for the app's own agent port after a failed dial (see probelink.DialOptions.OnPortSuspect); nil when there is no follower.
+func (dc *DeviceContext) portSuspectHook() func(context.Context) bool {
+	if f := dc.portFollower(); f != nil {
+		return f.Suspect
+	}
+	return nil
 }
 
 // ownAdbForward reports whether the host side of the agent port is this CLI's own `adb forward`, as it is on every Android run: a dial error then never blames an
@@ -700,12 +733,8 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		dc.Manager.ADB().Shell(ctx, dc.Serial, "rm", "-f", "/data/local/tmp/probe/token")
 		// Also clear logcat as fallback
 		dc.Manager.ADB().Run(ctx, dc.Serial, "logcat", "-c") //nolint:errcheck
-		// Re-establish port forward (force-stop may have dropped it)
-		devPort := dc.DevicePort
-		if devPort == 0 {
-			devPort = dc.Port
-		}
-		_ = dc.Manager.ForwardPort(ctx, dc.Serial, dc.Port, devPort)
+		// Re-establish port forward (force-stop may have dropped it), to the port the agent was last found on
+		_ = dc.Manager.ForwardPort(ctx, dc.Serial, dc.Port, dc.devicePort())
 	case device.PlatformIOS:
 		if dc.IsPhysical {
 			// Physical iOS: no token file to delete — idevicesyslog reads live stream
@@ -733,9 +762,16 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	var token string
 	var err error
 
+	follower := dc.portFollower()
 	switch dc.Platform {
 	case device.PlatformAndroid:
-		token, err = dc.Manager.ReadTokenAndroid(ctx, dc.Serial, tokenTimeout, dc.AppID, nil)
+		var src device.TokenSource
+		token, src, err = dc.Manager.ReadTokenAndroidSource(ctx, dc.Serial, tokenTimeout, dc.AppID, nil)
+		if err == nil && follower != nil {
+			// A token that did not come from run-as does not prove the app: do not go back to a port another app holds.
+			follower.NoteTokenSource(src)
+			follower.Preflight(ctx)
+		}
 	case device.PlatformIOS:
 		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
 	}
@@ -748,7 +784,11 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 	dialOpts.RefreshToken = func(c context.Context) (string, error) {
 		switch dc.Platform {
 		case device.PlatformAndroid:
-			return dc.Manager.ReadTokenAndroid(c, dc.Serial, 5*time.Second, dc.AppID, nil)
+			t, src, err := dc.Manager.ReadTokenAndroidSource(c, dc.Serial, 5*time.Second, dc.AppID, nil)
+			if err == nil && follower != nil {
+				follower.NoteTokenSource(src)
+			}
+			return t, err
 		case device.PlatformIOS:
 			return dc.Manager.ReadTokenIOS(c, dc.Serial, 5*time.Second, dc.AppID)
 		}
@@ -805,7 +845,7 @@ func (dc *DeviceContext) reforwardHook() func(context.Context) {
 		return nil
 	}
 	return func(c context.Context) {
-		_ = dc.Manager.ForwardPort(c, dc.Serial, dc.Port, dc.DevicePort)
+		_ = dc.Manager.ForwardPort(c, dc.Serial, dc.Port, dc.devicePort())
 	}
 }
 

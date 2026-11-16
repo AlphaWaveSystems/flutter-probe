@@ -133,9 +133,17 @@ func (e *connectError) Unwrap() error { return e.err }
 
 // runOnDevice connects to a single device and runs its assigned files.
 func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) ([]TestResult, error) {
-	// Setup port forward for Android
+	appID := dr.AppID
+	if appID == "" {
+		appID = po.cfg.Project.App
+	}
+
+	// Setup port forward for Android. Each lane has its own follower of the agent port: what one lane finds is not known to another.
+	var follower *device.PortFollower
 	if dr.Platform == device.PlatformAndroid {
-		devPort := po.cfg.Agent.AgentDevicePort()
+		follower = device.NewPortFollower(po.manager.ADB(), po.manager, dr.DeviceID, appID, dr.Port, po.cfg.Agent.AgentDevicePort(),
+			func(msg string) { fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), msg) }, nil)
+		devPort := follower.DevicePort()
 		if err := po.manager.ForwardPort(ctx, dr.DeviceID, dr.Port, devPort); err != nil {
 			return nil, &connectError{fmt.Errorf("[%s] port forward: %w", dr.DeviceID, err)}
 		}
@@ -150,14 +158,15 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		tokenTimeout = 30 * time.Second
 	}
 
-	appID := dr.AppID
-	if appID == "" {
-		appID = po.cfg.Project.App
-	}
-
 	switch dr.Platform {
 	case device.PlatformAndroid:
-		token, err = po.manager.ReadTokenAndroid(ctx, dr.DeviceID, tokenTimeout, appID, nil)
+		var src device.TokenSource
+		token, src, err = po.manager.ReadTokenAndroidSource(ctx, dr.DeviceID, tokenTimeout, appID, nil)
+		if err == nil {
+			// A token that did not come from run-as does not prove the app: do not stay on a port another app holds.
+			follower.NoteTokenSource(src)
+			follower.Preflight(ctx)
+		}
 	case device.PlatformIOS:
 		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
 	}
@@ -171,12 +180,16 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		dialTimeout = 30 * time.Second
 	}
 
-	client, err := po.dialAgent(ctx, probelink.DialOptions{
+	dialOpts := probelink.DialOptions{
 		Host:        "127.0.0.1",
 		Port:        dr.Port,
 		Token:       token,
 		DialTimeout: dialTimeout,
-	})
+	}
+	if follower != nil {
+		dialOpts.OnPortSuspect = follower.Suspect
+	}
+	client, err := po.dialAgent(ctx, dialOpts)
 	if err != nil {
 		hint := ""
 		if dr.Platform == device.PlatformAndroid {
@@ -198,6 +211,9 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 
 	// Create device context
 	devCtx := po.deviceContext(ctx, dr, appID, tokenTimeout, dialTimeout)
+	if follower != nil {
+		devCtx.Follower = follower // its reconnects start from the port found here
+	}
 
 	// Create runner for this device
 	deviceOpts := po.opts

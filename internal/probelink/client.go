@@ -64,7 +64,20 @@ type DialOptions struct {
 	// OwnAdbForward marks the host port as the CLI's own `adb forward` (Android
 	// runs), so port-holder hints do not blame it for a rejected token.
 	OwnAdbForward bool
+
+	// OnPortSuspect, when set, is called when a failed dial can mean that the forwarded
+	// port reaches the wrong app: after a 401/403, and while dials keep failing without
+	// being refused (the forward accepts, the device side does not answer) for longer
+	// than portSuspectAfter. The Android path uses it to look for the port the app under
+	// test really listens on and to move the adb forward there. It returns true when it
+	// moved the forward; the dial then tries again at once, also after a 401 that would
+	// otherwise be final. It is called on every such failed attempt, so it must be cheap
+	// or limit itself. Nil (the default) changes nothing.
+	OnPortSuspect func(ctx context.Context) bool
 }
+
+// portSuspectAfter is how long dials may fail without being refused before OnPortSuspect is asked.
+const portSuspectAfter = 3 * time.Second
 
 // refusedHookInterval throttles DialOptions.OnConnectRefused.
 const refusedHookInterval = 3 * time.Second
@@ -152,7 +165,7 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 	const retryInterval = time.Second
 	attempt := 0
 	var firstReject time.Time // first HTTP 401/403 seen; bounds RefreshToken retries
-	var lastRefusedHook, firstRefused time.Time
+	var lastRefusedHook, firstRefused, firstTransient time.Time
 	warnedRefused := false
 	opts.trace("probelink: dialing %s (timeout=%s)", safeURL, opts.DialTimeout)
 	for {
@@ -168,6 +181,12 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 		// A real HTTP auth rejection from the agent is fatal — retrying with
 		// the same token cannot succeed.
 		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+			// The agent that answered may be another app's: let the caller look for the port of the app under test.
+			if opts.OnPortSuspect != nil && opts.OnPortSuspect(dialCtx) {
+				opts.trace("probelink: [attempt %d] agent rejected token (HTTP %d) — the forward was moved to another port, dialing again", attempt, resp.StatusCode)
+				firstReject = time.Time{}
+				continue
+			}
 			if opts.RefreshToken != nil {
 				if firstReject.IsZero() {
 					firstReject = time.Now()
@@ -213,8 +232,17 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 				warnedRefused = true
 				emitWarning(fmt.Sprintf("still waiting: nothing listens on the agent port (%d) after %s — is the app running and built with --dart-define=PROBE_AGENT=true?", opts.Port, refusedWarnAfter))
 			}
+			firstTransient = time.Time{}
 		} else {
 			firstRefused = time.Time{}
+			if firstTransient.IsZero() {
+				firstTransient = time.Now()
+			}
+			if opts.OnPortSuspect != nil && time.Since(firstTransient) >= portSuspectAfter && opts.OnPortSuspect(dialCtx) {
+				opts.trace("probelink: [attempt %d] the dial kept failing — the forward was moved to another port, dialing again", attempt)
+				firstTransient = time.Time{}
+				continue
+			}
 		}
 		if opts.OnConnectRefused != nil && strings.Contains(err.Error(), "connection refused") &&
 			time.Since(lastRefusedHook) >= refusedHookInterval {

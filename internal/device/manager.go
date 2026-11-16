@@ -529,9 +529,30 @@ func (m *Manager) ReadToken(ctx context.Context, serial string, timeout time.Dur
 	return m.ReadTokenAndroid(ctx, serial, timeout, "", nil)
 }
 
+// TokenSource says where on the device an Android token was read. Only a token read through run-as proves which app it belongs to: the other sources are
+// shared files and a log that every app with the probe agent writes to.
+type TokenSource int
+
+const (
+	// TokenSourceNone is the source of no token (an error).
+	TokenSourceNone TokenSource = iota
+	// TokenSourceRunAs is the app's own cache file, read as the app (run-as <appID>): the token of that app.
+	TokenSourceRunAs
+	// TokenSourceTmpFile is /data/local/tmp/probe/token, one file for every app on the device.
+	TokenSourceTmpFile
+	// TokenSourceLogcat is the newest PROBE_TOKEN= line of the log, written by whichever app printed last.
+	TokenSourceLogcat
+)
+
 // ReadTokenAndroid reads the token with an optional app ID for run-as access
 // and an optional Tracer for step-by-step diagnostic logging (nil disables it).
 func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout time.Duration, appID string, trace Tracer) (string, error) {
+	token, _, err := m.ReadTokenAndroidSource(ctx, serial, timeout, appID, trace)
+	return token, err
+}
+
+// ReadTokenAndroidSource is ReadTokenAndroid that also says where the token was read (see TokenSource).
+func (m *Manager) ReadTokenAndroidSource(ctx context.Context, serial string, timeout time.Duration, appID string, trace Tracer) (string, TokenSource, error) {
 	deadline := time.Now().Add(timeout)
 	trace.log("android: reading token on %s (appID=%q, timeout=%s)", serial, appID, timeout)
 
@@ -548,7 +569,7 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 				token := strings.TrimSpace(string(out))
 				if len(token) >= 16 {
 					trace.log("android: [attempt %d] run-as token accepted (len=%d)", attempt, len(token))
-					return token, nil
+					return token, TokenSourceRunAs, nil
 				}
 				trace.log("android: [attempt %d] run-as returned no usable token (len=%d)", attempt, len(token))
 			}
@@ -564,7 +585,7 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 			token := strings.TrimSpace(string(out))
 			if len(token) >= 16 {
 				trace.log("android: [attempt %d] /data/local/tmp token accepted (len=%d)", attempt, len(token))
-				return token, nil
+				return token, TokenSourceTmpFile, nil
 			}
 			trace.log("android: [attempt %d] /data/local/tmp returned no usable token (len=%d)", attempt, len(token))
 		}
@@ -589,7 +610,7 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 			lastToken, matches := latestProbeToken(string(logOut))
 			if lastToken != "" {
 				trace.log("android: [attempt %d] logcat token accepted (len=%d, %d total token line(s) in buffer, using most recent)", attempt, len(lastToken), matches)
-				return lastToken, nil
+				return lastToken, TokenSourceLogcat, nil
 			}
 			trace.log("android: [attempt %d] logcat dump had no PROBE_TOKEN= line", attempt)
 		}
@@ -597,7 +618,7 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 		select {
 		case <-ctx.Done():
 			trace.log("android: context cancelled after %d attempt(s): %v", attempt, ctx.Err())
-			return "", ctx.Err()
+			return "", TokenSourceNone, ctx.Err()
 		case <-time.After(1 * time.Second):
 		}
 	}
@@ -607,10 +628,10 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 	// internal/cli/test.go already appends this suggestion when wrapping.
 	if appID != "" {
 		if out, err := m.adb.ShellQ(ctx, serial, "pidof", appID); err == nil && strings.TrimSpace(string(out)) == "" {
-			return "", TokenAppNotRunningError(timeout, appID)
+			return "", TokenSourceNone, TokenAppNotRunningError(timeout, appID)
 		}
 	}
-	return "", fmt.Errorf("android: probe token not found within %s", timeout)
+	return "", TokenSourceNone, fmt.Errorf("android: probe token not found within %s", timeout)
 }
 
 // AppNotRunningMarker is the text a failed token read carries when the app has no process. Callers that must tell that case from a token that is simply
