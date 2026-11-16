@@ -164,7 +164,11 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("[%s] connect: %w", dr.DeviceID, err)
+		hint := ""
+		if dr.Platform == device.PlatformAndroid {
+			hint = device.ForwardHint(ctx, po.manager.ADB(), dr.Port, dr.DeviceID)
+		}
+		return nil, fmt.Errorf("[%s] connect: %w%s", dr.DeviceID, err, hint)
 	}
 	defer client.Close()
 

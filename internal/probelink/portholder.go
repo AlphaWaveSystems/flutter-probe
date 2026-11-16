@@ -121,13 +121,19 @@ func describeHolders(port int, hs []Holder) string {
 	for _, h := range hs {
 		switch {
 		case strings.EqualFold(h.Name, "adb"):
-			parts = append(parts, fmt.Sprintf("an adb port forward (pid %s) — left over from an earlier run, or another Android device is forwarded to this port: remove it with `adb forward --remove tcp:%d` (list them with `adb forward --list`)", h.PID, port))
+			// The process that listens for an `adb forward` is the shared adb server, whichever device the forward belongs to, and the same server holds the
+			// port when it is the CLI's own forward. Its pid says nothing, and "a forward" may be wrong (the list may show no forward for the port), so it is not
+			// named here. Whose forward it is comes from `adb forward --list` (device.ForwardHint), which can say it.
+			continue
 		case simulatorUDID(h.Command) != "":
 			udid := simulatorUDID(h.Command)
 			parts = append(parts, fmt.Sprintf("an iOS simulator app %q (pid %s, simulator %s) — probably left over from an iOS run: stop it with `xcrun simctl terminate %s <bundle-id>` or shut the simulator down", h.Name, h.PID, udid, udid))
 		default:
 			parts = append(parts, fmt.Sprintf("pid %s (%s)", h.PID, h.Name))
 		}
+	}
+	if len(parts) == 0 {
+		return ""
 	}
 	return fmt.Sprintf(" — agent port %d is held by %s; if that is not the app under test, stop it or pick another port with --agent-port", port, strings.Join(parts, "; "))
 }

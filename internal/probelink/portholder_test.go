@@ -53,9 +53,18 @@ func TestPortHolder_FindsOwnListener(t *testing.T) {
 }
 
 func TestDescribeHolders_DistinguishesAdbFromASimulatorApp(t *testing.T) {
-	adb := describeHolders(48686, []Holder{{PID: "7", Name: "adb", Command: "adb -L tcp:5037 fork-server server"}})
-	if !strings.Contains(adb, "adb port forward") || !strings.Contains(adb, "adb forward --remove tcp:48686") || strings.Contains(adb, "simulator") {
-		t.Errorf("adb hint: %s", adb)
+	// The process listening for an `adb forward` is the shared adb server, whatever device the forward belongs to (and the CLI's own forward looks the same):
+	// it is never named, so no pid and no "forward" claim reach the message.
+	adbOnly := describeHolders(48686, []Holder{{PID: "7", Name: "adb", Command: "adb -L tcp:5037 fork-server server"}})
+	if adbOnly != "" {
+		t.Errorf("the adb server alone must give no hint, got: %s", adbOnly)
+	}
+	if got := describeHolders(48686, []Holder{{PID: "7", Name: "ADB"}, {PID: "8", Name: "adb"}}); got != "" {
+		t.Errorf("adb holders (any case, several) must give no hint, got: %s", got)
+	}
+	mixed := describeHolders(48686, []Holder{{PID: "7", Name: "adb"}, {PID: "3", Name: "python3", Command: "python3 -m http.server"}})
+	if !strings.Contains(mixed, "pid 3 (python3)") || strings.Contains(mixed, "adb") || strings.Contains(mixed, "pid 7") || strings.Contains(mixed, "forward") {
+		t.Errorf("with another holder only that one is named, got: %s", mixed)
 	}
 	sim := describeHolders(48686, []Holder{{PID: "9", Name: "Runner",
 		Command: "/Users/x/Library/Developer/CoreSimulator/Devices/11111111-2222-3333-4444-555555555555/data/Containers/Bundle/Application/AAA/Runner.app/Runner"}})

@@ -1067,7 +1067,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				}
 				if err != nil {
 					connectFailed = true
-					return fmt.Errorf("connecting to ProbeAgent: %w", err)
+					return fmt.Errorf("connecting to ProbeAgent: %w%s", err, device.ForwardHint(ctx, dm.ADB(), cfg.Agent.Port, deviceSerial))
 				}
 				defer client.Close()
 			} else {
