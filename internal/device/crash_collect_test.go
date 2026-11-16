@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
 const crashPkg = "dev.probe.webviewfixture"
@@ -26,18 +28,22 @@ func sample(t *testing.T, name string) string {
 
 // crashAdb is an AdbRunner that records every call and answers the two commands from fixed text, or fails.
 type crashAdb struct {
-	calls   [][]string
-	exit    string
-	buf     string
-	exitErr error
-	bufErr  error
-	block   bool // wait for the context instead of answering
+	calls    [][]string
+	exit     string
+	buf      string
+	exitErr  error
+	bufErr   error
+	block    bool  // wait for the context instead of answering
+	blockErr error // what to return after the wait instead of the context's own error
 }
 
 func (c *crashAdb) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
 	c.calls = append(c.calls, append([]string(nil), args...))
 	if c.block {
 		<-ctx.Done()
+		if c.blockErr != nil {
+			return nil, c.blockErr
+		}
 		return nil, ctx.Err()
 	}
 	if len(args) > 2 && args[2] == "logcat" {
@@ -362,6 +368,9 @@ func TestCollectCrashEvidenceRefusesBadInputWithoutCallingAdb(t *testing.T) {
 		"no redaction":  {&crashAdb{}, "s", crashPkg, CrashOptions{}},
 		"no serial":     {&crashAdb{}, " ", crashPkg, CrashOptions{Redact: maskToken}},
 		"no runner":     {nil, "s", crashPkg, CrashOptions{Redact: maskToken}},
+		"leading dash":  {&crashAdb{}, "s", "-a.b", CrashOptions{Redact: maskToken}},
+		"empty segment": {&crashAdb{}, "s", "a..b", CrashOptions{Redact: maskToken}},
+		"leading dot":   {&crashAdb{}, "s", ".a.b", CrashOptions{Redact: maskToken}},
 		"shell package": {&crashAdb{}, "s", "a.b;rm -rf /", CrashOptions{Redact: maskToken}},
 		"one word":      {&crashAdb{}, "s", "nodots", CrashOptions{Redact: maskToken}},
 		"quoted":        {&crashAdb{}, "s", "a.b'c", CrashOptions{Redact: maskToken}},
@@ -477,5 +486,239 @@ func TestCleanDeviceTextAndCuts(t *testing.T) {
 	}
 	if got := capBytes("abc", 10); got != "abc" {
 		t.Errorf("capBytes = %q", got)
+	}
+}
+
+// ---- review of #632 ----
+
+func exitEntry(proc string, extra string) string {
+	return "        ApplicationExitInfo #0:\n          timestamp=2026-11-15 10:00:00.000 pid=4000 realUid=10207 packageUid=10207 definingUid=10207 " + extra + "\n          process=" + proc + " reason=4 (x) status=0\n          importance=100 description=d state=empty\n"
+}
+
+// The process name is device text too: only the package, or the package with a short plain service name, is accepted, and what is accepted is masked.
+func TestProcessNamesAreRestrictedMaskedAndCut(t *testing.T) {
+	for name, proc := range map[string]string{
+		"bidi and zero-width": crashPkg + ":\u202eevil\u200bSECRET_TOKEN_abc",
+		"huge suffix":         crashPkg + ":" + strings.Repeat("a", 400000),
+		"65 characters":       crashPkg + ":" + strings.Repeat("a", 65),
+		"shell characters":    crashPkg + ":a;rm",
+		"empty suffix":        crashPkg + ":",
+		"colon in suffix":     crashPkg + ":a:b",
+	} {
+		if got := ParseExitInfo(exitEntry(proc, "user=0"), crashPkg); len(got) != 0 {
+			t.Errorf("%s: a process name of %d bytes was accepted: %.60q", name, len(proc), got[0].Process)
+		}
+	}
+	for _, ok := range []string{crashPkg, crashPkg + ":sync", crashPkg + ":a.b-c_d", crashPkg + ":" + strings.Repeat("a", 64)} {
+		if got := ParseExitInfo(exitEntry(ok, "user=0"), crashPkg); len(got) != 1 || got[0].Process != ok {
+			t.Errorf("%.80q was refused: %+v", ok, got)
+		}
+	}
+	// what is accepted still goes through the masking function
+	ev, err := CollectCrashEvidence(context.Background(), &crashAdb{exit: exitEntry(crashPkg+":abc123FIXTUREvalue", "user=0")}, "s", crashPkg, CrashOptions{Redact: maskToken})
+	if err != nil || len(ev.Exits) != 1 || ev.Exits[0].Process != crashPkg+":[masked]" {
+		t.Errorf("process not masked: %+v %v", ev.Exits, err)
+	}
+	// and is cut after it
+	long := crashPkg + ":" + strings.Repeat("a", 64)
+	ev, _ = CollectCrashEvidence(context.Background(), &crashAdb{exit: exitEntry(long, "user=0")}, "s", crashPkg, CrashOptions{Redact: func(s string) string { return s + strings.Repeat("z", 500) }})
+	if len(ev.Exits) != 1 || utf8.RuneCountInString(ev.Exits[0].Process) != maxProcessRunes {
+		t.Errorf("process not cut: %d runes", utf8.RuneCountInString(ev.Exits[0].Process))
+	}
+}
+
+func TestExitEntriesOfOtherUsersAreDropped(t *testing.T) {
+	text := exitEntry(crashPkg, "user=0") + exitEntry(crashPkg, "user=10") + strings.Replace(exitEntry(crashPkg, ""), "pid=4000", "pid=4001", 1)
+	ev, err := CollectCrashEvidence(context.Background(), &crashAdb{exit: text}, "s", crashPkg, CrashOptions{Redact: maskToken, PID: -1})
+	if err != nil || len(ev.Exits) != 2 || ev.Exits[0].User != 0 || ev.Exits[1].User != -1 {
+		t.Fatalf("default user: %+v %v", ev.Exits, err)
+	}
+	ev, _ = CollectCrashEvidence(context.Background(), &crashAdb{exit: text}, "s", crashPkg, CrashOptions{Redact: maskToken, User: 10, PID: -1})
+	if len(ev.Exits) != 2 || ev.Exits[0].User != 10 {
+		t.Errorf("user 10: %+v", ev.Exits)
+	}
+	if recs := ParseExitInfo(sample(t, "exit-java.txt"), crashPkg); recs[0].User != 0 {
+		t.Errorf("the real capture's user = %d", recs[0].User)
+	}
+}
+
+func TestFutureExitTimestampsAreRefused(t *testing.T) {
+	saved := crashNow
+	defer func() { crashNow = saved }()
+	crashNow = func() time.Time { return time.Date(2026, 11, 15, 12, 0, 0, 0, time.Local) }
+	at := func(ts string) string {
+		return strings.Replace(exitEntry(crashPkg, "user=0"), "2026-11-15 10:00:00.000", ts, 1)
+	}
+	for ts, want := range map[string]bool{
+		"2026-11-15 10:00:00.000": true,  // earlier today
+		"2026-11-16 12:00:00.000": true,  // a day ahead: a device in another zone
+		"2026-11-17 11:59:59.000": true,  // just inside the slack
+		"2026-11-17 12:00:01.000": false, // past it
+		"2099-01-01 00:00:00.000": false,
+	} {
+		if got := len(ParseExitInfo(at(ts), crashPkg)) == 1; got != want {
+			t.Errorf("%s: accepted = %v, want %v", ts, got, want)
+		}
+	}
+}
+
+func TestCollectorCapsWhatItReads(t *testing.T) {
+	// 512 KiB read cap: records and crash lines after it do not exist
+	filler := strings.Repeat("junk\n", maxCrashInputBytes/5+10)
+	adb := &crashAdb{exit: filler + exitEntry(crashPkg, "user=0")}
+	if ev, _ := CollectCrashEvidence(context.Background(), adb, "s", crashPkg, CrashOptions{Redact: maskToken}); len(ev.Exits) != 0 {
+		t.Errorf("an entry past the read cap was kept")
+	}
+	late := &crashAdb{exit: exitEntry(crashPkg, "user=0"), buf: filler + "11-15 19:03:48.050  4000  4000 E AndroidRuntime: java.lang.Error: late\n"}
+	if ev, _ := CollectCrashEvidence(context.Background(), late, "s", crashPkg, CrashOptions{Redact: maskToken}); len(ev.CrashLines) != 0 {
+		t.Errorf("a crash line past the read cap was kept")
+	}
+	// 8 exit entries
+	var many strings.Builder
+	for i := 0; i < 40; i++ {
+		many.WriteString(exitEntry(crashPkg, "user=0"))
+	}
+	if ev, _ := CollectCrashEvidence(context.Background(), &crashAdb{exit: many.String()}, "s", crashPkg, CrashOptions{Redact: maskToken}); len(ev.Exits) != maxExitRecords {
+		t.Errorf("kept %d exit entries, want %d", len(ev.Exits), maxExitRecords)
+	}
+	// 32 KiB of crash text by default
+	var buf strings.Builder
+	for i := 0; i < 200; i++ {
+		buf.WriteString("11-15 19:03:48.050  4000  4000 E AndroidRuntime: " + strings.Repeat("x", 300) + "\n")
+	}
+	ev, _ := CollectCrashEvidence(context.Background(), &crashAdb{exit: exitEntry(crashPkg, "user=0"), buf: buf.String()}, "s", crashPkg, CrashOptions{Redact: maskToken})
+	total := 0
+	for _, l := range ev.CrashLines {
+		total += len(l) + 1
+	}
+	if total > defaultCrashTextBytes || total < defaultCrashTextBytes-400 || !ev.Truncated {
+		t.Errorf("kept %d bytes (limit %d), truncated %v", total, defaultCrashTextBytes, ev.Truncated)
+	}
+}
+
+// The byte budget counts the masked text: a masking function that makes lines longer does not get past it.
+func TestTheByteBudgetCountsMaskedText(t *testing.T) {
+	var buf strings.Builder
+	for i := 0; i < 50; i++ {
+		buf.WriteString("11-15 19:03:48.050  4000  4000 E AndroidRuntime: line\n")
+	}
+	grow := func(s string) string { return s + strings.Repeat("[masked]", 10) }
+	ev, err := CollectCrashEvidence(context.Background(), &crashAdb{exit: exitEntry(crashPkg, "user=0"), buf: buf.String()}, "s", crashPkg, CrashOptions{Redact: grow, MaxBytes: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0
+	for _, l := range ev.CrashLines {
+		total += len(l) + 1
+	}
+	if total > 1000 || len(ev.CrashLines) == 0 || len(ev.CrashLines) >= 50 || !ev.Truncated {
+		t.Errorf("kept %d lines, %d bytes, truncated %v", len(ev.CrashLines), total, ev.Truncated)
+	}
+}
+
+func TestAPanickingMaskingFunctionIsReportedNotPropagated(t *testing.T) {
+	adb := &crashAdb{exit: sample(t, "exit-java.txt"), buf: sample(t, "crashbuf-java.txt")}
+	for name, f := range map[string]func(string) string{
+		"always": func(string) string { panic("boom") },
+		"on a line": func(s string) string {
+			if strings.Contains(s, "Unable to start") {
+				panic("boom")
+			}
+			return s
+		},
+		"on the tail": func(s string) string {
+			if strings.HasPrefix(s, "at ") || strings.Contains(s, "ActivityThread") {
+				panic("boom")
+			}
+			return s
+		},
+	} {
+		ev, err := CollectCrashEvidence(context.Background(), adb, "s", crashPkg, CrashOptions{Redact: f, PID: 3567})
+		var ce *CrashCollectError
+		if !errors.As(err, &ce) || ce.Step != "options" || ev.Exit != nil || len(ev.CrashLines) != 0 || ev.Summary != "" {
+			t.Errorf("%s: err = %v, evidence = %+v", name, err, ev)
+		}
+		if err != nil && strings.Contains(err.Error(), "boom") {
+			t.Errorf("%s: the panic text reached the error", name)
+		}
+	}
+}
+
+func TestPEMBlocksAreReplacedByOneLine(t *testing.T) {
+	line := func(m string) string { return "11-15 19:03:48.050  4000  4000 E AndroidRuntime: " + m + "\n" }
+	text := line("java.lang.Error: boom") + line("-----BEGIN RSA PRIVATE KEY-----") + line("MIIEowIBAAKCAQEAxxxxSECRETKEYBODY") + line("more+base64/lines==") + line("-----END RSA PRIVATE KEY-----") + line("after the key")
+	ct := ParseCrashBuffer(text, 4000, crashPkg, 0, 0)
+	if strings.Join(ct.Lines, "|") != "java.lang.Error: boom|[key block removed]|after the key" {
+		t.Errorf("lines = %q", ct.Lines)
+	}
+	// a BEGIN with no END hides at most maxPEMLines lines, so the rest of the buffer is still read
+	var b strings.Builder
+	b.WriteString(line("-----BEGIN PRIVATE KEY-----"))
+	for i := 0; i < maxPEMLines+50; i++ {
+		b.WriteString(line("body " + strconv.Itoa(i)))
+	}
+	ct = ParseCrashBuffer(b.String(), 4000, crashPkg, maxPEMLines*2, 1<<20)
+	if len(ct.Lines) != 51 { // the marker, then the 50 lines past the 200 the block may hide
+		t.Errorf("an unterminated block left %d lines", len(ct.Lines))
+	}
+	if strings.Contains(strings.Join(ct.Lines, "\n"), "body 0") {
+		t.Errorf("the start of the unterminated block was kept")
+	}
+	if ct.Lines[len(ct.Lines)-1] != "body "+strconv.Itoa(maxPEMLines+49) {
+		t.Errorf("the end of the buffer was hidden: %q", ct.Lines[len(ct.Lines)-1])
+	}
+	// one line with both ends is replaced too
+	if got := ParseCrashBuffer(line("x -----BEGIN CERTIFICATE----- abc -----END CERTIFICATE-----"), 4000, crashPkg, 0, 0); len(got.Lines) != 1 || got.Lines[0] != "[key block removed]" {
+		t.Errorf("one-line block: %q", got.Lines)
+	}
+}
+
+// Both cleaners drop the same invisible characters: they share one rule.
+func TestTheTwoCleanersShareTheHiddenCharacterRule(t *testing.T) {
+	for _, r := range []rune{0x3164, 0x115F, 0xFFA0, 0x2800, 0x034F, 0xFE00, 0xFE0F, 0xE0100, 0xE01EF, 0x180B, 0x180F, 0xFFFC, 0x202E, 0x200B, 0xFEFF, 0x2028, 0xE000, 0xFDD0, 0xFFFE} {
+		in := "a" + string(r) + "b"
+		if got := cleanDeviceText(in); got != "ab" {
+			t.Errorf("cleanDeviceText kept U+%04X: %q", r, got)
+		}
+		if got := cleanPageText(in); got != "ab" {
+			t.Errorf("cleanPageText kept U+%04X: %q", r, got)
+		}
+	}
+	for _, in := range []string{"a\u00a0b", "a\u3000b", "caf\u00e9", "日本語"} {
+		if cleanDeviceText(in) != in || cleanPageText(in) != in {
+			t.Errorf("visible text changed: %q", in)
+		}
+	}
+}
+
+// A timeout is reported as one whatever adb said when it was cut off, and the adb text is still not in the error.
+func TestATimeoutKeepsItsCauseWhateverAdbSaid(t *testing.T) {
+	adb := &crashAdb{block: true, blockErr: errors.New("adb: killed: SECRETWORDS")}
+	_, err := CollectCrashEvidence(context.Background(), adb, "s", crashPkg, CrashOptions{Redact: maskToken, Timeout: 20 * time.Millisecond})
+	if !errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "SECRETWORDS") || strings.Contains(err.Error(), "killed") {
+		t.Errorf("err = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	adb2 := &crashAdb{block: true, blockErr: errors.New("adb: killed")}
+	go func() { time.Sleep(20 * time.Millisecond); cancel() }()
+	if _, err := CollectCrashEvidence(ctx, adb2, "s", crashPkg, CrashOptions{Redact: maskToken}); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancel: err = %v", err)
+	}
+	// the second command too
+	adb3 := &crashAdb{exit: sample(t, "exit-java.txt")}
+	adb3.bufErr = errors.New("adb: killed")
+	if _, err := CollectCrashEvidence(context.Background(), adb3, "s", crashPkg, CrashOptions{Redact: maskToken}); errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		t.Errorf("a plain adb failure looks like a timeout: %v", err)
+	}
+}
+
+// The package name is validated first and then goes through the shell quoting helper; for a valid name the two agree, and the argument is exactly the helper's output.
+func TestThePackageArgumentIsTheQuotedForm(t *testing.T) {
+	adb := &crashAdb{exit: ""}
+	if _, err := CollectCrashEvidence(context.Background(), adb, "s", crashPkg, CrashOptions{Redact: maskToken}); err != nil {
+		t.Fatal(err)
+	}
+	if got := adb.calls[0][len(adb.calls[0])-1]; got != shellquote.Arg(crashPkg) {
+		t.Errorf("the package argument = %q, want %q", got, shellquote.Arg(crashPkg))
 	}
 }

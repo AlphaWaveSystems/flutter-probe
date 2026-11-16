@@ -465,17 +465,27 @@ func cleanPageText(s string) string {
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
 		i += size
-		switch {
-		case r == utf8.RuneError,
-			unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.Is(unicode.Co, r), unicode.Is(unicode.Cs, r),
-			r == '\u2028', r == '\u2029',
-			r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF, // variation selectors
-			r == '\u3164', r == '\u115F', r == '\uFFA0', // Hangul fillers: blank letters
-			r == '\u2800', r == '\u034F', r >= 0x180B && r <= 0x180F, r == '\uFFFC', // braille blank, combining grapheme joiner, Mongolian free variation selectors, object replacement
-			r >= 0xFDD0 && r <= 0xFDEF, r&0xFFFE == 0xFFFE:
-		default:
+		if !hiddenRune(r) {
 			b.WriteRune(r)
 		}
 	}
 	return b.String()
+}
+
+// hiddenRune reports whether text of an untrusted source should not carry r: the replacement character (what invalid UTF-8 decodes to), control, format (bidi
+// and zero-width included), private-use and surrogate characters, line and paragraph separators, variation selectors, the characters that show nothing but are
+// not whitespace (Hangul fillers, the braille blank, the combining grapheme joiner, Mongolian free variation selectors, the object replacement character) and
+// the non-characters. A no-break space and the ideographic space are not hidden: they show as spaces.
+func hiddenRune(r rune) bool {
+	switch {
+	case r == utf8.RuneError,
+		unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.Is(unicode.Co, r), unicode.Is(unicode.Cs, r),
+		r == '\u2028', r == '\u2029',
+		r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF, // variation selectors
+		r == '\u3164', r == '\u115F', r == '\uFFA0', // Hangul fillers: blank letters
+		r == '\u2800', r == '\u034F', r >= 0x180B && r <= 0x180F, r == '\uFFFC', // braille blank, combining grapheme joiner, Mongolian free variation selectors, object replacement
+		r >= 0xFDD0 && r <= 0xFDEF, r&0xFFFE == 0xFFFE:
+		return true
+	}
+	return false
 }
