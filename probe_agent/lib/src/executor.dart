@@ -2121,9 +2121,12 @@ class _ProbeGesture {
   }
 
   Future<void> moveTo(Offset location, {Duration? timeStamp}) async {
+    // The movement goes with the position: Flutter's drag recognizers read the event's delta, not the difference between
+    // positions, so a move without it is recognized as a drag that moves nothing.
     _binding.handlePointerEvent(PointerMoveEvent(
       pointer: _pointer,
       position: location,
+      delta: location - _position,
     ));
     _position = location;
   }
