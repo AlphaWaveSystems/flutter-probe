@@ -23,7 +23,8 @@
     "test:wifi": "node --test wifi-tests/",
     "test:fix": "node --test fix-tests/",
     "test:first-run": "node --test first-run-tests/",
-    "test:lint": "node --test lint-tests/"
+    "test:lint": "node --test lint-tests/",
+    "test:confirm": "node --test confirm-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.57.0"
