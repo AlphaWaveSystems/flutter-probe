@@ -1,5 +1,11 @@
 version: 2
 
+# Grouping: the minor and patch updates of one ecosystem in one directory arrive as ONE
+# pull request ("bump the <group> group"), because separate pull requests for modules that
+# share go.mod / go.sum or package-lock.json conflict with each other after every merge.
+# A major update is not in a group, so it keeps its own pull request and its own review.
+# https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#groups
+
 updates:
   # Go modules -- CLI (root)
   - package-ecosystem: "gomod"
@@ -13,6 +19,13 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     open-pull-requests-limit: 10
+    groups:
+      go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Go modules -- probe-convert tool
   - package-ecosystem: "gomod"
@@ -26,6 +39,13 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # npm -- documentation website (Starlight/Astro)
   - package-ecosystem: "npm"
@@ -39,6 +59,13 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Go modules -- Studio desktop app
   - package-ecosystem: "gomod"
@@ -52,6 +79,13 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # npm -- Studio frontend (Vite, Monaco)
   - package-ecosystem: "npm"
@@ -65,6 +99,13 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # npm -- VS Code extension (dev tooling and packaging)
   - package-ecosystem: "npm"
@@ -78,6 +119,23 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     open-pull-requests-limit: 5
+    # @types/vscode must not be newer than "engines.vscode" in vscode/package.json:
+    # vsce refuses to package an extension whose types are newer than its engine
+    # (#721 raised it to ^1.146.0 against engines.vscode ^1.85.0). Raising the engine
+    # is a decision about which VS Code versions the extension supports, so it is
+    # done by hand together with the types.
+    ignore:
+      - dependency-name: "@types/vscode"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions -- CI/CD workflows
   - package-ecosystem: "github-actions"
@@ -91,3 +149,10 @@ updates:
     commit-message:
       prefix: "chore(ci):"
     open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

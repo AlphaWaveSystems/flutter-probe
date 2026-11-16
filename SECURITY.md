@@ -60,9 +60,11 @@ When a Dependabot alert has a known fix, Dependabot automatically opens a pull r
 
 Configured via `.github/dependabot.yml`, Dependabot opens pull requests to keep dependencies up to date on a weekly schedule. This covers:
 
-- Go modules (root and `tools/probe-convert/`)
-- npm dependencies for the documentation website
+- Go modules (root, `studio/` and `tools/probe-convert/`)
+- npm dependencies for the documentation website, Studio's frontend and the VS Code extension
 - GitHub Actions versions in CI/CD workflows
+
+The minor and patch updates of one ecosystem in one directory arrive as a single grouped pull request, so that the pull requests do not conflict with each other. A major update keeps its own pull request, and a security update is not grouped.
 
 ### Code Scanning (CodeQL)
 
