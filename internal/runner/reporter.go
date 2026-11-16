@@ -108,6 +108,10 @@ func (r *Reporter) StreamResult(res TestResult) {
 	if res.Attempts > 1 {
 		jr.Attempts = res.Attempts
 	}
+	if res.TimeLimit > 0 {
+		jr.TimeLimitSeconds = res.TimeLimit.Seconds()
+	}
+	jr.TimedOut = res.TimedOut
 	for _, art := range res.Artifacts {
 		if r.outputDir != "" && filepath.IsAbs(art) {
 			if rel, err := filepath.Rel(r.outputDir, art); err == nil {
@@ -218,6 +222,8 @@ type jsonResult struct {
 	Attempts   int      `json:"attempts,omitempty"` // only when a failed test was re-run (retry_failed_tests)
 	SelectorProposal *SelectorProposal `json:"selector_proposal,omitempty"` // advisory, only with --ai-heal
 	Crash *jsonCrash `json:"crash,omitempty"` // only for a failed test whose app died, with --crash-evidence
+	TimedOut         bool              `json:"timed_out,omitempty"`          // a failed test that ran past defaults.test_timeout
+	TimeLimitSeconds float64           `json:"time_limit_seconds,omitempty"` // the limit the test ran under; only when the limit is set
 }
 
 type jsonReport struct {
@@ -278,7 +284,11 @@ func (r *Reporter) buildJSONReport(results []TestResult) jsonReport {
 		if res.Attempts > 1 {
 			jr.Attempts = res.Attempts
 		}
-		// Convert artifact paths to relative paths for portability (CI/CD)
+		if res.TimeLimit > 0 {
+			jr.TimeLimitSeconds = res.TimeLimit.Seconds()
+		}
+		jr.TimedOut = res.TimedOut
+			// Convert artifact paths to relative paths for portability (CI/CD)
 		for _, art := range res.Artifacts {
 			if r.outputDir != "" && filepath.IsAbs(art) {
 				if rel, err := filepath.Rel(r.outputDir, art); err == nil {
