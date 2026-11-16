@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -21,9 +22,11 @@ import (
 //     and the cleaning of the answer removed nothing from it;
 //   - the open file is the file the failed step ran from, and its line for the step still has the text it had when the suggestion was asked
 //     for (so nothing moved, and nothing was typed there since);
-//   - the file parses as it is, and parses with the line replaced, into exactly the same steps at exactly the same lines, the step on that
-//     line being of the same kind (a `tap` is replaced by a `tap`, never by a second step, a comment, a recipe call, a block or a step of
-//     another kind), and not a step that holds others.
+//   - the file parses as it is, and parses with the line replaced, into exactly the same steps at exactly the same lines, and the step on
+//     that line keeps its profile (see fixProfile): the same verb, the same flags (`optional`, `with ai`, ...) and the same shape, from a
+//     closed list of what a selector fix may be (tap, long press, double tap, type into, see, don't see, wait until appears or
+//     disappears). A step that is not on that list is never replaced and never produced, and neither is one that holds others;
+//   - the suggestion brings nothing the line did not have: no comment, no `;`, no `${ENV}` or `<variable>` the original did not hold.
 
 const (
 	fixResultTTL = 30 * time.Minute
@@ -129,15 +132,16 @@ func (a *App) CheckReplaceLine(id, openFile, content string) ReplaceLineCheck {
 	if current != r.original {
 		return refuse("line " + fmt.Sprint(r.line) + " is not what it was when the suggestion was asked for: ask for a new one")
 	}
+	if why := bringsNothingNew(current, text); why != "" {
+		return refuse(why)
+	}
 	indent := current[:len(current)-len(strings.TrimLeft(current, " \t"))]
 	newLine := indent + text
 	before, err := stepsOf(content)
 	if err != nil {
 		return refuse("the file does not parse as it is, so a replacement cannot be checked")
 	}
-	replaced := append([]string(nil), lines...)
-	replaced[r.line-1] = newLine + strings.TrimPrefix(lines[r.line-1], current)
-	after, err := stepsOf(strings.Join(replaced, "\n"))
+	after, err := stepsOf(withLineReplaced(lines, r.line, current, newLine))
 	if err != nil {
 		return refuse("the suggested line does not parse as a step")
 	}
@@ -145,6 +149,13 @@ func (a *App) CheckReplaceLine(id, openFile, content string) ReplaceLineCheck {
 		return refuse(why)
 	}
 	return ReplaceLineCheck{OK: true, Line: r.line, Text: newLine}
+}
+
+// withLineReplaced is the file with line n (1-based) replaced, the line ending of that line kept (a CRLF file stays a CRLF file).
+func withLineReplaced(lines []string, n int, current, newLine string) string {
+	replaced := append([]string(nil), lines...)
+	replaced[n-1] = newLine + strings.TrimPrefix(lines[n-1], current)
+	return strings.Join(replaced, "\n")
 }
 
 // plainSuggestionLine returns the suggestion as one line of plain characters, or why it is not.
@@ -187,6 +198,8 @@ type stepInfo struct {
 	kind      string
 	line      int
 	container bool
+	profile   string // see fixProfile
+	allowed   bool   // a selector fix may be, and may replace, a step of this profile
 }
 
 var stepIface = reflect.TypeOf((*parser.Step)(nil)).Elem()
@@ -207,7 +220,8 @@ func stepsOf(src string) (out []stepInfo, err error) {
 		for _, s := range steps {
 			kids := childSteps(s)
 			kind := fmt.Sprintf("%T", s)
-			out = append(out, stepInfo{kind: kind, line: s.GetLine(), container: len(kids) > 0 && !strings.HasSuffix(kind, "DeviceStep")})
+			profile, allowed := fixProfile(s)
+			out = append(out, stepInfo{kind: kind, line: s.GetLine(), container: len(kids) > 0, profile: profile, allowed: allowed})
 			walk(kids)
 		}
 	}
@@ -260,7 +274,7 @@ func childSteps(s parser.Step) []parser.Step {
 	return kids
 }
 
-// sameSteps says why after is not before with only the step on line replaced by a step of its own kind ("" when it is).
+// sameSteps says why after is not before with only the step on line replaced by a step of the same profile ("" when it is).
 func sameSteps(before, after []stepInfo, line int) string {
 	key := func(s []stepInfo) map[int][]string {
 		m := map[int][]string{}
@@ -273,10 +287,20 @@ func sameSteps(before, after []stepInfo, line int) string {
 	if len(b[line]) == 0 {
 		return "that line is not a step"
 	}
+	if len(b[line]) != 1 {
+		return "that line holds more than one step (a step under a device in a composite test is wrapped in another), so it is not replaced from a suggestion"
+	}
+	var old, now stepInfo
 	for _, st := range before {
-		if st.line == line && st.container {
-			return "that step holds other steps, so it is not replaced from a suggestion"
+		if st.line == line {
+			old = st
 		}
+	}
+	if old.container {
+		return "that step holds other steps, so it is not replaced from a suggestion"
+	}
+	if !old.allowed {
+		return "that kind of step is not replaced from a suggestion (only tap, long press, double tap, type into, see, don't see and wait until appears or disappears are)"
 	}
 	if len(before) != len(after) {
 		return "the suggestion is not exactly one step"
@@ -284,5 +308,93 @@ func sameSteps(before, after []stepInfo, line int) string {
 	if !reflect.DeepEqual(b, a) {
 		return "the suggestion is not a step of the same kind as the one it replaces"
 	}
+	for _, st := range after {
+		if st.line == line {
+			now = st
+		}
+	}
+	if now.profile != old.profile { // a step that is not allowed has no profile
+		return "the suggestion changes what the step does (its verb or a flag such as optional), not only what it looks for"
+	}
 	return ""
+}
+
+// fixVerbs are the actions a selector fix may be, and may replace. Every action verb the parser has is classified in the test
+// (TestEveryParserVerbIsClassified): a new verb is refused until it is added here on purpose.
+var fixVerbs = map[parser.ActionVerb]bool{
+	parser.VerbTap: true, parser.VerbLongPress: true, parser.VerbDoubleTap: true, parser.VerbType: true,
+}
+
+// fixWaits are the waits a selector fix may be: the ones that look for something on the screen.
+var fixWaits = map[parser.WaitKind]bool{parser.WaitAppears: true, parser.WaitDisappears: true, parser.WaitAny: true, parser.WaitSelector: true}
+
+// fixProfile describes a step by what it does, not by what it looks for: its verb and every flag and shape that changes its effect, and
+// not the selector, the text or the label a selector fix is there to change. Two steps with the same profile do the same thing to a
+// different target. allowed is false for a step that is not on the closed list: any other action (open link, clear app data, kill,
+// restart, store, native and webview actions, add media ...), `see ... with ai`, a system dialog step, a block, a recipe call, a call, a
+// mock, a dart block, and everything the parser may add.
+func fixProfile(s parser.Step) (string, bool) {
+	switch st := s.(type) {
+	case parser.ActionStep:
+		if !fixVerbs[st.Verb] || st.WebView != nil || st.DeepLink || st.To != nil || st.Until != nil || st.Direction != "" || st.DirectionWord != "" || st.Percent != 0 || st.Name != "" {
+			return "", false
+		}
+		return fmt.Sprintf("action:%s:optional=%t:ifvisible=%t:text=%t", st.Verb, st.Optional, st.IfVisible, st.Text != ""), true
+	case parser.AssertStep:
+		if st.WithAI || st.Native || st.WebView != nil {
+			return "", false
+		}
+		return fmt.Sprintf("assert:negated=%t:count=%t:check=%d:checkval=%t:pattern=%t:optional=%t:any=%t",
+			st.Negated, st.Count != 0, st.Check, st.CheckVal != "", st.Pattern != "", st.Optional, len(st.Any) > 0), true
+	case parser.WaitStep:
+		if !fixWaits[st.Kind] || st.WebView != nil || st.Duration != 0 {
+			return "", false
+		}
+		return fmt.Sprintf("wait:%d:pattern=%t:any=%t", st.Kind, st.Pattern != "", len(st.Any) > 0), true
+	}
+	return "", false
+}
+
+// interpolations are the forms the runner fills in when a step runs: ${ENV} and <variable> or <generator(...)>.
+var interpolations = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*\}|<[A-Za-z_][A-Za-z0-9_.\-]*(?:\([^)]*\))?>`)
+
+// bringsNothingNew says why the suggestion adds something the line did not have, or "": a comment, a `;`, a ${ENV} or <variable> form.
+func bringsNothingNew(original, suggestion string) string {
+	if hasComment(suggestion) {
+		return "the suggestion has a comment"
+	}
+	if hasComment(original) {
+		return "the line has a comment, which a replacement would drop: edit it by hand"
+	}
+	if strings.Contains(suggestion, ";") && !strings.Contains(original, ";") {
+		return "the suggestion has a ; the line did not have"
+	}
+	have := map[string]int{}
+	for _, f := range interpolations.FindAllString(original, -1) {
+		have[f]++
+	}
+	for _, f := range interpolations.FindAllString(suggestion, -1) {
+		if have[f] == 0 {
+			return "the suggestion has " + f + ", which the runner fills in when the step runs and the line did not have"
+		}
+		have[f]--
+	}
+	return ""
+}
+
+// hasComment says whether the line has a comment: a # outside double quotes that is followed by a space or the end of the line (a `#key`
+// selector is not one).
+func hasComment(line string) bool {
+	inString := false
+	for i := 0; i < len(line); i++ {
+		switch c := line[i]; {
+		case c == '\\' && inString:
+			i++
+		case c == '"':
+			inString = !inString
+		case c == '#' && !inString && (i+1 == len(line) || line[i+1] == ' ' || line[i+1] == '\t'):
+			return true
+		}
+	}
+	return false
 }
