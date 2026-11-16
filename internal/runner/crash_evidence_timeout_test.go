@@ -160,8 +160,8 @@ func TestNoLookWithoutAFailureOrTheOptIn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_ = e.runStep(ctx, pressEnter)
-	if len(a.calls) != 0 || e.CrashReport() != nil {
-		t.Errorf("a cancelled run made %d adb calls", len(a.calls))
+	if a.attempted != 0 || e.CrashReport() != nil {
+		t.Errorf("a cancelled run asked adb %d times", a.attempted)
 	}
 }
 

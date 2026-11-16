@@ -96,8 +96,8 @@ func TestTheHintIsEmptyWhenNothingCanBeSaid(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	b := &ceAdb{date: "2026-11-15 19:31:15", pidof: []string{""}}
-	if h := hintExecutor(b, true).reconnectHint(ctx); h != "" || len(b.calls) != 0 {
-		t.Errorf("a cancelled run: %q after %d calls", h, len(b.calls))
+	if h := hintExecutor(b, true).reconnectHint(ctx); h != "" || b.attempted != 0 {
+		t.Errorf("a cancelled run: %q after %d calls", h, b.attempted)
 	}
 }
 
@@ -286,8 +286,8 @@ func TestACancelledRunGetsNoHintThroughRunStep(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := e.runStep(ctx, parser.ActionStep{Verb: parser.VerbPressEnter})
-	if err == nil || strings.Contains(err.Error(), " — the app ") || len(a.calls) != 0 {
-		t.Errorf("err %v, %d adb calls", err, len(a.calls))
+	if err == nil || strings.Contains(err.Error(), " — the app ") || a.attempted != 0 {
+		t.Errorf("err %v, %d adb calls", err, a.attempted)
 	}
 }
 
@@ -357,5 +357,53 @@ func TestTheHintComesAfterTheReconnectAndOnlyWhenItFailed(t *testing.T) {
 	}
 	if len(b.calls) != 0 || len(log) != 1 || log[0] != "reconnect" {
 		t.Errorf("after a successful reconnect: %d adb calls, log %v", len(b.calls), log)
+	}
+}
+
+// The three looks that can meet on one failed step, in the order they run and within their cap: the crash look before the reconnect, the hint after the failed
+// reconnect, and the crash look at the end of the step. A slow app (running, no exit entry) is looked at twice by the crash look, and the hint asks for the
+// clock and the process list once.
+func TestTheLooksOnOneFailedStepRunInOrderWithinTheCap(t *testing.T) {
+	var log []string
+	a := &ceAdb{log: &log, date: "2026-11-15 19:31:15", pidof: []string{"4100"}, exit: []string{"ACTIVITY MANAGER PROCESS EXIT INFO\n"}, forward: "emulator-5600 tcp:48792 tcp:48792\n"}
+	e := hintExecutor(a, true)
+	e.client = &ceTimeoutClient{err: errors.New("probelink: write: broken pipe")}
+	e.SetReconnectPolicy(1, time.Hour)
+	e.hooks.reconnect = func(ctx context.Context, attempt int) error {
+		log = append(log, "reconnect")
+		return errors.New("reconnect refused")
+	}
+	_ = e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
+	// the markers: the first exit-info read is before the reconnect, and the other is after it (the end-of-step look); the hint's calls are between
+	rec, first, second := -1, -1, -1
+	exits := 0
+	for i, l := range log {
+		switch {
+		case l == "reconnect" && rec < 0:
+			rec = i
+		case strings.Contains(l, "exit-info"):
+			exits++
+			if first < 0 {
+				first = i
+			} else if second < 0 {
+				second = i
+			}
+		}
+	}
+	if rec < 0 || first < 0 || second < 0 || !(first < rec && rec < second) || exits != 2 {
+		t.Fatalf("order wrong (exit-info reads %d): %v", exits, log)
+	}
+	if e.crashTries != 2 || e.CrashReport() != nil {
+		t.Errorf("tries %d (a slow app is looked at twice here, cap %d), report %v", e.crashTries, crashMaxCollections, e.CrashReport())
+	}
+	if a.words("pidof") != 3 || a.words("date") != 3 {
+		t.Errorf("the clock was read %d times and the process list %d times, want 3 and 3 (look, hint, end-of-step look)", a.words("date"), a.words("pidof"))
+	}
+	// the cap holds however often steps fail in one attempt
+	for i := 0; i < 6; i++ {
+		_ = e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
+	}
+	if e.crashTries != crashMaxCollections {
+		t.Errorf("tries %d after many failures, want the cap %d", e.crashTries, crashMaxCollections)
 	}
 }

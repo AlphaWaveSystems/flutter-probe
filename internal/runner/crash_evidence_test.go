@@ -51,15 +51,17 @@ type ceAdb struct {
 	exitCalls     int
 	exitErr       error
 	buf           string
+	attempted     int // calls asked for, whether or not the context let them run
 }
 
 func (a *ceAdb) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.calls = append(a.calls, append([]string(nil), args...))
-	if err := ctx.Err(); err != nil { // like the real adb, which runs under the context: an expired one fails the call (the attempt is still counted)
+	a.attempted++                     // every call asked for, including one that a cancelled context refuses
+	if err := ctx.Err(); err != nil { // like the real adb, which runs under the context: an expired one fails the call and is not recorded in calls
 		return nil, err
 	}
+	a.calls = append(a.calls, append([]string(nil), args...))
 	if a.log != nil {
 		*a.log = append(*a.log, "adb "+strings.Join(args[2:], " "))
 	}
