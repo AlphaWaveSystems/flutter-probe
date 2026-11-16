@@ -38,6 +38,7 @@ var notSetByConstructor = map[string]string{
 	"WebViewOpen": "a test fake",
 	"SettingsRun": "a test fake",
 	"NoPrompt":    "a lane of a parallel or composite run: ApplyClearGate sets it; a single-device context never does",
+	"Follower":    "the connect that found the agent sets it (probe test, a parallel lane); a context without one makes its own on first use (portFollower)",
 }
 
 func TestConfiguredContextSetsEveryField(t *testing.T) {
