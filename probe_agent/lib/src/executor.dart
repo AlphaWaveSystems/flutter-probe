@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'agent_version.dart';
+import 'build_info.dart';
 import 'biometric.dart' as biometric;
 import 'device_view.dart';
 import 'finder.dart';
@@ -136,7 +137,13 @@ class ProbeExecutor {
         if (clientVersion != null && clientVersion.isNotEmpty) {
           stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
         }
-        return {'ok': true, 'agent_version': probeAgentVersion, 'capabilities': probeAgentCapabilities};
+        // flutter_version, flutter_channel, framework_revision and dart_version describe the app's own build; each is left out when unknown.
+        return {
+          'ok': true,
+          'agent_version': probeAgentVersion,
+          'capabilities': probeAgentCapabilities,
+          ...probeBuildInfo(),
+        };
 
       case ProbeMethods.settled:
         final timeout = (req.params['timeout'] as num?)?.toDouble() ?? 10.0;
