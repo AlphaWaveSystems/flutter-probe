@@ -4,7 +4,7 @@ test "onboarding"
   open the app
   wait for idle
   see "Welcome"
-  take a screenshot called "welcome_screen"
+  take screenshot "welcome_screen"
   tap on "Get Started"
   swipe left
   swipe left

@@ -72,7 +72,7 @@ func TestConvert_Screenshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, result.ProbeCode, "take a screenshot called")
+	assertContains(t, result.ProbeCode, "take screenshot")
 	assertContains(t, result.ProbeCode, "home_screen")
 }
 

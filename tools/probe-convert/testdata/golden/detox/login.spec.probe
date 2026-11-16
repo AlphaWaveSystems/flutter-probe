@@ -5,7 +5,7 @@
 before each
   open the app
 after each
-  take a screenshot called "after_test"
+  take screenshot "after_test"
 
 test "should log in with valid credentials"
   type "user@test.com" into #emailInput
