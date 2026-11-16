@@ -66,6 +66,7 @@ import {
   TestWiFi,
   WiFiTokenSaved,
   WriteFile,
+  WorkspaceNote,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 type ChatMessage = { role: string; content: string };
@@ -395,7 +396,24 @@ $("btn-files-up").addEventListener("click", () => {
   refreshFiles(parent);
 });
 
-$("btn-files-refresh").addEventListener("click", () => refreshFiles(currentDir));
+$("btn-files-refresh").addEventListener("click", () => {
+  void refreshWorkspaceNote(); // probe.yaml may have been edited outside Studio
+  void refreshFiles(currentDir);
+});
+
+// refreshWorkspaceNote says in the Workspace pane what in the workspace's probe.yaml will trip a first run: no file, a file that cannot be read,
+// or no project.app. It reads one file in the workspace, shows plain text, and is hidden when there is nothing to say.
+async function refreshWorkspaceNote(): Promise<void> {
+  const el = $("workspace-note");
+  try {
+    const n = await WorkspaceNote();
+    el.textContent = n?.text ?? "";
+    el.hidden = !n?.text;
+  } catch {
+    el.textContent = "";
+    el.hidden = true;
+  }
+}
 
 async function pickWorkspace() {
   try {
@@ -407,6 +425,7 @@ async function pickWorkspace() {
     workspaceRoot = path;
     resetNetworkPanel();
     refreshFiles(path);
+    void refreshWorkspaceNote();
     toast(`Workspace: ${path}`, "success", 1800);
   } catch (err) {
     toast(`Open failed: ${err}`, "error");
@@ -1213,6 +1232,7 @@ $("btn-settings-save").addEventListener("click", async () => {
     toast(`Save failed: ${err}`, "error");
     return;
   }
+  void refreshWorkspaceNote(); // the settings write probe.yaml
   resetAIPreview(); // changed provider settings are shown again before the next message
   void updateChatContextNote();
   if (aiFailure !== null) {
@@ -1990,6 +2010,7 @@ initDeviceSettings();
     resetAIPreview();
     workspaceRoot = ws;
     resetNetworkPanel();
+    void refreshWorkspaceNote();
     await refreshFiles(ws);
   } else {
     await refreshFiles();

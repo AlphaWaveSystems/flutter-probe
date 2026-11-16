@@ -18,6 +18,7 @@ Status column (filled by a run; see `RESULTS.md` for the dated record): ✅ pass
 | S-03 | Workspace still loading | nothing said, strip hidden, then the pane line exactly once | B | fr-03 |
 | S-04 | Workspace with files | no pane hint; strip asks for a file; goes once a file is open; Save's reason goes when edited | B | fr-04 |
 | S-05 | Guidance is text only | no child element in strip or reasons | B | fr-05 |
+| S-10 | Workspace note about probe.yaml | no file; no project.app; unreadable (no path, one line); good file says nothing; refresh re-reads; text only | B | workspace-note wn-01..06, Go workspace_note_test |
 | S-06 | Empty workspace folder | "No .probe files here" | B | fr-03 |
 | S-07 | Run while a run is in flight | Run disabled with "A run is in progress."; typing keeps it; goes at the end | D | rd-01 |
 | S-08 | Fresh start of the desktop app | window opens, toolbar visible, no error toast, editor placeholder is the scratch note | W | W-01 |
