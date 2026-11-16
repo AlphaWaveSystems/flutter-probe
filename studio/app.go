@@ -213,18 +213,28 @@ func (a *App) automationRoots() []string {
 
 // workspaceConfig loads probe.yaml from the open workspace, falling back to
 // the process working directory (and then to built-in defaults) as before.
-func (a *App) workspaceConfig() *config.Config {
+func (a *App) workspaceConfig() (*config.Config, error) {
 	a.mu.Lock()
 	ws := a.workspace
 	a.mu.Unlock()
 	if ws == "" {
-		ws = "."
+		return config.Default(), nil // no workspace is open: the built-in defaults, never the config of the folder Studio was started in
 	}
-	cfg, err := config.Load(ws)
+	cfg, err := config.Load(ws) // an absent probe.yaml gives the defaults; one that cannot be read is an error and is never replaced by another config
 	if err != nil || cfg == nil {
-		cfg, _ = config.Load(".")
+		return nil, errConfigUnreadable(err, ws)
 	}
-	return cfg
+	return cfg, nil
+}
+
+// errConfigUnreadable is the one line a run, a connection and the lint give when the workspace's probe.yaml cannot be loaded: the reason is
+// cleaned (one line, no path), and it says what to do. Studio never goes on with another config in its place.
+func errConfigUnreadable(err error, ws string) error {
+	reason := "it could not be loaded"
+	if err != nil {
+		reason = oneLine(withoutPaths(err.Error(), ws))
+	}
+	return fmt.Errorf("probe.yaml cannot be read: %s: fix it or remove it to use the defaults", reason)
 }
 
 // ListDir returns immediate children of a folder inside the workspace a person opened or an automation folder. Hidden
@@ -509,6 +519,10 @@ func (a *App) StopWiFiDiscovery() {
 // Use the values from a wifi:device-found event, plus the token the user
 // reads from their app's logs (PROBE_TOKEN=...).
 func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus, error) {
+	cfg, cfgErr := a.workspaceConfig() // a probe.yaml that cannot be read refuses the connection; no other config takes its place
+	if cfgErr != nil {
+		return ConnectionStatus{}, cfgErr
+	}
 	if a.runActive() {
 		return ConnectionStatus{}, errConnectDuringRun
 	}
@@ -526,7 +540,6 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		return ConnectionStatus{}, err
 	}
 
-	cfg := a.workspaceConfig()
 	dialTimeout := 5 * time.Second
 
 	client, err := probelink.DialWithOptions(a.ctx, probelink.DialOptions{
@@ -589,6 +602,10 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 	if deviceID == "" {
 		return ConnectionStatus{}, fmt.Errorf("deviceID is required")
 	}
+	cfg, cfgErr := a.workspaceConfig() // a probe.yaml that cannot be read refuses the connection; no other config takes its place
+	if cfgErr != nil {
+		return ConnectionStatus{}, cfgErr
+	}
 	if a.runActive() {
 		return ConnectionStatus{}, errConnectDuringRun
 	}
@@ -609,9 +626,8 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		return ConnectionStatus{}, fmt.Errorf("device %q not found", deviceID)
 	}
 
-	// probe.yaml comes from the open workspace (SetWorkspace), so per-app
-	// agent ports and timeouts apply; without a workspace, cwd/defaults.
-	cfg := a.workspaceConfig()
+	// probe.yaml comes from the open workspace (SetWorkspace), so per-app agent ports and timeouts apply; without a workspace, the built-in
+	// defaults. It was read at the top of Connect: a probe.yaml that cannot be read refuses the connection before anything else is done.
 	port := cfg.Agent.Port
 	// Studio is interactive — clamp the token wait and dial budget tighter
 	// than the CLI defaults so a "no agent running" state surfaces in
@@ -1113,6 +1129,9 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	a.mu.Unlock()
 	if conn == nil {
 		return nil, errNotConnected
+	}
+	if _, err := a.workspaceConfig(); err != nil {
+		return nil, err // the workspace's probe.yaml cannot be read now: no run on settings from somewhere else
 	}
 	a.setConfirmRun(runCtx)
 	defer a.clearConfirmRun()

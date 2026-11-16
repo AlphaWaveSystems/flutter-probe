@@ -90,7 +90,8 @@ test.describe("Workspace note about probe.yaml", () => {
   test("wn-04 a probe.yaml that cannot be read is named, with no path and one line", async ({ page }) => {
     const dir = workspaceWith("project: [unclosed\n");
     await withStudio(dir, async () => {
-      await expect(note(page)).toContainText("probe.yaml cannot be read, so Studio is not using it");
+      await expect(note(page)).toContainText("probe.yaml cannot be read");
+      await expect(note(page)).toContainText("fix it or remove it to use the defaults");
       const text = (await note(page).textContent()) ?? "";
       expect(text).not.toContain(dir);
       expect(text).not.toContain("\n");

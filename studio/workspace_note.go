@@ -37,7 +37,7 @@ func (a *App) WorkspaceNote() WorkspaceNote {
 func workspaceNoteFor(fileExists bool, loadErr error, appID, root string) WorkspaceNote {
 	switch {
 	case loadErr != nil:
-		return WorkspaceNote{Kind: "unreadable", Text: "probe.yaml cannot be read, so Studio is not using it: " + oneLine(withoutPaths(loadErr.Error(), root))}
+		return WorkspaceNote{Kind: "unreadable", Text: errConfigUnreadable(loadErr, root).Error()}
 	case !fileExists:
 		return WorkspaceNote{Kind: "no-file", Text: "No probe.yaml in this folder: runs use the defaults (agent port 48686) and no app id. Create probe.yaml with project.app to set the app id."}
 	case appID == "":
