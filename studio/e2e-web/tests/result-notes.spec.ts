@@ -82,6 +82,29 @@ test.describe("Result notes", () => {
     expect(await page.locator("#results-list li.note img, #results-list li.note b").count()).toBe(0);
   });
 
+  test("rn-07 a test that passed on a later attempt says so, that it is flaky, and lists the earlier failures under it", async ({ page }) => {
+    await runWith(page, result({ passed: true, error: "", attempts: 3, earlierFailures: [{ attempt: 1, error: "line 3: not found" }, { attempt: 2, error: "connection reset" }] }));
+    await expect(page.locator("#results-list li.pass")).toHaveCount(1);
+    await expect(page.locator("#results-list li.note-retry")).toHaveText(/Passed on attempt 3, after 2 failed attempts .*flaky/);
+    await expect(page.locator("#results-list li.note-attempt")).toHaveCount(2);
+    await expect(page.locator("#results-list li.note-attempt").first()).toHaveText("Attempt 1 failed: line 3: not found");
+    expect(await page.locator("#results-list li.pass + li.note-retry + li.note-attempt + li.note-attempt").count()).toBe(1); // in order, under the pass row
+  });
+
+  test("rn-08 a test that failed every attempt says so once, with the earlier attempts, after its error", async ({ page }) => {
+    await runWith(page, result({ attempts: 2, earlierFailures: [{ attempt: 1, error: "first" }] }));
+    await expect(page.locator("#results-list li.note-retry")).toHaveText("Failed on all 2 attempts (defaults.retry_failed_tests re-ran it).");
+    await expect(page.locator("#results-list li.note-attempt")).toHaveText("Attempt 1 failed: first");
+    expect(await page.locator("#results-list li.err + li.note-retry + li.note-attempt").count()).toBe(1);
+  });
+
+  test("rn-09 a test that ran once has no retry note, and an earlier failure is text", async ({ page }) => {
+    await runWith(page, result({ passed: true, error: "", attempts: 1 }), result({ name: "markup", attempts: 2, earlierFailures: [{ attempt: 1, error: "<img src=x onerror=alert(1)>" }] }));
+    await expect(page.locator("#results-list li.note-retry")).toHaveCount(1); // only the second test
+    await expect(page.locator("#results-list li.note-attempt")).toContainText("<img src=x onerror=alert(1)>");
+    expect(await page.locator("#results-list li.note img").count()).toBe(0);
+  });
+
   test("rn-06 notes stay with their test when failures are listed first", async ({ page }) => {
     await runWith(page, result({ name: "passes", passed: true, error: "" }), result({ name: "fails", crash: "the app died during this test: z" }));
     const order = await page.locator("#results-list > li").evaluateAll((els) => els.map((e) => e.className));

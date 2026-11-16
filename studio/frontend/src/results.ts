@@ -24,6 +24,8 @@ type RunResult = {
   timedOut?: boolean;
   timeLimitSeconds?: number;
   crashHint?: boolean; // a lost connection on Android with crash evidence off
+  attempts?: number; // how many times a retry ran the test, when more than once
+  earlierFailures?: { attempt: number; error: string }[];
 };
 
 export type RunStep = {

@@ -720,3 +720,5 @@ kbd {
 #results-list li.note { padding: 4px 12px 4px 28px; font-size: 12px; color: var(--fg-dim); white-space: pre-wrap; overflow-wrap: anywhere; }
 #results-list li.note-crash { color: var(--fail); }
 #results-list li.note-timeout { color: var(--warn); }
+#results-list li.note-retry { color: var(--warn); }
+#results-list li.note-attempt { padding-left: 40px; }

@@ -19,7 +19,7 @@ describe("formatLimit", () => {
 });
 
 describe("resultNotes", () => {
-  it("has no note for a test that passed or was skipped, whatever the fields say", () => {
+  it("has no note for a test that passed or was skipped, whatever the failure fields say", () => {
     for (const base of [{ passed: true, skipped: false }, { passed: false, skipped: true }]) {
       assert.deepEqual(resultNotes({ ...base, crash: "x", timedOut: true, timeLimitSeconds: 9, crashHint: true }), []);
     }
@@ -45,5 +45,30 @@ describe("resultNotes", () => {
   });
   it("orders the timeout before the crash line", () => {
     assert.deepEqual(resultNotes({ ...failed, timedOut: true, timeLimitSeconds: 30, crash: "c" }).map((x) => x.kind), ["timeout", "crash"]);
+  });
+});
+
+describe("resultNotes for retries", () => {
+  const earlier = [{ attempt: 1, error: "not found" }, { attempt: 2, error: "timed out" }];
+  it("says a test passed on a later attempt, that it is flaky, and lists the earlier failures", () => {
+    const n = resultNotes({ passed: true, skipped: false, attempts: 3, earlierFailures: earlier });
+    assert.deepEqual(n.map((x) => x.kind), ["retry", "attempt", "attempt"]);
+    assert.match(n[0].text, /^Passed on attempt 3, after 2 failed attempts/);
+    assert.match(n[0].text, /flaky/);
+    assert.equal(n[1].text, "Attempt 1 failed: not found");
+    assert.equal(n[2].text, "Attempt 2 failed: timed out");
+  });
+  it("uses the singular for one failed attempt", () => {
+    assert.match(resultNotes({ passed: true, skipped: false, attempts: 2, earlierFailures: [earlier[0]] })[0].text, /after 1 failed attempt \(/);
+  });
+  it("says a test failed on all attempts, after the other notes", () => {
+    const n = resultNotes({ passed: false, skipped: false, attempts: 2, earlierFailures: [earlier[0]], timedOut: true, timeLimitSeconds: 30 });
+    assert.deepEqual(n.map((x) => x.kind), ["timeout", "retry", "attempt"]);
+    assert.equal(n[1].text, "Failed on all 2 attempts (defaults.retry_failed_tests re-ran it).");
+  });
+  it("has nothing for a test that ran once, and none for a skipped one", () => {
+    assert.deepEqual(resultNotes({ passed: true, skipped: false, attempts: 1 }), []);
+    assert.deepEqual(resultNotes({ passed: true, skipped: false }), []);
+    assert.deepEqual(resultNotes({ passed: false, skipped: true, attempts: 3, earlierFailures: earlier }), []);
   });
 });
