@@ -1,0 +1,21 @@
+ACTIVITY MANAGER PROCESS EXIT INFO (dumpsys activity exit-info)
+Last Timestamp of Persistence Into Persistent Storage: 2026-11-15 17:32:53.991
+  package: dev.probe.webviewfixture
+    Historical Process Exit for uid=10207
+        ApplicationExitInfo #0:
+          timestamp=2026-11-15 19:03:48.348 pid=2939 realUid=10207 packageUid=10207 definingUid=10207 user=0
+          process=dev.probe.webviewfixture reason=5 (APP CRASH(NATIVE)) subreason=0 (UNKNOWN) status=5
+          importance=100 pss=0.00 rss=0.00 description=crash state=empty trace=null
+        ApplicationExitInfo #1:
+          timestamp=2026-11-15 11:13:30.886 pid=3026 realUid=99000 packageUid=10207 definingUid=10153 user=0
+          process=com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=13 (OTHER KILLS BY SYSTEM) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=0.00 rss=137MB description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #2:
+          timestamp=2026-11-15 11:13:30.881 pid=2990 realUid=10207 packageUid=10207 definingUid=10207 user=0
+          process=dev.probe.webviewfixture reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=196MB description=stop dev.probe.webviewfixture due to from pid 3549 state=empty trace=null
+    Historical Process Exit for uid=99000
+        ApplicationExitInfo #0:
+          timestamp=2026-11-15 19:03:48.198 pid=2965 realUid=99000 packageUid=10207 definingUid=10153 user=0
+          process=com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=2 (SIGNALED) subreason=0 (UNKNOWN) status=5
+          importance=100 pss=0.00 rss=0.00 description=null state=empty trace=null
