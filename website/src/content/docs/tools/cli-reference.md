@@ -199,7 +199,7 @@ probe prefs show
 probe prefs set clear-data-without-asking on     # off is the default
 ```
 
-`clear-data-without-asking`: when on, a `clear app data` step runs on a simulator or an emulator without the question (and without `--yes`, which also grants permissions). A line says so. It applies only to a device that is positively a simulator or an emulator (an Android serial that starts with `emulator-`, an iOS device with no USB or network transport); a physical phone, and any device that cannot be told, still ask, or fail in CI with the hint to pass `--yes`.
+`clear-data-without-asking`: when on, a `clear app data` step runs on a simulator or an emulator without the question (and without `--yes`, which also grants permissions). A line says so. It applies only to a device that is verified to be a simulator or an emulator at the moment the step asks (the device list says so, and an Android device also says so itself through `ro.kernel.qemu` or `ro.boot.qemu`); a physical phone, and any device that cannot be told, still ask, or fail in CI with the hint to pass `--yes`. The line says which package was cleared on which device. The setting file is not used if it is a link or other users can read or write it. A parallel run (`--devices`) answers every `clear app data` question yes on every device, as it did before this setting.
 
 ## probe report
 

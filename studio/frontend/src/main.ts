@@ -567,10 +567,15 @@ let loadedSettings: main.WorkspaceSettings | undefined;
 // The person's own Studio preferences (not in probe.yaml). The box is saved the moment it is pressed, and put back if Studio refuses.
 async function loadStudioPrefs(): Promise<void> {
   const box = $("settings-clear-data-sim") as HTMLInputElement;
+  const warning = $("settings-prefs-warning");
   try {
-    box.checked = (await GetStudioPrefs()).clearDataWithoutAsking === true;
+    const prefs = await GetStudioPrefs();
+    box.checked = prefs.clearDataWithoutAsking === true;
+    warning.textContent = prefs.warning ?? ""; // text, never markup
+    warning.hidden = !prefs.warning;
   } catch {
     box.checked = false;
+    warning.hidden = true;
   }
 }
 $("settings-clear-data-sim").addEventListener("change", async (e) => {

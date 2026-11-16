@@ -10,9 +10,20 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/userprefs"
 )
 
+// verified makes the device check answer v for the test.
+func verified(t *testing.T, v bool) {
+	t.Helper()
+	old := verifyDisposable
+	verifyDisposable = func(*connection) bool { return v }
+	t.Cleanup(func() { verifyDisposable = old })
+}
+
 func withPrefs(t *testing.T, on bool) {
 	t.Helper()
-	t.Setenv("PROBE_USER_CONFIG_DIR", t.TempDir())
+	dir := t.TempDir()
+	old := userprefs.Dir
+	userprefs.Dir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { userprefs.Dir = old })
 	if on {
 		if err := userprefs.SetClearDataWithoutAsking(true); err != nil {
 			t.Fatal(err)
@@ -23,8 +34,11 @@ func withPrefs(t *testing.T, on bool) {
 // With the person's setting on, a simulator or an emulator is not asked: the step is allowed at once, and the window is told in a note.
 func TestClearDataWithoutAskingOnASimulator(t *testing.T) {
 	withPrefs(t, true)
+	verified(t, true)
 	c := newConfirmApp(t, true)
 	c.a.conn.disposable = true
+	c.a.conn.deviceName = "Pixel 8"
+	c.a.conn.deviceID = "emulator-5554"
 	answer := c.ask()
 	select {
 	case ok := <-answer:
@@ -34,8 +48,11 @@ func TestClearDataWithoutAskingOnASimulator(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("the step waited for an answer that is not needed")
 	}
-	if note := c.next(t, "confirm:note"); !strings.Contains(note[0].(string), "without asking") {
-		t.Errorf("note = %v", note)
+	note := c.next(t, "confirm:note")[0].(string)
+	for _, want := range []string{"Cleared data of com.example.app", "Pixel 8", "emulator-5554", "without asking"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("the note lacks %q: %q", want, note)
+		}
 	}
 	select {
 	case ev := <-c.events:
@@ -55,6 +72,7 @@ func TestClearDataStillAsksWhenItShould(t *testing.T) {
 		"the setting off on a physical":     {false, false},
 	} {
 		withPrefs(t, tc.prefs)
+		verified(t, true)
 		c := newConfirmApp(t, true)
 		c.a.conn.disposable = tc.disposable
 		answer := c.ask()
@@ -68,6 +86,7 @@ func TestClearDataStillAsksWhenItShould(t *testing.T) {
 		case <-time.After(200 * time.Millisecond):
 		}
 		c.cancel()
+		<-answer // the step has ended: nothing of it is left running for the next test
 	}
 	// no window to ask, setting on, physical device: refused, not allowed
 	withPrefs(t, true)
@@ -95,6 +114,7 @@ func TestAProjectCannotTurnClearDataWithoutAskingOn(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 	c.cancel()
+	<-answer
 }
 
 // The bound methods are for the window only: not the automation endpoint, and over the headless bridge only for a test server that says its page is
@@ -132,5 +152,45 @@ func TestStudioPrefsRoundTrip(t *testing.T) {
 	}
 	if err := a.SetClearDataWithoutAsking(false); err != nil || a.GetStudioPrefs().ClearDataWithoutAsking {
 		t.Fatalf("set off: %v", err)
+	}
+}
+
+// The list says emulator but the device does not confirm it (an Android phone with a serial that only looks like one): the question is shown.
+func TestAnUnconfirmedDeviceStillAsks(t *testing.T) {
+	withPrefs(t, true)
+	verified(t, false)
+	c := newConfirmApp(t, true)
+	c.a.conn.disposable = true
+	answer := c.ask()
+	c.next(t, "confirm:request")
+	select {
+	case ok := <-answer:
+		t.Fatalf("an unconfirmed device was answered (%v) without the person", ok)
+	case <-time.After(200 * time.Millisecond):
+	}
+	c.cancel()
+	<-answer
+}
+
+// The preferences folder of the headless test server is honoured only in headless mode; a desktop Studio ignores the variable.
+func TestTheTestConfigDirIsHeadlessOnly(t *testing.T) {
+	if testUserConfigDir(false, "/tmp/x") != "" {
+		t.Error("a desktop Studio honoured the test variable")
+	}
+	if testUserConfigDir(true, "/tmp/x") != "/tmp/x" || testUserConfigDir(true, "") != "" {
+		t.Error("the headless server did not")
+	}
+}
+
+// A preferences file that is not trusted is reported to the form and the setting is off.
+func TestTheFormSeesAWarningForAnUntrustedFile(t *testing.T) {
+	withPrefs(t, true)
+	path, _ := userprefs.Path()
+	if err := os.Chmod(path, 0o666); err != nil {
+		t.Skip("no chmod")
+	}
+	p := (&App{}).GetStudioPrefs()
+	if p.ClearDataWithoutAsking || !strings.Contains(p.Warning, "other users") {
+		t.Errorf("prefs = %+v", p)
 	}
 }

@@ -59,7 +59,7 @@ export default defineConfig({
       PROBE_STUDIO_HEADLESS_PORT: port,
       PROBE_STUDIO_WORKSPACE: process.env.STUDIO_WORKSPACE ?? "",
       PROBE_STUDIO_DEVICE_VIEW: process.env.STUDIO_E2E_DEVICE_VIEW ?? "", // "1" runs Studio with the shared device view
-      PROBE_USER_CONFIG_DIR: process.env.PROBE_USER_CONFIG_DIR || path.join(os.tmpdir(), "studio-e2e-userconfig"), // never the real preferences folder
+      PROBE_STUDIO_TEST_USER_CONFIG_DIR: process.env.PROBE_STUDIO_TEST_USER_CONFIG_DIR || path.join(os.tmpdir(), "studio-e2e-userconfig"), // never the real preferences folder
       PROBE_STUDIO_E2E_ALLOW_CONFIRM_OVER_HTTP: "1", // the page of these specs is the window: it may answer the question before a wipe
       PROBE_STUDIO_TEST_SEND_RATE: "1000", // the specs share one server, and the real limit is ten a minute
       PROBE_STUDIO_TEST_ALLOW_LOCAL: "127.0.0.1", // the headless build refuses addresses on this machine except for hosts named here: the specs call fakes on 127.0.0.1

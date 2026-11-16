@@ -1,16 +1,20 @@
 package userprefs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
 func isolate(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "cfg")
-	t.Setenv("PROBE_USER_CONFIG_DIR", dir)
+	old := Dir
+	Dir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { Dir = old })
 	return dir
 }
 
@@ -89,5 +93,63 @@ func TestAFileInTheWorkingDirectoryIsNeverRead(t *testing.T) {
 	}
 	if Load().ClearDataWithoutAsking {
 		t.Error("a prefs.json in the working directory turned the setting on")
+	}
+}
+
+// A preferences file that is a link, or that other users may write to or read, is not trusted: the setting is off and one line says why.
+func TestAnUntrustedPreferencesFileIsNotUsed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("modes are not checked on Windows")
+	}
+	dir := isolate(t)
+	if err := SetClearDataWithoutAsking(true); err != nil {
+		t.Fatal(err)
+	}
+	if p, w := Check(); !p.ClearDataWithoutAsking || w != "" {
+		t.Fatalf("a good file: %+v %q", p, w)
+	}
+	path := filepath.Join(dir, "prefs.json")
+	for _, mode := range []os.FileMode{0o660, 0o606, 0o644, 0o666, 0o640} {
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+		p, w := Check()
+		if p.ClearDataWithoutAsking || !strings.Contains(w, "other users") || !strings.Contains(w, "chmod 600") {
+			t.Errorf("mode %o: %+v %q", mode, p, w)
+		}
+		if Load().ClearDataWithoutAsking {
+			t.Errorf("mode %o: Load turned the setting on", mode)
+		}
+	}
+	_ = os.Chmod(path, 0o600)
+	target := filepath.Join(t.TempDir(), "real.json")
+	_ = os.WriteFile(target, []byte(`{"clearDataWithoutAsking": true}`), 0o600)
+	_ = os.Remove(path)
+	if err := os.Symlink(target, path); err != nil {
+		t.Skip("no symlinks")
+	}
+	if p, w := Check(); p.ClearDataWithoutAsking || !strings.Contains(w, "link") {
+		t.Errorf("a link: %+v %q", p, w)
+	}
+	// a missing file is not a warning
+	_ = os.Remove(path)
+	if p, w := Check(); p.ClearDataWithoutAsking || w != "" {
+		t.Errorf("no file: %+v %q", p, w)
+	}
+}
+
+// With nowhere to keep preferences (no HOME), the answer is off, not on, and setting says so (m18).
+func TestNoPlaceForPreferencesIsOff(t *testing.T) {
+	old := Dir
+	Dir = func() (string, error) { return "", errors.New("neither $XDG_CONFIG_HOME nor $HOME are defined") }
+	t.Cleanup(func() { Dir = old })
+	if p, w := Check(); p.ClearDataWithoutAsking || w != "" {
+		t.Errorf("Check = %+v %q", p, w)
+	}
+	if err := SetClearDataWithoutAsking(true); err == nil {
+		t.Error("a preference was saved with nowhere to keep it")
+	}
+	if Load().ClearDataWithoutAsking {
+		t.Error("on with nowhere to keep preferences")
 	}
 }

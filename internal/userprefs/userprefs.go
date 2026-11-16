@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -22,15 +23,21 @@ type Prefs struct {
 
 var mu sync.Mutex
 
-// Path is the preferences file: $PROBE_USER_CONFIG_DIR/prefs.json when that is set (tests), else <user config dir>/flutter-probe/prefs.json.
+// Dir is where the preferences folder is: <user config dir>/flutter-probe. It is a variable for tests only (a test, or Studio's headless test server,
+// puts it in a temporary folder); nothing in a shipped build, an environment or a project sets it.
+var Dir = func() (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "flutter-probe"), nil
+}
+
+// Path is the preferences file.
 func Path() (string, error) {
-	dir := os.Getenv("PROBE_USER_CONFIG_DIR")
-	if dir == "" {
-		base, err := os.UserConfigDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(base, "flutter-probe")
+	dir, err := Dir()
+	if err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, "prefs.json"), nil
 }
@@ -38,27 +45,50 @@ func Path() (string, error) {
 // Load reads the preferences. A missing, unreadable or unparsable file (or one with a field this version does not know) is the defaults, everything
 // off: a safety setting is never on by accident.
 func Load() Prefs {
+	p, _ := Check()
+	return p
+}
+
+// Check is Load that also says, in one line, why a file that is there was not used: a link, a file that is not a plain file, or one that other users
+// may write to (a mode with a group or world bit): such a file could have been changed by someone else, so it is not trusted and the setting is off.
+// The line is "" when the file is missing or was used.
+func Check() (Prefs, string) {
 	mu.Lock()
 	defer mu.Unlock()
-	return load()
+	return loadChecked()
 }
 
 func load() Prefs {
+	p, _ := loadChecked()
+	return p
+}
+
+func loadChecked() (Prefs, string) {
 	path, err := Path()
 	if err != nil {
-		return Prefs{}
+		return Prefs{}, ""
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return Prefs{}, ""
+	}
+	if !info.Mode().IsRegular() {
+		return Prefs{}, "your preferences file is a link or not a plain file, so it is not used (settings are off)"
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return Prefs{}, fmt.Sprintf("your preferences file is writable or readable by other users (mode %o), so it is not used (settings are off): chmod 600 it", info.Mode().Perm())
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Prefs{}
+		return Prefs{}, ""
 	}
 	var p Prefs
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&p); err != nil {
-		return Prefs{}
+		return Prefs{}, "your preferences file cannot be read, so it is not used (settings are off)"
 	}
-	return p
+	return p, ""
 }
 
 // SetClearDataWithoutAsking turns the simulator and emulator shortcut for `clear app data` on or off. The file is replaced atomically, private to the
