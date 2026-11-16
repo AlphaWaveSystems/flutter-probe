@@ -67,6 +67,7 @@ import {
   WiFiTokenSaved,
   WriteFile,
   WorkspaceNote,
+  DeviceListNote,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 type ChatMessage = { role: string; content: string };
@@ -245,6 +246,7 @@ let dirty = false;
 let bootLoading = true;
 let devicesLoaded = false;
 let listing: FirstRunInput["listing"] = "unknown";
+let adbNote = ""; // why Android devices may be missing from the list (adb not found), from Go; plain text
 // The replaced line the card can re-run, whether that re-run is ours, and whether a run is going (declared here: setDirty reads them at start-up).
 let fixRerun: RerunTarget | null = null;
 let rerunInFlight = false;
@@ -323,6 +325,7 @@ function firstRunInput(): FirstRunInput {
     connected,
     running: runInProgress,
     listing,
+    adbNote,
   };
 }
 
@@ -1554,6 +1557,11 @@ async function refreshDevices() {
     select.appendChild(makeOption("", "— select device —"));
     lastDeviceList = devs;
     devicesLoaded = true;
+    try {
+      adbNote = (await DeviceListNote()) ?? "";
+    } catch {
+      adbNote = "";
+    }
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
     const sorted = [...devs].sort(

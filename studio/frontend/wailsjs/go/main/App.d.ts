@@ -30,6 +30,8 @@ export function ConnectWiFiSaved(arg1:string,arg2:number,arg3:string):Promise<ma
 
 export function DeleteAPIKey():Promise<void>;
 
+export function DeviceListNote():Promise<string>;
+
 export function Disconnect():Promise<void>;
 
 export function ExplainAvailability():Promise<main.ExplainOffer>;

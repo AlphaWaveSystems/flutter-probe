@@ -15,6 +15,12 @@ export interface FirstRunInput {
   connected: boolean;
   running: boolean; // a run or a re-run is in flight
   listing: "unknown" | "files" | "empty" | "failed"; // what the Workspace pane's last listing found
+  adbNote: string; // why Android devices would be missing from the list (adb not found), or ""
+}
+
+/** The adb note follows the step when there is one: it is the reason an Android device may be missing from the list. */
+function withNote(step: string, note: string): string {
+  return note ? `${step} ${note}` : step;
 }
 
 /** The one thing to do next, or "" when nothing is in the way (or while loading). The order is the order of a first run. */
@@ -28,8 +34,8 @@ export function nextStep(i: FirstRunInput): string {
   }
   if (i.connected) return "";
   if (!i.devicesLoaded) return "";
-  if (i.deviceCount === 0) return "No device found: boot a simulator or plug in a phone, then press the refresh button.";
-  if (i.bootedCount === 0) return "Every device is shut down: boot a simulator or emulator, then press the refresh button.";
+  if (i.deviceCount === 0) return withNote("No device found: boot a simulator or plug in a phone, then press the refresh button.", i.adbNote);
+  if (i.bootedCount === 0) return withNote("Every device is shut down: boot a simulator or emulator, then press the refresh button.", i.adbNote);
   if (!i.deviceSelected) return "Pick a device in the toolbar, then press Connect.";
   if (!i.deviceBooted) return "That device is shut down: boot it, then press the refresh button.";
   return "Press Connect to see the device and run the file.";
