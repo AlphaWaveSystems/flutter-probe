@@ -62,7 +62,7 @@ func TestHandshakeWithoutBuildInfoIsUnchanged(t *testing.T) {
 func TestHandshakeDropsBuildInfoThatIsNotPlainText(t *testing.T) {
 	long := strings.Repeat("a", 65)
 	hostile := []string{
-		"3.50.0\n3.49.0", "3.50.0; rm -rf /", "<script>alert(1)</script>", "3.50.0\u202e", "3.5\u200b0.0", "\x1b[31m3.50.0", "3.50.0 ", " 3.50.0", "v 3", "é", "3.50.0\x00", long,
+		"3.50.0\n3.49.0", "3.50.0; rm -rf /", "<script>alert(1)</script>", "3.50.0\u202e", "3.5\u200b0.0", "\x1b[31m3.50.0", "3.50.0 ", " 3.50.0", "3.50.0\n", "3.50.0\r\n", "\n3.50.0", "v 3", "é", "3.50.0\x00", long,
 	}
 	for _, wc := range wireClients {
 		for _, bad := range hostile {
@@ -105,7 +105,7 @@ func TestHandshakeIgnoresBuildInfoOfTheWrongType(t *testing.T) {
 func TestPlainBuildText(t *testing.T) {
 	for in, want := range map[string]string{
 		"3.50.0": "3.50.0", "3.50.0-0.1.pre+7": "3.50.0-0.1.pre+7", "stable": "stable", "AB12cd": "AB12cd", "a": "a",
-		"": "", "a b": "", "a_b": "", "a/b": "", "a:b": "", "é": "", "a\n": "", "\t": "",
+		"": "", "a b": "", "a_b": "", "a/b": "", "a:b": "", "é": "", "a\n": "", "3.50.0\n": "", "3.50.0\r\n": "", "\n3.50.0": "", "\t": "",
 	} {
 		if got := plainBuildText(in); got != want {
 			t.Errorf("plainBuildText(%q) = %q, want %q", in, got, want)

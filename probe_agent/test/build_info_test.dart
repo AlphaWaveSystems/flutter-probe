@@ -55,6 +55,9 @@ void main() {
         'é',
         'a' * 65,
         ' 3.50.0',
+        '3.50.0\n', // a trailing newline
+        '3.50.0\r\n',
+        '\n3.50.0',
         '3.50.0 ',
       ];
       for (final h in hostile) {
