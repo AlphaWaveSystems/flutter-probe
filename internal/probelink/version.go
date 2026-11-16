@@ -173,14 +173,27 @@ func CheckHandshake(ctx context.Context, client ProbeClient, clientVersion strin
 // CheckHandshakeVersion is CheckHandshake that also returns the agent's reported version, or "" for an agent that
 // predates the field. The caller prints the run line from it, so it is returned whenever the handshake succeeds.
 func CheckHandshakeVersion(ctx context.Context, client ProbeClient, clientVersion string) (agentVersion, warning string, err error) {
-	res, err := client.Handshake(ctx, clientVersion)
+	res, warning, err := CheckHandshakeResult(ctx, client, clientVersion)
 	if err != nil {
 		return "", "", err
 	}
+	return res.AgentVersion, warning, nil
+}
+
+// CheckHandshakeResult is CheckHandshakeVersion that returns the whole handshake result: the agent's version and capabilities and the build facts of
+// the app (Flutter and Dart versions, channel, framework revision), each "" when the agent did not send it. The result is the zero value on an error.
+func CheckHandshakeResult(ctx context.Context, client ProbeClient, clientVersion string) (HandshakeResult, string, error) {
+	res, err := client.Handshake(ctx, clientVersion)
+	if err != nil {
+		return HandshakeResult{}, "", err
+	}
+	if res == nil {
+		return HandshakeResult{}, "", fmt.Errorf("the agent sent no handshake result")
+	}
 	if MajorVersionIncompatible(clientVersion, res.AgentVersion) {
-		return "", "", fmt.Errorf(
+		return HandshakeResult{}, "", fmt.Errorf(
 			"incompatible versions: CLI v%s and agent v%s have different major versions — upgrade/downgrade one side to match",
 			clientVersion, res.AgentVersion)
 	}
-	return res.AgentVersion, VersionMismatchWarning(clientVersion, res.AgentVersion), nil
+	return *res, VersionMismatchWarning(clientVersion, res.AgentVersion), nil
 }
