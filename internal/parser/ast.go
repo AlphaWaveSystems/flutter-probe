@@ -97,6 +97,8 @@ type HookDef struct {
 	Kind HookKind
 	Body []Step
 	Line int
+	// Extra holds the words after the header on its line. The parser ignores them, as it always has; probe lint warns about them.
+	Extra []string
 }
 
 func (h HookDef) nodeType() string { return "hook" }

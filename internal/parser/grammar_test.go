@@ -1049,10 +1049,23 @@ func TestGrammarHookHeadIsTheWholeLine(t *testing.T) {
 			}
 		}
 	})
-	t.Run("a word after any other header is refused", func(t *testing.T) {
-		for _, head := range []string{"before each tests", "on failure now", "after each steps"} {
-			if _, err := parser.ParseFile(head + "\n  open the app\n\ntest \"t\"\n  open the app\n"); err == nil {
-				t.Errorf("%q: expected an error", head)
+	t.Run("a word after any other header is accepted and kept in Extra", func(t *testing.T) {
+		for _, c := range []struct {
+			head string
+			want string
+		}{
+			{"before each tests", "tests"},
+			{"on failure now", "now"},
+			{"after each steps", "steps"},
+			{"on failure test", "test"},
+		} {
+			prog, err := parser.ParseFile(c.head + "\n  open the app\n\ntest \"t\"\n  open the app\n")
+			if err != nil {
+				t.Errorf("%q: the parser must accept it as it always did, got %v", c.head, err)
+				continue
+			}
+			if len(prog.Hooks) != 1 || strings.Join(prog.Hooks[0].Extra, " ") != c.want {
+				t.Errorf("%q: want one hook with Extra %q, got %+v", c.head, c.want, prog.Hooks)
 			}
 		}
 	})

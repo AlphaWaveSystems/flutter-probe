@@ -30,6 +30,15 @@ func lintProgram(prog *parser.Program) []LintFinding {
 		}
 	}
 
+	// Check: a word after a hook header is ignored by the parser. The indented body under such a header is not the hook's either (the parser
+	// drops it, or reads it as a test); the warning names the words only.
+	for _, h := range prog.Hooks {
+		if len(h.Extra) > 0 {
+			warns = append(warns, LintFinding{Line: h.Line, Warning: true, Message: fmt.Sprintf(
+				"unexpected word(s) after the hook header are ignored: %s", strings.Join(h.Extra, " "))})
+		}
+	}
+
 	// Check: recipes referenced by `use` that don't exist
 	// (static check — file existence not verified here)
 
