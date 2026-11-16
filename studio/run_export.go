@@ -56,6 +56,15 @@ type ExportOutcome struct {
 	Tests int    `json:"tests"`
 }
 
+// CanExportRunResults says whether there is a finished run's report to save and no run is going: what the Export buttons follow.
+func (a *App) CanExportRunResults() bool {
+	if a.runActive() {
+		return false
+	}
+	results, _, _ := a.export.get()
+	return len(results) > 0
+}
+
 var errNothingToExport = errors.New("there are no results to export: run a file first")
 
 // exportFormats maps what the window may ask for to the engine's format and the file extension.
@@ -73,6 +82,7 @@ var exportFormats = map[string]struct {
 // run is going, before any run has finished, over the headless bridge (there is no dialog there), and a name whose extension does not match
 // the format (the dialog's own overwrite question covers only the name the person picked, so Studio never changes it).
 func (a *App) ExportRunResults(format string) (ExportOutcome, error) {
+	// (A run that was stopped leaves nothing to export: see keepForExport.)
 	f, ok := exportFormats[format]
 	if !ok {
 		return ExportOutcome{}, fmt.Errorf("unknown export format %q: use json or junit", format)
@@ -149,7 +159,7 @@ func checkExportPath(path, ext string) error {
 }
 
 // writeReportFile writes the report next to its final name and renames it into place, so a failure never leaves half a report where one was.
-// An existing file keeps its permissions; a new one is readable by others, like the CLI's report (it holds no secret: the reporters clean it).
+// An existing file keeps its permissions; a new one is readable by others, like the CLI's report. The content is the same as `probe test --format json|junit` writes: error messages are written as the engine produced them and can contain local paths, so check a report before sharing it.
 func writeReportFile(path string, data []byte) error {
 	mode := os.FileMode(0o644)
 	if info, err := os.Stat(path); err == nil {

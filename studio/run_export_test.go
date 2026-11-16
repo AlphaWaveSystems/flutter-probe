@@ -324,3 +324,84 @@ func TestANewRunDropsTheOldResultsFromTheExport(t *testing.T) {
 	close(fake.gate)
 	<-ran
 }
+
+// An upper-case extension is the same extension: the dialog's own name is used as it is.
+func TestExportAcceptsAnUpperCaseExtension(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "REPORT.JSON")
+	a := stagedApp(t, sampleResults(), out)
+	if o, err := a.ExportRunResults("json"); err != nil || !o.Saved || o.Name != "REPORT.JSON" {
+		t.Fatalf("export = %+v, %v", o, err)
+	}
+	if err := checkExportPath(filepath.Join(t.TempDir(), "r.JsOn"), ".json"); err != nil {
+		t.Errorf("a mixed-case extension was refused: %v", err)
+	}
+}
+
+// Opening another workspace drops the results of a run in the old one: they are not exportable there, and their JUnit names would be relative to
+// the old folder.
+func TestAnotherWorkspaceDropsTheResultsToExport(t *testing.T) {
+	a := stagedApp(t, sampleResults(), filepath.Join(t.TempDir(), "r.json"))
+	if !a.CanExportRunResults() {
+		t.Fatal("staged results are not exportable")
+	}
+	a.SetWorkspace(t.TempDir())
+	if a.CanExportRunResults() {
+		t.Error("SetWorkspace left the old results exportable")
+	}
+	b := stagedApp(t, sampleResults(), filepath.Join(t.TempDir(), "r.json"))
+	b.useWorkspace(t.TempDir())
+	if _, err := b.ExportRunResults("json"); err == nil || !strings.Contains(err.Error(), "no results") {
+		t.Errorf("useWorkspace left the old results exportable: %v", err)
+	}
+}
+
+// What the buttons follow: results held and no run going.
+func TestCanExportFollowsWhatIsHeld(t *testing.T) {
+	a := &App{ctx: context.Background()}
+	if a.CanExportRunResults() {
+		t.Error("nothing is held, yet export is offered")
+	}
+	a = stagedApp(t, sampleResults(), filepath.Join(t.TempDir(), "r.json"))
+	if !a.CanExportRunResults() {
+		t.Error("results are held and no run is going, yet export is not offered")
+	}
+	_, cancel, err := a.claimRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.CanExportRunResults() {
+		t.Error("a run is going, yet export is offered")
+	}
+	a.releaseRun(cancel)
+}
+
+// A run that was stopped leaves nothing to export: its results are partial.
+func TestAStoppedRunLeavesNothingToExport(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.probe")
+	if err := os.WriteFile(file, []byte("test \"t\"\n  tap \"Go\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{ctx: context.Background(), hub: newEventHub()}
+	a.SetWorkspace(dir)
+	cfg := &config.Config{}
+	cfg.Defaults.Timeout = 2 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	fake := &blockFake{started: make(chan struct{}), gate: make(chan struct{})}
+	a.conn = &connection{client: fake, cfg: cfg, streamCancel: cancel, streamDone: done}
+	go a.streamLoop(ctx, done, &closeFake{frameFake: frameFake{shot: []byte("s")}})
+	defer func() { cancel(); <-done }()
+	ran := make(chan struct{})
+	go func() { _, _ = a.RunFile(file); close(ran) }()
+	select {
+	case <-fake.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the run never reached the device")
+	}
+	a.CancelRun()
+	<-ran
+	if a.CanExportRunResults() {
+		t.Error("a stopped run left partial results to export")
+	}
+}

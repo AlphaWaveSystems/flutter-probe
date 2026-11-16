@@ -52,12 +52,14 @@ test.describe("Export of run results", () => {
     await expect(json(page)).toBeDisabled();
   });
 
-  test("xr-02 without the native window a click says so, writes nothing, and the buttons come back", async ({ page }) => {
+  test("xr-02 without the native window a click says so, writes nothing, and the buttons follow what Studio holds (nothing), not what the run event said", async ({ page }) => {
     await fire(page, "run:started", "probe-tests/a.probe");
-    await fire(page, "run:finished", [result]);
+    await fire(page, "run:finished", [result]); // the page believes there is a report; Studio, which ran nothing, holds none
+    await expect(json(page)).toBeEnabled();
     await json(page).click();
     await expect(page.locator("#toast-container .toast", { hasText: "Export failed" })).toBeVisible();
-    await expect(json(page)).toBeEnabled();
+    await expect(json(page)).toBeDisabled();
+    await expect(junit(page)).toBeDisabled();
   });
 
   test("xr-03 the buttons say where the report goes and that the person chooses", async ({ page }) => {

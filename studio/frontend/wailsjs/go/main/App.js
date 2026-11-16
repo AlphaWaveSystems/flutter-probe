@@ -26,6 +26,10 @@ export function BuildCallStep(arg1) {
   return window['go']['main']['App']['BuildCallStep'](arg1);
 }
 
+export function CanExportRunResults() {
+  return window['go']['main']['App']['CanExportRunResults']();
+}
+
 export function CancelRun() {
   return window['go']['main']['App']['CancelRun']();
 }

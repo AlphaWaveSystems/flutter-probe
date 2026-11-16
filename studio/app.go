@@ -186,6 +186,7 @@ func (a *App) SetWorkspace(path string) {
 	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.mu.Unlock()
 	a.resetFixAttempts() // another workspace is another session of suggestions
+	a.export.clear()     // and the results of a run in another workspace are not this one's to export
 }
 
 // useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike
@@ -194,6 +195,7 @@ func (a *App) useWorkspace(path string) {
 	a.mu.Lock()
 	a.workspace = path
 	a.mu.Unlock()
+	a.export.clear()
 }
 
 // automationRoots are the folders the automation endpoint may read from, list, open as a
@@ -1179,7 +1181,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	})
 	results, err := r.Run(runCtx)
 	a.failures.record(path, results)
-	a.keepForExport(conn, results)
+	a.keepForExport(conn, results, runCtx.Err() != nil)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))
