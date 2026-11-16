@@ -76,3 +76,51 @@ func TestTheRunQuestionDoesNotAnswerAClearAppDataStep(t *testing.T) {
 		t.Errorf("a clear app data step after it: err %v, asked %d (want a second question)", err, asks)
 	}
 }
+
+// Through the real attempt: when the run's question is answered no, the test body does not run at all (nothing was tapped), the result names the
+// setting, and with the setting off the same test runs and no question is asked.
+func TestAnAttemptDoesNotRunItsBodyWhenTheClearWasRefused(t *testing.T) {
+	asks := 0
+	client := newSlowClient()
+	r := newTimeoutRunner(client, 0)
+	r.cfg.Defaults.ClearDataBeforeEachTest = true
+	r.deviceCtx = &DeviceContext{AppID: "a.b", Serial: "s", Confirm: func(string) bool { asks++; return false }}
+	prog, tdef := parseOneTest(t, "test \"t\"\n  tap \"Fine\"\n")
+	res := r.runSingleTest(context.Background(), prog, tdef, "t.probe", nil, -1)
+	if res.Passed || res.Error == nil || !strings.Contains(res.Error.Error(), "clear data before each test: cancelled by user") {
+		t.Fatalf("result = %+v", res)
+	}
+	client.mu.Lock()
+	tapped := len(client.taps)
+	client.mu.Unlock()
+	if tapped != 0 {
+		t.Error("the test body ran although the clear was refused")
+	}
+	// the same run: a second test is refused with the same answer, without a second question
+	res2 := r.runSingleTest(context.Background(), prog, tdef, "t.probe", nil, -1)
+	if res2.Passed || asks != 1 {
+		t.Errorf("second test passed=%v, asks=%d (want a no and one question)", res2.Passed, asks)
+	}
+
+	off := newTimeoutRunner(newSlowClient(), 0)
+	off.deviceCtx = &DeviceContext{AppID: "a.b", Serial: "s", Confirm: func(string) bool { t.Error("asked with the setting off"); return false }}
+	if r := off.runSingleTest(context.Background(), prog, tdef, "t.probe", nil, -1); !r.Passed {
+		t.Errorf("with the setting off the test did not run: %+v", r)
+	}
+}
+
+// A before-each hook is part of the test's start: after a refused clear it does not run either.
+func TestABeforeEachHookDoesNotRunAfterARefusedClear(t *testing.T) {
+	client := newSlowClient()
+	r := newTimeoutRunner(client, 0)
+	r.cfg.Defaults.ClearDataBeforeEachTest = true
+	r.deviceCtx = &DeviceContext{AppID: "a.b", Serial: "s", Confirm: func(string) bool { return false }}
+	prog, tdef := parseOneTest(t, "before each\n  tap \"Hook\"\n\ntest \"t\"\n  tap \"Body\"\n")
+	res := r.runSingleTest(context.Background(), prog, tdef, "t.probe", nil, -1)
+	client.mu.Lock()
+	taps := append([]string(nil), client.taps...)
+	client.mu.Unlock()
+	if res.Passed || len(taps) != 0 {
+		t.Errorf("passed=%v, taps=%v: neither the hook nor the body may run after a refused clear", res.Passed, taps)
+	}
+}
