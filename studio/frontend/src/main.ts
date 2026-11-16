@@ -7,6 +7,7 @@ import { initDeviceSettings } from "./device-settings";
 import { planTapInsert } from "./device-view/insertStep";
 import { latestWins } from "./latest-wins";
 import { clampLine, placeLabel, planJump, type JumpTarget } from "./goto-line";
+import { connectReason, nextStep, recordReason, runReason, saveReason, workspacePaneText, type FirstRunInput } from "./first-run";
 import { ExplainSession, explainCardModel, previewNote, type ExplainPreview, type ExplainResult } from "./explain";
 import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardModel, fixPreviewNote, enclosingTest, planReplace, rerunGate, rerunVerdict, againOffer, type FixAnswer, type FixPreview, type RerunTarget } from "./selector-fix";
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
@@ -136,7 +137,7 @@ monaco.editor.defineTheme("probe-dark", {
 const editor = monaco.editor.create($("editor"), {
   value: [
     "# FlutterProbe Studio — preview",
-    "# Open a .probe file from the left to start, or pick a device and click Run.",
+    "# This is a scratch buffer, not a file. Open a .probe file in the Workspace pane to edit and run your tests.",
     "",
     "test \"smoke\":",
     "  see \"Welcome\"",
@@ -199,6 +200,11 @@ let currentDir = "tests";
 // settings overlay and the chat line read the same file. currentDir moves when the file pane is browsed; this does not.
 let workspaceRoot = "";
 let dirty = false;
+// First-run guidance: nothing is said while the workspace is still being opened at start-up, and the device list is not judged empty
+// before its first listing has arrived.
+let bootLoading = true;
+let devicesLoaded = false;
+let lastEntryCount = -1;
 // The replaced line the card can re-run, whether that re-run is ours, and whether a run is going (declared here: setDirty reads them at start-up).
 let fixRerun: RerunTarget | null = null;
 let rerunInFlight = false;
@@ -209,6 +215,7 @@ function setDirty(d: boolean) {
   $("editor-dirty").textContent = d ? "● unsaved" : "";
   ($("btn-save") as HTMLButtonElement).disabled = !d || !currentPath;
   refreshRerun();
+  refreshFirstRun();
 }
 
 async function refreshFiles(dir: string = currentDir) {
@@ -218,6 +225,7 @@ async function refreshFiles(dir: string = currentDir) {
   clearChildren(list);
   try {
     const entries = await ListDir(dir);
+    lastEntryCount = entries.length;
     for (const e of entries) {
       const li = document.createElement("li");
       li.textContent = e.name;
@@ -231,16 +239,70 @@ async function refreshFiles(dir: string = currentDir) {
       li.onclick = () => onFileClick(e.path, e.isDir);
       list.appendChild(li);
     }
-    if (entries.length === 0) {
-      const li = document.createElement("li");
-      li.classList.add("empty");
-      li.textContent = "(empty)";
-      list.appendChild(li);
-    }
+    if (entries.length === 0) renderEmptyPane(list);
   } catch (err) {
     console.error("ListDir failed", err);
     toast(`Cannot read ${dir}: ${err}`, "error");
   }
+  refreshFirstRun();
+}
+
+// renderEmptyPane says what an empty Workspace pane needs: a workspace to open, or .probe files to add. It says nothing while the workspace
+// is loading (no flash), and the line is plain text.
+function renderEmptyPane(list: HTMLElement): void {
+  const say = workspacePaneText({ loading: bootLoading, workspaceOpen: workspaceRoot !== "" }, 0);
+  if (!say) return;
+  const li = document.createElement("li");
+  li.classList.add("empty", "pane-empty");
+  li.append(textEl("span", "", say.text));
+  if (say.action) {
+    const btn = textEl("button", "btn", "Open workspace");
+    btn.id = "btn-workspace-hint";
+    btn.setAttribute("type", "button");
+    btn.addEventListener("click", () => void pickWorkspace());
+    li.append(document.createElement("br"), btn);
+  }
+  list.appendChild(li);
+}
+
+// firstRunInput is what the guidance reads, from the window's own state.
+function firstRunInput(): FirstRunInput {
+  const select = $("device-picker") as HTMLSelectElement;
+  return {
+    loading: bootLoading,
+    workspaceOpen: workspaceRoot !== "",
+    fileOpen: currentPath !== null,
+    dirty,
+    devicesLoaded,
+    deviceCount: lastDeviceList.length,
+    bootedCount: lastDeviceList.filter((d) => d.booted).length,
+    deviceSelected: select.value !== "",
+    deviceBooted: selectedDeviceIsBooted(),
+    connected,
+  };
+}
+
+// refreshFirstRun shows the one next step and gives each disabled primary button its reason: as its title and as a description the button
+// points to (aria-describedby), so a screen reader reads why it is disabled. A button that is enabled has no reason and no description.
+function refreshFirstRun(): void {
+  const i = firstRunInput();
+  const step = nextStep(i);
+  const strip = $("next-step");
+  strip.textContent = step;
+  strip.hidden = step === "";
+  const set = (id: string, reasonId: string, reason: string, enabledTitle: string) => {
+    const btn = $(id) as HTMLButtonElement;
+    const text = btn.disabled ? reason : "";
+    $(reasonId).textContent = text;
+    if (text) btn.setAttribute("aria-describedby", reasonId);
+    else btn.removeAttribute("aria-describedby");
+    btn.title = text || enabledTitle;
+  };
+  set("btn-run", "reason-run", runReason(i), "Run the open file");
+  set("btn-record", "reason-record", recordReason(i), "Record interactions (⌘⇧R)");
+  set("btn-save", "reason-save", saveReason(i), "Save (⌘S)");
+  const dev = lastDeviceList.find((d) => d.id === ($("device-picker") as HTMLSelectElement).value);
+  set("btn-connect", "reason-connect", connectReason(i, dev?.hint ?? ""), connected ? "Disconnect from device" : "Connect to selected device");
 }
 
 async function onFileClick(path: string, isDir: boolean) {
@@ -1386,11 +1448,13 @@ function enrichError(raw: unknown): string {
 
 function updateRunButton() {
   ($("btn-run") as HTMLButtonElement).disabled = !connected || !currentPath;
+  refreshFirstRun();
 }
 
 function updateRecordButton() {
   const btn = $("btn-record") as HTMLButtonElement;
   btn.disabled = !connected;
+  refreshFirstRun();
 }
 
 type DeviceInfo = {
@@ -1424,6 +1488,7 @@ async function refreshDevices() {
     clearChildren(select);
     select.appendChild(makeOption("", "— select device —"));
     lastDeviceList = devs;
+    devicesLoaded = true;
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
     const sorted = [...devs].sort(
@@ -1461,7 +1526,7 @@ async function refreshDevices() {
     clearChildren(select);
     select.appendChild(makeOption("", "— select device —"));
     console.error("ListDevices failed", err);
-    toast(`Device discovery failed: ${err}`, "error");
+    toast(`Device discovery failed: ${err}`, "error"); // the list was not read, so it is not judged empty either
   }
   updateConnectButton();
 }
@@ -1491,6 +1556,7 @@ function updateConnectButton() {
     btn.textContent = "Disconnect";
     btn.disabled = false;
     btn.title = "Disconnect from device";
+    refreshFirstRun();
     return;
   }
   btn.textContent = "Connect";
@@ -1505,6 +1571,7 @@ function updateConnectButton() {
     btn.disabled = false;
     btn.title = "Connect to selected device";
   }
+  refreshFirstRun();
 }
 
 ($("device-picker") as HTMLSelectElement).addEventListener("change", updateConnectButton);
@@ -1876,11 +1943,24 @@ initDeviceSettings();
     resetAIPreview();
     workspaceRoot = ws;
     resetNetworkPanel();
-    refreshFiles(ws);
+    await refreshFiles(ws);
   } else {
-    refreshFiles();
+    await refreshFiles();
   }
+  finishBoot();
 })();
+
+// finishBoot ends the start-up: from now on the guidance may speak. A pane that came back empty while the workspace was loading gets its
+// line now, once, and not before.
+function finishBoot(): void {
+  bootLoading = false;
+  const list = $("file-list");
+  if (lastEntryCount === 0 && !list.querySelector("li.pane-empty")) {
+    clearChildren(list);
+    renderEmptyPane(list);
+  }
+  refreshFirstRun();
+}
 
 refreshDevices();
 runLint();
