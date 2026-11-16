@@ -38,7 +38,7 @@ var boundMethods = map[string]string{
 	"AIChatLabel": catUI, "AIChatLabelParts": catUI, "ExplainAvailability": catUI, "InitialWorkspace": catUI, "Lint": catUI, "RunState": catUI,
 	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, "SelectorFixAttempts": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
 	// the workspace
-	"AnswerConfirm": catConfirm, "WorkspaceNote": catReadsWS, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
+	"AnswerConfirm": catConfirm, "WorkspaceNote": catReadsWS, "DeviceListNote": catDevice, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
 	"WriteFile": catWritesWS, "SaveAISettings": catWritesWS, "SaveWorkspaceSettings": catWritesWS,
 	"SetWorkspace": catWorkspaceRoot, "PickWorkspace": catWorkspaceRoot,
 	// the keychain

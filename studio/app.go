@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -48,8 +49,9 @@ type App struct {
 	viewOrigins []string
 
 	mu        sync.Mutex
-	conn      *connection // nil when disconnected
-	deviceMgr *device.Manager
+	conn      *connection     // nil when disconnected
+	deviceMgr *device.Manager // the default adb only (see adb_tools.go); read through mgr()
+	mgrMu     sync.Mutex
 	wifi      *wifiDiscovery
 	wifiLimit wifiLimiter
 	// lookupHost resolves a hostname for the WiFi target policy; nil uses the system resolver (tests replace it).
@@ -94,6 +96,7 @@ type connection struct {
 	deviceID     string
 	deviceName   string
 	platform     device.Platform
+	toolsNote    string // set when this connection uses an adb that probe.yaml names
 	streamCancel context.CancelFunc
 	streamDone   chan struct{} // closed when the streaming loop exits
 	view         *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
@@ -101,7 +104,7 @@ type connection struct {
 
 // NewApp creates a new App.
 func NewApp() *App {
-	return &App{ctx: context.Background(), deviceMgr: device.NewManager(), wifi: newWiFiDiscovery()}
+	return &App{ctx: context.Background(), deviceMgr: newDefaultManager(), wifi: newWiFiDiscovery()}
 }
 
 // startup is called once when the Wails runtime is ready. The context is
@@ -406,7 +409,8 @@ type DeviceInfo struct {
 // for shut-down devices instead of letting the user wait for a token-read
 // timeout.
 func (a *App) ListDevices() ([]DeviceInfo, error) {
-	devs, err := a.deviceMgr.List(a.ctx)
+	a.syncDefaultADB() // the default adb may have appeared since start-up; a workspace's tools.adb is never used here
+	devs, err := a.mgr().List(a.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -434,12 +438,12 @@ func (a *App) ListDevices() ([]DeviceInfo, error) {
 func (a *App) deviceKind(d device.Device) string {
 	switch d.Platform {
 	case device.PlatformIOS:
-		if a.deviceMgr.IsPhysicalIOS(a.ctx, d.ID) {
+		if a.mgr().IsPhysicalIOS(a.ctx, d.ID) {
 			return "physical"
 		}
 		return "simulator"
 	case device.PlatformAndroid:
-		if a.deviceMgr.IsPhysicalAndroid(a.ctx, d.ID) {
+		if a.mgr().IsPhysicalAndroid(a.ctx, d.ID) {
 			return "physical"
 		}
 		return "emulator"
@@ -468,6 +472,8 @@ type ConnectionStatus struct {
 	DeviceID   string `json:"deviceId"`
 	DeviceName string `json:"deviceName"`
 	Platform   string `json:"platform"`
+	// ToolsNote says the connection uses a program that probe.yaml names ("Using adb from probe.yaml: adb"); empty otherwise.
+	ToolsNote string `json:"toolsNote,omitempty"`
 }
 
 // Status returns the current connection state for the UI's connection
@@ -483,6 +489,7 @@ func (a *App) Status() ConnectionStatus {
 		DeviceID:   a.conn.deviceID,
 		DeviceName: a.conn.deviceName,
 		Platform:   string(a.conn.platform),
+		ToolsNote:  a.conn.toolsNote,
 	}
 }
 
@@ -610,8 +617,23 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		return ConnectionStatus{}, errConnectDuringRun
 	}
 
+	// The adb: the default one, unless probe.yaml names one and it passes the checks (explicit Connect only; see adb_tools.go).
+	mgr := a.mgr()
+	toolsNote := ""
+	if cfg.Tools.ADB != "" {
+		a.mu.Lock()
+		ws := a.workspace
+		a.mu.Unlock()
+		path, err := workspaceADB(cfg.Tools.ADB, ws, runtime.GOOS)
+		if err != nil {
+			return ConnectionStatus{}, err
+		}
+		mgr = device.NewManagerWithPaths(device.ToolPaths{ADB: path})
+		toolsNote = usingADBNote(path)
+	}
+
 	// Find the device.
-	devs, err := a.deviceMgr.List(a.ctx)
+	devs, err := mgr.List(a.ctx)
 	if err != nil {
 		return ConnectionStatus{}, fmt.Errorf("listing devices: %w", err)
 	}
@@ -636,7 +658,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 	// gets a longer token wait.
 	dialTimeout := 5 * time.Second
 	tokenTimeout := 8 * time.Second
-	if dev.Platform == device.PlatformIOS && a.deviceMgr.IsPhysicalIOS(a.ctx, deviceID) {
+	if dev.Platform == device.PlatformIOS && mgr.IsPhysicalIOS(a.ctx, deviceID) {
 		tokenTimeout = 20 * time.Second
 	}
 
@@ -651,16 +673,16 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		// transparently. Token reads fall through cache → /data/local/tmp →
 		// logcat, so physical devices that lock down /data/local/tmp still
 		// resolve via the logcat fallback.
-		if err := a.deviceMgr.EnsureADB(a.ctx, deviceID, port); err != nil {
+		if err := mgr.EnsureADB(a.ctx, deviceID, port); err != nil {
 			return ConnectionStatus{}, fmt.Errorf("android setup: %w", err)
 		}
-		if err := a.deviceMgr.ForwardPort(a.ctx, deviceID, port, port); err != nil {
+		if err := mgr.ForwardPort(a.ctx, deviceID, port, port); err != nil {
 			return ConnectionStatus{}, fmt.Errorf("port forward: %w", err)
 		}
 		cleanup = func() {
-			_ = a.deviceMgr.RemoveForward(context.Background(), deviceID, port)
+			_ = mgr.RemoveForward(context.Background(), deviceID, port)
 		}
-		token, err := a.deviceMgr.ReadToken(a.ctx, deviceID, tokenTimeout)
+		token, err := mgr.ReadToken(a.ctx, deviceID, tokenTimeout)
 		if err != nil {
 			cleanup()
 			return ConnectionStatus{}, fmt.Errorf("agent token: %w (is the app running with PROBE_AGENT=true?)", err)
@@ -680,8 +702,8 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		// Physical iOS needs an iproxy tunnel before we can dial the agent
 		// port over USB. Simulators read the token from the host filesystem
 		// via simctl and need no tunnel.
-		if a.deviceMgr.IsPhysicalIOS(a.ctx, deviceID) {
-			iproxyCleanup, err := a.deviceMgr.EnsureIProxy(a.ctx, deviceID, port, port)
+		if mgr.IsPhysicalIOS(a.ctx, deviceID) {
+			iproxyCleanup, err := mgr.EnsureIProxy(a.ctx, deviceID, port, port)
 			if err != nil {
 				return ConnectionStatus{}, fmt.Errorf("iproxy: %w (install via: brew install libimobiledevice)", err)
 			}
@@ -689,7 +711,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		}
 		// ReadTokenIOS tries simctl first (fast, file-based) then falls
 		// through to idevicesyslog for physical devices.
-		token, err := a.deviceMgr.ReadTokenIOS(a.ctx, deviceID, tokenTimeout, cfg.Project.App)
+		token, err := mgr.ReadTokenIOS(a.ctx, deviceID, tokenTimeout, cfg.Project.App)
 		if err != nil {
 			if cleanup != nil {
 				cleanup()
@@ -733,9 +755,10 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		deviceID:     deviceID,
 		deviceName:   dev.Name,
 		platform:     dev.Platform,
+		toolsNote:    toolsNote,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
-		deviceCtx:    newStudioDeviceContext(a, cfg, dev.Platform, deviceID, port, ""),
+		deviceCtx:    newStudioDeviceContextWith(a, mgr, cfg, dev.Platform, deviceID, port, ""),
 	}
 
 	// Replace any existing connection (and shut down its stream first).
@@ -1366,7 +1389,58 @@ func physicalHint(d device.Device, kind string) string {
 // device). The port is the one Studio forwarded or found, and host is the device's address for a Wi-Fi connection. Destructive steps ask in the
 // window (confirmClearData) and are never allowed without it: AllowClearData is off.
 func newStudioDeviceContext(a *App, cfg *config.Config, platform device.Platform, serial string, port int, host string) *runner.DeviceContext {
-	dc := runner.NewConfiguredDeviceContext(a.ctx, a.deviceMgr, cfg, platform, serial, runner.ConnFacts{AgentHost: host, Port: port, DevicePort: port})
+	return newStudioDeviceContextWith(a, a.mgr(), cfg, platform, serial, port, host)
+}
+
+// newStudioDeviceContextWith is newStudioDeviceContext for a given device manager (the one Connect chose for this connection).
+func newStudioDeviceContextWith(a *App, mgr *device.Manager, cfg *config.Config, platform device.Platform, serial string, port int, host string) *runner.DeviceContext {
+	dc := runner.NewConfiguredDeviceContext(a.ctx, mgr, cfg, platform, serial, runner.ConnFacts{AgentHost: host, Port: port, DevicePort: port})
 	dc.Confirm = a.confirmClearData(dc) // bound to this context: it asks about the device this context wipes
 	return dc
+}
+
+// mgr is the device manager. It is replaced when the workspace's probe.yaml names another adb, so every use reads it here.
+func (a *App) mgr() *device.Manager {
+	a.mgrMu.Lock()
+	defer a.mgrMu.Unlock()
+	return a.deviceMgr
+}
+
+// syncDefaultADB rebuilds the device manager when the default adb has appeared since it was built (the SDK was installed, or ANDROID_HOME set)
+// and no device is connected. It only ever looks for the default adb. The connection check and the swap are one step under a.mu.
+func (a *App) syncDefaultADB() {
+	path, found, _ := defaultADB()
+	if !found {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.conn != nil {
+		return // a connection keeps the manager it was made with
+	}
+	a.mgrMu.Lock()
+	defer a.mgrMu.Unlock()
+	if a.deviceMgr != nil && a.deviceMgr.ADB().Bin() == adbBinOf(path) {
+		return
+	}
+	a.deviceMgr = device.NewManagerWithPaths(device.ToolPaths{ADB: path})
+}
+
+// adbBinOf is the name the manager shows for an adb path: the path, or the default name when none is set.
+func adbBinOf(path string) string {
+	if path == "" {
+		return device.NewADBWithPath("").Bin()
+	}
+	return path
+}
+
+// DeviceListNote says, in one line, why Android devices would be missing from the list: adb cannot be found where Studio looks. `probe test`
+// reports it at connect; in Studio a missing adb used to make Android emulators and phones silently absent from the list. It is empty when adb is
+// found, and it reads no probe.yaml: the workspace cannot make it run anything.
+func (a *App) DeviceListNote() string {
+	_, found, searched := defaultADB()
+	if found {
+		return ""
+	}
+	return adbNote(searched)
 }

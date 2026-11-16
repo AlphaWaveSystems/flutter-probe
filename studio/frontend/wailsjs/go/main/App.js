@@ -58,6 +58,10 @@ export function DeleteAPIKey() {
   return window['go']['main']['App']['DeleteAPIKey']();
 }
 
+export function DeviceListNote() {
+  return window['go']['main']['App']['DeviceListNote']();
+}
+
 export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }

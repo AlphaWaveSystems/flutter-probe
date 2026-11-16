@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { connectReason, nextStep, recordReason, runReason, saveReason, workspacePaneText, type FirstRunInput } from "../src/first-run.ts";
 
-const ready: FirstRunInput = { loading: false, workspaceOpen: true, fileOpen: true, dirty: false, devicesLoaded: true, deviceCount: 1, bootedCount: 1, deviceSelected: true, deviceBooted: true, connected: false, running: false, listing: "files" };
+const ready: FirstRunInput = { loading: false, workspaceOpen: true, fileOpen: true, dirty: false, devicesLoaded: true, deviceCount: 1, bootedCount: 1, deviceSelected: true, deviceBooted: true, connected: false, running: false, listing: "files", adbNote: "" };
 const at = (extra: Partial<FirstRunInput>): FirstRunInput => ({ ...ready, ...extra });
 
 describe("nextStep", () => {
@@ -80,5 +80,17 @@ describe("workspacePaneText", () => {
   it("asks for a workspace with an action, and says an open one has no .probe files, with no action", () => {
     assert.deepEqual(workspacePaneText({ loading: false, workspaceOpen: false }, 0), { text: "No workspace open. Pick your project folder (the one with probe.yaml).", action: true });
     assert.deepEqual(workspacePaneText({ loading: false, workspaceOpen: true }, 0), { text: "No .probe files here. Open another folder, or add tests to this one.", action: false });
+  });
+});
+
+describe("nextStep with the adb note", () => {
+  const note = "adb was not found, so Android emulators and phones are not listed.";
+  it("adds the note to the no-device and the all-shut-down steps", () => {
+    assert.match(nextStep(at({ deviceCount: 0, bootedCount: 0, deviceSelected: false, deviceBooted: false, adbNote: note })), /No device found.*adb was not found/);
+    assert.match(nextStep(at({ bootedCount: 0, deviceSelected: false, deviceBooted: false, adbNote: note })), /Every device is shut down.*adb was not found/);
+  });
+  it("leaves the other steps alone, and adds nothing when adb is found", () => {
+    assert.doesNotMatch(nextStep(at({ deviceSelected: false, deviceBooted: false, adbNote: note })), /adb/);
+    assert.doesNotMatch(nextStep(at({ deviceCount: 0, bootedCount: 0, deviceSelected: false, deviceBooted: false })), /adb/);
   });
 });

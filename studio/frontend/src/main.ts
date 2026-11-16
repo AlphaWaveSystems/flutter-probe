@@ -69,6 +69,7 @@ import {
   WiFiTokenSaved,
   WriteFile,
   WorkspaceNote,
+  DeviceListNote,
 } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 type ChatMessage = { role: string; content: string };
@@ -87,6 +88,7 @@ type Diagnostic = {
 };
 
 type ConnectionStatus = {
+  toolsNote?: string; // the connection uses a program that probe.yaml names ("Using adb from probe.yaml: adb")
   connected: boolean;
   deviceId: string;
   deviceName: string;
@@ -247,6 +249,7 @@ let dirty = false;
 let bootLoading = true;
 let devicesLoaded = false;
 let listing: FirstRunInput["listing"] = "unknown";
+let adbNote = ""; // why Android devices may be missing from the list (adb not found), from Go; plain text
 // The replaced line the card can re-run, whether that re-run is ours, and whether a run is going (declared here: setDirty reads them at start-up).
 let fixRerun: RerunTarget | null = null;
 let rerunInFlight = false;
@@ -325,6 +328,7 @@ function firstRunInput(): FirstRunInput {
     connected,
     running: runInProgress,
     listing,
+    adbNote,
   };
 }
 
@@ -1559,6 +1563,11 @@ async function refreshDevices() {
     select.appendChild(makeOption("", "— select device —"));
     lastDeviceList = devs;
     devicesLoaded = true;
+    try {
+      adbNote = (await DeviceListNote()) ?? "";
+    } catch {
+      adbNote = "";
+    }
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
     const sorted = [...devs].sort(
@@ -1671,6 +1680,7 @@ $("btn-connect").addEventListener("click", async () => {
     );
     startStream();
     toast(`Connected to ${status.deviceName}`, "success");
+    if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
     setStatus("error", "connection failed", detail);
