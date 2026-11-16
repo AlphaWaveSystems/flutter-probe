@@ -64,6 +64,7 @@ type Executor struct {
 	crashReport          *CrashReport       // set by collectCrashOnce when the app died during the test
 	crashTries           int                // collections tried so far
 	appStopped           bool               // the test stopped the app on purpose (a kill step) and has not launched it again
+	hooks                executorTestHooks  // set only by tests
 	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64      // incremented on each successful reconnect
@@ -332,10 +333,14 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 			// leave the CLI sitting silent indefinitely, only recoverable by
 			// manually interrupting it.
 			reconnectCtx, reconnectCancel := context.WithTimeout(ctx, stepTimeout)
-			reconnErr := e.tryReconnect(reconnectCtx, attempt)
+			reconnect := e.tryReconnect
+			if e.hooks.reconnect != nil { // tests drive the reconnect outcome; nil is the real reconnect
+				reconnect = e.hooks.reconnect
+			}
+			reconnErr := reconnect(reconnectCtx, attempt)
 			reconnectCancel()
 			if reconnErr != nil {
-				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)", err, attempt, reconnErr)
+				err = fmt.Errorf("%w (auto-reconnect attempt %d failed: %v)%s", err, attempt, reconnErr, e.reconnectHint(ctx))
 				break
 			}
 			// Retry the step with a fresh timeout. Issue #237: this used to

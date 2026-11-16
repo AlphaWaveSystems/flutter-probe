@@ -162,6 +162,23 @@ func (dc *DeviceContext) CloseSystemDriver() {
 	}
 }
 
+// reconnectDialOptions are the dial options every reconnect starts from: where the agent is, the token, the timeout, the hook that re-creates a vanished `adb forward`
+// while dials are refused (another tool on the same adb server clearing forwards, an adb restart), and whether the port is this CLI's own forward.
+func (dc *DeviceContext) reconnectDialOptions(token string) probelink.DialOptions {
+	return probelink.DialOptions{
+		Host:             dc.agentHost(),
+		Port:             dc.Port,
+		Token:            token,
+		DialTimeout:      dc.dialTimeoutVal(),
+		OnConnectRefused: dc.reforwardHook(),
+		OwnAdbForward:    dc.ownAdbForward(),
+	}
+}
+
+// ownAdbForward reports whether the host side of the agent port is this CLI's own `adb forward`, as it is on every Android run: a dial error then never blames an
+// adb forward for holding the port (reconnectHint says so when the forward belongs to another device).
+func (dc *DeviceContext) ownAdbForward() bool { return dc.Platform == device.PlatformAndroid }
+
 // agentHost returns the configured agent host or the default.
 func (dc *DeviceContext) agentHost() string {
 	if dc.AgentHost != "" {
@@ -624,23 +641,16 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		return nil, fmt.Errorf("reconnect: read token: %w", err)
 	}
 
-	dialOpts := probelink.DialOptions{
-		Host:        dc.agentHost(),
-		Port:        dc.Port,
-		Token:       token,
-		DialTimeout: dc.dialTimeoutVal(),
-		// The token was read from the device a moment ago, possibly before the
-		// new app instance rewrote it: re-read on a 401 (FP-19).
-		OnConnectRefused: dc.reforwardHook(),
-		RefreshToken: func(c context.Context) (string, error) {
-			switch dc.Platform {
-			case device.PlatformAndroid:
-				return dc.Manager.ReadTokenAndroid(c, dc.Serial, 5*time.Second, dc.AppID, nil)
-			case device.PlatformIOS:
-				return dc.Manager.ReadTokenIOS(c, dc.Serial, 5*time.Second, dc.AppID)
-			}
-			return "", fmt.Errorf("no token source for %s", dc.Platform)
-		},
+	dialOpts := dc.reconnectDialOptions(token)
+	// The token was read from the device a moment ago, possibly before the new app instance rewrote it: re-read on a 401 (FP-19).
+	dialOpts.RefreshToken = func(c context.Context) (string, error) {
+		switch dc.Platform {
+		case device.PlatformAndroid:
+			return dc.Manager.ReadTokenAndroid(c, dc.Serial, 5*time.Second, dc.AppID, nil)
+		case device.PlatformIOS:
+			return dc.Manager.ReadTokenIOS(c, dc.Serial, 5*time.Second, dc.AppID)
+		}
+		return "", fmt.Errorf("no token source for %s", dc.Platform)
 	}
 
 	return dc.dialReconnect(ctx, dialOpts)
@@ -704,16 +714,7 @@ func (dc *DeviceContext) ReconnectWithToken(ctx context.Context, token string) (
 	// Wait for the app to restart and the agent to initialize
 	time.Sleep(dc.reconnectDelay())
 
-	dialOpts := probelink.DialOptions{
-		Host:        dc.agentHost(),
-		Port:        dc.Port,
-		Token:       token,
-		DialTimeout: dc.dialTimeoutVal(),
-		// The `adb forward` can disappear while the app restarts (another tool on the
-		// same adb server clearing forwards, an adb restart): re-create it while
-		// dials are refused instead of waiting out the token window.
-		OnConnectRefused: dc.reforwardHook(),
-	}
+	dialOpts := dc.reconnectDialOptions(token)
 
 	// For WiFi: use the original host (not 127.0.0.1)
 	// The host is embedded in the HTTPClient's baseURL, but for reconnect

@@ -263,7 +263,8 @@ func failedTestCrash(e *Executor, runErr error) *CrashReport {
 }
 
 // noteAppState remembers whether the test has stopped the app on purpose: a kill step that succeeded does, a restart, clear or open step that succeeded launches it
-// again. With no process and no exit entry, the crash look takes the first for the test's own doing and the second for a death.
+// again (`open link` can start a stopped app too). With no process and no exit entry, the crash look takes the first for the test's own doing and the second for a
+// death.
 func (e *Executor) noteAppState(step parser.Step, err error) {
 	a, ok := step.(parser.ActionStep)
 	if !ok || err != nil {
@@ -272,7 +273,13 @@ func (e *Executor) noteAppState(step parser.Step, err error) {
 	switch a.Verb {
 	case parser.VerbKill:
 		e.appStopped = true
-	case parser.VerbRestart, parser.VerbClearAppData, parser.VerbOpen:
+	case parser.VerbRestart, parser.VerbClearAppData, parser.VerbOpen, parser.VerbOpenLink:
 		e.appStopped = false
 	}
+}
+
+// executorTestHooks replace parts of an Executor that cannot be driven in a unit test. The zero value is the real behaviour; only tests set it.
+type executorTestHooks struct {
+	// reconnect replaces the auto-reconnect attempt of a step that lost its connection.
+	reconnect func(ctx context.Context, attempt int) error
 }
