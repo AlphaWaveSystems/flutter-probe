@@ -91,11 +91,12 @@ func (c *lintConfinement) allow(p string, line int, refusal string) bool {
 	return false
 }
 
-// Refusal texts. Each is one warning per refused path, and none names a file.
+// Refusal texts. Each is one warning per refused path, and none names a file. The first three refuse a recipe source, and each says in
+// the same line that it suppresses unknown-step errors (see recipesSkipped). The CSV source refusal suppresses nothing, so it does not.
 const (
-	refuseRecipesFolder = "the recipes folder is outside the workspace; recipes were not read"
-	refuseRecipeFile    = "a recipe file is outside the workspace and was not read"
-	refuseUseTarget     = "use target is outside the workspace and was not read"
+	refuseRecipesFolder = "the recipes folder is outside the workspace; recipes were not read, so calls to recipes were not checked"
+	refuseRecipeFile    = "a recipe file is outside the workspace and was not read, so calls to recipes were not checked"
+	refuseUseTarget     = "use target is outside the workspace and was not read, so calls to recipes were not checked"
 	refuseCSVSource     = "CSV source is outside the workspace and was not read"
 )
 

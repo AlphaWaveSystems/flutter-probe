@@ -409,3 +409,28 @@ func TestLintWithRootRefusesARecipeFileOutsideTheFolder(t *testing.T) {
 		t.Errorf("without the fence the link is read and the recipe defined; got %+v", open.References)
 	}
 }
+
+// The refusal texts are pinned here, since the other tests compare against the constants: a change to a constant shows in this test.
+// Each warning that suppresses unknown-step errors says so in its own line; the CSV refusal suppresses nothing and does not.
+func TestRefusalTextsSayWhatTheySuppress(t *testing.T) {
+	const suffix = ", so calls to recipes were not checked"
+	pinned := map[string]string{
+		refuseRecipesFolder: "the recipes folder is outside the workspace; recipes were not read, so calls to recipes were not checked",
+		refuseRecipeFile:    "a recipe file is outside the workspace and was not read, so calls to recipes were not checked",
+		refuseUseTarget:     "use target is outside the workspace and was not read, so calls to recipes were not checked",
+		refuseCSVSource:     "CSV source is outside the workspace and was not read",
+	}
+	for got, want := range pinned {
+		if got != want {
+			t.Errorf("refusal text = %q, want %q", got, want)
+		}
+	}
+	for _, text := range []string{refuseRecipesFolder, refuseRecipeFile, refuseUseTarget} {
+		if !strings.HasSuffix(text, suffix) {
+			t.Errorf("refusal %q suppresses unknown-step errors and must say so with %q", text, suffix)
+		}
+	}
+	if strings.Contains(refuseCSVSource, "recipes") {
+		t.Errorf("the CSV refusal suppresses nothing; it must not mention recipes: %q", refuseCSVSource)
+	}
+}
