@@ -504,7 +504,11 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		fmt.Fprintf(statusW, "  Shard %s: running %d files\n", shardStr, len(files))
 		if verbose {
 			for _, f := range files {
+				key, outside := runner.ShardKey(f, shardBase(cmd))
 				fmt.Fprintf(statusW, "    %s\n", f)
+				if outside {
+					fmt.Fprintf(statusW, "      note: outside the repository and the config directory, so its shard uses its absolute path (%s)\n", key)
+				}
 			}
 		}
 	}
