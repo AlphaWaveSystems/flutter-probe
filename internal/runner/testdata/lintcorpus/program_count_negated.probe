@@ -1,0 +1,4 @@
+# Expected: no count warning. A negated check is not flagged.
+test "negated count"
+  open the app
+  don't see "0 items"

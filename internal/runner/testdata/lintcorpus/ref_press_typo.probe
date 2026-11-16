@@ -1,0 +1,4 @@
+# Expected: error, unknown step "press tba", and a warning that suggests the key tab.
+test "press typo"
+  open the app
+  press tba

@@ -1,0 +1,4 @@
+# Expected: error, go back takes no arguments.
+test "go back with words"
+  open the app
+  go back to the start

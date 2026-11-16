@@ -1,0 +1,6 @@
+# Expected: three count warnings: see "0 items", see "None" (zero state), wait until "3" appears.
+test "count text"
+  open the app
+  see "0 items"
+  see "None"
+  wait until "3" appears

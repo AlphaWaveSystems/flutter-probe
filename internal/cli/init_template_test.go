@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // What `probe init` scaffolds is the first thing a new user runs: it must parse, or the first `probe test` fails.
@@ -20,12 +22,16 @@ func TestInitScaffoldParses(t *testing.T) {
 // The scaffold must pass the same lint checks as a user's own files, so a new user does not start with warnings.
 func TestInitScaffoldLintsClean(t *testing.T) {
 	for name, src := range map[string]string{"tests/example.probe": sampleTestFile, "tests/recipes/login.probe": sampleRecipeFile} {
-		prog, err := parser.ParseFile(src)
-		if err != nil {
-			t.Fatalf("%s does not parse: %v", name, err)
+		path := filepath.Join(t.TempDir(), filepath.Base(name))
+		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+			t.Fatal(err)
 		}
-		if warns := lintProgram(prog); len(warns) > 0 {
-			t.Errorf("%s has lint warnings: %v", name, warns)
+		report, err := runner.LintFile(&config.Config{}, path)
+		if err != nil {
+			t.Fatalf("%s does not lint: %v", name, err)
+		}
+		if len(report.Program) > 0 {
+			t.Errorf("%s has lint warnings: %v", name, report.Program)
 		}
 	}
 }

@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
 // probe lint fails on a reference a run cannot resolve, and only warns about a placeholder no value defines.
@@ -97,33 +95,6 @@ func TestLintCommandWarnsOnAZeroStateCheckAndStillPasses(t *testing.T) {
 	}
 	if !strings.Contains(out, "All files valid.") {
 		t.Errorf("a run with only warnings ends with All files valid.:\n%s", out)
-	}
-}
-
-// lintProgram warns on a count or zero-state text check that a substring match passes by accident. It does not warn on an
-// anchored check, a negated check, or a sentence that only starts with a zero-state word.
-func TestLintProgramFlagsUnanchoredCountAndZeroStateChecks(t *testing.T) {
-	cases := []struct {
-		name, src string
-		warn      bool
-	}{
-		{"zero state", "test \"x\"\n  see \"No items\"\n", true},
-		{"count", "test \"x\"\n  see \"3 items\"\n", true},
-		{"anchored zero state", "test \"x\"\n  see \"No items\" matching \"^No items$\"\n", false},
-		{"negated count", "test \"x\"\n  don't see \"3 items\"\n", false},
-		{"longer sentence", "test \"x\"\n  see \"Nothing is wrong with this page\"\n", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			prog, err := parser.ParseFile(c.src)
-			if err != nil {
-				t.Fatal(err)
-			}
-			warns := lintProgram(prog)
-			if got := len(warns) > 0; got != c.warn {
-				t.Errorf("lintProgram warned = %t, want %t: %q", got, c.warn, warns)
-			}
-		})
 	}
 }
 

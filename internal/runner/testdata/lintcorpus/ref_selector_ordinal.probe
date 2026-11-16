@@ -1,0 +1,4 @@
+# Expected: error, a selector that can never match: an ordinal with no number (0nd).
+test "ordinal zero"
+  open the app
+  tap 0nd "Buy"

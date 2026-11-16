@@ -1,0 +1,6 @@
+# Expected: no findings with the recipe in use. Without the recipe in use, "open menu" is an unknown step.
+use "recipes/open_menu.probe"
+
+test "calls a used recipe"
+  open the app
+  open menu

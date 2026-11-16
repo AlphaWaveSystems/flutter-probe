@@ -1,0 +1,8 @@
+# Expected: no placeholder warning. The examples table defines name.
+test "placeholder from examples"
+  open the app
+  tap "<name>"
+
+with examples:
+  name
+  "Ada"
