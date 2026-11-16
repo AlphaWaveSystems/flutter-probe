@@ -43,7 +43,7 @@ class FixtureApp extends StatelessWidget {
     if (widgetFamily.isNotEmpty) {
       return MaterialApp(
         title: 'Probe Fixture (Flutter)',
-        home: widgetFamilyScreen(widgetFamily) ?? Scaffold(body: Center(child: Text('No widget family named $widgetFamily'))),
+        home: widgetFamilyScreen(widgetFamily) ?? Scaffold(body: Center(child: Text('No widget family named $widgetFamily (known: ${widgetFamilies.join(', ')})'))),
       );
     }
     return MaterialApp(

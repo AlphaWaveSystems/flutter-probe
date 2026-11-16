@@ -46,8 +46,8 @@ decides `is checked` for a radio by comparing the radio's `value` with its own `
 
 | Widget (fixture id) | find (`#id`) | type | clear | read | Result |
 |---|---|---|---|---|---|
-| `TextField` (`wf_textfield`) | pass | pass | pass (`clear`) | not assessed (read through a mirror text) | partly |
-| `TextFormField` with a validator (`wf_formfield`, `wf_validate`) | pass | pass | not assessed | pass (the validation error text appears after `tap "Validate"` and goes after typing) | pass |
+| `TextField` (`wf_textfield`) | pass | pass | pass via the mirror (`Plain: (empty)` after `clear`; the field's own text was not read) | not assessed (read through a mirror text) | partly |
+| `TextFormField` with a validator (`wf_formfield`, `wf_validate`) | pass | pass | not assessed | mirror only (the test asserts `Form error: Required` and `Form error: none`, the mirror of the validator's result; the error text the field itself shows is not asserted) | partly |
 | `TextField` with `obscureText` (`wf_password`) | pass | pass (the mirror shows 6 characters) | not assessed | not assessed (see the observation) | partly |
 | `TextField` with `maxLines: 3` (`wf_multiline`) | pass | pass for one line; **a line break was not typed** | not assessed | not assessed | partly |
 | `CupertinoTextField` (`wf_cupertino_field`) | pass | pass | not assessed | not assessed (mirror text only) | partly |

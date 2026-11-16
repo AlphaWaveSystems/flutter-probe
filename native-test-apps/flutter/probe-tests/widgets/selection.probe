@@ -4,6 +4,7 @@
 before each test
   restart the app
 
+# `don't see "..." is checked` also passes when the element is absent; the `see "..." is checked` steps of the same tests are its positive twins.
 test "a checkbox turns on and off"
   see "Terms: off"
   don't see "Accept terms" is checked
