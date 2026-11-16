@@ -15,8 +15,8 @@ func lintWebViewWarnings(t *testing.T, step string) []string {
 	}
 	var got []string
 	for _, w := range lintProgram(prog) {
-		if strings.Contains(w, "in a WebView can match") {
-			got = append(got, w)
+		if strings.Contains(w.Message, "in a WebView can match") {
+			got = append(got, w.Message)
 		}
 	}
 	return got
