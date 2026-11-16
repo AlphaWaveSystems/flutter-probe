@@ -331,6 +331,19 @@ func TestQuoteOracleOverRandomTexts(t *testing.T) {
 				t.Fatalf("selector %q cannot be held: the step is %q", text, sline)
 			}
 		}
+		// `see` takes the same selector: its parsed text is the text too
+		seeLine := Step(ev{"action": "see", "selector": sel("text", text)})
+		if _, ok := Quote(clean); ok && clean != "" {
+			prog, err := parser.ParseFile("test \"t\"\n" + seeLine + "\n")
+			if err != nil {
+				t.Fatalf("see %q: %q does not parse: %v", text, seeLine, err)
+			}
+			if as, ok := prog.Tests[0].Body[0].(parser.AssertStep); !ok || as.Sel.Text != clean {
+				t.Fatalf("see %q: %q parsed to %+v", text, seeLine, prog.Tests[0].Body[0])
+			}
+		} else if seeLine != "  see the element" {
+			t.Fatalf("see %q cannot be held: the step is %q", text, seeLine)
+		}
 	}
 	if held < 5000 || refused < 2000 {
 		t.Errorf("the corpus is lopsided: %d held, %d refused", held, refused)
@@ -343,6 +356,117 @@ func TestQuoteEscapesExactlyTheFour(t *testing.T) {
 	for in, want := range map[string]string{"a\tb": `"a\tb"`, "a\nb": `"a\nb"`, `a"b`: `"a\"b"`, `a\b`: `"a\\b"`, "plain": `"plain"`, "": `""`, "a b": "\"a b\""} {
 		if got, ok := Quote(in); !ok || got != want {
 			t.Errorf("Quote(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+}
+
+// A recorded label or typed text that has a placeholder is written as it is (no escape exists), and a comment under the step says the runner
+// expands it. Comments carry no text, and text without the shapes gets no note.
+func TestAPlaceholderInRecordedTextIsFlagged(t *testing.T) {
+	for name, p := range map[string]ev{
+		"an env placeholder in a label": {"action": "tap", "selector": sel("text", "${HOME} items")},
+		"a variable in a label":         {"action": "tap", "selector": sel("text", "Hello <name>")},
+		"a random variable":             {"action": "see", "selector": sel("text", "<random.email>")},
+		"typed text":                    {"action": "type", "text": "user-<random.name>", "selector": sel("id", "f")},
+		"a flat text":                   {"action": "long_press", "text": "${X}"},
+	} {
+		got := Lines(p)
+		if len(got) != 2 || got[1] != PlaceholderNote || strings.HasPrefix(got[0], "  #") {
+			t.Errorf("%s: %q", name, got)
+		}
+		if strings.Contains(got[1], "HOME") || strings.Contains(got[1], "name") {
+			t.Errorf("%s: the note carries text: %q", name, got[1])
+		}
+	}
+	for name, p := range map[string]ev{
+		"plain text":           {"action": "tap", "selector": sel("text", "Sign in")},
+		"a less-than sign":     {"action": "tap", "selector": sel("text", "a < b")},
+		"a number in brackets": {"action": "tap", "selector": sel("text", "1<2>3")},
+		"an unknown action":    {"action": "pinch"},
+		"an obscured field":    {"action": "type", "obscured": true, "selector": sel("id", "pw")},
+		"a swipe":              {"action": "swipe", "direction": "left"},
+		"a refused typed text": {"action": "type", "text": "${X}\x00"},
+	} {
+		if got := Lines(p); len(got) != 1 {
+			t.Errorf("%s: %q", name, got)
+		}
+	}
+	if got := Lines(ev{}); got != nil {
+		t.Errorf("no action: %q", got)
+	}
+}
+
+// An id or a widget type is written raw, so one that holds a control character or a line separator is not written: the lookup falls back.
+func TestIdsAndTypesThatCannotBeHeldFallBack(t *testing.T) {
+	for name, text := range map[string]string{"NUL": "a\x00b", "a line separator": "a b", "an escape": "a\x1bb", "NEL": "a\u0085b", "invalid UTF-8": "a\xffb", "a lone CR": "a\rb"} {
+		for _, kind := range []string{"id", "type"} {
+			if got := Step(ev{"action": "tap", "selector": sel(kind, text)}); got != "  tap the element" {
+				t.Errorf("%s as a %s selector: %q", name, kind, got)
+			}
+			if got := Step(ev{"action": "tap", "selector": sel(kind, text), "id": "ok"}); got != "  tap #ok" {
+				t.Errorf("%s as a %s selector with a flat id: %q", name, kind, got)
+			}
+		}
+		if got := Step(ev{"action": "tap", "id": text}); got != "  tap the element" {
+			t.Errorf("%s as a flat id: %q", name, got)
+		}
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("type", "Switch")}); got != "  tap the Switch" {
+		t.Errorf("an ordinary type: %q", got)
+	}
+}
+
+// What the screen text keeps and loses: a line break becomes a space, spaces and tabs around the text are trimmed, and nothing else changes (a
+// no-break space at an edge is kept); a lone carriage return is not deleted, it makes the text unholdable.
+func TestSanitizeKeepsEverythingButLineBreaksAndEdgeSpaces(t *testing.T) {
+	for in, want := range map[string]string{
+		"  OK \t": "OK", "\n  x \r": "x", "a\nb": "a b", "a\r\nb": "a b", " OK ": " OK ", "a\u00adb": "a\u00adb", "a\rb": "a\rb", "": "",
+	} {
+		if got := Sanitize(in); got != want {
+			t.Errorf("Sanitize(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("text", " OK ")}); got != "  tap \" OK \"" {
+		t.Errorf("an edge no-break space was lost: %q", got)
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("text", "a\rb")}); got != "  tap the element" {
+		t.Errorf("a lone CR was deleted, not refused: %q", got)
+	}
+}
+
+// A flat text that is nothing but spaces is no lookup: never `tap ""`.
+func TestBlankFlatTextIsNoLookup(t *testing.T) {
+	for _, text := range []string{"", "   ", " \t ", "\n"} {
+		if got := Step(ev{"action": "tap", "text": text}); got != "  tap the element" {
+			t.Errorf("text %q: %q", text, got)
+		}
+		if got := Step(ev{"action": "tap", "text": text, "id": "ok"}); got != "  tap #ok" {
+			t.Errorf("text %q with an id: %q", text, got)
+		}
+		if got := Step(ev{"action": "tap", "selector": sel("text", text)}); got != "  tap the element" {
+			t.Errorf("selector text %q: %q", text, got)
+		}
+	}
+}
+
+// Whatever makes a step unrepresentable, the comment that replaces it never carries the text.
+func TestARefusalNeverCarriesTheText(t *testing.T) {
+	const word = "DISTINCTIVEWORD"
+	for _, bad := range []string{"\x00", "\x1b", "\x7f", "\u0085", " ", " ", "\r", "\xff", "\a", "\v", "\f"} {
+		for _, p := range []ev{
+			{"action": "type", "text": word + bad + word},
+			{"action": "type", "text": word + bad + word, "selector": sel("text", "Field")},
+			{"action": "type", "text": word + bad + word, "id": "f"},
+		} {
+			got := Step(p)
+			if !strings.HasPrefix(got, "  # type") || strings.Contains(got, "DISTINCTIVE") || strings.Contains(got, bad) {
+				t.Errorf("typed %q: %q", bad, got)
+			}
+		}
+		for _, kind := range []string{"text", "id", "type"} {
+			if got := Step(ev{"action": "tap", "selector": sel(kind, word+bad+word)}); strings.Contains(got, "DISTINCTIVE") || strings.Contains(got, bad) {
+				t.Errorf("a %s selector with %q: %q", kind, bad, got)
+			}
 		}
 	}
 }

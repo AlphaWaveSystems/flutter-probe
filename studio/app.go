@@ -1320,9 +1320,7 @@ func (a *App) StartRecording() error {
 		if wait := scriptgen.GapStep(gap); wait != "" {
 			newLines = append(newLines, wait)
 		}
-		if line := eventToProbeScriptLine(p); line != "" {
-			newLines = append(newLines, line)
-		}
+		newLines = append(newLines, scriptgen.Lines(p)...)
 
 		for _, l := range newLines {
 			a.recMu.Lock()

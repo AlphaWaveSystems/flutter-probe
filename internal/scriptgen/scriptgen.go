@@ -8,6 +8,7 @@ package scriptgen
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -126,29 +127,55 @@ func Selector(params map[string]interface{}) string {
 		if text != "" {
 			switch kind {
 			case "id":
-				if strings.HasPrefix(text, "#") {
-					return text
+				if holdable(text) {
+					if strings.HasPrefix(text, "#") {
+						return text
+					}
+					return "#" + text
 				}
-				return "#" + text
 			case "text":
 				if quoted, ok := Quote(text); ok {
 					return quoted
 				}
 			case "type":
-				return "the " + text
+				if holdable(text) {
+					return "the " + text
+				}
 			}
 		}
 	}
-	if text, ok := params["text"].(string); ok && text != "" {
-		if quoted, ok := Quote(Sanitize(text)); ok {
-			return quoted
+	if text, ok := params["text"].(string); ok {
+		if clean := Sanitize(text); clean != "" {
+			if quoted, ok := Quote(clean); ok {
+				return quoted
+			}
 		}
 	}
-	if id, ok := params["id"].(string); ok && id != "" {
-		return "#" + Sanitize(id)
+	if id, ok := params["id"].(string); ok {
+		if clean := Sanitize(id); clean != "" && holdable(clean) {
+			return "#" + clean
+		}
 	}
 	return "the element"
 }
+
+// holdable says whether text can be written into a script line as it is (an id, a widget type): valid UTF-8 and no control character or line
+// separator. A lookup that is not holdable is not written; Selector falls back to the next one.
+func holdable(s string) bool {
+	if !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		if unholdable(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// unholdable is a character a script line cannot hold: a control character (the escapes for tab and newline are Quote's), or a line or
+// paragraph separator.
+func unholdable(r rune) bool { return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' }
 
 // cleanName makes a word the agent sent that is not text from the screen (an unknown action, a direction) safe for a line: the engine's one-line
 // cleaning (line and paragraph separators, control, invisible and bidirectional characters become one space, runs of space collapse, trimmed) and
@@ -176,7 +203,7 @@ func Quote(s string) (string, bool) {
 			b.WriteString(`\n`)
 		case r == '\t':
 			b.WriteString(`\t`)
-		case unicode.IsControl(r) || r == '\u2028' || r == '\u2029':
+		case unholdable(r):
 			return "", false
 		default:
 			b.WriteRune(r)
@@ -186,9 +213,30 @@ func Quote(s string) (string, bool) {
 	return b.String(), true
 }
 
-// Sanitize makes text from the screen safe for a ProbeScript line: no line breaks (they would end the step), trimmed.
+// Sanitize makes text from the screen safe for a ProbeScript line: a line break (LF or CRLF) becomes a space, and spaces, tabs and carriage
+// returns around the text are trimmed. Nothing else changes, so a no-break space at an edge is kept, and a carriage return inside the text stays
+// and makes the lookup unholdable (it is refused downstream, not deleted).
 func Sanitize(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "\r", "")
-	return strings.TrimSpace(s)
+	return strings.Trim(s, " \t\r")
+}
+
+// placeholderShape matches what the runner expands when a step runs: ${NAME} (the environment) and <name> or <random.name> (a variable).
+var placeholderShape = regexp.MustCompile(`\$\{|<[A-Za-z_][A-Za-z0-9_.]*>`)
+
+// PlaceholderNote is the comment line that follows a step whose text has a placeholder the runner would expand at replay.
+const PlaceholderNote = "  # the text above contains a placeholder (${...} or <...>): the runner expands it, so the step may not mean what was recorded"
+
+// Lines is Step plus what a reader of the script should know about it: a step whose text has a ${...} or <name> placeholder is followed by a
+// comment saying the runner expands it at replay (there is no escape for it). The comment never carries the text.
+func Lines(params map[string]interface{}) []string {
+	line := Step(params)
+	if line == "" {
+		return nil
+	}
+	if !strings.HasPrefix(line, "  #") && placeholderShape.MatchString(line) {
+		return []string{line, PlaceholderNote}
+	}
+	return []string{line}
 }
