@@ -395,6 +395,12 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 		return nil
 	}
 
+	// Crash evidence (opt-in, read-only): a step that failed for any other reason, such as a timeout while the app died during a wait, gets one look at whether the
+	// app is dead. It changes nothing about the step's outcome or message; a lost connection was looked at before its reconnect attempts, above.
+	if err != nil && !isLifecycleAction && ctx.Err() == nil {
+		e.collectCrashOnce(ctx)
+	}
+
 	if err != nil {
 		e.emitStep(step, desc, StepFailed, time.Since(start), err)
 	} else {

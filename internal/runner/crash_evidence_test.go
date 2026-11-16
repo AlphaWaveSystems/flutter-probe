@@ -116,23 +116,25 @@ func TestJudgeDeath(t *testing.T) {
 		dead    bool
 		wantPID int
 	}{
-		"pid changed: alive, a recent crash":   {true, []device.ExitRecord{at(3, device.ExitCrash)}, now, true, 103},
-		"pid gone, a recent native crash":      {false, []device.ExitRecord{at(3, device.ExitNativeCrash)}, now, true, 103},
-		"a recent ANR kill":                    {true, []device.ExitRecord{at(3, device.ExitANR)}, now, true, 103},
-		"killed by a signal":                   {true, []device.ExitRecord{at(3, device.ExitSignaled)}, now, true, 103},
-		"low memory":                           {true, []device.ExitRecord{at(3, device.ExitLowMemory)}, now, true, 103},
-		"the app exited itself":                {true, []device.ExitRecord{at(3, device.ExitSelf)}, now, true, 103},
-		"slow: alive and nothing recent":       {true, nil, now, false, 0},
-		"slow: alive, only an old crash":       {true, []device.ExitRecord{at(600, device.ExitCrash)}, now, false, 0},
-		"gone, only an old crash":              {false, []device.ExitRecord{at(600, device.ExitCrash)}, now, true, 0},
-		"gone, nothing listed":                 {false, nil, now, true, 0},
-		"a force-stop is not a death (alive)":  {true, []device.ExitRecord{at(3, device.ExitUserRequested)}, now, false, 0},
-		"a force-stop with nothing running":    {false, []device.ExitRecord{at(3, device.ExitUserRequested)}, now, true, 0},
-		"an unknown reason is not a death":     {true, []device.ExitRecord{at(3, device.ExitUnknown)}, now, false, 0},
-		"the newest entry is a force-stop":     {true, []device.ExitRecord{at(1, device.ExitUserRequested), at(3, device.ExitCrash)}, now, true, 103},
-		"the window edge is inside":            {true, []device.ExitRecord{at(60, device.ExitCrash)}, now, true, 160},
-		"just past the window":                 {true, []device.ExitRecord{at(61, device.ExitCrash)}, now, false, 0},
-		"no device clock: nothing can be said": {false, []device.ExitRecord{at(3, device.ExitCrash)}, time.Time{}, false, 0},
+		"pid changed: alive, a recent crash":       {true, []device.ExitRecord{at(3, device.ExitCrash)}, now, true, 103},
+		"pid gone, a recent native crash":          {false, []device.ExitRecord{at(3, device.ExitNativeCrash)}, now, true, 103},
+		"a recent ANR kill":                        {true, []device.ExitRecord{at(3, device.ExitANR)}, now, true, 103},
+		"killed by a signal":                       {true, []device.ExitRecord{at(3, device.ExitSignaled)}, now, true, 103},
+		"low memory":                               {true, []device.ExitRecord{at(3, device.ExitLowMemory)}, now, true, 103},
+		"the app exited itself":                    {true, []device.ExitRecord{at(3, device.ExitSelf)}, now, true, 103},
+		"slow: alive and nothing recent":           {true, nil, now, false, 0},
+		"slow: alive, only an old crash":           {true, []device.ExitRecord{at(600, device.ExitCrash)}, now, false, 0},
+		"gone, only an old crash":                  {false, []device.ExitRecord{at(600, device.ExitCrash)}, now, true, 0},
+		"gone, nothing listed":                     {false, nil, now, true, 0},
+		"a force-stop is not a death (alive)":      {true, []device.ExitRecord{at(3, device.ExitUserRequested)}, now, false, 0},
+		"a recent force-stop with nothing running": {false, []device.ExitRecord{at(3, device.ExitUserRequested)}, now, false, 0},
+		"an old force-stop with nothing running":   {false, []device.ExitRecord{at(600, device.ExitUserRequested)}, now, true, 0},
+		"a force-stop and then a crash":            {false, []device.ExitRecord{at(1, device.ExitUserRequested), at(3, device.ExitCrash)}, now, true, 103},
+		"an unknown reason is not a death":         {true, []device.ExitRecord{at(3, device.ExitUnknown)}, now, false, 0},
+		"the newest entry is a force-stop":         {true, []device.ExitRecord{at(1, device.ExitUserRequested), at(3, device.ExitCrash)}, now, true, 103},
+		"the window edge is inside":                {true, []device.ExitRecord{at(60, device.ExitCrash)}, now, true, 160},
+		"just past the window":                     {true, []device.ExitRecord{at(61, device.ExitCrash)}, now, false, 0},
+		"no device clock: nothing can be said":     {false, []device.ExitRecord{at(3, device.ExitCrash)}, time.Time{}, false, 0},
 	} {
 		dead, rec := judgeDeath(c.alive, c.exits, c.now, window)
 		if dead != c.dead || (c.wantPID != 0) != (rec != nil) || (rec != nil && rec.PID != c.wantPID) {
@@ -425,19 +427,22 @@ func TestALostConnectionCollectsBeforeAnyReconnect(t *testing.T) {
 	}
 }
 
-// A step that fails for another reason, and a run whose steps all pass, make no adb call.
-func TestNoCollectionWithoutALostConnection(t *testing.T) {
+// A run whose steps all pass makes no adb call, and a failure that is not a lost connection is looked at only after the step has failed (see the timeout tests).
+func TestNoCollectionWithoutAFailure(t *testing.T) {
 	a := &ceAdb{date: "2026-11-15 19:31:12", pidof: []string{""}, exit: []string{ceSample(t, "exit-java.txt")}}
 	e := ceExecutor(a, true)
 	var log []string
-	e.client = &ceFailingClient{log: &log, err: errors.New("rpc error -32001: Widget not found")}
-	_ = e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
-	if len(a.calls) != 0 {
-		t.Errorf("a step failure that is not a lost connection made %d adb calls", len(a.calls))
-	}
 	e.client = &ceFailingClient{log: &log}
 	if err := e.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter}); err != nil || len(a.calls) != 0 {
 		t.Errorf("a passing step: err %v, %d adb calls", err, len(a.calls))
+	}
+	// a failure that is not a lost connection is looked at once, after the step, and never before a reconnect: nothing was closed or retried
+	a2 := &ceAdb{date: "2026-11-15 19:31:12", pidof: []string{"3567"}, exit: []string{"x\n"}}
+	e2 := ceExecutor(a2, true)
+	e2.client = &ceFailingClient{log: &log, err: errors.New("rpc error -32001: Widget not found")}
+	_ = e2.runStep(context.Background(), parser.ActionStep{Verb: parser.VerbPressEnter})
+	if a2.words("date") != 1 {
+		t.Errorf("%d looks after a missing widget, want 1", a2.words("date"))
 	}
 }
 

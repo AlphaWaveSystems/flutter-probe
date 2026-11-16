@@ -114,17 +114,22 @@ var deathKinds = map[device.ExitKind]bool{
 
 // judgeDeath decides dead or slow from what was seen. exits are newest first, deviceNow is the device's clock and window how long ago the test began, in the
 // device's time. An entry of an unexpected ending that is not older than the window belongs to this test: the app died, even if it has been started again since
-// (its pid changed). With no such entry, an app that has no process is gone, and an app that has one is only slow. Without the device's clock nothing can be said.
+// (its pid changed). With no such entry, an app that has no process is gone, unless a recent force-stop explains it, and an app that has one is only slow. Without the device's clock nothing can be said.
 func judgeDeath(alive bool, exits []device.ExitRecord, deviceNow time.Time, window time.Duration) (dead bool, rec *device.ExitRecord) {
 	if deviceNow.IsZero() {
 		return false, nil
 	}
+	stopped := false
 	for i := range exits {
 		if deathKinds[exits[i].Kind] && !exits[i].WallClock.Before(deviceNow.Add(-window)) {
 			return true, &exits[i]
 		}
+		if exits[i].Kind == device.ExitUserRequested && !exits[i].WallClock.Before(deviceNow.Add(-window)) {
+			stopped = true
+		}
 	}
-	return !alive, nil
+	// no process and a recent force-stop: the test (or its user) stopped the app, which is not a death
+	return !alive && !stopped, nil
 }
 
 var (
