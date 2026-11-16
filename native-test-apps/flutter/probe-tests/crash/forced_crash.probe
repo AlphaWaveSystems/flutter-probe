@@ -1,0 +1,8 @@
+# Needs the crash build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_CRASH=true (see README).
+# This test fails on purpose. The tap aborts the app, so the step after it loses its connection to the agent. Run it with
+# --crash-evidence to keep why: the failed test then carries the exit reason and the crash text (Android only).
+test "the app dies during a test"
+  restart the app
+  wait until "Crash the app" appears
+  tap #fixture_crash
+  see "Crash survived"
