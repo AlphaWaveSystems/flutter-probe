@@ -175,7 +175,7 @@ func convertStep(step map[string]interface{}) (string, string) {
 			if name == "" {
 				name = "screenshot"
 			}
-			return fmt.Sprintf("take a screenshot called %q", name), ""
+			return fmt.Sprintf("take screenshot %q", name), ""
 		case "evalScript":
 			src, _ := val.(string)
 			dartCode := transpileJSToDart(src)

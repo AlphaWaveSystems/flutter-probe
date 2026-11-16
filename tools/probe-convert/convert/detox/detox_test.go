@@ -113,7 +113,7 @@ describe('Device', () => {
 
 	assertContains(t, result.ProbeCode, "open the app")
 	assertContains(t, result.ProbeCode, "restart the app")
-	assertContains(t, result.ProbeCode, `take a screenshot called "home"`)
+	assertContains(t, result.ProbeCode, `take screenshot "home"`)
 }
 
 func TestConvert_ClearAndReplace(t *testing.T) {

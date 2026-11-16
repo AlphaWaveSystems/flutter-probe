@@ -18,7 +18,7 @@ test "login wrong credentials"
   type "badpass" into #passwordInput
   tap on #loginButton
   wait 3 seconds
-  take a screenshot called "wrong_creds.png"
+  take screenshot "wrong_creds.png"
 
 test "navigate back"
   tap on "Sign In"

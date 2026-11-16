@@ -151,7 +151,7 @@ func matchJSLine(line string) string {
 
 	// screenshot
 	if m := jsScreenshot.FindStringSubmatch(line); m != nil {
-		return fmt.Sprintf("take a screenshot called %q", m[1])
+		return fmt.Sprintf("take screenshot %q", m[1])
 	}
 
 	return ""

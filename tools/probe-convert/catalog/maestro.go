@@ -83,7 +83,7 @@ ListValue    = "[" { Step "," } "]" .
 			// Screenshot
 			{ID: "maestro.takeScreenshot", Name: "takeScreenshot", Category: CatScreenshot, Level: Full,
 				EBNF: `"takeScreenshot:" STRING`, Example: `- takeScreenshot: "home_screen"`,
-				ProbeTemplate: `take a screenshot called $1`, ProbeExample: `take a screenshot called "home_screen"`},
+				ProbeTemplate: `take screenshot $1`, ProbeExample: `take screenshot "home_screen"`},
 
 			// Flow
 			{ID: "maestro.runFlow", Name: "runFlow", Category: CatFlow, Level: Full,

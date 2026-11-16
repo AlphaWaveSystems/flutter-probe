@@ -75,7 +75,7 @@ func TestConvertYAML_Screenshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	assertContains(t, probe, "take a screenshot called")
+	assertContains(t, probe, "take screenshot")
 	assertContains(t, probe, "home_screen")
 }
 

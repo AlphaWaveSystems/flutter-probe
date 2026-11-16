@@ -15,4 +15,4 @@ test "navigation"
   # scrollDown
   tap on "Logout"
   see "Sign In"
-  take a screenshot called "after_logout"
+  take screenshot "after_logout"

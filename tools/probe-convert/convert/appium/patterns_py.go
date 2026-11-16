@@ -149,7 +149,7 @@ func matchPythonLine(line string) string {
 
 	// screenshot
 	if m := pyScreenshot.FindStringSubmatch(line); m != nil {
-		return fmt.Sprintf("take a screenshot called %q", m[1])
+		return fmt.Sprintf("take screenshot %q", m[1])
 	}
 
 	return ""

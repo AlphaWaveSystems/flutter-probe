@@ -10,6 +10,7 @@
     { "include": "#assert-keyword" },
     { "include": "#control-flow" },
     { "include": "#modifier-keyword" },
+    { "include": "#generated-keywords" },
     { "include": "#string" },
     { "include": "#selector-id" },
     { "include": "#ordinal" },
@@ -36,7 +37,7 @@
       }
     },
     "hook": {
-      "match": "^(before each test|after each test|on failure)",
+      "match": "^(before (each|all)( test)?|after (each|all)( test)?|on failure)\\b",
       "name": "keyword.control.hook.probe"
     },
     "action-keyword": {
@@ -54,6 +55,10 @@
     "modifier-keyword": {
       "match": "\\b(optional|native|if visible|with ai|in the app|into the app|from)\\b",
       "name": "storage.modifier.probe"
+    },
+    "generated-keywords": {
+      "match": "\\b(assert no visual defects with ai|wait until appears matching|see data transferred below|wait for animations to end|clear recorded requests|verify external browser|revoke all permissions|sign in sandbox tester|type into system field|wait for system dialog|dismiss system dialog|double tap if visible|grant all permissions|long press if visible|see slow frames below|wait for network idle|wait for page to load|wait until disappears|paste from clipboard|tap in system dialog|double tap optional|long press optional|biometric no match|compare screenshot|wait until appears|with examples from|copy to clipboard|read with ai into|see system dialog|set airplane mode|wait for response|wait until any of|allow permission|clear if visible|don't see native|enroll biometric|save device logs|see memory below|biometric match|deny permission|restart the app|start measuring|take screenshot|type if visible|clear app data|clear optional|composite test|deliver signal|set appearance|stop measuring|store response|tap if visible|see cpu below|store text of|type optional|wait for idle|with examples|kill the app|open the app|scroll until|see contains|see disabled|see matching|see optional|see response|set language|set location|tap optional|before each|if response|permissions|press enter|see checked|see enabled|see exactly|see focused|see with ai|type native|after each|animations|before all|disappears|double tap|if appears|long press|on failure|permission|screenshot|see any of|see native|tap native|wait until|add media|after all|animation|biometric|clipboard|composite|don't see|dump tree|open link|otherwise|travel to|contains|disabled|examples|language|location|matching|optional|run dart|appears|between|checked|compare|deliver|devices|enabled|exactly|failure|focused|go back|network|respond|restart|seconds|assert|before|button|called|delete|device|enroll|recipe|repeat|revoke|rotate|scroll|second|signal|toggle|travel|verify|widget|within|above|after|allow|below|clear|close|field|grant|paste|pause|pinch|press|retry|right|shake|store|swipe|times|until|back|body|call|copy|dart|deny|drag|dump|else|home|idle|kill|left|link|load|logs|open|over|page|post|read|save|sync|take|test|tree|type|wait|when|all|app|get|log|put|run|see|set|tap|use|if)\\b",
+      "name": "keyword.other.probe"
     },
     "string": {
       "match": "\"[^\"]*\"",

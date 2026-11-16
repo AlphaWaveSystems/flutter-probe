@@ -1,29 +1,9 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { getWorkspaceRoot } from '../config';
-
-const PROBESCRIPT_KEYWORDS = [
-  'test', 'recipe', 'use', 'before each test', 'after each test', 'on failure',
-  'if', 'else', 'repeat', 'Examples:', 'run dart:',
-  'open the app', 'tap on', 'tap', 'type', 'see', "don't see",
-  'wait until', 'wait for', 'wait',
-  'swipe up', 'swipe down', 'swipe left', 'swipe right',
-  'swipe up over 40 percent', 'swipe right on "" from 2 percent', 'press tab', 'press backspace',
-  'tap "" in webview', 'type "" into css:"" in webview', 'see "" in webview', 'don\'t see "" in webview', 'wait until "" appears in webview', 'store text of css:"" in webview as',
-  'scroll up', 'scroll down', 'scroll up until', 'scroll down until',
-  'go back', 'long press', 'double tap',
-  'take a screenshot called', 'dump the widget tree',
-  'clear app data', 'restart the app',
-  'allow permission', 'deny permission',
-  'grant all permissions', 'revoke all permissions',
-  'toggle wifi', 'set airplane mode',
-  'when the app calls', 'respond with',
-  'start measuring', 'stop measuring', 'see memory below', 'see memory growth below', 'see cpu below',
-  'see slow frames below', 'see frame time below', 'see data transferred below',
-  'wait for response', 'see response', 'store response', 'if response',
-  'see exactly', 'see no requests', 'clear recorded requests',
-  'pause for', 'log',
-];
+// The completion words come from the ProbeScript docs (see scripts/gen-keywords.mjs): the lead of each command and the
+// reserved words. The examples with arguments are in the snippets.
+import { PROBESCRIPT_COMMANDS, PROBESCRIPT_KEYWORDS } from './probescriptKeywords.generated';
 
 const PERMISSION_NAMES = [
   'notifications', 'camera', 'location', 'microphone',
@@ -60,14 +40,26 @@ export class ProbeCompletionProvider implements vscode.CompletionItemProvider {
   }
 
   private getKeywordCompletions(textBefore: string): vscode.CompletionItem[] {
-    const trimmed = textBefore.trimStart();
-    return PROBESCRIPT_KEYWORDS
-      .filter(kw => kw.startsWith(trimmed.toLowerCase()) || trimmed === '')
+    const trimmed = textBefore.trimStart().toLowerCase();
+    const words = PROBESCRIPT_KEYWORDS
+      .filter(kw => kw.startsWith(trimmed) || trimmed === '')
       .map(kw => {
         const item = new vscode.CompletionItem(kw, vscode.CompletionItemKind.Keyword);
         item.detail = 'ProbeScript';
         return item;
       });
+    // A command form with its arguments as tab stops (`press <key>`, `see no requests`). A form that is only a keyword word is
+    // already offered above.
+    const commands = PROBESCRIPT_COMMANDS
+      .filter(cmd => !PROBESCRIPT_KEYWORDS.includes(cmd.label))
+      .filter(cmd => cmd.label.toLowerCase().startsWith(trimmed) || trimmed === '')
+      .map(cmd => {
+        const item = new vscode.CompletionItem(cmd.label, vscode.CompletionItemKind.Snippet);
+        item.insertText = new vscode.SnippetString(cmd.insert);
+        item.detail = 'ProbeScript command';
+        return item;
+      });
+    return [...words, ...commands];
   }
 
   private getWorkspaceRecipes(document: vscode.TextDocument): vscode.CompletionItem[] {
