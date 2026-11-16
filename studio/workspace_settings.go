@@ -20,15 +20,16 @@ import (
 // (loaded as raw map, only the managed keys are overwritten), so a power user
 // with complex config doesn't lose anything by using the UI.
 type WorkspaceSettings struct {
-	AgentPort           int    `json:"agentPort"`           // probe.yaml: agent.port
-	DefaultsTimeout     string `json:"defaultsTimeout"`     // probe.yaml: defaults.timeout (Go duration string, e.g. "30s")
-	TestTimeout         string `json:"testTimeout"`         // probe.yaml: defaults.test_timeout (wall-clock limit per test attempt; "" = off)
-	RetryFailedTests    int    `json:"retryFailedTests"`    // probe.yaml: defaults.retry_failed_tests (extra attempts of a failing test; 0 = off)
-	ImplicitWait        string `json:"implicitWait"`        // probe.yaml: defaults.implicit_wait (how long tap/type/see wait for a target; "" = off)
-	IOSDeviceID         string `json:"iosDeviceId"`         // probe.yaml: device.ios_device_id
-	AndroidDeviceID     string `json:"androidDeviceId"`     // probe.yaml: device.android_device_id
-	AIContextRunResults bool   `json:"aiContextRunResults"` // probe.yaml: studio.ai_context.run_results (off unless set)
-	AIContextWidgetTree bool   `json:"aiContextWidgetTree"` // probe.yaml: studio.ai_context.widget_tree (off unless set)
+	AgentPort               int    `json:"agentPort"`               // probe.yaml: agent.port
+	DefaultsTimeout         string `json:"defaultsTimeout"`         // probe.yaml: defaults.timeout (Go duration string, e.g. "30s")
+	TestTimeout             string `json:"testTimeout"`             // probe.yaml: defaults.test_timeout (wall-clock limit per test attempt; "" = off)
+	RetryFailedTests        int    `json:"retryFailedTests"`        // probe.yaml: defaults.retry_failed_tests (extra attempts of a failing test; 0 = off)
+	ImplicitWait            string `json:"implicitWait"`            // probe.yaml: defaults.implicit_wait (how long tap/type/see wait for a target; "" = off)
+	ClearDataBeforeEachTest bool   `json:"clearDataBeforeEachTest"` // probe.yaml: defaults.clear_data_before_each_test (wipe the app's data and relaunch before every test; asked once per run)
+	IOSDeviceID             string `json:"iosDeviceId"`             // probe.yaml: device.ios_device_id
+	AndroidDeviceID         string `json:"androidDeviceId"`         // probe.yaml: device.android_device_id
+	AIContextRunResults     bool   `json:"aiContextRunResults"`     // probe.yaml: studio.ai_context.run_results (off unless set)
+	AIContextWidgetTree     bool   `json:"aiContextWidgetTree"`     // probe.yaml: studio.ai_context.widget_tree (off unless set)
 	// Base is the form as it was loaded. Save writes only the fields that differ from it, and refuses when probe.yaml has changed on disk
 	// since then for any of them (an editor, git or another window may have written it), so a field the person did not touch is never put
 	// back to an old value.
@@ -51,15 +52,16 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 		return WorkspaceSettings{}, err
 	}
 	return WorkspaceSettings{
-		AgentPort:           cfg.Agent.Port,
-		DefaultsTimeout:     cfg.Defaults.Timeout.String(),
-		TestTimeout:         durationText(cfg.Defaults.TestTimeout),
-		RetryFailedTests:    cfg.Defaults.RetryFailedTests,
-		ImplicitWait:        durationText(cfg.Defaults.ImplicitWait),
-		IOSDeviceID:         cfg.Device.IOSDeviceID,
-		AndroidDeviceID:     cfg.Device.AndroidDeviceID,
-		AIContextRunResults: ai.RunResults,
-		AIContextWidgetTree: ai.WidgetTree,
+		AgentPort:               cfg.Agent.Port,
+		DefaultsTimeout:         cfg.Defaults.Timeout.String(),
+		TestTimeout:             durationText(cfg.Defaults.TestTimeout),
+		RetryFailedTests:        cfg.Defaults.RetryFailedTests,
+		ImplicitWait:            durationText(cfg.Defaults.ImplicitWait),
+		ClearDataBeforeEachTest: cfg.Defaults.ClearDataBeforeEachTest,
+		IOSDeviceID:             cfg.Device.IOSDeviceID,
+		AndroidDeviceID:         cfg.Device.AndroidDeviceID,
+		AIContextRunResults:     ai.RunResults,
+		AIContextWidgetTree:     ai.WidgetTree,
 	}, nil
 }
 
@@ -117,6 +119,7 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 		{"the test time limit", s.TestTimeout != base.TestTimeout, disk.TestTimeout == base.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
 		{"the retries", s.RetryFailedTests != base.RetryFailedTests, disk.RetryFailedTests == base.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
 		{"the wait for a target", s.ImplicitWait != base.ImplicitWait, disk.ImplicitWait == base.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{"clear data before each test", s.ClearDataBeforeEachTest != base.ClearDataBeforeEachTest, disk.ClearDataBeforeEachTest == base.ClearDataBeforeEachTest, s.ClearDataBeforeEachTest, []string{"defaults", "clear_data_before_each_test"}},
 		{"the iOS device", s.IOSDeviceID != base.IOSDeviceID, disk.IOSDeviceID == base.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
 		{"the Android device", s.AndroidDeviceID != base.AndroidDeviceID, disk.AndroidDeviceID == base.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
 		{"the AI run results switch", s.AIContextRunResults != base.AIContextRunResults, disk.AIContextRunResults == base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
@@ -143,6 +146,7 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 		{s.TestTimeout != base.TestTimeout, strings.TrimSpace(s.TestTimeout), []string{"defaults", "test_timeout"}},
 		{s.RetryFailedTests != base.RetryFailedTests, s.RetryFailedTests, []string{"defaults", "retry_failed_tests"}},
 		{s.ImplicitWait != base.ImplicitWait, strings.TrimSpace(s.ImplicitWait), []string{"defaults", "implicit_wait"}},
+		{s.ClearDataBeforeEachTest != base.ClearDataBeforeEachTest, s.ClearDataBeforeEachTest, []string{"defaults", "clear_data_before_each_test"}},
 		{s.IOSDeviceID != base.IOSDeviceID, strings.TrimSpace(s.IOSDeviceID), []string{"device", "ios_device_id"}},
 		{s.AndroidDeviceID != base.AndroidDeviceID, strings.TrimSpace(s.AndroidDeviceID), []string{"device", "android_device_id"}},
 		{s.AIContextRunResults != base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},

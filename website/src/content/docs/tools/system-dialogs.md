@@ -12,7 +12,7 @@ description: Drive OS-level dialogs — permission alerts, the iOS share sheet, 
 
 > **Notifications on iOS.** The system keeps the Allow / Don't Allow decision per app for good, and `simctl` has no command to
 > reset it. `deny permission "notifications"` therefore reinstalls the app (from a copy of its own bundle) when the app is not
-> running, so the next launch asks again; with the app running it answers the alert. Use it in `before each test` after
+> running: it asks first, as a clear does, because the reinstall deletes the app's data (its keychain items are kept), so the next launch asks again. With the app running it answers the alert. In a parallel or composite run it needs `--yes`. `simctl privacy reset all` leaves the decision as it was (measured on a simulator). Use it in `before each test` after
 > `kill the app` for first-run permission tests.
 
 Some UI is not part of your Flutter app: iOS permission alerts, the StoreKit **Sign in to Apple Account** sheet,

@@ -33,6 +33,8 @@ import {
   ConnectWiFiSaved,
   DeleteAPIKey,
   Disconnect,
+  GetStudioPrefs,
+  SetClearDataWithoutAsking,
   CanExportRunResults,
   ExportRunResults,
   ForgetWiFiToken,
@@ -539,12 +541,14 @@ async function openSettingsOverlay() {
   }
   noWorkspace.hidden = true;
   form.hidden = false;
+  void loadStudioPrefs();
 
   try {
     const s = await LoadWorkspaceSettings(workspaceRoot);
     loadedSettings = s; // what the form shows now: Save sends it back, and writes only what the person changed from it
     ($("settings-port") as HTMLInputElement).value = s.agentPort ? String(s.agentPort) : "";
     ($("settings-timeout") as HTMLInputElement).value = s.defaultsTimeout ?? "";
+    ($("settings-clear-each-test") as HTMLInputElement).checked = s.clearDataBeforeEachTest === true;
     ($("settings-test-timeout") as HTMLInputElement).value = s.testTimeout ?? "";
     ($("settings-retry") as HTMLInputElement).value = s.retryFailedTests ? String(s.retryFailedTests) : "";
     ($("settings-implicit-wait") as HTMLInputElement).value = s.implicitWait ?? "";
@@ -560,6 +564,32 @@ async function openSettingsOverlay() {
 
 // The settings the form was filled from, sent back with Save so that Studio writes only what changed since, and notices a probe.yaml that changed on disk.
 let loadedSettings: main.WorkspaceSettings | undefined;
+
+// The person's own Studio preferences (not in probe.yaml). The box is saved the moment it is pressed, and put back if Studio refuses.
+async function loadStudioPrefs(): Promise<void> {
+  const box = $("settings-clear-data-sim") as HTMLInputElement;
+  const warning = $("settings-prefs-warning");
+  try {
+    const prefs = await GetStudioPrefs();
+    box.checked = prefs.clearDataWithoutAsking === true;
+    warning.textContent = prefs.warning ?? ""; // text, never markup
+    warning.hidden = !prefs.warning;
+  } catch {
+    box.checked = false;
+    warning.hidden = true;
+  }
+}
+$("settings-clear-data-sim").addEventListener("change", async (e) => {
+  const box = e.target as HTMLInputElement;
+  const want = box.checked;
+  try {
+    await SetClearDataWithoutAsking(want);
+    toast(want ? "clear app data now runs without asking on simulators and emulators" : "clear app data asks again", "info", 4000);
+  } catch (err) {
+    box.checked = !want;
+    toast(`Not saved: ${err}`, "error", 6000);
+  }
+});
 
 function closeSettingsOverlay() {
   $("settings-overlay").hidden = true;
@@ -1281,6 +1311,7 @@ $("btn-settings-save").addEventListener("click", async () => {
   const settings = main.WorkspaceSettings.createFrom({
     base: loadedSettings,
     agentPort: port,
+    clearDataBeforeEachTest: ($("settings-clear-each-test") as HTMLInputElement).checked,
     testTimeout: ($("settings-test-timeout") as HTMLInputElement).value.trim(),
     retryFailedTests: retries,
     implicitWait: ($("settings-implicit-wait") as HTMLInputElement).value.trim(),

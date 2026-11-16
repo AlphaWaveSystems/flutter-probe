@@ -54,6 +54,8 @@ export function GetDeviceSettings():Promise<main.DeviceSettingsInfo>;
 
 export function GetDeviceView():Promise<main.DeviceViewInfo>;
 
+export function GetStudioPrefs():Promise<main.StudioPrefs>;
+
 export function GetWidgetTree():Promise<string>;
 
 export function HTTPExchange(arg1:string,arg2:number):Promise<main.NetDetail>;
@@ -107,6 +109,8 @@ export function SelectorFixPreviewed(arg1:string):Promise<main.SelectorFix>;
 export function SendRequest(arg1:main.SendInput):Promise<main.SendResult>;
 
 export function SetAPIKey(arg1:string):Promise<void>;
+
+export function SetClearDataWithoutAsking(arg1:boolean):Promise<void>;
 
 export function SetWorkspace(arg1:string):Promise<void>;
 

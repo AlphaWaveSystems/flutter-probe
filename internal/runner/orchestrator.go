@@ -219,8 +219,8 @@ func (po *ParallelOrchestrator) deviceContext(ctx context.Context, dr *DeviceRun
 	dc.AppID = appID
 	dc.Port = dr.Port
 	dc.DevicePort = po.cfg.Agent.AgentDevicePort()
-	dc.AllowClearData = true
-	dc.GrantPermissionsOnClear = po.cfg.Defaults.GrantPermissionsOnClear
+	// A lane has nobody to ask: its wipes follow the run's clear gate (see ApplyClearGate).
+	dc.ApplyClearGate(po.opts.ClearGate)
 	dc.CrashEvidence = po.cfg.Defaults.CrashEvidence
 	dc.ReconnectDelay = po.cfg.Agent.ReconnectDelay
 	dc.RestartDelay = po.cfg.Device.RestartDelay

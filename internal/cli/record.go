@@ -259,7 +259,7 @@ func generateProbeScript(events []recordedEvent) string {
 				sb.WriteString(wait + "\n")
 			}
 		}
-		if line := scriptgen.Step(e.Params); line != "" {
+		for _, line := range scriptgen.Lines(e.Params) {
 			sb.WriteString(line + "\n")
 		}
 	}

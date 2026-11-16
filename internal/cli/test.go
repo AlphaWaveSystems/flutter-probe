@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
+	"github.com/alphawavesystems/flutter-probe/internal/userprefs"
 	"io"
 	"os"
 	"os/exec"
@@ -108,6 +109,7 @@ func init() {
 	f.String("locale", "", `run the app in this language (BCP-47, e.g. "de", "pt-BR", "ar"; "system" = device default). Android 13+ and iOS simulators; the device language itself is unchanged`)
 	f.String("locales", "", `run the whole suite once per language (comma-separated, e.g. "de,ja,ar"), each in its own run; -o report files get the tag in their name`)
 	f.Duration("test-timeout", 0, "wall-clock limit per test attempt (also defaults.test_timeout): a test that runs past it fails with \"test exceeded <limit>\" and the run goes on. 0 turns it off. Each retry and each data-driven row gets its own limit")
+	f.Bool("clear-data-before-each-test", false, "wipe the app's data and relaunch before every test, so each starts from a clean state (also defaults.clear_data_before_each_test). Asked once per run: --yes, or \"probe prefs set clear-data-without-asking on\" on a simulator or emulator, answers it")
 	f.Int("retry-failed", 0, "re-run a failing test up to N extra times before reporting it failed (also defaults.retry_failed_tests); a pass on a retry is reported with its attempt count")
 	f.String("perf-baseline", "", "compare every `start measuring` window with this baseline file; a test whose memory/CPU/frames/data got worse than the tolerance fails (create it with --perf-update-baseline)")
 	f.Float64("perf-tolerance", 20, "percent a measured number may exceed its baseline by before it counts as a regression (small absolute changes are ignored)")
@@ -125,7 +127,7 @@ func init() {
 	f.Bool("upload-local", false, "upload this run as a local run (Probe Cloud, preview): git facts instead of CI facts; unverified evidence, shown beside the CI result, that never counts toward a pull request's verdict. Opt-in: needs a probe_cloud license and a team that enabled local uploads. Never implied by --upload-report, and hosted.upload_report does not apply to it")
 	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
 	f.Bool("crash-evidence", false, "when a step loses its connection and the Android app died, print why (exit reason and crash text, masked) for the failed test; also defaults.crash_evidence")
-	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
+	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs); applies to parallel and composite runs too")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
 
@@ -247,6 +249,9 @@ func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Co
 	lc.RestartDelay = cfg.Device.RestartDelay
 	return lc
 }
+
+// buildCompositeRunnerFn is buildCompositeRunner. It is a variable so a test can see the clear gate a composite run is given.
+var buildCompositeRunnerFn = buildCompositeRunner
 
 func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
@@ -420,6 +425,9 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 	if err := applyTestTimeout(cmd, cfg); err != nil {
 		return err
+	}
+	if cmd.Flags().Changed("clear-data-before-each-test") {
+		cfg.Defaults.ClearDataBeforeEachTest, _ = cmd.Flags().GetBool("clear-data-before-each-test")
 	}
 	if n, _ := cmd.Flags().GetInt("retry-failed"); n > 0 {
 		cfg.Defaults.RetryFailedTests = n
@@ -614,6 +622,14 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			Verbose:     verbose,
 			Grant:       grantPerms,
 		}
+
+		// The person's setting is read once for the run, and every lane answers `clear app data` from that one reading.
+		clearPrefs, clearPrefsWarning := userprefs.Check()
+		if clearPrefsWarning != "" {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
+		}
+		opts.ClearGate = clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking,
+			runner.GrantAfterClear(autoYes, cfg.Defaults.GrantPermissionsOnClear, noGrantOnClear), cfg.Project.App)
 
 		orch := runner.NewParallelOrchestrator(cfg, dm, deviceRuns, opts, portBase)
 		results, orchErr := orch.Run(ctx)
@@ -1269,7 +1285,12 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// Only available for local devices — cloud mode has no ADB/simctl access.
 	var devCtx *runner.DeviceContext
 	if !dryRun && client != nil && dm != nil {
-		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear, confirmFunc())
+		prefs, prefsWarning := userprefs.Check()
+		if prefsWarning != "" {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", prefsWarning)
+		}
+		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear,
+			confirmWithPrefs(confirmFunc(), prefs.ClearDataWithoutAsking, func() bool { return dm.IsVerifiedDisposable(ctx, platform, deviceSerial) }, os.Stderr, cfg.Project.App, deviceSerial))
 		if devCtx.IsPhysical {
 			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
 		}
@@ -1348,7 +1369,14 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// Set up composite runner if --composite-device flags or probe.yaml composite.devices are present.
 	compositeDeviceFlags, _ := cmd.Flags().GetStringArray("composite-device")
 	if len(compositeDeviceFlags) > 0 || len(cfg.Composite.Devices) > 0 {
-		cr, compositeCleanup, crErr := buildCompositeRunner(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose)
+		// The composite devices have nobody to ask either: the same clear gate as a parallel run, with the setting read once here.
+		clearPrefs, clearPrefsWarning := userprefs.Check()
+		if clearPrefsWarning != "" {
+			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  %s\n", clearPrefsWarning)
+		}
+		clearGate := clearGateFor(ctx, dm, autoYes, clearPrefs.ClearDataWithoutAsking,
+			runner.GrantAfterClear(autoYes, cfg.Defaults.GrantPermissionsOnClear, noGrantOnClear), cfg.Project.App)
+		cr, compositeCleanup, crErr := buildCompositeRunnerFn(ctx, cfg, dm, compositeDeviceFlags, durationFromTimeout(timeout), verbose, clearGate)
 		if crErr != nil {
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite devices unavailable: %v\n", crErr)
 			fmt.Fprintf(statusW, "  \033[33m⚠\033[0m  composite tests will be skipped\n")
@@ -1648,6 +1676,32 @@ func confirmFunc() func(string) bool {
 		return nil
 	}
 	return promptUserConfirm
+}
+
+// confirmWithPrefs is the confirmation a run uses: the terminal prompt (or none), except that when the person has turned on "clear app data without
+// asking" (`probe prefs`, or Studio's settings; a setting on this computer, never in a project) and the device is verified to be a simulator or an
+// emulator (disposable is asked only now, when a step is about to ask), the question is answered yes and a line names what was wiped and where. A
+// physical device, and a device that cannot be told, still ask.
+func confirmWithPrefs(ask func(string) bool, allowOnDisposable bool, disposable func() bool, w io.Writer, appID, serial string) func(string) bool {
+	if !allowOnDisposable {
+		return ask
+	}
+	return func(message string) bool {
+		if !disposable() {
+			if ask == nil {
+				return false
+			}
+			return ask(message)
+		}
+		fmt.Fprintf(w, "  \033[36mℹ\033[0m  no question for %s on %s (your setting for simulators and emulators, probe prefs): %s\n",
+			device.CleanOneLine(appID, 80), device.CleanOneLine(serial, 80), device.CleanOneLine(answeredLine(message), 400))
+		return true
+	}
+}
+
+// answeredLine is a question as one line, for the line that says a clear was answered without asking.
+func answeredLine(message string) string {
+	return strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(message), "Continue?")), " ")
 }
 
 // promptUserConfirm asks the user for confirmation before destructive operations.

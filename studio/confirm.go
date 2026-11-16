@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/userprefs"
 )
 
 // A step that wipes the app's data (`clear app data`) asks first. In `probe test` it asks on the terminal or needs --yes; in Studio it asks in
@@ -92,6 +93,12 @@ func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
 		a.mu.Unlock()
 		if run == nil || run.Err() != nil || conn == nil || dc == nil || conn.deviceCtx != dc {
 			return false // no run to ask for, or the window is on another connection than the one this step would wipe
+		}
+		// The person's own setting, kept outside the workspace: on a simulator or an emulator the step may run without the question. A physical
+		// device, a WiFi connection and a device that is not classified always ask.
+		if conn.disposable && userprefs.Load().ClearDataWithoutAsking && a.verifiedDisposable(conn) {
+			a.emit("confirm:note", "Cleared data of "+dialogText(dc.AppID)+" on "+dialogText(conn.deviceName)+" ("+dialogText(conn.deviceID)+") without asking: your setting for simulators and emulators")
+			return true
 		}
 		if !a.windowReady() {
 			return false // nobody to ask: the step is not run

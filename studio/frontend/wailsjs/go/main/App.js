@@ -106,6 +106,10 @@ export function GetDeviceView() {
   return window['go']['main']['App']['GetDeviceView']();
 }
 
+export function GetStudioPrefs() {
+  return window['go']['main']['App']['GetStudioPrefs']();
+}
+
 export function GetWidgetTree() {
   return window['go']['main']['App']['GetWidgetTree']();
 }
@@ -212,6 +216,10 @@ export function SendRequest(arg1) {
 
 export function SetAPIKey(arg1) {
   return window['go']['main']['App']['SetAPIKey'](arg1);
+}
+
+export function SetClearDataWithoutAsking(arg1) {
+  return window['go']['main']['App']['SetClearDataWithoutAsking'](arg1);
 }
 
 export function SetWorkspace(arg1) {

@@ -81,13 +81,15 @@ The `run_tests` tool has named parameters for common options (`paths`, `tag`, `d
 | `--agent-port 48700` | Agent port (alias of `--port`); pair with the app's `--dart-define=PROBE_PORT=48700` so simulators don't collide. A failed dial names the process holding the port. |
 | `--grant notifications,camera` | Pre-grant OS permissions before the first test (Android `pm grant`, iOS simulator `simctl privacy`; iOS notifications: a watcher taps Allow when the alert appears) |
 | `--disable-animations` | Set a tiny `timeDilation` (0.001) so animations end within a frame |
-| `-y` | Auto-approve destructive operations (CI mode) |
+| `-y`, `--yes` | Refused over MCP. `--yes` is the person's consent to a destructive step such as `clear app data`, so a `-y` in any argument (`flags`, `paths`, `tag`, `device`, `composite_devices`) is refused. Run such a test from a terminal with `probe test --yes`. A short flag group that contains a `y`, such as `-vy`, is refused too, since it can carry `-y`. |
 | `--video` | Record device screen during the run |
 | `--record` | Write a step-by-step recording of each test attempt under `reports_folder/recordings/`: steps, screenshots, widget trees, the app's Dart HTTP calls (credentials redacted) and an offline viewer. Local only; never uploaded. `--record-dir DIR` changes the folder |
 | `--stream` | Emit one ndjson line per test as it completes (requires `--format json`) |
 | `--ai-heal` | Optional, advisory: with an `ai:` block in `probe.yaml`, add a `selector_proposal` to each selector step that ran into its timeout in the JSON report. Not applied and not verified; the step stays failed and results do not change |
 
 > **Tip for agents:** pass `-v` in `flags` when a test is failing and you need to understand which step is slow or stuck. The `⏱` progress ticks and `⚠` timeout warnings appear in `run_tests` output and tell you exactly where time is being spent before the failure.
+
+Clearing app data (the `clear app data` step) in a parallel or composite run (`--parallel`, `composite_devices`, several devices) is refused on every device unless that device is one the person has allowed to be wiped without a question in their own settings (`probe prefs`). Over MCP there is no way to give that consent. The refused step fails with the hint to pass `--yes`.
 
 ## Composite (multi-device) tests
 

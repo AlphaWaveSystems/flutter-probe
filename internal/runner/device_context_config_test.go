@@ -37,6 +37,7 @@ var notSetByConstructor = map[string]string{
 	"WebViewADB":  "a test fake",
 	"WebViewOpen": "a test fake",
 	"SettingsRun": "a test fake",
+	"NoPrompt":    "a lane of a parallel or composite run: ApplyClearGate sets it; a single-device context never does",
 }
 
 func TestConfiguredContextSetsEveryField(t *testing.T) {
