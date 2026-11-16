@@ -378,4 +378,4 @@ export const PROBESCRIPT_COMMANDS: readonly { readonly label: string; readonly i
   { label: "within", insert: "wait until \"${1:Done}\" appears within ${2:90} seconds" },
 ];
 
-export const SOURCE_SHA256 = "80d0cbe8b5fa9c8fb220d72332a2f22c6596522baf00f1e529998c5385fde015";
+export const SOURCE_SHA256 = "37efce1d6d6be446b3febe983447a47de4e9db92cb7dd7f7589e75e24815b1a3";
