@@ -1,0 +1,337 @@
+{
+  "add media": {
+    "prefix": "add media \"path/to/photo.jpg\"",
+    "body": "add media \"${1:path/to/photo.jpg}\"",
+    "description": "Seed a local file into the device's camera roll/gallery (adb push + media scan on Android, simctl addmedia on iOS). CLI-side only — skipped in cloud mode. Makes a photo available to pick, but does not drive the app's own native image-picker UI to select it"
+  },
+  "allow permission": {
+    "prefix": "allow permission \"camera\"",
+    "body": "allow permission \"${1:camera}\"",
+    "description": "Grant a specific permission"
+  },
+  "call DELETE": {
+    "prefix": "call DELETE \"url\"",
+    "body": "call DELETE \"${1:url}\"",
+    "description": "Send a DELETE request"
+  },
+  "call GET": {
+    "prefix": "call GET \"https://api.example.com/health\"",
+    "body": "call GET \"${1:https://api.example.com/health}\"",
+    "description": "Send a GET request"
+  },
+  "call POST": {
+    "prefix": "call POST \"url\" with body \"{...}\"",
+    "body": "call POST \"${1:url}\" with body \"${2:{...\\}}\"",
+    "description": "Send a POST request with JSON body"
+  },
+  "call PUT": {
+    "prefix": "call PUT \"url\" with body \"{...}\"",
+    "body": "call PUT \"${1:url}\" with body \"${2:{...\\}}\"",
+    "description": "Send a PUT request"
+  },
+  "clear": {
+    "prefix": "clear \"Field\"",
+    "body": "clear \"${1:Field}\"",
+    "description": "Clear the contents of a text field"
+  },
+  "clear if visible": {
+    "prefix": "clear \"Field\" if visible",
+    "body": "clear \"${1:Field}\" if visible",
+    "description": "Clear only if field exists"
+  },
+  "clear optional": {
+    "prefix": "clear \"Field\" optional",
+    "body": "clear \"${1:Field}\" optional",
+    "description": "Attempt to clear; continue if not found"
+  },
+  "compare screenshot": {
+    "prefix": "compare screenshot \"baseline\"",
+    "body": "compare screenshot \"${1:baseline}\"",
+    "description": "Compare against a visual regression baseline"
+  },
+  "compare screenshot ... of": {
+    "prefix": "compare screenshot \"price_tag\" of \"Price Label\"",
+    "body": "compare screenshot \"${1:price_tag}\" of \"${2:Price Label}\"",
+    "description": "Scope the comparison to a single widget's on-screen bounds instead of the full screen"
+  },
+  "composite test": {
+    "prefix": "composite test \"name\"",
+    "body": "composite test \"${1:name}\"",
+    "description": "Define a multi-device test"
+  },
+  "copy to clipboard": {
+    "prefix": "copy \"text\" to clipboard",
+    "body": "copy \"${1:text}\" to clipboard",
+    "description": "Copy text to the device clipboard"
+  },
+  "deliver signal": {
+    "prefix": "deliver signal \"payment_ready\" \"true\"",
+    "body": "deliver signal \"${1:payment_ready}\" \"${2:true}\"",
+    "description": "Resolve a pending awaitSignal(name) call in the app; value defaults to \"true\""
+  },
+  "deny permission": {
+    "prefix": "deny permission \"location\"",
+    "body": "deny permission \"${1:location}\"",
+    "description": "Revoke a specific permission"
+  },
+  "don't see ... in webview": {
+    "prefix": "don't see css:\".error\" in webview",
+    "body": "don't see css:\"${1:.error}\" in webview",
+    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only"
+  },
+  "don't see native": {
+    "prefix": "don't see native \"...\"",
+    "body": "don't see native \"${1:...}\"",
+    "description": "Assert a native UI element matching the query is NOT present"
+  },
+  "double tap": {
+    "prefix": "double tap \"Label\"",
+    "body": "double tap \"${1:Label}\"",
+    "description": "Double-tap a widget"
+  },
+  "double tap if visible": {
+    "prefix": "double tap \"Item\" if visible",
+    "body": "double tap \"${1:Item}\" if visible",
+    "description": "Double tap only if present"
+  },
+  "double tap optional": {
+    "prefix": "double tap \"Item\" optional",
+    "body": "double tap \"${1:Item}\" optional",
+    "description": "Attempt a double tap; continue if not found"
+  },
+  "l10n \"key\"": {
+    "prefix": "tap l10n \"saveButton\"",
+    "body": "tap l10n \"${1:saveButton}\"",
+    "description": "A string from the app's ARB files in the current app language (needs l10n.dir). Works wherever a quoted string does"
+  },
+  "log": {
+    "prefix": "log \"message\"",
+    "body": "log \"${1:message}\"",
+    "description": "Emit a message into the run output"
+  },
+  "long press": {
+    "prefix": "long press \"Label\"",
+    "body": "long press \"${1:Label}\"",
+    "description": "Long-press a widget (triggers context menus)"
+  },
+  "long press if visible": {
+    "prefix": "long press \"Item\" if visible",
+    "body": "long press \"${1:Item}\" if visible",
+    "description": "Long press only if present"
+  },
+  "long press optional": {
+    "prefix": "long press \"Item\" optional",
+    "body": "long press \"${1:Item}\" optional",
+    "description": "Attempt a long press; continue if not found"
+  },
+  "open link": {
+    "prefix": "open link \"https://example.com\"",
+    "body": "open link \"${1:https://example.com}\"",
+    "description": "Open a URL in the external browser via url_launcher"
+  },
+  "open link ... in the app": {
+    "prefix": "open link \"myapp://item/42\" in the app",
+    "body": "open link \"${1:myapp://item/42}\" in the app",
+    "description": "Route a URL to the app itself via the OS's intent/URL handling (adb/simctl), not the external browser. Also accepts into the app / in app. CLI-side only — skipped in cloud mode. On iOS Simulator this reliably works only when the app is already running (see the CHANGELOG for the cold-launch caveat)"
+  },
+  "read with ai into": {
+    "prefix": "read \"the 6-digit OTP code\" with ai into otp",
+    "body": "read \"${1:the 6-digit OTP code}\" with ai into otp",
+    "description": "Extract text off the current screen into a variable"
+  },
+  "retry N times": {
+    "prefix": "retry 3 times",
+    "body": "retry ${1:3} times",
+    "description": "Re-run an indented block from the top on failure, up to N attempts, stopping at the first success"
+  },
+  "see ... in webview": {
+    "prefix": "see \"Getting Started\" in webview",
+    "body": "see \"${1:Getting Started}\" in webview",
+    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only"
+  },
+  "see checked": {
+    "prefix": "see \"Agree\" is checked",
+    "body": "see \"${1:Agree}\" is checked",
+    "description": "Assert the switch, checkbox, radio (or their list tiles, filter or choice chips) is on; \"not a checkable control\" for anything else. don't see \"Agree\" is checked asserts it is off"
+  },
+  "see contains": {
+    "prefix": "see \"Price\" contains \"$\"",
+    "body": "see \"${1:Price}\" contains \"${2:\\$}\"",
+    "description": "Assert widget text contains substring"
+  },
+  "see cpu below": {
+    "prefix": "see cpu below 60 percent",
+    "body": "see cpu below ${1:60} percent",
+    "description": "Average / busiest-second CPU (percent of one core)"
+  },
+  "see data transferred below": {
+    "prefix": "see data transferred below 500 KB",
+    "body": "see data transferred below ${1:500} KB",
+    "description": "Request + response bytes"
+  },
+  "see disabled": {
+    "prefix": "see \"Submit\" is disabled",
+    "body": "see \"${1:Submit}\" is disabled",
+    "description": "Assert widget is disabled"
+  },
+  "see enabled": {
+    "prefix": "see \"Submit\" is enabled",
+    "body": "see \"${1:Submit}\" is enabled",
+    "description": "Assert widget is enabled"
+  },
+  "see exactly": {
+    "prefix": "see exactly 3 \"Item\"",
+    "body": "see exactly ${1:3} \"${2:Item}\"",
+    "description": "Assert exact count of matching widgets"
+  },
+  "see exactly N requests": {
+    "prefix": "see exactly 2 requests GET \"/api/orders\"",
+    "body": "see exactly ${1:2} requests GET \"${2:/api/orders}\"",
+    "description": "Count the requests the app made"
+  },
+  "see focused": {
+    "prefix": "see \"Email\" is focused",
+    "body": "see \"${1:Email}\" is focused",
+    "description": "Assert the widget currently holds keyboard focus"
+  },
+  "see matching": {
+    "prefix": "see \"Email\" matching \".*@.*\"",
+    "body": "see \"${1:Email}\" matching \"${2:.*@.*}\"",
+    "description": "Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: see \"0 ml\" matching \"^0 ml$\". probe lint warns, without failing, about such a check that has no anchored pattern"
+  },
+  "see memory below": {
+    "prefix": "see memory below 300 MB",
+    "body": "see memory below ${1:300} MB",
+    "description": "Peak memory / growth over the window"
+  },
+  "see native": {
+    "prefix": "see native \"...\"",
+    "body": "see native \"${1:...}\"",
+    "description": "Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as \"not found\" on other platforms"
+  },
+  "see optional": {
+    "prefix": "see \"Maybe There\" optional",
+    "body": "see \"${1:Maybe There}\" optional",
+    "description": "Attempt the assertion; continue if it doesn't hold"
+  },
+  "see response": {
+    "prefix": "see response \"/api/me\" status 200",
+    "body": "see response \"${1:/api/me}\" status ${2:200}",
+    "description": "Check the newest matching response"
+  },
+  "see response ... below": {
+    "prefix": "see response \"/api/x\" below 800 ms",
+    "body": "see response \"${1:/api/x}\" below ${2:800} ms",
+    "description": "Response time"
+  },
+  "see slow frames below": {
+    "prefix": "see slow frames below 5 percent",
+    "body": "see slow frames below ${1:5} percent",
+    "description": "Frame timings"
+  },
+  "see system dialog": {
+    "prefix": "see system dialog \"Title\"",
+    "body": "see system dialog \"${1:Title}\"",
+    "description": "Assert a system dialog is showing (don't see system dialog asserts none)"
+  },
+  "see with ai": {
+    "prefix": "see \"the checkout total looks correct\" with ai",
+    "body": "see \"${1:the checkout total looks correct}\" with ai",
+    "description": "Natural-language visual assertion"
+  },
+  "set location": {
+    "prefix": "set location 37.7749, -122.4194",
+    "body": "set location ${1:37}.${2:7749}, -${3:122}.${4:4194}",
+    "description": "Set GPS coordinates (emulator/simulator only)"
+  },
+  "store": {
+    "prefix": "store \"value\" as myVar",
+    "body": "store \"${1:value}\" as myVar",
+    "description": "Store a literal or <var> value for use in later steps"
+  },
+  "store response": {
+    "prefix": "store response \"/api/me\" json \"data.plan\" as plan",
+    "body": "store response \"${1:/api/me}\" json \"${2:data.plan}\" as plan",
+    "description": "Keep a value from the body in <plan>"
+  },
+  "store text of ... in webview": {
+    "prefix": "store text of css:\"#total\" in webview as total",
+    "body": "store text of css:\"${1:#total}\" in webview as total",
+    "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but open link, add media, set language, type native, screenshot names, call, mock, start measuring and system dialog steps refuse it. Needs a local Android device; see Reading text from a WebView"
+  },
+  "sync": {
+    "prefix": "sync \"label\"",
+    "body": "sync \"${1:label}\"",
+    "description": "Cross-device barrier — every device's steps block here until all arrive"
+  },
+  "take screenshot": {
+    "prefix": "take screenshot \"name\"",
+    "body": "take screenshot \"${1:name}\"",
+    "description": "Save a PNG screenshot"
+  },
+  "tap if visible": {
+    "prefix": "tap \"OK\" if visible",
+    "body": "tap \"${1:OK}\" if visible",
+    "description": "Tap only if present, skip otherwise"
+  },
+  "tap native": {
+    "prefix": "tap native \"Choose from Gallery\"",
+    "body": "tap native \"${1:Choose from Gallery}\"",
+    "description": "Tap a native (non-Flutter) UI element — pickers, share sheets — matched by uiautomator's text or resource-id. Android only; errors clearly on other platforms. CLI-side only — skipped in cloud mode"
+  },
+  "tap optional": {
+    "prefix": "tap \"Maybe There\" optional",
+    "body": "tap \"${1:Maybe There}\" optional",
+    "description": "Attempt the tap; log a warning and continue if it fails"
+  },
+  "toggle": {
+    "prefix": "toggle \"Dark Mode\"",
+    "body": "toggle \"${1:Dark Mode}\"",
+    "description": "Toggle a switch or checkbox — accepts any selector (text, #id, ordinal) and dispatches it as a tap on the target"
+  },
+  "type": {
+    "prefix": "type \"text\" into \"Field\"",
+    "body": "type \"${1:text}\" into \"${2:Field}\"",
+    "description": "Enter text into a text field"
+  },
+  "type ... in webview": {
+    "prefix": "type \"hello\" into css:\"#message\" in webview",
+    "body": "type \"${1:hello}\" into css:\"${2:#message}\" in webview",
+    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element cannot take typed text: a disabled or read-only field, an input of a type that takes no text (checkbox, radio, file, button, range, color, date and time types), an element that is not a text field (a select, a button, a plain element), or one that does not take the focus. Text and number inputs, textareas and content-editable elements are typed into. Android only"
+  },
+  "type if visible": {
+    "prefix": "type \"text\" into \"Field\" if visible",
+    "body": "type \"${1:text}\" into \"${2:Field}\" if visible",
+    "description": "Type only if field exists"
+  },
+  "type native": {
+    "prefix": "type native \"text\" into \"query\"",
+    "body": "type native \"${1:text}\" into \"${2:query}\"",
+    "description": "Focus a native text field matched by query, then type into it. Android only. If the field is reached via a screen transition (not already visible), add a wait step first — the same idiom used for Flutter navigation"
+  },
+  "type optional": {
+    "prefix": "type \"text\" into \"Field\" optional",
+    "body": "type \"${1:text}\" into \"${2:Field}\" optional",
+    "description": "Attempt to type; continue if the field isn't found"
+  },
+  "wait N seconds": {
+    "prefix": "wait 5 seconds",
+    "body": "wait ${1:5} seconds",
+    "description": "Wait for a fixed duration"
+  },
+  "wait until ... appears in webview": {
+    "prefix": "wait until \"Message sent\" appears in webview",
+    "body": "wait until \"${1:Message sent}\" appears in webview",
+    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only"
+  },
+  "wait until appears matching": {
+    "prefix": "wait until \"0 ml\" appears matching \"^0 ml$\"",
+    "body": "wait until \"${1:0 ml}\" appears matching \"${2:^0 ml\\$}\"",
+    "description": "Wait until a matched widget's text also matches the regular expression (exact text)"
+  },
+  "with examples from": {
+    "prefix": "with examples from \"file.csv\"",
+    "body": "with examples from \"${1:file.csv}\"",
+    "description": "Load examples from a CSV file"
+  }
+}
