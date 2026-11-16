@@ -165,7 +165,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
-      - uses: flutter-actions/setup-flutter@v4
+      - uses: flutter-actions/setup-flutter@v5
         with:
           channel: stable
       - name: Publish flutter_probe_agent pre-release
