@@ -1146,7 +1146,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				client, err = probelink.DialWithOptions(ctx, dialOpts)
 				if err != nil {
 					connectFailed = true
-					return fmt.Errorf("connecting to ProbeAgent: %w%s", err, device.ForwardHint(ctx, dm.ADB(), cfg.Agent.Port, deviceSerial))
+					return fmt.Errorf("connecting to ProbeAgent: %w%s", err, device.ConnectHint(ctx, dm.ADB(), deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort(), cfg.Project.App))
 				}
 				defer client.Close()
 			}

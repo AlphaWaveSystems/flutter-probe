@@ -607,10 +607,19 @@ func (m *Manager) ReadTokenAndroid(ctx context.Context, serial string, timeout t
 	// internal/cli/test.go already appends this suggestion when wrapping.
 	if appID != "" {
 		if out, err := m.adb.ShellQ(ctx, serial, "pidof", appID); err == nil && strings.TrimSpace(string(out)) == "" {
-			return "", fmt.Errorf("android: probe token not found within %s: the app process %s is not running (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, appID)
+			return "", TokenAppNotRunningError(timeout, appID)
 		}
 	}
 	return "", fmt.Errorf("android: probe token not found within %s", timeout)
+}
+
+// AppNotRunningMarker is the text a failed token read carries when the app has no process. Callers that must tell that case from a token that is simply
+// missing (runner's token-read hint) look for this marker, so the text lives in one place with the error that carries it.
+const AppNotRunningMarker = "is not running"
+
+// TokenAppNotRunningError is the error of a token read that timed out while the app had no process.
+func TokenAppNotRunningError(timeout time.Duration, appID string) error {
+	return fmt.Errorf("android: probe token not found within %s: the app process %s "+AppNotRunningMarker+" (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, appID)
 }
 
 // latestProbeToken scans a `logcat -d` dump for PROBE_TOKEN= lines and
