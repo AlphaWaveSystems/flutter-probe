@@ -28,6 +28,9 @@ type AISettings struct {
 	Timeout             string `json:"timeout"`             // a Go duration such as "60s"; empty means the default
 	AllowRemoteEndpoint bool   `json:"allowRemoteEndpoint"` // confirms a local endpoint that is not this machine
 	PlainKeyInFile      bool   `json:"plainKeyInFile"`      // read-only: probe.yaml holds a plain key, which Studio refuses to use
+	// Base is the form as it was loaded. Save writes only the fields that differ from it, and refuses when probe.yaml has changed on disk since
+	// then for any of them (an editor, git or another window may have written it), so an untouched field is never put back to an old value.
+	Base *AISettings `json:"base,omitempty"`
 }
 
 var (
@@ -232,8 +235,17 @@ func (a *App) SaveAISettings(workspace string, s AISettings) error {
 	}
 	// A form that equals what the file already says changes nothing, so it is neither validated nor written. A setup the CLI
 	// accepts, such as OpenAI with a plain key, must not stop the rest of Settings from saving.
+	base := s.Base
+	s.Base = nil
 	if cur, err := readAISettings(workspace); err == nil {
 		s.PlainKeyInFile = cur.PlainKeyInFile // read-only: the form cannot change it
+		if base != nil {
+			merged, err := mergeAIForm(*base, s, cur)
+			if err != nil {
+				return err
+			}
+			s = merged
+		}
 		if s == cur {
 			return nil
 		}
@@ -333,4 +345,44 @@ func providerLabel(s aiProviderSettings) string {
 		return "OpenAI API, model " + s.Model
 	}
 	return "nothing: AI is off"
+}
+
+// mergeAIForm applies the form's changes to what the file says now. A field that differs from base (the form as it was loaded) is the person's
+// change and is taken from the form, unless the file changed that field since to something else: then the save is refused, with a reload
+// message that names the field and no value, rather than overwrite an edit made elsewhere. (If the file now says what the person asked for,
+// nothing is lost and the change is accepted.) A field that does not differ keeps what the file says now, so an untouched field is never put
+// back to the value it had when the form was loaded. The key source and its variable name are one field.
+func mergeAIForm(base, form, disk AISettings) (AISettings, error) {
+	out := disk
+	out.Base = nil
+	refuse := func(name string) error {
+		return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", name)
+	}
+	type field struct {
+		name                  string
+		changed, onDisk, same bool // the person changed it; the file still has the loaded value; the file already has the person's value
+		take                  func()
+	}
+	fields := []field{
+		{"the AI provider", form.Provider != base.Provider, disk.Provider == base.Provider, disk.Provider == form.Provider, func() { out.Provider = form.Provider }},
+		{"the endpoint", form.Endpoint != base.Endpoint, disk.Endpoint == base.Endpoint, disk.Endpoint == form.Endpoint, func() { out.Endpoint = form.Endpoint }},
+		{"the model", form.Model != base.Model, disk.Model == base.Model, disk.Model == form.Model, func() { out.Model = form.Model }},
+		{"the key source", form.KeySource != base.KeySource || form.KeyEnvName != base.KeyEnvName,
+			disk.KeySource == base.KeySource && disk.KeyEnvName == base.KeyEnvName,
+			disk.KeySource == form.KeySource && disk.KeyEnvName == form.KeyEnvName,
+			func() { out.KeySource, out.KeyEnvName = form.KeySource, form.KeyEnvName }},
+		{"the timeout", form.Timeout != base.Timeout, disk.Timeout == base.Timeout, disk.Timeout == form.Timeout, func() { out.Timeout = form.Timeout }},
+		{"the vision switch", form.Vision != base.Vision, disk.Vision == base.Vision, disk.Vision == form.Vision, func() { out.Vision = form.Vision }},
+		{"the remote-endpoint switch", form.AllowRemoteEndpoint != base.AllowRemoteEndpoint, disk.AllowRemoteEndpoint == base.AllowRemoteEndpoint, disk.AllowRemoteEndpoint == form.AllowRemoteEndpoint, func() { out.AllowRemoteEndpoint = form.AllowRemoteEndpoint }},
+	}
+	for _, f := range fields {
+		if !f.changed {
+			continue
+		}
+		if !f.onDisk && !f.same {
+			return AISettings{}, refuse(f.name)
+		}
+		f.take()
+	}
+	return out, nil
 }
