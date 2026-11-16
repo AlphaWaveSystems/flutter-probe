@@ -45,6 +45,8 @@ type TestResult struct {
 	FailedSelector *FailedSelector
 	// Proposal is advisory report text set after the run by `probe test --ai-heal`. It never changes Passed or Error.
 	Proposal *SelectorProposal
+	// Crash is set on a failed test whose app died during it, when the run asked for crash evidence. It is held in memory and printed as one line; it is not in the reports yet.
+	Crash *CrashReport
 }
 
 // DefName is the test's name as the file writes it. The result of a data-driven row carries " [row N]" after it, and
@@ -170,6 +172,7 @@ func (r *Runner) newExecutor() *Executor {
 	exec.OnStep(r.onStep)
 	exec.recorder = r.recorder
 	exec.SetStepContext(r.curFile, r.curTest, r.curAttempt)
+	exec.startedAt = time.Now()
 	return exec
 }
 
@@ -548,6 +551,7 @@ func (r *Runner) runSingleAttempt(ctx context.Context, prog *parser.Program, t p
 	exec.closePerf(ctx)
 
 	return TestResult{
+		Crash:      failedTestCrash(exec, runErr),
 		Perf:       nameUnnamed(exec.PerfResults()),
 		TestName:   name,
 		File:       file,

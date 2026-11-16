@@ -117,6 +117,10 @@ func (s *Scrubber) walk(key string, v any) any {
 	return v
 }
 
+// ScrubText applies the string rules of Scrub to one text: home paths become "~", the working directory is shortened, well-known credential shapes are
+// replaced by "[redacted]", and a very long string is cut. It counts into the scrubber's Stats, so one Scrubber must not be used from two goroutines at once.
+func (s *Scrubber) ScrubText(in string) string { return s.scrubString(in) }
+
 func (s *Scrubber) scrubString(in string) string {
 	str := in
 	if s.Cwd != "" && s.Cwd != "/" {

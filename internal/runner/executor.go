@@ -59,6 +59,9 @@ type Executor struct {
 	selectorFailures     []selectorFailure  // failed selector steps of this executor, for FailedSelector
 	resolvedSelectors    []resolvedSelector // selectors the running step resolved, cleared when the step ends
 	maxReconnectAttempts int                // max auto-reconnect attempts per call (default 4)
+	startedAt            time.Time          // when this executor (one test attempt) was made
+	crashReport          *CrashReport       // set by collectCrashOnce when the app died during the test
+	crashTries           int                // collections tried so far
 	reconnectBackoff     time.Duration      // base delay for exponential reconnect backoff (default 1s)
 	reconnectMu          sync.Mutex         // serializes concurrent tryReconnect calls
 	clientGen            atomic.Uint64      // incremented on each successful reconnect
@@ -311,6 +314,7 @@ func (e *Executor) runStep(ctx context.Context, step parser.Step) error {
 	// isn't a lifecycle action (restart/kill/clear), try to reconnect and retry.
 	// Uses exponential backoff with jitter — see tryReconnect for the formula.
 	if err != nil && !isLifecycleAction && isConnectionError(err) && e.deviceCtx != nil && e.client != nil {
+		e.collectCrashOnce(ctx) // before anything reconnects or relaunches; does nothing unless the run asked for crash evidence
 		maxAttempts := e.maxReconnectAttempts
 		if maxAttempts == 0 {
 			maxAttempts = 4

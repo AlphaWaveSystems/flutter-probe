@@ -722,3 +722,151 @@ func TestThePackageArgumentIsTheQuotedForm(t *testing.T) {
 		t.Errorf("the package argument = %q, want %q", got, shellquote.Arg(crashPkg))
 	}
 }
+
+// ---- carried from the review of #632 ----
+
+// Other users' entries are filtered before the cap: eight of them in front of a real one must not push it out.
+func TestOtherUsersEntriesDoNotUseUpTheCap(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 12; i++ {
+		b.WriteString(strings.Replace(exitEntry(crashPkg, "user=10"), "pid=4000", "pid="+strconv.Itoa(5000+i), 1))
+	}
+	b.WriteString(exitEntry(crashPkg, "user=0"))
+	got := ParseExitInfoFiltered(b.String(), crashPkg, ExitFilter{OnlyUser: true, User: 0})
+	if len(got) != 1 || got[0].PID != 4000 || got[0].User != 0 {
+		t.Fatalf("got %+v", got)
+	}
+	ev, err := CollectCrashEvidence(context.Background(), &crashAdb{exit: b.String()}, "s", crashPkg, CrashOptions{Redact: maskToken, PID: -1})
+	if err != nil || len(ev.Exits) != 1 {
+		t.Errorf("collector: %d exits, %v", len(ev.Exits), err)
+	}
+	// the zero filter keeps every user's entries, up to the cap
+	if all := ParseExitInfoFiltered(b.String(), crashPkg, ExitFilter{}); len(all) != maxExitRecords {
+		t.Errorf("zero filter kept %d", len(all))
+	}
+}
+
+// Entries stamped after the clock rank behind the real ones, whatever order the device printed them in, so the cap drops them first.
+func TestFutureStampedEntriesDoNotDisplaceRealOnes(t *testing.T) {
+	saved := crashNow
+	defer func() { crashNow = saved }()
+	crashNow = func() time.Time { return time.Date(2026, 11, 15, 12, 0, 0, 0, time.Local) }
+	var b strings.Builder
+	for i := 0; i < 12; i++ { // stamped 30 hours ahead: inside the slack of a host clock, so they pass the filter
+		b.WriteString(strings.Replace(strings.Replace(exitEntry(crashPkg, "user=0"), "2026-11-15 10:00:00.000", "2026-11-16 18:00:00.000", 1), "pid=4000", "pid="+strconv.Itoa(6000+i), 1))
+	}
+	for i := 0; i < 3; i++ {
+		b.WriteString(strings.Replace(strings.Replace(exitEntry(crashPkg, "user=0"), "2026-11-15 10:00:00.000", "2026-11-15 0"+strconv.Itoa(i+1)+":00:00.000", 1), "pid=4000", "pid="+strconv.Itoa(100+i), 1))
+	}
+	got := ParseExitInfo(b.String(), crashPkg)
+	if len(got) != maxExitRecords {
+		t.Fatalf("kept %d", len(got))
+	}
+	for i, wantPID := range []int{102, 101, 100} {
+		if got[i].PID != wantPID {
+			t.Fatalf("entry %d is pid %d, want %d (the real ones, newest first): %+v", i, got[i].PID, wantPID, got)
+		}
+	}
+	// with the device's own clock the slack is two minutes and the doubtful ones are not kept at all
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	own := ParseExitInfoFiltered(b.String(), crashPkg, ExitFilter{Now: now})
+	if len(own) != 3 || own[0].PID != 102 {
+		t.Errorf("with the device clock: %+v", own)
+	}
+	if edge := ParseExitInfoFiltered(strings.Replace(exitEntry(crashPkg, "user=0"), "2026-11-15 10:00:00.000", "2026-11-15 12:01:59.000", 1), crashPkg, ExitFilter{Now: now}); len(edge) != 1 {
+		t.Errorf("an entry inside the two minutes was refused")
+	}
+	if edge := ParseExitInfoFiltered(strings.Replace(exitEntry(crashPkg, "user=0"), "2026-11-15 10:00:00.000", "2026-11-15 12:02:01.000", 1), crashPkg, ExitFilter{Now: now}); len(edge) != 0 {
+		t.Errorf("an entry past the two minutes was kept")
+	}
+	// the collector passes the device clock on
+	ev, _ := CollectCrashEvidence(context.Background(), &crashAdb{exit: b.String()}, "s", crashPkg, CrashOptions{Redact: maskToken, DeviceNow: now, PID: -1})
+	if len(ev.Exits) != 3 {
+		t.Errorf("collector with the device clock kept %d", len(ev.Exits))
+	}
+}
+
+// A key block that never ends is cut off, and what the cut may have hidden is said: Truncated.
+func TestAnUnterminatedKeyBlockSetsTruncated(t *testing.T) {
+	line := func(m string) string { return "11-15 19:03:48.050  4000  4000 E AndroidRuntime: " + m + "\n" }
+	ended := line("a") + line("-----BEGIN PRIVATE KEY-----") + line("body") + line("-----END PRIVATE KEY-----") + line("b")
+	if ct := ParseCrashBuffer(ended, 4000, crashPkg, 0, 0); ct.Truncated || len(ct.Lines) != 3 {
+		t.Errorf("a block that ends: truncated %v, lines %q", ct.Truncated, ct.Lines)
+	}
+	var long strings.Builder
+	long.WriteString(line("-----BEGIN PRIVATE KEY-----"))
+	for i := 0; i < maxPEMLines+10; i++ {
+		long.WriteString(line("body"))
+	}
+	if ct := ParseCrashBuffer(long.String(), 4000, crashPkg, 0, 0); !ct.Truncated {
+		t.Error("a block that outlasts the limit did not set Truncated")
+	}
+	short := line("-----BEGIN PRIVATE KEY-----") + line("body") + line("more")
+	if ct := ParseCrashBuffer(short, 4000, crashPkg, 0, 0); !ct.Truncated || len(ct.Lines) != 1 {
+		t.Errorf("a buffer that ends inside a block: truncated %v, lines %q", ct.Truncated, ct.Lines)
+	}
+}
+
+// Only the first maxExitCandidates entries are looked at, so a device that prints thousands of them costs a bounded amount.
+func TestOnlyTheFirstEntriesAreLookedAt(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < maxExitCandidates+10; i++ {
+		ts := "2026-11-15 10:00:00.000"
+		if i >= maxExitCandidates {
+			ts = "2026-11-15 11:00:00.000" // newer, but printed past the limit
+		}
+		b.WriteString(strings.Replace(strings.Replace(exitEntry(crashPkg, "user=0"), "2026-11-15 10:00:00.000", ts, 1), "pid=4000", "pid="+strconv.Itoa(7000+i), 1))
+	}
+	got := ParseExitInfoFiltered(b.String(), crashPkg, ExitFilter{})
+	if len(got) != maxExitRecords {
+		t.Fatalf("kept %d", len(got))
+	}
+	for _, r := range got {
+		if r.PID >= 7000+maxExitCandidates {
+			t.Errorf("an entry past the limit was looked at: pid %d", r.PID)
+		}
+	}
+}
+
+func TestCleanOneLine(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain text é 日本":            "plain text é 日本",
+		"  leading and trailing   ":  "leading and trailing",
+		"a\x1b[2Jb":                  "a [2Jb",
+		"a\rb\nc\r\nd":               "a b c d",
+		"a\x00b":                     "a b",
+		"a\u202eb\u200bc\u2066d":     "a b c d",
+		"a\u2028b\u2029c":            "a b c",
+		"a\t\t \u00a0b":              "a b",
+		"x\u3164\u2800\ufe0f\ufffcy": "x y",
+		"":                           "",
+		"\x1b\r\n":                   "",
+	} {
+		if got := CleanOneLine(in, 100); got != want {
+			t.Errorf("CleanOneLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := CleanOneLine(strings.Repeat("ab ", 100), 10); utf8.RuneCountInString(got) != 10 || !strings.HasSuffix(got, "…") {
+		t.Errorf("cut = %q", got)
+	}
+	if got := CleanOneLine("日本語日本語", 3); got != "日本…" {
+		t.Errorf("rune cut = %q", got)
+	}
+}
+
+func TestEveryExitReasonHasItsKind(t *testing.T) {
+	want := map[int]ExitKind{0: ExitUnknown, 1: ExitSelf, 2: ExitSignaled, 3: ExitLowMemory, 4: ExitCrash, 5: ExitNativeCrash, 6: ExitANR, 7: ExitInitFailure, 8: ExitSystemChange, 9: ExitResource,
+		10: ExitUserRequested, 11: ExitUserRequested, 12: ExitDependency, 13: ExitOther, 14: ExitSystemChange, 15: ExitSystemChange, 16: ExitSystemChange, 17: ExitOther, 999: ExitOther}
+	for reason, kind := range want {
+		text := exitEntry(crashPkg, "user=0")
+		text = strings.Replace(text, "reason=4", "reason="+strconv.Itoa(reason), 1)
+		recs := ParseExitInfo(text, crashPkg)
+		if len(recs) != 1 || recs[0].Kind != kind {
+			t.Errorf("reason %d: %+v, want %s", reason, recs, kind)
+		}
+	}
+	// a reason number that does not fit three digits is not an entry
+	if recs := ParseExitInfo(strings.Replace(exitEntry(crashPkg, "user=0"), "reason=4", "reason=1000", 1), crashPkg); len(recs) != 0 {
+		t.Errorf("a four-digit reason was read: %+v", recs)
+	}
+}

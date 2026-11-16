@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
@@ -50,13 +52,17 @@ const (
 	ExitNativeCrash   ExitKind = "native_crash"   // a native crash with a signal
 	ExitANR           ExitKind = "anr"            // the app did not respond
 	ExitUserRequested ExitKind = "user_requested" // force-stop or swipe away
-	ExitOther         ExitKind = "other"
+	ExitInitFailure   ExitKind = "init_failure"   // the process could not start
+	ExitResource      ExitKind = "resource"       // the system killed it for using too much of something
+	ExitDependency    ExitKind = "dependency"     // a process it depended on died
+	ExitSystemChange  ExitKind = "system_change"  // the system ended it for a change of permission, package state, package version, or by freezing it: not a failure of the app
+	ExitOther         ExitKind = "other"          // an unlisted reason, or "other kills by system": not enough to call it a death
 )
 
 // exitKinds maps android.app.ApplicationExitInfo REASON_* numbers.
 var exitKinds = map[int]ExitKind{
 	0: ExitUnknown, 1: ExitSelf, 2: ExitSignaled, 3: ExitLowMemory, 4: ExitCrash, 5: ExitNativeCrash, 6: ExitANR,
-	7: ExitOther, 8: ExitOther, 9: ExitOther, 10: ExitUserRequested, 11: ExitUserRequested, 12: ExitOther, 13: ExitOther, 14: ExitOther, 15: ExitOther, 16: ExitOther,
+	7: ExitInitFailure, 8: ExitSystemChange, 9: ExitResource, 10: ExitUserRequested, 11: ExitUserRequested, 12: ExitDependency, 13: ExitOther, 14: ExitSystemChange, 15: ExitSystemChange, 16: ExitSystemChange,
 }
 
 // ExitRecord is one entry of `dumpsys activity exit-info <package>` that belongs to the app's own processes.
@@ -89,18 +95,55 @@ var crashNow = time.Now
 // validPackage reports whether s can be an Android package name. It is checked before the name reaches a command line, in addition to quoting.
 func validPackage(s string) bool { return len(s) <= 255 && packageRE.MatchString(s) }
 
-// ParseExitInfo reads the text of `dumpsys activity exit-info <package>` and returns the entries of the package's own processes (the package name, or the package name,
-// a colon and a service name), in the order the device printed them (newest first), at most maxExitRecords. Entries of other processes under the same user id, such as a
-// WebView sandbox, are left out. A line it cannot read is skipped; it never fails. The text is cut at maxCrashInputBytes first.
+// ValidPackageName is validPackage for a caller that must refuse a bad name before any adb call of its own.
+func ValidPackageName(s string) bool { return validPackage(s) }
+
+// ExitFilter says which entries ParseExitInfoFiltered keeps, before the cap on their number is applied. The zero value keeps every user's entries and judges
+// future stamps by this machine's clock with a slack of futureSlack.
+type ExitFilter struct {
+	// OnlyUser keeps only the entries of User; an entry whose dump does not print a user is kept.
+	OnlyUser bool
+	User     int
+	// Now is the device's own wall clock (from `date` on the device), in the same zone-less form as the entries; zero means this machine's clock is used instead.
+	Now time.Time
+	// Slack is how far after the clock an entry may be stamped and still be believed. Zero means futureSlack when Now is zero, and two minutes when it is given.
+	Slack time.Duration
+}
+
+// maxExitCandidates bounds how many entries are looked at before the newest are chosen.
+const maxExitCandidates = 64
+
+// ParseExitInfo is ParseExitInfoFiltered with the zero filter.
 func ParseExitInfo(text, pkg string) []ExitRecord {
+	return ParseExitInfoFiltered(text, pkg, ExitFilter{})
+}
+
+// ParseExitInfoFiltered reads the text of `dumpsys activity exit-info <package>` and returns the entries of the package's own processes (the package name, or the package
+// name, a colon and a service name) that pass the filter, newest first by their time (ties keep the order the device printed them), at most maxExitRecords. The filter
+// and the sort come before the cap, so entries of other users or stamped in the future cannot push real ones out. Entries of other processes under the same user id, such
+// as a WebView sandbox, are left out. A line it cannot read is skipped; it never fails. The text is cut at maxCrashInputBytes first, and at most maxExitCandidates
+// entries are looked at.
+func ParseExitInfoFiltered(text, pkg string, f ExitFilter) []ExitRecord {
 	if !validPackage(pkg) {
 		return nil
 	}
 	text = capBytes(text, maxCrashInputBytes)
 	var out []ExitRecord
 	var block []string
+	// the device prints no zone, so without its own clock "now" is this machine's wall clock read as if it were the device's, with a day or two of slack for the difference
+	now, slack := f.Now, f.Slack
+	if now.IsZero() {
+		n := crashNow()
+		now = time.Date(n.Year(), n.Month(), n.Day(), n.Hour(), n.Minute(), n.Second(), 0, time.UTC)
+		if slack == 0 {
+			slack = futureSlack
+		}
+	} else if slack == 0 {
+		slack = 2 * time.Minute
+	}
 	flush := func() {
-		if rec, ok := exitRecordOf(block, pkg); ok && len(out) < maxExitRecords {
+		if rec, ok := exitRecordOf(block, pkg); ok && len(out) < maxExitCandidates &&
+			!rec.WallClock.After(now.Add(slack)) && (!f.OnlyUser || rec.User == -1 || rec.User == f.User) {
 			out = append(out, rec)
 		}
 		block = block[:0]
@@ -120,6 +163,17 @@ func ParseExitInfo(text, pkg string) []ExitRecord {
 		}
 	}
 	flush()
+	// newest first, but an entry stamped after the clock (inside the slack) ranks behind every entry that is not: it is the doubtful one, so the cap drops it first
+	sort.SliceStable(out, func(i, j int) bool {
+		fi, fj := out[i].WallClock.After(now), out[j].WallClock.After(now)
+		if fi != fj {
+			return !fi
+		}
+		return out[i].WallClock.After(out[j].WallClock)
+	})
+	if len(out) > maxExitRecords {
+		out = out[:maxExitRecords]
+	}
 	return out
 }
 
@@ -160,12 +214,6 @@ func exitRecordOf(block []string, pkg string) (ExitRecord, bool) {
 		}
 	}
 	if !haveTime || !haveProc || !ownProcess(rec.Process, pkg) {
-		return ExitRecord{}, false
-	}
-	// the device prints no zone, so "now" is the host's wall clock read as if it were the device's, with a day or two of slack for the difference
-	now := crashNow()
-	wall := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC)
-	if rec.WallClock.After(wall.Add(futureSlack)) {
 		return ExitRecord{}, false
 	}
 	kind, known := exitKinds[rec.Reason]
@@ -226,6 +274,7 @@ func ParseCrashBuffer(text string, pid int, pkg string, maxLines, maxBytes int) 
 	var out CrashText
 	bytes := 0
 	pemLeft := 0
+	pemOpen := false // a block began and its end has not been seen
 	for _, g := range groups {
 		keep := g[0].pid == pid
 		if !keep && g[0].tag == "DEBUG" {
@@ -244,13 +293,15 @@ func ParseCrashBuffer(text string, pid int, pkg string, maxLines, maxBytes int) 
 			if pemLeft > 0 {
 				pemLeft--
 				if strings.Contains(line, "-----END ") {
-					pemLeft = 0
+					pemLeft, pemOpen = 0, false
+				} else if pemLeft == 0 {
+					out.Truncated, pemOpen = true, false // the block never ended within the limit: what follows may be its body
 				}
 				continue
 			}
 			if strings.Contains(line, "-----BEGIN ") {
 				if !strings.Contains(line, "-----END ") {
-					pemLeft = maxPEMLines
+					pemLeft, pemOpen = maxPEMLines, true
 				}
 				line = "[key block removed]"
 			}
@@ -265,6 +316,9 @@ func ParseCrashBuffer(text string, pid int, pkg string, maxLines, maxBytes int) 
 			out.Lines = append(out.Lines, line)
 			bytes += size
 		}
+	}
+	if pemOpen {
+		out.Truncated = true // the buffer ended inside a key block
 	}
 	return out
 }
@@ -294,6 +348,8 @@ type CrashOptions struct {
 	PID int
 	// User is the Android user whose entries are kept (default 0, the main user); entries of other users are dropped. An entry whose dump does not print a user is kept.
 	User int
+	// DeviceNow is the device's wall clock (zone-less, as the exit entries print it), when the caller has read it; it makes the check against future stamps exact. Zero uses this machine's clock with two days of slack.
+	DeviceNow time.Time
 	// Timeout bounds the whole collection (default 10 seconds). MaxLines and MaxBytes bound the kept crash text (defaults 200 lines, 32 KiB).
 	Timeout  time.Duration
 	MaxLines int
@@ -384,10 +440,7 @@ func CollectCrashEvidence(ctx context.Context, runner AdbRunner, serial, pkg str
 		return CrashEvidence{}, &CrashCollectError{Step: "exit-info", cause: contextCause(ctx, err)}
 	}
 	ev := CrashEvidence{Package: pkg}
-	for _, rec := range ParseExitInfo(string(exitOut), pkg) {
-		if rec.User != -1 && rec.User != opts.User {
-			continue
-		}
+	for _, rec := range ParseExitInfoFiltered(string(exitOut), pkg, ExitFilter{OnlyUser: true, User: opts.User, Now: opts.DeviceNow}) {
 		rec.Process = cutRunes(red.apply(rec.Process), maxProcessRunes)
 		rec.Description = cutRunes(red.apply(rec.Description), maxExitDescription)
 		ev.Exits = append(ev.Exits, rec)
@@ -472,4 +525,26 @@ func capBytes(s string, n int) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// CleanOneLine returns s as one line that is safe to print to a terminal or put in a report: every control character (escape, carriage return, new line, tab,
+// NUL), line and paragraph separator and every hidden character (hiddenRune) becomes a space, runs of whitespace collapse to one space, the ends are trimmed, and
+// at most maxRunes runes are kept (a cut is marked with an ellipsis). Visible text is unchanged.
+func CleanOneLine(s string, maxRunes int) string {
+	var b strings.Builder
+	space := true // so leading spaces are dropped
+	for len(s) > 0 {
+		r, n := utf8.DecodeRuneInString(s)
+		s = s[n:]
+		if hiddenRune(r) || unicode.IsSpace(r) {
+			if !space {
+				b.WriteByte(' ')
+				space = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		space = false
+	}
+	return cutRunes(strings.TrimRight(b.String(), " "), maxRunes)
 }

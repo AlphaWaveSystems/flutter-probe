@@ -122,6 +122,7 @@ func init() {
 	f.String("record-dir", "", "recording base directory (default: recordings under reports_folder, usually reports/recordings)")
 	f.Bool("upload-local", false, "upload this run as a local run (Probe Cloud, preview): git facts instead of CI facts; unverified evidence, shown beside the CI result, that never counts toward a pull request's verdict. Opt-in: needs a probe_cloud license and a team that enabled local uploads. Never implied by --upload-report, and hosted.upload_report does not apply to it")
 	f.Bool("measure-all", false, "measure every test: open a performance window named after the test around its body (memory, CPU, frames, network), so an existing suite gets baselines with no script edits; also perf.measure_all in probe.yaml. Tests that use `start measuring` themselves are left alone")
+	f.Bool("crash-evidence", false, "when a step loses its connection and the Android app died, print why (exit reason and crash text, masked) for the failed test; also defaults.crash_evidence")
 	f.Bool("no-grant-on-clear", false, "after `clear app data`, keep runtime permissions revoked even with --yes (to test first-run permission dialogs)")
 	f.Bool("fail-on-warning", false, "treat agent warnings (a tap that did nothing, press enter with no focus, go back at the root) as step failures")
 	f.Bool("dry-run", false, "parse and validate .probe files without executing against a device")
@@ -231,6 +232,7 @@ func singleDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Co
 	dc.AllowClearData = autoYes
 	dc.Confirm = confirm
 	dc.GrantPermissionsOnClear = (autoYes || cfg.Defaults.GrantPermissionsOnClear) && !noGrantOnClear
+	dc.CrashEvidence = cfg.Defaults.CrashEvidence
 	dc.ReconnectDelay = cfg.Agent.ReconnectDelay
 	dc.RestartDelay = cfg.Device.RestartDelay
 	dc.TokenReadTimeout = cfg.Agent.TokenReadTimeout
@@ -422,6 +424,9 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 	if ml, _ := cmd.Flags().GetBool("match-loose"); ml || strings.EqualFold(cfg.Defaults.Match, "loose") {
 		runner.SetLooseMatching(true)
+	}
+	if ce, _ := cmd.Flags().GetBool("crash-evidence"); ce {
+		cfg.Defaults.CrashEvidence = true
 	}
 	if iw, _ := cmd.Flags().GetDuration("implicit-wait"); iw > 0 {
 		cfg.Defaults.ImplicitWait = iw
