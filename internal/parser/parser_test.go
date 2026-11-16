@@ -709,6 +709,7 @@ func TestParser_SwipeFrom(t *testing.T) {
 		{`swipe left on #drawer from 100 percent`, 100, 0, parser.SwipeLeft},
 		{`swipe down on "Sheet" from 1 percent over 60 percent`, 1, 60, parser.SwipeDown},
 		{`swipe up on "Card"`, 0, 0, parser.SwipeUp},
+		{`swipe up on Menu`, 0, 0, parser.SwipeUp}, // no from: the unquoted name is read as it always was
 	} {
 		a := firstAction(t, mustParse(t, testBody(tc.src)).Tests[0].Body)
 		if a.Verb != parser.VerbSwipe || a.StartPercent != tc.startPct || a.Percent != tc.percent || a.Direction != tc.direction {
@@ -727,6 +728,10 @@ func TestParser_SwipeFrom(t *testing.T) {
 		`swipe right on "Menu" over 40 percent from 2 percent`,
 		`swipe right on "Menu" from 2 percent over 40 percent now`,
 		`swipe right on "Menu" from 2 percent now`,
+		`swipe right on "Menu" from ٥ percent`,
+		`swipe right on "Menu" from ５ percent`,
+		`swipe up on Menu from 5 percent`,
+		`swipe up on Login from 5 percent`,
 	} {
 		if _, err := parser.ParseFile(testBody(src)); err == nil {
 			t.Errorf("%q: want a parse error", src)

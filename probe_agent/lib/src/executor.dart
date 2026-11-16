@@ -36,16 +36,20 @@ Offset swipeStart(String direction, Offset origin, Size size, int startPercent) 
   final centre = size.center(origin);
   switch (direction) {
     case 'up':
-      return Offset(centre.dx, origin.dy + size.height * (1 - fraction));
+      return Offset(centre.dx, origin.dy + _insideSpan(size.height - size.height * fraction, size.height));
     case 'down':
-      return Offset(centre.dx, origin.dy + size.height * fraction);
+      return Offset(centre.dx, origin.dy + _insideSpan(size.height * fraction, size.height));
     case 'left':
-      return Offset(origin.dx + size.width * (1 - fraction), centre.dy);
+      return Offset(origin.dx + _insideSpan(size.width - size.width * fraction, size.width), centre.dy);
     case 'right':
     default:
-      return Offset(origin.dx + size.width * fraction, centre.dy);
+      return Offset(origin.dx + _insideSpan(size.width * fraction, size.width), centre.dy);
   }
 }
+
+/// [offset] from the start edge of a span of [span], kept inside it. Flutter's hit test does not reach a point on the far
+/// edge, so a start on that edge would be a pointer-down that hits nothing; a span under a logical pixel starts at its middle.
+double _insideSpan(double offset, double span) => span < 1 ? span / 2 : offset.clamp(0.5, span - 0.5).toDouble();
 
 /// The pointer's total movement for a swipe in [direction] across [size] at [fraction] of it. Above 50 percent the finger
 /// ends outside the element or the screen: the swipe starts at the centre, so 50 percent ends at the edge.

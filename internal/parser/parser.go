@@ -731,6 +731,11 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 		s := p.parseSelector()
 		sel = &s
 	}
+	// A name without quotes is not a target, so a `from` after it would silently become a centre swipe and a recipe call on
+	// the name. Refuse it, and say how to write it.
+	if sel == nil && p.peek().Type != TOKEN_FROM && p.peekAt(1).Type == TOKEN_FROM {
+		return nil, fmt.Errorf("line %d: swipe from needs the element name in quotes, for example: swipe right on \"%s\" from 2 percent", line, p.peek().Literal)
+	}
 	// "from N percent" sets where the swipe starts, counted from the edge it starts at (the bottom for up, the top for
 	// down, the right for left, the left for right). It is a whole number from 1 to 100, it needs a target before it, and
 	// it comes before "over": `swipe right on "Menu" from 2 percent over 40 percent`. Without it the swipe starts at the centre.
@@ -738,7 +743,7 @@ func (p *Parser) parseActionSwipe() (Step, error) {
 	if p.peek().Type == TOKEN_FROM {
 		p.advance() // from
 		if p.peek().Type != TOKEN_INT {
-			return nil, fmt.Errorf("line %d: swipe from needs a whole percentage from 1 to 100, for example: swipe right on \"Menu\" from 2 percent", line)
+			return nil, fmt.Errorf("line %d: swipe from needs a whole number from 1 to 100 written with ASCII digits, for example: swipe right on \"Menu\" from 2 percent", line)
 		}
 		lit := p.advance().Literal
 		n, err := strconv.Atoi(lit)
