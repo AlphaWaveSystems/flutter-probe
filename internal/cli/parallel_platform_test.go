@@ -117,6 +117,22 @@ func listing(devices []device.Device) func(context.Context, *device.Manager) ([]
 	return func(context.Context, *device.Manager) ([]device.Device, error) { return devices, nil }
 }
 
+// noDeviceADB is an adb with no device attached: `devices` lists none, and every other command fails as a device that is not online would.
+func noDeviceADB(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "adb")
+	script := "#!/bin/sh\n" +
+		"case \"$*\" in\n" +
+		"  *devices*) printf 'List of devices attached\\n\\n' ;;\n" +
+		"  *) echo \"error: device not found or not online\" >&2; exit 1 ;;\n" +
+		"esac\n" +
+		"exit 0\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
 // runTestsWith runs the test command in a project with one test, with list as the device listing, and returns its error. The listing is
 // replaced, so no device or adb is touched by the listing itself. The run is guarded: if the command has not returned within testRunGuard,
 // the test fails instead of hanging, which a regression that starts a real run would otherwise do.
@@ -124,7 +140,10 @@ func runTestsWith(t *testing.T, list func(context.Context, *device.Manager) ([]d
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("project:\n  app: com.example.app\n"), 0o644); err != nil {
+	// The adb is a fake with no device attached, so the run reaches the device step and fails on the device, the same way on every machine.
+	// Without it the step looks for adb on PATH, and a machine with no Android SDK fails on the tool instead of the device.
+	adb := noDeviceADB(t)
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("project:\n  app: com.example.app\ntools:\n  adb: "+adb+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "tests"), 0o755); err != nil {
