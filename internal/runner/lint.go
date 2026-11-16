@@ -157,8 +157,8 @@ func lintReferencesSource(cfg *config.Config, path, content string, conf *lintCo
 						// The parser reads use only at the top of a file; inside a test it is an ordinary call.
 						msg = "a use statement must come before the first test; inside a test it is not read"
 					}
-					// With the recipes folder outside the workspace, a call the folder would define is not an error: the one
-					// warning for the folder says why recipes were not read.
+					// With a recipe source refused (the folder, a recipe file or a use target), a call it might define is not
+					// an error: the one warning for the refused source says why recipes were not read.
 					if !conf.recipesSkipped() {
 						findings = append(findings, LintFinding{Line: rc.Line, Message: msg})
 					}
@@ -268,7 +268,8 @@ type lintSettings struct {
 // unsaved text. With it, a lint reads a file only when the file, with symlinks resolved, lies inside root:
 //   - a `use` target, a CSV source, or the recipes folder outside root is not read, and one warning with fixed text is reported
 //     for it, naming no file;
-//   - with the recipes folder outside root, a recipe call the folder would define is not reported as an unknown step;
+//   - with a recipe source refused (the folder, a recipe file or a use target), an unresolved recipe call is not reported as an
+//     unknown step: the lint cannot tell whether the refused source defines it, so it reports neither as an error;
 //   - a file inside root that does not parse is reported by its relative name and the parser's line, never by its text. Parse
 //     errors of the linted text itself are returned as before.
 //

@@ -319,3 +319,93 @@ func TestLintWithRootEmptyIsAnError(t *testing.T) {
 		t.Fatal("an empty root should be an error")
 	}
 }
+
+// While a use target is refused, an unresolved recipe call is not reported: the refused file may define it, and the lint cannot read
+// the file to tell. This is the trade-off: a call that nothing defines is not reported while a recipe source is refused, because the
+// lint cannot tell it from one the refused source defines. Without the fence the use is read, the vault resolves, and the gizmo is the
+// one unknown step.
+func TestLintWithRootSuppressesCallsWhileASourceIsRefused(t *testing.T) {
+	ws, outside := confinedWorkspace(t)
+	path := filepath.Join(ws, "tests", "login.probe")
+	content := "use \"../../outside/secret.probe\"\n\ntest \"t\"\n  open the app\n  open the vault\n  frobnicate the gizmo\n"
+
+	fenced, err := LintSource(&config.Config{}, path, content, LintWithRoot(ws))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fenced.References {
+		if !f.Warning {
+			t.Errorf("no unknown-step error while a source is refused; got line %d %q", f.Line, f.Message)
+		}
+	}
+	if len(findingsWith(fenced.References, refuseUseTarget)) != 1 {
+		t.Errorf("want one warning for the refused use target, got %+v", fenced.References)
+	}
+	assertNoLeak(t, fenced, confinedLeaks(ws, outside)...)
+
+	open, err := LintSource(&config.Config{}, path, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open.References) != 1 || open.References[0].Line != 6 || open.References[0].Warning || !strings.Contains(open.References[0].Message, `unknown step "frobnicate the gizmo"`) {
+		t.Errorf("without the fence, want the one unknown-step error at line 6, got %+v", open.References)
+	}
+}
+
+// With no refused source, a call that nothing defines is an unknown-step error with the fence on, exactly as without it.
+func TestLintWithRootKeepsUnknownStepWhenNothingIsRefused(t *testing.T) {
+	ws, _ := confinedWorkspace(t)
+	path := filepath.Join(ws, "tests", "login.probe")
+	content := "use \"../recipes/open_menu.probe\"\n\ntest \"t\"\n  open the app\n  open menu\n  frobnicate the gizmo\n"
+	cases := []struct {
+		label string
+		opts  []LintOption
+	}{
+		{"fenced", []LintOption{LintWithRoot(ws)}},
+		{"unfenced", nil},
+	}
+	for _, c := range cases {
+		rep, err := LintSource(&config.Config{}, path, content, c.opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rep.References) != 1 || rep.References[0].Line != 6 || rep.References[0].Warning || !strings.Contains(rep.References[0].Message, `unknown step "frobnicate the gizmo"`) {
+			t.Errorf("%s: want the one unknown-step error at line 6, got %+v", c.label, rep.References)
+		}
+	}
+}
+
+// A recipe file in the recipes folder that resolves outside the workspace is not read: one warning for it, and the calls it could
+// define are not reported. Without the fence the file is read through the link and the call resolves.
+func TestLintWithRootRefusesARecipeFileOutsideTheFolder(t *testing.T) {
+	ws, outside := confinedWorkspace(t)
+	if err := os.Symlink(filepath.Join(outside, "secret.probe"), filepath.Join(ws, "recipes", "vault_link.probe")); err != nil {
+		t.Skipf("symlinks are not available: %v", err)
+	}
+	path := filepath.Join(ws, "tests", "login.probe")
+	content := "test \"t\"\n  open the app\n  open the vault\n"
+	cfg := &config.Config{Recipes: filepath.Join(ws, "recipes")}
+
+	fenced, err := LintSource(cfg, path, content, LintWithRoot(ws))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := findingsWith(fenced.References, refuseRecipeFile)
+	if len(refused) != 1 || refused[0].Line != 0 || !refused[0].Warning {
+		t.Errorf("want one warning for the recipe file at line 0, got %+v", fenced.References)
+	}
+	for _, f := range fenced.References {
+		if !f.Warning {
+			t.Errorf("no unknown-step error while a source is refused; got line %d %q", f.Line, f.Message)
+		}
+	}
+	assertNoLeak(t, fenced, confinedLeaks(ws, outside)...)
+
+	open, err := LintSource(cfg, path, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open.References) != 0 {
+		t.Errorf("without the fence the link is read and the recipe defined; got %+v", open.References)
+	}
+}

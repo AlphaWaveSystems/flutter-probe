@@ -15,7 +15,7 @@ import (
 type lintConfinement struct {
 	root        string        // the root, with its symlinks resolved
 	linted      string        // the absolute path of the linted file, to tell its own use statements from those of other files
-	skipRecipes bool          // the recipes folder is outside the root and was not read: unresolved recipe calls are not reported
+	skipRecipes bool          // a recipe source (the folder, a recipe file or a use target) was refused: unresolved recipe calls are not reported
 	findings    []LintFinding // what the fence kept out or could not read, in the order it met them
 }
 
@@ -99,8 +99,10 @@ const (
 	refuseCSVSource     = "CSV source is outside the workspace and was not read"
 )
 
-// recipesSkipped reports whether the recipes folder was refused, so that a recipe call the folder would have defined is not an
-// error: the one warning for the folder explains it.
+// recipesSkipped reports whether a recipe source was refused. A refused source may define any recipe the lint cannot see, so an
+// unresolved recipe call is not reported as an unknown step: the one warning for the refused source explains it. The lint cannot
+// tell a call that a refused source defines from one that nothing defines, so a lint with a refused source reports neither as an
+// error. A lint with no refused source reports every unknown call, as it always has.
 func (c *lintConfinement) recipesSkipped() bool {
 	return c != nil && c.skipRecipes
 }

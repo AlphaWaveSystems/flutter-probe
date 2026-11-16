@@ -602,6 +602,7 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 		}
 		path := filepath.Join(r.cfg.Recipes, e.Name())
 		if !r.confine.allow(path, 0, refuseRecipeFile) {
+			r.confine.skipRecipes = true
 			continue
 		}
 		if err := r.loadRecipeFile(context.TODO(), path); err != nil {
@@ -647,6 +648,7 @@ func (r *Runner) loadUse(ctx context.Context, from string, u parser.UseStmt, see
 	}
 	seen[abs] = true
 	if !r.confine.allow(target, r.confine.lineOf(from, u.Line), refuseUseTarget) {
+		r.confine.skipRecipes = true
 		return nil
 	}
 	src, err := os.ReadFile(target)
