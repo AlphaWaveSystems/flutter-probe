@@ -558,4 +558,22 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await f.close();
     }
   });
+
+  test("rr-05 a line added elsewhere in the file takes the re-run away: the replaced line is no longer where it was recorded", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await page.click("#btn-fix-replace");
+      await page.click("#btn-save");
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Connect a device"); // saved: only the missing device is in the way
+      await lines(page).locator(".view-line", { hasText: 'see "Home"' }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.press("Enter"); // one more line, below the replaced one: its text and number are unchanged
+      await page.keyboard.type("  tap \"Extra\"");
+      await page.click("#btn-save");
+      await expect(page.locator("#fix-rerun-hint")).toContainText("Lines were added or removed");
+      await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
+    } finally {
+      await f.close();
+    }
+  });
 });
