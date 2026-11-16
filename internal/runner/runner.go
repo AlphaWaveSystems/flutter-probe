@@ -86,6 +86,7 @@ type Runner struct {
 	recipes         map[string]parser.RecipeDef
 	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
 	missingUses     []string                     // `use` targets that do not exist, for error messages
+	confine         *lintConfinement             // set by a lint given LintWithRoot; nil for runs and for the CLI's lint
 	visual          *visual.Comparator  // nil if visual regression is not configured
 	onResult        func(TestResult)    // optional per-result callback for streaming
 	recorder        StepRecorder
@@ -659,9 +660,18 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 	if r.cfg.Recipes == "" {
 		return nil
 	}
-	entries, err := os.ReadDir(r.cfg.Recipes)
+	dir, ok := r.confine.open(r.cfg.Recipes, 0, refuseRecipesFolder)
+	if !ok {
+		r.confine.skipRecipes = true
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			return nil
+		}
+		if r.confine != nil {
+			r.confine.unreadable(dir, 0)
 			return nil
 		}
 		return err
@@ -670,7 +680,12 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 		if !strings.HasSuffix(e.Name(), ".probe") {
 			continue
 		}
-		if err := r.loadRecipeFile(context.TODO(), filepath.Join(r.cfg.Recipes, e.Name())); err != nil {
+		path, ok := r.confine.open(filepath.Join(dir, e.Name()), 0, refuseRecipeFile)
+		if !ok {
+			r.confine.skipRecipes = true
+			continue
+		}
+		if err := r.loadRecipeFile(context.TODO(), path); err != nil {
 			return err
 		}
 	}
@@ -683,10 +698,18 @@ func (r *Runner) loadRecipeFile(_ context.Context, path string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
+		if r.confine != nil {
+			r.confine.unreadable(path, 0)
+			return nil
+		}
 		return err
 	}
 	prog, err := parser.ParseFile(string(src))
 	if err != nil {
+		if r.confine != nil {
+			r.confine.broken(path, err, 0)
+			return nil
+		}
 		return fmt.Errorf("parse recipe file %s: %w", path, err)
 	}
 	for _, rec := range prog.Recipes {
@@ -708,16 +731,29 @@ func (r *Runner) loadUse(ctx context.Context, from string, u parser.UseStmt, see
 		return nil
 	}
 	seen[abs] = true
-	src, err := os.ReadFile(target)
+	read, ok := r.confine.open(target, r.confine.lineOf(from, u.Line), refuseUseTarget)
+	if !ok {
+		r.confine.skipRecipes = true
+		return nil
+	}
+	src, err := os.ReadFile(read)
 	if err != nil {
 		if os.IsNotExist(err) {
 			r.missingUses = append(r.missingUses, fmt.Sprintf("%s:%d `use %q` -> %s", from, u.Line, u.Path, target))
+			return nil
+		}
+		if r.confine != nil {
+			r.confine.unreadable(read, r.confine.lineOf(from, u.Line))
 			return nil
 		}
 		return err
 	}
 	prog, err := parser.ParseFile(string(src))
 	if err != nil {
+		if r.confine != nil {
+			r.confine.broken(read, err, r.confine.lineOf(from, u.Line))
+			return nil
+		}
 		return fmt.Errorf("parse recipe file %s: %w", target, err)
 	}
 	for _, rec := range prog.Recipes {
