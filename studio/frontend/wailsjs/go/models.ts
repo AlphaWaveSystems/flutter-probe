@@ -1134,6 +1134,20 @@ export namespace main {
 	        this.refused = source["refused"];
 	    }
 	}
+	export class WorkspaceNote {
+	    kind: string;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceNote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.text = source["text"];
+	    }
+	}
 	export class WorkspaceSettings {
 	    agentPort: number;
 	    defaultsTimeout: string;

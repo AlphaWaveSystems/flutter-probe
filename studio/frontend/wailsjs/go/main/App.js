@@ -242,6 +242,10 @@ export function WiFiTokenSaved(arg1) {
   return window['go']['main']['App']['WiFiTokenSaved'](arg1);
 }
 
+export function WorkspaceNote() {
+  return window['go']['main']['App']['WorkspaceNote']();
+}
+
 export function WriteFile(arg1, arg2) {
   return window['go']['main']['App']['WriteFile'](arg1, arg2);
 }

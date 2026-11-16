@@ -122,4 +122,6 @@ export function TestWiFi(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function WiFiTokenSaved(arg1:string):Promise<boolean>;
 
+export function WorkspaceNote():Promise<main.WorkspaceNote>;
+
 export function WriteFile(arg1:string,arg2:string):Promise<void>;
