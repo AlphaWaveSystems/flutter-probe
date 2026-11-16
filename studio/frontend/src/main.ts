@@ -90,6 +90,7 @@ type Diagnostic = {
 };
 
 type ConnectionStatus = {
+  appBuild?: string; // what the app reports about its build ("App built with Flutter 3.44.8 (stable), Dart 3.12.2"); absent when it reports nothing
   toolsNote?: string; // the connection uses a program that probe.yaml names ("Using adb from probe.yaml: adb")
   connected: boolean;
   deviceId: string;
@@ -1478,7 +1479,8 @@ async function manualWiFi(connect: boolean) {
   try {
     if (connect) {
       setStatus("connecting", `Connecting to ${host}…`);
-      await ConnectWiFi(host, port, token);
+      const wifiStatus = (await ConnectWiFi(host, port, token)) as ConnectionStatus;
+      showAppBuild(wifiStatus.appBuild);
       try {
         localStorage.setItem(WIFI_LAST_KEY, JSON.stringify({ host, port }));
       } catch {
@@ -1542,6 +1544,14 @@ $("btn-wifi-connect").addEventListener("click", async () => {
 
 let connected = false;
 
+// showAppBuild shows what the app reports about its build under the Device title, and nothing when it reports nothing: no placeholder, no guess.
+// The text is set as text, never as markup.
+function showAppBuild(text?: string): void {
+  const el = $("app-build");
+  el.textContent = text ?? "";
+  el.hidden = !text;
+}
+
 function setStatus(
   state: "disconnected" | "connecting" | "connected" | "error",
   text: string,
@@ -1556,6 +1566,7 @@ function setStatus(
   const tip = tooltip ?? text;
   dot.title = tip;
   $("status-text").title = tip;
+  if (state !== "connected") showAppBuild(undefined); // a build line belongs to a connection
   connected = state === "connected";
   refreshRerun();
   updateRunButton();
@@ -1751,6 +1762,7 @@ $("btn-connect").addEventListener("click", async () => {
       `${status.deviceName}  ·  ${status.platform}`,
       `${status.deviceName} (${status.deviceId}) · ${status.platform} · USB transport`
     );
+    showAppBuild(status.appBuild);
     startStream();
     toast(`Connected to ${status.deviceName}`, "success");
     if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
@@ -1764,6 +1776,7 @@ $("btn-connect").addEventListener("click", async () => {
 
 EventsOn("connection:changed", (status: ConnectionStatus) => {
   resetNetworkPanel(); // another app, or none: the request log on screen is not its own
+  showAppBuild(status.connected ? status.appBuild : undefined);
   if (status.connected) {
     setStatus("connected", `${status.deviceName}  ·  ${status.platform}`);
   } else {
@@ -2167,6 +2180,7 @@ runLint();
 (async () => {
   try {
     const status = (await Status()) as ConnectionStatus;
+    showAppBuild(status.connected ? status.appBuild : undefined);
     if (status.connected) {
       setStatus("connected", `${status.deviceName}  ·  ${status.platform}`);
       startStream();

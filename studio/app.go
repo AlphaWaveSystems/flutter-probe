@@ -101,6 +101,7 @@ type connection struct {
 	deviceName   string
 	platform     device.Platform
 	toolsNote    string // set when this connection uses an adb that probe.yaml names
+	appBuild     string // what the app reports about its build (see appBuildText); empty when it reports nothing
 	streamCancel context.CancelFunc
 	streamDone   chan struct{} // closed when the streaming loop exits
 	view         *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
@@ -480,6 +481,9 @@ type ConnectionStatus struct {
 	Platform   string `json:"platform"`
 	// ToolsNote says the connection uses a program that probe.yaml names ("Using adb from probe.yaml: adb"); empty otherwise.
 	ToolsNote string `json:"toolsNote,omitempty"`
+	// AppBuild is the one line about the build of the app under test (Flutter and Dart versions, channel, framework revision) as the app reports it;
+	// empty when it reports nothing. The window shows it only when it is not empty.
+	AppBuild string `json:"appBuild,omitempty"`
 }
 
 // Status returns the current connection state for the UI's connection
@@ -496,6 +500,7 @@ func (a *App) Status() ConnectionStatus {
 		DeviceName: a.conn.deviceName,
 		Platform:   string(a.conn.platform),
 		ToolsNote:  a.conn.toolsNote,
+		AppBuild:   a.conn.appBuild,
 	}
 }
 
@@ -566,7 +571,8 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 	}
 	// The handshake is the ping plus the agent's capabilities, which a press_key step needs. Studio has no CLI version to
 	// compare, so there is no version warning to show.
-	if _, err := probelink.CheckHandshake(a.ctx, client, ""); err != nil {
+	hs, _, err := probelink.CheckHandshakeResult(a.ctx, client, "")
+	if err != nil {
 		_ = client.Close()
 		return ConnectionStatus{}, fmt.Errorf("%s", redactToken(fmt.Sprintf("ping: %v. %s", err, wifiHint(host, port, err)), token))
 	}
@@ -584,6 +590,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		cfg:          cfg,
 		deviceID:     deviceID,
 		deviceName:   fmt.Sprintf("WiFi %s", host),
+		appBuild:     appBuildText(hs),
 		platform:     device.PlatformIOS,
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
@@ -743,7 +750,8 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 
 	// The handshake is the ping plus the agent's capabilities, which a press_key step needs. Studio has no CLI version to
 	// compare, so there is no version warning to show.
-	if _, err := probelink.CheckHandshake(a.ctx, client, ""); err != nil {
+	hs, _, err := probelink.CheckHandshakeResult(a.ctx, client, "")
+	if err != nil {
 		_ = client.Close()
 		if cleanup != nil {
 			cleanup()
@@ -762,6 +770,7 @@ func (a *App) Connect(deviceID string) (ConnectionStatus, error) {
 		deviceName:   dev.Name,
 		platform:     dev.Platform,
 		toolsNote:    toolsNote,
+		appBuild:     appBuildText(hs),
 		streamCancel: streamCancel,
 		streamDone:   streamDone,
 		deviceCtx:    newStudioDeviceContextWith(a, mgr, cfg, dev.Platform, deviceID, port, ""),
