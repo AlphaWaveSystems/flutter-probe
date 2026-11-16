@@ -37,6 +37,7 @@ Run of the matrix in `MATRIX.md`. Newest first.
 | W-15 help overlay | ✅ | opens with `?`, shows the shortcuts, closes with Escape |
 | Network tab without a device | ✅ | "connect to a device first: the request log is read from the app" |
 | Layout at the default window size | ➖ cosmetic | when connected the status text wraps to two lines and the "BETA PREVIEW" badge wraps; nothing overlaps or is cut. Not changed here. |
+| Sideways scroll below about 1175 px | ➖ known, not ours | measured on the CSS before and after #658: the toolbar's own content is 828 px wide and its buttons and selects do not shrink, so the page scrolls sideways at any viewport narrower than 1150 px before #658 and 1117 px after. The window's minimum width is 1040 px, so between 1040 and 1117 px the bar scrolls by up to 77 px (110 px before #658). Letting the two selects shrink removes the scroll but leaves the device picker 34 px wide. A real fix is a design change (for example hiding the Run/Record/Save labels below about 1180 px); not done. |
 | W-05 save, W-12 cancel, W-13 record, W-14 inspector refresh, W-16 keyboard reach | ➖ not run in the window | covered by the headless specs in the full-suite row below; not repeated by hand |
 
 ### Full suite (headless + device) at the end

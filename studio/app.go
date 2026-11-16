@@ -779,6 +779,8 @@ func (a *App) adoptClient(conn *connection, nc probelink.ProbeClient) {
 	streamDone := make(chan struct{})
 	conn.client, conn.streamCancel, conn.streamDone = nc, streamCancel, streamDone
 	a.mu.Unlock()
+	// The recording first: every moment before it is taps the new agent sends to a handler that is not on the new client yet.
+	a.carryRecording(old, nc)
 	if cancel != nil {
 		cancel()
 	}
@@ -789,34 +791,65 @@ func (a *App) adoptClient(conn *connection, nc probelink.ProbeClient) {
 		}
 	}
 	_ = old.Close() // the run may have closed it already: Close is safe to repeat (see TestClosingAnAlreadyClosedClientIsSafe)
-	a.carryRecording(old, nc)
 	a.startFrameSource(streamCtx, streamDone, nc)
 }
 
 // carryRecording takes a recording that is on while the app restarts over to the new client: the handler moves from the old client to the
 // new one and the new agent is told to record. Without it the recording would silently stop receiving events.
 func (a *App) carryRecording(old, nc probelink.ProbeClient) {
-	a.recMu.Lock()
-	active, handler, from := a.recActive, a.recHandler, a.recClient
-	a.recMu.Unlock()
-	if !active || handler == nil {
-		return
-	}
 	to, ok := nc.(*probelink.Client)
 	if !ok {
 		return // an HTTP connection has no notifications to take over
 	}
-	if from != nil {
-		from.OnNotify = nil
-	}
-	to.OnNotify = handler
+	// The check and the move are one step under recMu, so a StopRecording cannot fall between them: it either runs before (nothing to
+	// carry) or after (it finds the new client in recClient and clears its handler).
 	a.recMu.Lock()
+	if !a.recActive || a.recHandler == nil {
+		a.recMu.Unlock()
+		return
+	}
+	if a.recClient != nil {
+		a.recClient.OnNotify = nil
+	}
+	to.OnNotify = a.recHandler
 	a.recClient = to
+	// The restart took time that was not a pause of the person's: the next event is measured from now, so no "wait N seconds" line is
+	// written for the gap.
+	a.recLastAt = time.Now()
 	a.recMu.Unlock()
+	if carryHook != nil {
+		carryHook(carryMoved)
+	}
+
+	a.recMu.Lock()
+	stillOn := a.recActive && a.recClient == to
+	a.recMu.Unlock()
+	if !stillOn {
+		return // the recording ended meanwhile: the new agent is not asked to record
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, _ = nc.Call(ctx, probelink.MethodStartRecording, nil)
+	if carryHook != nil {
+		carryHook(carryStarted)
+	}
+
+	// A Stop that came while the start call was out cleared the handler, but the new agent was already told to record: tell it to stop.
+	a.recMu.Lock()
+	stillOn = a.recActive && a.recClient == to
+	a.recMu.Unlock()
+	if !stillOn {
+		_, _ = nc.Call(ctx, probelink.MethodStopRecording, nil) // StopRecording already took the handler off the new client
+	}
 }
+
+// carryHook is called at two points of carryRecording so a test can put a StopRecording between its steps; nil in the product.
+var carryHook func(step string)
+
+const (
+	carryMoved   = "moved"   // the handler is on the new client, the new agent is not asked yet
+	carryStarted = "started" // the new agent was asked to record
+)
 
 // stopConnection tears down a connection in dependency order: cancel the
 // streaming goroutine first (so it doesn't try to use a closed client),
@@ -1179,12 +1212,6 @@ func (a *App) StartRecording() error {
 		return fmt.Errorf("recording requires a WebSocket connection (simulators/emulators only)")
 	}
 
-	a.recMu.Lock()
-	a.recActive = true
-	a.recLines = nil
-	a.recLastAt = time.Now()
-	a.recMu.Unlock()
-
 	handler := func(method string, params json.RawMessage) {
 		if method != probelink.NotifyRecordedEvent {
 			return
@@ -1215,10 +1242,15 @@ func (a *App) StartRecording() error {
 			a.emit("recorder:line", l)
 		}
 	}
-	wsClient.OnNotify = handler
+	// The handler, the client it is on and the active flag are set together, in this order: a reconnect that looks at the recorder (carryRecording)
+	// finds either no recording or a whole one, never an active recording without a handler.
 	a.recMu.Lock()
 	a.recClient, a.recHandler = wsClient, handler
+	a.recActive = true
+	a.recLines = nil
+	a.recLastAt = time.Now()
 	a.recMu.Unlock()
+	wsClient.OnNotify = handler
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
