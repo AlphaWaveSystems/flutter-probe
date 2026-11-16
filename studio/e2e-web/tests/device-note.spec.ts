@@ -48,4 +48,19 @@ test.describe("Device list note about adb", () => {
     await expect(page.locator("#next-step")).toContainText("<img src=x onerror=alert(1)>");
     expect(await page.locator("#next-step").evaluate((el) => el.children.length)).toBe(0);
   });
+
+  test("dn-04 a connection that uses the adb probe.yaml names says so; one that does not says nothing about it", async ({ page }) => {
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"ListDevices"')) return route.fulfill({ json: { result: [{ id: "emu-1", name: "Pixel Test", platform: "android", kind: "emulator", state: "device", booted: true }] } });
+      if (body.includes('"method":"DeviceListNote"')) return route.fulfill({ json: { result: "" } });
+      if (body.includes('"method":"Connect"')) return route.fulfill({ json: { result: { connected: true, deviceId: "emu-1", deviceName: "Pixel Test", platform: "android", toolsNote: "Using adb from probe.yaml: adb" } } });
+      await route.continue();
+    });
+    await openStudio(page);
+    await page.click("#btn-refresh");
+    await page.locator("#device-picker").selectOption({ label: "Pixel Test · android" });
+    await page.click("#btn-connect");
+    await expect(page.locator("#toast-container .toast", { hasText: "Using adb from probe.yaml: adb" })).toBeVisible();
+  });
 });

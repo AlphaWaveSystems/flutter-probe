@@ -97,6 +97,6 @@ sf-20 and sf-21 check the place buttons on the Suggest a fix card and the Explai
 
 **`workspace-note.spec.ts` (wn-01 to wn-06).** The note in the Workspace pane about `probe.yaml`, each case with its own headless Studio on its own folder: no file, no `project.app`, a good file (nothing said), a file that cannot be read (named, one line, no path), the refresh button reading the file again after an outside edit, and markup staying text.
 
-**`device-note.spec.ts` (dn-01 to dn-03).** When `adb` cannot be found and no device is usable, the first-run line adds why Android devices are missing (the Go calls are answered by hand: an empty device list and the note), says nothing about `adb` when it is found, and is text only.
+**`device-note.spec.ts` (dn-01 to dn-04).** When `adb` cannot be found and no device is usable, the first-run line adds why Android devices are missing (the Go calls are answered by hand: an empty device list and the note), says nothing about `adb` when it is found, is text only, and a connection that uses the adb `probe.yaml` names says so.
 
 **`lint-problems.spec.ts` lp-11.** A `${NAME}` that Studio's environment does not have is a warning on its line with the name and the way out; a set variable (`${HOME}`) and one in a comment say nothing.

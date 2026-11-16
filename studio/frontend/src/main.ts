@@ -86,6 +86,7 @@ type Diagnostic = {
 };
 
 type ConnectionStatus = {
+  toolsNote?: string; // the connection uses a program that probe.yaml names ("Using adb from probe.yaml: adb")
   connected: boolean;
   deviceId: string;
   deviceName: string;
@@ -1674,6 +1675,7 @@ $("btn-connect").addEventListener("click", async () => {
     );
     startStream();
     toast(`Connected to ${status.deviceName}`, "success");
+    if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
     setStatus("error", "connection failed", detail);

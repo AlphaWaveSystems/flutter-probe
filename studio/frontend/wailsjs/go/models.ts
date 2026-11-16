@@ -176,6 +176,7 @@ export namespace main {
 	    deviceId: string;
 	    deviceName: string;
 	    platform: string;
+	    toolsNote?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionStatus(source);
@@ -187,6 +188,7 @@ export namespace main {
 	        this.deviceId = source["deviceId"];
 	        this.deviceName = source["deviceName"];
 	        this.platform = source["platform"];
+	        this.toolsNote = source["toolsNote"];
 	    }
 	}
 	export class DeviceInfo {
