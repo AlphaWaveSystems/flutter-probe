@@ -174,6 +174,36 @@ test.describe("First-run guidance", () => {
     }
   });
 
+  test("fr-06 a remembered workspace that is gone or empty: the pane and the strip name the folder, not a file", async ({ page }) => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "studio-empty-ws-"));
+    const gone = path.join(os.tmpdir(), "studio-gone-ws-does-not-exist");
+    const studio = await startStudio("");
+    try {
+      // the window remembers the last workspace; the folder has since gone
+      await page.addInitScript((p) => localStorage.setItem("fp.studio.workspace", p), gone);
+      await page.goto(studio.url);
+      await expect(page.locator("#file-list .pane-empty")).toContainText(/cannot be read|No \.probe files/);
+      await expect(strip(page)).not.toContainText("Open a .probe file from the Workspace pane");
+      await expect(strip(page)).toContainText("open another folder");
+      await expect(page.locator("#btn-workspace-hint")).toBeVisible();
+      // a remembered folder that exists but is empty
+      const page2 = await page.context().newPage();
+      await page2.addInitScript((p) => localStorage.setItem("fp.studio.workspace", p), empty);
+      await page2.goto(studio.url);
+      await expect(page2.locator("#file-list .pane-empty")).toContainText("No .probe files here");
+      await expect(strip(page2)).toContainText("no .probe files in this folder");
+      await expectReasons(page2, ["btn-run", "btn-record", "btn-connect"]);
+      // the folder goes while Studio is open: a refresh says so (this path is after the start-up, where the pane line is drawn at once)
+      fs.rmSync(empty, { recursive: true, force: true });
+      await page2.click("#btn-files-refresh");
+      await expect(page2.locator("#file-list .pane-empty")).toContainText("cannot be read");
+      await expect(strip(page2)).toContainText("cannot be read");
+    } finally {
+      studio.stop();
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
   test("fr-05 the guidance is text only: no element inside the strip or the reasons", async ({ page }) => {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), "studio-ws-"));
     fs.writeFileSync(path.join(ws, "x.probe"), 'test "a"\n  see "x"\n');
