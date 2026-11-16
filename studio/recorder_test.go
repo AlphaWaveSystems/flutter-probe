@@ -39,7 +39,7 @@ func TestEventToProbeScriptLine(t *testing.T) {
 		{"see by type", map[string]interface{}{"action": "see", "selector": sel("type", "Switch")}, `  see the Switch`},
 		{"see with ID fallback", map[string]interface{}{"action": "see", "id": "status"}, `  see #status`},
 		{"unknown action becomes a comment", map[string]interface{}{"action": "pinch"}, `  # pinch`},
-		{"unknown action containing newline", map[string]interface{}{"action": "pinch\n  tap #unexpected"}, "  # pinch\n  tap #unexpected"},
+		{"unknown action containing newline", map[string]interface{}{"action": "pinch\n  tap #unexpected"}, "  # pinch tap #unexpected"},
 		{"no action is skipped", map[string]interface{}{}, ``},
 	}
 	for _, c := range cases {
