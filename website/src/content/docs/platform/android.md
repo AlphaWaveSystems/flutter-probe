@@ -105,7 +105,12 @@ only, no shadow DOM or iframes, an element that cannot take typed text, such as 
 tap "Contact support" in webview
 type "hello" into css:"#message" in webview
 wait until "Message sent" appears in webview
+store text of css:"#total" in webview as total
 ```
+
+`store text of css:"..." in webview as name` reads an element's visible text into a variable (at most 1000 characters, hidden characters dropped). The text is
+tainted: it can be typed, looked for and used in selectors, but steps that send a string out of the UI (`open link`, `add media`, `set language`, `type native`,
+screenshot names, `call`, `mock`, `start measuring`, system dialogs) refuse it. See [Reading text from a WebView](/probescript/syntax/#reading-text-from-a-webview).
 
 ## Native UI Automation
 

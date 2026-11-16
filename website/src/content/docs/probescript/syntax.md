@@ -465,6 +465,39 @@ test "contact support from the help page"
 
 `tap "Help"` is an ordinary step on the Flutter screen; the four steps after the first `wait` act on the page.
 
+### Reading text from a WebView
+
+```
+store text of css:"#total" in webview as total
+store text of css:"#total" in webview "checkout" as total
+see "<total>" in webview
+type "<total>" into css:"#search" in webview
+```
+
+`store text of css:"..." in webview ["page"] as name` reads the visible text of the first visible element that matches the CSS selector into a
+variable. It takes a CSS selector only: with a quoted text the value would be the operand itself, so that is a parse error. The page name works as in
+the other WebView steps, and `as name` ends the step.
+
+- **What is stored.** The element's visible text (the value of an input without text), with runs of whitespace collapsed, as the page reports it. Characters
+  that show nothing are dropped (control and format characters, zero-width characters, bidi controls, variation selectors, the Hangul fillers, the braille blank,
+  line separators, invalid UTF-8), and at most **1000 characters** are kept; the step prints `cut from N` when it cut. An element with no text stores an empty
+  string. A missing or hidden element (an empty paragraph with no height counts as hidden) fails the step and changes nothing, so the variable keeps its old value.
+- **The step prints the variable's name and a length, never the text.**
+- **A value read from a page is tainted.** The page chooses its content, so the value cannot be used where it would choose a link, a file, a command or an
+  address. It can be **typed** (`type`, `type ... in webview`), **looked for** (`see`, `don't see`, `wait until`, also in a WebView) and used in **selectors**.
+  These steps refuse it, with a message that names the variable and never repeats the value: `open link`, `add media`, `set language`, `type native`, the names of
+  `take screenshot` and `compare screenshot`, `call`, `mock`, `start measuring` and the system dialog steps. A copy through `store`, a recipe parameter that
+  mentions it, and the clipboard (`copy` then `paste`) stay tainted; a clean `store` over the name clears it. A clipboard that the app or the page wrote itself is
+  not seen by the script's `copy` and counts as clean.
+- **Masking depends on the name.** A variable whose name has a secret word (`token`, `password`, `pin`, `key`, `secret`, ...) is masked wherever it could be printed: the
+  whole stored text, when it has 3 or more characters (a part of it shown elsewhere is not masked on its own). For any other name the text is **not** masked: later
+  steps may print the resolved page text, for example in the line of a `type "<total>"` step or in an error that quotes a selector. Name a variable like a secret
+  when the page text is one.
+- **Names.** The name may not be empty or one that another step manages (`clipboard`, `response`, `response.*`).
+- **Where it runs.** On a local Android device, like the other WebView steps. In a cloud run, and on iOS, the step is an error: a skipped read would leave the variable
+  unset and the test reading a placeholder.
+- A variable lives for the test, like every variable, and each step opens the page for itself.
+
 ### What to know first
 
 - **The app's WebView must have debugging on**: `WebView.setWebContentsDebuggingEnabled(true)` in the app (a debug or profile
