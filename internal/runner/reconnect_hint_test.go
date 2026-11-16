@@ -407,3 +407,28 @@ func TestTheLooksOnOneFailedStepRunInOrderWithinTheCap(t *testing.T) {
 		t.Errorf("tries %d after many failures, want the cap %d", e.crashTries, crashMaxCollections)
 	}
 }
+
+// The parallel orchestrator's connect failure on Android adds the shared forward hint, and only on Android; no site of the runner builds that text itself.
+func TestOrchestratorConnectFailureUsesTheSharedForwardHint(t *testing.T) {
+	b, err := os.ReadFile("orchestrator.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	i := strings.Index(src, `"[%s] connect: %w%s"`)
+	if i < 0 {
+		t.Fatal("the connect failure of the orchestrator does not carry a hint")
+	}
+	// the hint is asked for in the block just above that message, behind the Android check and nowhere else
+	block := strings.Join(strings.Fields(src[max(0, i-400):i]), " ")
+	want := `hint := "" if dr.Platform == device.PlatformAndroid { hint = device.ForwardHint(ctx, po.manager.ADB(), dr.Port, dr.DeviceID) }`
+	if !strings.Contains(block, want) {
+		t.Errorf("the connect failure must ask for the hint only on Android, through device.ForwardHint; the block above the message is:\n%s", block)
+	}
+	for _, f := range []string{"orchestrator.go", "reconnect_hint.go"} {
+		b, _ := os.ReadFile(f)
+		if strings.Contains(string(b), "agent port %d is forwarded") {
+			t.Errorf("%s builds the forward message itself", f)
+		}
+	}
+}

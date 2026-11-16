@@ -222,8 +222,8 @@ func collectCrash(ctx context.Context, p crashProbe, since time.Duration, poll t
 //     uses up one of the looks: pass a fresh context with its own bound, derived from the run's context so that a cancelled run still stops it at once.
 func (e *Executor) collectCrashOnce(ctx context.Context) {
 	dc := e.deviceCtx
-	if dc == nil || !dc.CrashEvidence || dc.Platform != device.PlatformAndroid || !device.ValidPackageName(dc.AppID) || e.crashReport != nil || e.crashTries >= crashMaxCollections {
-		return
+	if dc == nil || !dc.CrashEvidence || dc.Platform != device.PlatformAndroid || !device.ValidPackageName(dc.AppID) || e.crashReport != nil || e.crashTries >= crashMaxCollections || ctx.Err() != nil {
+		return // a cancelled context makes no call and does not use up one of the tries
 	}
 	var runner device.AdbRunner = dc.CrashADB
 	if runner == nil && dc.Manager != nil {

@@ -216,7 +216,7 @@ func (r *Runner) newExecutor() *Executor {
 func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 	// Load recipes
 	if err := r.loadRecipes(ctx); err != nil {
-		return notRunAll(r.opts.Files, err), fmt.Errorf("runner: loading recipes: %w", err)
+		return notRunAll(r.opts.Files, firstFile(r.opts.Files), err), fmt.Errorf("runner: loading recipes: %w", err)
 	}
 	r.baseRecipes = make(map[string]parser.RecipeDef, len(r.recipes))
 	for k, v := range r.recipes {
@@ -225,7 +225,7 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 
 	stopGrants, err := r.applyGrants(ctx)
 	if err != nil {
-		return notRunAll(r.opts.Files, err), err
+		return notRunAll(r.opts.Files, firstFile(r.opts.Files), err), err
 	}
 	defer func() {
 		stopGrants()
@@ -242,7 +242,7 @@ func (r *Runner) Run(ctx context.Context) ([]TestResult, error) {
 		results = append(results, fileResults...)
 		if err != nil {
 			results = append(results, fileFailure(file, err))
-			results = append(results, notRunAll(r.opts.Files[i+1:], err)...)
+			results = append(results, notRunAll(r.opts.Files[i+1:], file, nil)...)
 			return results, fmt.Errorf("runner: %s: %w", file, err)
 		}
 	}
@@ -255,13 +255,26 @@ func fileFailure(file string, err error) TestResult {
 	return TestResult{TestName: filepath.Base(file), File: file, Passed: false, Row: -1, Error: err}
 }
 
-// notRunAll gives every file in files a failed result: the run stopped on err before it reached them. The error names what stopped it.
-func notRunAll(files []string, err error) []TestResult {
+// notRunAll gives each file in files a failed result, not run because the lane stopped at the file stop. The cause, when there is one, is on
+// the stop file's result alone, so it is stated once; every other file says only where the lane stopped.
+func notRunAll(files []string, stop string, cause error) []TestResult {
 	var out []TestResult
 	for _, f := range files {
-		out = append(out, TestResult{TestName: filepath.Base(f), File: f, Passed: false, Row: -1, Error: fmt.Errorf("not run: %w", err)})
+		err := fmt.Errorf("not run: lane stopped at %s", stop)
+		if cause != nil && f == stop {
+			err = fmt.Errorf("not run: lane stopped at %s: %w", stop, cause)
+		}
+		out = append(out, TestResult{TestName: filepath.Base(f), File: f, Passed: false, Row: -1, Error: err})
 	}
 	return out
+}
+
+// firstFile is the first file of a run, the file a lane stops at when it stops before any file runs ("" for no files).
+func firstFile(files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	return files[0]
 }
 
 // loadFileRecipes makes the recipes that path can call available to its tests: those of the recipes folder, those of

@@ -178,7 +178,11 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return nil, &connectError{fmt.Errorf("[%s] connect: %w", dr.DeviceID, err)}
+		hint := ""
+		if dr.Platform == device.PlatformAndroid {
+			hint = device.ForwardHint(ctx, po.manager.ADB(), dr.Port, dr.DeviceID)
+		}
+		return nil, &connectError{fmt.Errorf("[%s] connect: %w%s", dr.DeviceID, err, hint)}
 	}
 	defer client.Close()
 
@@ -235,23 +239,15 @@ func (po *ParallelOrchestrator) mergeResults() []TestResult {
 	return all
 }
 
-// addNotRun gives a failed result to each file of a lane that stopped with an error before the file ran, so a lane that never connected
-// shows its files in the report. A file the runner reached already has its results and is not added again.
+// addNotRun gives a not-run result to each file of a lane that never connected, so the report shows the files the lane did not reach. A
+// lane that connected has its files accounted for by Run: the file it stopped at has its failure, and the files after it are not run. A
+// file that ran and has no results (no tests, or none a tag let through) is not reported as not run.
 func addNotRun(dr *DeviceRun) {
-	if dr.Error == nil {
+	var ce *connectError
+	if dr.Error == nil || !errors.As(dr.Error, &ce) {
 		return
 	}
-	named := map[string]bool{}
-	for _, r := range dr.Results {
-		named[r.File] = true
-	}
-	var missing []string
-	for _, f := range dr.Files {
-		if !named[f] {
-			missing = append(missing, f)
-		}
-	}
-	dr.Results = append(dr.Results, notRunAll(missing, dr.Error)...)
+	dr.Results = append(dr.Results, notRunAll(dr.Files, firstFile(dr.Files), dr.Error)...)
 }
 
 // summaryError returns an error if any device failed to connect.
