@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "80d0cbe8b5fa9c8fb220d72332a2f22c6596522baf00f1e529998c5385fde015";
+export const SOURCE_SHA256 = "37efce1d6d6be446b3febe983447a47de4e9db92cb7dd7f7589e75e24815b1a3";
 
 export const COMMANDS = [
   {
@@ -146,7 +146,7 @@ export const COMMANDS = [
   {
     "command": "store text of ... in webview",
     "syntax": "store text of css:\"#total\" in webview as total or store text of css:\"#total\" in webview \"checkout\" as total",
-    "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but `open link`, `add media`, `set language`, `type native`, screenshot names, `call`, `mock`, `start measuring` and system dialog steps refuse it. Needs a local Android device; see [Reading text from a WebView](/probescript/syntax/#reading-text-from-a-webview)",
+    "description": "Read the visible text of one element inside the app's WebView into a variable (a CSS selector only; whitespace collapsed, hidden characters dropped, at most 1000 characters). The value came from a page, so it can be typed, looked for and used in selectors, but `open link`, `add media`, `set language`, `type native`, screenshot names, `call`, `mock`, `start measuring` and system dialog steps refuse it. Needs a local Android device; see [Reading text from a WebView](/probescript/syntax/#reading-text-from-a-webview). The app must host the probe agent.",
     "category": "Actions"
   },
   {
@@ -164,13 +164,13 @@ export const COMMANDS = [
   {
     "command": "tap ... in webview",
     "syntax": "tap \"Contact support\" in webview or tap css:\"#submit\" in webview \"checkout\"",
-    "description": "Tap an element inside the app's own WebView: a quoted string is the element's visible text, `css:\"...\"` is a CSS selector, and an optional quoted page name picks one page when the app has several. Android only, and the app must have WebView debugging on (see [WebView content](/probescript/syntax/#webview-content-android)); errors clearly on iOS, skipped in cloud mode",
+    "description": "Tap an element inside the app's own WebView: a quoted string is the element's visible text, `css:\"...\"` is a CSS selector, and an optional quoted page name picks one page when the app has several. Android only, and the app must have WebView debugging on (see [WebView content](/probescript/syntax/#webview-content-android)); errors clearly on iOS, skipped in cloud mode. The app must host the probe agent.",
     "category": "Actions"
   },
   {
     "command": "type ... in webview",
     "syntax": "type \"hello\" into css:\"#message\" in webview",
-    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element cannot take typed text: a disabled or read-only field, an input of a type that takes no text (checkbox, radio, file, button, range, color, date and time types), an element that is not a text field (a select, a button, a plain element), or one that does not take the focus. Text and number inputs, textareas and content-editable elements are typed into. Android only",
+    "description": "Focus an input inside the WebView and type into it. Refuses, typing nothing, when the element cannot take typed text: a disabled or read-only field, an input of a type that takes no text (checkbox, radio, file, button, range, color, date and time types), an element that is not a text field (a select, a button, a plain element), or one that does not take the focus. Text and number inputs, textareas and content-editable elements are typed into. Android only; the app must host the probe agent",
     "category": "Actions"
   },
   {
@@ -254,13 +254,13 @@ export const COMMANDS = [
   {
     "command": "see ... in webview",
     "syntax": "see \"Getting Started\" in webview",
-    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only",
+    "description": "Assert that a visible element with this text (or matching this selector) is in the WebView. Android only; the app must host the probe agent",
     "category": "Assertions"
   },
   {
     "command": "don't see ... in webview",
     "syntax": "don't see css:\".error\" in webview",
-    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only",
+    "description": "Assert that no visible element matches. Passes when the element is absent or hidden; fails when the WebView cannot be reached at all. Android only; the app must host the probe agent",
     "category": "Assertions"
   },
   {
@@ -356,7 +356,7 @@ export const COMMANDS = [
   {
     "command": "wait until ... appears in webview",
     "syntax": "wait until \"Message sent\" appears in webview",
-    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only",
+    "description": "Wait for a visible element inside the WebView, polling every 250 ms for the step's time limit. Android only; the app must host the probe agent",
     "category": "Wait"
   },
   {
