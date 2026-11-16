@@ -99,6 +99,9 @@ type HookDef struct {
 	Line int
 	// Extra holds the words after the header on its line. The parser ignores them, as it always has; probe lint warns about them.
 	Extra []string
+	// ExtraRunsAsTest is set when one of the extra words is the keyword test: the parser then reads the steps under the header as a test,
+	// not as the hook.
+	ExtraRunsAsTest bool
 }
 
 func (h HookDef) nodeType() string { return "hook" }

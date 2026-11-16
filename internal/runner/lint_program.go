@@ -8,6 +8,16 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
+// hookBodyFate says what the parser does with the steps under a hook header that has ignored words. A test keyword among the words starts a
+// test with no name, so the steps run as a test. Any other words are skipped with the steps, so the steps are not run at all. Either way
+// they are not the hook's.
+func hookBodyFate(h parser.HookDef) string {
+	if h.ExtraRunsAsTest {
+		return "the steps under this header are NOT part of the hook: they run as a test"
+	}
+	return "the steps under this header are NOT part of the hook, and they do not run"
+}
+
 // lintProgram runs static checks on a parsed program and returns warnings. It needs only the parse, so it is the part of
 // probe lint that reads no file but the one it was given. Each finding carries the line the parser has for it: the test's line
 // for a test with no steps and for a dart share, the step's line for a count check.
@@ -31,11 +41,11 @@ func lintProgram(prog *parser.Program) []LintFinding {
 	}
 
 	// Check: a word after a hook header is ignored by the parser. The indented body under such a header is not the hook's either (the parser
-	// drops it, or reads it as a test); the warning names the words only.
+	// drops it, or reads it as a test); the warning says which.
 	for _, h := range prog.Hooks {
 		if len(h.Extra) > 0 {
 			warns = append(warns, LintFinding{Line: h.Line, Warning: true, Message: fmt.Sprintf(
-				"unexpected word(s) after the hook header are ignored: %s", strings.Join(h.Extra, " "))})
+				"unexpected word(s) after the hook header are ignored: %s; %s", strings.Join(h.Extra, " "), hookBodyFate(h))})
 		}
 	}
 

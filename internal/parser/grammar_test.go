@@ -1050,22 +1050,39 @@ func TestGrammarHookHeadIsTheWholeLine(t *testing.T) {
 		}
 	})
 	t.Run("a word after any other header is accepted and kept in Extra", func(t *testing.T) {
+		// The steps under the header are not the hook's. A test keyword among the words makes them a test with no name; any other words drop
+		// them, and they do not run. The parse is kept as it always was: the hook has no body.
 		for _, c := range []struct {
-			head string
-			want string
+			head   string
+			want   string
+			asTest bool
 		}{
-			{"before each tests", "tests"},
-			{"on failure now", "now"},
-			{"after each steps", "steps"},
-			{"on failure test", "test"},
+			{"before each tests", "tests", false},
+			{"on failure now", "now", false},
+			{"after each steps", "steps", false},
+			{"before all tests foo", "foo", false},
+			{"on failure test", "test", true},
+			{"on failure foo test", "foo test", true},
 		} {
 			prog, err := parser.ParseFile(c.head + "\n  open the app\n\ntest \"t\"\n  open the app\n")
 			if err != nil {
 				t.Errorf("%q: the parser must accept it as it always did, got %v", c.head, err)
 				continue
 			}
-			if len(prog.Hooks) != 1 || strings.Join(prog.Hooks[0].Extra, " ") != c.want {
-				t.Errorf("%q: want one hook with Extra %q, got %+v", c.head, c.want, prog.Hooks)
+			if len(prog.Hooks) != 1 || len(prog.Hooks[0].Body) != 0 || strings.Join(prog.Hooks[0].Extra, " ") != c.want || prog.Hooks[0].ExtraRunsAsTest != c.asTest {
+				t.Errorf("%q: want one hook with no body, Extra %q and ExtraRunsAsTest %t, got %+v", c.head, c.want, c.asTest, prog.Hooks)
+				continue
+			}
+			wantTests := 1
+			if c.asTest {
+				wantTests = 2
+			}
+			if len(prog.Tests) != wantTests {
+				t.Errorf("%q: want %d tests, got %+v", c.head, wantTests, prog.Tests)
+				continue
+			}
+			if c.asTest && (prog.Tests[0].Name != "" || len(prog.Tests[0].Body) != 1) {
+				t.Errorf("%q: the steps must run as a test with no name, got %+v", c.head, prog.Tests[0])
 			}
 		}
 	})
