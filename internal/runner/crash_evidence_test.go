@@ -51,7 +51,10 @@ type ceAdb struct {
 	exitCalls     int
 	exitErr       error
 	buf           string
-	attempted     int // calls asked for, whether or not the context let them run
+	attempted     int    // calls asked for, whether or not the context let them run
+	procTCP6      string // the answers to `cat /proc/net/tcp6`, `cat /proc/net/tcp` and `pm list packages -U` (the port-owner look); empty by default
+	procTCP       string
+	pmList        string
 }
 
 func (a *ceAdb) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
@@ -87,6 +90,12 @@ func (a *ceAdb) RunArgs(ctx context.Context, args ...string) ([]byte, error) {
 			return nil, errors.New("exit status 1")
 		}
 		return []byte(a.pidof[i] + "\n"), nil
+	case len(args) > 4 && args[3] == "cat" && args[4] == "/proc/net/tcp6":
+		return []byte(a.procTCP6), nil
+	case len(args) > 4 && args[3] == "cat" && args[4] == "/proc/net/tcp":
+		return []byte(a.procTCP), nil
+	case len(args) > 5 && args[3] == "pm" && args[4] == "list" && args[5] == "packages":
+		return []byte(a.pmList), nil
 	case len(args) > 2 && args[2] == "logcat":
 		return []byte(a.buf), nil
 	case len(args) > 5 && args[5] == "exit-info":

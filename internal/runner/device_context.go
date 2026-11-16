@@ -638,7 +638,7 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("reconnect: read token: %w", err)
+		return nil, fmt.Errorf("reconnect: read token: %w%s", err, dc.tokenReadHint(ctx, err))
 	}
 
 	dialOpts := dc.reconnectDialOptions(token)

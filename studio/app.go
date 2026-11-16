@@ -28,6 +28,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
+	"github.com/alphawavesystems/flutter-probe/internal/scriptgen"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -1316,8 +1317,8 @@ func (a *App) StartRecording() error {
 		a.recMu.Unlock()
 
 		var newLines []string
-		if gap > 2*time.Second {
-			newLines = append(newLines, fmt.Sprintf("  wait %d seconds", int(gap.Seconds())))
+		if wait := scriptgen.GapStep(gap); wait != "" {
+			newLines = append(newLines, wait)
 		}
 		if line := eventToProbeScriptLine(p); line != "" {
 			newLines = append(newLines, line)

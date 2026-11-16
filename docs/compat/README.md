@@ -25,6 +25,21 @@ rendering or accessibility, and either break the agent or leave new components u
    `tools/flutter-catalog -check` against it. A failure opens or updates one open issue labelled `compat-drift`, and the run fails. The check does not run
    the fixture suite. Whoever touches the repo and sees a newer stable release still records it in `RELEASES.md` before finishing.
 
+## When a new stable Flutter comes out
+
+1. Get that SDK from the official source only, and check it: the release manifest (`https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json`) names the stable release and its
+   revision; a clone of the release tag of `https://github.com/flutter/flutter` must have exactly that commit. Run `flutter --version` once with analytics off, and use a scratch `HOME` and `PUB_CACHE` if
+   the machine's own Flutter must stay untouched. Never run `flutter upgrade` on an SDK that is not meant to change.
+2. Regenerate the catalog from it (below) and read the diff: `git diff docs/compat/catalog.json` shows added and removed lines (a changed flag is a changed line). Write the added, removed, renamed and
+   deprecated widgets in the new `RELEASES.md` entry, with what they mean for a family in `MATRIX.md`.
+3. Read the release notes of the release and the Dart changelog, and the tool's requirements (`packages/flutter_tools/lib/src/android/gradle_utils.dart`, `packages/flutter_tools/gradle/.../DependencyVersionChecker.kt`,
+   `packages/flutter_tools/lib/src/macos/xcode.dart`). Record what concerns FlutterProbe, with the pull-request numbers; where a page gives no date or no requirement, say so.
+4. Run the fixture suite on that release on a named device and record the result; raise the fixtures' Gradle, AGP and Kotlin versions when the tool's new minimums need it.
+5. Put the new entry at the top of `RELEASES.md` (the weekly check reads the first `## Flutter <version>` heading).
+
+The catalog stamp is the release (Flutter version, framework revision, Dart version). It does **not** record the channel: that says how an SDK was installed (a clone of a tag reports `[user-branch]`, an installed
+stable release `stable`), not which release it is, and two installs of one release must give the same file for `-check` to mean anything.
+
 ## Regenerating the catalog
 
 The tool only reads the SDK folder (it never writes there, runs nothing from it and uses no network). Use the SDK you want to record:

@@ -94,7 +94,7 @@ func TestWhatCountsAsAWidget(t *testing.T) {
 
 func TestStampAndCounts(t *testing.T) {
 	c := generateFake(t)
-	if c.Flutter.Version != "9.9.9" || c.Flutter.Dart != "9.0.1" || c.Flutter.Channel != "stable" || c.Schema != schemaVersion {
+	if c.Flutter.Version != "9.9.9" || c.Flutter.Dart != "9.0.1" || c.Flutter.Revision != "0000000000000000000000000000000000000000" || c.Schema != schemaVersion {
 		t.Errorf("stamp = %+v schema %d", c.Flutter, c.Schema)
 	}
 	by := map[string]int{}
@@ -157,7 +157,7 @@ func TestOnlyFactsAreRecorded(t *testing.T) {
 	}
 	ver := regexp.MustCompile(`^[0-9A-Za-z.+-]*$`)
 	c := generateFake(t)
-	for _, s := range []string{c.Flutter.Version, c.Flutter.Channel, c.Flutter.Revision, c.Flutter.Dart} {
+	for _, s := range []string{c.Flutter.Version, c.Flutter.Revision, c.Flutter.Dart} {
 		if !ver.MatchString(s) {
 			t.Errorf("stamp text %q is not a plain version", s)
 		}
@@ -352,5 +352,31 @@ func TestRealSDK(t *testing.T) {
 	}
 	if c.Counts.Total < 300 {
 		t.Errorf("only %d widgets", c.Counts.Total)
+	}
+}
+
+// The channel of an SDK says how it was installed, not which release it is: two installs of the same release give the same file whatever channel they report.
+func TestTheChannelDoesNotChangeTheCatalog(t *testing.T) {
+	a := t.TempDir()
+	copyTree(t, fakeSDK, a)
+	b := t.TempDir()
+	copyTree(t, fakeSDK, b)
+	write(t, filepath.Join(a, versionFile), `{"frameworkVersion":"9.9.9","channel":"stable","frameworkRevision":"0000000000000000000000000000000000000000","dartSdkVersion":"9.0.1"}`)
+	write(t, filepath.Join(b, versionFile), `{"frameworkVersion":"9.9.9","channel":"[user-branch]","frameworkRevision":"0000000000000000000000000000000000000000","dartSdkVersion":"9.0.1"}`)
+	ca, err := Generate(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cb, err := Generate(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ba, _ := Marshal(ca)
+	bb, _ := Marshal(cb)
+	if !bytes.Equal(ba, bb) {
+		t.Error("the same release on two channels gave two different catalogs")
+	}
+	if bytes.Contains(ba, []byte("channel")) || bytes.Contains(ba, []byte("user-branch")) {
+		t.Errorf("the catalog records a channel: %s", ba)
 	}
 }
