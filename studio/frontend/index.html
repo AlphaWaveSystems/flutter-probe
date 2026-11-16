@@ -27,7 +27,8 @@
         <button id="btn-cancel" class="btn btn-cancel" hidden title="Cancel the running test">
           <span class="btn-icon">■</span><span class="btn-label">Cancel</span>
         </button>
-        <span id="run-progress" class="run-progress" hidden aria-live="polite"></span>
+        <span id="run-progress" class="run-progress" hidden></span>
+        <span id="run-signal" class="run-signal" hidden></span>
         <button id="btn-record" class="btn" disabled title="Record interactions (⌘⇧R)">
           <span class="btn-icon btn-record-icon">●</span><span class="btn-label">Record</span>
         </button>
@@ -51,6 +52,7 @@
 
     <div id="device-hint" class="device-hint" role="status" aria-live="polite" hidden></div>
     <div id="next-step" class="next-step" role="status" aria-live="polite" hidden></div>
+    <div id="run-waiting" class="next-step run-waiting" role="status" aria-live="polite" hidden></div>
     <span id="reason-run" class="sr-only"></span>
     <span id="reason-record" class="sr-only"></span>
     <span id="reason-save" class="sr-only"></span>
