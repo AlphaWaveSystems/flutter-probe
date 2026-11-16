@@ -359,9 +359,9 @@ func mergeAIForm(base, form, disk AISettings) (AISettings, error) {
 		return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", name)
 	}
 	type field struct {
-		name                string
+		name                  string
 		changed, onDisk, same bool // the person changed it; the file still has the loaded value; the file already has the person's value
-		take                func()
+		take                  func()
 	}
 	fields := []field{
 		{"the AI provider", form.Provider != base.Provider, disk.Provider == base.Provider, disk.Provider == form.Provider, func() { out.Provider = form.Provider }},
