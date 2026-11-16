@@ -114,10 +114,18 @@ func (g *cleanupGuard) release() {
 	g.mu.Unlock()
 }
 
-// collectCrashAfterTimeout is the seam for crash evidence after a test that ran past its limit. It does nothing yet. probe-admin's
-// S2b puts the evidence collector on this path (collectCrashOnce, which needs a live, fresh context), and that call replaces the
-// body of this function.
-func (e *Executor) collectCrashAfterTimeout(ctx context.Context) {}
+// testTimeoutCrashBudget bounds the crash-evidence look after an attempt ran past its limit. A variable so the tests can shorten it.
+var testTimeoutCrashBudget = 10 * time.Second
+
+// collectCrashAfterTimeout gives an attempt that ran past its limit its one look at the device's crash evidence. The context is fresh and
+// bounded by testTimeoutCrashBudget, derived from the run's context, so a cancelled run still stops the look at once. The look is once per
+// attempt (collectCrashOnce keeps that), and it runs before the cleanup starts: the body has returned, so no step of this executor is
+// running while the look reads it. It does nothing unless the run asked for crash evidence.
+func (e *Executor) collectCrashAfterTimeout(runCtx context.Context) {
+	ctx, cancel := context.WithTimeout(runCtx, testTimeoutCrashBudget)
+	defer cancel()
+	e.collectCrashOnce(ctx)
+}
 
 // cleanupOut is where the failure screenshot's lines are printed. It is os.Stdout; a test replaces it to see what a cleanup that was
 // abandoned still prints after the budget.
@@ -183,6 +191,7 @@ type graceOutcome struct {
 	artifacts []string // the attempt's artifacts: all of them when the cleanup finished, else a snapshot taken before it
 	video     string   // the path the video stop returned, when the cleanup finished
 	videoErr  error
+	crash     *CrashReport // the crash evidence the look found before the cleanup: kept even when the cleanup is abandoned
 }
 
 // finishTimedOutAttempt is the cleanup after an attempt that ran past its limit. Its order is the order the app needs:
@@ -199,6 +208,9 @@ type graceOutcome struct {
 // The restart runs on ctx, the run's context, not on the attempt's, which the limit has expired. The restart step is bounded by
 // agent.launch_timeout. It is skipped when the run itself was cancelled.
 func (r *Runner) finishTimedOutAttempt(ctx context.Context, exec *Executor, guard *cleanupGuard, prog *parser.Program, t parser.TestDef, te *testTimeoutError, stopVideo func(context.Context) (string, error)) graceOutcome {
+	// The crash look comes first, while the app is still the one that failed. The body has returned, so no step of this executor is running.
+	exec.collectCrashAfterTimeout(ctx)
+	crash := exec.CrashReport()
 	before := exec.Artifacts()
 	client := r.client // read here, on the runner's goroutine: the grace goroutine may outlive this call
 	graceCtx, cancelGrace := context.WithTimeout(ctx, testTimeoutGrace)
@@ -207,7 +219,6 @@ func (r *Runner) finishTimedOutAttempt(ctx context.Context, exec *Executor, guar
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		exec.collectCrashAfterTimeout(graceCtx)
 		r.finishAttempt(graceCtx, exec, prog, t, te, client, guard)
 		video, videoErr = stopVideo(graceCtx)
 		exec.closePerf(graceCtx)
@@ -225,9 +236,9 @@ func (r *Runner) finishTimedOutAttempt(ctx context.Context, exec *Executor, guar
 	r.restartAfterTimeout(ctx, te)
 	guard.release()
 	if abandoned {
-		return graceOutcome{abandoned: true, artifacts: before}
+		return graceOutcome{abandoned: true, artifacts: before, crash: crash}
 	}
-	return graceOutcome{artifacts: exec.Artifacts(), video: video, videoErr: videoErr}
+	return graceOutcome{artifacts: exec.Artifacts(), video: video, videoErr: videoErr, crash: crash}
 }
 
 // restartAfterTimeout relaunches the app so that the next test starts clean. A failure, or a restart that could not happen because
