@@ -13,6 +13,7 @@ export interface FirstRunInput {
   deviceSelected: boolean;
   deviceBooted: boolean; // the selected device can be connected
   connected: boolean;
+  running: boolean; // a run or a re-run is in flight
 }
 
 /** The one thing to do next, or "" when nothing is in the way (or while loading). The order is the order of a first run. */
@@ -31,6 +32,7 @@ export function nextStep(i: FirstRunInput): string {
 
 /** Why Run is disabled, or "" when it is not. */
 export function runReason(i: FirstRunInput): string {
+  if (i.running) return "A run is in progress.";
   if (i.connected && i.fileOpen) return "";
   if (!i.fileOpen) return "Open a .probe file first.";
   return "Connect a device first.";

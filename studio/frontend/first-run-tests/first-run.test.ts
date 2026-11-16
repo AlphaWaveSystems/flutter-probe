@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { connectReason, nextStep, recordReason, runReason, saveReason, workspacePaneText, type FirstRunInput } from "../src/first-run.ts";
 
-const ready: FirstRunInput = { loading: false, workspaceOpen: true, fileOpen: true, dirty: false, devicesLoaded: true, deviceCount: 1, bootedCount: 1, deviceSelected: true, deviceBooted: true, connected: false };
+const ready: FirstRunInput = { loading: false, workspaceOpen: true, fileOpen: true, dirty: false, devicesLoaded: true, deviceCount: 1, bootedCount: 1, deviceSelected: true, deviceBooted: true, connected: false, running: false };
 const at = (extra: Partial<FirstRunInput>): FirstRunInput => ({ ...ready, ...extra });
 
 describe("nextStep", () => {
@@ -32,6 +32,11 @@ describe("the reasons a primary button is disabled", () => {
     assert.equal(runReason(at({ fileOpen: false })), "Open a .probe file first.");
     assert.equal(runReason(at({ fileOpen: false, connected: true })), "Open a .probe file first.");
     assert.equal(runReason(ready), "Connect a device first.");
+  });
+  it("Run says a run is in progress, whatever else is true, and the reason goes with the run", () => {
+    assert.equal(runReason(at({ connected: true, running: true })), "A run is in progress.");
+    assert.equal(runReason(at({ running: true })), "A run is in progress."); // even when the connection went away during it
+    assert.equal(runReason(at({ connected: true, running: false })), "");
   });
   it("Record needs a connection", () => {
     assert.equal(recordReason(at({ connected: true })), "");
