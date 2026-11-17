@@ -1,0 +1,28 @@
+---
+import Legal from '../layouts/Legal.astro';
+---
+<Legal title="Subprocessors" description="The service providers that process data for the hosted FlutterProbe services, and what each one receives.">
+  <p>This page lists the companies that process data for the hosted FlutterProbe services, and what each one receives. It does not cover the command line tool, the Dart agent or Probe Studio: they run on your machine and send nothing to us unless you turn on a hosted service.</p>
+
+  <h2>Stripe</h2>
+  <p><strong>What for:</strong> payments and billing: payment links, checkout, invoices and the customer billing portal.</p>
+  <p><strong>What it receives:</strong> the billing email address on your account and the payment details you enter at Stripe, plus the subscription and invoice records for your team. We never receive or store full card numbers.</p>
+
+  <h2>Cloudflare</h2>
+  <p><strong>What for:</strong> hosting and edge delivery for the hosted services: the API that receives run reports, the dashboard, the payment and mail Workers, and the storage behind them.</p>
+  <p><strong>What it receives:</strong> the requests the hosted services handle, and the data they store, including the run reports you upload.</p>
+
+  <h2>Resend</h2>
+  <p><strong>What for:</strong> email delivery for the hosted services: licence and account messages and sign-in and portal links, sent from our support address.</p>
+  <p><strong>What it receives:</strong> the recipient email address, the subject and text of each message (a licence email contains the licence key), and the delivery events (sent, delivered, bounced) that come back to us. The sending region of the email provider is US East (us-east-1).</p>
+
+  <h2>GitHub Pages</h2>
+  <p><strong>What for:</strong> hosting this website.</p>
+  <p><strong>What it receives:</strong> <strong>TODO (owner):</strong> confirm what GitHub receives when a page of this website is loaded. The records behind this draft do not say it, so this row must be completed before the page is published.</p>
+
+  <h2>Where data is stored</h2>
+  <p>We have not verified in which region each provider stores data, and we do not promise that your data stays in one region.</p>
+
+  <h2>Data processing agreement</h2>
+  <p>We are preparing a data processing agreement for business customers. Until it is final, this page is a draft.</p>
+</Legal>
