@@ -49,6 +49,9 @@ type PortHeldError struct {
 	App     string
 }
 
+// RefuseDial tells the dial loop of probelink that this error is final: when a token refresh returns it, the dial stops instead of trying again.
+func (e *PortHeldError) RefuseDial() bool { return true }
+
 func (e *PortHeldError) Error() string {
 	return fmt.Sprintf("agent port %d on the device is held by %s, and %s has not opened an agent port; not connecting, because the token read here may belong to %s: stop it, or give the app under test another port (--dart-define=PROBE_PORT=<n>, and agent.port / agent.device_port in probe.yaml to match)",
 		e.Port, strings.Join(e.Holders, ", "), e.App, strings.Join(e.Holders, ", "))
@@ -242,6 +245,25 @@ func (f *PortFollower) Preflight(ctx context.Context, window time.Duration) (boo
 		}
 		f.sleep(ctx, preflightRetryInterval)
 	}
+}
+
+// CheckRefreshedToken is for a token that was read again after the agent rejected one (the RefreshToken of the dial). Right after a cold start the run-as token can be
+// rejected and the read falls back to a shared source (a file, the log): that token may be the other app's, so, as before the first dial, the holder check runs again and
+// the redial does not happen against a port another app holds. window is how long to look for the app's own port; when ctx has a deadline (the dial's) it is the time
+// left in it, less one retry. It returns a *PortHeldError when the redial must not happen. A run-as token needs nothing.
+func (f *PortFollower) CheckRefreshedToken(ctx context.Context, src TokenSource, window time.Duration) error {
+	f.NoteTokenSource(src)
+	if src == TokenSourceRunAs {
+		return nil
+	}
+	if dl, ok := ctx.Deadline(); ok {
+		window = time.Until(dl) - preflightRetryInterval
+		if window < 0 {
+			window = 0
+		}
+	}
+	_, err := f.Preflight(ctx, window)
+	return err
 }
 
 // Suspect is for a dial that failed: the port may belong to another app. It looks for the app's own port and moves the forward when it finds exactly one other. It

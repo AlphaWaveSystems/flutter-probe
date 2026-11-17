@@ -79,6 +79,12 @@ type DialOptions struct {
 // portSuspectAfter is how long dials may fail without being refused before OnPortSuspect is asked.
 const portSuspectAfter = 3 * time.Second
 
+// refusesDial reports whether err says that the dial must stop: an error with a RefuseDial() bool method that returns true (device.PortHeldError).
+func refusesDial(err error) bool {
+	var r interface{ RefuseDial() bool }
+	return err != nil && errors.As(err, &r) && r.RefuseDial()
+}
+
 // refusedHookInterval throttles DialOptions.OnConnectRefused.
 const refusedHookInterval = 3 * time.Second
 
@@ -201,6 +207,10 @@ func DialWithOptions(ctx context.Context, opts DialOptions) (*Client, error) {
 					if tok, terr := opts.RefreshToken(dialCtx); terr == nil && tok != "" {
 						opts.Token = tok
 						u.RawQuery = "token=" + tok
+					} else if refusesDial(terr) {
+						// the caller found that dialing again could reach another app: this is final, not a failed read
+						opts.trace("probelink: [attempt %d] the token refresh refused the dial: %v", attempt, terr)
+						return nil, fmt.Errorf("probelink: dial %s: %w", safeURL, terr)
 					}
 					continue
 				}

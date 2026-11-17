@@ -1174,7 +1174,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 					}
 					if err == nil {
 						lastToken = t
-						follower.NoteTokenSource(src)
+						// A refreshed token that is not from run-as may be the other app's: check the holder again before the redial (see PortFollower.CheckRefreshedToken).
+						if holdErr := follower.CheckRefreshedToken(c, src, cfg.Agent.DialTimeout); holdErr != nil {
+							return "", holdErr
+						}
 					}
 					return t, err
 				}

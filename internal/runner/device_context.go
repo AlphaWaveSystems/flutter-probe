@@ -788,7 +788,10 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		case device.PlatformAndroid:
 			t, src, err := dc.Manager.ReadTokenAndroidSource(c, dc.Serial, 5*time.Second, dc.AppID, nil)
 			if err == nil && follower != nil {
-				follower.NoteTokenSource(src)
+				// A refreshed token that is not from run-as may be the other app's: check the holder again before the redial.
+				if holdErr := follower.CheckRefreshedToken(c, src, dc.dialTimeoutVal()); holdErr != nil {
+					return "", holdErr
+				}
 			}
 			return t, err
 		case device.PlatformIOS:
