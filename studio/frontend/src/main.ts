@@ -22,6 +22,7 @@ import { placeStep } from "./send-insert";
 import { initResults, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
+import { recordingBuffer, recordingHeader } from "./recording";
 
 import {
   CancelRun,
@@ -263,7 +264,7 @@ let runInProgress = false;
 function setDirty(d: boolean) {
   dirty = d;
   $("editor-dirty").textContent = d ? "● unsaved" : "";
-  ($("btn-save") as HTMLButtonElement).disabled = !d || !currentPath;
+  ($("btn-save") as HTMLButtonElement).disabled = !d; // with no file yet, Save asks for a name (saveAs)
   refreshRerun();
   refreshFirstRun();
 }
@@ -447,8 +448,43 @@ $("btn-pick-workspace").addEventListener("click", pickWorkspace);
 
 // ---- Save ---------------------------------------------------------------
 
+// saveAs writes the buffer to a new file in the open folder (currentDir), named by the user (default recorded.probe), and makes it the
+// current file, so Save, Ctrl/Cmd+S and Run work on it. It asks before it overwrites a file.
+async function saveAs(): Promise<boolean> {
+  const name = prompt("Save as (a file name in the open folder):", "recorded.probe")?.trim();
+  if (!name) return false;
+  const file = name.endsWith(".probe") ? name : `${name}.probe`;
+  if (/[\\/]/.test(file) || file.includes("..")) {
+    toast("Use a plain file name, without a folder.", "error", 4000);
+    return false;
+  }
+  const path = `${currentDir}/${file}`;
+  const exists = await ReadFile(path).then(
+    () => true,
+    () => false
+  );
+  if (exists && !confirm(`Replace ${path}?`)) return false;
+  try {
+    await WriteFile(path, model.getValue());
+    currentPath = path;
+    $("editor-filename").textContent = path;
+    setDirty(false);
+    updateRunButton();
+    void refreshFiles(currentDir);
+    toast(`Saved ${path}`, "success", 1800);
+    return true;
+  } catch (err) {
+    console.error("WriteFile failed", err);
+    toast(`Save failed: ${err}`, "error");
+    return false;
+  }
+}
+
 async function saveCurrent() {
-  if (!currentPath) return;
+  if (!currentPath) {
+    await saveAs();
+    return;
+  }
   try {
     await WriteFile(currentPath, model.getValue());
     setDirty(false);
@@ -2079,6 +2115,7 @@ async function gotoFailingLine(target: JumpTarget): Promise<void> {
 // ---- Recorder -----------------------------------------------------------
 
 let recording = false;
+let recordedAt = ""; // the time Record was pressed, shown in the recorded file's header
 
 function setRecording(active: boolean) {
   recording = active;
@@ -2136,13 +2173,13 @@ $("btn-record").addEventListener("click", async () => {
   if (!connected) return;
 
   if (!recording) {
-    const now = new Date().toLocaleString();
-    const header = `# Recorded on ${now}\n\ntest "recorded flow"\n  open the app`;
-    model.setValue(header);
+    recordedAt = new Date().toLocaleString();
+    model.setValue(recordingHeader(recordedAt));
     currentPath = null;
     $("editor-filename").textContent = "recorded.probe";
     setDirty(true);
     setRecording(true);
+    updateRunButton();
     try {
       await StartRecording();
     } catch (err) {
@@ -2153,12 +2190,13 @@ $("btn-record").addEventListener("click", async () => {
     try {
       const script = await StopRecording();
       if (script && script.trim()) {
-        model.setValue(script);
+        model.setValue(recordingBuffer(recordedAt, script));
       }
     } catch (err) {
       toast(`Stop failed: ${enrichError(err)}`, "error");
     } finally {
       setRecording(false);
+      updateRunButton();
     }
   }
 });
