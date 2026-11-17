@@ -127,7 +127,7 @@ test('every test run hands its env to the terminal', () => {
 
 test('the extension says once when a workspace still sets a machine-scoped setting', () => {
   const text = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'extension.ts'), 'utf8');
-  assert.match(text, /staleWorkspaceSettings\(text, SECRET_SETTINGS\)/);
+  assert.match(text, /staleWorkspaceSettings\(text, \[\.\.\.SECRET_SETTINGS, \.\.\.TOOL_SETTINGS\]\)/);
   assert.match(text, /workspaceState\.update\('flutterprobe\.staleSettingsNoticed', true\)/);
   assert.match(text, /export function activate\(context: vscode\.ExtensionContext\): void \{\n  noticeStaleWorkspaceSettings\(context\);/);
 });
