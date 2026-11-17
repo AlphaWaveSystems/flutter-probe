@@ -9,14 +9,19 @@ import (
 )
 
 // Clean returns s as one line that is safe to print to a terminal or put in a report: every control character (escape, carriage return,
-// new line, tab, NUL), line and paragraph separator and every hidden character (Hidden) becomes a space, runs of whitespace collapse to
-// one space, the ends are trimmed, and at most maxRunes runes are kept (a cut is marked with an ellipsis). Visible text is unchanged.
+// new line, tab, NUL), line and paragraph separator and every other hidden character (Hidden) becomes a space, runs of whitespace collapse
+// to one space, the ends are trimmed, and at most maxRunes runes are kept (a cut is marked with an ellipsis). The joiners (Joiner) are
+// dropped instead: they glue an emoji sequence or the letters of a word, so a space in their place would split what reads as one. Visible
+// text is unchanged.
 func Clean(s string, maxRunes int) string {
 	var b strings.Builder
 	space := true // so leading spaces are dropped
 	for len(s) > 0 {
 		r, n := utf8.DecodeRuneInString(s)
 		s = s[n:]
+		if Joiner(r) {
+			continue
+		}
 		if Hidden(r) || unicode.IsSpace(r) {
 			if !space {
 				b.WriteByte(' ')
@@ -46,6 +51,14 @@ func Hidden(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// Joiner reports whether r is a hidden character that joins what is around it and changes nothing else: the zero-width non-joiner and
+// joiner (U+200C, U+200D: emoji sequences such as a family, and the letters of Persian or Indic words) and the variation selectors (U+FE00
+// to U+FE0F, such as the emoji presentation selector, and U+E0100 to U+E01EF). Clean drops them; the bidi controls and every other hidden
+// character still become spaces.
+func Joiner(r rune) bool {
+	return r == '\u200C' || r == '\u200D' || (r >= 0xFE00 && r <= 0xFE0F) || (r >= 0xE0100 && r <= 0xE01EF)
 }
 
 // Cut keeps at most n runes of s, marking a cut with an ellipsis. With n below 1 nothing is kept.
