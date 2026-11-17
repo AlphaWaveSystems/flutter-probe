@@ -584,9 +584,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (!mod) return;
-  // While the help card is open the other shortcuts are off: the card is a question on top of the window, and a Cmd+P under it would open a folder dialog the
-  // person cannot see the reason for. Escape and the card's own button close it.
-  if (!$("help-overlay").hidden) {
+  // While an overlay is open (the help card, the settings, the WiFi list, a question about sending or deleting) the other shortcuts are off: the overlay is a
+  // question on top of the window, and a Cmd+P under it would open a folder dialog the person cannot see the reason for. Escape closes it.
+  if (document.querySelector(".overlay:not([hidden])")) {
     // still the browser's own Save, Print and reload must not run under the card: the shortcuts' keys are taken, and do nothing
     if ("srbpk".includes(e.key.toLowerCase()) || (e.key.toLowerCase() === "a" && e.shiftKey)) e.preventDefault();
     return;
