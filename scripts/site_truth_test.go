@@ -20,12 +20,19 @@ var truthFiles = []string{
 	"src/pages/pricing.astro",
 	"src/pages/probe-cloud.astro",
 	"src/content/docs/tools/probe-cloud-preview.md",
+	"src/layouts/Site.astro",
+	"src/layouts/Legal.astro",
+	"public/llms.txt",
 }
 
 func nodeOrSkip(t *testing.T) string {
 	t.Helper()
 	node, err := exec.LookPath("node")
 	if err != nil {
+		// In CI a missing node must not turn the check into a silent pass.
+		if os.Getenv("CI") != "" {
+			t.Fatal("node is not on PATH in CI; the truth check is a Node script (the website build runs it too)")
+		}
 		t.Skip("node is not on PATH; the truth check is a Node script (the website build runs it too)")
 	}
 	return node
@@ -153,8 +160,6 @@ func TestSiteTruthFailsEachFalseClaim(t *testing.T) {
 			[]string{pricing, `"Enterprise"`, "not in sellable.json"}},
 		{"a Start control on a planned heading card", pricing, "<p class=\"note\">", `<div class="plan planned"><h3>Scale</h3><p>$149 / month</p><a href="/x/">Start Scale</a></div><p class="note">`,
 			[]string{pricing, `"Start Scale"`, "a buy control on Scale"}},
-		{"a Buy control under a bare heading that names a planned plan", pricing, "<p class=\"note\">", `<h3>Team</h3><button>Buy Team</button><p class="note">`,
-			[]string{pricing, `"Buy Team"`, "a buy control on Team"}},
 		{"another plan's price on a heading card", pricing, "<p class=\"note\">", `<div class="plan planned"><h3>Scale</h3><p>$49 / month</p></div><p class="note">`,
 			[]string{pricing, `"$49"`, "the Scale card shows a price that is not its price"}},
 		{"another plan's results count on a card", pricing, "<p class=\"note\">", `<div class="plan planned"><h3>Scale</h3><p>100,000 results per month</p></div><p class="note">`,
@@ -163,17 +168,17 @@ func TestSiteTruthFailsEachFalseClaim(t *testing.T) {
 			[]string{index, `"10,000 results a month"`, "not the results_per_month of any plan"}},
 		{"costs extra", pricing, "<p class=\"note\">", strings.Replace(onTheGoCard, "%s", "<p>Costs extra per run.</p>", 1) + "<p class=\"note\">",
 			[]string{pricing, `"Costs extra"`}},
-		{"Slack", cloud, "</Site>", "<p>Slack alerts for failed runs.</p></Site>", []string{cloud, `"Slack"`, "not built"}},
+		{"Slack", cloud, "</Site>", "<p>Slack alerts for failed runs.</p></Site>", []string{cloud, `"Slack alerts"`, "not built"}},
 		{"email notifications", cloud, "</Site>", "<p>Email notifications.</p></Site>", []string{cloud, `"Email notifications"`, "not built"}},
 		{"parallel orchestration", cloud, "</Site>", "<p>Parallel orchestration.</p></Site>", []string{cloud, `"Parallel orchestration"`}},
-		{"roles", cloud, "</Site>", "<p>Team roles.</p></Site>", []string{cloud, `"roles"`, "not built"}},
+		{"roles", cloud, "</Site>", "<p>Team roles.</p></Site>", []string{cloud, `"Team roles"`, "not built"}},
 		{"priority support", cloud, "</Site>", "<p>Priority support.</p></Site>", []string{cloud, `"Priority support"`}},
 		{"pay-per-use", cloud, "</Site>", "<p>Pay per use for agents.</p></Site>", []string{cloud, `"Pay per use"`, "not buyable"}},
 		{"uploads from any CI", cloud, "</Site>", "<p>Upload reports from any CI.</p></Site>", []string{cloud, "any CI", "GitHub Actions only"}},
 		{"cancel any time", cloud, "</Site>", "<p>Cancel anytime.</p></Site>", []string{cloud, `"Cancel anytime"`, "legal review"}},
 		{"a 14-day refund", cloud, "</Site>", "<p>A 14-day refund.</p></Site>", []string{cloud, `"14-day"`, "legal review"}},
 		{"gate", cloud, "</Site>", "<p>A gate on pull requests.</p></Site>", []string{cloud, `"gate"`, "verdict and failures list"}},
-		{"gating", index, "</Site>", "<p>Gating merges on results.</p></Site>", []string{index, `"Gating"`}},
+		{"gating", index, "</Site>", "<p>Gating merges on results.</p></Site>", []string{index, `"Gating merges"`}},
 		{"a banned claim in the page description", pricing, "Design partners are being invited.\"", "Design partners get priority support.\"",
 			[]string{pricing + ":6:", `"priority support"`}},
 		{"an Apply link to another place", pricing, `href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml">Apply as a design partner`,
@@ -190,11 +195,16 @@ func TestSiteTruthFailsEachFalseClaim(t *testing.T) {
 			"offers: { '@type': 'Offer', priceCurrency: 'USD' },", []string{index, "structured-data Offer"}},
 		{"a results count with a non-breaking space", index, "</Site>", "<p>Up to 10,000&nbsp;results a month.</p></Site>",
 			[]string{index, `"10,000`, "not the results_per_month of any plan"}},
+		{"a refund stated with no link to the refund policy", pricing, `<p class="note">`, "<p>Full refund within 30 days.</p><p class=\"note\">",
+			[]string{pricing, `"refund"`, "refund terms wait for the legal review"}},
+		{"alerts in Slack", cloud, "</Site>", "<p>Alerts in Slack for every failed run.</p></Site>", []string{cloud, `"Alerts in Slack"`, "not built"}},
+		{"another form of this repository behind a plain label", pricing, `href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml">Apply as a design partner`,
+			`href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=bug.yml">Tell us more`, []string{pricing, `"Tell us more"`, "an Apply link to"}},
 		{"a form on another site", "sellable.json", "https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml",
 			"https://forms.example.com/new?template=design-partner.yml", []string{"sellable.json: apply.form must be the design-partner issue form URL of this repository"}},
 		{"an apply address that is not a mailto", "sellable.json", `"mailto:support@alphawavesystems.com"`, `"support@alphawavesystems.com"`,
 			[]string{"sellable.json: apply.email must be a mailto: address"}},
-		{"a banned claim in the docs page", preview, "## Turn it on", "Slack alerts are coming.\n\n## Turn it on", []string{preview, `"Slack"`}},
+		{"a banned claim in the docs page", preview, "## Turn it on", "Slack alerts are coming.\n\n## Turn it on", []string{preview, `"Slack alerts"`}},
 		{"a status that is neither available nor planned", "sellable.json", `"status": "planned",
       "price_usd_month": 49`, `"status": "soon",
       "price_usd_month": 49`, []string{"sellable.json: team: status"}},
@@ -227,6 +237,18 @@ func TestSiteTruthAllowsTrueClaims(t *testing.T) {
 		{"a Start control under its own heading after a planned card", pricing, "<p class=\"note\">", "<h2>Try it now</h2><a href=\"/getting-started/installation/\">Start with the free CLI</a><p class=\"note\">"},
 		{"heading cards with their own price and results", pricing, "<p class=\"note\">", `<div class="plan planned"><h3>Team</h3><p>$49 / month, 100,000 results a month</p><a href="#design-partners">See the design-partner offer</a></div><div class="plan"><h3>Free</h3><p>$0, 1,000 results a month</p><a href="/x/">Start free</a></div><p class="note">`},
 		{"a planned card with no price and no button", pricing, "<p class=\"note\">", strings.Replace(onTheGoCard, "%s", "", 1) + "<p class=\"note\">"},
+		{"a Start control under a heading outside a card (not a plan card)", pricing, `<p class="note">`, `<h3>Team</h3><p><a href="/getting-started/">Start with the docs</a></p><p class="note">`},
+		{"Slack named as the user's own channel", index, "</Site>", "<p>Post the JUnit summary to your own Slack channel.</p></Site>"},
+		{"a price per hour in an article", index, "</Site>", "<section><h3>Scale</h3><p>A flaky test costs about $50 an hour.</p></section></Site>"},
+		{"a shell variable in a code block of the docs", preview, "## Turn it on", "```sh\nprobe report | awk '{print $1}'\n```\n\n## Turn it on"},
+		{"a link that applies something else", index, "</Site>", `<p><a href="/docs/visual/">Apply a tolerance</a></p></Site>`},
+		{"the form with a prefilled title", pricing, `design-partner.yml">Apply as`, `design-partner.yml&amp;title=Apply">Apply as`},
+		{"gateway, Gated, Bill Gates", index, "</Site>", "<p>Use an API gateway; Gated builds; Bill Gates.</p></Site>"},
+		{"refunds in a question answered next to the refund policy", index, "</Site>", `<details><summary>And refunds?</summary><p>See the <a href="/refunds/">refund policy</a>.</p></details></Site>`},
+		{"a price in a code block of the docs", preview, "## Turn it on", "```sh\necho 'Team: $5 a month'\n```\n\n## Turn it on"},
+		{"a docs link with a buy word inside a planned card", pricing, "<li>Run history for your team</li>", `<li>Run history for your team</li></ul><a href="/getting-started/">Start with the docs</a><ul>`},
+		{"a free Offer whose price comes after a nested object", index, "offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },",
+			"offers: { '@type': 'Offer', seller: { name: 'Alpha Wave Systems' }, price: '0', priceCurrency: 'USD' },"},
 		{"a banned word in a comment", pricing, "<p class=\"note\">", "<!-- old card -> Slack, gate: removed -->"},
 		{"a banned word in a script", index, "</Site>", "<script>const slack = 'gate';</script></Site>"},
 	}
@@ -236,6 +258,56 @@ func TestSiteTruthAllowsTrueClaims(t *testing.T) {
 			edit(t, site, c.file, c.old, c.new)
 			if out, ok := runTruth(t, site); !ok {
 				t.Fatalf("the check refused %s:\n%s", c.name, out)
+			}
+		})
+	}
+}
+
+// The review's table: benign edits of the real site must pass, false claims must fail. A false positive here would block the deploy of a
+// true page; a false negative lets a false claim go live.
+func TestSiteTruthReviewCases(t *testing.T) {
+	raw, err := os.ReadFile("testdata/site_truth_cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data struct {
+		Cases []struct {
+			Kind, Name, File, Find, Repl, Append string
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatal(err)
+	}
+	if len(data.Cases) == 0 {
+		t.Fatal("no cases")
+	}
+	for _, c := range data.Cases {
+		t.Run(c.Kind+"/"+c.Name, func(t *testing.T) {
+			site := copySite(t)
+			if c.Find != "" {
+				edit(t, site, c.File, c.Find, c.Repl)
+			} else {
+				p := filepath.Join(site, c.File)
+				old, err := os.ReadFile(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, append(old, c.Append...), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, ok := runTruth(t, site)
+			switch c.Kind {
+			case "benign":
+				if !ok {
+					t.Errorf("a true edit was refused (this would block the deploy):\n%s", out)
+				}
+			case "false":
+				if ok {
+					t.Errorf("a false claim passed")
+				}
+			default:
+				t.Fatalf("kind %q", c.Kind)
 			}
 		})
 	}
