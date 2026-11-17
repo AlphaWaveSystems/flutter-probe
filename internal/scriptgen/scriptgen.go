@@ -22,6 +22,9 @@ import (
 // ellipsis that marks the cut.
 const MaxNameRunes = 48
 
+// noSelector is what Selector returns when the event names nothing a step can look up.
+const noSelector = "the element"
+
 // GapPause is the idle time between two events above which a recording gets a wait step.
 const GapPause = 2 * time.Second
 
@@ -52,7 +55,7 @@ func stepLine(params map[string]interface{}) string {
 	action, _ := params["action"].(string)
 	switch action {
 	case "tap":
-		return fmt.Sprintf("  tap %s", Selector(params))
+		return onElement(params, "tap", "tap %s")
 	case "type":
 		sel := TypeTarget(params)
 		if Obscured(params) {
@@ -65,14 +68,14 @@ func stepLine(params map[string]interface{}) string {
 		if !ok {
 			// The text has a character a script line cannot hold (a control character, a line separator): no step is made for it, and the
 			// comment says what to do. The text itself is not in the comment.
-			if sel != "the element" {
+			if sel != noSelector {
 				return fmt.Sprintf("  # type into %s was not recorded: the text has a character a script cannot hold. Add the step by hand.", sel)
 			}
 			return "  # type was not recorded: the text has a character a script cannot hold. Add the step by hand."
 		}
 		// `into the <lookup> field` takes a quoted text or a #id. A widget type (`the TextField`) is not a lookup a type step can name, so
 		// the text is typed into the focused field, as when the event named nothing.
-		if sel != "the element" && !strings.HasPrefix(sel, "the ") {
+		if sel != noSelector && !strings.HasPrefix(sel, "the ") {
 			return fmt.Sprintf("  type %s into the %s field", quoted, sel)
 		}
 		return "  type " + quoted
@@ -85,17 +88,28 @@ func stepLine(params map[string]interface{}) string {
 		// is more steps on the same line). The comment names the action only.
 		return fmt.Sprintf("  # %s was not recorded: its direction is not up, down, left or right. Add the step by hand.", action)
 	case "long_press":
-		return fmt.Sprintf("  long press on %s", Selector(params))
+		return onElement(params, "long press", "long press on %s")
 	case "navigate":
 		return "  go back"
 	case "see":
-		return fmt.Sprintf("  see %s", Selector(params))
+		return onElement(params, "see", "see %s")
 	default:
 		if name := cleanName(action); name != "" {
 			return "  # " + name
 		}
 		return ""
 	}
+}
+
+// onElement is the step for an action that needs a selector (format has one %s for it). When no selector can be written, the step would have to name
+// "the element", which at replay is a widget type called element that matches nothing: a step that looks recorded and never works. A comment
+// that says so is written instead, and the person adds the step.
+func onElement(params map[string]interface{}, name, format string) string {
+	sel := Selector(params)
+	if sel == noSelector {
+		return fmt.Sprintf("  # could not record a selector for %s: add the step by hand.", name)
+	}
+	return "  " + fmt.Sprintf(format, sel)
 }
 
 // Scrub is the event as it may be shown: for an obscured event the flat text is dropped, for every action, so it can never become a selector
@@ -176,7 +190,7 @@ func Selector(params map[string]interface{}) string {
 			return "#" + clean
 		}
 	}
-	return "the element"
+	return noSelector
 }
 
 // direction is the direction of a swipe or scroll as the script says it: up, down, left or right (the agent's word, trimmed, in any case), or

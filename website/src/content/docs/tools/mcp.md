@@ -240,7 +240,7 @@ probe-mcp --http 127.0.0.1:7391
 
 ```
 probe-mcp: MCP over HTTP at http://127.0.0.1:7391/mcp
-probe-mcp: bearer token written to /Users/you/Library/Application Support/flutter-probe-mcp/http-token (a new one on every start)
+probe-mcp: bearer token written to /Users/you/Library/Application Support/flutter-probe-mcp/http-token-127.0.0.1-7391 (a new one on every start)
 ```
 
 Pick any free port; `127.0.0.1:0` lets the system choose one and prints it. The server works in the directory you start it in (or in `PROBE_PROJECT_DIR`), so start it in your Flutter project. Stop it with Ctrl+C.
@@ -251,15 +251,15 @@ The tools and their results are the same as over stdio. The endpoint follows the
 
 Every request must carry `Authorization: Bearer <token>`. A request without the right token gets `401` and an empty body.
 
-- **Default: a new token on every start.** It is 256 random bits, written to `http-token` in `flutter-probe-mcp` under your user config directory (`~/Library/Application Support` on macOS, `~/.config` on Linux, `%AppData%` on Windows). The file is readable only by you (mode `0600` in a `0700` directory) and is removed when the server stops. The path is printed on start; the token itself is never printed or logged. A token that leaked stops working as soon as the server stops.
+- **Default: a new token on every start.** It is 256 random bits, written to `http-token-<address>-<port>` (for example `http-token-127.0.0.1-7391` for a server on 127.0.0.1:7391; `::1` is written `__1`, and an IPv6 zone is part of it, in hexadecimal after `-z`, or hashed after `-h` when it is longer than 32 characters) in `flutter-probe-mcp` under your user config directory (`~/Library/Application Support` on macOS, `~/.config` on Linux, `%AppData%` on Windows). The file is readable only by you (mode `0600` in a `0700` directory) and is removed when the server stops. The path is printed on start; the token itself is never printed or logged. A token that leaked stops working as soon as the server stops.
 - **A token that stays the same:** set `PROBE_MCP_HTTP_TOKEN` to your own value, for example from `openssl rand -base64 32`. It must be at least 43 characters long and use at least 16 different characters; a shorter or more repetitive value is refused. Then no file is written. Keep it out of files you share. `probe-mcp` removes the variable from its own environment at start, so the commands it runs do not inherit it, but the value stays visible in the process's initial environment to programs running as the same user. On a shared machine, do not reuse a stable token after the server has stopped: another program could listen on the same port and receive it.
 
 `probe-mcp` refuses to start if the token directory or an existing token file is a symlink or can be read by other users. Remove the file, or run `chmod 700` on the directory, and start again. On Windows these file-mode checks are skipped: the file is protected by the access rules of your user profile folder, not by a mode.
 
-Run one HTTP server per user config directory. A second one started the same way replaces the first one's token file (it says so on start), and the first server's token is then no longer on disk. For a second server, set `PROBE_MCP_HTTP_TOKEN`.
+Every address and port has its own token file, so you can run several HTTP servers: a second one on another port, or on another address with the same port (`127.0.0.1` and `::1` can both be bound), does not touch the first one's token file, and each removes only its own when it stops. A second one on the same address and port cannot start. A token file left by a server that did not stop cleanly is replaced when a server starts on that address and port again (it says so on start).
 
 ```bash
-TOKEN=$(cat "$HOME/Library/Application Support/flutter-probe-mcp/http-token")
+TOKEN=$(cat "$HOME/Library/Application Support/flutter-probe-mcp/http-token-127.0.0.1-7391")
 curl -s http://127.0.0.1:7391/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \

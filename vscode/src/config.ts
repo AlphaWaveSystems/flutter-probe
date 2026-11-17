@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { notFoundPath, resolveToolPath } from './toolPath';
 import { ProbeConfig } from './types';
 
 export function getConfig(): vscode.WorkspaceConfiguration {
@@ -12,33 +13,39 @@ export function getSetting<T>(key: string): T | undefined {
 }
 
 export function getProbePath(): string {
-  const configured = getSetting<string>('probePath');
-  if (configured && configured !== 'probe') {
-    return configured;
-  }
-  const ws = getWorkspaceRoot();
-  if (ws) {
-    const localBin = path.join(ws, 'bin', 'probe');
-    if (fs.existsSync(localBin)) {
-      return localBin;
-    }
-  }
-  return 'probe';
+  return toolPath('probePath', 'probe');
 }
 
 export function getConvertPath(): string {
-  const configured = getSetting<string>('convertPath');
-  if (configured && configured !== 'probe-convert') {
-    return configured;
+  return toolPath('convertPath', 'probe-convert');
+}
+
+// toolPath is the absolute path of the binary for a path setting (see toolPath.ts for the rules). When nothing is found it is the bare name
+// on macOS and Linux, where a bare name is looked up on PATH only; on Windows, where the system would also look in the workspace, it is
+// an error instead.
+function toolPath(setting: string, defaultName: string): string {
+  const r = resolveToolPath({
+    configured: getSetting<string>(setting),
+    defaultName,
+    workspaceRoot: getWorkspaceRoot(),
+    useWorkspaceBinaries: getSetting<boolean>('useWorkspaceBinaries') === true,
+    trusted: vscode.workspace.isTrusted,
+    platform: process.platform,
+    pathEnv: process.env.PATH,
+    isFile,
+    isAbsolute: path.isAbsolute,
+    join: path.join,
+  });
+  if ('path' in r) { return r.path; }
+  return notFoundPath(r, setting, process.platform);
+}
+
+function isFile(p: string): boolean {
+  try {
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
   }
-  const ws = getWorkspaceRoot();
-  if (ws) {
-    const localBin = path.join(ws, 'bin', 'probe-convert');
-    if (fs.existsSync(localBin)) {
-      return localBin;
-    }
-  }
-  return 'probe-convert';
 }
 
 export function getWorkspaceRoot(): string | undefined {

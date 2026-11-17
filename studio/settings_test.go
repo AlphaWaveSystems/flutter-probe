@@ -29,7 +29,7 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &App{}
-	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, DefaultsTimeout: "20s", IOSDeviceID: "SIM-UDID", AndroidDeviceID: "emulator-5554"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, DefaultsTimeout: "20s", IOSDeviceID: "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B", AndroidDeviceID: "emulator-5554"}); err != nil {
 		t.Fatal(err)
 	}
 	m := readYAML(t, dir)
@@ -40,12 +40,12 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 	if agent["port"] != 48800 || agent["dial_timeout"] != "45s" {
 		t.Errorf("agent = %v; the port changes and dial_timeout stays", agent)
 	}
-	if m["defaults"].(map[string]any)["timeout"] != "20s" || m["device"].(map[string]any)["ios_device_id"] != "SIM-UDID" || m["device"].(map[string]any)["android_device_id"] != "emulator-5554" {
+	if m["defaults"].(map[string]any)["timeout"] != "20s" || m["device"].(map[string]any)["ios_device_id"] != "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B" || m["device"].(map[string]any)["android_device_id"] != "emulator-5554" {
 		t.Errorf("managed keys not written: %v", m)
 	}
 
 	got, err := a.LoadWorkspaceSettings(dir)
-	if err != nil || got.AgentPort != 48800 || got.DefaultsTimeout != "20s" || got.IOSDeviceID != "SIM-UDID" || got.AndroidDeviceID != "emulator-5554" {
+	if err != nil || got.AgentPort != 48800 || got.DefaultsTimeout != "20s" || got.IOSDeviceID != "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B" || got.AndroidDeviceID != "emulator-5554" {
 		t.Errorf("load = %+v, err %v", got, err)
 	}
 }
@@ -53,7 +53,7 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 func TestSaveWorkspaceSettingsRemovesClearedKeys(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{}
-	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: "X"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800}); err != nil {
@@ -207,5 +207,28 @@ func TestSettingsWritesClearDataBeforeEachTest(t *testing.T) {
 	}
 	if got := read(t, filepath.Join(dir, "probe.yaml")); strings.Contains(got, "clear_data") {
 		t.Errorf("the key was not removed: %q", got)
+	}
+}
+
+// device.ios_device_id follows the CLI's rule: Studio refuses to save a value that is not a simulator or a device UDID, and writes nothing.
+func TestSaveWorkspaceSettingsRefusesAnIOSDeviceIDThatIsNotAUDID(t *testing.T) {
+	for _, bad := range []string{"iPhone 16", "../../x", "/etc", "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B/../x"} {
+		dir := t.TempDir()
+		a := &App{}
+		err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: bad})
+		if err == nil || !strings.Contains(err.Error(), "probe device list") {
+			t.Errorf("%q must be refused, got %v", bad, err)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "probe.yaml")); statErr == nil {
+			if dev, ok := readYAML(t, dir)["device"].(map[string]any); ok && dev["ios_device_id"] != nil {
+				t.Errorf("%q was written: %v", bad, dev)
+			}
+		}
+	}
+	for _, ok := range []string{"6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B", "00008110-001A2C3E0E12801E", "0123456789abcdef0123456789abcdef01234567"} {
+		dir := t.TempDir()
+		if err := inWS(&App{}, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: ok}); err != nil {
+			t.Errorf("%q must be saved: %v", ok, err)
+		}
 	}
 }

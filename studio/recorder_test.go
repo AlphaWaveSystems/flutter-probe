@@ -16,7 +16,7 @@ func TestEventToProbeScriptLine(t *testing.T) {
 		{"key already has a hash", map[string]interface{}{"action": "tap", "selector": sel("id", "#loginButton")}, `  tap #loginButton`},
 		{"tap by type", map[string]interface{}{"action": "tap", "selector": sel("type", "Switch")}, `  tap the Switch`},
 		{"tap with only text", map[string]interface{}{"action": "tap", "text": "OK"}, `  tap "OK"`},
-		{"tap without a selector", map[string]interface{}{"action": "tap"}, `  tap the element`},
+		{"tap without a selector", map[string]interface{}{"action": "tap"}, `  # could not record a selector for tap: add the step by hand.`},
 		{"type into a field", map[string]interface{}{"action": "type", "text": "a@b.co", "selector": sel("id", "email")}, `  type "a@b.co" into the #email field`},
 		{"type with no target", map[string]interface{}{"action": "type", "text": "hi"}, `  type "hi"`},
 		{"swipe", map[string]interface{}{"action": "swipe", "direction": "left"}, `  swipe left`},

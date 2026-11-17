@@ -1,5 +1,6 @@
 import { expect, Page, test } from "@playwright/test";
 import { ChildProcess, spawn } from "node:child_process";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
@@ -20,11 +21,12 @@ async function freePort(): Promise<number> {
   });
 }
 
-async function startStudio(workspaceDir: string): Promise<{ url: string; stop: () => void }> {
+async function startStudio(workspaceDir: string): Promise<{ url: string; token: string; stop: () => void }> {
+  const token = crypto.randomBytes(32).toString("hex"); // this server's own token: the page is given it as a header, never by Studio
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "studio-wn-home-"));
   const port = await freePort();
   const child: ChildProcess = spawn(bin, [], {
-    env: { ...process.env, HOME: home, PROBE_STUDIO_HEADLESS: "1", PROBE_STUDIO_HEADLESS_PORT: String(port), PROBE_STUDIO_WORKSPACE: workspaceDir, PROBE_STUDIO_KEYCHAIN: "memory", PROBE_STUDIO_SEED_RUN: "", PROBE_STUDIO_SEED_EXCHANGES: "" },
+    env: { ...process.env, HOME: home, PROBE_STUDIO_HEADLESS: "1", PROBE_STUDIO_HEADLESS_PORT: String(port), PROBE_STUDIO_HEADLESS_TOKEN: token, PROBE_STUDIO_WORKSPACE: workspaceDir, PROBE_STUDIO_KEYCHAIN: "memory", PROBE_STUDIO_SEED_RUN: "", PROBE_STUDIO_SEED_EXCHANGES: "" },
     stdio: "ignore",
   });
   const url = `http://127.0.0.1:${port}/`;
@@ -36,7 +38,7 @@ async function startStudio(workspaceDir: string): Promise<{ url: string; stop: (
     }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  return { url, stop: () => child.kill() };
+  return { url, token, stop: () => child.kill() };
 }
 
 function workspaceWith(yaml: string | null): string {
@@ -55,6 +57,7 @@ test.describe("Workspace note about probe.yaml", () => {
   async function withStudio(dir: string, body: (page: Page, url: string) => Promise<void>, page: Page) {
     const studio = await startStudio(dir);
     try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       await expect(page.locator("#file-list li", { hasText: "tests" })).toBeVisible();
       await body(page, studio.url);
