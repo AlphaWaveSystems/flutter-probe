@@ -38,6 +38,10 @@ void main() {
         'a..b',
         'a.b.',
         'com.example.app:remote', // a process name with a suffix
+        'co:m.example.app', // a colon in the first segment
+        'com.ex:ample.app', // a colon in a middle segment
+        'com.example.a pp',
+        'c\$m.example.app',
         'com.example.app\n',
         'com.example. app',
         'com.example.app;rm',
