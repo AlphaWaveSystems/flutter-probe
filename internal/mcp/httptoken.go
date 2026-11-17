@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/secretfile"
 )
@@ -13,8 +15,8 @@ import (
 // The bearer token of the HTTP transport.
 //
 // By default a new token (32 bytes from crypto/rand, hex) is made on every start and written to
-// <user config dir>/flutter-probe-mcp/http-token-<port>, mode 0600 in a 0700 directory, one file for
-// each port a server listens on, so two servers of one user never overwrite each other's token. The
+// <user config dir>/flutter-probe-mcp/http-token-<address>-<port>, mode 0600 in a 0700 directory, one
+// file for each address and port a server listens on, so two servers of one user never overwrite each other's token. The
 // file is removed when the server stops. A token that changes on every start is the safer default: one
 // that leaked (a shell history, a screen share, a copied config) stops working with the process.
 // Someone who wants a token that stays the same supplies their own in PROBE_MCP_HTTP_TOKEN; then
@@ -79,9 +81,19 @@ func checkSuppliedToken(token string) error {
 	return nil
 }
 
-// tokenFileName is the name of the token file of the server that listens on port. A port belongs to one server at a time, so the name does too:
-// a second server on another port has its own file, and one on the same port cannot start (the listen fails before any file is touched).
-func tokenFileName(port int) string { return fmt.Sprintf("%s-%d", tokenFileBase, port) }
+// tokenFileName is the name of the token file of the server that listens on ip:port: http-token-<address>-<port>. An address and port belong to one
+// server at a time, so the name does too: a server on another port, or on another address with the same port (127.0.0.1 and ::1 can both be
+// bound), has its own file, and a second one on the same address and port cannot start (the listen fails before any file is touched). The address
+// is written with only letters, digits and dots (a colon or a bracket is not allowed in a file name on every system), so ::1 is __1.
+func tokenFileName(ip net.IP, port int) string {
+	addr := strings.Map(func(r rune) rune {
+		if r == '.' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			return r
+		}
+		return '_'
+	}, ip.String())
+	return fmt.Sprintf("%s-%s-%d", tokenFileBase, addr, port)
+}
 
 // writeTokenFile writes the token to dir/name and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
 // directory or an existing token file that is a link, not ours or reachable by other users, instead of repairing it. replaced reports that a token

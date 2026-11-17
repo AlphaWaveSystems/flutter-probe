@@ -337,7 +337,7 @@ func RunHTTP(ctx context.Context, opts HTTPOptions) error {
 		if token, err = newToken(); err != nil {
 			return err
 		}
-		if tokenFile, replaced, err = writeTokenFile(dir, tokenFileName(bound.Port), token); err != nil {
+		if tokenFile, replaced, err = writeTokenFile(dir, tokenFileName(bound.IP, bound.Port), token); err != nil {
 			return err
 		}
 		defer removeTokenFile(tokenFile, token)
@@ -352,7 +352,7 @@ func RunHTTP(ctx context.Context, opts HTTPOptions) error {
 	if tokenFile != "" {
 		fmt.Fprintf(logw, "probe-mcp: bearer token written to %s (a new one on every start)\n", tokenFile)
 		if replaced {
-			fmt.Fprintf(logw, "probe-mcp: note: the token file of this port was already there (left by a server on this port that did not stop cleanly) and has been replaced. A server on another port has its own file.\n")
+			fmt.Fprintf(logw, "probe-mcp: note: the token file of this port was already there (left by a server on this address and port that did not stop cleanly) and has been replaced. A server on another port or address has its own file.\n")
 		}
 	} else {
 		fmt.Fprintf(logw, "probe-mcp: bearer token taken from %s\n", TokenEnv)
