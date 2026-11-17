@@ -150,6 +150,13 @@ func (a *App) seedRun(results []RunResult, steps ...RunStep) {
 // seedSources keeps the text of the files the seeded steps name, as a run would have, so the browser suite can check an insertion against a seeded
 // failed step. A file outside the workspace, not regular or unreadable is skipped (see readSeedFile); headless only, like the seed itself.
 func (a *App) seedSources(workspace string, steps []RunStep) {
+	// The page names the same workspace a moment later (InitialWorkspace is this variable); naming it first means that opening it is not a change of
+	// workspace, which would drop the text kept here.
+	a.mu.Lock()
+	if a.workspace == "" {
+		a.workspace = workspace
+	}
+	a.mu.Unlock()
 	for _, s := range steps {
 		path := s.File
 		if !filepath.IsAbs(path) {
