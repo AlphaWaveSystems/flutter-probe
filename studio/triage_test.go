@@ -79,7 +79,7 @@ func TestToRunStepCarriesTriageForAFailedSelector(t *testing.T) {
 		Status:      runner.StepFailed,
 		Duration:    6 * time.Millisecond,
 		Error:       errors.New(`rpc error -32002: Expected to see "text("This text does not exist")" but it was not found`),
-	})
+	}, "")
 	if rs.Triage == nil {
 		t.Fatal("a failed see carries a triage")
 	}
@@ -96,7 +96,7 @@ func TestToRunStepTriageUsesTheIDFlag(t *testing.T) {
 		Duration:     time.Second,
 		Error:        errors.New(`Widget not found: id("probe_open_paywall")`),
 		SelectorIsID: true,
-	})
+	}, "")
 	if rs.Triage == nil {
 		t.Fatal("a failed tap on an id carries a triage")
 	}
@@ -107,7 +107,7 @@ func TestToRunStepTriageUsesTheIDFlag(t *testing.T) {
 
 // A step that passed has no triage: there is nothing to explain.
 func TestToRunStepHasNoTriageForAPassedStep(t *testing.T) {
-	rs := toRunStep(runner.StepEvent{Description: `see "Home"`, Status: runner.StepPassed})
+	rs := toRunStep(runner.StepEvent{Description: `see "Home"`, Status: runner.StepPassed}, "")
 	if rs.Triage != nil {
 		t.Errorf("Triage = %+v for a passed step, want none", rs.Triage)
 	}

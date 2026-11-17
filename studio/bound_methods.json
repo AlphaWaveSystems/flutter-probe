@@ -192,6 +192,21 @@
    ]
   },
   {
+   "method": "CheckReplaceStep",
+   "category": "ui",
+   "does": "Says whether the on-screen text the rules found for a failed see or tap (the same text written another way) may replace the text of that step in the text the window holds: only while that text is the text the run read and no run is going; builds the line from the run's text, reads nothing from disk and writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none",
+   "tests": [
+    "TestCheckReplaceStepRefusals",
+    "TestCheckReplaceStepRefusesAnEditAboveThatShiftsAnIdenticalStep"
+   ]
+  },
+  {
    "method": "CheckTarget",
    "category": "network",
    "does": "Says where a request to a URL would go and whether its host is allowed yet; looks the name up.",
