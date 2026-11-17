@@ -143,3 +143,28 @@ func TestDialThatSucceedsNeverCallsOnPortSuspect(t *testing.T) {
 		t.Errorf("the hook was called %d time(s) on a dial that succeeded first time", calls.Load())
 	}
 }
+
+// A slow but healthy start: the forward accepts and drops the connection for a while (the agent is not up yet), then the agent answers. Before portSuspectAfter the hook is
+// not asked, so a cold start never makes the CLI look at the device.
+func TestDialDoesNotAskOnPortSuspectBeforeTheGracePeriod(t *testing.T) {
+	var moved atomic.Bool
+	srv := serverBehindAForward(t, &moved, "drop")
+	defer srv.Close()
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		moved.Store(true) // the agent is up
+	}()
+	host, port := serverHostPort(t, srv)
+	var calls atomic.Int32
+	client, err := DialWithOptions(context.Background(), DialOptions{
+		Host: host, Port: port, Token: "t", DialTimeout: 20 * time.Second,
+		OnPortSuspect: func(context.Context) bool { calls.Add(1); return false },
+	})
+	if err != nil {
+		t.Fatalf("a slow healthy start must connect, got %v", err)
+	}
+	defer client.Close()
+	if calls.Load() != 0 {
+		t.Errorf("the hook was asked %d time(s) during a start that took under %s", calls.Load(), portSuspectAfter)
+	}
+}

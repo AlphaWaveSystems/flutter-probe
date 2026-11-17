@@ -16,6 +16,11 @@ func procRow(port, uid int) string {
 	return fmt.Sprintf("   0: 0000000000000000FFFF00000100007F:%04X 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000 %5d        0 12345 1 0000000000000000 100 0 0 10 0\n", port, uid)
 }
 
+// procRowState is procRow in another state: "01" is ESTABLISHED (a connection from or to the app, not a listener), "0A" is LISTEN.
+func procRowState(port, uid int, state string) string {
+	return strings.Replace(procRow(port, uid), " 0A ", " "+state+" ", 1)
+}
+
 const procHeader = "  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
 
 func twoApps(heldBy, ownPort int) *poAdb {
@@ -64,6 +69,43 @@ func TestDiscoverAppPort(t *testing.T) {
 		if got != tc.want || ok != tc.wantOK {
 			t.Errorf("%s: got (%d, %v, %q), want (%d, %v)", tc.name, got, ok, why, tc.want, tc.wantOK)
 		}
+	}
+}
+
+// A package name that is the start or the end of another one is another package: com.x.app is not com.x.app.debug, in either order of the list.
+func TestDiscoverAppPortDoesNotConfusePackageNamesThatContainEachOther(t *testing.T) {
+	for _, pm := range []string{
+		"package:com.x.app uid:10200\npackage:com.x.app.debug uid:10300\n",
+		"package:com.x.app.debug uid:10300\npackage:com.x.app uid:10200\n",
+	} {
+		onlyDebug := &poAdb{tcp6: procHeader + procRow(48912, 10300), tcp: procHeader, pm: pm}
+		if p, ok, _ := DiscoverAppPort(context.Background(), onlyDebug, "emulator-5554", 48911, "com.x.app"); ok {
+			t.Errorf("com.x.app followed %d, the port of com.x.app.debug", p)
+		}
+		if p, ok, why := DiscoverAppPort(context.Background(), onlyDebug, "emulator-5554", 48911, "com.x.app.debug"); !ok || p != 48912 {
+			t.Errorf("com.x.app.debug: got (%d, %v, %q), want (48912, true)", p, ok, why)
+		}
+		both := &poAdb{tcp6: procHeader + procRow(48912, 10300) + procRow(48913, 10200), tcp: procHeader, pm: pm}
+		if p, ok, why := DiscoverAppPort(context.Background(), both, "emulator-5554", 48911, "com.x.app"); !ok || p != 48913 {
+			t.Errorf("com.x.app next to com.x.app.debug: got (%d, %v, %q), want (48913, true)", p, ok, why)
+		}
+	}
+}
+
+// Only a socket in LISTEN state is a port the app serves: a connection of the app to somewhere (ESTABLISHED, TIME_WAIT) on a port in the range is not.
+func TestDiscoverAppPortCountsOnlyListeningSockets(t *testing.T) {
+	for _, state := range []string{"01", "06", "08", "02"} {
+		adb := &poAdb{tcp6: procHeader + procRowState(48912, 10200, state), tcp: procHeader, pm: "package:com.second uid:10200\n"}
+		if p, ok, _ := DiscoverAppPort(context.Background(), adb, "emulator-5554", 48911, "com.second"); ok {
+			t.Errorf("state %s: followed %d, a socket that does not listen", state, p)
+		}
+	}
+	listen := &poAdb{tcp6: procHeader + procRowState(48912, 10200, "01") + procRow(48913, 10200), tcp: procHeader, pm: "package:com.second uid:10200\n"}
+	if p, ok, why := DiscoverAppPort(context.Background(), listen, "emulator-5554", 48911, "com.second"); !ok || p != 48913 {
+		t.Errorf("with one connected and one listening socket: got (%d, %v, %q), want (48913, true)", p, ok, why)
+	}
+	if got := listeningPortsOf(procHeader+procRowState(48912, 10200, "01"), 10200, 48911, 48921); len(got) != 0 {
+		t.Errorf("listeningPortsOf counted a connected socket: %v", got)
 	}
 }
 
@@ -204,6 +246,29 @@ func TestPortFollowerSuspectIsRateLimited(t *testing.T) {
 	}
 	if len(fwd.calls) != 0 || f.DevicePort() != 48911 {
 		t.Errorf("nothing found: the forward must stay (calls %v, port %d)", fwd.calls, f.DevicePort())
+	}
+}
+
+// Once the follower stands on the app's own port, a later Suspect that finds the same port does nothing: no forward again, no second notice.
+func TestPortFollowerRepeatedSuspectOnTheAppsOwnPortDoesNothing(t *testing.T) {
+	adb := twoApps(48911, 48912)
+	fwd := &fakeFwd{}
+	var notices []string
+	var changes []int
+	f := newTestFollower(adb, fwd, &notices, &changes)
+	clock := time.Unix(1000, 0)
+	f.now = func() time.Time { return clock }
+	if !f.Suspect(context.Background()) {
+		t.Fatalf("the first Suspect did not move the forward")
+	}
+	for i := 0; i < 3; i++ {
+		clock = clock.Add(time.Minute)
+		if f.Suspect(context.Background()) {
+			t.Errorf("Suspect %d reported a move although the follower stands on the app's port", i+2)
+		}
+	}
+	if len(fwd.calls) != 1 || len(notices) != 1 || len(changes) != 1 {
+		t.Errorf("forwards %v, notices %q, changes %v: want exactly one of each", fwd.calls, notices, changes)
 	}
 }
 
