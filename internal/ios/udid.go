@@ -16,4 +16,6 @@ var (
 func ValidSimulatorUDID(s string) bool { return simulatorUDIDRE.MatchString(s) }
 
 // ValidDeviceUDID reports whether s is a physical device's UDID or a CoreDevice identifier.
-func ValidDeviceUDID(s string) bool { return deviceUDIDRE.MatchString(s) || simulatorUDIDRE.MatchString(s) }
+func ValidDeviceUDID(s string) bool {
+	return deviceUDIDRE.MatchString(s) || simulatorUDIDRE.MatchString(s)
+}
