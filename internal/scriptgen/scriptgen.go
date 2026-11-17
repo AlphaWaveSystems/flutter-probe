@@ -15,11 +15,15 @@ import (
 	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
 // MaxNameRunes is the longest an unknown action's name, or a swipe or scroll direction, may be in a recorded step: longer is cut to this many runes, the last of them an
 // ellipsis that marks the cut.
 const MaxNameRunes = 48
+
+// noSelector is what Selector returns when the event names nothing a step can look up.
+const noSelector = "the element"
 
 // GapPause is the idle time between two events above which a recording gets a wait step.
 const GapPause = 2 * time.Second
@@ -29,11 +33,29 @@ const GapPause = 2 * time.Second
 // An unknown action becomes a comment that names only the action, sanitized: no other value of the event is ever written into a comment. The
 // typed text of an obscured field is never written anywhere (see Obscured).
 func Step(params map[string]interface{}) string {
+	line := stepLine(params)
+	if line == "" || strings.HasPrefix(line, "  #") || readsAsOneStep(line) {
+		return line
+	}
+	// The line is built from rules about what the lexer reads (see Selector), and a word of the grammar in a name can still make it read as more
+	// than one step (found by FuzzStep: a type named SAve). So the line is read back with the real parser, and a line that is not one step is not
+	// written.
+	action, _ := params["action"].(string)
+	return fmt.Sprintf("  # %s was not recorded: it could not be written as one step. Add the step by hand.", action)
+}
+
+// readsAsOneStep says whether the real parser reads the line as exactly one step.
+func readsAsOneStep(line string) bool {
+	prog, err := parser.ParseFile("test \"t\"\n" + line + "\n")
+	return err == nil && len(prog.Tests) == 1 && len(prog.Tests[0].Body) == 1
+}
+
+func stepLine(params map[string]interface{}) string {
 	params = Scrub(params)
 	action, _ := params["action"].(string)
 	switch action {
 	case "tap":
-		return fmt.Sprintf("  tap %s", Selector(params))
+		return onElement(params, "tap", "tap %s")
 	case "type":
 		sel := TypeTarget(params)
 		if Obscured(params) {
@@ -46,33 +68,48 @@ func Step(params map[string]interface{}) string {
 		if !ok {
 			// The text has a character a script line cannot hold (a control character, a line separator): no step is made for it, and the
 			// comment says what to do. The text itself is not in the comment.
-			if sel != "the element" {
+			if sel != noSelector {
 				return fmt.Sprintf("  # type into %s was not recorded: the text has a character a script cannot hold. Add the step by hand.", sel)
 			}
 			return "  # type was not recorded: the text has a character a script cannot hold. Add the step by hand."
 		}
-		if sel != "the element" {
+		// `into the <lookup> field` takes a quoted text or a #id. A widget type (`the TextField`) is not a lookup a type step can name, so
+		// the text is typed into the focused field, as when the event named nothing.
+		if sel != noSelector && !strings.HasPrefix(sel, "the ") {
 			return fmt.Sprintf("  type %s into the %s field", quoted, sel)
 		}
 		return "  type " + quoted
-	case "swipe":
+	case "swipe", "scroll":
 		dir, _ := params["direction"].(string)
-		return fmt.Sprintf("  swipe %s", cleanName(dir))
-	case "scroll":
-		dir, _ := params["direction"].(string)
-		return fmt.Sprintf("  scroll %s", cleanName(dir))
+		if d, ok := direction(dir); ok {
+			return fmt.Sprintf("  %s %s", action, d)
+		}
+		// Anything else is not a direction, and a line that carried it could say more than the event did (a word with a space or a quote in it
+		// is more steps on the same line). The comment names the action only.
+		return fmt.Sprintf("  # %s was not recorded: its direction is not up, down, left or right. Add the step by hand.", action)
 	case "long_press":
-		return fmt.Sprintf("  long press on %s", Selector(params))
+		return onElement(params, "long press", "long press on %s")
 	case "navigate":
 		return "  go back"
 	case "see":
-		return fmt.Sprintf("  see %s", Selector(params))
+		return onElement(params, "see", "see %s")
 	default:
 		if name := cleanName(action); name != "" {
 			return "  # " + name
 		}
 		return ""
 	}
+}
+
+// onElement is the step for an action that needs a selector (format has one %s for it). When no selector can be written, the step would have to name
+// "the element", which at replay is a widget type called element that matches nothing: a step that looks recorded and never works. A comment
+// that says so is written instead, and the person adds the step.
+func onElement(params map[string]interface{}, name, format string) string {
+	sel := Selector(params)
+	if sel == noSelector {
+		return fmt.Sprintf("  # could not record a selector for %s: add the step by hand.", name)
+	}
+	return "  " + fmt.Sprintf(format, sel)
 }
 
 // Scrub is the event as it may be shown: for an obscured event the flat text is dropped, for every action, so it can never become a selector
@@ -127,18 +164,15 @@ func Selector(params map[string]interface{}) string {
 		if text != "" {
 			switch kind {
 			case "id":
-				if holdable(text) {
-					if strings.HasPrefix(text, "#") {
-						return text
-					}
-					return "#" + text
+				if idToken(strings.TrimPrefix(text, "#")) {
+					return "#" + strings.TrimPrefix(text, "#")
 				}
 			case "text":
 				if quoted, ok := Quote(text); ok {
 					return quoted
 				}
 			case "type":
-				if holdable(text) {
+				if typeName(text) {
 					return "the " + text
 				}
 			}
@@ -152,25 +186,45 @@ func Selector(params map[string]interface{}) string {
 		}
 	}
 	if id, ok := params["id"].(string); ok {
-		if clean := Sanitize(id); clean != "" && holdable(clean) {
+		if clean := Sanitize(id); clean != "" && idToken(clean) {
 			return "#" + clean
 		}
 	}
-	return "the element"
+	return noSelector
 }
 
-// holdable says whether text can be written into a script line as it is (an id, a widget type): valid UTF-8 and no control character or line
-// separator. A lookup that is not holdable is not written; Selector falls back to the next one.
-func holdable(s string) bool {
-	if !utf8.ValidString(s) {
-		return false
+// direction is the direction of a swipe or scroll as the script says it: up, down, left or right (the agent's word, trimmed, in any case), or
+// not a direction.
+func direction(s string) (string, bool) {
+	switch d := strings.ToLower(strings.TrimSpace(s)); d {
+	case "up", "down", "left", "right":
+		return d, true
 	}
-	for _, r := range s {
-		if unholdable(r) {
+	return "", false
+}
+
+// idToken says whether an id can follow a # in a line: the lexer reads a #id as a letter or underscore and then letters, digits and underscores,
+// and stops at anything else (a hyphen, a dot, a space, a quote), so anything else would leave the rest of the id as more words on the line.
+func idToken(s string) bool {
+	for i, r := range s {
+		if !unicode.IsLetter(r) && r != '_' && !(i > 0 && unicode.IsDigit(r)) {
 			return false
 		}
 	}
-	return true
+	return s != ""
+}
+
+// typeName says whether a widget type can follow "the" in a line: a class name (a capital or underscore, then letters, digits or underscores; a dollar sign is the lexer's variable mark).
+func typeName(s string) bool {
+	for i, r := range s {
+		if i == 0 && !unicode.IsUpper(r) && r != '_' {
+			return false // a class name starts with a capital: a lower-case word such as `field` is a word of the grammar, and `tap the field` is two steps
+		}
+		if !unicode.IsLetter(r) && r != '_' && !(i > 0 && unicode.IsDigit(r)) {
+			return false // a name holds letters, digits and underscores: "the 0" is an ordinal, not a type
+		}
+	}
+	return s != ""
 }
 
 // unholdable is a character a script line cannot hold: a control character (the escapes for tab and newline are Quote's), or a line or

@@ -26,7 +26,8 @@
     "test:lint": "node --test lint-tests/",
     "test:confirm": "node --test confirm-tests/",
     "test:result-notes": "node --test result-notes-tests/",
-    "test:still-waiting": "node --test still-waiting-tests/"
+    "test:still-waiting": "node --test still-waiting-tests/",
+    "test:recording": "node --test recording-tests/"
   },
   "dependencies": {
     "monaco-editor": "^0.57.0"
