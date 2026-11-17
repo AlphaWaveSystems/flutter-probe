@@ -55,7 +55,7 @@ func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket
 	before := listForwardPorts(ctx, runner, serial, socket.Name)
 	out, err := runner.RunArgs(ctx, "-s", serial, "forward", "tcp:0", target)
 	if err != nil {
-		return nil, fmt.Errorf("adb forward for the WebView socket failed on %s: %w", serial, err)
+		return nil, fmt.Errorf("adb forward for the WebView socket failed on %s: %w", CleanOneLine(serial, 80), err)
 	}
 	port, perr := strconv.Atoi(strings.TrimSpace(string(out)))
 	if perr == nil && port > 0 && port < 65536 {
@@ -86,11 +86,11 @@ func ForwardWebView(ctx context.Context, runner AdbRunner, serial string, socket
 			if strings.Contains(strings.ToLower(err.Error()), "address already in use") {
 				continue
 			}
-			return nil, fmt.Errorf("adb forward tcp:%d for the WebView socket failed on %s: %w", free, serial, err)
+			return nil, fmt.Errorf("adb forward tcp:%d for the WebView socket failed on %s: %w", free, CleanOneLine(serial, 80), err)
 		}
 		return &WebViewForward{runner: runner, serial: serial, port: free}, nil
 	}
-	return nil, fmt.Errorf("adb forward for the WebView socket failed on %s after %d ports were in use: %w", serial, maxForwardAttempts, last)
+	return nil, fmt.Errorf("adb forward for the WebView socket failed on %s after %d ports were in use: %w", CleanOneLine(serial, 80), maxForwardAttempts, last)
 }
 
 // ParseForwardList reads the output of `adb forward --list` ("<serial> tcp:<port> localabstract:<name>" per line) and returns the host ports of the rules of that serial that point at that socket. Other
@@ -142,7 +142,7 @@ func (f *WebViewForward) Close() error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), removeTimeout)
 	defer cancel()
 	if _, err := f.runner.RunArgs(ctx, "-s", f.serial, "forward", "--remove", "tcp:"+strconv.Itoa(f.port)); err != nil {
-		return fmt.Errorf("adb forward --remove tcp:%d failed on %s: %w", f.port, f.serial, err)
+		return fmt.Errorf("adb forward --remove tcp:%d failed on %s: %w", f.port, CleanOneLine(f.serial, 80), err)
 	}
 	f.removed = true
 	return nil
