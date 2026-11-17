@@ -228,6 +228,8 @@ fi'
   step studio-go studio/frontend 'npm ci --no-audit --no-fund
 npm run build'
   step studio-go studio 'go test ./...'
+  step studio-go studio 'go vet ./...'
+  step studio-go studio 'GOOS=windows go vet ./...'
 
   job vscode optional "VS Code extension tests" "node npm" "node=22" "studio-ci.yml:vscode"
   step vscode vscode 'npm ci --no-audit --no-fund'
