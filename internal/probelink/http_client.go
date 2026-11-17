@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -274,22 +272,8 @@ func (c *HTTPClient) Screenshot(ctx context.Context, name string) (string, error
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return "", err
 	}
-	if result.Data != "" {
-		decoded, decErr := base64Decode(result.Data)
-		if decErr == nil && len(decoded) > 0 {
-			localDir := "reports/screenshots"
-			_ = mkdirAll(localDir)
-			localPath := joinPath(localDir, basePath(result.Path))
-			if writeErr := writeFile(localPath, decoded); writeErr == nil {
-				absPath, _ := absFilePath(localPath)
-				if absPath != "" {
-					return absPath, nil
-				}
-				return localPath, nil
-			}
-		}
-	}
-	return result.Path, nil
+	// The agent's path is never used as a host path as it is: see savedScreenshot.
+	return savedScreenshot(result)
 }
 
 func (c *HTTPClient) DumpWidgetTree(ctx context.Context) (string, error) {
@@ -461,26 +445,4 @@ func (c *HTTPClient) DrainOutput(ctx context.Context) (map[string]string, error)
 		return nil, err
 	}
 	return result, nil
-}
-
-// File helpers to avoid importing os/filepath in this file
-// (they delegate to the stdlib, matching client.go's Screenshot usage)
-func mkdirAll(path string) error {
-	return os.MkdirAll(path, 0755)
-}
-
-func joinPath(elem ...string) string {
-	return filepath.Join(elem...)
-}
-
-func basePath(path string) string {
-	return filepath.Base(path)
-}
-
-func writeFile(path string, data []byte) error {
-	return os.WriteFile(path, data, 0644)
-}
-
-func absFilePath(path string) (string, error) {
-	return filepath.Abs(path)
 }

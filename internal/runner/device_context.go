@@ -12,6 +12,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/devsettings"
 	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
@@ -231,7 +232,7 @@ func (dc *DeviceContext) portFollower() *device.PortFollower {
 			base = dc.Port
 		}
 		dc.Follower = device.NewPortFollower(dc.Manager.ADB(), dc.Manager, dc.Serial, dc.AppID, dc.Port, base,
-			func(msg string) { fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", dc.Serial, msg) }, nil)
+			func(msg string) { fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", dc.serialShown(), msg) }, nil)
 	}
 	return dc.Follower
 }
@@ -294,7 +295,7 @@ func (dc *DeviceContext) dialTimeoutVal() time.Duration {
 
 // RestartApp force-stops the app and relaunches it. This preserves app data.
 func (dc *DeviceContext) RestartApp(ctx context.Context) error {
-	fmt.Printf("    \033[33m↻\033[0m  Force-stopping %s on %s...\n", dc.AppID, dc.Serial)
+	fmt.Printf("    \033[33m↻\033[0m  Force-stopping %s on %s...\n", dc.appShown(), dc.serialShown())
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
@@ -303,7 +304,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 			return fmt.Errorf("restart: force-stop: %w", err)
 		}
 		time.Sleep(dc.restartDelay())
-		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.appShown())
 		// Launch via am start with the standard Flutter MainActivity
 		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
@@ -315,7 +316,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 			dctl := dc.Manager.DeviceCtl()
 			_ = dctl.Terminate(ctx, dc.Serial, dc.AppID)
 			time.Sleep(dc.restartDelay())
-			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.appShown())
 			if err := dctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
 				return fmt.Errorf("restart: launch: %w", err)
 			}
@@ -323,7 +324,7 @@ func (dc *DeviceContext) RestartApp(ctx context.Context) error {
 			simctl := dc.Manager.SimCtl()
 			_ = simctl.Terminate(ctx, dc.Serial, dc.AppID)
 			time.Sleep(dc.restartDelay())
-			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+			fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.appShown())
 			if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
 				return fmt.Errorf("restart: launch: %w", err)
 			}
@@ -374,17 +375,18 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 	if perTest {
 		what = "clear data before each test"
 	}
-	reason := "wipes all app data for " + device.CleanOneLine(dc.AppID, 80)
+	app, serial := dc.appShown(), dc.serialShown() // text from the project and the device: one clean line in every message
+	reason := "wipes all app data for " + app
 	note := ""
 	if dc.Platform == device.PlatformIOS {
 		reason += iosKeychainHint
 		note = " " + iosKeychainSentence
 	}
 	question := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
-		"  SharedPreferences, databases, and files will be wiped.%s Continue?", dc.AppID, dc.Serial, note)
+		"  SharedPreferences, databases, and files will be wiped.%s Continue?", app, serial, note)
 	if perTest {
 		question = fmt.Sprintf("This will permanently delete ALL app data for %s on %s "+beforeEveryTest+" of this run.\n"+
-			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80), note)
+			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", app, serial, note)
 	}
 	return dc.askWipe(what, reason, question)
 }
@@ -392,9 +394,10 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 // AskReinstallForNotifications is the gate for the reinstall that resets an iOS simulator's notification decision. The reinstall deletes
 // the app's data container, so it is asked the way a clear is. Its keychain items are kept: measured, they survive an uninstall.
 func (dc *DeviceContext) AskReinstallForNotifications() error {
-	reason := fmt.Sprintf("reinstalls %s to reset its notification decision; this wipes ALL its app data (its keychain items are kept)", dc.AppID)
+	app, serial := dc.appShown(), dc.serialShown()
+	reason := fmt.Sprintf("reinstalls %s to reset its notification decision; this wipes ALL its app data (its keychain items are kept)", app)
 	question := fmt.Sprintf("This will reinstall %s on %s to reset its notification decision.\n"+
-		"  This wipes ALL its app data. Its keychain items are kept. Continue?", dc.AppID, dc.Serial)
+		"  This wipes ALL its app data. Its keychain items are kept. Continue?", app, serial)
 	return dc.askWipe("deny notifications", reason, question)
 }
 
@@ -427,7 +430,7 @@ func (dc *DeviceContext) ClearAppDataConfirmed(ctx context.Context) error {
 }
 
 func (dc *DeviceContext) clearAppData(ctx context.Context) error {
-	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", dc.AppID, dc.Serial)
+	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", dc.appShown(), dc.serialShown())
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
@@ -443,7 +446,7 @@ func (dc *DeviceContext) clearAppData(ctx context.Context) error {
 			}
 		}
 		time.Sleep(dc.restartDelay())
-		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.appShown())
 		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
 			"am", "start", "-n", dc.Manager.ADB().ResolveLauncherActivity(ctx, dc.Serial, dc.AppID)); err != nil {
 			return fmt.Errorf("clear data: relaunch: %w", err)
@@ -481,7 +484,7 @@ func (dc *DeviceContext) clearAppData(ctx context.Context) error {
 			}
 		}
 		time.Sleep(dc.restartDelay())
-		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.AppID)
+		fmt.Printf("    \033[33m↻\033[0m  Relaunching %s...\n", dc.appShown())
 		if err := simctl.Launch(ctx, dc.Serial, dc.AppID); err != nil {
 			return fmt.Errorf("clear data: relaunch: %w", err)
 		}
@@ -499,17 +502,17 @@ func (dc *DeviceContext) validateIOSDataPath(dataPath string) error {
 
 	// Must be an absolute path
 	if !strings.HasPrefix(dataPath, "/") {
-		return fmt.Errorf("invalid data path (not absolute): %s", dataPath)
+		return fmt.Errorf("invalid data path (not absolute): %q", dataPath)
 	}
 
 	// Must contain CoreSimulator/Devices to be a legitimate simulator container
 	if !strings.Contains(dataPath, "CoreSimulator/Devices") {
-		return fmt.Errorf("data path does not look like a simulator container: %s", dataPath)
+		return fmt.Errorf("data path does not look like a simulator container: %q", dataPath)
 	}
 
 	// Must contain the simulator UDID
 	if !strings.Contains(dataPath, dc.Serial) {
-		return fmt.Errorf("data path does not belong to device %s: %s", dc.Serial, dataPath)
+		return fmt.Errorf("data path does not belong to device %s: %q", dc.serialShown(), dataPath)
 	}
 
 	// Must not be a root-level path (defense in depth)
@@ -572,7 +575,7 @@ func (dc *DeviceContext) SetLanguage(ctx context.Context, tag string) error {
 		}
 	case device.PlatformIOS:
 		if dc.IsPhysical {
-			return fmt.Errorf("set language is not supported on physical iOS devices: change the language in Settings > Apps > %s", dc.AppID)
+			return fmt.Errorf("set language is not supported on physical iOS devices: change the language in Settings > Apps > %s", dc.appShown())
 		}
 		dc.Manager.SimCtl().SetAppLanguage(dc.Serial, dc.AppID, t.BCP47, t.POSIX)
 	}
@@ -666,7 +669,7 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 				if err := dc.AskReinstallForNotifications(); err != nil {
 					return err
 				}
-				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", dc.AppID)
+				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", dc.appShown())
 				if err := simctl.Reinstall(ctx, dc.Serial, dc.AppID); err != nil {
 					return fmt.Errorf("deny notifications: %w", err)
 				}
@@ -687,7 +690,7 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 
 // GrantAllPermissions grants all known runtime permissions to the app.
 func (dc *DeviceContext) GrantAllPermissions(ctx context.Context) error {
-	fmt.Printf("    \033[36m🔓\033[0m  Granting all permissions for %s\n", dc.AppID)
+	fmt.Printf("    \033[36m🔓\033[0m  Granting all permissions for %s\n", dc.appShown())
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		for _, perms := range device.AndroidPermissions {
@@ -915,7 +918,10 @@ func (dc *DeviceContext) iosTokenPath() string {
 			return cp + "/tmp/probe/token"
 		}
 	}
-	// Fallback: device-level tmp
+	// Fallback: device-level tmp, only for a simulator UDID: the serial shapes the path.
+	if !ios.ValidSimulatorUDID(dc.Serial) {
+		return ""
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -925,7 +931,7 @@ func (dc *DeviceContext) iosTokenPath() string {
 
 // KillApp force-stops the app without relaunching it.
 func (dc *DeviceContext) KillApp(ctx context.Context) error {
-	fmt.Printf("    \033[31m⏹\033[0m  Killing %s on %s\n", dc.AppID, dc.Serial)
+	fmt.Printf("    \033[31m⏹\033[0m  Killing %s on %s\n", dc.appShown(), dc.serialShown())
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial, "am", "force-stop", dc.AppID); err != nil {
@@ -933,7 +939,10 @@ func (dc *DeviceContext) KillApp(ctx context.Context) error {
 		}
 	case device.PlatformIOS:
 		if dc.IsPhysical {
-			_ = dc.Manager.DeviceCtl().Terminate(ctx, dc.Serial, dc.AppID)
+			// A failure here leaves the app running: say so in one line (the error quotes the device id with %q).
+			if err := dc.Manager.DeviceCtl().Terminate(ctx, dc.Serial, dc.AppID); err != nil {
+				fmt.Printf("    \033[33m⚠\033[0m  the app was not stopped: %v\n", err)
+			}
 		} else {
 			_ = dc.Manager.SimCtl().Terminate(ctx, dc.Serial, dc.AppID)
 		}
@@ -943,7 +952,7 @@ func (dc *DeviceContext) KillApp(ctx context.Context) error {
 
 // LaunchApp launches the app without force-stopping first.
 func (dc *DeviceContext) LaunchApp(ctx context.Context) error {
-	fmt.Printf("    \033[32m▶\033[0m  Launching %s on %s\n", dc.AppID, dc.Serial)
+	fmt.Printf("    \033[32m▶\033[0m  Launching %s on %s\n", dc.appShown(), dc.serialShown())
 	switch dc.Platform {
 	case device.PlatformAndroid:
 		if _, err := dc.Manager.ADB().ShellQ(ctx, dc.Serial,
@@ -1395,3 +1404,10 @@ func (dc *DeviceContext) answerNotificationAlertWithin(ctx context.Context, butt
 		}
 	}
 }
+
+// appShown is the app id as plain text on one line, for a printed line or a message. The value itself, the one given to adb and simctl, is
+// never changed: this is for display only.
+func (dc *DeviceContext) appShown() string { return device.CleanOneLine(dc.AppID, 80) }
+
+// serialShown is the device's serial or UDID as plain text on one line (it comes from adb or simctl), for display only.
+func (dc *DeviceContext) serialShown() string { return device.CleanOneLine(dc.Serial, 80) }

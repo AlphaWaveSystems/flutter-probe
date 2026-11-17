@@ -11,6 +11,7 @@ import (
 	mathrand "math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1472,10 +1473,36 @@ func (e *Executor) captureRedactedScreenshot(ctx context.Context, name string) (
 	if err != nil {
 		return "", nil, fmt.Errorf("redact screenshot: %w", err)
 	}
-	if err := os.WriteFile(path, imgBytes, 0644); err != nil {
+	// The redacted image goes to a new file the run creates: it never writes over the file the screenshot came from.
+	out, err := writeRedactedScreenshot(name, imgBytes)
+	if err != nil {
 		return "", nil, fmt.Errorf("write redacted screenshot: %w", err)
 	}
-	return path, imgBytes, nil
+	return out, imgBytes, nil
+}
+
+// redactedScreenshotDir is where redacted screenshots are written.
+var redactedScreenshotDir = filepath.Join("reports", "screenshots")
+
+// writeRedactedScreenshot writes img to a new file (created exclusively, mode 0600) in redactedScreenshotDir and returns its path.
+func writeRedactedScreenshot(name string, img []byte) (string, error) {
+	if err := os.MkdirAll(redactedScreenshotDir, 0o755); err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(redactedScreenshotDir, sanitizeName(name)+"-redacted-*.png")
+	if err != nil {
+		return "", err
+	}
+	_, werr := f.Write(img)
+	cerr := f.Close()
+	if werr != nil || cerr != nil {
+		_ = os.Remove(f.Name())
+		return "", errors.Join(werr, cerr)
+	}
+	if abs, err := filepath.Abs(f.Name()); err == nil {
+		return abs, nil
+	}
+	return f.Name(), nil
 }
 
 // redactSelector turns a raw ai.redact[].selector string from probe.yaml
