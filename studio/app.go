@@ -89,7 +89,9 @@ type App struct {
 
 	recMu     sync.Mutex
 	recActive bool
-	recLines  []string
+	// sources are the bytes the last run parsed, kept to check an insertion by the line number of a failed step (insert_before.go).
+	sources  runSources
+	recLines []string
 	// recClient is the client the recorder's notification handler was set on, and recHandler the handler: StopRecording clears the one it set (not
 	// whatever the connection holds then), and a run that reconnects takes the recording over to the new client (see carryRecording).
 	recClient  *probelink.Client
@@ -192,11 +194,15 @@ func (a *App) InitialWorkspace() string {
 // (agent port, timeout, device ids) instead of the process working directory.
 func (a *App) SetWorkspace(path string) {
 	a.mu.Lock()
+	changed := a.workspace != path
 	a.workspace = path
 	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.export.clear()        // and the results of a run in another workspace are not this one's to export (under the lock keepForExport checks the workspace with)
 	a.mu.Unlock()
 	a.resetFixAttempts() // another workspace is another session of suggestions
+	if changed {
+		a.sources.reset() // and the text of its last run is not kept (opening the same folder again keeps it: they are the same files)
+	}
 }
 
 var (
@@ -228,6 +234,7 @@ func (a *App) CloseWorkspace() error {
 	a.mu.Unlock()
 	a.runMu.Unlock()
 	a.resetFixAttempts()
+	a.sources.reset()
 	return nil
 }
 
@@ -860,6 +867,7 @@ func (a *App) runOptions(conn *connection, path string, sel runSelection) runner
 		Timeout:   conn.cfg.Defaults.Timeout,
 		Verbose:   false,
 		OnClient:  func(c probelink.ProbeClient) { a.adoptClient(conn, c) },
+		ReadFile:  a.sources.readAndKeep, // the bytes the run parses are kept for CheckInsertBefore
 	}
 }
 
@@ -1223,6 +1231,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	a.emit("run:started", path)
 	a.emit("run:plan", plan)
 
+	a.sources.reset() // the last run's text is not the new run's
 	r := runner.New(conn.cfg, a.clientOf(conn), conn.deviceCtx, a.runOptions(conn, path, sel))
 	r.OnResult(func(res runner.TestResult) {
 		rr := a.runResultFor(res, conn)
