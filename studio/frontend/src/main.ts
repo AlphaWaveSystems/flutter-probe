@@ -24,6 +24,7 @@ import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
 import { initResults, runIsGoing, type RunPlan, type RunStep } from "./results";
+import { isTextEntry } from "./typing-target";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
 
@@ -576,8 +577,8 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "?" && !mod) {
-    // Avoid triggering when the editor has focus and the user types a literal `?`.
-    if (document.activeElement?.closest("#editor")) return;
+    // A `?` typed into a field is text: the editor, the chat input, the send panel's fields, every input that takes text (typing-target.ts).
+    if (document.activeElement?.closest("#editor") || isTextEntry(document.activeElement as HTMLElement | null)) return;
     e.preventDefault();
     openHelpOverlay();
     return;
