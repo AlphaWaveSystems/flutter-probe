@@ -21,6 +21,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/l10n"
 	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -947,6 +948,11 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 						break
 					}
 				}
+				// An iOS id shapes host paths (a simulator's data folder) and devicectl arguments: --device follows the rule of
+				// device.ios_device_id, a simulator or a device UDID.
+				if err := validIOSDeviceFlag(platform, deviceSerial); err != nil {
+					return err
+				}
 			}
 
 			// Use the application ID this device has installed (see resolveDeviceAppID).
@@ -1780,4 +1786,13 @@ func uploadAndStartCloudSession(ctx context.Context, provider cloud.CloudProvide
 		return cloud.Session{}, fmt.Errorf("cloud session: %w", err)
 	}
 	return sess, nil
+}
+
+// validIOSDeviceFlag refuses a --device value for an iOS device that is not a simulator UDID or a device UDID (the rule of
+// device.ios_device_id). Other platforms keep config.ValidateDeviceSerial's rule.
+func validIOSDeviceFlag(platform device.Platform, serial string) error {
+	if platform != device.PlatformIOS || ios.ValidSimulatorUDID(serial) || ios.ValidDeviceUDID(serial) {
+		return nil
+	}
+	return fmt.Errorf("invalid --device %q for an iOS device: use the UDID of a simulator or of a device, as `probe device list` shows it", serial)
 }

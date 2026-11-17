@@ -332,7 +332,7 @@ agent:
   token_read_timeout: 30s
 ```
 
-Set `ios_device_id` to avoid passing `--device <UDID>` on every run. The `--device` flag takes precedence when provided. The value must be a UDID (a simulator's, or a device's): a device name or a path is refused when `probe.yaml` is loaded.
+Set `ios_device_id` to avoid passing `--device <UDID>` on every run. The `--device` flag takes precedence when provided. The value must be a UDID (a simulator's, or a device's): a device name or a path is refused when `probe.yaml` is loaded. `--device` follows the same rule for an iOS device, and Studio's Settings refuse to save anything else.
 
 ## Troubleshooting
 
