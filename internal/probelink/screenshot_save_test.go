@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 const simUUID = "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B"
@@ -35,6 +36,7 @@ func writeFile(t *testing.T, p, content string) {
 // An agent that sends no image data and names a host file outside a simulator's data folder gets an error: the run never reads,
 // changes or attaches that file.
 func TestScreenshotWithoutDataRefusesAHostFile(t *testing.T) {
+	t.Chdir(t.TempDir())
 	root := fakeSimulators(t)
 	victim := filepath.Join(t.TempDir(), "photo.png")
 	writeFile(t, victim, "VICTIM")
@@ -74,9 +76,12 @@ func TestScreenshotWithoutDataRefusesAHostFile(t *testing.T) {
 			t.Errorf("a link from a simulator's data folder to a host file was accepted as %q", got)
 		}
 	}
+	// A screenshot in a simulator's data folder is accepted: its bytes are copied into the screenshots folder, and that copy is returned,
+	// so no caller opens the agent's path again.
 	got, err := savedScreenshot(ScreenshotResult{Path: inSim})
-	if real, _ := filepath.EvalSymlinks(inSim); err != nil || got != real {
-		t.Errorf("a screenshot in a simulator's data folder must be accepted: %q, %v", got, err)
+	dir, _ := filepath.Abs(screenshotDir)
+	if b, _ := os.ReadFile(got); err != nil || filepath.Dir(got) != dir || string(b) != "SHOT" {
+		t.Errorf("a screenshot in a simulator's data folder must be copied into %q: %q, %v", dir, got, err)
 	}
 	if b, _ := os.ReadFile(victim); string(b) != "VICTIM" {
 		t.Error("the host file was changed")
@@ -164,5 +169,129 @@ func TestBothClientsUseSavedScreenshot(t *testing.T) {
 	c := screenshotServer(t, `{"path":"/etc/passwd"}`, nil)
 	if got, err := c.Screenshot(context.Background(), "shot"); err == nil {
 		t.Errorf("the HTTP client returned the agent's path %q", got)
+	}
+}
+
+// A hard link in a simulator's data folder gives a host file an allowed name: a file with more than one name is refused.
+func TestScreenshotWithoutDataRefusesAHardLink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("hard links to a temporary file")
+	}
+	t.Chdir(t.TempDir())
+	root := fakeSimulators(t)
+	victim := filepath.Join(t.TempDir(), "secret.png")
+	writeFile(t, victim, "SECRET")
+	link := filepath.Join(root, simUUID, "data", "shot.png")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(victim, link); err != nil {
+		t.Skipf("hard link not possible here: %v", err)
+	}
+	if got, err := savedScreenshot(ScreenshotResult{Path: link}); err == nil {
+		t.Errorf("a hard link to a host file was accepted as %q", got)
+	}
+}
+
+// The check and the read are one: a goroutine flips the file in a simulator's data folder between a real screenshot and a link to a host
+// file, and no read ever returns the host file's bytes.
+func TestScreenshotWithoutDataSurvivesASwap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks")
+	}
+	t.Chdir(t.TempDir())
+	root := fakeSimulators(t)
+	secret := filepath.Join(t.TempDir(), "secret.png")
+	writeFile(t, secret, "HOST-SECRET")
+	dir := filepath.Join(root, simUUID, "data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shot := filepath.Join(dir, "shot.png")
+	writeFile(t, shot, "SHOT")
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			tmp := filepath.Join(dir, ".swap")
+			_ = os.Remove(tmp)
+			if i%2 == 0 {
+				_ = os.Symlink(secret, tmp)
+			} else {
+				_ = os.WriteFile(tmp, []byte("SHOT"), 0o644)
+			}
+			_ = os.Rename(tmp, shot)
+		}
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	reads, leaks, shots := 0, 0, 0
+	for time.Now().Before(deadline) {
+		data, err := simulatorScreenshotBytes(shot)
+		reads++
+		if err == nil && strings.Contains(string(data), "HOST-SECRET") {
+			leaks++
+		}
+		if err == nil && string(data) == "SHOT" {
+			shots++
+		}
+	}
+	close(stop)
+	<-done
+	if leaks != 0 {
+		t.Errorf("the host file was read %d times in %d reads", leaks, reads)
+	}
+	if shots == 0 {
+		t.Errorf("no read in %d returned the screenshot: the swap never left a regular file in place, so the test checked nothing", reads)
+	}
+	t.Logf("%d reads, %d screenshots, %d leaks", reads, shots, leaks)
+}
+
+func TestScreenshotFileName(t *testing.T) {
+	for in, want := range map[string]string{
+		"/data/shot.png":    "shot.png",
+		"/data/shot.PNG":    "shot.PNG",
+		"/data/shot.jpg":    "shot.jpg.png",
+		"/data/shot":        "shot.png",
+		"/data/CON":         "screenshot.png",
+		"/data/nul.png":     "screenshot.png",
+		"/data/COM1.png":    "screenshot.png",
+		"/data/lpt9":        "screenshot.png",
+		"/data/x.":          "screenshot.png",
+		"/data/a b ":        "screenshot.png",
+		"..":                "screenshot.png",
+		"":                  "screenshot.png",
+		"/data/COM10.png":   "COM10.png",
+		"/data/console.png": "console.png",
+	} {
+		if got := screenshotFileName(in); got != want {
+			t.Errorf("screenshotFileName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The file itself must not be a link, even one to another screenshot in a simulator's data folder.
+func TestScreenshotWithoutDataRefusesALinkInsideTheSimulator(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks")
+	}
+	t.Chdir(t.TempDir())
+	root := fakeSimulators(t)
+	dir := filepath.Join(root, simUUID, "data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "real.png"), "SHOT")
+	link := filepath.Join(dir, "shot.png")
+	if err := os.Symlink(filepath.Join(dir, "real.png"), link); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := savedScreenshot(ScreenshotResult{Path: link}); err == nil {
+		t.Errorf("a link was accepted as %q", got)
 	}
 }
