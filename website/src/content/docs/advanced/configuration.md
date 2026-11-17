@@ -164,7 +164,7 @@ Device/emulator management:
 | `boot_poll_interval` | duration | `2s` | Polling interval during boot |
 | `token_file_retries` | int | `5` | Retries for reading token file |
 | `restart_delay` | duration | `500ms` | Delay after force-stop before relaunch |
-| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag |
+| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag Must be a UDID: a simulator UDID (a UUID, `xcrun simctl list devices`) or a device UDID (`xcrun devicectl list devices`); anything else stops the config load. |
 | `android_device_id` | string | — | Preferred Android emulator serial or device serial. Overridden by `--device` flag |
 
 ### video
