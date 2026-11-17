@@ -24,6 +24,10 @@ func TestAnnouncementTableFillerNamesAndOversizeText(t *testing.T) {
 	if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, oversize, "version=1.2.3")); d.Version != "1.2.3" {
 		t.Errorf("an oversize record is not a TXT string and is skipped; the next version record is read: %q", d.Version)
 	}
+	// Another key before `version` is never read as the version, whatever it holds.
+	if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, "token=9.9.9", "platform=1.0", "version=0.27.0")); d.Version != "0.27.0" {
+		t.Errorf("a token= or platform= record before version= was read as the version: %q", d.Version)
+	}
 	if d := entryToDevice(announce("x", 48686, []string{"10.0.0.7"}, nil, "version=bad value", "version=1.2.3")); d.Version != "" {
 		t.Errorf("a first version record that is not a version counts, and nothing is read after it: %q", d.Version)
 	}
@@ -55,8 +59,9 @@ func TestAnAnnouncementCarriesNoAuthority(t *testing.T) {
 }
 
 // Whatever an announcement says, the address it gives is only a candidate: it is listed, and a connect to it still goes through the
-// target check, so a public address, a name that resolves to one and a broadcast-style address are refused before anything is dialled
-// and no token is sent. (A listed address is not a trusted one.)
+// target check. The announced addresses tried here are public IPv4 addresses (a public one, a carrier-grade-NAT one, a documentation
+// range): each is listed as an address and then refused by the check before anything is dialled. (Hostnames and the addresses an
+// announcement cannot carry, such as broadcast, are covered by TestCheckWiFiTargetByClass and TestHostilePortsAndAddresses.)
 func TestAnnouncedAddressesAreCheckedAgainAtConnect(t *testing.T) {
 	t.Setenv(allowPublicEnv, "")
 	for name, ip := range map[string]string{"public v4": "8.8.8.8", "public v4 b": "1.1.1.1", "carrier-grade NAT": "100.64.0.1", "documentation range": "203.0.113.9"} {
@@ -89,5 +94,18 @@ func TestTwoAnnouncementsWithOneNameStaySeparate(t *testing.T) {
 	// A name in another case, or with other spacing, is also its own row, never folded into the known one.
 	if _, ok := d.admit(announce("desk phone", 48686, []string{"10.0.0.50"}, nil)); !ok {
 		t.Error("a different-case name at another address was dropped")
+	}
+}
+
+// The name is read from at most wifiMaxName*8 characters of the announcement, then stripped of hidden characters. That bounds the work, and it
+// is deliberate that it changes the result for a name that is mostly invisible characters: a few hundred of them in front still leave the
+// visible part, and more than the window leaves nothing, so the device is listed by its address.
+func TestAMostlyInvisibleNameIsCutBeforeItIsStripped(t *testing.T) {
+	hidden := "\u200b"
+	if d := entryToDevice(announce(strings.Repeat(hidden, 100)+"abc", 48686, []string{"10.0.0.7"}, nil)); d.Name != "abc" {
+		t.Errorf("100 hidden characters then abc: %q, want abc", d.Name)
+	}
+	if d := entryToDevice(announce(strings.Repeat(hidden, wifiMaxName*8+10)+"abc", 48686, []string{"10.0.0.7"}, nil)); d.Name != "10.0.0.7" {
+		t.Errorf("more hidden characters than the window reads: %q, want the address", d.Name)
 	}
 }
