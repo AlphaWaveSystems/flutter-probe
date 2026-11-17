@@ -249,4 +249,49 @@ test.describe("Use the text on screen", () => {
       studio.stop();
     }
   });
+
+  test("rs-08 the answer is for the file of the click: switching to a twin file while Studio checks changes nothing in either", async ({ page }) => {
+    const studio = await startStudio(base);
+    try {
+      await openLogin(page, studio);
+      await fireFailedStep(page);
+      // hold Studio's answer back, so there is time to open the twin (same text, other file) before it arrives
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CheckReplaceStep"')) await new Promise((r) => setTimeout(r, 1200));
+        await route.continue();
+      });
+      await useButton(page).click();
+      await page.locator("#file-list li", { hasText: "dup.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("dup.probe");
+      await expect(toasts(page)).toContainText("another file was opened or the text changed");
+      await expect(page.locator("#editor .view-lines")).not.toContainText('tap "Sign In"'); // the twin is as it was
+      await page.locator("#file-list li", { hasText: "login.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("login.probe");
+      await expect(page.locator("#editor .view-lines")).not.toContainText('tap "Sign In"'); // and so is the file of the click
+      expect(fs.readFileSync(path.join(studio.ws, "tests", "dup.probe"), "utf8")).toBe(base);
+    } finally {
+      studio.stop();
+    }
+  });
+
+  test("rs-09 an edit typed while Studio is checking stops the edit and is kept", async ({ page }) => {
+    const studio = await startStudio(base);
+    try {
+      await openLogin(page, studio);
+      await fireFailedStep(page);
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CheckReplaceStep"')) await new Promise((r) => setTimeout(r, 1200));
+        await route.continue();
+      });
+      await useButton(page).click();
+      await page.locator("#editor .view-line").first().click();
+      await page.keyboard.press("End");
+      await page.keyboard.type("!");
+      await expect(toasts(page)).toContainText("another file was opened or the text changed");
+      await expect(page.locator("#editor .view-lines")).toContainText('tap "Sign in"');
+      await expect(page.locator("#editor .view-lines")).toContainText('test "login"!'); // the person's edit is still there
+    } finally {
+      studio.stop();
+    }
+  });
 });
