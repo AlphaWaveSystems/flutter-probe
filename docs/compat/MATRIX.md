@@ -17,7 +17,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 | Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `Scrollbar`, `PageView` | see below (`PageView` not assessed) | see below | n/a | see below | see below | `lists` screen | `probe-tests/widgets/lists.probe` |
 | Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | see below | see below | n/a | n/a | see below | `dialogs` screen | `probe-tests/widgets/dialogs.probe` |
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | not assessed | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
-| Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card`, `Opacity`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer` | see below (`Opacity`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer`, a covered `Stack` child; the others not assessed) | see below | n/a | not assessed | see below | `layout` screen | `probe-tests/widgets/layout.probe` |
 | Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | not assessed | not assessed | n/a | not assessed | n/a | not assessed | not assessed |
 | WebView content | an embedded web page (`webview_flutter`) | see below | see below | see below | not assessed | see below | `native-test-apps/flutter-webview` | `native-test-apps/flutter-webview/probe-tests/webview.probe` |
 
@@ -180,6 +180,26 @@ Not covered by the screen: `PageView` (a swipe), dragging a `Scrollbar` thumb, a
 
 Not covered by the screen: iOS (a Cupertino dialog and sheet were run on Android only), a dialog with `barrierDismissible: false`, a dialog with a text field, a scrolling dialog, `showDatePicker` and `showTimePicker`, a persistent bottom sheet, a floating or queued snack bar, `PopupMenuButton`, `Drawer`, and native system dialogs (see `tools/system-dialogs`). The 9 variants of the suite that must fail
 (`probe-tests/negative/dialogs.probe.expect-fail`) were run: all 9 fail at their own step with the message in their comment (a snack bar and its action before `Save`, a dialog seen after Cancel, `tap "Delete"` taken for the button, a tap on a button that the dialog body covers counted, the wrong state, a sheet seen after an option, a state before its tap, the Cancel button after a tap on the barrier).
+
+### Layout: widgets a person cannot see or cannot tap (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=layout`, `probe-tests/widgets/layout.probe`)
+
+Measured on Flutter 3.44.8 with the agent from main, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): the suite (6 tests) passed 3 of 3 runs on each device, and the 7 variants that must fail (`probe-tests/negative/layout.probe.expect-fail`) failed on both, each with the message in its comment; no run had a restart failure (issue #823). Each button counts its taps in the state line, so a test shows whether a tap arrived, not only that the step passed. The same results, and the warnings below, were first seen in a widget test of the agent.
+
+| Widget (fixture id) | find (`see`) | tap | What a person sees and gets | Result |
+|---|---|---|---|---|
+| `Opacity(opacity: 0)` button (`wf_faded`) | **found** | **pressed** (`Faded: 1`) | nothing is shown; a tap on that spot presses it (Flutter hit-tests a transparent widget) | finding: `see` is true for a widget a person cannot see |
+| `Visibility(visible: false)` text, kept in the tree (`maintainState`) or removed (`wf_kept`, `wf_gone`) | not found | `Widget not found` | nothing | pass |
+| `Offstage` text (`wf_offstage`) | not found | `Widget not found` | nothing | pass |
+| `IgnorePointer` button (`wf_ignored`) | found | **passes with no warning, nothing happens** (`Ignored: 0`) | the button is shown and does nothing | **bug, issue #842**: even `--fail-on-warning` passed. Fixed in #846: the tap warns `is inside an IgnorePointer, so it receives no taps` |
+| `AbsorbPointer` button (`wf_absorbed`) | found | passes with the warning `is covered by another widget ... the screen did not change`; nothing happens (`Absorbed: 0`) | the button is shown and does nothing | pass (warned) |
+| a button fully covered in a `Stack` by a `GestureDetector` (`wf_covered`, cover `wf_cover`) | found | lands on the cover (`Covered: 0`, `Cover: 1`), no warning, since the screen changed | the cover is shown and takes the tap | finding: `see` is true for a covered widget; the tap behaves as a person's would |
+
+**Findings.**
+- **`see` checks presence and layout, not what is painted.** It is true for a transparent (`Opacity(0)`) widget and for one fully covered by another, and false for `Visibility(visible: false)` and `Offstage` (the agent skips those subtrees, `_visitElement` in `probe_agent/lib/src/finder.dart`, and `_isVisible` checks them too). A test that must show a widget is actually visible cannot rely on `see` alone.
+- **`tap` is a real pointer tap at the widget's center**, so it does what a person's tap there would: it presses a transparent button and lands on a cover. When the hit is unrelated to the target and the screen does not change, the agent warns (`_tap` and `_hitState` in `probe_agent/lib/src/executor.dart`).
+- **`IgnorePointer` was the gap**: the hit stopped at the list's own scroll listener, an ancestor of the button, which `_hitState` took for a parent handling the tap, so there was no warning (issue #842, fixed in #846). The suite pins that the tap does nothing (`Ignored: 0`); with #846 the step also prints the warning, and `--fail-on-warning` fails it.
+
+Not covered by the screen: `Opacity` between 0 and 1, `AnimatedOpacity`, `Visibility` with `maintainInteractivity`, `ExcludeSemantics`, `ModalBarrier`, a widget partly covered, `ClipRect` clipping a child away, and `Container`, `Row`, `Column` and `Card` as layout (nothing to assess beyond their children). Flutter 3.50.0 was not run for this family.
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 

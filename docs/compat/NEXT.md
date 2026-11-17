@@ -25,7 +25,7 @@ A ranked list of the widgets that apps use most and that `MATRIX.md` has not ass
 | 8 | `AlertDialog`, `Dialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` | 5, 1, 1, 2 | Dialogs and sheets | assessed on Android: `dialogs` screen, `AlertDialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` and a bottom sheet on a build by each Flutter on one emulator (see `MATRIX.md`); `Dialog` alone and iOS not run | a dialog's text, its actions, and closing it |
 | 9 | `SnackBar` (through `ScaffoldMessenger`) | 4 | Dialogs and sheets | assessed on Android: `dialogs` screen, a `SnackBar` with an action, on a build by each Flutter on one emulator (see `MATRIX.md`) | a message that appears and goes away by itself |
 | 10 | `CupertinoPageScaffold` + `CupertinoNavigationBar`, `CupertinoSliverNavigationBar`, `CupertinoTabScaffold` + `CupertinoTabBar` | 4, 3, 2 | Navigation | not assessed | the Cupertino bars: title, back, tabs |
-| 11 | `Stack` + `Positioned`, `Opacity`, `Visibility` | 9 + 8, 4, 1 | Layout and containers | not assessed | whether a covered or invisible widget counts as seen or tappable |
+| 11 | `Stack` + `Positioned`, `Opacity`, `Visibility` | 9 + 8, 4, 1 | Layout and containers | assessed: `layout` screen, `Opacity(0)`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer` and a covered `Stack` child, on two named devices (see `MATRIX.md`); found issue #842 (a tap inside `IgnorePointer` passed silently) | whether a covered or invisible widget counts as seen or tappable |
 
 ### The tests
 
