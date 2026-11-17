@@ -62,8 +62,8 @@ test.describe("Confirm before clear app data", () => {
     await expect(page.locator("#confirm-warning")).toContainText("cannot be undone");
     await expect(page.locator("#btn-confirm-cancel")).toBeFocused();
     await expect(page.locator("#btn-confirm-danger")).toHaveText("Clear data");
-    await expect(page.locator(".confirm-card")).toHaveAttribute("role", "alertdialog");
-    await expect(page.locator(".confirm-card")).toHaveAttribute("aria-modal", "true");
+    await expect(page.locator("#confirm-overlay .confirm-card")).toHaveAttribute("role", "alertdialog");
+    await expect(page.locator("#confirm-overlay .confirm-card")).toHaveAttribute("aria-modal", "true");
   });
 
   test("cd-02 Escape and Cancel say no; nothing says yes by itself", async ({ page }) => {
@@ -123,7 +123,7 @@ test.describe("Confirm before clear app data", () => {
     const seen = answers(page);
     await fire(page, "confirm:request", request("f", "<img src=x onerror=alert(1)>", "<b>dev</b>"));
     await expect(page.locator("#confirm-app")).toHaveText("<img src=x onerror=alert(1)>");
-    expect(await page.locator(".confirm-card img, .confirm-card b").count()).toBe(0);
+    expect(await page.locator("#confirm-overlay .confirm-card img, #confirm-overlay .confirm-card b").count()).toBe(0);
     await page.keyboard.press("Escape");
     await fire(page, "confirm:request", { id: "g", kind: "format-disk", appId: "a", deviceName: "d" });
     await expect(overlay(page)).toBeHidden();
