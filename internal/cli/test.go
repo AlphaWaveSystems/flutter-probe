@@ -1200,7 +1200,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			if warning != "" {
 				printAgentWarning(statusW, warning)
 			}
-			if w := probelink.AppIDMismatchWarning(handshake, cfg.Project.App, platform == device.PlatformIOS); w != "" {
+			if w := probelink.AppIDMismatchWarning(handshake, cfg.Project.App, platform.AppIDIsCaseInsensitive()); w != "" {
 				printAgentWarning(statusW, w)
 			}
 			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)

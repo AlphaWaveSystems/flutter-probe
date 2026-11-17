@@ -28,6 +28,7 @@ func TestLaneWarnsWhenTheAgentReportsAnotherApp(t *testing.T) {
 		wantWarn       bool
 	}{
 		{"another app", "com.other.app", true},
+		{"a difference of case alone is another app on an Android lane", "com.Example.app", true},
 		{"the same app", "com.example.app", false},
 		{"the agent does not say", "", false},
 	} {
@@ -45,7 +46,7 @@ func TestLaneWarnsWhenTheAgentReportsAnotherApp(t *testing.T) {
 		if runErr != nil {
 			t.Errorf("%s: the lane must still run: %v", tc.name, runErr)
 		}
-		has := strings.Contains(out, "the agent that answered reports app com.other.app, but project.app is com.example.app")
+		has := strings.Contains(out, "the agent that answered reports app "+tc.reported+", but project.app is com.example.app")
 		if has != tc.wantWarn {
 			t.Errorf("%s: warning printed = %v, want %v\n%s", tc.name, has, tc.wantWarn, out)
 		}
