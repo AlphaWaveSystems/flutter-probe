@@ -2150,33 +2150,60 @@ class ProbeExecutor {
   /// control (button, icon button, FAB, text field, switch, checkbox) decides — a
   /// grey `ElevatedButton(onPressed: null, child: Text("Submit"))` is disabled.
   ///
-  /// null when the nearest control is one whose state the agent cannot read: a widget named like a control it reads (an `ElevatedButton`)
-  /// that is not that class, as with `package:material_ui` (issue #852). Then nothing is decided: reading it as enabled was a false pass.
+  /// The order is the checked reader's: the target, then what it holds, then what holds it (up to 40).
+  ///  - What it holds (issue #860): an id on a wrapper (`SizedBox(key: ...)`, `KeyedSubtree`, `Semantics(identifier: ...)`) around a
+  ///    disabled button used to read as enabled. The first control on each branch counts. When the controls held agree (all enabled, or all
+  ///    disabled), that is the answer; when they disagree (an enabled and a disabled button in a `Row`), there is no one answer, so the
+  ///    step refuses rather than pick by tree order.
+  ///  - null when the control to read is one whose state the agent cannot read: a widget named like a control it reads (an
+  ///    `ElevatedButton`) that is not that class, as with `package:material_ui` (issue #852). Reading it as enabled was a false pass.
   bool? _isDisabled(Element e) {
+    final own = _controlDisabled(e.widget);
+    if (own != null) return own;
+    if (_isLookalike(e.widget, _enabledReadNames)) return null;
+
+    final held = <Element>[];
+    var lookalikeHeld = false;
+    void visit(Element c) {
+      if (_controlDisabled(c.widget) != null) {
+        held.add(c);
+        return;
+      }
+      if (_isLookalike(c.widget, _enabledReadNames)) {
+        lookalikeHeld = true;
+        return;
+      }
+      c.visitChildren(visit);
+    }
+
+    e.visitChildren(visit);
+    if (lookalikeHeld) return null;
+    final states = held.map((c) => _controlDisabled(c.widget)!).toSet();
+    if (states.length > 1) {
+      final names = held.map((c) => '${_typeName(c.widget)} (${_controlDisabled(c.widget)! ? 'disabled' : 'enabled'})').join(', ');
+      throw ProbeError(ProbeError.assertFailed,
+          '"is enabled" and "is disabled" cannot be evaluated: the target holds ${held.length} controls that disagree ($names), so its '
+          'state is not one answer; put the id on the control to check');
+    }
+    if (states.isNotEmpty) return states.single;
+
     bool? found;
     var unread = false;
-    bool visit(Widget w) {
-      final d = _controlDisabled(w);
+    var depth = 0;
+    e.visitAncestorElements((a) {
+      final d = _controlDisabled(a.widget);
       if (d != null) {
         found = d;
         return false;
       }
-      if (_isLookalike(w, _enabledReadNames)) {
+      if (_isLookalike(a.widget, _enabledReadNames)) {
         unread = true;
         return false;
       }
-      return true;
-    }
-
-    if (visit(e.widget)) {
-      var depth = 0;
-      e.visitAncestorElements((a) => visit(a.widget) && ++depth < 40);
-    }
+      return ++depth < 40;
+    });
     if (found != null) return found;
     if (unread) return null;
-    // A keyed wrapper around a lookalike (`SizedBox(key: #w, child: <material_ui button>)`): nothing above or on the target was read, and
-    // the control is below it. Refuse rather than fall back to the old rule (enabled).
-    if (_lookalikeBelow(e, _enabledReadNames) != null) return null;
     return e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null;
   }
 
