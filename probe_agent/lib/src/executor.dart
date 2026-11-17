@@ -132,6 +132,8 @@ class ProbeExecutor {
     // step never runs on a screen laid out at 0×0 (issue #793). With a real size this is a synchronous check, no await. The wait is
     // before the request's own work starts, so a step's own waiting (a `wait until`, a scroll) is not shortened by it.
     var viewWaitMs = 0;
+    // The agent may have started before the app made its binding: attach then, on the first request that finds one (a bool check after).
+    if (!ViewReady.instance.attached) ViewReady.instance.attachToAppBinding();
     if (!ViewReady.instance.isReady) viewWaitMs = await ViewReady.instance.wait();
     switch (req.method) {
       // ---- Lifecycle ----

@@ -43,22 +43,48 @@ class ViewReady with WidgetsBindingObserver {
   /// (the rule before this one).
   bool _attached = false;
 
-  /// Records the size each frame is laid out at. Called once when the agent starts (after the app's binding exists).
+  /// Records the size each frame is laid out at. It never makes the binding and never throws: it takes effect only when the app's binding
+  /// exists, and otherwise does nothing, so the executor calls it again on each request until it has ([attached]). Until then the earlier
+  /// rule applies.
   void attach() {
     if (_attached) return;
+    attachAttempts++;
     try {
-      WidgetsBinding.instance.addPersistentFrameCallback((_) {
+      final binding = WidgetsBinding.instance;
+      binding.addPersistentFrameCallback((_) {
         final views = ViewReady.views();
         _laidOut = views.isEmpty ? null : views.first.physicalSize;
       });
+      // Attached late (the app made its binding after start()): with no frame scheduled, the tree is laid out at the current size (a new
+      // size always schedules a frame), so that size is taken as laid out. With a frame pending, the agent waits for it.
+      final views = ViewReady.views();
+      if (!binding.hasScheduledFrame && views.isNotEmpty)
+        _laidOut = views.first.physicalSize;
       _attached = true;
     } catch (_) {
       // No binding (or it refused the callback): keep the earlier rule rather than fail.
     }
   }
 
+  /// [attach], when the app's binding exists and is an app's binding (a [WidgetsFlutterBinding] or a subclass of it). A test binding runs
+  /// frames only when the test pumps them, so a request must not wait for a frame there; under one the agent keeps the earlier rule, as
+  /// ProbeSync does. The executor calls this on each request until the agent is attached.
+  void attachToAppBinding() {
+    if (_attached) return;
+    try {
+      if (WidgetsBinding.instance is! WidgetsFlutterBinding) return;
+    } catch (_) {
+      return; // no binding yet
+    }
+    attach();
+  }
+
   /// Whether [attach] took effect (for tests and diagnostics).
   bool get attached => _attached;
+
+  /// How many times [attach] tried to register its frame callback (for tests: once it took effect, it never tries again).
+  @visibleForTesting
+  int attachAttempts = 0;
 
   /// Set when [cap] was reached; cleared when the view's metrics change (a new size may be on its way).
   bool _gaveUp = false;
@@ -159,8 +185,9 @@ class ViewReady with WidgetsBindingObserver {
   void reset() {
     _gaveUp = false;
     _laidOut = null;
-    _attached =
-        false; // a later attach adds its callback again (persistent callbacks cannot be removed; the extra one is harmless)
+    attachAttempts = 0;
+    // A later attach adds its callback again (persistent callbacks cannot be removed; the extra one is harmless).
+    _attached = false;
     if (_observing) {
       WidgetsBinding.instance.removeObserver(this);
       _observing = false;
