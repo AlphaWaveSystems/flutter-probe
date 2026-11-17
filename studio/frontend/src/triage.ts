@@ -4,6 +4,8 @@
 export interface StepTriage {
   fix?: string;
   reason: string;
+  // The text the screen showed that the failed text was another way of writing (studio/replace_step.go); then there is no fix.
+  replacement?: string;
 }
 
 export interface TriageRow {
@@ -12,10 +14,11 @@ export interface TriageRow {
 }
 
 // triageRows returns the rows the Results pane shows under a failed step: the suggested fix when there is one,
-// then the reason.
+// then the text the screen showed, then the reason.
 export function triageRows(t: StepTriage): TriageRow[] {
   const rows: TriageRow[] = [];
   if (t.fix) rows.push({ label: "Suggested fix", text: t.fix });
+  if (t.replacement) rows.push({ label: "On screen", text: t.replacement });
   rows.push({ label: "Reason", text: t.reason });
   return rows;
 }

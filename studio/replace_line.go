@@ -83,7 +83,8 @@ func (a *App) rememberFix(p fixStored, suggestion string, changed bool) string {
 // shows that step there: the text, trimmed, is the step's description.
 func failedStepPlace(a *App, content string) (file string, line int, original string) {
 	step, ok := lastFailedStep(a.track.snapshot())
-	if !ok || step.Line < 1 || step.File == "" {
+	// A step that ran inside a recipe has the line of the recipe's file, not of the file the event names: its line says nothing about this file.
+	if !ok || step.Line < 1 || step.File == "" || step.Depth > 0 {
 		return "", 0, ""
 	}
 	lines := strings.Split(content, "\n")
@@ -121,12 +122,31 @@ func (a *App) CheckReplaceLine(id, openFile, content string) ReplaceLineCheck {
 	case r.changed:
 		return refuse("text was removed from this suggestion, so it is not what the model wrote: edit the line by hand")
 	}
+	// Also here, not only in the window's button: a run seen only as events (an automation-driven one) must stop an edit in flight too.
+	if a.track.snapshot().Running {
+		return refuse("a run is in progress: wait until it has finished")
+	}
 	a.mu.Lock()
 	ws := a.workspace
 	a.mu.Unlock()
 	if !sameFile(ws, r.file, openFile) {
 		return refuse("the open file is not the file the failed step ran from")
 	}
+	// The anchor is the failed step of the run that is held now and the file as that run read it, not only "line N has the text it had": two identical
+	// steps with an edit above would put the other one in line N, and a step that ran inside a recipe has no line in this file at all.
+	if step, ok := a.failedTriageStep(ws, r.file, r.line); !ok || step.Depth > 0 || strings.TrimSpace(step.Description) != strings.TrimSpace(r.original) {
+		return refuse("this is not a failed step of the last run: ask for a new suggestion")
+	}
+	kept, held := a.sources.keptText(ws, r.file)
+	switch {
+	case !held:
+		return refuse("the text of the run for this file is not held (a new run began, or the file is too large): run again")
+	case normalizedSource(content) != normalizedSource(kept):
+		return refuse("the file changed since the run: run again")
+	}
+	// From here on the text is read the way the parser and the run's line numbers read it: one line break style, no byte-order mark. A lone CR is a line
+	// break to the parser, so splitting the raw text on LF alone could take a different line than the one the run's line number names.
+	content = normalizedSource(content)
 	text, why := plainSuggestionLine(r.suggestion)
 	if why != "" {
 		return refuse(why)

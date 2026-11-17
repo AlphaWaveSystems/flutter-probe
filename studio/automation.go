@@ -282,7 +282,38 @@ func probeFileForWriteWithinRoots(roots []string, p string) (string, error) {
 	if info, err := os.Lstat(real); err == nil && info.IsDir() {
 		return "", fmt.Errorf("%s is a folder", p)
 	}
+	if hidden := hiddenBelowRoot(roots, real); hidden != "" {
+		return "", fmt.Errorf("%s: %q starts with a dot (a hidden folder or name such as .git): Studio does not write there", p, hidden)
+	}
 	return real, nil
+}
+
+// hiddenBelowRoot returns the first component of real, below the folder the person opened, that starts with a dot ("" when none does): the file's
+// own name, or any folder on the way to it (.git, .github, .hg, a hidden folder of any tool). Only the part below the root is judged: a workspace
+// that itself sits under a dotted folder is still a workspace. real is the path with links resolved, so a visible link that leads into a hidden
+// folder is judged by where it leads.
+func hiddenBelowRoot(roots []string, real string) string {
+	for _, root := range roots {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rr, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(rr, real)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			if strings.HasPrefix(part, ".") {
+				return part
+			}
+		}
+		return ""
+	}
+	return ""
 }
 
 // probeFileWithinRoots is withinRoots for a .probe file; the suffix is checked on the

@@ -549,6 +549,14 @@ func (c *Client) TypeText(ctx context.Context, sel SelectorParam, text string) e
 }
 
 func (c *Client) See(ctx context.Context, params SeeParams) error {
+	if seeNeedsFilledCapability(params.Check) {
+		c.mu.Lock()
+		h := c.handshake
+		c.mu.Unlock()
+		if err := checkSeeFilled(h); err != nil {
+			return err
+		}
+	}
 	_, err := c.Call(ctx, MethodSee, params)
 	return err
 }

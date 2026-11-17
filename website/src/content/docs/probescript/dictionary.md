@@ -56,6 +56,8 @@ Commands that verify the state of the UI.
 | `see disabled` | `see "Submit" is disabled` | Assert widget is disabled |
 | `see checked` | `see "Agree" is checked` | Assert the switch, checkbox, radio (or their list tiles, filter or choice chips) is on; "not a checkable control" for anything else. `don't see "Agree" is checked` asserts it is off |
 | `see focused` | `see "Email" is focused` | Assert the widget currently holds keyboard focus |
+| `see filled` | `see #password is filled` | Assert that a text field holds at least one character (spaces count). It never reads the text, so it also works on a password field; name the field by its `#id` (a label, a button or a container with several fields is refused: "not a text field"). `don't see #password is filled` asserts it is empty. Needs a `probe_agent` that reports `see_filled` |
+| `see empty` | `see #password is empty` | Assert that a text field holds no character. Same rules as `is filled`; it cannot be combined with `matching` |
 | `see contains` | `see "Price" contains "$"` | Assert widget text contains substring |
 | `see any of` | `see any of "Create Your Account", "Confirm Your Details"` | Assert that any one of the texts is on screen; `don't see any of "A", "B"` asserts none is |
 | `see matching` | `see "Email" matching ".*@.*"` | Assert that some widget found by the text selector has text matching the regex. Text selectors match substrings, so the anchored form is preferred for zero-state and count checks: `see "0 ml" matching "^0 ml$"`. `probe lint` warns, without failing, about such a check that has no anchored pattern |

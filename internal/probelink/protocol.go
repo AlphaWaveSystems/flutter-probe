@@ -277,6 +277,56 @@ const CodeConnectionClosed = -32099
 type VisibleSummaryResult struct {
 	Texts []string `json:"texts"`
 	Keys  []string `json:"keys"`
+	// Detail is what a newer agent adds so that a reader can tell whether the snapshot is complete. It is nil when the agent did not send all of it in the
+	// right shape (an older agent, or a malformed answer): a reader must then treat the snapshot as incomplete, not as empty.
+	Detail *VisibleDetail `json:"-"`
+}
+
+// VisibleDetail is the part of the visible_summary answer that says what the snapshot leaves out.
+type VisibleDetail struct {
+	EditableTexts []string // the text of every visible field that is not obscured, whether or not a Text holds the same text
+	RichTexts     []string // the texts of visible RichTexts that no Text and no Icon built
+	Max           int      // the cap of each list
+	Truncated     bool     // true when any list saw more than Max
+	Counts        map[string]int
+}
+
+// UnmarshalJSON reads texts and keys as before (a wrong type there is an error, as it always was) and the newer keys leniently: every one of editable_texts,
+// rich_texts, max and truncated must be present with its own type for Detail to be set; any other case leaves it nil. A key an app could not have made (the
+// agent builds all of them) is not trusted to be well formed.
+func (r *VisibleSummaryResult) UnmarshalJSON(b []byte) error {
+	var base struct {
+		Texts []string `json:"texts"`
+		Keys  []string `json:"keys"`
+	}
+	if err := json.Unmarshal(b, &base); err != nil {
+		return err
+	}
+	r.Texts, r.Keys, r.Detail = base.Texts, base.Keys, nil
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(b, &raw) != nil {
+		return nil
+	}
+	var d VisibleDetail
+	if json.Unmarshal(raw["editable_texts"], &d.EditableTexts) != nil || raw["editable_texts"] == nil || d.EditableTexts == nil {
+		return nil
+	}
+	if json.Unmarshal(raw["rich_texts"], &d.RichTexts) != nil || raw["rich_texts"] == nil || d.RichTexts == nil {
+		return nil
+	}
+	var max float64
+	if json.Unmarshal(raw["max"], &max) != nil || raw["max"] == nil || max < 1 || max != float64(int(max)) {
+		return nil
+	}
+	d.Max = int(max)
+	if json.Unmarshal(raw["truncated"], &d.Truncated) != nil || raw["truncated"] == nil || string(raw["truncated"]) != "true" && string(raw["truncated"]) != "false" {
+		return nil
+	}
+	if raw["counts"] != nil {
+		_ = json.Unmarshal(raw["counts"], &d.Counts) // optional: used only to check that no list saw more than it reported
+	}
+	r.Detail = &d
+	return nil
 }
 
 // BoundsResult is a widget's on-screen pixel bounding box (top-left origin).

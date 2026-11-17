@@ -1,5 +1,5 @@
 {
- "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none; asks (Go itself requires a person's answer in the window, and without a window or an answer the action is not done: no window means no); previewed (Go compares what the call names with what it holds and refuses on a mismatch: a destination label that must still be the current one, a preview id that must exist, a host that must have been checked. For an id or a checked host an earlier preview must have happened, for a destination label only the comparison does. Nothing in Go asks a person, and a script that holds the bridge token can make the preview itself); answers (it is the answer); native-dialog (only a person in a native dialog can drive it). decision: required for an aiProvider or network method with confirm none and for every previewed method, to say why no person is asked in Go (or what the window does instead). touches is checked against the code, for the four kinds the walk knows (keychain, files, network, devices): a call graph of the Studio sources is walked from each method (bound_methods_derive_test.go), following every name of the package that a function mentions, package variables that hold functions, and any use of a sink package's name (a call, a function value, a package client such as http.DefaultClient); a sink that the method can reach and the entry does not list fails the test. An entry may list more. The sinks are listed at the top of that file. What the walk does not see, so touches can still understate there: a function value or an interface that is assigned inside another function (only package variables are followed), a method called on a value that is not named like a function of the package, calls through reflection, a package that is not a listed sink (the Wails runtime, os/signal, the standard library's other file and network calls), the runner functions other than New and NewExecutor, and what a sink package does beyond the functions listed for it. automationInternal: the unexported methods the automation endpoint reaches, which are not bound but are what a script that holds its token can do.",
+ "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none; asks (Go itself requires a person's answer in the window, and without a window or an answer the action is not done: no window means no); previewed (Go compares what the call names with what it holds and refuses on a mismatch: a destination label that must still be the current one, a preview id that must exist, a host that must have been checked. For an id or a checked host an earlier preview must have happened, for a destination label only the comparison does. Nothing in Go asks a person, and a script that holds the bridge token can make the preview itself); answers (it is the answer); native-dialog (only a person in a native dialog can drive it). decision: required for an aiProvider or network method with confirm none and for every previewed method, to say why no person is asked in Go (or what the window does instead). touches is checked against the code, for the four kinds the walk knows (keychain, files, network, devices): a call graph of the Studio sources is walked from each method (bound_methods_derive_test.go), following every name of the package that a function mentions, package variables that hold functions, and any use of a sink package's name (a call, a function value, a package client such as http.DefaultClient); a sink that the method can reach and the entry does not list fails the test. An entry may list more. The sinks are listed at the top of that file. What the walk does not see, so touches can still understate there: a function value or an interface that is assigned inside another function (only package variables are followed), a method called on a value that is not named like a function of the package, calls through reflection, a package that is not a listed sink (the Wails runtime, os/signal, the standard library's other file and network calls), the runner functions other than New and NewExecutor, and what a sink package does beyond the functions listed for it. automationInternal: the unexported methods the automation endpoint reaches, which are not bound but are what a script that holds its token can do. Each method also names the Go tests that call it (tests): bound_methods_tests_test.go checks that each name is a test of the package that calls a method of that name, and that a method with no test says why (noTests), which only a pure read (category ui or readsWorkspace) may. It proves a test mentions the call, not that the test is good; a test that calls another type's method of the same name would pass.",
  "methods": [
   {
    "method": "AIChatLabel",
@@ -13,7 +13,12 @@
     "files",
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestChatLabelPartsJoinToTheLabel",
+    "TestChatLabelAgreesWithThePreview",
+    "TestChatLabelReplacesAfterTheGate"
+   ]
   },
   {
    "method": "AIChatLabelParts",
@@ -27,7 +32,11 @@
     "files",
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestChatLabelPartsJoinToTheLabel",
+    "TestAIPathsNeverAskTheAppForItsRequestLog"
+   ]
   },
   {
    "method": "AllowHost",
@@ -41,7 +50,12 @@
     "network"
    ],
    "confirm": "previewed",
-   "decision": "Previewed, not asked: Go requires an earlier CheckTarget for the host and refuses an address that is never allowed, but nothing in Go asks a person. The window shows where the host leads and asks before it calls AllowHost; a bridge-token script can call CheckTarget and AllowHost itself."
+   "decision": "Previewed, not asked: Go requires an earlier CheckTarget for the host and refuses an address that is never allowed, but nothing in Go asks a person. The window shows where the host leads and asks before it calls AllowHost; a bridge-token script can call CheckTarget and AllowHost itself.",
+   "tests": [
+    "TestAllowHostRefusesNonsense",
+    "TestKeysAreInTheNormalForm",
+    "TestSendRequestNeedsAnAllowedHost"
+   ]
   },
   {
    "method": "AnswerConfirm",
@@ -51,7 +65,12 @@
     "window"
    ],
    "touches": [],
-   "confirm": "answers"
+   "confirm": "answers",
+   "tests": [
+    "TestConfirmAnswerIsBoundToItsRun",
+    "TestConfirmWithNobodyToAskDenies",
+    "TestConfirmIdsAreRandomAndUsedOnce"
+   ]
   },
   {
    "method": "ApplyDeviceSetting",
@@ -64,7 +83,10 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestApplyDeviceSettingNeedsAConnection"
+   ]
   },
   {
    "method": "BuildCallStep",
@@ -75,7 +97,10 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestSaveStepTouchesNothing"
+   ]
   },
   {
    "method": "CanExportRunResults",
@@ -86,7 +111,12 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestCanExportFollowsWhatIsHeld",
+    "TestAStoppedRunLeavesNothingToExport",
+    "TestAnotherWorkspaceDropsTheResultsToExport"
+   ]
   },
   {
    "method": "CancelRun",
@@ -100,7 +130,12 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestAStoppedRunLeavesNothingToExport",
+    "TestTheRunSlotMovesFreeClaimedCancelledReleased",
+    "TestACancelWhileStartingStopsTheRunBeforeItsSteps"
+   ]
   },
   {
    "method": "Chat",
@@ -117,7 +152,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Decided: no confirmation in Go. The window asks before the first send to a destination it has not confirmed (confirmFirstChatSend, after PreviewAIChat shows the text and where it goes); nothing in Go ties a send to a preview, so a script with the bridge token can call Chat without one, as it can ExplainLastRun. The same gap the AI plan already records for Explain; closing it is a product decision, not made here."
+   "decision": "Decided: no confirmation in Go. The window asks before the first send to a destination it has not confirmed (confirmFirstChatSend, after PreviewAIChat shows the text and where it goes); nothing in Go ties a send to a preview, so a script with the bridge token can call Chat without one, as it can ExplainLastRun. The same gap the AI plan already records for Explain; closing it is a product decision, not made here.",
+   "tests": [
+    "TestChatReplyIsCleaned",
+    "TestChatWithoutAKeyMakesNoRequest",
+    "TestLocalChatDoesNotFollowARedirect"
+   ]
   },
   {
    "method": "CheckReplaceLine",
@@ -128,7 +168,12 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestReplaceLineSaysWhy",
+    "TestReplaceLineThroughASuggestion",
+    "TestReplaceLineRefusesWhileARunIsGoing"
+   ]
   },
   {
    "method": "CheckInsertBefore",
@@ -139,7 +184,27 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestInsertBeforeRefusals",
+    "TestInsertBeforeRefusesALineWithTwoSteps",
+    "TestInsertBeforeRefusesAWaitAlreadyAbove"
+   ]
+  },
+  {
+   "method": "CheckReplaceStep",
+   "category": "ui",
+   "does": "Says whether the on-screen text the rules found for a failed see or tap (the same text written another way) may replace the text of that step in the text the window holds: only while that text is the text the run read and no run is going; builds the line from the run's text, reads nothing from disk and writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none",
+   "tests": [
+    "TestCheckReplaceStepRefusals",
+    "TestCheckReplaceStepRefusesAnEditAboveThatShiftsAnIdenticalStep"
+   ]
   },
   {
    "method": "CheckTarget",
@@ -153,7 +218,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Looks the name up and reports where a request would go; it sends no request and no content."
+   "decision": "Looks the name up and reports where a request would go; it sends no request and no content.",
+   "tests": [
+    "TestCheckTargetRefusesWhatACallWould",
+    "TestSendPolicy",
+    "TestKeysAreInTheNormalForm"
+   ]
   },
   {
    "method": "CloseWorkspace",
@@ -164,7 +234,11 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestCloseWorkspaceIsRefusedWhileARunOrARecordingIsGoing",
+    "TestCloseWorkspaceRacingARunNeverLeavesTheRunAClosedWorkspace"
+   ]
   },
   {
    "method": "CreateFile",
@@ -177,7 +251,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestCreateFileHasASizeCap",
+    "TestCreateFileWritesANewFile",
+    "TestCreateFileRemovesAHalfWrittenFile"
+   ]
   },
   {
    "method": "Connect",
@@ -192,7 +271,12 @@
     "devices",
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestApp_Connect_EmptyDeviceID",
+    "TestApp_Connect_UnknownDevice",
+    "TestConnectIsRefusedWhileARunIsActive"
+   ]
   },
   {
    "method": "ConnectWiFi",
@@ -208,7 +292,12 @@
     "files",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestApp_ConnectWiFi_RequiresAllParams",
+    "TestConnectWiFiLeavesThePlatformUnknown",
+    "TestConnectIsRefusedWhileARunIsActive"
+   ]
   },
   {
    "method": "ConnectWiFiSaved",
@@ -224,7 +313,10 @@
     "keychain",
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "asks",
+   "tests": [
+    "TestConnectWiFiSavedUsesTheSavedTokenAndTheSameChecks"
+   ]
   },
   {
    "method": "DeleteAPIKey",
@@ -237,7 +329,10 @@
    "touches": [
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestAPIKeyRoundTripThroughTheKeychain"
+   ]
   },
   {
    "method": "DeviceListNote",
@@ -251,7 +346,12 @@
     "devices",
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestAnAdbFoundOnlyThroughADotInPathIsNotRun",
+    "TestPassiveActionsNeverRunTheProgramAWorkspaceNames",
+    "TestTheDefaultAdbAppearingMidSessionIsPickedUpWithoutARace"
+   ]
   },
   {
    "method": "Disconnect",
@@ -265,7 +365,12 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestApp_Disconnect_NoOpWhenNotConnected",
+    "TestDisconnectDeniesAPendingQuestionAndClosesTheDialog",
+    "TestAHostileBuildReportShowsOnlyItsValidParts"
+   ]
   },
   {
    "method": "ExplainAvailability",
@@ -279,7 +384,12 @@
     "files",
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestExplainAvailabilityReadsTheKeychainOnlyWhenItMust",
+    "TestExplainAvailabilityIsOfferedOnlyWithAIOnAndAFailedTest",
+    "TestAIPathsNeverAskTheAppForItsRequestLog"
+   ]
   },
   {
    "method": "ExplainLastRun",
@@ -295,7 +405,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Decided: no confirmation in Go; the window shows the preview of a hosted destination first and sends through ExplainPreviewed, which rechecks the destination. ExplainLastRun is the unpreviewed form, still bound (the same gap as Chat)."
+   "decision": "Decided: no confirmation in Go; the window shows the preview of a hosted destination first and sends through ExplainPreviewed, which rechecks the destination. ExplainLastRun is the unpreviewed form, still bound (the same gap as Chat).",
+   "tests": [
+    "TestExplainBoundsEachCall",
+    "TestExplainSendsAtMostFive",
+    "TestExplainNeedsAFailedTest"
+   ]
   },
   {
    "method": "ExplainPreviewed",
@@ -311,7 +426,10 @@
     "network"
    ],
    "confirm": "previewed",
-   "decision": "Previewed, not asked: Go compares the destination label it is given with the current one and stops on a mismatch (no preview has to have happened first); nothing in Go asks a person. The window shows the preview of a hosted destination first."
+   "decision": "Previewed, not asked: Go compares the destination label it is given with the current one and stops on a mismatch (no preview has to have happened first); nothing in Go asks a person. The window shows the preview of a hosted destination first.",
+   "tests": [
+    "TestExplainPreviewedRefusesAChangedDestination"
+   ]
   },
   {
    "method": "ExportRunResults",
@@ -323,7 +441,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "native-dialog"
+   "confirm": "native-dialog",
+   "tests": [
+    "TestExportRefusals",
+    "TestExportCancelledWritesNothing",
+    "TestExportRefusesAPathItCannotUse"
+   ]
   },
   {
    "method": "FindLocalModels",
@@ -337,7 +460,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Asks model servers on this machine (loopback only) which models they have and sends no workspace content, so there is nothing to confirm."
+   "decision": "Asks model servers on this machine (loopback only) which models they have and sends no workspace content, so there is nothing to confirm.",
+   "tests": [
+    "TestFindLocalModelsCapsTheList",
+    "TestFindLocalModelsCleansTheIDs",
+    "TestFindLocalModelsWritesNothing"
+   ]
   },
   {
    "method": "ForgetWiFiToken",
@@ -350,7 +478,11 @@
    "touches": [
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestForgettingOrReplacingATokenDropsItsAddress",
+    "TestWiFiTokenIsSavedPerDeviceAndForgottenOneAtATime"
+   ]
   },
   {
    "method": "GetAPIKey",
@@ -363,7 +495,10 @@
    "touches": [
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestAPIKeyRoundTripThroughTheKeychain"
+   ]
   },
   {
    "method": "GetDeviceSettings",
@@ -376,7 +511,11 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestSettingsAndDeviceViewAreToldNoPlatformForWiFi",
+    "TestPassiveActionsNeverRunTheProgramAWorkspaceNames"
+   ]
   },
   {
    "method": "GetDeviceView",
@@ -390,7 +529,12 @@
     "devices",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestDeviceViewNeedsAConnection",
+    "TestDeviceViewFollowsAnAdoptedClient",
+    "TestDeviceViewIsOffByDefaultAndStartsNothing"
+   ]
   },
   {
    "method": "GetStudioPrefs",
@@ -403,7 +547,11 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestStudioPrefsRoundTrip",
+    "TestTheFormSeesAWarningForAnUntrustedFile"
+   ]
   },
   {
    "method": "GetWidgetTree",
@@ -417,7 +565,10 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestTakeScreenshotAndGetWidgetTreeNeedAConnection"
+   ]
   },
   {
    "method": "HTTPExchange",
@@ -430,7 +581,12 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestHTTPExchangeRefusesAnotherEpoch",
+    "TestHTTPExchangeMissingAndBadSequence",
+    "TestHTTPExchangeIsRedactedInEveryPosition"
+   ]
   },
   {
    "method": "HTTPExchanges",
@@ -443,7 +599,12 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestHTTPExchangesSinceAndFilters",
+    "TestHTTPExchangesIsRedactedSortedAndCapped",
+    "TestLargeInputsAreCheap"
+   ]
   },
   {
    "method": "InitialWorkspace",
@@ -454,7 +615,10 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestInitialWorkspaceIsTheEnvironmentVariable"
+   ]
   },
   {
    "method": "Lint",
@@ -465,7 +629,12 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestApp_Lint_ParseError",
+    "TestApp_Lint_ValidScript",
+    "TestApp_Lint_EmptyTestWarning"
+   ]
   },
   {
    "method": "LintProblems",
@@ -478,7 +647,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestLintProblemsSkipsAHugeText",
+    "TestLintProblemsSizeCapBoundary",
+    "TestLintProblemsUnderConcurrentCalls"
+   ]
   },
   {
    "method": "ListAIModels",
@@ -494,7 +668,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Asks the configured local endpoint for its model names; no workspace content is sent, so there is nothing to confirm."
+   "decision": "Asks the configured local endpoint for its model names; no workspace content is sent, so there is nothing to confirm.",
+   "tests": [
+    "TestListAIModelsReadsTheLocalEndpoint",
+    "TestListAIModelsSendsNothingWithAIOffOrOnAnthropic",
+    "TestModelIDsAreGatedThenBounded"
+   ]
   },
   {
    "method": "ListDevices",
@@ -509,7 +688,12 @@
     "devices",
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestTheManagerIsNotSwappedUnderAConnection",
+    "TestAnAdbFoundOnlyThroughADotInPathIsNotRun",
+    "TestPassiveActionsNeverRunTheProgramAWorkspaceNames"
+   ]
   },
   {
    "method": "ListDir",
@@ -523,7 +707,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestListDirListsTheWorkspace",
+    "TestListDirRefusesDotDotSegments",
+    "TestApp_ListDir_FiltersHiddenEntries"
+   ]
   },
   {
    "method": "LoadAISettings",
@@ -536,7 +725,10 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestLoadAISettingsReadsTheWorkspacesProbeYaml"
+   ]
   },
   {
    "method": "LoadWorkspaceSettings",
@@ -549,7 +741,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestEditsOnOtherShapesOfProbeYAML",
+    "TestConcurrentSavesKeepTheFileWhole",
+    "TestATopLevelKeyInAMultiDocumentFile"
+   ]
   },
   {
    "method": "PickWorkspace",
@@ -561,7 +758,10 @@
    "touches": [
     "files"
    ],
-   "confirm": "native-dialog"
+   "confirm": "native-dialog",
+   "tests": [
+    "TestPickWorkspaceReturnsTheChoiceAndOpensNothing"
+   ]
   },
   {
    "method": "PreviewAIChat",
@@ -578,7 +778,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Sends nothing: it builds the text of the next chat turn and names the destination, so the person can decide."
+   "decision": "Sends nothing: it builds the text of the next chat turn and names the destination, so the person can decide.",
+   "tests": [
+    "TestPreviewErrorsWithAIOff",
+    "TestChatLabelAgreesWithThePreview",
+    "TestAIPathsNeverAskTheAppForItsRequestLog"
+   ]
   },
   {
    "method": "PreviewExplain",
@@ -594,7 +799,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Sends nothing: it builds what ExplainLastRun would send and names the destination."
+   "decision": "Sends nothing: it builds what ExplainLastRun would send and names the destination.",
+   "tests": [
+    "TestExplainNeverChangesTheRun",
+    "TestExplainWithAIOffSendsNothing",
+    "TestExplainPreviewEqualsTheRequest"
+   ]
   },
   {
    "method": "PreviewSelectorFix",
@@ -611,7 +821,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Sends nothing: it builds what a selector fix would send and names the destination (the send is SelectorFixPreviewed, by the id this returns)."
+   "decision": "Sends nothing: it builds what a selector fix would send and names the destination (the send is SelectorFixPreviewed, by the id this returns).",
+   "tests": [
+    "TestAIOffAndOneAtATime",
+    "TestTheCapIsPerFailedStep",
+    "TestTheGateRunsOnEveryField"
+   ]
   },
   {
    "method": "ReadFile",
@@ -625,7 +840,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestReadFileNeedsAnAbsolutePath",
+    "TestReadFileRefusesDotDotSegments",
+    "TestApp_WriteFile_ReadFile_RoundTrip"
+   ]
   },
   {
    "method": "RunFile",
@@ -640,7 +860,12 @@
     "files",
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "asks",
+   "tests": [
+    "TestRunFileRefusesPathsOutsideTheWorkspace",
+    "TestARunReleasesTheRunSlot",
+    "TestARunLeavesItsResultsForTheExport"
+   ]
   },
   {
    "method": "RunFileAsync",
@@ -655,7 +880,12 @@
     "files",
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "asks",
+   "tests": [
+    "TestRunFileAsyncRefusesPathsOutsideTheWorkspace",
+    "TestAKeptRunHoldsItsWorkspaceAsTheReportBase",
+    "TestUseWorkspaceDuringARunLeavesNothingToExport"
+   ]
   },
   {
    "method": "RunFileScoped",
@@ -670,7 +900,10 @@
     "files",
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "asks",
+   "tests": [
+    "TestRunFileScopedNeedsAFileInTheWorkspaceAndAConnection"
+   ]
   },
   {
    "method": "RunState",
@@ -682,7 +915,12 @@
     "automation"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestSeedRunMakesTheLastRun",
+    "TestRunTrackerSnapshotIsACopy",
+    "TestSeededRunMayCarryTheStepsOfTheRun"
+   ]
   },
   {
    "method": "SaveAISettings",
@@ -695,7 +933,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestEachFieldAloneIsWritten",
+    "TestAIFormKeySourceIsOneField",
+    "TestAChangedFormIsStillRefused"
+   ]
   },
   {
    "method": "SaveWiFiToken",
@@ -708,7 +951,12 @@
    "touches": [
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestSaveWiFiTokenRefusesAnEmptyDeviceOrToken",
+    "TestAPublicAddressIsRefusedBeforeTheQuestion",
+    "TestATokenWithNoAddressAsksOnceAndIsThenBound"
+   ]
   },
   {
    "method": "SaveWorkspaceSettings",
@@ -721,7 +969,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestSaveWorkspaceSettingsWritesTheRunKnobs",
+    "TestSaveWorkspaceSettingsRefusesBadRunKnobs",
+    "TestSaveWorkspaceSettingsRemovesClearedKeys"
+   ]
   },
   {
    "method": "SelectorFixAttempts",
@@ -732,7 +985,10 @@
     "bridge"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestTheLiveCountIsStudios"
+   ]
   },
   {
    "method": "SelectorFixPreviewed",
@@ -749,7 +1005,12 @@
     "network"
    ],
    "confirm": "previewed",
-   "decision": "Previewed, not asked: Go sends only the suggestion whose preview id it returned, once, and a change after the preview stops the send; nothing in Go asks a person (the window shows the preview)."
+   "decision": "Previewed, not asked: Go sends only the suggestion whose preview id it returned, once, and a change after the preview stops the send; nothing in Go asks a person (the window shows the preview).",
+   "tests": [
+    "TestAIOffAndOneAtATime",
+    "TestTheOneCallPathIsGone",
+    "TestAPreviewIsUsedUpOnFailureToo"
+   ]
   },
   {
    "method": "SendRequest",
@@ -763,7 +1024,12 @@
     "network"
    ],
    "confirm": "previewed",
-   "decision": "Previewed, not asked: Go refuses a host that was not allowed (AllowHost, at the strength CheckTarget showed), but nothing in Go asks a person; a bridge-token script can run CheckTarget, AllowHost and SendRequest without a window question. The window asks before AllowHost."
+   "decision": "Previewed, not asked: Go refuses a host that was not allowed (AllowHost, at the strength CheckTarget showed), but nothing in Go asks a person; a bridge-token script can run CheckTarget, AllowHost and SendRequest without a window question. The window asks before AllowHost.",
+   "tests": [
+    "TestSendRequestNeedsAnAllowedHost",
+    "TestSendRequestRefusalsAreFixedSentences",
+    "TestSendPolicy"
+   ]
   },
   {
    "method": "SetAPIKey",
@@ -776,7 +1042,10 @@
    "touches": [
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestAPIKeyRoundTripThroughTheKeychain"
+   ]
   },
   {
    "method": "SetClearDataWithoutAsking",
@@ -788,7 +1057,10 @@
    "touches": [
     "files"
    ],
-   "confirm": "native-dialog"
+   "confirm": "native-dialog",
+   "tests": [
+    "TestStudioPrefsRoundTrip"
+   ]
   },
   {
    "method": "SetWorkspace",
@@ -801,7 +1073,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestARunReleasesTheRunSlot",
+    "TestListDirListsTheWorkspace",
+    "TestReadFileNeedsAnAbsolutePath"
+   ]
   },
   {
    "method": "StartRecording",
@@ -814,7 +1091,10 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestStartRecordingNeedsAWebSocketConnection"
+   ]
   },
   {
    "method": "StartWiFiDiscovery",
@@ -828,7 +1108,10 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Listens for agents that announce themselves on the local network (mDNS) and sends no workspace content; a found device is never connected to or sent a token without ConnectWiFi or ConnectWiFiSaved, the second of which asks."
+   "decision": "Listens for agents that announce themselves on the local network (mDNS) and sends no workspace content; a found device is never connected to or sent a token without ConnectWiFi or ConnectWiFiSaved, the second of which asks.",
+   "tests": [
+    "TestWiFiDiscoveryStartAndStop"
+   ]
   },
   {
    "method": "Status",
@@ -840,7 +1123,12 @@
     "automation"
    ],
    "touches": [],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestApp_Status_Disconnected",
+    "TestAppBuildReachesTheStatus",
+    "TestApp_Disconnect_NoOpWhenNotConnected"
+   ]
   },
   {
    "method": "StopRecording",
@@ -853,7 +1141,12 @@
    "touches": [
     "devices"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestStopRecordingDuringTheStartCallStopsTheNewAgent",
+    "TestStopRecordingBetweenTheMoveAndTheStartCallSkipsTheStart",
+    "TestRecordingFollowsAnAdoptionAndStopClearsTheClientItSetItOn"
+   ]
   },
   {
    "method": "StopWiFiDiscovery",
@@ -867,7 +1160,10 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Stops the listening above; it sends nothing."
+   "decision": "Stops the listening above; it sends nothing.",
+   "tests": [
+    "TestWiFiDiscoveryStartAndStop"
+   ]
   },
   {
    "method": "TakeScreenshot",
@@ -882,7 +1178,10 @@
     "devices",
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestTakeScreenshotAndGetWidgetTreeNeedAConnection"
+   ]
   },
   {
    "method": "TestAIConnection",
@@ -898,7 +1197,12 @@
     "network"
    ],
    "confirm": "none",
-   "decision": "Sends one fixed test prompt and no workspace content; a person starts it from the settings dialog."
+   "decision": "Sends one fixed test prompt and no workspace content; a person starts it from the settings dialog.",
+   "tests": [
+    "TestDoctorDetailsAreScrubbed",
+    "TestConnectionTestNeverShowsTheKey",
+    "TestStudioGatesTheDoctorBeforeTheCut"
+   ]
   },
   {
    "method": "TestWiFi",
@@ -913,7 +1217,12 @@
     "devices",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestTestWiFiErrorsNeverEchoTheToken",
+    "TestTestWiFiOnAClosedPortSaysWhatToCheck",
+    "TestTestWiFiIsLimitedAndRefusesPublicTargetsBeforeDialling"
+   ]
   },
   {
    "method": "WiFiTokenSaved",
@@ -926,7 +1235,11 @@
    "touches": [
     "keychain"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestForgettingOrReplacingATokenDropsItsAddress",
+    "TestWiFiTokenIsSavedPerDeviceAndForgottenOneAtATime"
+   ]
   },
   {
    "method": "WorkspaceNote",
@@ -939,12 +1252,17 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestWorkspaceNoteUsesTheRunsLoader",
+    "TestEveryCallerRefusesAnUnreadableProbeYaml",
+    "TestPassiveActionsNeverRunTheProgramAWorkspaceNames"
+   ]
   },
   {
    "method": "WriteFile",
    "category": "writesWorkspace",
-   "does": "Saves an open .probe file in place inside the open workspace: it replaces the file's content and creates missing folders. A new file is made with CreateFile, which never replaces one.",
+   "does": "Saves an open .probe file in place inside the open workspace: it replaces the file's content through a new file in the same folder that is flushed and renamed over it (a failed write leaves the file as it was), and creates missing folders; a path with a hidden part below the workspace (a folder or file name starting with a dot, .git included) and a content over 1 MiB are refused. A new file is made with CreateFile, which never replaces one.",
    "callers": [
     "window",
     "bridge"
@@ -952,7 +1270,12 @@
    "touches": [
     "files"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "tests": [
+    "TestWriteFileNeedsAnAbsolutePath",
+    "TestWriteFileRefusesANonProbeName",
+    "TestWriteFileRefusesAReadOnlyFile"
+   ]
   }
  ],
  "automationInternal": [

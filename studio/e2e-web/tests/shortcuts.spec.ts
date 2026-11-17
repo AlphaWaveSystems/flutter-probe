@@ -191,4 +191,53 @@ test.describe("Keyboard shortcuts", () => {
     await expect(page.locator("#help-overlay")).toBeHidden();
     await expect(page.locator("#editor-dirty")).toContainText("unsaved");
   });
+
+  for (const mod of mods) {
+    test(`sc-10 ${mod}+Shift+S saves the open file too`, async ({ page }) => {
+      const calls = await recordCalls(page);
+      await openStudio(page);
+      await openPath(page, "probe-tests/counter.probe");
+      await expect(page.locator("#editor-filename")).toContainText("counter.probe");
+      await page.locator("body").press(`${mod}+Shift+s`);
+      await expect.poll(() => count(calls, "WriteFile")).toBe(1);
+    });
+
+    test(`sc-11 while the help card is open ${mod}+P, ${mod}+K and ${mod}+Shift+A do nothing; Escape closes the card and they work again`, async ({ page }) => {
+      const calls = await recordCalls(page);
+      await openStudio(page);
+      const pane = page.locator("#chat-pane");
+      const chatBefore = await pane.isHidden();
+      await page.locator("body").press("?");
+      await expect(page.locator("#help-overlay")).toBeVisible();
+      const listBefore = count(calls, "ListDevices");
+      await page.locator("body").press(`${mod}+p`);
+      await page.locator("body").press(`${mod}+k`);
+      await page.locator("body").press(`${mod}+Shift+a`);
+      await page.waitForTimeout(300);
+      expect(count(calls, "PickWorkspace")).toBe(0);
+      expect(count(calls, "ListDevices")).toBe(listBefore);
+      expect(await pane.isHidden()).toBe(chatBefore);
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#help-overlay")).toBeHidden();
+      await page.locator("body").press(`${mod}+p`);
+      await expect.poll(() => count(calls, "PickWorkspace")).toBe(1);
+    });
+  }
+
+  test("sc-12 the browser's own defaults (Save, Print, ...) are prevented for the shortcuts, and not for a plain key", async ({ page }) => {
+    await openStudio(page);
+    const prevented = (init: KeyboardEventInit) =>
+      page.evaluate((i) => {
+        const ev = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...i });
+        window.dispatchEvent(ev);
+        return ev.defaultPrevented;
+      }, init);
+    for (const key of ["s", "r", "b", "p", "k"]) {
+      expect(await prevented({ key, ctrlKey: true }), `Ctrl+${key}`).toBe(true);
+      expect(await prevented({ key, metaKey: true }), `Meta+${key}`).toBe(true);
+    }
+    expect(await prevented({ key: "a", ctrlKey: true, shiftKey: true }), "Ctrl+Shift+A").toBe(true);
+    expect(await prevented({ key: "a", ctrlKey: true }), "Ctrl+A alone is the browser's select all").toBe(false);
+    expect(await prevented({ key: "s" }), "a plain s").toBe(false);
+  });
 });
