@@ -369,7 +369,7 @@ class ProbeExecutor {
         return {'node': hit?.toJson()};
 
       case ProbeMethods.visibleSummary:
-        return _finder.visibleSummary();
+        return _finder.visibleSummaryFull();
 
       case ProbeMethods.selectorBounds:
         final sel = req.params['selector'] as Map<String, dynamic>;
