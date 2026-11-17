@@ -169,7 +169,7 @@
   {
    "method": "CreateFile",
    "category": "writesWorkspace",
-   "does": "Writes a NEW .probe file inside the workspace (Save for a buffer with no file): created exclusively, so a file that exists, or a link in its place, is never replaced and the answer says it already exists; the folder must exist.",
+   "does": "Writes a NEW .probe file inside the workspace (Save for a buffer with no file): created exclusively, so a file that exists, or a link in its place, is never replaced and the answer says it already exists; the folder must exist; at most 1 MiB.",
    "callers": [
     "window",
     "bridge"

@@ -394,6 +394,9 @@ func (a *App) CreateFile(path, content string) error {
 	if why := newFileNameProblem(name); why != "" {
 		return fmt.Errorf("%s: %s", name, why)
 	}
+	if len(content) > maxNewFileBytes {
+		return fmt.Errorf("%s: the file is %d bytes and a new file is at most %d", name, len(content), maxNewFileBytes)
+	}
 	// A name the file system treats as an existing one although the bytes differ (APFS and NTFS ignore case, APFS ignores Unicode normalisation) is
 	// found by listing the folder and comparing the names folded and normalised; the exclusive create below is the check that cannot race.
 	if entries, err := os.ReadDir(filepath.Dir(real)); err == nil {
@@ -413,13 +416,20 @@ func (a *App) CreateFile(path, content string) error {
 		}
 		return err
 	}
-	if _, err := f.WriteString(content); err != nil {
+	if _, err := createFileWrite(f, content); err != nil {
 		_ = f.Close()
 		_ = os.Remove(real) // a half-written new file is not left behind
 		return err
 	}
 	return f.Close()
 }
+
+// maxNewFileBytes is the most CreateFile writes: the same 1 MiB a run keeps of a script, far above any test file and far below what a window call
+// should be able to put on disk.
+const maxNewFileBytes = 1 << 20
+
+// createFileWrite writes the content of a new file; tests make it fail part way.
+var createFileWrite = func(f *os.File, content string) (int, error) { return f.WriteString(content) }
 
 // createFileAfterListing is called between the listing and the exclusive create; tests put a file there.
 var createFileAfterListing = func() {}
