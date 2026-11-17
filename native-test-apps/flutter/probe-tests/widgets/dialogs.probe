@@ -8,14 +8,14 @@ before each test
   restart the app
   # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
   # with an id (the last button of the screen).
-  wait until #wf_page_button appears
+  wait until #wf_open_cover appears
 
 test "a dialog is opened and its title and text are seen; the page under it is still seen"
   tap "Open dialog"
   wait until "Delete item?" appears
   see "Delete item?"
   see "This cannot be undone."
-  see "Page taps: 0"
+  see "Dialog: none"
 
 test "Cancel closes the dialog"
   tap "Open dialog"
@@ -52,28 +52,35 @@ test "go back closes the dialog"
   don't see "Delete item?"
   see "Dialog: none"
 
-# The button of the page is found under the open dialog, but the dialog's body is on top of it: the step passes with the warning "tap target ... is covered
-# by another widget" (`--fail-on-warning` would fail it), the tap lands on the dialog, the counter does not move and the dialog stays open.
+# The Cover page puts a "Page button" at the centre of the page, opens a tall dialog (a 240 dp body, centred, so its non-interactive body spans the centre of the page
+# whatever the screen) and has a "Top button" above the dialog. The covered-widget warning of the agent ("tap target ... is covered by another widget") is not asserted
+# here (a .probe file has no step for a warning); what holds the test is that the counter stays 0 and that the dialog is still open for the `tap "Close"` that follows.
+# `--fail-on-warning` would fail the covered step. The geometry is checked on four screens by test/dialogs_cover_test.dart.
 test "a tap on a button that the dialog body covers lands on the dialog"
-  tap "Open dialog"
-  wait until "Delete item?" appears
+  tap "Open cover page"
+  wait until #wf_open_tall appears
+  tap "Open tall dialog"
+  wait until "Close" appears
   tap "Page button"
-  see "Delete item?"
   see "Page taps: 0"
-  tap "Cancel"
-  wait until "Delete item?" disappears
+  see "Tall dialog"
+  tap "Close"
+  wait until "Close" disappears
+  see "Cover dialog: closed"
   see "Page taps: 0"
   tap "Page button"
   see "Page taps: 1"
 
-# A button outside the dialog body is under the barrier: the tap lands on the barrier, which dismisses the dialog (`showDialog` dismisses on a tap
-# outside by default), and the button's own handler does not run.
+# A button above the dialog is under the barrier: the tap lands on the barrier, which dismisses the dialog (`showDialog` dismisses on a tap outside by default), and the
+# button's own handler does not run.
 test "a tap on a button outside the dialog body dismisses the dialog and does not press the button"
-  tap "Open dialog"
-  wait until "Delete item?" appears
+  tap "Open cover page"
+  wait until #wf_open_tall appears
+  tap "Open tall dialog"
+  wait until "Close" appears
   tap "Top button"
-  wait until "Delete item?" disappears
-  see "Dialog: none"
+  wait until "Close" disappears
+  see "Cover dialog: none"
   see "Top taps: 0"
   tap "Top button"
   see "Top taps: 1"

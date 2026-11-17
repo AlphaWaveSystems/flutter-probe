@@ -114,7 +114,7 @@ Each item is a new screen of the Flutter fixture app (`native-test-apps/flutter`
 
    Must fail: `see "Delete item?"` after Cancel.
 
-   Under the open dialog the page is still matched (item 2), so `see` a text of the page passes while the dialog is open, and `don't see` it fails. The suite asserts that as the rule. A `tap` on a widget of the page under the open dialog finds the widget, so what the test settles is whether the tap reaches it or the barrier takes it: the page's counter must not move.
+   Under the open dialog the page is still matched (item 2), so `see` a text of the page passes while the dialog is open, and `don't see` it fails. The suite asserts that as the rule. A `tap` on a widget of the page under the open dialog finds the widget, so what the test settles is where the tap lands: on a button behind the dialog's body it lands on the dialog (the agent warns that the target is covered by another widget), on a button outside the body it lands on the barrier, which dismisses the dialog; either way the button's own counter must not move. Which one a given widget gets depends on the screen, so the fixture fixes the geometry (the Cover page of the `dialogs` screen: a button at the centre, a tall centred dialog, a button above it) and a widget test checks it on four screen sizes.
 9. **`dialogs` screen: snack bar.** Widgets: a button that shows `SnackBar(content: Text("Saved"), action: SnackBarAction(label: "Undo"))` for 4 seconds.
 
    Steps:

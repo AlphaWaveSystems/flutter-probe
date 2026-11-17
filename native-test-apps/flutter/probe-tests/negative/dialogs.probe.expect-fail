@@ -12,7 +12,7 @@ before each test
   restart the app
   # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
   # with an id (the last button of the screen).
-  wait until #wf_page_button appears
+  wait until #wf_open_cover appears
 
 # Expected: see "Saved": Expected to see "text("Saved")" but it was not found (no snack bar before the tap on Save)
 test "N1 the snack bar is not there before Save"
@@ -37,13 +37,15 @@ test "N4 tap by the text Delete does not press the Delete button"
   tap "Delete"
   see "Dialog: deleted"
 
-# Expected: see "Page taps: 1": Expected to see "text("Page taps: 1")" but it was not found (the dialog body covers the button: the tap lands on the dialog and is not counted)
+# Expected: see "Page taps: 1": Expected to see "text("Page taps: 1")" but it was not found (the tall dialog's body covers the button: the tap lands on the dialog and is not counted)
 test "N5 a tap on a button that the dialog body covers is not counted"
-  tap "Open dialog"
-  wait until "Delete item?" appears
+  tap "Open cover page"
+  wait until #wf_open_tall appears
+  tap "Open tall dialog"
+  wait until "Close" appears
   tap "Page button"
-  tap "Cancel"
-  wait until "Delete item?" disappears
+  tap "Close"
+  wait until "Close" disappears
   see "Page taps: 1"
 
 # Expected: see "Dialog: deleted": Expected to see "text("Dialog: deleted")" but it was not found (Cancel was pressed, the state is cancelled)
@@ -68,10 +70,12 @@ test "N8 the snack bar state is not undone before Undo"
   wait until "Saved" appears
   see "Snack: undone"
 
-# Expected: tap "Cancel": Widget not found: text("Cancel") (a tap on the barrier dismissed the dialog, so its Cancel button is gone)
+# Expected: tap "Close": Widget not found: text("Close") (a tap on the barrier dismissed the dialog, so its Close button is gone)
 test "N9 the dialog is gone after a tap on the barrier"
-  tap "Open dialog"
-  wait until "Delete item?" appears
+  tap "Open cover page"
+  wait until #wf_open_tall appears
+  tap "Open tall dialog"
+  wait until "Close" appears
   tap "Top button"
-  wait until "Delete item?" disappears
-  tap "Cancel"
+  wait until "Close" disappears
+  tap "Close"
