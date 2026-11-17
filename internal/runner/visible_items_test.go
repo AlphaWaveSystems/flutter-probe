@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -104,5 +105,17 @@ func TestAStepEventCarriesVisibleOnlyForATimeout(t *testing.T) {
 		if has := got[i].Visible.Detail; has != want || (want && len(got[i].Visible.Texts) != 1) {
 			t.Errorf("event %d (%s): Visible = %+v, want present %v", i, got[i].Status, got[i].Visible, want)
 		}
+	}
+}
+
+// A StepEvent that is marshalled by anything never carries the raw lists: Visible is kept out of every serialisation.
+func TestAStepEventNeverSerialisesWhatWasOnScreen(t *testing.T) {
+	ev := StepEvent{File: "a.probe", Description: `tap "x"`, Visible: VisibleItems{Texts: []string{"SENTINEL-TEXT"}, Editable: []string{"SENTINEL-FIELD"}, Rich: []string{"SENTINEL-RICH"}, Keys: []string{"SENTINEL-KEY"}, Detail: true, Max: 25}}
+	b, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "SENTINEL") || strings.Contains(strings.ToLower(string(b)), "visible") {
+		t.Errorf("the marshalled event carries what was on screen: %s", b)
 	}
 }

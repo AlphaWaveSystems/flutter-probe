@@ -41,9 +41,9 @@ type StepEvent struct {
 	// Target is the element an action step acts on. It is set on StepStarted, and only when a recorder is attached.
 	Target *StepTarget
 	// Visible is what the agent reported on screen when the step timed out, set on StepFailed only when the failure is the runner's own step timeout. It is data
-	// for Studio's rule-based fixes and has no JSON tag on purpose: nothing serialises a StepEvent, and a consumer that copies it into something it sends or
-	// saves would add a second, raw copy of what the failure text already carries masked and cut.
-	Visible VisibleItems
+	// for Studio's rule-based fixes and is kept out of every serialisation (`json:"-"`): a consumer that marshals or copies a StepEvent must not add a second, raw
+	// copy of what the failure text already carries masked and cut.
+	Visible VisibleItems `json:"-"`
 	// SelectorIsID is true when the step's selector is an id (#name), not a text. The step text quotes both, so a
 	// consumer that needs to tell them apart (the Studio triage) reads this flag.
 	SelectorIsID bool

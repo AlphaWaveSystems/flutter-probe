@@ -81,6 +81,45 @@ func TestReplacementForGivesNothingWhenTheSnapshotCannotProveIt(t *testing.T) {
 	}
 }
 
+// The failed text is already on screen: the step did not time out for want of it, so another text is not the answer.
+func TestReplacementForGivesNothingWhenTheFailedTextIsAlreadyOnScreen(t *testing.T) {
+	for name, c := range map[string]struct {
+		failed string
+		v      runner.VisibleItems
+	}{
+		"the same text and another spelling":    {"Sign in", snap("Sign in", "Sign In")},
+		"inside a longer text, and another way": {"Sign in", snap("Sign In", "Sign in with Google")},
+		"as a field's value":                    {"Sign in", runner.VisibleItems{Texts: []string{"Sign In"}, Editable: []string{"Sign in"}, Detail: true, Max: 25}},
+		"inside a raw rich text":                {"Sign in", runner.VisibleItems{Texts: []string{"Sign In"}, Rich: []string{"Please Sign in here"}, Detail: true, Max: 25}},
+		"inside a field's longer value":         {"Sign in", runner.VisibleItems{Texts: []string{"Sign In"}, Editable: []string{"Sign in now"}, Detail: true, Max: 25}},
+	} {
+		if got := replacementFor(c.failed, c.v, ""); got != "" {
+			t.Errorf("%s: %q", name, got)
+		}
+	}
+	// the control: without the failed text on screen the same spelling is offered
+	if replacementFor("Sign in", snap("Sign In", "Home"), "") != "Sign In" {
+		t.Error("the control gave no offer")
+	}
+}
+
+// A looser match is refused whichever way it is written: the config value in any case, an unknown value, and the process-wide switch the CLI sets.
+func TestReplacementForRefusesEveryLooseMatching(t *testing.T) {
+	for _, mode := range []string{"loose", "Loose", "LOOSE", "something else"} {
+		if got := replacementFor("Sign in", snap("Sign In"), mode); got != "" {
+			t.Errorf("match %q: %q", mode, got)
+		}
+	}
+	if replacementFor("Sign in", snap("Sign In"), "Exact") != "Sign In" {
+		t.Error("exact in another case was refused")
+	}
+	runner.SetLooseMatching(true)
+	defer runner.SetLooseMatching(false)
+	if got := replacementFor("Sign in", snap("Sign In"), ""); got != "" {
+		t.Errorf("the process-wide loose switch: %q", got)
+	}
+}
+
 func TestReplacementForRefusesWhatTheNewStepCouldMatchBesidesTheTextOnScreen(t *testing.T) {
 	for name, c := range map[string]struct {
 		failed string

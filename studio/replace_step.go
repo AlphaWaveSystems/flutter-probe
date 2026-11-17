@@ -74,11 +74,11 @@ func replacementProblem(n string) string {
 // replacementFor is the text that replaces failed in a see or tap, or "" when the rules give none. matchMode is the run's text matching ("" and "exact" are
 // the default: a case-sensitive substring). It gives a text only when everything it needs to be sure of is in the snapshot:
 //   - the snapshot is complete: the agent said so with all of its keys, nothing was masked or cut, no list reached its cap;
-//   - exactly one visible text is failed written another way, and it is not the typed value of a field;
+//   - the failed text itself is nowhere on screen, and exactly one visible text is failed written another way, and it is not the typed value of a field;
 //   - exactly one visible text, of any list, contains that text as a substring: the new step matches one widget, the one on screen.
 func replacementFor(failed string, v runner.VisibleItems, matchMode string) string {
-	if matchMode != "" && matchMode != "exact" {
-		return "" // a looser match folds more than this rule does: what the new text would match cannot be counted here
+	if (matchMode != "" && !strings.EqualFold(matchMode, "exact")) || runner.LooseMatching() {
+		return "" // a looser match (the config, in any case, or the process-wide switch the CLI sets) folds more than this rule does: what the new text would match cannot be counted here
 	}
 	if !v.Detail || v.Truncated || v.Masked || v.Cut > 0 || v.Max < 1 {
 		return ""
@@ -86,6 +86,16 @@ func replacementFor(failed string, v runner.VisibleItems, matchMode string) stri
 	for _, list := range [][]string{v.Texts, v.Editable, v.Rich} {
 		if len(list) >= v.Max || len(list) >= maxSnapshotTexts {
 			return "" // the list may be a cut one
+		}
+	}
+	// The failed text itself already on screen (as a text, a field value or a rich text, or inside a longer one) means the step did not time out for want of it:
+	// something else is wrong (a widget that cannot be hit, a hidden one), and a step with another text would act on another widget. The agent's own
+	// match is a case-sensitive substring, so that is the test.
+	for _, list := range [][]string{v.Texts, v.Editable, v.Rich} {
+		for _, t := range list {
+			if strings.Contains(t, failed) {
+				return ""
+			}
 		}
 	}
 	want := foldedText(failed)
