@@ -1,11 +1,11 @@
 package runner
 
 import (
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"math/rand/v2"
 	"os"
 	"path"
@@ -27,24 +27,24 @@ import (
 
 // TestResult captures the outcome of a single test run.
 type TestResult struct {
-	TestName    string
-	File        string
-	Passed      bool
-	Skipped     bool
-	Duration    time.Duration
-	Error       error
-	Row         int      // data-driven row index, -1 = not data-driven
-	Tags        []string // the test's tags, as the file writes them (the reports clean them: ReportTags)
-	Artifacts   []string
-	VideoURL    string           // cloud provider video URL (session-level)
-	DeviceID    string           // device serial/UDID that ran this test
-	DeviceName  string           // human-readable device name
-	Perf        []perf.Metrics   // measurements the test took (`start measuring` ... `stop measuring`)
-	PerfNew     []string         // measurements with no entry in the baseline (not compared)
-	PerfSkipped int              // measurements not compared: the window spans an app restart or has no memory/frame data
-	Attempts    int              // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
-	StartedAt   time.Time        // when the (last) attempt started
-	AttemptLog  []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
+	TestName   string
+	File       string
+	Passed     bool
+	Skipped    bool
+	Duration   time.Duration
+	Error      error
+	Row        int // data-driven row index, -1 = not data-driven
+	Tags       []string // the test's tags, as the file writes them (the reports clean them: ReportTags)
+	Artifacts  []string
+	VideoURL   string // cloud provider video URL (session-level)
+	DeviceID   string // device serial/UDID that ran this test
+	DeviceName string // human-readable device name
+	Perf       []perf.Metrics // measurements the test took (`start measuring` ... `stop measuring`)
+	PerfNew    []string       // measurements with no entry in the baseline (not compared)
+	PerfSkipped int           // measurements not compared: the window spans an app restart or has no memory/frame data
+	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
+	StartedAt  time.Time        // when the (last) attempt started
+	AttemptLog []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
 	// FailedSelector is the selector step the test failed on, nil when it failed elsewhere or passed.
 	FailedSelector *FailedSelector
 	// Proposal is advisory report text set after the run by `probe test --ai-heal`. It never changes Passed or Error.
@@ -84,19 +84,19 @@ type AttemptOutcome struct {
 type Runner struct {
 	cfg             *config.Config
 	client          probelink.ProbeClient
-	deviceCtx       *DeviceContext // nil in dry-run mode
-	clip            clipboardTaint // the clipboard taint of a run that has no device context
+	deviceCtx       *DeviceContext  // nil in dry-run mode
+	clip            clipboardTaint  // the clipboard taint of a run that has no device context
 	opts            RunOptions
 	recipes         map[string]parser.RecipeDef
 	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
-	missingUses     []string                    // `use` targets that do not exist, for error messages
-	confine         *lintConfinement            // set by a lint given LintWithRoot; nil for runs and for the CLI's lint
-	visual          *visual.Comparator          // nil if visual regression is not configured
-	onResult        func(TestResult)            // optional per-result callback for streaming
+	missingUses     []string                     // `use` targets that do not exist, for error messages
+	confine         *lintConfinement             // set by a lint given LintWithRoot; nil for runs and for the CLI's lint
+	visual          *visual.Comparator  // nil if visual regression is not configured
+	onResult        func(TestResult)    // optional per-result callback for streaming
 	recorder        StepRecorder
-	onStep          func(StepEvent)  // optional per-step callback (live highlight)
-	compositeRunner *CompositeRunner // nil if composite tests are not configured
-	curFile         string           // attribution for StepEvents from newExecutor
+	onStep          func(StepEvent)     // optional per-step callback (live highlight)
+	compositeRunner *CompositeRunner    // nil if composite tests are not configured
+	curFile         string              // attribution for StepEvents from newExecutor
 	curTest         string
 	curAttempt      int
 	restartHook     func(context.Context) error // tests only: replaces the restart step after a timed-out attempt
@@ -122,13 +122,13 @@ type RunOptions struct {
 	TestNames    []string // run only the tests with these names (composite tests too); nil runs every test
 	Watch        bool     // re-run on file change
 	Timeout      time.Duration
-	DryRun       bool // parse only
+	DryRun       bool   // parse only
 	Verbose      bool
-	VideoEnabled bool      // record device screen during tests
-	VideoDir     string    // directory to store video recordings
-	DeviceID     string    // device serial/UDID (for tagging results)
-	DeviceName   string    // human-readable device name
-	Grant        []string  // permissions to pre-grant before the first test (--grant)
+	VideoEnabled bool   // record device screen during tests
+	VideoDir     string // directory to store video recordings
+	DeviceID     string // device serial/UDID (for tagging results)
+	DeviceName   string // human-readable device name
+	Grant        []string // permissions to pre-grant before the first test (--grant)
 	ClearGate    ClearGate // how `clear app data` is answered on the lanes of a parallel or composite run (see ClearGate)
 
 	MeasureAll    bool           // open a measuring window around every test that does not measure itself

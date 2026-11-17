@@ -209,3 +209,26 @@ func TestSettingsWritesClearDataBeforeEachTest(t *testing.T) {
 		t.Errorf("the key was not removed: %q", got)
 	}
 }
+
+// device.ios_device_id follows the CLI's rule: Studio refuses to save a value that is not a simulator or a device UDID, and writes nothing.
+func TestSaveWorkspaceSettingsRefusesAnIOSDeviceIDThatIsNotAUDID(t *testing.T) {
+	for _, bad := range []string{"iPhone 16", "../../x", "/etc", "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B/../x"} {
+		dir := t.TempDir()
+		a := &App{}
+		err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: bad})
+		if err == nil || !strings.Contains(err.Error(), "probe device list") {
+			t.Errorf("%q must be refused, got %v", bad, err)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "probe.yaml")); statErr == nil {
+			if dev, ok := readYAML(t, dir)["device"].(map[string]any); ok && dev["ios_device_id"] != nil {
+				t.Errorf("%q was written: %v", bad, dev)
+			}
+		}
+	}
+	for _, ok := range []string{"6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B", "00008110-001A2C3E0E12801E", "0123456789abcdef0123456789abcdef01234567"} {
+		dir := t.TempDir()
+		if err := inWS(&App{}, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: ok}); err != nil {
+			t.Errorf("%q must be saved: %v", ok, err)
+		}
+	}
+}
