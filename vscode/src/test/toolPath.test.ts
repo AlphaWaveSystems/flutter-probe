@@ -211,7 +211,7 @@ test('config.ts gives the resolver the opt-in, the trust, the platform and PATH,
 test('a control character is refused in the command and in every argument, for every shell', () => {
   const shells: Array<[string, string]> = [['darwin', '/bin/zsh'], ['linux', '/bin/bash'], ['linux', '/usr/bin/fish'], ['linux', ''],
     ['win32', 'powershell.exe'], ['win32', 'cmd.exe'], ['win32', 'C:\\Windows\\System32\\wsl.exe'], ['win32', '']];
-  for (const c of [0x00, 0x01, 0x03, 0x09, 0x0a, 0x0d, 0x15, 0x1b, 0x1f, 0x7f]) {
+  for (const c of [0x00, 0x01, 0x03, 0x09, 0x0a, 0x0d, 0x15, 0x1b, 0x1f, 0x7f, 0x80, 0x85, 0x88, 0x92, 0x9f]) {
     const ch = String.fromCharCode(c);
     for (const [platform, shell] of shells) {
       const p = platform === 'win32' ? `C:\\a${ch}b\\probe.exe` : `/a${ch}touch PWNED;#/probe`;
@@ -246,6 +246,21 @@ test('PowerShell on macOS and Linux: only a plain path is typed', () => {
     assert.equal(commandWord('/usr/local/bin/probe', 'darwin', shell), '/usr/local/bin/probe');
     for (const bad of ['/Users/a b/probe', '/Users/O\u2019Brien/probe', '/Users/\u2018x/probe', "/a'b/probe"]) {
       assert.throws(() => commandWord(bad, 'linux', shell), /cannot be typed into PowerShell/, `${shell} ${bad}`);
+    }
+  }
+});
+
+// The refusal message carries no control character itself: each is written as \uXXXX.
+test('the refusal message escapes control characters and line separators', () => {
+  for (const c of [0x7f, 0x85, 0x92, 0x2028, 0x2029]) {
+    const p = `/a${String.fromCharCode(c)}b/probe\u0001`;
+    try {
+      commandWord(p, 'linux', '/bin/bash');
+      assert.fail('refused');
+    } catch (e) {
+      const msg = (e as Error).message;
+      assert.equal(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(msg), false, `U+${c.toString(16)}: ${JSON.stringify(msg)}`);
+      assert.match(msg, /control character/);
     }
   }
 });

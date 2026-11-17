@@ -109,15 +109,22 @@ export function quotePosix(word: string): string {
   return `'${word.replace(/'/g, "'\\''")}'`;
 }
 
-// CONTROL is any control character (U+0000 to U+001F, U+007F). A line-editing shell acts on them while the text is typed into the
-// terminal (readline and zle: ^U deletes back to the start of the line, ^A moves to it, ^C cancels it), so a quoted path that holds one
-// can lose its opening quote and run what follows. Refused for every shell, in the command and in every argument (shellEscape).
-export const CONTROL = /[\u0000-\u001f\u007f]/;
+// CONTROL is any control character: C0 (U+0000 to U+001F), DEL (U+007F) and C1 (U+0080 to U+009F). A line-editing shell acts on them
+// while the text is typed into the terminal (readline and zle: ^U deletes back to the start of the line, ^A moves to it, ^C cancels it;
+// under a single-byte locale such as LC_ALL=C, readline reads a C1 character as a meta key: U+0092 is M-C-r, revert-line), so a quoted
+// path that holds one can lose its opening quote and run what follows. Refused for every shell, in the command and in every argument.
+export const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+
+// shown is text quoted for a message, with every control character and the line and paragraph separators written as \uXXXX, so the
+// message itself carries none of them.
+function shown(text: string): string {
+  return JSON.stringify(text).replace(/[\u007f-\u009f\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+}
 
 // refuseControl throws when text holds a control character.
 export function refuseControl(text: string, what: string): void {
   if (CONTROL.test(text)) {
-    throw new Error(`${what} ${JSON.stringify(text)} has a control character, which the terminal's shell would act on as it is typed: rename it, or install the tool in a folder without one`);
+    throw new Error(`${what} ${shown(text)} has a control character, which the terminal's shell would act on as it is typed: rename it, or install the tool in a folder without one`);
   }
 }
 
