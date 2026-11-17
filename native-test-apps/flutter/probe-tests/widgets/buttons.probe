@@ -47,3 +47,9 @@ test "a long press and a tap on the same button are told apart"
   see "Hold: tap 0, long 1"
   tap "Hold me"
   see "Hold: tap 1, long 1"
+
+# Flutter's own behavior, measured: a press that is held on a button with no long-press handler ends as a tap when it is released.
+test "a long press on a button that has no long-press handler ends as a tap"
+  see "Elevated: 0"
+  long press "Press elevated"
+  see "Elevated: 1"
