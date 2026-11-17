@@ -46,7 +46,7 @@
       </div>
       <div class="status">
         <span id="status-dot" class="status-dot status-disconnected"></span>
-        <span id="status-text" class="status-text">disconnected</span>
+        <span id="status-text" class="status-text" role="status">disconnected</span>
       </div>
     </header>
 
@@ -64,6 +64,7 @@
           <span>Workspace</span>
           <span class="pane-actions">
             <button id="btn-pick-workspace" class="btn-mini" title="Open folder">📂</button>
+            <button id="btn-close-workspace" class="btn-mini" title="Close the workspace (back to the empty first-run state)" hidden>✕</button>
             <button id="btn-files-up" class="btn-mini" title="Up one directory">↑</button>
             <button id="btn-files-refresh" class="btn-mini" title="Refresh">↻</button>
           </span>

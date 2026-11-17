@@ -46,6 +46,10 @@ export function CheckTarget(arg1) {
   return window['go']['main']['App']['CheckTarget'](arg1);
 }
 
+export function CloseWorkspace() {
+  return window['go']['main']['App']['CloseWorkspace']();
+}
+
 export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }

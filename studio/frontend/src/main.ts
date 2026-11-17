@@ -15,6 +15,7 @@ import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
 import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
+import { connectFailureLine } from "./connect-failure";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
@@ -28,6 +29,7 @@ import { toast } from "./toast";
 import {
   CancelRun,
   CheckReplaceLine,
+  CloseWorkspace,
   SelectorFixAttempts,
   Chat,
   Connect,
@@ -436,6 +438,7 @@ async function pickWorkspace() {
     await SetWorkspace(path);
     resetAIPreview();
     workspaceRoot = path;
+    showWorkspaceClose();
     resetNetworkPanel();
     refreshFiles(path);
     void refreshWorkspaceNote();
@@ -446,6 +449,45 @@ async function pickWorkspace() {
 }
 
 $("btn-pick-workspace").addEventListener("click", pickWorkspace);
+
+// The Close button is there only while a workspace is open. Closing brings back the state of a first start (no workspace, no file, the guidance in
+// the panes), and forgets the remembered folder, so the next start does not reopen it. PROBE_STUDIO_WORKSPACE, when set, still opens its folder at start.
+function showWorkspaceClose(): void {
+  ($("btn-close-workspace") as HTMLButtonElement).hidden = workspaceRoot === "";
+}
+
+async function closeWorkspace(): Promise<void> {
+  if (workspaceRoot === "") return;
+  if (dirty && !(await askDiscard())) return; // unsaved changes: the same question as opening another file
+  try {
+    await CloseWorkspace(); // Go refuses while a run or a recording is going (and says so)
+  } catch (err) {
+    toast(String(err).replace(/^Error:\s*/, ""), "info", 4000);
+    return;
+  }
+  localStorage.removeItem(WORKSPACE_KEY);
+  workspaceRoot = "";
+  resetAIPreview();
+  resetNetworkPanel();
+  model.setValue("");
+  currentPath = null;
+  $("editor-filename").textContent = "untitled.probe";
+  setDirty(false);
+  updateRunButton();
+  showWorkspaceClose();
+  void refreshWorkspaceNote();
+  // The tree is cleared here, not listed again: with a folder from the environment still reachable, a listing of a relative path would be refused and say so.
+  currentDir = "tests";
+  $("file-path").textContent = currentDir;
+  const list = $("file-list");
+  clearChildren(list);
+  listing = "empty";
+  renderEmptyPane(list);
+  refreshFirstRun();
+  toast("Workspace closed", "info", 1800);
+}
+
+$("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 
 // ---- Save ---------------------------------------------------------------
 
@@ -1785,9 +1827,13 @@ function updateConnectButton() {
   refreshFirstRun();
 }
 
-($("device-picker") as HTMLSelectElement).addEventListener("change", updateConnectButton);
+($("device-picker") as HTMLSelectElement).addEventListener("change", () => {
+  if (!connected && $("status-dot").classList.contains("status-error")) setStatus("disconnected", "disconnected"); // another device: the old failure is not about it
+  updateConnectButton();
+});
 $("btn-refresh").addEventListener("click", refreshDevices);
 
+let connectAttempt = 0;
 $("btn-connect").addEventListener("click", async () => {
   if (connected) {
     try {
@@ -1802,6 +1848,7 @@ $("btn-connect").addEventListener("click", async () => {
   const select = $("device-picker") as HTMLSelectElement;
   const id = select.value;
   if (!id) return;
+  const attempt = ++connectAttempt; // a result that comes back after a newer attempt started is not about the screen any more
   setStatus("connecting", "connecting…");
   try {
     const status = (await Connect(id)) as ConnectionStatus;
@@ -1816,9 +1863,10 @@ $("btn-connect").addEventListener("click", async () => {
     if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
-    setStatus("error", "connection failed", detail);
+    if (attempt !== connectAttempt) return; // superseded: a newer Connect is under way or has finished, and its result is the one shown
+    // The reason stays in the status (full text as the tooltip) until the person picks another device or connects again.
+    setStatus("error", connectFailureLine(detail), detail);
     toast(`Connect failed: ${detail}`, "error", 8000);
-    setTimeout(() => setStatus("disconnected", "disconnected"), 2500);
   }
 });
 
@@ -2203,6 +2251,7 @@ initDeviceSettings();
     await SetWorkspace(ws);
     resetAIPreview();
     workspaceRoot = ws;
+    showWorkspaceClose();
     resetNetworkPanel();
     void refreshWorkspaceNote();
     await refreshFiles(ws);

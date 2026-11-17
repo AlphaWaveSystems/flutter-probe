@@ -145,6 +145,17 @@
    "decision": "Looks the name up and reports where a request would go; it sends no request and no content."
   },
   {
+   "method": "CloseWorkspace",
+   "category": "workspaceRoot",
+   "does": "Closes the workspace a person opened (SetWorkspace with no folder); refused while a run or a recording is going. A connection that exists is not dropped.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
    "method": "Connect",
    "category": "device",
    "does": "Connects to a simulator, emulator or USB device and its agent (forwards a port, reads the token).",
