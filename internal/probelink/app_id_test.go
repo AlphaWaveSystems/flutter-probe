@@ -82,17 +82,25 @@ func TestAppIDMismatchWarning(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		got, want  string
+		ignoreCase bool
 		wantNotice bool
 	}{
-		{"the same app", "com.example.app", "com.example.app", false},
-		{"another app", "com.other.app", "com.example.app", true},
-		{"a suffixed build is another id", "com.example.app.debug", "com.example.app", true},
-		{"a longer id that starts the same", "com.example.application", "com.example.app", true},
-		{"the agent does not say", "", "com.example.app", false},
-		{"the project does not say", "com.example.app", "", false},
-		{"neither says", "", "", false},
+		{"the same app", "com.example.app", "com.example.app", false, false},
+		{"another app", "com.other.app", "com.example.app", false, true},
+		{"a suffixed build is another id", "com.example.app.debug", "com.example.app", false, true},
+		{"a longer id that starts the same", "com.example.application", "com.example.app", false, true},
+		{"the agent does not say", "", "com.example.app", false, false},
+		{"the project does not say", "com.example.app", "", false, false},
+		{"neither says", "", "", false, false},
+		// Case: an Android package name is case-sensitive, so a difference of case alone is another app and is said; an iOS bundle id is not, so it is not said there.
+		{"android: a difference of case is another app", "com.Example.app", "com.example.app", false, true},
+		{"android: a difference of case, the other way", "com.example.app", "com.Example.App", false, true},
+		{"ios: a difference of case alone says nothing", "com.Example.app", "com.example.app", true, false},
+		{"ios: the same id says nothing", "com.example.app", "com.example.app", true, false},
+		{"ios: another app is still said", "com.other.app", "com.example.app", true, true},
+		{"ios: a suffixed id is still said", "com.example.app.debug", "com.Example.App", true, true},
 	} {
-		w := AppIDMismatchWarning(h(tc.got), tc.want)
+		w := AppIDMismatchWarning(h(tc.got), tc.want, tc.ignoreCase)
 		if (w != "") != tc.wantNotice {
 			t.Errorf("%s: warning = %q, want a warning: %v", tc.name, w, tc.wantNotice)
 		}
