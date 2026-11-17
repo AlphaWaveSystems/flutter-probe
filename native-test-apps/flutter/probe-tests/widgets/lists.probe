@@ -46,8 +46,16 @@ test "a sliver list: scroll down to a far item, tap it, scroll back"
 test "a single child scroll view: a far button is tapped without a scroll step"
   tap "Open scroll view"
   wait until "Line 0" appears
+  don't see "Bottom button"
   tap "Bottom button"
   see "Tapped bottom: yes"
+
+# `see` matches only what is on screen: a line that is built but below the fold is not seen, while `tap` still scrolls to a built button.
+test "a single child scroll view: a built line below the fold is not seen"
+  tap "Open scroll view"
+  wait until "Line 0" appears
+  see "Line 0"
+  don't see "Line 39"
 
 test "a single child scroll view: scroll down until the bottom button appears"
   tap "Open scroll view"

@@ -22,7 +22,7 @@ test "N1 a far row of a lazy list is not seen before a scroll"
 test "N2 a far row of a lazy list is not tapped without a scroll step"
   tap "Row 150"
 
-# Expected: scroll down until "Row 999" appears: not found after scrolling (the list has 200 rows and the step ends with that message, it does not run on)
+# Expected: scroll down until "Row 999" appears: scroll down until text("Row 999"): not found after scrolling (the list has 200 rows and the step ends with that message, it does not run on)
 test "N3 scrolling to a row that does not exist ends with a failure"
   scroll down until "Row 999" appears
 
@@ -59,6 +59,7 @@ test "N8 a long press by a name that the state text also holds"
   long press "Alice"
   see "Long press: Alice"
 
-# Expected: see exactly 1 "Row 0": Expected exactly 1 "text("Row 0")" but found 2 (a known miscount: a Text is counted twice by `see exactly`; see the finding in docs/compat/MATRIX.md)
+# Expected: see exactly 1 "Row 0": Expected exactly 1 "text("Row 0")" but found 2 (a known miscount: a Text is counted twice by `see exactly`; see the finding in docs/compat/MATRIX.md).
+# When the agent is fixed this test will PASS: it must then be flipped (the count is 1) and moved to the positive suite, or removed.
 test "N9 see exactly counts a Text once"
   see exactly 1 "Row 0"
