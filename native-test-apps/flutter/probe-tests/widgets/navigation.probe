@@ -21,6 +21,8 @@ test "a pushed route is seen"
 # The route rule on a device: the first route is under the opaque second one, so its title and its texts are not matched while the second is on top
 # (probe_agent's finder, _isVisible and _routeOnScreen; unit test "ProbeFinder route-awareness (PT-03)").
 test "the route under the top one is not seen"
+  see "Inbox"
+  see "Queries: 0"
   tap "Open message"
   wait until "From: Ada" appears
   don't see "Inbox"

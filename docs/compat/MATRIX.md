@@ -88,12 +88,12 @@ Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulat
 | `AppBar` title (`Inbox`) | pass (`see "Inbox"`) | n/a | pass (its text) | pass |
 | `AppBar` action: an `IconButton` with the tooltip `Search` (`wf_search`) | pass (the tooltip text and `#wf_search`) | pass (both; the state text `Queries: N` counts) | n/a | pass |
 | `Navigator.push` of a `MaterialPageRoute` (`wf_open_message`, the route titled `Message`) | pass (`see "Message"`, `see "From: Ada"` after `wait until ... appears`) | pass (`tap "Open message"`) | pass | pass |
-| the route under an opaque route | **not matched** (`don't see "Inbox"`, `"Queries: 0"`, `"Open message"` all pass while the message route is on top; `see "Inbox"` fails) | n/a | n/a | pass: the agent's route rule (PT-03) holds on a device |
+| the route under an opaque route | **not matched** (the same test first sees `"Inbox"` and `"Queries: 0"`, then, while the message route is on top, `don't see "Inbox"`, `"Queries: 0"`, `"Open message"` all pass; `see "Inbox"` fails) | n/a | n/a | pass: the agent's route rule (PT-03) holds on a device |
 | `go back` (the agent calls `Navigator.pop()` on the app's navigator; not a system back key) | pass (the first route is seen again) | n/a | n/a | pass, with the finding below |
 
 **Findings.**
 - **The route under an opaque route is not matched, on a device.** The agent's rule (`_isVisible` and `_routeOnScreen` in `probe_agent/lib/src/finder.dart`, unit test "ProbeFinder route-awareness (PT-03)") holds on both devices: while the message route is on top, the first route's title, texts and button are not found, and `see "Inbox"` fails.
-- **During a pop, the leaving route is still matched.** Right after `go back`, `wait until "Inbox" appears` passes at once while the message route is still on screen in Material's page transition, and `don't see "From: Ada"` then found it (measured on Android before the suite was changed). A test that checks a pop waits for the leaving route to go: `wait until "From: Ada" disappears`.
+- **During a pop, the leaving route is still matched.** Right after `go back`, `wait until "Inbox" appears` passes at once while the message route is still on screen in Material's page transition, and `don't see "From: Ada"` then finds it. Measured on both devices with those steps alone, 5 runs each: `Compat-Pixel-API35` 4 of 5 runs, `Compat-iPhone` 5 of 5. A test that checks a pop waits for the leaving route to go: `wait until "From: Ada" disappears`.
 
 Not covered by the screen: `NavigationBar`, `TabBar`, `Drawer`, a route that is not opaque (a dialog, a popup menu, a bottom sheet: the page under it stays matched by design; item 8 of `NEXT.md`), named routes and `go_router`, the Android system back key and the iOS edge swipe (`go back` pops in the app, it does not press either), a nested `Navigator`, and Cupertino routes (item 10 of `NEXT.md`). Flutter 3.50.0 was not run for this family.
 

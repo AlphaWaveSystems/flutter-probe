@@ -11,6 +11,7 @@ before each test
 
 # Expected: see "Inbox": Expected to see "text("Inbox")" but it was not found (the first route is under the opaque message route)
 test "N1 the route under the top one is seen"
+  see "Inbox"
   tap "Open message"
   wait until "From: Ada" appears
   see "Inbox"
