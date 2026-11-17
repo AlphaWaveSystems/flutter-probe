@@ -11,3 +11,4 @@ Maintainer scripts for the FlutterProbe repository. None of them are needed to *
 | `setup-wiki.sh` | One-time: initializes the GitHub Wiki from `docs/wiki/`. Needs an authenticated `gh` with write access. |
 | `fake-cloud/` | A fake hosted service and a throwaway test license, to try `probe test --upload-report` on one machine without GitHub Actions. See its README. |
 | `bench/` | Comparison benchmarks (`run-comparison.sh`, `summarize.py`). |
+| `licensecheck/` | The dependency licence check of `dependabot-compat.yml`: reads the SPDX expression of each dependency (`license-checker --json` for npm, `go-licenses report` for Go) and fails a package when a GPL, AGPL, SSPL or EUPL licence is mandatory for it; LGPL, unknown and custom licences are notes, and `allowlist.txt` holds the reviewed ones with a reason each. `go test ./scripts/licensecheck/` is its self-test, run by the required Go tests and by the workflow. |

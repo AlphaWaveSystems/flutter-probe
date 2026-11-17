@@ -1,0 +1,27 @@
+# Packages whose licence is not plain permissive and that somebody has read, one per line:  name@version | reason
+# The version may be * . An entry silences only the NOTE of a package (and the unlicensed-Go failure); it can never silence a strong copyleft licence (GPL, AGPL, SSPL, EUPL).
+# A Go package is written with its import path and * as version: example.com/module/pkg@* | reason
+# Every entry is reviewed in the pull request that adds it. Remove an entry when its package leaves the dependency tree.
+
+# --- website/ (documentation site, a build-time tool: nothing from it ships in the CLI, Studio or the extension)
+@img/sharp-libvips-darwin-arm64@* | LGPL-3.0-or-later native library of sharp (image processing in the website build); linked dynamically by a build tool, not distributed with the product
+@img/sharp-libvips-darwin-x64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
+@img/sharp-libvips-linux-arm64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
+@img/sharp-libvips-linux-x64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
+@img/sharp-libvips-linuxmusl-arm64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
+@img/sharp-libvips-linuxmusl-x64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
+
+# --- vscode/ (the extension has no runtime dependencies; these are packaging tools, dev dependencies)
+@vscode/vsce-sign@* | Microsoft's own licence for the signing helper of vsce, a packaging tool used at build time; not part of the extension bundle
+@vscode/vsce-sign-darwin-arm64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-darwin-x64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-linux-arm@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-linux-arm64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-linux-x64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-alpine-arm64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-alpine-x64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-win32-arm64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+@vscode/vsce-sign-win32-x64@* | Microsoft's signing helper binary for vsce (build time); no licence field
+
+# --- this repository's own npm packages: their package.json has no "license" field (the licence split is an owner decision, kept out of this change)
+flutterprobe@* | the VS Code extension of this repository: package.json has no license field yet
