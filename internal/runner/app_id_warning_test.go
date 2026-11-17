@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alphawavesystems/flutter-probe/internal/device"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 )
 
@@ -57,18 +58,22 @@ func TestLaneWarnsWhenTheAgentReportsAnotherApp(t *testing.T) {
 	}
 }
 
-// The handshake after a reconnect says the same.
+// The handshake after a reconnect says the same, and compares an iOS bundle id without regard to case (an Android package name is case-sensitive).
 func TestReconnectHandshakeWarnsWhenTheAgentReportsAnotherApp(t *testing.T) {
 	for _, tc := range []struct {
 		name, reported, appID string
+		platform              device.Platform
 		wantWarn              bool
 	}{
-		{"another app", "com.other.app", "com.example.app", true},
-		{"the same app", "com.example.app", "com.example.app", false},
-		{"the agent does not say", "", "com.example.app", false},
-		{"the context has no app id", "com.other.app", "", false},
+		{"another app", "com.other.app", "com.example.app", device.PlatformAndroid, true},
+		{"the same app", "com.example.app", "com.example.app", device.PlatformAndroid, false},
+		{"the agent does not say", "", "com.example.app", device.PlatformAndroid, false},
+		{"the context has no app id", "com.other.app", "", device.PlatformAndroid, false},
+		{"android: a difference of case is another app", "com.Example.app", "com.example.app", device.PlatformAndroid, true},
+		{"ios: a difference of case says nothing", "com.Example.app", "com.example.app", device.PlatformIOS, false},
+		{"ios: another app is said", "com.other.app", "com.example.app", device.PlatformIOS, true},
 	} {
-		dc := &DeviceContext{AppID: tc.appID, CLIVersion: harnessCLIVersion}
+		dc := &DeviceContext{AppID: tc.appID, CLIVersion: harnessCLIVersion, Platform: tc.platform}
 		client := &idAgent{harnessAgent: &harnessAgent{slowClient: newSlowClient()}, appID: tc.reported}
 		var err error
 		out := captureStdout(t, func() { err = dc.handshakeNewClient(context.Background(), client) })

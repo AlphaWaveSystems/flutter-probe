@@ -19,7 +19,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
 | Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
 | Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | not assessed | not assessed | n/a | not assessed | n/a | not assessed | not assessed |
-| WebView content | an embedded web page (`webview_flutter`) | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
+| WebView content | an embedded web page (`webview_flutter`) | see below | see below | see below | not assessed | see below | `native-test-apps/flutter-webview` | `native-test-apps/flutter-webview/probe-tests/webview.probe` |
 
 ## Assessed widgets
 
@@ -56,11 +56,39 @@ the radio's own group value when it has one and otherwise the nearest `RadioGrou
 
 **The value of an obscured field is never searchable (agent rule).** The agent used to match a text selector against an obscured field's value, so `see "<typed text>"` (or a prefix of it), `wait until ... appears`, `tap` and `selector_bounds` by that text found the field: a test could learn the value one prefix at a time. Its responses never carried the value (`dump_tree`, `visible_summary`, `hit_test`, the failure messages: measured, none did). The value is now never a match target; the field is still found by its id, key, label or hint. The test asserts it (`don't see "secret"`, `don't see "sec"`): with an agent from before the rule it fails at `don't see "secret"`. To assert on such a field, assert what the screen shows about it: a `Text` with its length (`see "Password length: 6"`, as `wf_password` does), the field by its id (`see #wf_password`), or what the app does after the value is accepted; `see #pw is filled` and `is empty` are planned. A suite that taps "show password" and then asserts the value now fails, because a field seen obscured stays secret once the app shows it. Limits: a field that was never seen obscured is ordinary text, two fields that share a key share the state, a `Text` that mirrors the value is just text, and the value is still readable through `run_dart`, screenshots and the app's own logs, which this rule does not cover.
 
+### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
+
+An Android app with a `webview_flutter` 4.14.1 `WebViewWidget` that shows `assets/page.html` (the page of `native-test-apps/android-webview`, kept equal by a test) from the app's own assets, next to
+Flutter widgets: a status text, a reload button and a text field with its echo. The agent runs in the app. WebView debugging is turned on with `AndroidWebViewController.enableDebugging(true)`.
+
+| What | Step | Result |
+|---|---|---|
+| find by visible text | `see "Getting Started" in webview` | pass |
+| find by CSS selector | `see css:"#result" in webview` | pass |
+| absence | `don't see css:"#nope" in webview` | pass (and `see css:"#nope" in webview` fails) |
+| tap by visible text | `tap "Contact support" in webview` | pass (the page then shows `Message sent`, found by `wait until "Message sent" appears in webview`) |
+| type | `type "hello" into css:"#message" in webview` | pass, **read back**: `store text of css:"#message" in webview as typed`, typed into the Flutter field, the echo reads `Echo: hello` |
+| read | `store text of css:"#total" in webview as total` | pass: runs of spaces collapse (`Total: 42.00   USD` is stored as `Total: 42.00 USD`, 16 characters) and hidden characters are dropped (`css:"#hidden"` stores `abc d`, 5 characters) |
+| reload from Flutter | `tap "Reload page"`, then `wait until "Page loaded (2)" appears` | pass: the page starts again (`Message sent` is gone) |
+| scroll | there is no WebView scroll step | **not assessed** |
+
+**The boundary.** The Dart agent does not see inside the page, and the WebView steps do not see the Flutter widgets: `see "Getting Started"` (no `in webview`) fails, and `see "Reload page" in webview` fails. A test uses
+the Dart steps for the widgets and the `in webview` steps for the page, and both work in one test. The WebView steps are Android only; iOS (`webview_flutter_wkwebview`) was not assessed.
+
+Each failure above was shown by a variant of the suite whose steps assert something wrong or cross the boundary: all 8 variants fail with the message that says why (a title the page does not have, the raw three spaces,
+the hidden characters kept, the message still there after a reload, an element that is not on the page, a Flutter widget looked for in the page, the page text looked for in the Flutter tree, a wrong typed value). The variant file is not
+kept in the repository.
+
 ### How it was run
 
 Flutter 3.50.0 (Dart 3.14.0) and Flutter 3.44.8 (Dart 3.12.2), each building the fixture with `--dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=<family>`; the 3.50.0 builds used the Gradle, AGP and Kotlin versions of #711. Device: emulator-5600, AVD `ProbeWebViewSpike` (Android 15, API 35), one run per family
 and build: 5 of 5 tests passed in each family on both builds (the radio and password tests as written above; the one radio check that fails is not in the test). On 3.50.0 the analyzer reports `package:flutter/material.dart` and `package:flutter/cupertino.dart` as deprecated ("deprecated after v3.47.0-0.0.pre", use `material_ui` and `cupertino_ui`): an info, the builds are unaffected, and the fixture and the agent still import them. Not run: iOS, a physical device, another Android version, TalkBack or other
 accessibility services, other screen sizes or text scales.
+
+**WebView content** was run separately: Flutter 3.44.8 and 3.50.0, each building `native-test-apps/flutter-webview` with `--dart-define=PROBE_AGENT=true`, `webview_flutter` and `webview_flutter_android` 4.14.1 (pinned; see
+`RELEASES.md`), on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `webview.probe` 5 of 5 on each build. The 3.50.0 build was made in a scratch copy with a private SDK; its `pubspec.lock` differs from the committed one only in
+packages the Flutter SDK pins itself (`test_api`, `matcher` and others), not in the WebView packages. Not run: a physical device, another API level, the WebView component's version of the emulator (not recorded), iOS, any WebView steps beyond
+the table.
 
 ## Unsupported
 

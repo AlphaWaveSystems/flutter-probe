@@ -104,7 +104,7 @@ The answer also carries `app_id`, and so does `GET /probe/status` (which needs n
 Android the agent reads it from its own process name (`/proc/self/cmdline`), which is the package name unless the app sets `android:process`; on iOS, or when the process has
 another name, build with `--dart-define=PROBE_APP_ID=<id>`. It is left out when it is not a plain application id (dot-separated segments of letters, digits, `_` and `-`, at
 most 255 characters), and nothing is guessed. When two apps with the agent share a device, the CLI can then tell which one answered: after the handshake it prints a **warning**
-(not a refusal) when the agent's `app_id` differs from `project.app` in `probe.yaml`, for example `the agent that answered reports app com.other.app, but project.app is
+(not a refusal) when the agent's `app_id` differs from `project.app` in `probe.yaml` (compared exactly on Android, where package names are case-sensitive, and without regard to case on iOS, where bundle ids are not), for example `the agent that answered reports app com.other.app, but project.app is
 com.example.app`. It is the app's own statement, not a proof, and an agent that does not send it (an older one) says nothing.
 
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
