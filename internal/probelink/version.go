@@ -149,6 +149,20 @@ const CapabilityWaitsForViewSize = "waits_for_view_size"
 // wrong place.
 const CapabilitySwipeFrom = "swipe_from"
 
+// CapabilitySeeFilled is reported by an agent that evaluates the `filled` and `empty` state checks of a `see` step (`see #pw is filled`).
+// An agent without it does not know the two words and answers ok for every element: a state it does not know counts as met. So the CLI refuses
+// the step before it sends it, and a field that is empty cannot pass `is filled` (nor a filled one `is empty`) on an old agent.
+const CapabilitySeeFilled = "see_filled"
+
+// checkSeeFilled returns the refusal for a `see ... is filled` or `is empty` step when the agent's handshake does not report
+// CapabilitySeeFilled, and nil when it does.
+func checkSeeFilled(h *HandshakeResult) error {
+	return checkCapability(h, CapabilitySeeFilled, "see ... is filled / is empty", "the release that adds see ... is filled")
+}
+
+// seeNeedsFilledCapability reports whether a state check of a see step is one that needs CapabilitySeeFilled.
+func seeNeedsFilledCapability(check string) bool { return check == "filled" || check == "empty" }
+
 // checkPressKey returns the refusal for a `press <key>` step when the agent's handshake does not report CapabilityPressKey,
 // and nil when it does.
 func checkPressKey(h *HandshakeResult) error {
