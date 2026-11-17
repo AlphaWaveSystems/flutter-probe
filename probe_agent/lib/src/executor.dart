@@ -656,7 +656,7 @@ class ProbeExecutor {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_screenFingerprint() != before) return;
       }
-      _tapWarning = _insideIgnorePointer(box)
+      _tapWarning = _ignoreCutsOwnHandler(box)
           ? 'tap target ${_selDesc(sel)} is inside an IgnorePointer, so it receives no taps; the tap at '
               '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}) did nothing and the screen did not change'
               '${_visibleHint()}'
@@ -784,10 +784,14 @@ class ProbeExecutor {
     return found;
   }
 
-  /// Whether an [IgnorePointer] that ignores is above [r]: the hit test skips [r] whatever is on top (issue #842).
-  bool _insideIgnorePointer(RenderObject r) {
+  /// Whether an [IgnorePointer] that ignores cut off a handler of [r]'s own: one inside [r], or between [r] and the IgnorePointer (a
+  /// button's InkWell). Only then is "it receives no taps" true; a passive label inside an IgnorePointer under a tile that takes the tap
+  /// does receive it (issue #842).
+  bool _ignoreCutsOwnHandler(RenderObject r) {
+    var handlerBelow = _subtreeHandlesPointer(r);
     for (RenderObject? c = r; c != null; c = c.parent) {
-      if (c is RenderIgnorePointer && c.ignoring) return true;
+      if (_handlesPointer(c)) handlerBelow = true;
+      if (c is RenderIgnorePointer && c.ignoring && handlerBelow) return true;
     }
     return false;
   }

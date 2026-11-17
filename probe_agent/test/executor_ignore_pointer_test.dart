@@ -162,4 +162,24 @@ void main() {
     expect(taps, 0);
     expect(result['warning'], contains('is inside an IgnorePointer'));
   });
+
+  // The review's case: a tile that takes the tap, whose title is inside an IgnorePointer. The tile does get the tap, so the message must
+  // not say the target receives none.
+  testWidgets(
+      'a ListTile whose title is inside an IgnorePointer gets the tap, and no IgnorePointer message',
+      (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ListView(children: [
+          ListTile(
+              onTap: () => taps++,
+              title: const IgnorePointer(child: Text('Row title'))),
+        ]),
+      ),
+    ));
+    final result = await _tap(tester, 'Row title');
+    expect(taps, 1);
+    expect('${result['warning']}', isNot(contains('inside an IgnorePointer')));
+  });
 }
