@@ -1,0 +1,134 @@
+name: Ubuntu 26.04 probe (throwaway)
+
+# Runs the Linux steps of release.yml, studio-e2e-web.yml and e2e.yml on ubuntu-latest (now Ubuntu 26.04), unchanged, to see which of
+# them still work. Only on this branch; never merged.
+
+on:
+  push:
+    branches: [ci/ubuntu-26-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  release-cli-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cat /etc/os-release
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.10"
+          check-latest: true
+      - name: Build binaries (release.yml build, linux)
+        env:
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          VERSION="0.0.0-probe"
+          go build -ldflags "-s -w -X github.com/alphawavesystems/flutter-probe/internal/cli.Version=${VERSION}" -o probe-linux-amd64 ./cmd/probe/
+          go build -ldflags "-s -w -X main.Version=${VERSION}" -o probe-mcp-linux-amd64 ./cmd/probe-mcp/
+          ./probe-linux-amd64 version
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Build .mcpb bundle (release.yml build-mcpb, linux)
+        run: |
+          mkdir -p mcpb-out
+          scripts/build-mcpb.sh probe-mcp-linux-amd64 linux 0.0.0-probe mcpb-out
+          ls -l mcpb-out
+      - name: Extract changelog section (release.yml release)
+        run: |
+          VERSION="0.26.1"
+          BODY=$(awk "/^## .*${VERSION}/{found=1; next} /^## /{if(found) exit} found{print}" CHANGELOG.md)
+          test -n "$BODY" && echo "changelog section: $(echo "$BODY" | wc -l) lines"
+      - name: Checksums (release.yml homebrew)
+        run: sha256sum probe-linux-amd64 probe-mcp-linux-amd64
+
+  release-studio-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cat /etc/os-release
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.10"
+          check-latest: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Install Linux WebKitGTK (release.yml build-studio)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+      - name: Build Studio (linux)
+        working-directory: studio
+        run: $(go env GOPATH)/bin/wails build -ldflags "-X main.Version=0.0.0-probe" -platform "linux/amd64" -tags webkit2_41
+      - name: Package Studio (linux)
+        working-directory: studio/build/bin
+        run: tar -czf flutter-probe-studio-0.0.0-probe-linux-amd64.tar.gz flutter-probe-studio && ls -l
+
+  studio-e2e-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - run: cat /etc/os-release
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.10"
+          check-latest: true
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Run UI tests (studio-e2e-web.yml)
+        env:
+          STUDIO_E2E_NO_DEVICE: "1"
+        run: scripts/studio-e2e-web.sh
+      - name: Playwright version used
+        if: always()
+        working-directory: studio/e2e-web
+        run: npx playwright --version || true
+
+  e2e-android-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - run: cat /etc/os-release
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.10"
+          check-latest: true
+          cache: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+      - name: Build probe CLI (e2e.yml)
+        run: make build
+      - name: Enable KVM (e2e.yml)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+      - name: Boot an emulator (e2e.yml AVD step, API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: false
+          script: adb devices && adb shell getprop sys.boot_completed && adb shell getprop ro.build.version.sdk
