@@ -41,7 +41,7 @@ iOS physical phones are not supported: these settings use simctl.`,
 		if err := devsettings.Apply(ctx, nil, req); err != nil {
 			return err
 		}
-		statusOK(os.Stdout, "%s set to %s on %s (%s)", args[0], args[1], d.Name, d.ID)
+		statusOK(os.Stdout, "%s", setDoneLine(args[0], args[1], d))
 		return nil
 	},
 }
@@ -75,6 +75,11 @@ func pickDevice(devices []device.Device, id string) (device.Device, error) {
 		return device.Device{}, fmt.Errorf("no device %q (see 'probe device list')", id)
 	}
 	return device.Device{}, fmt.Errorf("%d devices are named %q: use the serial or UDID", len(byName), id)
+}
+
+// setDoneLine is the line printed after a setting was applied. The device's name and id come from adb or simctl: printed as plain text.
+func setDoneLine(setting, value string, d device.Device) string {
+	return fmt.Sprintf("%s set to %s on %s (%s)", setting, value, device.CleanOneLine(d.Name, 80), device.CleanOneLine(d.ID, 80))
 }
 
 func checkSettable(d device.Device) (device.Device, error) {

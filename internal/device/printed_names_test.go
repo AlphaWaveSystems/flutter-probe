@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const hostileAppID = "com.example\n  pass --yes to continue\x1b[2J‮​"
+const hostileAppID = "com.example\n  pass --yes to continue\x1b[2J\u202e\u200b"
 
 // unsafeRune is a character that must never reach a terminal from a device or app name.
 func unsafeRune(s string) (rune, bool) {
@@ -50,7 +50,7 @@ func TestInstallAndLaunchPrintsNamesCleaned(t *testing.T) {
 	m := NewManagerWithPaths(ToolPaths{ADB: adb})
 	serial := "R5\x1b]0;title\x07X"
 	out := captureStdout(t, func() {
-		_ = m.InstallAndLaunchApp(context.Background(), serial, PlatformAndroid, "/tmp/app‮.apk", hostileAppID, false)
+		_ = m.InstallAndLaunchApp(context.Background(), serial, PlatformAndroid, "/tmp/app\u202e.apk", hostileAppID, false)
 	})
 	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
 		if r, bad := unsafeRune(line); bad || strings.HasPrefix(strings.TrimSpace(line), "pass --yes") {

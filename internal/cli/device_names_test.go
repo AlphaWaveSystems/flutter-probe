@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/deviceview"
 )
 
 // hiddenInPrint reports the first character in s that must never reach a terminal from a device name: an escape, a carriage return,
@@ -66,8 +69,8 @@ func TestDeviceListPrintsAHostileNameCleaned(t *testing.T) {
 // ("pass --yes") cannot appear as if probe had printed it.
 func TestDeviceSetRefusalNamesAHostileDeviceOnOneLine(t *testing.T) {
 	hostile := device.Device{
-		ID:       "AAAA-​BBBB",
-		Name:     "iPhone\n  pass --yes to continue\x1b[31m‮",
+		ID:       "AAAA-\u200bBBBB",
+		Name:     "iPhone\n  pass --yes to continue\x1b[31m\u202e",
 		State:    "Shutdown\r",
 		Platform: device.PlatformIOS,
 	}
@@ -94,5 +97,88 @@ func TestCleaningIsForDisplayOnly(t *testing.T) {
 	got, err := checkSettable(d)
 	if err != nil || got.ID != "emulator-5554" || got.Name != "Pixel\x1b[2J" {
 		t.Errorf("checkSettable must return the device unchanged: %+v, %v", got, err)
+	}
+}
+
+// hostileName is a device name with a new line and a fake probe line, an escape sequence, a bidi override and a zero-width space. It
+// is built from code points so this source stays ASCII.
+var hostileName = "Pixel\n  pass --yes to continue\x1b[2J" + string(rune(0x202e)) + string(rune(0x200b))
+
+// cleanOutput fails the test when out holds a line that starts with the forged text, or a character hiddenInPrint reports.
+func cleanOutput(t *testing.T, what, out string) {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "pass --yes") {
+			t.Errorf("%s: a device name forged its own line: %q", what, line)
+		}
+		if r, bad := hiddenInPrint(line); bad {
+			t.Errorf("%s: a line prints %U from the device: %q", what, r, line)
+		}
+	}
+}
+
+// The device view's startup line names the device; in every output mode it is plain text on one line.
+func TestDeviceViewStartupLineNamesAHostileDeviceCleaned(t *testing.T) {
+	for _, mode := range []string{"json", "plain", "print-token"} {
+		asJSON, printToken := mode == "json", mode == "print-token"
+		var out, errOut syncBuf
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- serveDeviceView(ctx, deviceview.Options{
+				Agent:  &stubAgent{},
+				Device: deviceview.DeviceInfo{ID: "dev-1", Platform: "android", Name: hostileName},
+			}, asJSON, printToken, &out, &errOut)
+		}()
+		deadline := time.Now().Add(3 * time.Second)
+		for !strings.Contains(errOut.String(), "listening") && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(errOut.String(), "Pixel pass --yes to continue") {
+			t.Fatalf("%s: the startup line must name the device: %q", mode, errOut.String())
+		}
+		cleanOutput(t, mode, errOut.String())
+	}
+}
+
+// With two ready devices, probe device view asks for one and lists their ids: as plain text on one line.
+func TestDeviceViewChoiceListsHostileIDsCleaned(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake adb is a shell script")
+	}
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$*\" in\n  *devices*) printf 'List of devices attached\\nR5A\\033[2JX device\\nR5B\\033]0;t\\007Y device\\n\\n' ;;\n  *) exit 1 ;;\nesac\n"
+	adb := filepath.Join(dir, "adb")
+	if err := os.WriteFile(adb, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dm := device.NewManagerWithPaths(device.ToolPaths{ADB: adb})
+	_, err := pickViewDevice(context.Background(), dm, "")
+	if err == nil || !strings.Contains(err.Error(), "several devices are ready") {
+		t.Fatalf("want the choice error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "\x1b") || strings.Contains(err.Error(), "\x07") {
+		t.Errorf("the choice lists raw ids: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "R5A [2JX") || !strings.Contains(err.Error(), "R5B ]0;t Y") {
+		t.Errorf("the ids' visible text must stay: %q", err.Error())
+	}
+}
+
+// The connect line of probe device view and the done line of probe device set name the device as plain text on one line.
+func TestConnectAndSetDoneLinesNameAHostileDeviceCleaned(t *testing.T) {
+	d := device.Device{ID: "R5\x1b]0;t\x07X", Name: hostileName}
+	for what, line := range map[string]string{"connect": connectingLine(d), "set done": setDoneLine("locale", "de-DE", d)} {
+		if !strings.Contains(line, "Pixel pass --yes to continue") {
+			t.Errorf("%s: the line must name the device: %q", what, line)
+		}
+		if strings.Count(strings.TrimRight(line, "\n"), "\n") != 0 || strings.Contains(line, "\x07") {
+			t.Errorf("%s: the line must be one clean line: %q", what, line)
+		}
+		cleanOutput(t, what, line)
 	}
 }

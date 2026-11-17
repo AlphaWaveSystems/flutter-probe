@@ -82,7 +82,7 @@ func runDeviceView(cmd *cobra.Command, _ []string) error {
 	conn := &viewConnector{dm: dm, cfg: cfg, dev: dev, warn: stderr}
 	defer conn.cleanup()
 
-	fmt.Fprintf(stderr, "  Connecting to the agent on %s (%s)...\n", device.CleanOneLine(dev.Name, 80), device.CleanOneLine(dev.ID, 80))
+	fmt.Fprint(stderr, connectingLine(dev))
 	agent, err := conn.connect(ctx)
 	if err != nil {
 		return err
@@ -97,6 +97,12 @@ func runDeviceView(cmd *cobra.Command, _ []string) error {
 		ViewOnly:         viewOnly,
 		TakeoverCooldown: deviceview.DefaultTakeoverCooldown,
 	}, asJSON, printToken, cmd.OutOrStdout(), stderr)
+}
+
+// connectingLine is the line printed before the agent connection: the device's name and id come from adb or simctl, so they are printed as
+// plain text on one line.
+func connectingLine(dev device.Device) string {
+	return fmt.Sprintf("  Connecting to the agent on %s (%s)...\n", device.CleanOneLine(dev.Name, 80), device.CleanOneLine(dev.ID, 80))
 }
 
 // cancelOnEOF reads r until it ends or fails, then calls cancel. It lets a
@@ -125,13 +131,13 @@ func serveDeviceView(ctx context.Context, opts deviceview.Options, asJSON, print
 		}{hub.URL(), hub.Token(), opts.Device.ID})
 		fmt.Fprintf(stdout, "%s\n", line)
 		fmt.Fprintf(stderr, "  Device view for %s is listening on %s (token printed on stdout). Press Ctrl+C to stop.\n",
-			opts.Device.Name, hub.URL())
+			device.CleanOneLine(opts.Device.Name, 80), hub.URL())
 	} else if printToken {
 		fmt.Fprintf(stderr, "  Device view for %s is listening on %s?token=%s . Press Ctrl+C to stop.\n",
-			opts.Device.Name, hub.URL(), hub.Token())
+			device.CleanOneLine(opts.Device.Name, 80), hub.URL(), hub.Token())
 	} else {
 		fmt.Fprintf(stderr, "  Device view for %s is listening on %s (token not printed; use --print-token). Press Ctrl+C to stop.\n",
-			opts.Device.Name, hub.URL())
+			device.CleanOneLine(opts.Device.Name, 80), hub.URL())
 	}
 	return hub.Run(ctx)
 }
@@ -165,7 +171,7 @@ func pickViewDevice(ctx context.Context, dm *device.Manager, id string) (device.
 	}
 	ids := make([]string, len(ready))
 	for i, d := range ready {
-		ids[i] = d.ID
+		ids[i] = device.CleanOneLine(d.ID, 80) // for the message only
 	}
 	return device.Device{}, fmt.Errorf("several devices are ready (%s); choose one with --device", strings.Join(ids, ", "))
 }

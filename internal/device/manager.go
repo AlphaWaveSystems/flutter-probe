@@ -308,7 +308,7 @@ func (m *Manager) StartIOSNamed(ctx context.Context, udid, name string) (*Device
 		}
 		if found := ios.FindByName(sims, name); found != nil {
 			if udid != "" && udid != found.UDID {
-				return nil, fmt.Errorf("simulator %q is %s, not %s", name, found.UDID, udid)
+				return nil, fmt.Errorf("simulator %q is %s, not %s", name, CleanOneLine(found.UDID, 80), CleanOneLine(udid, 80))
 			}
 			udid = found.UDID
 		} else {
