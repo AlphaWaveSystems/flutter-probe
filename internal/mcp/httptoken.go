@@ -84,14 +84,19 @@ func checkSuppliedToken(token string) error {
 // tokenFileName is the name of the token file of the server that listens on ip:port: http-token-<address>-<port>. An address and port belong to one
 // server at a time, so the name does too: a server on another port, or on another address with the same port (127.0.0.1 and ::1 can both be
 // bound), has its own file, and a second one on the same address and port cannot start (the listen fails before any file is touched). The address
-// is written with only letters, digits and dots (a colon or a bracket is not allowed in a file name on every system), so ::1 is __1.
-func tokenFileName(ip net.IP, port int) string {
+// is written with only letters, digits and dots (a colon or a bracket is not allowed in a file name on every system), so ::1 is __1; an IPv6 zone
+// (fe80::1%en0) is part of it, so the same link-local address on two interfaces is two files (fe80__1_en0, fe80__1_en1).
+func tokenFileName(ip net.IP, zone string, port int) string {
+	text := ip.String()
+	if zone != "" {
+		text += "%" + zone
+	}
 	addr := strings.Map(func(r rune) rune {
 		if r == '.' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
 			return r
 		}
 		return '_'
-	}, ip.String())
+	}, text)
 	return fmt.Sprintf("%s-%s-%d", tokenFileBase, addr, port)
 }
 

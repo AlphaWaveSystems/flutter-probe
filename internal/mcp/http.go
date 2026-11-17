@@ -337,7 +337,7 @@ func RunHTTP(ctx context.Context, opts HTTPOptions) error {
 		if token, err = newToken(); err != nil {
 			return err
 		}
-		if tokenFile, replaced, err = writeTokenFile(dir, tokenFileName(bound.IP, bound.Port), token); err != nil {
+		if tokenFile, replaced, err = writeTokenFile(dir, tokenFileName(bound.IP, bound.Zone, bound.Port), token); err != nil {
 			return err
 		}
 		defer removeTokenFile(tokenFile, token)
