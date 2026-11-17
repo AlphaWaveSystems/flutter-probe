@@ -13,6 +13,7 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
@@ -2149,13 +2150,14 @@ insertTapBtn.addEventListener("click", () => {
   editor.focus();
 });
 
+let recordingHead = "";
+
 $("btn-record").addEventListener("click", async () => {
   if (!connected) return;
 
   if (!recording) {
-    const now = new Date().toLocaleString();
-    const header = `# Recorded on ${now}\n\ntest "recorded flow"\n  open the app`;
-    model.setValue(header);
+    recordingHead = recordingHeader(new Date().toLocaleString());
+    model.setValue(recordingHead);
     currentPath = null;
     $("editor-filename").textContent = "recorded.probe";
     setDirty(true);
@@ -2170,7 +2172,8 @@ $("btn-record").addEventListener("click", async () => {
     try {
       const script = await StopRecording();
       if (script && script.trim()) {
-        model.setValue(script);
+        // the header the recording started with stays: the steps go under its test block
+        model.setValue(recordedScript(recordingHead, script));
       }
     } catch (err) {
       toast(`Stop failed: ${enrichError(err)}`, "error");
