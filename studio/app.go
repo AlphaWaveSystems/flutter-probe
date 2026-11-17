@@ -1179,6 +1179,9 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	}
 	a.setConfirmRun(runCtx)
 	defer a.clearConfirmRun()
+	a.mu.Lock()
+	startedIn := a.workspace // the folder this run belongs to: if another one is open when it ends, its results are not kept for export
+	a.mu.Unlock()
 	a.track.begin(path, plan)
 	a.export.clear() // a new run leaves nothing of the last one to export until it finishes
 	a.emit("run:started", path)
@@ -1197,7 +1200,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	})
 	results, err := r.Run(runCtx)
 	a.failures.record(path, results)
-	a.keepForExport(conn, results, runCtx.Err() != nil)
+	a.keepForExport(conn, results, runCtx.Err() != nil, startedIn)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))
