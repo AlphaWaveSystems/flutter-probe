@@ -57,7 +57,9 @@ type App struct {
 	wifiLimit wifiLimiter
 	// lookupHost resolves a hostname for the WiFi target policy; nil uses the system resolver (tests replace it).
 	lookupHost func(ctx context.Context, host string) ([]net.IP, error)
-	workspace  string // directory whose probe.yaml governs connections; "" → cwd
+	// connectWiFi is what ConnectWiFiSaved dials through; nil is ConnectWiFi (tests record what it is given).
+	connectWiFi func(host string, port int, token string) (ConnectionStatus, error)
+	workspace   string // directory whose probe.yaml governs connections; "" → cwd
 	// humanWorkspace is the last workspace a person opened in the window; it is what automation
 	// may work inside (see automationRoots).
 	humanWorkspace string
@@ -102,6 +104,7 @@ type connection struct {
 	platform     device.Platform
 	toolsNote    string // set when this connection uses an adb that probe.yaml names
 	disposable   bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
+	wifiAddr     string // host:port of a WiFi connection (what a saved token is bound to); empty for any other
 	appBuild     string // what the app reports about its build (see appBuildText); empty when it reports nothing
 	streamCancel context.CancelFunc
 	streamDone   chan struct{} // closed when the streaming loop exits
@@ -591,6 +594,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		cfg:          cfg,
 		deviceID:     deviceID,
 		deviceName:   fmt.Sprintf("WiFi %s", host),
+		wifiAddr:     wifiAddress(host, port),
 		appBuild:     appBuildText(hs),
 		platform:     device.PlatformIOS,
 		streamCancel: streamCancel,

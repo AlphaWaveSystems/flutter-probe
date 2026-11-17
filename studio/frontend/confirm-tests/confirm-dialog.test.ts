@@ -20,6 +20,24 @@ describe("confirmCopy", () => {
     assert.equal(c?.device, "(unknown device)");
     assert.equal(confirmCopy({ id: "x", kind: "clear-app-data", appId: "", deviceName: "d" })?.app, "(unknown app)");
   });
+  it("asks about the saved token with both addresses, and Cancel stays the first choice", () => {
+    const c = confirmCopy({ id: "x", kind: "send-saved-token", appId: "192.168.1.50:48686", deviceName: "Desk phone", detail: "192.168.1.20:48686" });
+    assert.ok(c);
+    assert.match(c.lead, /"Desk phone"/);
+    assert.equal(c.app, "192.168.1.50:48686");
+    assert.match(c.device, /192\.168\.1\.20:48686/);
+    assert.match(c.warning, /Nothing is sent unless you press Send token/);
+    assert.equal(c.cancel, "Cancel");
+    assert.equal(c.danger, "Send token");
+    assert.equal(confirmCopy({ id: "x", kind: "send-saved-token", appId: "", deviceName: "", detail: "" })?.app, "(unknown address)");
+  });
+  it("words a token saved without an address as such, not as a different address", () => {
+    const c = confirmCopy({ id: "x", kind: "send-saved-token", appId: "192.168.1.50:48686", deviceName: "Desk phone", detail: "" });
+    assert.ok(c);
+    assert.match(c.lead, /saved without an address/);
+    assert.doesNotMatch(c.lead, /different address/);
+    assert.match(c.device, /before tokens were tied to an address/);
+  });
   it("has no question for a kind it does not know", () => {
     assert.equal(confirmCopy({ id: "x", kind: "format-disk", appId: "a", deviceName: "d" }), null);
   });
