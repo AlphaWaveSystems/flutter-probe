@@ -15,11 +15,11 @@ A ranked list of the widgets that apps use most and that `MATRIX.md` has not ass
 
 | # | Widget(s) | Packages | Family in the matrix | State today | What the test must settle |
 |---|---|---|---|---|---|
-| 1 | `Text`, `RichText`, `Text.rich` | 32, 3 | Text and display | not assessed | how `see` matches the text a user sees |
-| 2 | `Scaffold` + `AppBar`, `Navigator` (push, pop, back) | 26 + 22, 9 | Navigation | not assessed | the title and actions of a bar, and what `see` matches after a push |
+| 1 | `Text`, `RichText` | 32, 3 | Text and display | not assessed | how `see` matches the text a user sees |
+| 2 | `Scaffold` + `AppBar`, `Navigator` (push, pop, back) | 26 + 22, 9 | Navigation | not assessed (the route rule has an agent unit test, not a device run) | the title and actions of a bar, and what `see` matches after a push, on a device |
 | 3 | `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` | 19, 7, 7, 5 | Text and display | not assessed | how a widget with no text is found |
 | 4 | `ListView` (and `.builder`), `SingleChildScrollView`, `CustomScrollView` + `SliverList`, `GridView`, `Scrollbar` | 12, 7, 5 + 4, 3, 3 | Lists and scrolling | not assessed | scrolling to an item that is not built yet |
-| 5 | `Card` + `ListTile`, `CupertinoListTile` | 9 + 8, 2 | Lists and scrolling | not assessed | tapping a row and reading its subtitle |
+| 5 | `Card` + `ListTile`, `CupertinoListTile` | 9 + 8, 2 | Layout and containers (`Card`); Lists and scrolling (the tiles) | not assessed | tapping a row and reading its subtitle |
 | 6 | `CircularProgressIndicator`, `LinearProgressIndicator` | 8, 1 | Text and display | not assessed | waiting for a spinner to go away |
 | 7 | `GestureDetector`, `InkWell` | 7, 5 | Gestures | not assessed | a tap on a text inside a gesture widget |
 | 8 | `AlertDialog`, `Dialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` | 5, 1, 1, 2 | Dialogs and sheets | not assessed | a dialog's text, its actions, and closing it |
@@ -29,12 +29,12 @@ A ranked list of the widgets that apps use most and that `MATRIX.md` has not ass
 
 ### The tests
 
-Each item is a new screen of the Flutter fixture app (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=<family>`, as for `selection`, `textinput` and `buttons`) with a suite in `probe-tests/widgets/`, and a file of variants that must fail in `probe-tests/negative/` (`.expect-fail`). Ids are `ValueKey`s with the `wf_` prefix the existing screens use. Every step below exists in the grammar today.
+Each item is a new screen of the Flutter fixture app (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=<family>`, as for `selection`, `textinput` and `buttons`) with a suite in `probe-tests/widgets/`, and a file of variants that must fail in `probe-tests/negative/` (`.expect-fail`). Ids are `ValueKey`s with the `wf_` prefix the existing screens use. Every step below exists in the grammar today; the one follow-up that needs a missing verb says so.
 
 1. **`display` screen: text.** Widgets:
    - `Text("Order total: 42.00")` (`wf_text`)
    - a `Text` with `maxLines: 1` and `overflow: TextOverflow.ellipsis` whose string is longer than the screen is wide (`wf_ellipsis`)
-   - `Text.rich` with two spans, "Hello " and a bold "world" (`wf_rich`)
+   - `Text.rich` with two spans, "Hello " and a bold "world" (`wf_rich`). The source has no `Text.rich` call; it is here because it builds the same `RichText` that the 3 packages construct.
    - a `RichText` (`wf_richtext`)
 
    Steps:
@@ -50,10 +50,12 @@ Each item is a new screen of the Flutter fixture app (`native-test-apps/flutter`
    Steps:
    - `see "Inbox"`, then `tap "Search"`
    - `tap "Open message"`, then `see "Message"`
-   - `don't see "Inbox"` while the second route is on top. This settles the rule in `website/src/content/docs/tools/agent.md` that only the current route is matched; an earlier project note said the route underneath was matched, and no test has settled it.
+   - `don't see "Inbox"` while the second route is on top. The agent excludes a route under the current one when an opaque route covers it (`_isVisible` and `_routeOnScreen` in `probe_agent/lib/src/finder.dart`), and a unit test covers it (`probe_agent/test/finder_test.dart`, group "ProbeFinder route-awareness (PT-03)"). What is open is the device run: this step on a built app on a device.
    - `go back`, then `see "Inbox"`
 
-   Must fail: `see "Inbox"` while the message route is on top, if the rule holds.
+   Must fail: `see "Inbox"` while the message route is on top.
+
+   A route under one that is not opaque (a dialog, a popup menu, a bottom sheet) stays on screen, and the agent keeps matching it by design: under an open dialog, `see` still finds the page's text. Item 8 depends on this.
 3. **`display` screen: widgets without text.** Widgets:
    - an `Icon` with `semanticLabel: "Favorite"` (`wf_icon`)
    - an `Image.asset` with `semanticLabel: "Logo"` (`wf_image`)
@@ -110,7 +112,9 @@ Each item is a new screen of the Flutter fixture app (`native-test-apps/flutter`
    - open it again and `go back`. This settles whether back closes a dialog.
    - the same for the Cupertino dialog and sheet
 
-   Must fail: `see "Delete item?"` after Cancel, and `tap` a widget of the page under an open dialog. This settles whether the barrier stops it: the page's counter must not move.
+   Must fail: `see "Delete item?"` after Cancel.
+
+   Under the open dialog the page is still matched (item 2), so `see` a text of the page passes while the dialog is open, and `don't see` it fails. The suite asserts that as the rule. A `tap` on a widget of the page under the open dialog finds the widget, so what the test settles is whether the tap reaches it or the barrier takes it: the page's counter must not move.
 9. **`dialogs` screen: snack bar.** Widgets: a button that shows `SnackBar(content: Text("Saved"), action: SnackBarAction(label: "Undo"))` for 4 seconds.
 
    Steps:
@@ -148,7 +152,7 @@ These matrix families are "not assessed", and the sample apps hardly use them: `
 These cells are "partly" or "not assessed" inside families that already have a screen. Each is one or two steps on the existing screen:
 
 - **Text input:**
-  - read a field's own text rather than its mirror (`store text of #wf_textfield as v`, then type it into another field, the way the WebView suite reads back);
+  - read a field's own text rather than its mirror. **This needs a verb that does not exist:** `store text of` takes only a CSS selector in a WebView (`store text of css:"..." in webview as name`), so a Flutter field's text cannot be stored today. Until there is one, the field is read through a mirror, as now;
   - type a line break into the `maxLines: 3` field (the matrix says it was not typed);
   - `clear` on the form field and the Cupertino field.
 - **Selection controls:** `see #wf_slider` reads its value (only the mirror is read today), and `see "..." is checked` on the `CupertinoSwitch`.
