@@ -21,6 +21,7 @@ import { getWorkspaceRoot } from './config';
 import { disposeAllTerminals } from './terminal/probeTerminal';
 import { Session } from './types';
 import { SECRET_SETTINGS, staleWorkspaceSettings } from './secretArgs';
+import { TOOL_SETTINGS } from './toolPath';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -35,13 +36,13 @@ function noticeStaleWorkspaceSettings(context: vscode.ExtensionContext): void {
   } catch {
     return;
   }
-  const stale = staleWorkspaceSettings(text, SECRET_SETTINGS);
+  const stale = staleWorkspaceSettings(text, [...SECRET_SETTINGS, ...TOOL_SETTINGS]);
   if (stale.length === 0) { return; }
   void context.workspaceState.update('flutterprobe.staleSettingsNoticed', true);
   void vscode.window.showWarningMessage(
     `FlutterProbe ignores ${stale.map(k => 'flutterprobe.' + k).join(', ')} in this workspace's .vscode/settings.json: ` +
-    'they can be set only in your user settings now: the secrets, and the relay URL and the cloud provider that decide where they are sent, ' +
-    'cannot come from a workspace. Which binary the extension runs is a separate setting (Tool Paths in the README). Move them to your user settings.',
+    'they can be set only in your user (or remote) settings now: the secrets, the relay URL and the cloud provider that decide where they are sent, ' +
+    'and the paths of the binaries the extension runs cannot come from a workspace. Move them to your user settings.',
   );
 }
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { ToolPathInput, candidates, notFoundPath, pathDirs, resolveToolPath } from '../toolPath';
+import { TOOL_SETTINGS, ToolPathInput, candidates, notFoundPath, pathDirs, resolveToolPath } from '../toolPath';
 
 const posix = path.posix;
 const win = path.win32;
@@ -99,7 +99,8 @@ test('the binary settings and the opt-in are machine-scoped, the opt-in is off, 
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
   const conf = pkg.contributes.configuration;
   const props = Array.isArray(conf) ? Object.assign({}, ...conf.map((c: { properties: object }) => c.properties)) : conf.properties;
-  for (const key of ['probePath', 'convertPath', 'adbPath', 'flutterPath', 'useWorkspaceBinaries']) {
+  assert.deepEqual([...TOOL_SETTINGS], ['probePath', 'convertPath', 'adbPath', 'flutterPath', 'useWorkspaceBinaries']);
+  for (const key of TOOL_SETTINGS) {
     assert.equal(props[`flutterprobe.${key}`]?.scope, 'machine', `flutterprobe.${key} must be machine-scoped`);
   }
   assert.equal(props['flutterprobe.useWorkspaceBinaries'].default, false);

@@ -12,6 +12,9 @@
 //   default) and the workspace is trusted. Trusting a folder is not consent to run its binaries.
 // - Otherwise the first match on PATH.
 
+// The settings that name a binary, and the opt-in for the workspace's own: all machine-scoped (package.json).
+export const TOOL_SETTINGS = ['probePath', 'convertPath', 'adbPath', 'flutterPath', 'useWorkspaceBinaries'] as const;
+
 export interface ToolPathInput {
   configured: string | undefined;  // the setting's value
   defaultName: string;             // 'probe' or 'probe-convert'
