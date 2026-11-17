@@ -29,6 +29,15 @@ test('a test run keeps the secrets it is allowed, and the settings come on top',
   assert.equal(env.PROBE_CLOUD_KEY, 'key');
 });
 
+test('a secret variable is removed in any casing, and the settings replace any casing of their name', () => {
+  const mixed = { Path: 'C:\\Windows', Probe_Cloud_Key: 'k', probe_cloud_secret: 's', PROBE_relay_CLI_token: 't', Probe_Cloud_Url: 'u' };
+  assert.deepEqual(childEnv(mixed), { Path: 'C:\\Windows', Probe_Cloud_Url: 'u' });
+  const env = childEnv(mixed, { allow: ALL_SECRETS, add: { PROBE_CLOUD_SECRET: 'from-settings' } });
+  assert.equal(env.PROBE_CLOUD_SECRET, 'from-settings');
+  assert.equal(env.probe_cloud_secret, undefined);
+  assert.equal(env.Probe_Cloud_Key, 'k');
+});
+
 // The spawn sites import vscode, so their use of childEnv is checked in their source.
 test('each spawned child gets the environment its role allows', () => {
   const src = path.join(__dirname, '..', '..', 'src');

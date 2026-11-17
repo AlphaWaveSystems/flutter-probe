@@ -173,8 +173,8 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `probePath` | `probe` | Path to the probe CLI binary |
-| `convertPath` | `probe-convert` | Path to the probe-convert binary |
+| `probePath` | `probe` | Path to the probe CLI binary. User or remote settings only. Without it: `probe` on PATH (see Tool Paths) |
+| `convertPath` | `probe-convert` | Path to the probe-convert binary. User or remote settings only. Without it: `probe-convert` on PATH (see Tool Paths) |
 | `autoLint` | `true` | Lint `.probe` files on save |
 | `defaultDevice` | | Default device serial |
 | `defaultTimeout` | `30s` | Per-step timeout |
@@ -215,11 +215,11 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 **The cloud key, the cloud secret and the relay token never go on the command line.** A command line is visible to other users in the process list and stays in your shell's history, so the extension gives these three to `probe test` as environment variables of its terminal (`PROBE_CLOUD_KEY`, `PROBE_CLOUD_SECRET`, `PROBE_RELAY_CLI_TOKEN`), which the CLI reads when the flag is not given.
 
-**What else the programs inherit.** Every program the extension starts inherits VS Code's environment. The three secret variables reach only test runs (the terminal runs and Test Explorer runs, which also get the settings' values); the device list, lint and the device view get the environment without them. Nothing else is removed: a `${NAME}` in a test reads any variable by design. The boundary is which binaries run and in which workspaces (see Tool Paths).
+**What else the programs inherit.** Every program the extension starts inherits VS Code's environment. The settings' secrets are given only to test runs (the terminal runs and Test Explorer runs). The device list, lint and the device view get VS Code's environment without the three variables, in any casing. The other terminals (Studio, record, convert, init, lint, report, devices) are created with no extra variables, but a terminal still inherits VS Code's own environment, so if VS Code itself was started with one of the three variables set, those terminals have it too. Nothing else is removed: a `${NAME}` in a test reads any variable by design. The boundary is which binaries run and in which workspaces (see Tool Paths).
 
 **Where they live.** The values stay in that terminal's environment for as long as the terminal is open: every command you type in it, and every program `probe` starts from it (`adb`, `flutter`), inherits them. A terminal is replaced when a run's secrets differ from those it was made with. Whether VS Code keeps or restores a terminal's environment when it restores terminals after a restart was not verified; close the FlutterProbe terminals to be sure the values are gone.
 
-**What a workspace cannot set.** `cloudKey`, `cloudSecret` and `relayToken`, and the two settings that decide where they are sent, `relayUrl` (the relay token is sent to it) and `cloudProvider` (the key and secret are sent to it), can be set only in your user (or remote) settings. A repository's `.vscode/settings.json` cannot set them, and Settings Sync leaves them out. This covers the extension's settings only: `probe test` also reads the workspace's `probe.yaml`, whose `cloud:` section can name a provider and a relay service URL. Which binary the extension runs is a separate setting: tool paths (see Tool Paths); until that is restricted, only open workspaces you trust. VS Code stores settings in plain text; on a shared machine or in CI, set the environment variables instead.
+**What a workspace cannot set.** `cloudKey`, `cloudSecret` and `relayToken`, and the two settings that decide where they are sent, `relayUrl` (the relay token is sent to it) and `cloudProvider` (the key and secret are sent to it), can be set only in your user (or remote) settings. A repository's `.vscode/settings.json` cannot set them, and Settings Sync leaves them out. This covers the extension's settings only: `probe test` also reads the workspace's `probe.yaml`, whose `cloud:` section can name a provider and a relay service URL. Which binary the extension runs is a separate set of settings, restricted the same way (see Tool Paths); `probe.yaml`'s `tools:` section can still name `adb` and `flutter`. VS Code stores settings in plain text; on a shared machine or in CI, set the environment variables instead.
 
 > **Changed in this version:** a value of `cloudKey`, `cloudSecret`, `relayToken`, `relayUrl` or `cloudProvider` in a workspace's `.vscode/settings.json` is now ignored, and the extension says so once for that workspace. Move it to your user settings (Preferences: Open User Settings (JSON)), or set the environment variable.
 
@@ -227,9 +227,19 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `adbPath` | | Custom ADB binary path |
-| `flutterPath` | | Custom Flutter binary path |
+| `adbPath` | | Custom ADB binary path. User or remote settings only |
+| `flutterPath` | | Custom Flutter binary path. User or remote settings only |
+| `useWorkspaceBinaries` | `false` | Run `bin/probe` and `bin/probe-convert` from the open workspace when `probePath` or `convertPath` is not set. User or remote settings only |
 | `studioPort` | `9191` | Port for probe studio |
+
+**Which binaries run.**
+
+- The settings that name a binary (`probePath`, `convertPath`, `adbPath`, `flutterPath`) and `useWorkspaceBinaries` can be set only in your user settings, or in the **remote** settings when VS Code is connected to a remote machine (SSH, WSL, a container): set them there, since a value in the workspace's `.vscode/settings.json` is ignored. A repository cannot point the extension at a binary of its own.
+- The extension resolves the binary itself and runs it by its absolute path: the `probePath` you set (an absolute path, or a command name looked up on PATH), else `probe` on PATH. Only the absolute folders of PATH are searched, never the workspace: on Windows the system would otherwise look in the current folder first (Node's `spawn` and cmd.exe do), so a `probe.exe` in a repository could run instead of yours. On Windows, when `probe` is on no folder of PATH, the extension says so rather than let the system search the workspace.
+- A `bin/probe` inside the workspace is used only when you turn on `useWorkspaceBinaries` and the workspace is trusted. Trusting a folder in VS Code is not consent to run its binaries.
+- The extension runs only in a trusted workspace (VS Code's Restricted Mode keeps it off until you trust the folder). `probe test` still reads the workspace's `probe.yaml`, whose `tools:` section can name `adb` and `flutter` binaries: trust a folder only if you trust what it runs.
+
+> **Changed in this version:** a value of `probePath`, `convertPath`, `adbPath` or `flutterPath` in a workspace's `.vscode/settings.json` is now ignored: move it to your user (or remote) settings. A `bin/probe` in the workspace is no longer picked up on its own: turn on `useWorkspaceBinaries` in your user settings to use it.
 
 ## Cloud Provider Setup
 

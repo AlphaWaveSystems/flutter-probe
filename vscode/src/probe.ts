@@ -32,7 +32,12 @@ export function runCommand(
 }
 
 export async function listDevices(): Promise<Device[]> {
-  const probePath = getProbePath();
+  let probePath: string;
+  try {
+    probePath = getProbePath();
+  } catch {
+    return []; // probe was not found (see toolPath.ts); the commands that run it say so
+  }
   const result = await runCommand(probePath, ['device', 'list']);
   if (result.code !== 0) {
     return [];
@@ -79,7 +84,12 @@ export async function listDevices(): Promise<Device[]> {
 }
 
 export async function runLint(filePath: string): Promise<LintResult[]> {
-  const probePath = getProbePath();
+  let probePath: string;
+  try {
+    probePath = getProbePath();
+  } catch {
+    return []; // lint on save stays quiet when probe is not found
+  }
   const result = await runCommand(probePath, ['lint', filePath]);
   const results: LintResult[] = [];
   const output = result.stdout + result.stderr;

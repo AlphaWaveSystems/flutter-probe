@@ -56,11 +56,18 @@ export function childEnv(
   base: Record<string, string | undefined>,
   opts: { allow?: readonly (keyof SecretValues)[]; add?: Record<string, string> } = {},
 ): Record<string, string | undefined> {
-  const env = { ...base };
+  // Names are compared without regard to case: Windows reads Probe_Cloud_Key as PROBE_CLOUD_KEY, and Node keeps the casing it was given.
+  const dropped = new Set<string>();
   for (const key of Object.keys(SECRET_ENV) as (keyof SecretValues)[]) {
-    if (!opts.allow?.includes(key)) { delete env[SECRET_ENV[key].env]; }
+    if (!opts.allow?.includes(key)) { dropped.add(SECRET_ENV[key].env.toUpperCase()); }
   }
-  return { ...env, ...(opts.add ?? {}) };
+  const add = opts.add ?? {};
+  for (const name of Object.keys(add)) { dropped.add(name.toUpperCase()); } // add replaces any casing of its names
+  const env: Record<string, string | undefined> = {};
+  for (const [name, value] of Object.entries(base)) {
+    if (!dropped.has(name.toUpperCase())) { env[name] = value; }
+  }
+  return { ...env, ...add };
 }
 
 // ALL_SECRETS is the allow list of a child that runs tests.
