@@ -20,9 +20,8 @@ export function getConvertPath(): string {
   return toolPath('convertPath', 'probe-convert');
 }
 
-// toolPath is the absolute path of the binary for a path setting (see toolPath.ts for the rules). When nothing is found it is the bare name
-// on macOS and Linux, where a bare name is looked up on PATH only; on Windows, where the system would also look in the workspace, it is
-// an error instead.
+// toolPath is the absolute path of the binary for a path setting (see toolPath.ts for the rules). When nothing is found it is an error,
+// on every system (notFoundPath).
 function toolPath(setting: string, defaultName: string): string {
   const r = resolveToolPath({
     configured: getSetting<string>(setting),

@@ -83,8 +83,8 @@ export function resolveToolPath(i: ToolPathInput): ToolPath {
 }
 
 // notFoundPath is what the extension runs when resolveToolPath found nothing. A missing absolute path is returned as it is (running it
-// fails with "not found"); a bare name is returned on macOS and Linux, where the system looks it up on PATH only. On Windows a bare name
-// would also be looked up in the workspace, and a relative path is always relative to it, so both are an error that says what to do.
+// fails with "not found"). A name that is on no absolute folder of PATH, and a relative path, are an error that says what to do, on every
+// system: a bare name could only be found through an empty or relative PATH entry, which is the workspace.
 export function notFoundPath(r: Extract<ToolPath, { notFound: string }>, setting: string): string {
   if (r.reason === 'not-a-file') { return r.notFound; }
   if (r.reason === 'relative') {
@@ -109,18 +109,40 @@ export function quotePosix(word: string): string {
   return `'${word.replace(/'/g, "'\\''")}'`;
 }
 
-// commandWord is the command as typed into the terminal, quoted for the shell the terminal runs (vscode.env.shell). A path with a space
-// must stay one word, and each shell has its own way: PowerShell runs a quoted path only with the call operator (& 'C:\Program Files\p.exe'),
-// cmd.exe reads double quotes, and a POSIX shell (also Git Bash or WSL on Windows) single quotes. An unknown shell on Windows gets the
-// path as it is: no quoting is right for all of them.
+// The POSIX shells whose single quotes were checked to keep any text as one word with nothing expanded.
+const POSIX_SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
+
+// Characters a shell can act on. Under a shell whose quoting is not handled here, a path that holds one is refused rather than typed.
+// The backslash is one too on macOS and Linux; on Windows it separates folders and every path has it.
+const METACHARACTERS = /[&|;<>^`$()'"%!\n\r]/;
+
+// commandWord is the command as typed into the terminal, quoted for the shell the terminal runs (vscode.env.shell), or an error when the
+// path cannot be typed safely for that shell. Only the command is handled here: the arguments are still quoted the POSIX way on every
+// system (shellEscape in probeTerminal.ts).
+// - bash, sh, zsh, dash, ksh (also Git Bash or WSL on Windows): POSIX single quotes.
+// - PowerShell: the call operator and single quotes, & '...'. PowerShell also reads the typographic quotes ‘ ’ “ ” as quotation marks
+//   (about_Quoting_Rules), so ' ‘ ’ are doubled inside the string, and a path with ‚ or ‛, which that page does not list, is refused.
+// - cmd.exe: double quotes. %NAME% still expands inside them and cmd has no escape for it on a command line, so a path with % is refused.
+// - Any other shell (fish, nu, csh, pwsh on macOS or Linux, none detected): a path of safe characters is typed as it is, one with a shell
+//   metacharacter is refused, and any other (a space) is single-quoted on macOS and Linux and typed as it is on Windows.
 export function commandWord(command: string, platform: string, shell: string): string {
-  if (platform !== 'win32') { return quotePosix(command); }
   if (/^[a-zA-Z0-9_.:\\/-]+$/.test(command)) { return command; }
-  const name = shell.split(/[\\/]/).pop()?.toLowerCase() ?? '';
-  if (name === 'pwsh.exe' || name === 'powershell.exe' || name === 'pwsh' || name === 'powershell') {
-    return `& '${command.replace(/'/g, "''")}'`;
+  const name = (shell.split(/[\\/]/).pop() ?? '').toLowerCase().replace(/\.exe$/, '');
+  if (POSIX_SHELLS.has(name) || (name === 'wsl' && platform === 'win32')) { return quotePosix(command); }
+  if (platform === 'win32' && (name === 'powershell' || name === 'pwsh')) {
+    if (/[\u201A\u201B\n\r]/.test(command)) {
+      throw new Error(`the path of the command, ${JSON.stringify(command)}, has a character PowerShell may read as a quote: install it in a folder without one, or set flutterprobe.probePath to such a path`);
+    }
+    return `& '${command.replace(/['\u2018\u2019]/g, c => c + c)}'`;
   }
-  if (name === 'cmd.exe' || name === 'cmd') { return `"${command}"`; }
-  if (/^(bash|sh|zsh|wsl)(\.exe)?$/.test(name)) { return quotePosix(command); }
-  return command;
+  if (platform === 'win32' && name === 'cmd') {
+    if (/[%"\n\r]/.test(command)) {
+      throw new Error(`the path of the command, ${JSON.stringify(command)}, has a % or " that cmd.exe would read: install it in a folder without one, or use PowerShell as the terminal`);
+    }
+    return `"${command}"`;
+  }
+  if (METACHARACTERS.test(command) || (platform !== 'win32' && command.includes('\\'))) {
+    throw new Error(`the path of the command, ${JSON.stringify(command)}, has a character the terminal's shell (${name || 'not detected'}) may act on: install it in a folder without one, or use bash, zsh, PowerShell or cmd.exe as the terminal`);
+  }
+  return platform === 'win32' ? command : quotePosix(command);
 }

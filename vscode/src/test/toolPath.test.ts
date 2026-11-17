@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { TOOL_SETTINGS, ToolPathInput, candidates, commandWord, isRegularFile, notFoundPath, pathDirs, quotePosix, resolveToolPath } from '../toolPath';
 import * as os from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 const posix = path.posix;
 const win = path.win32;
@@ -113,16 +114,66 @@ test('isRegularFile on real files', () => {
 });
 
 test('the command is quoted for the shell of the terminal', () => {
+  const ps = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
+  const cmd = 'C:\\Windows\\System32\\cmd.exe';
   assert.equal(commandWord('/usr/local/bin/probe', 'darwin', '/bin/zsh'), '/usr/local/bin/probe');
   assert.equal(commandWord('/Users/a b/probe', 'darwin', '/bin/zsh'), "'/Users/a b/probe'");
-  assert.equal(commandWord('C:\\tools\\probe.exe', 'win32', 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'), 'C:\\tools\\probe.exe');
-  assert.equal(commandWord("C:\\Program Files\\o'p\\probe.exe", 'win32', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'), "& 'C:\\Program Files\\o''p\\probe.exe'");
-  assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', 'C:\\Windows\\System32\\cmd.exe'), '"C:\\Program Files\\probe\\probe.exe"');
+  assert.equal(commandWord('C:\\tools\\probe.exe', 'win32', ps), 'C:\\tools\\probe.exe');
+  assert.equal(commandWord("C:\\Program Files\\o'p\\probe.exe", 'win32', ps), "& 'C:\\Program Files\\o''p\\probe.exe'");
+  assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', cmd), '"C:\\Program Files\\probe\\probe.exe"');
   assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', 'C:\\Program Files\\Git\\bin\\bash.exe'), "'C:\\Program Files\\probe\\probe.exe'");
   assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', ''), 'C:\\Program Files\\probe\\probe.exe');
   assert.equal(quotePosix("it's"), "'it'\\''s'");
 });
 
+// PowerShell reads the typographic quotes ‘ ’ as single quotes (about_Quoting_Rules): they are doubled, so the string cannot end early.
+test('PowerShell: typographic single quotes are doubled, and quotes it may read are refused', () => {
+  const ps = 'powershell.exe';
+  assert.equal(commandWord('C:\\Users\\O\u2019Brien\\probe.exe', 'win32', ps), "& 'C:\\Users\\O\u2019\u2019Brien\\probe.exe'");
+  assert.equal(commandWord('C:\\x\u2019; calc; \u2018\\probe.exe', 'win32', ps), "& 'C:\\x\u2019\u2019; calc; \u2018\u2018\\probe.exe'");
+  assert.equal(commandWord("C:\\a'b c\\probe.exe", 'win32', ps), "& 'C:\\a''b c\\probe.exe'");
+  assert.throws(() => commandWord('C:\\x\u201A y\\probe.exe', 'win32', ps), /may read as a quote/);
+  assert.throws(() => commandWord('C:\\x\u201B y\\probe.exe', 'win32', ps), /may read as a quote/);
+});
+
+test('cmd.exe: a path with % is refused, other characters are inside double quotes', () => {
+  const cmd = 'cmd.exe';
+  assert.throws(() => commandWord('C:\\%COMSPEC% x\\probe.exe', 'win32', cmd), /% or "/);
+  assert.equal(commandWord('C:\\a&calc b\\probe.exe', 'win32', cmd), '"C:\\a&calc b\\probe.exe"');
+});
+
+// Under a shell whose quoting is not handled (or none detected), a path with a metacharacter is refused, never typed.
+test('an unknown shell gets no path with a metacharacter', () => {
+  for (const shell of ['', 'C:\\tools\\nu.exe', 'fish.exe']) {
+    for (const bad of ['C:\\a&calc\\probe.exe', 'C:\\a|b c\\probe.exe', 'C:\\a;b c\\probe.exe', 'C:\\a$(x) b\\probe.exe', 'C:\\a%x% b\\probe.exe', "C:\\a'b c\\probe.exe"]) {
+      assert.throws(() => commandWord(bad, 'win32', shell), /may act on/, `${shell} ${bad}`);
+    }
+    assert.equal(commandWord('C:\\Program Files\\probe.exe', 'win32', shell), 'C:\\Program Files\\probe.exe');
+  }
+  for (const shell of ['/usr/local/bin/fish', '/usr/local/bin/pwsh', '/bin/csh', '']) {
+    for (const bad of ['/a;b/probe', '/a b/$(id)/probe', '/a\\b c/probe', "/a'b c/probe", '/a!b c/probe', '/a`id` b/probe']) {
+      assert.throws(() => commandWord(bad, 'darwin', shell), /may act on/, `${shell} ${bad}`);
+    }
+    assert.equal(commandWord('/Users/a b/probe', 'linux', shell), "'/Users/a b/probe'");
+  }
+});
+
+// The verified POSIX shells, run for real where installed: each hostile path comes back as one word, unchanged, and nothing runs.
+test('bash, sh, zsh, dash and ksh read each quoted path as one word', () => {
+  if (process.platform === 'win32') { return; }
+  const hostile = ["/x'; touch PWNED; '/probe", '/a b/$(touch PWNED)/probe', '/a`touch PWNED`/probe', '/a\\\nb/probe', '/a"b;c|d&e/probe', '/\u202Eevil\u200B/probe', "/it's here/probe"];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quote-'));
+  for (const shell of ['bash', 'sh', 'zsh', 'dash', 'ksh']) {
+    const bin = ['/bin/', '/usr/bin/'].map(d => d + shell).find(p => fs.existsSync(p));
+    if (!bin) { continue; }
+    for (const p of hostile) {
+      const word = commandWord(p, 'linux', bin);
+      const out = execFileSync(bin, ['-c', `printf '%s\\0' ${word}`], { cwd: dir }).toString();
+      assert.equal(out, p + '\0', `${shell}: ${JSON.stringify(p)}`);
+    }
+  }
+  assert.equal(fs.existsSync(path.join(dir, 'PWNED')), false, 'nothing in a path may run');
+});
 // The manifest: the settings that name a binary, and the opt-in, are machine-scoped; the extension needs a trusted workspace.
 test('the binary settings and the opt-in are machine-scoped, the opt-in is off, and the extension needs trust', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
