@@ -360,6 +360,13 @@ func (dc *DeviceContext) askWipe(what, reason, question string) error {
 	return nil
 }
 
+// beforeEveryTest is the words that say when a per-test wipe happens, in its question and in every line that says it was answered without one.
+const beforeEveryTest = "BEFORE EVERY TEST"
+
+// IsBeforeEachTestQuestion says whether a clear question is the one for "clear data before each test" (as opposed to a `clear app data` step), so
+// a line that says it was answered without asking can say when the wipe happens.
+func IsBeforeEachTestQuestion(message string) bool { return strings.Contains(message, beforeEveryTest) }
+
 // AskClearData is the gate for a clear: the clear step, or the before-each question (perTest: its text names the package and device cleaned to one line and says it happens before every test). On an iOS
 // simulator the question and the hint also say what the keychain reset takes with it.
 func (dc *DeviceContext) AskClearData(perTest bool) error {
@@ -367,7 +374,7 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 	if perTest {
 		what = "clear data before each test"
 	}
-	reason := "wipes all app data for " + dc.AppID
+	reason := "wipes all app data for " + device.CleanOneLine(dc.AppID, 80)
 	note := ""
 	if dc.Platform == device.PlatformIOS {
 		reason += iosKeychainHint
@@ -376,7 +383,7 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 	question := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
 		"  SharedPreferences, databases, and files will be wiped.%s Continue?", dc.AppID, dc.Serial, note)
 	if perTest {
-		question = fmt.Sprintf("This will permanently delete ALL app data for %s on %s BEFORE EVERY TEST of this run.\n"+
+		question = fmt.Sprintf("This will permanently delete ALL app data for %s on %s "+beforeEveryTest+" of this run.\n"+
 			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80), note)
 	}
 	return dc.askWipe(what, reason, question)
