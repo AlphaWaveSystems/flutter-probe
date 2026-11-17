@@ -91,3 +91,6 @@ Each has a number to hit, so a review can say done or not done.
 2. The AI-card hardening PR: `CheckReplaceLine` gets the Running, `Depth > 0` and kept-text checks (the prerequisite above).
 3. The agent change (an agent task with unit tests, by the session the business session assigns): `editable_texts` independent of the de-duplication, raw `RichText` texts, `truncated`, the cap and the count. It needs a published agent release.
 4. The N8 code, after the design is accepted and 1 to 3 are in.
+
+## Follow-up: glyph characters (code of this note)
+The agent's text matcher also matches an `Icon`'s glyph (a private-use character) by a text selector, and the summary leaves Icon glyphs out of `rich_texts`: a replacement text that holds one could be a `Text` next to an `Icon` that shows the same glyph, where the summary shows one match and the agent matches two. So a replacement text with a private-use character, U+FFFC, U+FFFD or any unassigned code point is refused by its own rule (asked before the "plain line" rule, so it is a rule of its own and not only a case of it), and so is a text with no letter or digit.

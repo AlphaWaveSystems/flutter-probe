@@ -13,6 +13,10 @@ import (
 type StepTriage struct {
 	Fix    string `json:"fix,omitempty"`
 	Reason string `json:"reason"`
+	// Replacement is the text the screen showed that the failed text was another way of writing (see replace_step.go); the step is then the same with this text.
+	// Only the text: the line is built when it is applied, from the text the run read. When it is set, Fix is empty: a wait for text that is spelled otherwise
+	// on screen would time out again.
+	Replacement string `json:"replacement,omitempty"`
 }
 
 // selectorStep matches a see or tap on a quoted selector. The runner writes an id in the same quoted form as a
