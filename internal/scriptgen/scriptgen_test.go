@@ -30,7 +30,7 @@ func TestStep(t *testing.T) {
 		{"tap by type", ev{"action": "tap", "selector": sel("type", "Switch")}, `  tap the Switch`},
 		{"tap with only text", ev{"action": "tap", "text": "OK"}, `  tap "OK"`},
 		{"tap with only an id", ev{"action": "tap", "id": "ok"}, `  tap #ok`},
-		{"tap without a selector", ev{"action": "tap"}, `  tap the element`},
+		{"tap without a selector", ev{"action": "tap"}, `  # could not record a selector for tap: add the step by hand.`},
 		{"tap with a quote", ev{"action": "tap", "selector": sel("text", `Say "hi"`)}, `  tap "Say \"hi\""`},
 		{"type into a field", ev{"action": "type", "text": "a@b.co", "selector": sel("id", "email")}, `  type "a@b.co" into the #email field`},
 		{"type into a field by text", ev{"action": "type", "text": "x", "selector": sel("text", "Email")}, `  type "x" into the "Email" field`},
@@ -45,11 +45,11 @@ func TestStep(t *testing.T) {
 		{"no action is skipped", ev{}, ``},
 		{"an action that is not text is skipped", ev{"action": 7}, ``},
 		// a selector without text is not a selector: the old CLI panicked here, and both wrote "#" for an id with no text
-		{"a selector without a text key", ev{"action": "tap", "selector": ev{"kind": "id"}}, `  tap the element`},
-		{"an id selector with empty text", ev{"action": "tap", "selector": sel("id", "")}, `  tap the element`},
+		{"a selector without a text key", ev{"action": "tap", "selector": ev{"kind": "id"}}, `  # could not record a selector for tap: add the step by hand.`},
+		{"an id selector with empty text", ev{"action": "tap", "selector": sel("id", "")}, `  # could not record a selector for tap: add the step by hand.`},
 		{"an empty selector falls back to flat text", ev{"action": "tap", "selector": sel("text", ""), "id": "ok"}, `  tap #ok`},
 		{"an unknown selector kind falls back", ev{"action": "tap", "selector": sel("weird", "x"), "text": "Y"}, `  tap "Y"`},
-		{"selector is not a map", ev{"action": "tap", "selector": "x"}, `  tap the element`},
+		{"selector is not a map", ev{"action": "tap", "selector": "x"}, `  # could not record a selector for tap: add the step by hand.`},
 	} {
 		if got := Step(c.params); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
@@ -220,11 +220,18 @@ func TestNamesAreCleanedLikeEverywhereElseInTheEngine(t *testing.T) {
 	if want := "  # " + strings.Repeat("é", MaxNameRunes-1) + "…"; got != want {
 		t.Errorf("a long action was not cut to %d runes: %q", MaxNameRunes, got)
 	}
-	if got := Step(ev{"action": "swipe", "direction": long}); got != "  swipe "+strings.Repeat("é", MaxNameRunes-1)+"…" {
-		t.Errorf("a long direction was not cut: %q", got)
+	// A direction is up, down, left or right (trimmed, any case); anything else is a comment that does not echo it, so a hostile word cannot add steps to the line.
+	wantNote := "  # swipe was not recorded: its direction is not up, down, left or right. Add the step by hand."
+	if got := Step(ev{"action": "swipe", "direction": long}); got != wantNote {
+		t.Errorf("a direction that is not one: %q", got)
 	}
-	if got := Step(ev{"action": "swipe", "direction": "  left  "}); got != "  swipe left" {
-		t.Errorf("a direction is trimmed: %q", got)
+	if got := Step(ev{"action": "swipe", "direction": "  Left  "}); got != "  swipe left" {
+		t.Errorf("a direction is trimmed and lower-cased: %q", got)
+	}
+	for _, bad := range []string{"up steps: 1 tap \"x\"", "up\nsteps: 1", "diagonal", "", "le ft", "up up", "x", "forward", "upward"} {
+		if got := Step(ev{"action": "scroll", "direction": bad}); got != "  # scroll was not recorded: its direction is not up, down, left or right. Add the step by hand." {
+			t.Errorf("direction %q: %q", bad, got)
+		}
 	}
 }
 
@@ -280,7 +287,7 @@ func TestWhatAScriptCannotHoldIsRefused(t *testing.T) {
 		if got := Step(ev{"action": "tap", "selector": sel("text", text), "id": "ok"}); got != "  tap #ok" {
 			t.Errorf("%s: %q", name, got)
 		}
-		if got := Step(ev{"action": "tap", "selector": sel("text", text)}); got != "  tap the element" {
+		if got := Step(ev{"action": "tap", "selector": sel("text", text)}); got != "  # could not record a selector for tap: add the step by hand." {
 			t.Errorf("%s: %q", name, got)
 		}
 	}
@@ -327,7 +334,7 @@ func TestQuoteOracleOverRandomTexts(t *testing.T) {
 				t.Fatalf("selector %q: %q parsed to %+v (quote %s)", text, sline, act.Sel, q)
 			}
 		} else if clean == "" || !ok {
-			if sline != "  tap the element" {
+			if sline != "  # could not record a selector for tap: add the step by hand." {
 				t.Fatalf("selector %q cannot be held: the step is %q", text, sline)
 			}
 		}
@@ -341,7 +348,7 @@ func TestQuoteOracleOverRandomTexts(t *testing.T) {
 			if as, ok := prog.Tests[0].Body[0].(parser.AssertStep); !ok || as.Sel.Text != clean {
 				t.Fatalf("see %q: %q parsed to %+v", text, seeLine, prog.Tests[0].Body[0])
 			}
-		} else if seeLine != "  see the element" {
+		} else if seeLine != "  # could not record a selector for see: add the step by hand." {
 			t.Fatalf("see %q cannot be held: the step is %q", text, seeLine)
 		}
 	}
@@ -400,14 +407,14 @@ func TestAPlaceholderInRecordedTextIsFlagged(t *testing.T) {
 func TestIdsAndTypesThatCannotBeHeldFallBack(t *testing.T) {
 	for name, text := range map[string]string{"NUL": "a\x00b", "a line separator": "a b", "an escape": "a\x1bb", "NEL": "a\u0085b", "invalid UTF-8": "a\xffb", "a lone CR": "a\rb"} {
 		for _, kind := range []string{"id", "type"} {
-			if got := Step(ev{"action": "tap", "selector": sel(kind, text)}); got != "  tap the element" {
+			if got := Step(ev{"action": "tap", "selector": sel(kind, text)}); got != "  # could not record a selector for tap: add the step by hand." {
 				t.Errorf("%s as a %s selector: %q", name, kind, got)
 			}
 			if got := Step(ev{"action": "tap", "selector": sel(kind, text), "id": "ok"}); got != "  tap #ok" {
 				t.Errorf("%s as a %s selector with a flat id: %q", name, kind, got)
 			}
 		}
-		if got := Step(ev{"action": "tap", "id": text}); got != "  tap the element" {
+		if got := Step(ev{"action": "tap", "id": text}); got != "  # could not record a selector for tap: add the step by hand." {
 			t.Errorf("%s as a flat id: %q", name, got)
 		}
 	}
@@ -429,7 +436,7 @@ func TestSanitizeKeepsEverythingButLineBreaksAndEdgeSpaces(t *testing.T) {
 	if got := Step(ev{"action": "tap", "selector": sel("text", " OK ")}); got != "  tap \" OK \"" {
 		t.Errorf("an edge no-break space was lost: %q", got)
 	}
-	if got := Step(ev{"action": "tap", "selector": sel("text", "a\rb")}); got != "  tap the element" {
+	if got := Step(ev{"action": "tap", "selector": sel("text", "a\rb")}); got != "  # could not record a selector for tap: add the step by hand." {
 		t.Errorf("a lone CR was deleted, not refused: %q", got)
 	}
 }
@@ -437,13 +444,13 @@ func TestSanitizeKeepsEverythingButLineBreaksAndEdgeSpaces(t *testing.T) {
 // A flat text that is nothing but spaces is no lookup: never `tap ""`.
 func TestBlankFlatTextIsNoLookup(t *testing.T) {
 	for _, text := range []string{"", "   ", " \t ", "\n"} {
-		if got := Step(ev{"action": "tap", "text": text}); got != "  tap the element" {
+		if got := Step(ev{"action": "tap", "text": text}); got != "  # could not record a selector for tap: add the step by hand." {
 			t.Errorf("text %q: %q", text, got)
 		}
 		if got := Step(ev{"action": "tap", "text": text, "id": "ok"}); got != "  tap #ok" {
 			t.Errorf("text %q with an id: %q", text, got)
 		}
-		if got := Step(ev{"action": "tap", "selector": sel("text", text)}); got != "  tap the element" {
+		if got := Step(ev{"action": "tap", "selector": sel("text", text)}); got != "  # could not record a selector for tap: add the step by hand." {
 			t.Errorf("selector text %q: %q", text, got)
 		}
 	}
@@ -467,6 +474,86 @@ func TestARefusalNeverCarriesTheText(t *testing.T) {
 			if got := Step(ev{"action": "tap", "selector": sel(kind, word+bad+word)}); strings.Contains(got, "DISTINCTIVE") || strings.Contains(got, bad) {
 				t.Errorf("a %s selector with %q: %q", kind, bad, got)
 			}
+		}
+	}
+}
+
+// An id or a widget type is written as one word. One with a space, a quote or a backslash would end the word or open a string, and the line would
+// read as more than the one step (found by FuzzStep); it falls back to the next lookup like every lookup a line cannot hold.
+func TestAnIdOrTypeThatIsNotOneWordFallsBack(t *testing.T) {
+	for _, bad := range []string{"has space", "has\ttab", `has"quote`, "has'quote", `back\slash`, "a\u00a0b", "x y z", "login-button", "a.b", "A!0", "1st", "##x", ""} {
+		if got := Step(ev{"action": "tap", "selector": sel("id", bad)}); got != "  # could not record a selector for tap: add the step by hand." {
+			t.Errorf("id %q: %q", bad, got)
+		}
+		if got := Step(ev{"action": "tap", "id": bad}); got != "  # could not record a selector for tap: add the step by hand." {
+			t.Errorf("flat id %q: %q", bad, got)
+		}
+		if got := Step(ev{"action": "tap", "selector": sel("id", bad), "id": "ok"}); got != "  tap #ok" {
+			t.Errorf("id %q with a flat id: %q", bad, got)
+		}
+	}
+	for _, bad := range []string{`Foo" bar`, "Foo Bar", "Foo<int>", "Foo.Bar", "", "Foo\u00a0", "0", "2nd", "9Lives", "f$000", "$x", "field", "button", "the"} {
+		if got := Step(ev{"action": "tap", "selector": sel("type", bad)}); got != "  # could not record a selector for tap: add the step by hand." {
+			t.Errorf("type %q: %q", bad, got)
+		}
+	}
+	for _, good := range []string{"Switch", "_PrivateWidget", "Widget1", "Ünï"} {
+		if got := Step(ev{"action": "tap", "selector": sel("type", good)}); got != "  tap the "+good {
+			t.Errorf("type %q: %q", good, got)
+		}
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("id", "login_button2")}); got != "  tap #login_button2" {
+		t.Errorf("an ordinary id: %q", got)
+	}
+}
+
+// A type event whose lookup is a widget type is written without it: `type "x" into the TextField` does not read as one step, so the text is typed into the
+// focused field (found by FuzzStep).
+func TestATypeIntoAWidgetTypeIsTypedIntoTheFocusedField(t *testing.T) {
+	got := Step(ev{"action": "type", "text": "hi", "selector": sel("type", "TextField")})
+	if got != `  type "hi"` {
+		t.Errorf("%q", got)
+	}
+	prog, err := parser.ParseFile("test \"t\"\n" + got + "\n")
+	if err != nil || len(prog.Tests[0].Body) != 1 {
+		t.Errorf("the line does not read back as one step: %v", err)
+	}
+}
+
+// A widget type or an id that is a word of the grammar in another case still makes more than one step, so the line is read back with the real parser and
+// is not written when it does not read as one step (found by FuzzStep: a type named SAve).
+func TestALineThatDoesNotReadBackAsOneStepIsNotWritten(t *testing.T) {
+	got := Step(ev{"action": "long_press", "selector": sel("type", "SAve")})
+	if got != "  # long_press was not recorded: it could not be written as one step. Add the step by hand." {
+		t.Errorf("%q", got)
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("type", "Switch")}); got != "  tap the Switch" {
+		t.Errorf("an ordinary type: %q", got)
+	}
+}
+
+// The real agent sends a tap, a long press and a see with only a nested selector. When that selector cannot be written (a kebab-case ValueKey is
+// not an id the lexer reads as one word), no step may be written that looks recorded and matches nothing at replay: a comment says so.
+func TestAStepThatNeedsASelectorIsACommentWhenNoneCanBeWritten(t *testing.T) {
+	cases := []struct {
+		name string
+		ev   ev
+		want string
+	}{
+		{"tap, kebab-case id", ev{"action": "tap", "selector": sel("id", "submit-btn")}, "  # could not record a selector for tap: add the step by hand."},
+		{"long press, kebab-case id", ev{"action": "long_press", "selector": sel("id", "submit-btn")}, "  # could not record a selector for long press: add the step by hand."},
+		{"see, kebab-case id", ev{"action": "see", "selector": sel("id", "submit-btn")}, "  # could not record a selector for see: add the step by hand."},
+		{"long press, nothing", ev{"action": "long_press"}, "  # could not record a selector for long press: add the step by hand."},
+		{"tap, a plain id is still a step", ev{"action": "tap", "selector": sel("id", "submit_btn")}, "  tap #submit_btn"},
+		{"tap, text is still a step", ev{"action": "tap", "selector": sel("text", "Sign in")}, `  tap "Sign in"`},
+		{"type with no lookup still types into the focused field", ev{"action": "type", "text": "hi"}, `  type "hi"`},
+	}
+	for _, c := range cases {
+		if got := Step(c.ev); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+		if strings.Contains(Step(c.ev), "the element") {
+			t.Errorf("%s: a step names \"the element\", which matches nothing at replay", c.name)
 		}
 	}
 }

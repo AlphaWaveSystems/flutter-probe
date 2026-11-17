@@ -164,7 +164,7 @@ Device/emulator management:
 | `boot_poll_interval` | duration | `2s` | Polling interval during boot |
 | `token_file_retries` | int | `5` | Retries for reading token file |
 | `restart_delay` | duration | `500ms` | Delay after force-stop before relaunch |
-| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag |
+| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag. Must be a UDID: a simulator UDID (a UUID) or a device UDID, as `probe device list` shows it; anything else stops the config load. |
 | `android_device_id` | string | — | Preferred Android emulator serial or device serial. Overridden by `--device` flag |
 
 ### video
@@ -186,8 +186,20 @@ Device/emulator management:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `adb` | string | `adb` (PATH) | Path to ADB binary |
-| `flutter` | string | `flutter` (PATH) | Path to Flutter binary |
+| `adb` | string | `adb` (PATH) | Absolute path to the ADB binary, outside the repository |
+| `flutter` | string | `flutter` (PATH) | Absolute path to the Flutter binary, outside the repository |
+
+A `probe.yaml` belongs to the repository it sits in, so a path in it that points into that repository would run a program the repository carries. `probe test` and `probe doctor` (like Studio) use `tools.adb` and `tools.flutter` only when the value is an **absolute path to an executable file with the tool's name** (`adb`, or `adb.exe` on Windows; `flutter`, or `flutter.bat` or `flutter.exe` on Windows), **outside every repository the `probe.yaml` sits in** (each folder above it that holds a `.git`, up to the filesystem root, so a submodule's outer repository counts too), with symlinks resolved; a `probe.yaml` reached through a symlink is protected where it really is as well. Folders are compared as folders, not as text, so another spelling of the same folder (letter case on macOS or Windows) is still inside. Anything else stops the run with a message that names the key and says why.
+
+**Without a `.git`** (a Docker `COPY`, a `git archive`, a copied folder), only the `probe.yaml`'s own folder is protected: a tools path elsewhere in that copy passes. Keep the `.git`, or pass `--adb`/`--flutter` explicitly, when you run a copy you did not make yourself.
+
+Edge cases:
+- **A `.git` higher up protects everything below it.** With a `.git` in your home folder (dotfiles kept in git), every repository below it is inside that one too, so a tool under `~/sdk` is refused for a `probe.yaml` under `~`. Move the SDK outside that folder (for example `/opt/android-sdk`), or pass `--adb`/`--flutter`.
+- **A hard link or a bind mount** of a binary placed outside the repository is a file outside the repository, and it passes. Making one needs write access outside the repository, which a checked-out repository does not have.
+- **On Windows** the file name is compared without regard to case (`ADB.EXE` is `adb.exe`), as Windows does. A folder whose file identity cannot be read (some network shares and file systems report none) counts as inside, so the path is refused rather than run. The message then says what could not be checked ("where it is cannot be verified, so it is refused: ..."), not that the tool is inside the repository. A folder on the way to the tool that cannot be read (permission denied) is reported the same way, not as a missing file.
+- **Who reads these paths.** `probe test` and the other CLI commands read `tools.adb` and `tools.flutter`; Studio reads only `tools.adb`, and only when you press Connect. The VS Code extension reads the `tools` section to show it but runs neither path: it runs `probe`, which applies the rule above.
+
+For contributors: a source test (`TestToolsFromProbeYAMLAreAlwaysChecked` in `internal/cli`) parses every non-test Go file under `internal/`, `studio/` and `cmd/` and fails when a `Tools` field is used outside the two files that apply the check. It works on the syntax, so it does not see a reader that gets the paths by reflection, through a `ToolsConfig` passed to a function (which reads `t.ADB` and never names `Tools`), from a marshalled copy of the config (YAML or JSON), or from a package outside those three folders. Keep new readers going through `configTool` (CLI) or `toolpath.Check` (Studio). To use a program from inside the repository on purpose, pass it as `--adb` or `--flutter`: a flag you type is used as given.
 
 ### ai
 

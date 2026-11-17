@@ -2,6 +2,21 @@ package sysdialog
 
 import "testing"
 
+// emptyKnownSecrets gives a test an empty secret list and puts the old one back afterwards. The list lives for the whole process, so a test
+// that compares the text before and after noting a value would otherwise see the value already noted when it runs again (go test -count=2).
+func emptyKnownSecrets(t *testing.T) {
+	t.Helper()
+	knownSecrets.mu.Lock()
+	saved := knownSecrets.values
+	knownSecrets.values = nil
+	knownSecrets.mu.Unlock()
+	t.Cleanup(func() {
+		knownSecrets.mu.Lock()
+		knownSecrets.values = saved
+		knownSecrets.mu.Unlock()
+	})
+}
+
 // Each case notes one environment value and checks whether ScrubKnown then masks it in printed text. The values are
 // distinct, so one case cannot change the result of another.
 func TestNoteEnvValueMasksOnlyCredentialShapedValues(t *testing.T) {
@@ -68,6 +83,7 @@ func TestSecretLikeNameNotesValuesOfThreeCharacters(t *testing.T) {
 }
 
 func TestNoteNamedSecretMasksByNameOnly(t *testing.T) {
+	emptyKnownSecrets(t)
 	for name, tc := range map[string]struct {
 		value  string
 		masked bool

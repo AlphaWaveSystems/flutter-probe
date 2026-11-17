@@ -18,8 +18,9 @@ import (
 //     string) planted in any position (query value, query under a credential name, path segment, JSON value, JSON array, form value,
 //     free text, after a credential name, an XML element, an Authorization line) is never in what is saved, nor in an error.
 //
-// A plain `go test` runs the seed corpus below, which holds the classes the reviews found; `go test -fuzz=FuzzSaveStep` explores more.
-// The fuzz run is not part of CI.
+// A plain `go test` runs the seed corpus below and the inputs saved under testdata/fuzz/FuzzSaveStep, which hold the classes the reviews found; to
+// explore more, run it for as long as you like: `go test ./studio -run '^$' -fuzz '^FuzzSaveStep$' -fuzztime 2m`. A failing input is saved under
+// testdata/fuzz/FuzzSaveStep and runs with every plain `go test` from then on: commit it with the fix. The fuzz run is not part of CI.
 
 var plantedSecrets = []string{
 	"Zk9qLm2Xp7Rt",
@@ -169,6 +170,15 @@ func FuzzSaveStep(f *testing.F) {
 		}
 		if call == nil || call.Method != strings.ToUpper(strings.TrimSpace(in.Method)) {
 			t.Fatalf("the saved step is not a %q call: %+v", in.Method, call)
+		}
+		// It is exactly that one step (a comment line before it makes no step), and the names it asks the person to fill are plain upper-case names.
+		if len(prog.Tests[0].Body) != 1 {
+			t.Fatalf("the saved lines read back as %d steps, want 1:\n%s", len(prog.Tests[0].Body), strings.Join(step.Lines, "\n"))
+		}
+		for _, name := range step.Fill {
+			if name == "" || strings.ContainsFunc(name, func(r rune) bool { return !(r == '_' || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) }) {
+				t.Fatalf("a name to fill is not a plain upper-case name: %q", name)
+			}
 		}
 		// What the runner would fill in is never saved as typed: the only ${...} are the generated ones, and no <name> is left.
 		if envForm.MatchString(in.URL) || envForm.MatchString(in.Body) || varForm.MatchString(in.URL) || varForm.MatchString(in.Body) {

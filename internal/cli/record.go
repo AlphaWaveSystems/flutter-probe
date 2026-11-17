@@ -181,7 +181,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("start recording: %w", err)
 	}
 
-	fmt.Printf("\n  \033[32m●\033[0m  Recording on %s — interact with your app\n", deviceSerial)
+	fmt.Printf("\n  \033[32m●\033[0m  Recording on %s — interact with your app\n", device.CleanOneLine(deviceSerial, 80))
 	fmt.Println("  Press Ctrl+C or wait for timeout to stop and save.")
 
 	// Wait for timeout or interrupt
@@ -218,6 +218,10 @@ func printRecordedEvent(e recordedEvent) {
 
 	switch action {
 	case "tap":
+		if sel == "the element" {
+			statusWarn(os.Stdout, "tap not recorded: no selector could be written for it. Add the step by hand.")
+			break
+		}
 		statusOK(os.Stdout, "tap %s", sel)
 	case "type":
 		sel = scriptgen.TypeTarget(params) // never the typed text
@@ -227,7 +231,7 @@ func printRecordedEvent(e recordedEvent) {
 			break
 		}
 		text, _ := params["text"].(string)
-		if sel != "the element" {
+		if sel != "the element" && !strings.HasPrefix(sel, "the ") { // a widget type is not a lookup a type step names: the text goes to the focused field
 			statusOK(os.Stdout, "type %q into %s", text, sel)
 		} else {
 			statusOK(os.Stdout, "type %q", text)
@@ -236,6 +240,10 @@ func printRecordedEvent(e recordedEvent) {
 		dir, _ := params["direction"].(string)
 		statusOK(os.Stdout, "swipe %s", dir)
 	case "long_press":
+		if sel == "the element" {
+			statusWarn(os.Stdout, "long press not recorded: no selector could be written for it. Add the step by hand.")
+			break
+		}
 		statusOK(os.Stdout, "long press on %s", sel)
 	default:
 		statusOK(os.Stdout, "%s", action)

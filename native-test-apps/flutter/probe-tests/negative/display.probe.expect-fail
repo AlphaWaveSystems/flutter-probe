@@ -1,0 +1,66 @@
+# The negative variants of probe-tests/widgets/display.probe: every test below asserts something WRONG, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/display.probe.expect-fail /tmp/display-negative.probe
+#   probe test /tmp/display-negative.probe --device <serial> -y       # (the display build, the same probe.yaml as for display.probe)
+#
+# Expected: 0 passed, 13 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+  # the last widget of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until "Taps: 0" appears
+
+# Expected: see "Order total: 42.01": Expected to see "text("Order total: 42.01")" but it was not found
+test "N1 a number one cent off"
+  see "Order total: 42.01"
+
+# Expected: see "Order total": "text("Order total")" contains "Order total: 42.00", not "42.01"
+test "N2 contains a value the text does not hold"
+  see "Order total" contains "42.01"
+
+# Expected: see "Refund total": Expected to see "text("Refund total")" but it was not found
+test "N3 a text that is not on the screen"
+  see "Refund total"
+
+# Expected: see "hello world": Expected to see "text("hello world")" but it was not found (case counts)
+test "N4 the spans in another case"
+  see "hello world"
+
+# Expected: see "Hello  world": Expected to see "text("Hello  world")" but it was not found (spaces count: the spans are joined as written)
+test "N5 the spans with two spaces between them"
+  see "Hello  world"
+
+# This variant shows the finding by its construction: it fails because the selector is matched against the whole string.
+# Expected: see "Shipping address: 1600 Amphitheatre…": Expected to see ... but it was not found (the painted, cut form is not what is matched)
+test "N6 the painted form of the cut text"
+  see "Shipping address: 1600 Amphitheatre…"
+
+# Expected: see "Hello world": "text("Hello world")" contains "Hello world", not "earth" (the read of a Text.rich is its whole text)
+test "N7 the rich text read as holding a word it does not"
+  see "Hello world" contains "earth"
+
+# Expected: see "Painted rich text": "text("Painted rich text")" contains "Painted rich text", not "plain text"
+test "N8 the RichText read as holding a phrase it does not"
+  see "Painted rich text" contains "plain text"
+
+# Expected: see "Shipping address": "text("Shipping address")" contains "Shipping address: 1600 Amphitheatre Parkway, ...", not "Canada"
+test "N9 the cut text read as holding a tail it does not"
+  see "Shipping address" contains "Canada"
+
+# Expected: see "Favourite": Expected to see "text("Favourite")" but it was not found (a semantic label is matched as written)
+test "N10 the icon's label in another spelling"
+  see "Favourite"
+
+# Expected: see "#wf_missing": Expected to see "#wf_missing" but it was not found
+test "N11 an id that is not on the screen"
+  see #wf_missing
+
+# Expected: see "Taps: 0": Expected to see "text("Taps: 0")" but it was not found (the tap on the logo arrived)
+test "N12 the tap on the logo did not arrive"
+  tap #wf_logo
+  see "Taps: 0"
+
+# Expected: see "Logo": "text("Logo")" contains "Logo", not "Banner" (the image reads as its semantic label)
+test "N13 the image's semantic label read as another word"
+  see "Logo" contains "Banner"

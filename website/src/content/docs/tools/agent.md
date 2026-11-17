@@ -95,6 +95,8 @@ and AI agents can reason about behavior.
 | App control | `probe.run_dart`, `probe.mock`, `probe.open_link`, `probe.set_time_dilation`, `probe.set_next_token`, clipboard and recording methods |
 | Signals from tests | `probe.biometric_signal`, `probe.signal`, `probe.set_output`, `probe.drain_output` |
 
+The `probe.visible_summary` answer lists what a person could see now: `texts` (each visible `Text` and the value of each visible field that is not obscured, de-duplicated by trimmed text) and `keys` (string `ValueKey`s), each cut at 25 in tree order. It also carries keys an older CLI ignores: `editable_texts` (the value of every visible field that is not obscured, recorded even when a `Text` with the same text is already in `texts`, since a text selector also matches a field by its value), `rich_texts` (the texts of visible `RichText`s that no `Text` and no `Icon` built, which a text selector also matches; an `Icon`'s `RichText` holds only its glyph, a private-use character. The glyph is still matchable by a text selector made of that character, but it is not listed, so a reader must refuse text selectors made of private-use characters), `max` (the cap, 25), `counts` (how many distinct items each list saw, cut or not) and `truncated` (true when any list saw more than `max`). The agent never cuts or leaves out an item for its length; an obscured field adds nothing to any list.
+
 The `probe.ping` answer carries the agent's version and capabilities, and, when the app's build knows them, `flutter_version`, `flutter_channel`,
 `framework_revision` and `dart_version`: the Flutter and Dart that built the app (the Flutter tool records them in the app at build time; they are not the
 Flutter that published `probe_agent`). Each field is optional and left out when unknown. The CLI keeps only plain version text (letters, digits, dots, dashes
@@ -106,6 +108,22 @@ another name, build with `--dart-define=PROBE_APP_ID=<id>`. It is left out when 
 most 255 characters), and nothing is guessed. When two apps with the agent share a device, the CLI can then tell which one answered: after the handshake it prints a **warning**
 (not a refusal) when the agent's `app_id` differs from `project.app` in `probe.yaml` (compared exactly on Android, where package names are case-sensitive, and without regard to case on iOS, where bundle ids are not), for example `the agent that answered reports app com.other.app, but project.app is
 com.example.app`. It is the app's own statement, not a proof, and an agent that does not send it (an older one) says nothing.
+
+**One visible text is one match.** A text selector matches a `Text`, a `Text.rich`, a `RichText` or a text field's value, by the whole text or any part
+of it. A `Text` builds a `RichText` inside it; the agent counts that pair once, so `see exactly 1 "<text>"` passes for one `Text`, an ordinal (`2nd "Row"`)
+counts separate texts, and a button's label is one match. Before the fix for issue #800 (`probe_agent` 0.27.0 and earlier), a plain `Text` counted twice: `see exactly 2` passed for one `Text`, and `2nd "8"` found the inner paragraph of a single "8"; with the fix both fail, and the real count and `tap "8"` are what to write.
+
+**A widget with no text is found, and read, by its label.** When no visible text matches, a text selector falls back to a `Semantics` label (an `Icon` or an `Image` with a `semanticLabel`) or a `Tooltip` message (an icon button). That widget reads as its label, so `see "Logo" contains "Logo"` and `see "Add item" contains "Add"` check it; before the fix for issue #818 (`probe_agent` 0.27.0 and earlier) it read as an empty text. A text field under a labelled `Semantics` or a `Tooltip` still reads as the field's text, and an obscured one as nothing, as before. Changed for an element that is itself a labelled `Semantics` and has no text field below it, when it is the match (by `#id` on a `Semantics(identifier:)`): it reads as its label where it read as `""` (`Semantics(identifier: "tot", label: "Total label", child: Text("42.00"))` found by `#tot` reads "Total label"; it never read "42.00"). A widget found by `#id` whose only text is a tooltip still reads as empty.
+
+**The agent answers once the app's view has its real size.** After a relaunch, an app can draw its first frames with a 0×0 view for about a second (measured on an
+Android 15 emulator), and a list laid out then holds only its first item: a step that ran in that window saw half the screen (issue #793). The size changes the moment
+the engine reports it, but the widgets are laid out at it only in the next frame, so the agent records the size each frame was laid out at, and waits, before it
+answers any request, until a frame has been laid out at the view's real size. Once it has, this is a synchronous check that costs nothing; after a resize (a
+rotation) a request waits for at most one frame. The wait
+is capped at 2.5 seconds, well under the handshake's limits (the dial timeout is 5 seconds in Studio and 30 by default in the CLI); a size that does not come within
+the cap is not waited for again until the view's metrics change. It never waits for an app with no view, or one that is not in the foreground (paused, hidden,
+inactive). The `probe.ping` answer says how long it waited, in `view_ready_ms` (0 when it did not wait), and the agent reports the capability
+`waits_for_view_size`. Both are for diagnostics: no step needs them, and an older agent sends neither.
 
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
 not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed. The value of an obscured (password) field is never matched by a selector and never listed there; the field is found by its id, label or hint (see Password fields in the ProbeScript syntax page).

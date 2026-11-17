@@ -192,7 +192,7 @@ class ProbeFinder {
               }
             });
           }
-          return results;
+          return _oncePerText(results);
         }
         raw = _findByText(text);
 
@@ -242,7 +242,7 @@ class ProbeFinder {
         results.add(e);
       }
     });
-    if (results.isNotEmpty) return results;
+    if (results.isNotEmpty) return _oncePerText(results);
     // Nothing shows this text: fall back to what the app labels for assistive
     // technology and hover help — a Semantics label or a Tooltip message (an
     // icon button has no Text, only a tooltip). Only when no visible text matches, so
@@ -294,6 +294,27 @@ class ProbeFinder {
       _loose ? foldedContains(haystack, needle) : haystack.contains(needle);
 
   bool _loose = false;
+
+  /// One element per visible text (issue #800): a [Text] builds a [RichText] inside it, and both match the same text, so `see exactly 1`
+  /// found 2 and an ordinal could pick the inner one. A [RichText] whose nearest [Text] above it (the one that built it) is also in
+  /// [matches] is left out; the [Text] stays (its render object is the same paragraph). A [RichText] of its own, and a `Text.rich` (which
+  /// matches only through its [RichText]), are kept.
+  List<Element> _oncePerText(List<Element> matches) {
+    final texts = matches.where((e) => e.widget is Text).toSet();
+    if (texts.isEmpty) return matches;
+    return matches.where((e) {
+      if (e.widget is! RichText) return true;
+      Element? builtBy;
+      e.visitAncestorElements((a) {
+        if (a.widget is Text) {
+          builtBy = a;
+          return false;
+        }
+        return a.widget is! RichText; // stop at another RichText: this one is not the inner paragraph of a Text above it
+      });
+      return builtBy == null || !texts.contains(builtBy);
+    }).toList();
+  }
 
   /// Whether [e] is a widget that shows [text]. The value of an obscured field (a password) is never a match target: a selector that could
   /// find a field by the text it holds would let a test learn the value by asking about it, one prefix at a time. The field is still found by its
@@ -487,27 +508,79 @@ class ProbeFinder {
   /// beneath it. Every caller reads this one summary (the `visible_summary` RPC
   /// and the failure hints the executor builds), so the rule lives here.
   Map<String, List<String>> visibleSummary({int max = 25}) {
-    final texts = <String>[];
-    final keys = <String>[];
+    final full = visibleSummaryFull(max: max);
+    return {'texts': full['texts'] as List<String>, 'keys': full['keys'] as List<String>};
+  }
+
+  /// The `visible_summary` RPC answer: [visibleSummary]'s `texts` and `keys`, unchanged, and keys an older CLI ignores:
+  /// - `editable_texts`: the text of every visible field that is not obscured, recorded whether or not a [Text] with the same text is
+  ///   already in `texts`. `texts` is de-duplicated, so a [Text] "Sign In" first hid a field holding "Sign In", which a text selector
+  ///   also matches.
+  /// - `rich_texts`: the texts of visible [RichText]s that no [Text] and no [Icon] built (a [Text]'s own paragraph is already in
+  ///   `texts`; an [Icon]'s is its glyph); a text selector matches them too.
+  /// - `max`: the cap of each list; `counts`: how many distinct items each list saw before the cap; `truncated`: true when any list
+  ///   saw more than `max`, so a reader knows a list is incomplete.
+  /// Each list is de-duplicated by trimmed text, in tree order, and holds no empty text. An obscured field adds nothing, in any list.
+  Map<String, dynamic> visibleSummaryFull({int max = 25}) {
+    final texts = <String>{};
+    final keys = <String>{};
+    final editable = <String>{};
+    final rich = <String>{};
     _walkTreePruningObscuredFields((e) {
-      if (texts.length >= max && keys.length >= max) return;
       final widget = e.widget;
       final key = widget.key;
-      if (key is ValueKey<String> && keys.length < max && !keys.contains(key.value) && _isVisible(e)) {
+      if (key is ValueKey<String> && !keys.contains(key.value) && _isVisible(e)) {
         keys.add(key.value);
       }
-      // An obscured field's value is never read, so it cannot reach the summary.
-      if (texts.length < max && (widget is Text || (widget is EditableText && !isSecretEditable(e)))) {
-        final text = widget is Text
-            ? (widget.data ?? widget.textSpan?.toPlainText() ?? '')
-            : (widget as EditableText).controller.text;
-        final trimmed = text.trim();
-        if (trimmed.isNotEmpty && !texts.contains(trimmed) && _isVisible(e)) {
-          texts.add(trimmed);
+      if (widget is Text) {
+        final trimmed = (widget.data ?? widget.textSpan?.toPlainText() ?? '').trim();
+        if (trimmed.isNotEmpty && !texts.contains(trimmed) && _isVisible(e)) texts.add(trimmed);
+      } else if (widget is EditableText && !isSecretEditable(e)) {
+        // An obscured field's value is never read, so it cannot reach the summary.
+        final trimmed = widget.controller.text.trim();
+        if (trimmed.isNotEmpty && _isVisible(e)) {
+          texts.add(trimmed); // a set: a text already there stays once
+          editable.add(trimmed);
         }
+      } else if (widget is RichText && !_builtByText(e) && !_builtByIcon(e)) {
+        final trimmed = widget.text.toPlainText().trim();
+        if (trimmed.isNotEmpty && !rich.contains(trimmed) && _isVisible(e)) rich.add(trimmed);
       }
     });
-    return {'texts': texts, 'keys': keys};
+    final lists = {'texts': texts, 'keys': keys, 'editable_texts': editable, 'rich_texts': rich};
+    return {
+      for (final entry in lists.entries) entry.key: entry.value.take(max).toList(),
+      'max': max,
+      'counts': {for (final entry in lists.entries) entry.key: entry.value.length},
+      'truncated': lists.values.any((l) => l.length > max),
+    };
+  }
+
+  /// Whether an [Icon] built [e] (a [RichText] holding the icon's glyph, a private-use character): the glyph is not a text a person reads
+  /// or a test names, and a screen of icons would otherwise fill `rich_texts`.
+  bool _builtByIcon(Element e) {
+    var built = false;
+    e.visitAncestorElements((a) {
+      if (a.widget is Icon) {
+        built = true;
+        return false;
+      }
+      return a.widget is! RichText;
+    });
+    return built;
+  }
+
+  /// Whether a [Text] built [e] (a [RichText]): its nearest [Text] above it, with no other [RichText] between.
+  bool _builtByText(Element e) {
+    var built = false;
+    e.visitAncestorElements((a) {
+      if (a.widget is Text) {
+        built = true;
+        return false;
+      }
+      return a.widget is! RichText;
+    });
+    return built;
   }
 
   /// Returns all element info for a given selector (used by dump_tree).

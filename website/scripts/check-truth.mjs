@@ -6,12 +6,14 @@
 //   - shows a results count per month ("100,000 results per month") that is not a plan's results_per_month, or another plan's count on a card,
 //   - shows a Start, Subscribe, Checkout, Buy, Purchase or Upgrade control on the card of a plan whose status is not "available",
 //   - names a feature that is not built or an offer that waits for the legal review (the banned list below),
+//   - links an "Apply" control anywhere but the design-partner form or the support address in sellable.json (apply), or names a form
+//     template that the repository does not have,
 //   - or says "gate".
 //
 // Run: node scripts/check-truth.mjs [--site <website folder>]   (npm run check:truth; the build runs it first)
 // No dependencies: the Pages build has Node only.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -79,7 +81,12 @@ export function loadSellable(site) {
     }
     if (!Array.isArray(p.features)) problems.push(`sellable.json: ${key}: features must be a list`);
   }
-  return { plans: plans.map(([key, p]) => ({ key, ...p })), problems };
+  const apply = data.apply || {};
+  if (typeof apply.form !== 'string' || !/^https:\/\/github\.com\/AlphaWaveSystems\/flutter-probe\/issues\/new\?template=[a-z0-9-]+\.yml$/.test(apply.form)) {
+    problems.push('sellable.json: apply.form must be the design-partner issue form URL of this repository');
+  }
+  if (typeof apply.email !== 'string' || !/^mailto:[^?\s]+@[^?\s]+$/.test(apply.email)) problems.push('sellable.json: apply.email must be a mailto: address');
+  return { plans: plans.map(([key, p]) => ({ key, ...p })), apply, problems };
 }
 
 // markers are the places that set which plan card the following markup belongs to. A card is either an element whose class has
@@ -119,7 +126,7 @@ function cardAt(marks, pos) {
   return card;
 }
 
-export function checkPage(file, raw, plans) {
+export function checkPage(file, raw, plans, apply) {
   const problems = [];
   const src = clean(raw);
   const byName = new Map(plans.map((p) => [p.name, p]));
@@ -132,10 +139,11 @@ export function checkPage(file, raw, plans) {
     if (m.isCard && !byName.has(m.card)) at(m.pos, m.card, 'a plan card for a plan that is not in sellable.json');
   }
 
-  // The text a reader sees, with tags blanked so positions stay the file's. A meta description is read too: search results show it.
+  // The text a reader sees, with tags blanked so positions stay the file's. A page's description is read too, as a meta tag or as the
+  // description of the page layout (<Site description="...">, <Legal ...>): search results show it.
   const text = src
     .replace(/<[^>]*>/g, (tag) => {
-      const m = tag.match(/^(<meta\b[^>]*\bname="description"[^>]*\bcontent=")([^"]*)"/i);
+      const m = tag.match(/^(<meta\b[^>]*\bname="description"[^>]*\bcontent="|<(?:Site|Legal)\b[^>]*\bdescription=")([^"]*)"/);
       return m ? blank(m[1]) + m[2] + blank(tag.slice(m[1].length + m[2].length)) : blank(tag);
     })
     .replace(/&#36;/g, '   $');
@@ -171,6 +179,18 @@ export function checkPage(file, raw, plans) {
     if (plan && plan.status !== 'available') at(m.index, label, `a buy control on ${plan.name}, whose status is "${plan.status}"`);
   }
 
+  // Every Apply control goes to the design-partner form or to the support address, and nowhere else.
+  const applies = [
+    ...[...src.matchAll(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)].map((m) => ({ pos: m.index, href: m[1], label: textOf(m[2]) })),
+    ...[...src.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)].map((m) => ({ pos: m.index, href: m[2], label: m[1] })),
+  ];
+  for (const a of applies) {
+    if (!/\bapply\b/i.test(a.label)) continue;
+    if (a.href !== apply.form && !(a.href === apply.email || a.href.startsWith(apply.email + '?'))) {
+      at(a.pos, a.label, `an Apply link to ${a.href}, not the design-partner form or the support address in sellable.json`);
+    }
+  }
+
   for (const [re, why] of BANNED) {
     for (const m of text.matchAll(new RegExp(re.source, 'gi'))) at(m.index, m[0], why);
   }
@@ -180,10 +200,15 @@ export function checkPage(file, raw, plans) {
 }
 
 export function check(site) {
-  const { plans, problems } = loadSellable(site);
+  const { plans, apply, problems } = loadSellable(site);
   if (problems.length) return problems;
   const out = [];
-  for (const page of PAGES) out.push(...checkPage(page, readFileSync(join(site, page), 'utf8'), plans));
+  // The form an Apply link opens must exist: a renamed template would send people to an empty form.
+  const template = apply.form.split('template=')[1];
+  if (!existsSync(join(site, '..', '.github', 'ISSUE_TEMPLATE', template))) {
+    out.push(`sellable.json: apply.form names the template ${template}, which is not in .github/ISSUE_TEMPLATE`);
+  }
+  for (const page of PAGES) out.push(...checkPage(page, readFileSync(join(site, page), 'utf8'), plans, apply));
   return out;
 }
 

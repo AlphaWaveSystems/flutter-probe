@@ -3,6 +3,10 @@
 
 before each test
   restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id. `wait until ... appears` matches only what is on screen, so this needs a screen tall enough to show that element
+  # (measured on a Pixel 6 profile); on a shorter one the wait would time out. A wait for an earlier element was not enough (measured).
+  wait until #wf_long_press_state appears
 
 test "the kinds of button react to a tap found by their text"
   see "Elevated: 0"
@@ -27,6 +31,8 @@ test "an icon button is found by its id and by its tooltip"
   see "Icon button: 1"
   tap "Add item"
   see "Icon button: 2"
+  # found by its tooltip, it reads as the tooltip (issue #818)
+  see "Add item" contains "Add"
 
 test "a floating action button is found by its id and by its tooltip"
   see "FAB: 0"

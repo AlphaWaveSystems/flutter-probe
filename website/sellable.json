@@ -1,4 +1,8 @@
 {
+  "apply": {
+    "form": "https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml",
+    "email": "mailto:support@alphawavesystems.com"
+  },
   "plans": {
     "free": {
       "name": "Free",
@@ -7,9 +11,15 @@
       "seats": "unlimited",
       "results_per_month": 1000,
       "features": [
-        "CLI and Dart agent",
+        "Full CLI and Dart agent",
         "Unlimited local test runs",
-        "Terminal, JUnit and JSON reports"
+        "All ProbeScript features",
+        "Terminal, JUnit and JSON reports",
+        "probe-convert (all 7 formats)",
+        "VS Code extension",
+        "Recording and visual regression",
+        "Unlimited seats",
+        "1,000 results a month in Probe Cloud (preview)"
       ]
     },
     "team": {
@@ -19,12 +29,13 @@
       "seats": "unlimited",
       "results_per_month": 100000,
       "features": [
-        "Hosted test reports (Probe Cloud)",
-        "Run history",
-        "Flaky tests with evidence",
-        "A verdict and failures list per commit",
-        "Trends",
-        "Uploads from GitHub Actions"
+        "Everything in Free",
+        "Unlimited seats, no overage",
+        "100,000 results a month",
+        "Run history for your team",
+        "Flaky tests flagged, with the evidence",
+        "A verdict for each commit",
+        "Trends over time"
       ]
     },
     "scale": {
@@ -35,7 +46,8 @@
       "results_per_month": 500000,
       "features": [
         "Everything in Team",
-        "500,000 results per month"
+        "Unlimited seats, no overage",
+        "500,000 results a month"
       ]
     },
     "on_the_go": {
@@ -44,7 +56,10 @@
       "price_usd_month": null,
       "seats": "unlimited",
       "results_per_month": null,
-      "features": []
+      "features": [
+        "Part of Probe Cloud, not of the free CLI",
+        "Billed by use, separately from Free, Team and Scale"
+      ]
     }
   }
 }

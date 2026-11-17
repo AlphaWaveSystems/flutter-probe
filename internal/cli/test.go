@@ -21,6 +21,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/cloud"
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/l10n"
 	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
@@ -186,8 +187,8 @@ func init() {
 	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, saucelabs, lambdatest, firebase [deprecated by its vendor]); all are implemented but not yet verified on a live account, and every one needs a relay service (see https://flutterprobe.dev/tools/cloud-farms/)")
 	f.String("cloud-app", "", "path to app binary (.apk/.ipa) to upload to cloud provider")
 	f.String("cloud-device", "", "target device name on the cloud provider")
-	f.String("cloud-key", "", "cloud provider API key or username")
-	f.String("cloud-secret", "", "cloud provider API secret or access key")
+	f.String("cloud-key", "", "cloud provider API key or username (or set PROBE_CLOUD_KEY, which keeps it out of the process list and shell history)")
+	f.String("cloud-secret", "", "cloud provider API secret or access key (or set PROBE_CLOUD_SECRET, which keeps it out of the process list and shell history)")
 
 	// x402 pay-per-use
 	f.String("pay", "", `experimental: payment method for uploads to a cloud endpoint you configure (no hosted service is provided yet)`)
@@ -197,7 +198,7 @@ func init() {
 	f.Bool("relay", false, "force enable relay mode for cloud device farm testing")
 	f.Bool("no-relay", false, "force disable relay mode (use direct port forwarding)")
 	f.String("relay-url", "", "reuse an existing relay session (WebSocket URL) — skips relay creation")
-	f.String("relay-token", "", "CLI auth token for the existing relay session (used with --relay-url)")
+	f.String("relay-token", "", "CLI auth token for the existing relay session (used with --relay-url; or set PROBE_RELAY_CLI_TOKEN, which keeps it out of the process list and shell history)")
 	f.String("relay-session-id", "", "existing relay session ID for status polling and cleanup")
 
 	// Animation control
@@ -537,8 +538,8 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	cloudProvider, _ := cmd.Flags().GetString("cloud-provider")
 	cloudApp, _ := cmd.Flags().GetString("cloud-app")
 	cloudDevice, _ := cmd.Flags().GetString("cloud-device")
-	cloudKey, _ := cmd.Flags().GetString("cloud-key")
-	cloudSecret, _ := cmd.Flags().GetString("cloud-secret")
+	cloudKey := secretFlag(cmd, "cloud-key")
+	cloudSecret := secretFlag(cmd, "cloud-secret")
 
 	// Apply CLI overrides for cloud provider config
 	if cloudProvider == "" {
@@ -550,12 +551,9 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 	// ── Parallel mode: distribute files across multiple devices ──
 	if parallelMode && !dryRun && cloudProvider == "" {
-		toolPaths := device.ToolPaths{ADB: adbPath, Flutter: flutterPath}
-		if adbPath == "" {
-			toolPaths.ADB = cfg.Tools.ADB
-		}
-		if flutterPath == "" {
-			toolPaths.Flutter = cfg.Tools.Flutter
+		toolPaths, err := runToolPaths(cfg, adbPath, flutterPath, true)
+		if err != nil {
+			return err
 		}
 		dm := device.NewManagerWithPaths(toolPaths)
 
@@ -747,7 +745,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				// Check if an existing relay session was provided (pre-created
 				// in CI so the relay URL can be baked into the APK at build time)
 				existingRelayURL, _ := cmd.Flags().GetString("relay-url")
-				existingRelayToken, _ := cmd.Flags().GetString("relay-token")
+				existingRelayToken := secretFlag(cmd, "relay-token")
 				existingRelaySessionID, _ := cmd.Flags().GetString("relay-session-id")
 
 				var relayURL, cliToken, relaySessionID string
@@ -784,19 +782,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 					statusOK(statusW, "Relay session: %s", relaySessionID)
 				}
 
-				// Upload app
-				statusInfo(statusW, "Uploading app to %s...", provider.Name())
-				appID, err := provider.UploadApp(ctx, cloudApp)
+				// Upload the app and start the cloud session (the app launches on the device)
+				sess, err := uploadAndStartCloudSession(ctx, provider, cloudApp, targetDevice, statusW)
 				if err != nil {
-					return fmt.Errorf("cloud upload: %w", err)
-				}
-				statusOK(statusW, "App uploaded: %s", appID)
-
-				// Start cloud session (app launches on device)
-				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
-				sess, err := provider.StartSession(ctx, appID, targetDevice)
-				if err != nil {
-					return fmt.Errorf("cloud session: %w", err)
+					return err
 				}
 				sess.RelayURL = relayURL
 				sess.CLIToken = cliToken
@@ -850,23 +839,14 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if warning != "" {
 					printAgentWarning(statusW, warning)
 				}
-				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", device.CleanOneLine(targetDevice, 80), provider.Name())
 			} else {
 				// ── Direct path: port forwarding (existing behavior) ──────
 
-				// Step 1: Upload app
-				statusInfo(statusW, "Uploading app to %s...", provider.Name())
-				appID, err := provider.UploadApp(ctx, cloudApp)
+				// Upload the app and start the session
+				sess, err := uploadAndStartCloudSession(ctx, provider, cloudApp, targetDevice, statusW)
 				if err != nil {
-					return fmt.Errorf("cloud upload: %w", err)
-				}
-				statusOK(statusW, "App uploaded: %s", appID)
-
-				// Step 2: Start session
-				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
-				sess, err := provider.StartSession(ctx, appID, targetDevice)
-				if err != nil {
-					return fmt.Errorf("cloud session: %w", err)
+					return err
 				}
 				cloudSession = &sess
 				defer func() {
@@ -911,7 +891,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if warning != "" {
 					printAgentWarning(statusW, warning)
 				}
-				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", device.CleanOneLine(targetDevice, 80), provider.Name())
 			}
 
 			// Use cloud device info as the "serial" for reporting
@@ -919,16 +899,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 		} else {
 			// ── Local device path (existing behavior) ───────────────────────
-			// Resolve tool paths: CLI flags > probe.yaml > PATH
-			toolPaths := device.ToolPaths{
-				ADB:     cfg.Tools.ADB,
-				Flutter: cfg.Tools.Flutter,
-			}
-			if adbPath != "" {
-				toolPaths.ADB = adbPath
-			}
-			if flutterPath != "" {
-				toolPaths.Flutter = flutterPath
+			// Resolve tool paths: CLI flags > probe.yaml (when it passes the tool path rule) > PATH
+			toolPaths, err := runToolPaths(cfg, adbPath, flutterPath, true)
+			if err != nil {
+				return err
 			}
 			dm = device.NewManagerWithPaths(toolPaths)
 			// Validate device serial if provided
@@ -939,32 +913,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			}
 
 			// Pick device and detect platform
-			platform = device.Platform(cfg.Defaults.Platform)
-			// Apply probe.yaml device preference when --device flag not provided
-			if deviceSerial == "" {
-				if platform == device.PlatformIOS && cfg.Device.IOSDeviceID != "" {
-					deviceSerial = cfg.Device.IOSDeviceID
-				} else if platform == device.PlatformAndroid && cfg.Device.AndroidDeviceID != "" {
-					deviceSerial = cfg.Device.AndroidDeviceID
-				}
-			}
-			if deviceSerial == "" {
-				devices, err := listDevices(ctx, dm)
-				first, ok := defaultDevice(devices)
-				if err != nil || !ok {
-					return noDeviceError(err)
-				}
-				deviceSerial = first.ID
-				platform = first.Platform
-			} else {
-				// Detect platform from device list when serial is specified manually
-				devices, _ := listDevices(ctx, dm)
-				for _, d := range devices {
-					if d.ID == deviceSerial {
-						platform = d.Platform
-						break
-					}
-				}
+			deviceSerial, platform, err = pickLocalDevice(deviceSerial, device.Platform(cfg.Defaults.Platform), cfg.Device.IOSDeviceID,
+				cfg.Device.AndroidDeviceID, func() ([]device.Device, error) { return listDevices(ctx, dm) })
+			if err != nil {
+				return err
 			}
 
 			// Use the application ID this device has installed (see resolveDeviceAppID).
@@ -1101,7 +1053,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			} else {
 				// Android: verify ADB is available and device is reachable,
 				// clean up stale port forwards
-				trace("android: ensuring adb + device %s reachable", deviceSerial)
+				trace("android: ensuring adb + device %s reachable", device.CleanOneLine(deviceSerial, 80))
 				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
 					trace("android: EnsureADB failed: %v", err)
 					return fmt.Errorf("android setup: %w", err)
@@ -1200,10 +1152,8 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			if warning != "" {
 				printAgentWarning(statusW, warning)
 			}
-			if w := probelink.AppIDMismatchWarning(handshake, cfg.Project.App, platform == device.PlatformIOS); w != "" {
-				printAgentWarning(statusW, w)
-			}
-			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
+			printAppIDWarning(statusW, handshake, cfg.Project.App, platform)
+			statusOK(statusW, "Connected to ProbeAgent on %s", device.CleanOneLine(deviceSerial, 80)) // an auto-picked id is the device's own
 		}
 	}
 	_ = cloudSession // used by deferred StopSession above
@@ -1320,7 +1270,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			devCtx.Follower = portFollower
 		}
 		if devCtx.IsPhysical {
-			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
+			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", device.CleanOneLine(deviceSerial, 80))
 		}
 	}
 
@@ -1453,7 +1403,13 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		screenshotDir = filepath.Join(filepath.Dir(outFile), "screenshots")
 	}
 	if devCtx != nil {
-		runner.PullArtifacts(ctx, results, devCtx, screenshotDir)
+		// The folders this run writes artifacts to, and no other: screenshotDir (PullArtifacts' own), the video folder, the folder the
+		// probelink client saves the agent's screenshots in (./reports/screenshots, see probelink.savedScreenshot; a crop and a redacted copy
+		// go next to them) and the folder of the compare screenshot diffs (./reports/visual-diff). Never the folder of the -o file: that can
+		// be the working folder or the home folder.
+		clientShots, _ := filepath.Abs(filepath.Join("reports", "screenshots"))
+		visualDiffs, _ := filepath.Abs(filepath.Join("reports", "visual-diff"))
+		runner.PullArtifacts(ctx, results, devCtx, screenshotDir, videoDir, clientShots, visualDiffs)
 	} else if cloudSession != nil {
 		// In cloud mode, screenshots are saved locally by the probelink client
 		// via the probe.screenshot RPC (base64 data in response). Ensure the
@@ -1783,4 +1739,58 @@ func junitOptionsFromFlags(cmd *cobra.Command) runner.JUnitOptions {
 		}
 	}
 	return o
+}
+
+// uploadAndStartCloudSession uploads the app to the cloud provider and starts a session on targetDevice. The printed lines show the id the
+// provider returned and the device as plain text on one line; the provider gets the values as they are.
+func uploadAndStartCloudSession(ctx context.Context, provider cloud.CloudProvider, appPath, targetDevice string, statusW io.Writer) (cloud.Session, error) {
+	statusInfo(statusW, "Uploading app to %s...", provider.Name())
+	appID, err := provider.UploadApp(ctx, appPath)
+	if err != nil {
+		return cloud.Session{}, fmt.Errorf("cloud upload: %w", err)
+	}
+	statusOK(statusW, "App uploaded: %s", device.CleanOneLine(appID, 80)) // the id the provider returned
+	statusInfo(statusW, "Starting cloud session on %s (%s)...", device.CleanOneLine(targetDevice, 80), provider.Name())
+	sess, err := provider.StartSession(ctx, appID, targetDevice)
+	if err != nil {
+		return cloud.Session{}, fmt.Errorf("cloud session: %w", err)
+	}
+	return sess, nil
+}
+
+// pickLocalDevice chooses the device of a local run and its platform. A serial given (--device) is used, else probe.yaml's preferred device
+// for the default platform, else the first device listed. A given serial takes the platform the device list shows for it; one the list does
+// not show keeps the default platform, and for iOS it must be a simulator or a device UDID (the rule of device.ios_device_id): an iOS id
+// shapes host paths (a simulator's data folder) and devicectl arguments.
+func pickLocalDevice(serial string, platform device.Platform, iosPref, androidPref string, list func() ([]device.Device, error)) (string, device.Platform, error) {
+	if serial == "" {
+		if platform == device.PlatformIOS && iosPref != "" {
+			serial = iosPref
+		} else if platform == device.PlatformAndroid && androidPref != "" {
+			serial = androidPref
+		}
+	}
+	if serial == "" {
+		devices, err := list()
+		first, ok := defaultDevice(devices)
+		if err != nil || !ok {
+			return "", platform, noDeviceError(err)
+		}
+		return first.ID, first.Platform, nil
+	}
+	devices, _ := list()
+	listed := false
+	for _, d := range devices {
+		if d.ID == serial {
+			platform, listed = d.Platform, true
+			break
+		}
+	}
+	if platform == device.PlatformIOS && !ios.ValidSimulatorUDID(serial) && !ios.ValidDeviceUDID(serial) {
+		if !listed {
+			return "", platform, fmt.Errorf("--device %q is not in the device list (see `probe device list`); for an iOS device, use its UDID", serial)
+		}
+		return "", platform, fmt.Errorf("invalid --device %q for an iOS device: use the UDID of a simulator or of a device, as `probe device list` shows it", serial)
+	}
+	return serial, platform, nil
 }

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/secretfile"
 )
 
 // The automation endpoint lets a script or an MCP client drive Studio without a window,
@@ -53,23 +55,31 @@ type automationServer struct {
 	ln      net.Listener
 	srv     *http.Server
 	file    string
+	shared  bool   // the person named the file (PROBE_STUDIO_AUTOMATION_FILE): its folder is theirs, and is judged as a folder, not as a private one
+	doc     string // what the discovery file holds, so Close removes only its own
 }
 
-// automationFilePath is where the discovery file lives.
-func automationFilePath() string {
+// automationFilePath is where the discovery file lives, and whether the person named it. With no user config folder and no
+// PROBE_STUDIO_AUTOMATION_FILE there is no place that is private to this user, so there is no file (the system temp folder is shared, and is
+// not a fallback).
+func automationFilePath() (path string, named bool, err error) {
 	if p := os.Getenv("PROBE_STUDIO_AUTOMATION_FILE"); p != "" {
-		return p
+		return p, true, nil
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
-		dir = os.TempDir()
+		return "", false, fmt.Errorf("studio automation: this user has no config folder to keep the discovery file in; set PROBE_STUDIO_AUTOMATION_FILE to a file in a folder of your own")
 	}
-	return filepath.Join(dir, "flutter-probe-studio", automationFileName)
+	return filepath.Join(dir, "flutter-probe-studio", automationFileName), false, nil
 }
 
 func startAutomation(b automationBackend) (*automationServer, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
+		return nil, err
+	}
+	file, named, err := automationFilePath()
+	if err != nil {
 		return nil, err
 	}
 	port := os.Getenv("PROBE_STUDIO_AUTOMATION_PORT")
@@ -80,7 +90,7 @@ func startAutomation(b automationBackend) (*automationServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &automationServer{backend: b, token: hex.EncodeToString(raw), ln: ln, file: automationFilePath()}
+	s := &automationServer{backend: b, token: hex.EncodeToString(raw), ln: ln, file: file, shared: named}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/rpc", s.handleRPC)
 	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -95,18 +105,22 @@ func startAutomation(b automationBackend) (*automationServer, error) {
 
 func (s *automationServer) URL() string { return "http://" + s.ln.Addr().String() }
 
+// writeDiscovery writes the discovery file through the one writer of secret files (internal/secretfile), so it is refused in a folder or as a file
+// that is a link, that belongs to another user or that others can reach, and is never written through a link at its name.
 func (s *automationServer) writeDiscovery() error {
-	if err := os.MkdirAll(filepath.Dir(s.file), 0o700); err != nil {
-		return err
-	}
 	doc, _ := json.Marshal(map[string]any{"url": s.URL(), "token": s.token, "pid": os.Getpid()})
-	return os.WriteFile(s.file, doc, 0o600)
+	s.doc = string(doc)
+	_, _, err := secretfile.Write(secretfile.Options{Label: "studio automation", Dir: filepath.Dir(s.file), Name: filepath.Base(s.file), Content: s.doc, SharedDir: s.shared})
+	return err
 }
 
-// Close stops the server and removes the discovery file.
+// Close stops the server and removes the discovery file, but only while it still holds this server's document: a server started later has put its
+// own there.
 func (s *automationServer) Close() {
 	_ = s.srv.Close()
-	_ = os.Remove(s.file)
+	if s.doc != "" {
+		secretfile.Remove(s.file, s.doc)
+	}
 }
 
 func isLoopbackHost(hostport string) bool {
@@ -268,7 +282,38 @@ func probeFileForWriteWithinRoots(roots []string, p string) (string, error) {
 	if info, err := os.Lstat(real); err == nil && info.IsDir() {
 		return "", fmt.Errorf("%s is a folder", p)
 	}
+	if hidden := hiddenBelowRoot(roots, real); hidden != "" {
+		return "", fmt.Errorf("%s: %q starts with a dot (a hidden folder or name such as .git): Studio does not write there", p, hidden)
+	}
 	return real, nil
+}
+
+// hiddenBelowRoot returns the first component of real, below the folder the person opened, that starts with a dot ("" when none does): the file's
+// own name, or any folder on the way to it (.git, .github, .hg, a hidden folder of any tool). Only the part below the root is judged: a workspace
+// that itself sits under a dotted folder is still a workspace. real is the path with links resolved, so a visible link that leads into a hidden
+// folder is judged by where it leads.
+func hiddenBelowRoot(roots []string, real string) string {
+	for _, root := range roots {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rr, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(rr, real)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			if strings.HasPrefix(part, ".") {
+				return part
+			}
+		}
+		return ""
+	}
+	return ""
 }
 
 // probeFileWithinRoots is withinRoots for a .probe file; the suffix is checked on the

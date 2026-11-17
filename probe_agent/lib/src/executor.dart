@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageScaffold, CupertinoRadio, CupertinoSwitch;
-import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, CheckboxListTile, ChoiceChip, Dialog, FilterChip, FloatingActionButton, GestureDetector, IconButton, InkResponse, Radio, RadioListTile, Scaffold, Switch, SwitchListTile, TextField;
+import 'package:flutter/material.dart' show BottomSheet, ButtonStyleButton, Checkbox, CheckboxListTile, ChoiceChip, Dialog, FilterChip, FloatingActionButton, GestureDetector, IconButton, InkResponse, Radio, RadioListTile, Scaffold, Switch, SwitchListTile, TextField, Tooltip;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter/services.dart';
@@ -23,6 +23,7 @@ import 'protocol.dart';
 import 'recorder.dart';
 import 'signal.dart' as signal_lib;
 import 'sync.dart';
+import 'view_ready.dart';
 
 typedef SendFn = void Function(String message);
 
@@ -127,6 +128,13 @@ class ProbeExecutor {
   }
 
   Future<dynamic> _handle(ProbeRequest req) async {
+    // Every request first waits, at most ViewReady.cap and only while the app's view has no size yet, for the view's real size, so a
+    // step never runs on a screen laid out at 0×0 (issue #793). With a real size this is a synchronous check, no await. The wait is
+    // before the request's own work starts, so a step's own waiting (a `wait until`, a scroll) is not shortened by it.
+    var viewWaitMs = 0;
+    // The agent may have started before the app made its binding: attach then, on the first request that finds one (a bool check after).
+    if (!ViewReady.instance.attached) ViewReady.instance.attachToAppBinding();
+    if (!ViewReady.instance.isReady) viewWaitMs = await ViewReady.instance.wait();
     switch (req.method) {
       // ---- Lifecycle ----
       case ProbeMethods.ping:
@@ -145,6 +153,8 @@ class ProbeExecutor {
           'ok': true,
           'agent_version': probeAgentVersion,
           'capabilities': probeAgentCapabilities,
+          // How long this request waited for the view's real size (0: none); for diagnostics.
+          'view_ready_ms': viewWaitMs,
           ...probeBuildInfo(),
           if (appId != null) 'app_id': appId,
         };
@@ -359,7 +369,7 @@ class ProbeExecutor {
         return {'node': hit?.toJson()};
 
       case ProbeMethods.visibleSummary:
-        return _finder.visibleSummary();
+        return _finder.visibleSummaryFull();
 
       case ProbeMethods.selectorBounds:
         final sel = req.params['selector'] as Map<String, dynamic>;
@@ -2087,6 +2097,11 @@ class ProbeExecutor {
     final editable = _findEditableTarget(e);
     if (editable != null)
       return editable.obscured ? null : editable.controller.text;
+    // A widget with no text of its own is found by its Semantics label (an Icon or an Image with a semanticLabel) or its Tooltip message
+    // (an icon button): the match is that Semantics or Tooltip element, so it reads as that label (issue #818). This comes after the text
+    // field lookup, so a labelled wrapper around a field still reads as the field's text (or as nothing, for an obscured one).
+    if (widget is Semantics && widget.properties.label != null) return widget.properties.label!;
+    if (widget is Tooltip && widget.message != null) return widget.message!;
     return '';
   }
 

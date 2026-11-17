@@ -2,6 +2,7 @@ package probelink
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -30,6 +31,27 @@ type HandshakeResult struct {
 	// older agent, an id it could not read) and when what it sent is not a plain application id (letters, digits, '_' and '-' in dot-separated segments, at
 	// most 255 characters). It is the app's own statement, shown in a warning and never used to run anything.
 	AppID string
+	// ViewReadyMS is how long the agent waited, before it answered, for the app's view to get its real size (an app can draw its first frames
+	// at 0×0 after a relaunch, issue #793), in milliseconds; 0 when it did not wait. It is -1 when the agent does not send it (an older agent)
+	// or when what it sent is not an integer from 0 to maxViewReadyMS. For diagnostics only: nothing depends on it.
+	ViewReadyMS int
+}
+
+// maxViewReadyMS is the largest view_ready_ms accepted from an agent (the agent caps its wait at 2.5 s).
+const maxViewReadyMS = 60000
+
+// viewReadyMS reads view_ready_ms: a plain JSON integer (digits only: no sign, no fraction, no exponent, not null) from 0 to maxViewReadyMS,
+// else -1.
+func viewReadyMS(raw json.RawMessage) int {
+	text := strings.TrimSpace(string(raw))
+	if text == "" || len(text) > 5 || strings.Trim(text, "0123456789") != "" {
+		return -1
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil || n > maxViewReadyMS {
+		return -1
+	}
+	return n
 }
 
 // maxBuildFieldLen is the longest build field (version, channel, revision) accepted from an agent.
@@ -110,12 +132,17 @@ func newHandshakeResult(res PingResult) *HandshakeResult {
 		FrameworkRevision: plainBuildText(string(res.FrameworkRevision)),
 		DartVersion:       plainBuildText(string(res.DartVersion)),
 		AppID:             plainAppID(string(res.AppID)),
+		ViewReadyMS:       viewReadyMS(res.ViewReadyMS),
 	}
 }
 
 // CapabilityPressKey is reported by an agent that presses the key of a `press <key>` step (the press_key device action).
 // An agent without it answers that action with ok and presses nothing, so the CLI refuses the step before it sends it.
 const CapabilityPressKey = "press_key"
+
+// CapabilityWaitsForViewSize is reported by an agent that answers only once the app's view has its real size (issue #793): after a
+// relaunch, a step does not run on a screen laid out at 0×0. Informational: no step needs it, and nothing is refused without it.
+const CapabilityWaitsForViewSize = "waits_for_view_size"
 
 // CapabilitySwipeFrom is reported by an agent that starts a swipe on a target at the point start_percent gives, not the
 // centre. An agent without it swipes from the centre, so the CLI refuses a swipe with a start rather than swipe from the

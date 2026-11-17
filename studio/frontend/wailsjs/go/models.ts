@@ -693,6 +693,24 @@ export namespace main {
 		}
 	}
 	
+	export class InsertBeforeCheck {
+	    ok: boolean;
+	    line?: number;
+	    text?: string;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new InsertBeforeCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class ReplaceLineCheck {
 	    ok: boolean;
 	    reason: string;
@@ -1213,6 +1231,7 @@ export namespace main {
 	    androidDeviceId: string;
 	    aiContextRunResults: boolean;
 	    aiContextWidgetTree: boolean;
+	    iosDeviceIdProblem?: string;
 	    base?: WorkspaceSettings;
 	
 	    static createFrom(source: any = {}) {
@@ -1231,6 +1250,7 @@ export namespace main {
 	        this.androidDeviceId = source["androidDeviceId"];
 	        this.aiContextRunResults = source["aiContextRunResults"];
 	        this.aiContextWidgetTree = source["aiContextWidgetTree"];
+	        this.iosDeviceIdProblem = source["iosDeviceIdProblem"];
 	        this.base = this.convertValues(source["base"], WorkspaceSettings);
 	    }
 	

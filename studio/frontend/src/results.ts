@@ -85,12 +85,25 @@ let firstStepOfTest: HTMLLIElement | null = null;
 type TestBlock = { outcome: Outcome; rows: HTMLElement[] };
 let blocks: TestBlock[] = [];
 let pendingRows: HTMLElement[] = [];
+// A run is going between run:started and run:finished. The Insert button of a rule row is off meanwhile: an insertion moves every line below it, and the
+// steps still to come would be drawn at the old line numbers on the changed text.
+let runGoing = false;
+
+function setInsertButtons(): void {
+  document.querySelectorAll<HTMLButtonElement>("#results-list .triage-insert").forEach((b) => {
+    b.disabled = runGoing;
+    b.title = runGoing ? "Wait until the run has finished: an insertion moves the lines the run is still reporting." : INSERT_TITLE;
+  });
+}
+
+const INSERT_TITLE = "Add this line above the failed step in the editor. It is not saved and not run; Undo removes it.";
 
 export function initResults(): void {
   listEl = document.getElementById("results-list");
   summaryEl = document.getElementById("results-summary");
 
   EventsOn("run:started", (path: string) => {
+    runGoing = true;
     resetForRun(path);
   });
 
@@ -103,7 +116,9 @@ export function initResults(): void {
   });
 
   EventsOn("run:finished", (results: RunResult[]) => {
+    runGoing = false;
     finishRun(results);
+    setInsertButtons();
   });
 }
 
@@ -175,9 +190,7 @@ function onStep(s: RunStep): void {
     li.appendChild(name);
     li.appendChild(duration);
     li.setAttribute("aria-label", `step running: ${s.description}`);
-    li.addEventListener("click", () => {
-      if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file: s.file, line: s.line } }));
-    });
+    li.addEventListener("click", () => jumpToStep(s));
     listEl.appendChild(li);
     pendingRows.push(li);
     openSteps.set(key, li);
@@ -200,6 +213,7 @@ function onStep(s: RunStep): void {
       const errLi = document.createElement("li");
       errLi.classList.add("step-err");
       errLi.textContent = s.error;
+      errLi.addEventListener("click", () => jumpToStep(s, true)); // the error text is part of the row's click target
       li.insertAdjacentElement("afterend", errLi);
       pendingRows.push(errLi);
       anchor = errLi;
@@ -218,12 +232,34 @@ function onStep(s: RunStep): void {
       text.classList.add("triage-text");
       text.textContent = row.text;
       triLi.append(label, text);
+      if (row.label === "Suggested fix" && s.depth === 0 && s.line > 0) {
+        // A line to add before the step: Studio checks it against the text the run read before the editor changes (insert-before-step design).
+        const add = document.createElement("button");
+        add.type = "button";
+        add.classList.add("btn-mini", "triage-insert");
+        add.textContent = "Insert before the step";
+        add.title = INSERT_TITLE;
+        add.disabled = runGoing;
+        add.addEventListener("click", (ev) => {
+          ev.stopPropagation(); // not a click on the row (which opens the line)
+          document.dispatchEvent(new CustomEvent("studio:insert-before", { detail: { file: s.file, line: s.line } }));
+        });
+        triLi.append(add);
+        setInsertButtons();
+      }
+      triLi.addEventListener("click", () => jumpToStep(s, true));
       anchor.insertAdjacentElement("afterend", triLi);
       pendingRows.push(triLi);
       anchor = triLi;
     }
   }
   openSteps.delete(key);
+}
+
+/** Opens the line of a step (the same click as its row). Text a person has selected in an error or a hint to copy it is not a click on the row. */
+function jumpToStep(s: RunStep, ignoreSelection = false): void {
+  if (ignoreSelection && (window.getSelection()?.toString() ?? "") !== "") return;
+  if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file: s.file, line: s.line } }));
 }
 
 function appendResult(res: RunResult): void {
