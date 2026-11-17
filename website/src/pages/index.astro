@@ -63,7 +63,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
       <a href="/getting-started/installation/" class="btn-p">Install free</a>
       <a href={APPLY} class="btn-s">Apply as a design partner</a>
     </div>
-    <div class="cmd-line"><span>$</span> <b>brew install AlphaWaveSystems/tap/probe</b></div>
+    <div class="cmd-line" tabindex="0" role="region" aria-label="Install command"><span>$</span> <b>brew install AlphaWaveSystems/tap/probe</b></div>
   </div>
 
   <div class="metrics">
@@ -80,7 +80,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
     <div class="split">
       <div class="codebox">
         <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="fname">webview.probe</span></div>
-<pre><span class="kw">test</span> <span class="str">"type into a field, tap a button, wait for the result"</span>
+<pre tabindex="0" role="region" aria-label="The test, in ProbeScript"><span class="kw">test</span> <span class="str">"type into a field, tap a button, wait for the result"</span>
   wait until <span class="str">"Page loaded"</span> appears
   type <span class="str">"hello"</span> into css:<span class="str">"#message"</span> in webview
   store text of css:<span class="str">"#message"</span> in webview as typed
@@ -91,7 +91,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
       </div>
       <div class="codebox">
         <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="fname">probe test</span></div>
-<pre><span class="ok">✓</span>  the page is shown and its title is found (2.808s)
+<pre tabindex="0" role="region" aria-label="The report of the run"><span class="ok">✓</span>  the page is shown and its title is found (2.808s)
 <span class="ok">✓</span>  type into a field, tap a button, wait for the result (3.569s)
 <span class="ok">✓</span>  the result text is read, not only found (3.864s)
 <span class="ok">✓</span>  stored text has its runs of spaces collapsed, and can be typed into a Flutter field (4.709s)
@@ -159,7 +159,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
   <section class="sec" aria-labelledby="price-h">
     <div class="sec-h"><h2 id="price-h">Plans</h2><p>The CLI and agent are free. The paid plans are planned and by invitation: nothing can be bought yet.</p></div>
     <div class="plans">
-      <div class="plan"><span class="pill live">Available now</span><h3>Free</h3><div class="price">$0</div><p class="desc">Local runs, unlimited seats. 10,000 results a month in Probe Cloud (preview).</p></div>
+      <div class="plan"><span class="pill live">Available now</span><h3>Free</h3><div class="price">$0</div><p class="desc">Local runs, unlimited seats. 1,000 results a month in Probe Cloud (preview).</p></div>
       <div class="plan planned"><span class="pill planned">Planned, by invitation</span><h3>Team</h3><div class="price">$49 <small>/ month</small></div><p class="desc">Unlimited seats, no overage. 100,000 results a month.</p></div>
       <div class="plan planned"><span class="pill planned">Planned, by invitation</span><h3>Scale</h3><div class="price">$149 <small>/ month</small></div><p class="desc">Unlimited seats, no overage. 500,000 results a month.</p></div>
     </div>
@@ -199,8 +199,8 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
   <section class="sec" aria-labelledby="side-h">
     <div class="sec-h"><h2 id="side-h">Side by side</h2><p>Same login test. Different experience.</p></div>
     <div class="compare">
-      <div><div class="compare-hd"><span>FlutterProbe</span><span class="lines">7 lines</span></div><pre set:html={probeLogin}></pre></div>
-      <div><div class="compare-hd"><span>flutter_test</span><span class="lines">13 lines</span></div><pre set:html={dartLogin}></pre></div>
+      <div><div class="compare-hd"><span>FlutterProbe</span><span class="lines">7 lines</span></div><pre tabindex="0" role="region" aria-label="FlutterProbe login test" set:html={probeLogin}></pre></div>
+      <div><div class="compare-hd"><span>flutter_test</span><span class="lines">13 lines</span></div><pre tabindex="0" role="region" aria-label="flutter_test login test" set:html={dartLogin}></pre></div>
     </div>
   </section>
   <div class="divider"></div>
@@ -276,7 +276,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
     <div class="install">
       <div class="sec-h" style="margin-bottom:0"><h2 id="try-h">Try it now</h2></div>
       <div class="install-box">
-        <span><span style="color:var(--muted);margin-right:0.5rem">$</span>brew install AlphaWaveSystems/tap/probe</span>
+        <span tabindex="0" role="region" aria-label="Install command, to copy"><span style="color:var(--muted);margin-right:0.5rem">$</span>brew install AlphaWaveSystems/tap/probe</span>
         <button type="button" id="copy-install" aria-label="Copy the install command">Copy</button>
       </div>
       <p>Free to use for any purpose, including production, except offering a competing hosted testing service (the CLI is under BSL 1.1; the Dart agent is MIT).</p>

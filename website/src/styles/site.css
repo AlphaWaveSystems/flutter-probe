@@ -24,6 +24,9 @@ html { scroll-padding-top: 1rem; }
 body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+/* A link inside text is told from the text by an underline, not by colour alone (axe: link-in-text-block). Buttons and the nav keep their own look. */
+main a:not(.btn-p):not(.btn-s):not(.btn-sm), footer a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+nav a, .nav-logo { text-decoration: none; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 code { font-family: var(--mono); font-size: 0.9em; overflow-wrap: anywhere; }
 h1, h2, h3 { text-wrap: balance; }
