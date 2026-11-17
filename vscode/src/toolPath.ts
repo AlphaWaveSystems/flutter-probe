@@ -128,7 +128,42 @@ export function refuseControl(text: string, what: string): void {
   }
 }
 
-// quoteArg quotes one argument of the command the POSIX way (shellEscape in probeTerminal.ts). An argument with a control character is
+// argWord is one argument as typed into the terminal, quoted for the shell the terminal runs (vscode.env.shell), or an error when it cannot
+// be typed safely for that shell. An argument of letters, digits and . _ / : = - (and \ on Windows) is typed as it is; any other:
+// - bash, sh, zsh, dash, ksh (also Git Bash or WSL on Windows): POSIX single quotes.
+// - PowerShell (any system): single quotes, with ' ‘ ’ doubled. Refused: ‚ and ‛ (PowerShell may read them as quotes), " (Windows
+//   PowerShell 5.1 passes it to the program mangled), and a trailing \ (5.1 can turn it into an escaped quote).
+// - cmd.exe: double quotes, with a trailing run of \ doubled (the program's own argument parsing would read \" as an escaped quote).
+//   Refused: % (it expands inside quotes and has no escape) and ".
+// - Any other shell (fish, nu, csh, none detected): a shell metacharacter (or, on macOS and Linux, a backslash) is refused; any other
+//   argument (a space) is single-quoted on macOS and Linux and refused on Windows, where the shell's quoting is unknown.
+// On every system and shell an argument with a control character is refused (CONTROL).
+export function argWord(arg: string, platform: string, shell: string): string {
+  refuseControl(arg, 'the argument');
+  const safe = platform === 'win32' ? /^[a-zA-Z0-9_./:=\\-]+$/ : /^[a-zA-Z0-9_./:=-]+$/;
+  if (safe.test(arg)) { return arg; }
+  const name = (shell.split(/[\\/]/).pop() ?? '').toLowerCase().replace(/\.exe$/, '');
+  const refuse = (why: string): never => {
+    throw new Error(`the argument ${shown(arg)} ${why}: rename the file or folder, or use bash or zsh as the terminal`);
+  };
+  if (POSIX_SHELLS.has(name) || (name === 'wsl' && platform === 'win32')) { return quotePosix(arg); }
+  if (name === 'powershell' || name === 'pwsh') {
+    if (/[\u201A\u201B"]/.test(arg)) { refuse('has a quote character PowerShell may read'); }
+    if (arg.endsWith('\\')) { refuse('ends with a backslash, which Windows PowerShell can pass on as an escaped quote'); }
+    return `'${arg.replace(/['\u2018\u2019]/g, c => c + c)}'`;
+  }
+  if (platform === 'win32' && name === 'cmd') {
+    if (/[%"]/.test(arg)) { refuse('has a % or " that cmd.exe would read'); }
+    return `"${arg.replace(/(\\+)$/, '$1$1')}"`;
+  }
+  if (METACHARACTERS.test(arg) || (platform !== 'win32' && arg.includes('\\'))) {
+    refuse(`has a character the terminal's shell (${name || 'not detected'}) may act on`);
+  }
+  if (platform === 'win32') { refuse(`cannot be quoted for the terminal's shell (${name || 'not detected'})`); }
+  return quotePosix(arg);
+}
+
+// quoteArg quotes one argument the POSIX way, whatever the shell (argWord quotes it for the terminal's shell). An argument with a control character is
 // refused (CONTROL): a line-editing shell would act on it as it is typed.
 export function quoteArg(arg: string): string {
   refuseControl(arg, 'the argument');
@@ -144,8 +179,7 @@ const POSIX_SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
 const METACHARACTERS = /[&|;<>^`$()'"%!\n\r]/;
 
 // commandWord is the command as typed into the terminal, quoted for the shell the terminal runs (vscode.env.shell), or an error when the
-// path cannot be typed safely for that shell. Only the command is handled here: the arguments are still quoted the POSIX way on every
-// system (shellEscape in probeTerminal.ts).
+// path cannot be typed safely for that shell. The arguments are quoted the same way by argWord.
 // - bash, sh, zsh, dash, ksh (also Git Bash or WSL on Windows): POSIX single quotes.
 // - PowerShell: the call operator and single quotes, & '...'. PowerShell also reads the typographic quotes ‘ ’ “ ” as quotation marks
 //   (about_Quoting_Rules), so ' ‘ ’ are doubled inside the string, and a path with ‚ or ‛, which that page does not list, is refused.

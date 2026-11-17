@@ -200,7 +200,8 @@ test('config.ts gives the resolver the opt-in, the trust, the platform and PATH,
   assert.doesNotMatch(text, /path\.join\(ws, 'bin'/);
   const term = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'terminal', 'probeTerminal.ts'), 'utf8');
   assert.match(term, /const shown = commandWord\(command, process\.platform, vscode\.env\.shell\);/);
-  assert.match(term, /\[shown, \.\.\.args\.map\(shellEscape\)\]/);
+  assert.match(term, /\[shown, \.\.\.args\.map\(a => argWord\(a, process\.platform, vscode\.env\.shell\)\)\]/);
+  assert.doesNotMatch(term, /quoteArg|shellEscape/);
   const probe = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'probe.ts'), 'utf8');
   assert.match(probe, /try \{\n    probePath = getProbePath\(\);\n  \} catch \{\n    return \[\]; \/\/ probe was not found/);
   assert.match(probe, /try \{\n    probePath = getProbePath\(\);\n  \} catch \{\n    return \[\]; \/\/ lint on save stays quiet/);

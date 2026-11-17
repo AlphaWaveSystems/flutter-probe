@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { envFingerprint, secretFlagIn, terminalAction } from '../secretArgs';
-import { commandWord, quoteArg } from '../toolPath';
+import { argWord, commandWord } from '../toolPath';
 
 // Each terminal with the fingerprint of the environment it was made with: a terminal's environment is fixed when it is created, so a run
 // whose secrets differ gets a new terminal.
@@ -46,14 +46,9 @@ export function runInTerminal(
   const terminal = getOrCreateTerminal(name, cwd, env);
   // The command is quoted for the terminal's shell, so a path with a space stays one word (commandWord in toolPath.ts).
   const shown = commandWord(command, process.platform, vscode.env.shell);
-  const fullCommand = [shown, ...args.map(shellEscape)].join(' ');
+  const fullCommand = [shown, ...args.map(a => argWord(a, process.platform, vscode.env.shell))].join(' ');
   terminal.sendText(fullCommand);
   return terminal;
-}
-
-// shellEscape quotes one argument the POSIX way (quoteArg in toolPath.ts, which refuses a control character).
-function shellEscape(arg: string): string {
-  return quoteArg(arg);
 }
 
 export function disposeTerminal(name: string): void {
