@@ -192,7 +192,7 @@ func randomProbeYAML(rng *rand.Rand) string {
 		case "agent":
 			b.WriteString("agent:" + eol() + indent + "port: 48686" + pick("", " # port") + eol())
 		case "device":
-			b.WriteString("device:" + eol() + indent + "ios_device_id: ABC" + eol())
+			b.WriteString("device:" + eol() + indent + "ios_device_id: 6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B" + eol())
 		case "defaults":
 			b.WriteString("defaults:" + pick("", " # my defaults") + eol())
 			for n := rng.Intn(4); n > 0; n-- {
@@ -502,7 +502,7 @@ func TestConcurrentSavesOfDifferentFieldsAllLand(t *testing.T) {
 			func(f *WorkspaceSettings) { f.TestTimeout = "42s" },
 			func(f *WorkspaceSettings) { f.RetryFailedTests = 3 },
 			func(f *WorkspaceSettings) { f.ImplicitWait = "5s" },
-			func(f *WorkspaceSettings) { f.IOSDeviceID = "IOS-1" },
+			func(f *WorkspaceSettings) { f.IOSDeviceID = "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B" },
 			func(f *WorkspaceSettings) { f.AndroidDeviceID = "emu-1" },
 			func(f *WorkspaceSettings) { f.AIContextRunResults = true },
 		}
@@ -530,7 +530,7 @@ func TestConcurrentSavesOfDifferentFieldsAllLand(t *testing.T) {
 			}
 		}
 		got := read(t, path)
-		for _, want := range []string{"port: 4001", "timeout: 41s", "test_timeout: 42s", "retry_failed_tests: 3", "implicit_wait: 5s", "ios_device_id: IOS-1", "android_device_id: emu-1", "run_results: true"} {
+		for _, want := range []string{"port: 4001", "timeout: 41s", "test_timeout: 42s", "retry_failed_tests: 3", "implicit_wait: 5s", "ios_device_id: 6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B", "android_device_id: emu-1", "run_results: true"} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("round %d: a save was lost, %q is missing:\n%s", round, want, got)
 			}
