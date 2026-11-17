@@ -14,6 +14,7 @@ const widgetFamilies = <String>[
   'buttons',
   'navigation',
   'display',
+  'dialogs',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -23,6 +24,7 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'buttons' => const ButtonsFamilyScreen(),
   'navigation' => const NavigationFamilyScreen(),
   'display' => const DisplayFamilyScreen(),
+  'dialogs' => const DialogsFamilyScreen(),
   _ => null,
 };
 
@@ -491,6 +493,211 @@ class DisplayFamilyScreen extends StatelessWidget {
                 text: 'Painted ',
                 children: const [TextSpan(text: 'rich text')],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dialogs and sheets (docs/compat/NEXT.md, items 8 and 9): an `AlertDialog` ("Delete item?", actions "Cancel" and "Delete"), a
+/// `CupertinoAlertDialog` ("Discard changes?", actions "Keep editing" and "Discard"), a `CupertinoActionSheet` ("Share", actions "Copy link" and
+/// "Send", cancel button "Cancel"), a modal bottom sheet ("Option one", "Option two") and a `SnackBar` ("Saved", action "Undo", 4 seconds). A button
+/// of the page ("Page button") counts its taps, to show whether a tap reaches the page under an open dialog. State texts: `Dialog: none|cancelled|deleted`,
+/// `Cupertino dialog: none|kept|discarded`, `Sheet: none|copy|send|cancelled`, `Bottom sheet: none|one|two`, `Snack: none|saved|undone`, `Page taps: N`.
+class DialogsFamilyScreen extends StatefulWidget {
+  const DialogsFamilyScreen({super.key});
+
+  @override
+  State<DialogsFamilyScreen> createState() => _DialogsFamilyScreenState();
+}
+
+class _DialogsFamilyScreenState extends State<DialogsFamilyScreen> {
+  String _dialog = 'none';
+  String _cupertino = 'none';
+  String _sheet = 'none';
+  String _bottom = 'none';
+  String _snack = 'none';
+  int _pageTaps = 0;
+
+  Future<void> _openDialog() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete item?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          _s(
+            'wf_dialog_cancel',
+            (k) => TextButton(
+              key: k,
+              onPressed: () => Navigator.of(context).pop('cancelled'),
+              child: const Text('Cancel'),
+            ),
+          ),
+          _s(
+            'wf_dialog_delete',
+            (k) => TextButton(
+              key: k,
+              onPressed: () => Navigator.of(context).pop('deleted'),
+              child: const Text('Delete'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (mounted) setState(() => _dialog = result ?? 'none');
+  }
+
+  Future<void> _openCupertino() async {
+    final result = await showCupertinoDialog<String>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text('Your edits are lost.'),
+        actions: [
+          _s(
+            'wf_cupertino_keep',
+            (k) => CupertinoDialogAction(
+              key: k,
+              onPressed: () => Navigator.of(context).pop('kept'),
+              child: const Text('Keep editing'),
+            ),
+          ),
+          _s(
+            'wf_cupertino_discard',
+            (k) => CupertinoDialogAction(
+              key: k,
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(context).pop('discarded'),
+              child: const Text('Discard'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (mounted) setState(() => _cupertino = result ?? 'none');
+  }
+
+  Future<void> _openSheet() async {
+    final result = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Share'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('copy'),
+            child: const Text('Copy link'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop('send'),
+            child: const Text('Send'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop('cancelled'),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (mounted) setState(() => _sheet = result ?? 'none');
+  }
+
+  Future<void> _openBottom() async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            title: const Text('Option one'),
+            onTap: () => Navigator.of(context).pop('one'),
+          ),
+          ListTile(
+            title: const Text('Option two'),
+            onTap: () => Navigator.of(context).pop('two'),
+          ),
+        ],
+      ),
+    );
+    if (mounted) setState(() => _bottom = result ?? 'none');
+  }
+
+  void _save() {
+    setState(() => _snack = 'saved');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Saved'),
+        duration: const Duration(seconds: 4),
+        persist: false,
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => setState(() => _snack = 'undone'),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Dialogs')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _state('wf_dialog_state', 'Dialog: $_dialog'),
+          _state('wf_cupertino_state', 'Cupertino dialog: $_cupertino'),
+          _state('wf_sheet_state', 'Sheet: $_sheet'),
+          _state('wf_bottom_state', 'Bottom sheet: $_bottom'),
+          _state('wf_snack_state', 'Snack: $_snack'),
+          _state('wf_page_taps', 'Page taps: $_pageTaps'),
+          _s(
+            'wf_open_dialog',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: _openDialog,
+              child: const Text('Open dialog'),
+            ),
+          ),
+          _s(
+            'wf_open_cupertino',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: _openCupertino,
+              child: const Text('Open Cupertino dialog'),
+            ),
+          ),
+          _s(
+            'wf_open_sheet',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: _openSheet,
+              child: const Text('Open action sheet'),
+            ),
+          ),
+          _s(
+            'wf_open_bottom',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: _openBottom,
+              child: const Text('Open bottom sheet'),
+            ),
+          ),
+          _s(
+            'wf_save',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: _save,
+              child: const Text('Save'),
+            ),
+          ),
+          _s(
+            'wf_page_button',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => setState(() => _pageTaps++),
+              child: const Text('Page button'),
             ),
           ),
         ],

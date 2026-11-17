@@ -15,7 +15,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 | Selection controls | `Checkbox`, `Switch`, `Radio`, `Slider`, `CupertinoSwitch` | see below | see below | n/a | not assessed | see below | `selection` screen | `probe-tests/widgets/selection.probe` |
 | Pickers and menus | `DropdownButton`, `PopupMenuButton`, `DatePickerDialog`, `CupertinoPicker` | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
 | Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `PageView` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
-| Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | see below | see below | n/a | n/a | see below | `dialogs` screen | `probe-tests/widgets/dialogs.probe` |
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | not assessed | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
 | Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
 | Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | not assessed | not assessed | n/a | not assessed | n/a | not assessed | not assessed |
@@ -114,6 +114,26 @@ Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulat
 
 Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` inside other widgets (buttons are their own family), text scale and `textScaler`, right-to-left and other scripts, a `Text` with `semanticsLabel` (item 3 asks how a semantic label is matched), soft wrapping without `maxLines`, and `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` (item 3). Flutter 3.50.0 was not run for this family.
 
+### Dialogs and sheets (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=dialogs`, `probe-tests/widgets/dialogs.probe`)
+
+| Widget (fixture id) | find | tap | close | read | Result |
+|---|---|---|---|---|---|
+| `AlertDialog` "Delete item?" with the actions "Cancel" and "Delete" (`wf_open_dialog`, `wf_dialog_cancel`, `wf_dialog_delete`) | pass (title and text; `wait until "Delete item?" appears`) | pass (`tap "Cancel"`; `tap #wf_dialog_delete`); `tap "Delete"` taps the title, see below | pass (an action; `go back`) | pass (`Dialog: cancelled\|deleted\|none`) | pass, with the findings below |
+| `CupertinoAlertDialog` "Discard changes?" (`wf_open_cupertino`, `wf_cupertino_keep`, `wf_cupertino_discard`) | pass (title and text) | pass (by id) | pass | pass (`Cupertino dialog: kept\|discarded`) | pass |
+| `CupertinoActionSheet` "Share" with "Copy link", "Send" and the cancel button "Cancel" (`wf_open_sheet`) | pass | pass (`tap "Copy link"`, `tap "Cancel"` by text) | pass | pass (`Sheet: copy\|cancelled`) | pass |
+| modal bottom sheet with two `ListTile`s (`wf_open_bottom`) | pass | pass (`tap "Option two"`) | pass (an option; `go back` without a choice) | pass (`Bottom sheet: two\|none`) | pass |
+| `SnackBar` "Saved" with the action "Undo" (`wf_save`) | pass after `wait until "Saved" appears` | pass (`tap "Undo"`) | pass (it goes away by itself after 4 seconds, and `Undo` removes it) | pass (`Snack: saved\|undone`) | pass |
+
+**Findings.**
+- **A dialog, a sheet or a snack bar is still in the widget tree while it animates away, so a `don't see` right after the tap that closes it fails** ("Expected NOT to see ... but found 2 element(s)"). `wait until "Delete item?" disappears` first, then `don't see`. The same holds for appearing: `see "Saved"` right after `tap "Save"` fails, `wait until "Saved" appears` first. The suite waits at every such step.
+- **`go back` closes a dialog and a bottom sheet** (the state text reads `none`: no choice was made). Whether the dialog is out of the tree when `go back` returns depends on the build: on Flutter 3.44.8 it was, on 3.50.0 it was not (a `don't see` right after `go back` failed there in 2 of 2 runs), so the test waits.
+- **The page under an open dialog is still matched, and a tap on it does not reach it.** `see "Page taps: 0"` passes while the dialog is open, and `tap "Page button"` finds the button and passes, but the barrier takes the tap: the counter stays 0, and one tap after the dialog is closed makes it 1.
+- **A text selector takes the first widget whose text contains it, so `tap "Delete"` taps the dialog's title "Delete item?" and not its button "Delete".** The dialog stays open (`Dialog: none`). The button has to be named by id (`tap #wf_dialog_delete`). `tap "Discard"` hit the title "Discard changes?" the same way, which is why the Cupertino actions have ids; `tap "Cancel"` and `tap "Copy link"` are not ambiguous and work by text.
+- **A `SnackBar` that has an action stays on screen until it is dismissed, on the Flutter versions measured, unless it is built with `persist: false`.** The fixture sets it, so that "it goes away by itself" can be tested; without it, `wait until "Saved" disappears` timed out after 30 seconds. That is Flutter's own default, not the agent's.
+
+Not covered by the screen: iOS (a Cupertino dialog and sheet were run on Android only), tapping the barrier to dismiss, a dialog with a text field, a scrolling dialog, `showDatePicker` and `showTimePicker`, a persistent bottom sheet, a floating or queued snack bar, `PopupMenuButton`, `Drawer`, and native system dialogs (see `tools/system-dialogs`). The 8 variants of the suite that must fail
+(`probe-tests/negative/dialogs.probe.expect-fail`) were run: all 8 fail at their own step with the message in their comment (a snack bar and its action before `Save`, a dialog seen after Cancel, `tap "Delete"` taken for the button, a tap on the page under an open dialog counted, the wrong state, a sheet seen after an option, a state before its tap).
+
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 
 An Android app with a `webview_flutter` 4.14.1 `WebViewWidget` that shows `assets/page.html` (the page of `native-test-apps/android-webview`, kept equal by a test) from the app's own assets, next to
@@ -145,6 +165,8 @@ accessibility services, other screen sizes or text scales.
 
 **Buttons** were run on a build by each Flutter (`--dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=buttons`; the 3.50.0 build in a scratch copy with a private SDK) on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `buttons.probe` 7 of 7 and the negative file 0 passed, 8 failed, on each.
 Not run: a physical device, another API level, TalkBack or other accessibility services, other screen sizes or text scales.
+
+**Dialogs and sheets** were run on a build by each Flutter (`--dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=dialogs`; the 3.50.0 build in a scratch copy with a private SDK) on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35). Flutter 3.50.0: `dialogs.probe` 11 of 11 in each of 2 runs, and the negative file 0 passed, 8 failed. Flutter 3.44.8: 11 of 11 in one run of an earlier version of the suite (it differs from the final one in the `go back` test, which got its wait), and 10 passed in each of 2 runs of the final suite, the eleventh test not running because `before each test` failed to restart the app ("restart the app: reconnect with pre-shared token: agent not reachable within 20s"), a different test each time; so every test passed on 3.44.8 in at least one run, but not all 11 in one run of the final suite. The negative file: 0 passed, 8 failed. The reconnect failure is under investigation (a follow-up of issue #793) and tracks the load of the machine. Not run: a physical device, another API level, iOS, TalkBack or other accessibility services, other screen sizes or text scales.
 
 **WebView content** was run separately: Flutter 3.44.8 and 3.50.0, each building `native-test-apps/flutter-webview` with `--dart-define=PROBE_AGENT=true`, `webview_flutter` and `webview_flutter_android` 4.14.1 (pinned; see
 `RELEASES.md`), on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `webview.probe` 5 of 5 on each build (6 of 6 after the result-text test was added, run on the 3.44.8 build), and the negative file 0 passed, 9 failed. The 3.50.0 build was made in a scratch copy with a private SDK; its `pubspec.lock` differs from the committed one only in

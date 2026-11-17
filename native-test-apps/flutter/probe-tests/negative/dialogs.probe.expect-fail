@@ -1,0 +1,69 @@
+# The negative variants of probe-tests/widgets/dialogs.probe: every test below asserts something WRONG, or crosses what the agent can do, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/dialogs.probe.expect-fail /tmp/dialogs-negative.probe
+#   probe test /tmp/dialogs-negative.probe --device <serial> -y       # (the dialogs build, the same probe.yaml as for dialogs.probe)
+#
+# Expected: 0 passed, 8 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
+# waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id (the last button of the screen).
+  wait until #wf_page_button appears
+
+# Expected: see "Saved": Expected to see "text("Saved")" but it was not found (no snack bar before the tap on Save)
+test "N1 the snack bar is not there before Save"
+  see "Saved"
+
+# Expected: tap "Undo": Widget not found: text("Undo") (there is no action to tap before the snack bar shows)
+test "N2 the Undo action is not there before Save"
+  tap "Undo"
+
+# Expected: see "Delete item?": Expected to see "text("Delete item?")" but it was not found (the dialog is closed after Cancel and the wait)
+test "N3 the dialog is gone after Cancel"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Cancel"
+  wait until "Delete item?" disappears
+  see "Delete item?"
+
+# Expected: see "Dialog: deleted": Expected to see "text("Dialog: deleted")" but it was not found (tap "Delete" taps the title, the dialog is still open and its state is none)
+test "N4 tap by the text Delete does not press the Delete button"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Delete"
+  see "Dialog: deleted"
+
+# Expected: see "Page taps: 1": Expected to see "text("Page taps: 1")" but it was not found (the barrier takes the tap on the page under an open dialog)
+test "N5 a tap on the page under an open dialog is not counted"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Page button"
+  tap "Cancel"
+  wait until "Delete item?" disappears
+  see "Page taps: 1"
+
+# Expected: see "Dialog: deleted": Expected to see "text("Dialog: deleted")" but it was not found (Cancel was pressed, the state is cancelled)
+test "N6 the state names Cancel, not Delete"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Cancel"
+  wait until "Delete item?" disappears
+  see "Dialog: deleted"
+
+# Expected: see "Option one": Expected to see "text("Option one")" but it was not found (the bottom sheet is closed after an option and the wait)
+test "N7 the bottom sheet is gone after an option"
+  tap "Open bottom sheet"
+  wait until "Option one" appears
+  tap "Option two"
+  wait until "Option one" disappears
+  see "Option one"
+
+# Expected: see "Snack: undone": Expected to see "text("Snack: undone")" but it was not found (Undo was not tapped)
+test "N8 the snack bar state is not undone before Undo"
+  tap "Save"
+  wait until "Saved" appears
+  see "Snack: undone"
