@@ -9,10 +9,15 @@ name: Dependency licences
 #
 # Safety, in the manner of the disclosure guard:
 #   - pull_request, never pull_request_target: the pull request's code runs with a read-only token and no secrets;
-#   - the licence tool and its self-test come from the BASE commit, and only the dependency manifests come from the pull request, so a pull request cannot weaken
-#     the check that judges it (a change to the tool is reviewed, and tested by the required Go tests). The allowlist is read from the pull request: it can only
-#     silence notes, never a strong copyleft licence;
+#   - the licence tool, its self-test and check-all.sh come from the BASE commit (the one pull request that adds check-all.sh uses its own copy), and only the
+#     dependency manifests and the allowlist come from the pull request, so a pull request cannot weaken the TOOL or the SCRIPT (a change to them is reviewed, and the
+#     tool is tested by the required Go tests). It can still edit or drop THIS WORKFLOW FILE, which comes from the merge result, and this check is not a required
+#     status check: a change to the workflow is caught by review, not by the check. The allowlist is read from the pull request: it can silence notes and the
+#     unlicensed-Go-package failure, never a strong copyleft licence;
 #   - npm runs with --ignore-scripts, so no lifecycle script of a dependency runs.
+#
+# Limits: the check trusts the licence a package declares (the license field of its package.json, what go-licenses detects in a module's licence file); a `replace`
+# of a module under this repository's own import path (--own github.com/alphawavesystems/) would hide that dependency from the Go check, and review is what sees it.
 
 on:
   pull_request:

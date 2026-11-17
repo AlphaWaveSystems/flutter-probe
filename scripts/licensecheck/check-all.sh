@@ -6,8 +6,9 @@
 #
 #   REPO_DIR  the checkout whose dependencies are checked (the pull request)
 #   TOOL_DIR  the checkout whose scripts/licensecheck is run: the same as REPO_DIR, or, for a pull request from outside, the BASE branch, so that a pull
-#             request cannot weaken the check that judges it (the disclosure guard works the same way). The allowlist is read from REPO_DIR: it can only
-#             silence notes, never a strong copyleft licence.
+#             request cannot weaken the tool or this script (the disclosure guard works the same way); the workflow file itself comes from the pull request and is
+#             caught by review, not by this check. The allowlist is read from REPO_DIR: it can silence notes and the unlicensed-Go-package failure, never a strong
+#             copyleft licence.
 #   TMP_DIR   where the tools' output goes
 #   TARGET    go                  the Go modules: ., tools/probe-convert, studio   (needs go-licenses v1.6.0 in $GOPATH/bin or $GO_LICENSES)
 #             npm:<directory>     one npm project, for example npm:website, npm:studio/frontend, npm:vscode   (needs node and npm)

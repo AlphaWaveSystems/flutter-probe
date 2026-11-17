@@ -10,6 +10,7 @@
 @img/sharp-libvips-linux-x64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
 @img/sharp-libvips-linuxmusl-arm64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
 @img/sharp-libvips-linuxmusl-x64@* | LGPL-3.0-or-later native library of sharp (website build); same reasoning
+@img/sharp-wasm32@* | Apache-2.0 AND LGPL-3.0-or-later AND MIT: the WebAssembly build of sharp with its libvips (website build, used where no native build fits); the LGPL part is the same library as above, a build tool, not distributed with the product
 
 # --- vscode/ (the extension has no runtime dependencies; these are packaging tools, dev dependencies)
 @vscode/vsce-sign@* | Microsoft's own licence for the signing helper of vsce, a packaging tool used at build time; not part of the extension bundle
