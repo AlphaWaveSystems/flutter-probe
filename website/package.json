@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "node scripts/check-truth.mjs && astro build",
+    "check:truth": "node scripts/check-truth.mjs",
     "preview": "astro preview"
   },
   "dependencies": {
