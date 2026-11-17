@@ -58,6 +58,8 @@ don't see "Error"                  # text is NOT visible (dont see "Error" also 
 see 3 "Item"                       # exactly 3 matches
 see "Submit" is enabled            # widget state
 see "Terms" is checked             # checkbox state
+see #email is filled               # a text field holds at least one character (never reads it)
+see #email is empty                # a text field holds no character
 see "Price" contains "$9.99"       # partial text match
 ```
 
@@ -69,10 +71,13 @@ The value of an obscured (password) field is never matched: `see "secret"`, a pr
 type "secret" into #password
 see "Password length: 6"          # a Text the app shows about the field
 see #password                      # the field is on screen
+see #password is filled            # the field holds at least one character
 don't see "secret"                 # the value is not searchable
 ```
 
-A field stays secret once it has been seen obscured, also after the app shows its text, so a suite that taps "show password" and then asserts the value fails. The value is still readable through `run_dart`, screenshots and the app's own logs. `see #password is filled` and `is empty` are planned.
+A field stays secret once it has been seen obscured, also after the app shows its text, so a suite that taps "show password" and then asserts the value fails. The value is still readable through `run_dart`, screenshots and the app's own logs.
+
+`see #password is filled` and `see #password is empty` say whether the field holds a character, and nothing else: the agent asks only whether the length is above zero, so the value is not in the answer, in an error, in a hint or in a report, and the check works on a password field. Spaces count as characters. Name the field by its `#id`: the check looks at the field and below it, never at a label next to it, and a label, a button, or a container that holds none or several text fields is refused ("is not a text field", "holds 2 text fields") instead of passing. `don't see #password is filled` means empty, and also refuses a widget that is not a text field. The two checks cannot be combined with `matching` or `contains`, which read the text. The CLI sends them only to a `probe_agent` that reports the `see_filled` capability and refuses the step before sending it to an older one, because an older agent does not know the words and would pass them for any widget.
 
 ## Gestures
 
