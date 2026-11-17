@@ -132,8 +132,9 @@ class _SelectionFamilyScreenState extends State<SelectionFamilyScreen> {
             'wf_cupertino_switch_state',
             'Cupertino switch: ${_cupertino ? 'on' : 'off'}',
           ),
-          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
-          const SizedBox(height: 1200),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
           _s(
             'wf_bottom_checkbox',
             (k) => CheckboxListTile(
@@ -261,8 +262,9 @@ class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
             'wf_cupertino_state',
             'Cupertino: ${_cupertino.isEmpty ? '(empty)' : _cupertino}',
           ),
-          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
-          const SizedBox(height: 1200),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
           _s(
             'wf_bottom_field',
             (k) => TextField(
@@ -413,8 +415,9 @@ class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
             'Hold: tap ${_counts['tap']}, long ${_counts['long']}',
           ),
           const SizedBox(height: 80),
-          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
-          const SizedBox(height: 1200),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
           _s(
             'wf_bottom_button',
             (k) => ElevatedButton(
@@ -483,8 +486,9 @@ class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
               child: const Text('Open message'),
             ),
           ),
-          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
-          const SizedBox(height: 1200),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
           _s(
             'wf_open_bottom_message',
             (k) => ElevatedButton(
@@ -609,8 +613,9 @@ class _DisplayFamilyScreenState extends State<DisplayFamilyScreen> {
             ],
           ),
           _state('wf_logo_taps', 'Taps: $_logoTaps'),
-          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
-          const SizedBox(height: 1200),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
           _s(
             'wf_bottom_text',
             (k) => Text('Bottom text: end of the list', key: k),

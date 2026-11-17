@@ -43,7 +43,7 @@ test "go back returns to the first route, which is seen again"
   see "Inbox"
   see "Queries: 0"
 
-# Below the fold: a 1200 dp space and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
+# Below the fold: a space of a screen height plus 600 dp and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
 test "a button below the fold opens a route, and go back returns to the list"
   don't see "Open bottom message"
   scroll down until "Open bottom message" appears

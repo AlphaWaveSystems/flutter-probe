@@ -47,7 +47,7 @@ test "a Cupertino switch turns on"
   toggle #wf_cupertino_switch
   see "Cupertino switch: on"
 
-# Below the fold: a 1200 dp space and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
+# Below the fold: a space of a screen height plus 600 dp and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
 test "a checkbox below the fold: scroll to it, turn it on, read it, scroll back"
   don't see "Bottom terms"
   scroll down until "Bottom terms" appears
