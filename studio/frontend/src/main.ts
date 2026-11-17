@@ -15,6 +15,7 @@ import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
 import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
+import { askSaveAsName, initSaveAsDialog } from "./save-as-dialog";
 import { connectFailureLine } from "./connect-failure";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
@@ -267,7 +268,7 @@ let runInProgress = false;
 function setDirty(d: boolean) {
   dirty = d;
   $("editor-dirty").textContent = d ? "● unsaved" : "";
-  ($("btn-save") as HTMLButtonElement).disabled = !d || !currentPath;
+  ($("btn-save") as HTMLButtonElement).disabled = !d || (!currentPath && !workspaceRoot); // a buffer with no file is saved as a new one in the workspace
   refreshRerun();
   refreshFirstRun();
 }
@@ -491,8 +492,47 @@ $("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 
 // ---- Save ---------------------------------------------------------------
 
+// saveAs gives an unsaved buffer (a recording, a scratch buffer) a file: the name is asked in the page, a file that exists is never replaced, and the new
+// file becomes the open one (so Run and Save work on it).
+async function saveAs(): Promise<void> {
+  if (!workspaceRoot) {
+    toast("Open a workspace first: Save needs a folder to put the new file in.", "info", 4000);
+    return;
+  }
+  // the folder the Workspace pane shows, when it is inside the workspace; the workspace root otherwise
+  const dir = currentDir === workspaceRoot || currentDir.startsWith(`${workspaceRoot}/`) ? currentDir : workspaceRoot;
+  let existing: string[];
+  try {
+    existing = (await ListDir(dir)).map((e) => e.name);
+  } catch (err) {
+    toast(`Cannot save here: ${err}`, "error");
+    return;
+  }
+  const typed = $("editor-filename").textContent === "recorded.probe" ? "recorded.probe" : "untitled.probe";
+  const name = await askSaveAsName(typed, existing, dir);
+  if (name === null) return;
+  const path = `${dir.replace(/\/+$/, "")}/${name}`;
+  const content = model.getValue();
+  try {
+    await WriteFile(path, content);
+  } catch (err) {
+    toast(`Save failed: ${err}`, "error");
+    return;
+  }
+  currentPath = path;
+  $("editor-filename").textContent = path;
+  setDirty(false);
+  updateRunButton();
+  await refreshFiles(dir);
+  document.querySelectorAll("#file-list li").forEach((li) => li.classList.toggle("active", (li as HTMLElement).dataset.path === path));
+  toast(`Saved ${path}`, "success", 1800);
+}
+
 async function saveCurrent() {
-  if (!currentPath) return;
+  if (!currentPath) {
+    if (dirty) await saveAs();
+    return;
+  }
   try {
     await WriteFile(currentPath, model.getValue());
     setDirty(false);
@@ -1933,6 +1973,7 @@ initResults();
 initNetworkPanel();
 initConfirmDialog();
 initDiscardDialog();
+initSaveAsDialog();
 // Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
 // Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
 // parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.
