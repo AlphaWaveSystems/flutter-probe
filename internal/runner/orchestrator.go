@@ -208,7 +208,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(warning))
 	}
-	if w := probelink.AppIDMismatchWarning(handshake, appID, dr.Platform == device.PlatformIOS); w != "" {
+	if w := probelink.AppIDMismatchWarning(handshake, appID, dr.Platform.AppIDIsCaseInsensitive()); w != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(w))
 	}
 

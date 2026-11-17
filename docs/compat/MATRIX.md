@@ -87,9 +87,9 @@ Flutter widgets: a status text, a reload button and a text field with its echo. 
 | What | Step | Result |
 |---|---|---|
 | find by visible text | `see "Getting Started" in webview` | pass |
-| find by CSS selector | `see css:"#result" in webview` | pass |
+| find by CSS selector | `see css:"#result" in webview` | pass, but **it shows only that the element exists** (it is on the page before the tap too, empty); what it holds is read with `store text` (next rows) |
 | absence | `don't see css:"#nope" in webview` | pass (and `see css:"#nope" in webview` fails) |
-| tap by visible text | `tap "Contact support" in webview` | pass (the page then shows `Message sent`, found by `wait until "Message sent" appears in webview`) |
+| tap by visible text | `tap "Contact support" in webview` | pass (the page then shows `Message sent`, found by `wait until "Message sent" appears in webview`, and the text of `#result` is **read back**: `store text of css:"#result" in webview`, typed into the Flutter field, the echo reads `Echo: Message sent`) |
 | type | `type "hello" into css:"#message" in webview` | pass, **read back**: `store text of css:"#message" in webview as typed`, typed into the Flutter field, the echo reads `Echo: hello` |
 | read | `store text of css:"#total" in webview as total` | pass: runs of spaces collapse (`Total: 42.00   USD` is stored as `Total: 42.00 USD`, 16 characters) and hidden characters are dropped (`css:"#hidden"` stores `abc d`, 5 characters) |
 | reload from Flutter | `tap "Reload page"`, then `wait until "Page loaded (2)" appears` | pass: the page starts again (`Message sent` is gone) |
@@ -98,9 +98,9 @@ Flutter widgets: a status text, a reload button and a text field with its echo. 
 **The boundary.** The Dart agent does not see inside the page, and the WebView steps do not see the Flutter widgets: `see "Getting Started"` (no `in webview`) fails, and `see "Reload page" in webview` fails. A test uses
 the Dart steps for the widgets and the `in webview` steps for the page, and both work in one test. The WebView steps are Android only; iOS (`webview_flutter_wkwebview`) was not assessed.
 
-Each failure above was shown by a variant of the suite whose steps assert something wrong or cross the boundary: all 8 variants fail with the message that says why (a title the page does not have, the raw three spaces,
-the hidden characters kept, the message still there after a reload, an element that is not on the page, a Flutter widget looked for in the page, the page text looked for in the Flutter tree, a wrong typed value). The variant file is not
-kept in the repository.
+The variants of the suite whose steps assert something wrong or cross the boundary are in `native-test-apps/flutter-webview/probe-tests/negative/webview.probe.expect-fail` (the extension keeps them out of directory runs; the header says how to run them). All 9 fail with
+the message that says why (a title the page does not have, the raw three spaces, the hidden characters kept, the message still there after a reload, an element that is not on the page, a Flutter widget looked for in the page, the page text looked for in the Flutter tree, a wrong typed value,
+a wrong result text).
 
 ### How it was run
 
@@ -112,7 +112,7 @@ accessibility services, other screen sizes or text scales.
 Not run: a physical device, another API level, TalkBack or other accessibility services, other screen sizes or text scales.
 
 **WebView content** was run separately: Flutter 3.44.8 and 3.50.0, each building `native-test-apps/flutter-webview` with `--dart-define=PROBE_AGENT=true`, `webview_flutter` and `webview_flutter_android` 4.14.1 (pinned; see
-`RELEASES.md`), on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `webview.probe` 5 of 5 on each build. The 3.50.0 build was made in a scratch copy with a private SDK; its `pubspec.lock` differs from the committed one only in
+`RELEASES.md`), on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `webview.probe` 5 of 5 on each build (6 of 6 after the result-text test was added, run on the 3.44.8 build), and the negative file 0 passed, 9 failed. The 3.50.0 build was made in a scratch copy with a private SDK; its `pubspec.lock` differs from the committed one only in
 packages the Flutter SDK pins itself (`test_api`, `matcher` and others), not in the WebView packages. Not run: a physical device, another API level, the WebView component's version of the emulator (not recorded), iOS, any WebView steps beyond
 the table.
 
