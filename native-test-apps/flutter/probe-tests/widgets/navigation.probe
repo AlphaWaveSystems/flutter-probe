@@ -3,7 +3,9 @@
 
 before each test
   restart the app
-  # the last element of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id. `wait until ... appears` matches only what is on screen, so this needs a screen tall enough to show that element
+  # (measured on a Pixel 6 profile); on a shorter one the wait would time out. A wait for an earlier element was not enough (measured).
   wait until #wf_open_message appears
 
 test "the app bar's title is seen and its action is found by its tooltip"

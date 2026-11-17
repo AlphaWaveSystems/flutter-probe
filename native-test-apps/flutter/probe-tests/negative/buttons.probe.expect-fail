@@ -5,10 +5,14 @@
 #   probe test /tmp/buttons-negative.probe --device <serial> -y       # (the buttons build, the same probe.yaml as for buttons.probe)
 #
 # Expected: 0 passed, 8 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
+# waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
 
 before each test
   restart the app
-  # the last element of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id. `wait until ... appears` matches only what is on screen, so this needs a screen tall enough to show that element
+  # (measured on a Pixel 6 profile); on a shorter one the wait would time out. A wait for an earlier element was not enough (measured).
   wait until #wf_long_press_state appears
 
 # Expected: line 2: see "Elevated: 2": Expected to see "text("Elevated: 2")" but it was not found
