@@ -1,0 +1,94 @@
+name: Dependency licences
+
+# FlutterProbe is BSL 1.1 (CLI) and MIT (parts of the repository): a dependency under a strong copyleft licence (GPL, AGPL, SSPL, EUPL) that is mandatory for its
+# users cannot be shipped. dependabot-compat.yml checks the pull requests that Dependabot opens; this workflow checks every other pull request that changes a
+# dependency, so a person who adds one is checked too.
+#
+# It runs only when a dependency manifest or lockfile changes (the paths below), or the check itself. The check is scripts/licensecheck, which reads the SPDX
+# expression of each dependency; scripts/licensecheck/check-all.sh is the one script both workflows call.
+#
+# Safety, in the manner of the disclosure guard:
+#   - pull_request, never pull_request_target: the pull request's code runs with a read-only token and no secrets;
+#   - the licence tool and its self-test come from the BASE commit, and only the dependency manifests come from the pull request, so a pull request cannot weaken
+#     the check that judges it (a change to the tool is reviewed, and tested by the required Go tests). The allowlist is read from the pull request: it can only
+#     silence notes, never a strong copyleft licence;
+#   - npm runs with --ignore-scripts, so no lifecycle script of a dependency runs.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'tools/probe-convert/go.mod'
+      - 'tools/probe-convert/go.sum'
+      - 'studio/go.mod'
+      - 'studio/go.sum'
+      - 'website/package.json'
+      - 'website/package-lock.json'
+      - 'studio/frontend/package.json'
+      - 'studio/frontend/package-lock.json'
+      - 'vscode/package.json'
+      - 'vscode/package-lock.json'
+      - 'scripts/licensecheck/**'
+      - '.github/workflows/license-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  licenses:
+    name: Dependency licences
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # the dependencies to check: the pull request's merge result (or the branch, for a manual run)
+      - uses: actions/checkout@v7
+        with:
+          path: repo
+          persist-credentials: false
+
+      # the tool that judges them: the base commit of a pull request, so the pull request cannot change it (a manual run uses the same checkout)
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: tool
+          persist-credentials: false
+
+      - name: Choose the tool directory
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            echo "TOOL_DIR=$GITHUB_WORKSPACE/tool" >> "$GITHUB_ENV"
+          else
+            echo "TOOL_DIR=$GITHUB_WORKSPACE/repo" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.10"
+          check-latest: true
+          cache: true
+          cache-dependency-path: repo/go.sum
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.23.4"
+
+      - name: Self-test of the licence check
+        run: cd "$TOOL_DIR" && go test ./scripts/licensecheck/ -count=1
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@v1.6.0
+
+      - name: Check the licences of every Go module and npm project
+        run: |
+          bash "$TOOL_DIR/scripts/licensecheck/check-all.sh" "$GITHUB_WORKSPACE/repo" "$TOOL_DIR" "$RUNNER_TEMP/licences" \
+            go npm:website npm:studio/frontend npm:vscode
