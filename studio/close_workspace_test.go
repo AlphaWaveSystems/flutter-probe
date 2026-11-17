@@ -87,3 +87,30 @@ func TestCloseWorkspaceIsRefusedWhileARunOrARecordingIsGoing(t *testing.T) {
 		t.Errorf("during a recording: %v, roots %v", err, b.automationRoots())
 	}
 }
+
+// The refusal and the change are one step under the run slot's lock and a.mu: a run that claims the slot while closes are going on either gets the slot
+// before a close (and the close is refused) or after it (and the run belongs to the closed, empty workspace); no run is left with a workspace that
+// was closed under it. Run with -race.
+func TestCloseWorkspaceRacingARunNeverClosesUnderIt(t *testing.T) {
+	t.Setenv("PROBE_STUDIO_WORKSPACE", "")
+	t.Setenv("PROBE_STUDIO_AUTOMATION_ROOTS", "")
+	dir := t.TempDir()
+	for i := 0; i < 200; i++ {
+		a := NewApp()
+		a.SetWorkspace(dir)
+		done := make(chan error, 1)
+		go func() { done <- a.CloseWorkspace() }()
+		_, cancel, claimErr := a.claimRun()
+		closeErr := <-done
+		if claimErr == nil {
+			// the run holds the slot: if the close came after the claim it was refused and the workspace is open; if it came before, it was closed first
+			if closeErr == nil && a.runWorkspace != "" && len(a.automationRoots()) != 0 {
+				t.Fatalf("round %d: closed, yet the run was given a workspace and the roots are open", i)
+			}
+			if closeErr == errCloseDuringRun && len(a.automationRoots()) != 1 {
+				t.Fatalf("round %d: a refused close changed the workspace", i)
+			}
+			a.releaseRun(cancel)
+		}
+	}
+}
