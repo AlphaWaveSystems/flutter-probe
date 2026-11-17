@@ -29,7 +29,7 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &App{}
-	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, DefaultsTimeout: "20s", IOSDeviceID: "SIM-UDID", AndroidDeviceID: "emulator-5554"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, DefaultsTimeout: "20s", IOSDeviceID: "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B", AndroidDeviceID: "emulator-5554"}); err != nil {
 		t.Fatal(err)
 	}
 	m := readYAML(t, dir)
@@ -40,12 +40,12 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 	if agent["port"] != 48800 || agent["dial_timeout"] != "45s" {
 		t.Errorf("agent = %v; the port changes and dial_timeout stays", agent)
 	}
-	if m["defaults"].(map[string]any)["timeout"] != "20s" || m["device"].(map[string]any)["ios_device_id"] != "SIM-UDID" || m["device"].(map[string]any)["android_device_id"] != "emulator-5554" {
+	if m["defaults"].(map[string]any)["timeout"] != "20s" || m["device"].(map[string]any)["ios_device_id"] != "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B" || m["device"].(map[string]any)["android_device_id"] != "emulator-5554" {
 		t.Errorf("managed keys not written: %v", m)
 	}
 
 	got, err := a.LoadWorkspaceSettings(dir)
-	if err != nil || got.AgentPort != 48800 || got.DefaultsTimeout != "20s" || got.IOSDeviceID != "SIM-UDID" || got.AndroidDeviceID != "emulator-5554" {
+	if err != nil || got.AgentPort != 48800 || got.DefaultsTimeout != "20s" || got.IOSDeviceID != "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B" || got.AndroidDeviceID != "emulator-5554" {
 		t.Errorf("load = %+v, err %v", got, err)
 	}
 }
@@ -53,7 +53,7 @@ func TestSaveWorkspaceSettingsKeepsEverythingElseInProbeYAML(t *testing.T) {
 func TestSaveWorkspaceSettingsRemovesClearedKeys(t *testing.T) {
 	dir := t.TempDir()
 	a := &App{}
-	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: "X"}); err != nil {
+	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800, IOSDeviceID: "6F5A2C1B-3D4E-4F60-8A9B-0C1D2E3F4A5B"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := inWS(a, dir).SaveWorkspaceSettings(dir, WorkspaceSettings{AgentPort: 48800}); err != nil {
