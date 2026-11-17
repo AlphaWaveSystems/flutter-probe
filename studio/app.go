@@ -208,16 +208,26 @@ var (
 // recording is going. The check is here and not only in the page, so a script with the bridge token cannot pull the workspace from under a run either.
 // A connection that exists is not dropped, and keeps the probe.yaml configuration it was made with.
 func (a *App) CloseWorkspace() error {
-	if a.runActive() {
-		return errCloseDuringRun
-	}
+	// The run slot, the recording flag and the change are one step: a run cannot take the slot between the check and the change. The lock order is
+	// the run slot's, then a.mu (no code takes them the other way round: claimRun takes them one after the other, never nested).
+	a.runMu.Lock()
 	a.mu.Lock()
-	recording := a.recActive
-	a.mu.Unlock()
-	if recording {
+	switch {
+	case a.runCancel != nil:
+		a.mu.Unlock()
+		a.runMu.Unlock()
+		return errCloseDuringRun
+	case a.recActive:
+		a.mu.Unlock()
+		a.runMu.Unlock()
 		return errCloseDuringRecording
 	}
-	a.SetWorkspace("")
+	a.workspace = ""
+	a.humanWorkspace = ""
+	a.export.clear()
+	a.mu.Unlock()
+	a.runMu.Unlock()
+	a.resetFixAttempts()
 	return nil
 }
 
