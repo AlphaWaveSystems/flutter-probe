@@ -194,12 +194,15 @@ func (a *App) InitialWorkspace() string {
 // (agent port, timeout, device ids) instead of the process working directory.
 func (a *App) SetWorkspace(path string) {
 	a.mu.Lock()
+	changed := a.workspace != path
 	a.workspace = path
 	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.export.clear()        // and the results of a run in another workspace are not this one's to export (under the lock keepForExport checks the workspace with)
 	a.mu.Unlock()
 	a.resetFixAttempts() // another workspace is another session of suggestions
-	a.sources.reset()    // and the text of its last run is not kept
+	if changed {
+		a.sources.reset() // and the text of its last run is not kept (opening the same folder again keeps it: they are the same files)
+	}
 }
 
 var (

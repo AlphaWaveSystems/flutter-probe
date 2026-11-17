@@ -212,9 +212,13 @@ func TestTheRunsReadHookKeepsTheBytesAndDropsThemOnReset(t *testing.T) {
 	if got, ok := a.sources.keptText(dir, file); !ok || got != "one" {
 		t.Errorf("kept = %q, %v: it must be what the run read, not what is on disk now", got, ok)
 	}
-	a.SetWorkspace(dir)
+	a.SetWorkspace(dir) // the same folder again: the files are the same, the text stays
+	if _, ok := a.sources.keptText(dir, file); !ok {
+		t.Error("opening the same workspace again dropped the kept text")
+	}
+	a.SetWorkspace(t.TempDir())
 	if _, ok := a.sources.keptText(dir, file); ok {
-		t.Error("the kept text survived a workspace change")
+		t.Error("the kept text survived a change of workspace")
 	}
 	big := filepath.Join(dir, "big.probe")
 	if err := os.WriteFile(big, []byte(strings.Repeat("x", maxKeptSource+1)), 0o600); err != nil {

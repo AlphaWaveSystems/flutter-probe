@@ -146,3 +146,17 @@ func (a *App) seedRun(results []RunResult, steps ...RunStep) {
 	}
 	a.track.finish(results, nil)
 }
+
+// seedSources keeps the text of the files the seeded steps name, as a run would have, so the browser suite can check an insertion against a seeded
+// failed step. A file outside the workspace, not regular or unreadable is skipped (see readSeedFile); headless only, like the seed itself.
+func (a *App) seedSources(workspace string, steps []RunStep) {
+	for _, s := range steps {
+		path := s.File
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(workspace, path)
+		}
+		if b, note := readSeedFile("a seeded step's file", true, path, workspace); note == "" {
+			a.sources.keep(path, b)
+		}
+	}
+}

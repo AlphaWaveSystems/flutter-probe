@@ -35,8 +35,17 @@ func (s *runSources) reset() {
 // insertion is offered for it).
 func (s *runSources) readAndKeep(path string) ([]byte, error) {
 	b, err := os.ReadFile(path)
-	if err != nil || len(b) > maxKeptSource {
+	if err != nil {
 		return b, err
+	}
+	s.keep(path, b)
+	return b, nil
+}
+
+// keep records the bytes of a file (not a file over maxKeptSource).
+func (s *runSources) keep(path string, b []byte) {
+	if len(b) > maxKeptSource {
+		return
 	}
 	s.mu.Lock()
 	if s.files == nil {
@@ -44,7 +53,6 @@ func (s *runSources) readAndKeep(path string) ([]byte, error) {
 	}
 	s.files[filepath.Clean(path)] = append([]byte(nil), b...)
 	s.mu.Unlock()
-	return b, err
 }
 
 // keptText is the kept text of the file, whichever way its path is written (a relative one is relative to the workspace).
