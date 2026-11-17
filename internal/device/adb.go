@@ -261,7 +261,7 @@ func (a *ADB) GetAppVersion(ctx context.Context, serial, appID string) (string, 
 			return strings.TrimPrefix(line, "versionName="), nil
 		}
 	}
-	return "", fmt.Errorf("adb: versionName not found for %s", appID)
+	return "", fmt.Errorf("adb: versionName not found for %s", CleanOneLine(appID, 80))
 }
 
 // PackageInstalled reports whether pkg is installed on the device. `pm list packages` filters by substring, so the
@@ -348,7 +348,7 @@ func (a *ADB) UIAutomatorDump(ctx context.Context, serial string) (string, error
 		case <-time.After(400 * time.Millisecond):
 		}
 	}
-	return "", fmt.Errorf("uiautomator dump failed after 4 attempts: %s", last)
+	return "", fmt.Errorf("uiautomator dump failed after 4 attempts: %s", CleanOneLine(last, 400))
 }
 
 // Tap issues a raw coordinate tap via `input tap`. Used internally by
@@ -444,7 +444,7 @@ func (a *ADB) run(ctx context.Context, args ...string) ([]byte, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("%s: %s", strings.Join(args, " "), ee.Stderr)
+			return nil, fmt.Errorf("%s: %s", CleanOneLine(strings.Join(args, " "), 400), CleanOneLine(string(ee.Stderr), 400))
 		}
 		return nil, err
 	}

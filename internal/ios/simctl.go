@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -161,7 +162,7 @@ func (s *SimCtl) WaitForBoot(ctx context.Context, udid string, timeout, pollInte
 		}
 		time.Sleep(pollInterval)
 	}
-	return fmt.Errorf("simctl: simulator %s did not boot within %s", udid, timeout)
+	return fmt.Errorf("simctl: simulator %s did not boot within %s", oneline.Clean(udid, 80), timeout)
 }
 
 // Install installs an .app bundle on the simulator.
@@ -406,7 +407,7 @@ func (s *SimCtl) AppBundlePath(ctx context.Context, udid, bundleID string) strin
 func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
 	app := s.AppBundlePath(ctx, udid, bundleID)
 	if app == "" {
-		return fmt.Errorf("reinstall: %s is not installed on %s", bundleID, udid)
+		return fmt.Errorf("reinstall: %s is not installed on %s", oneline.Clean(bundleID, 80), oneline.Clean(udid, 80))
 	}
 	tmp, err := os.MkdirTemp("", "probe-reinstall-*")
 	if err != nil {
