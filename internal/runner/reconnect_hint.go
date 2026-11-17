@@ -72,8 +72,14 @@ func (dc *DeviceContext) tokenReadHint(ctx context.Context, readErr error) strin
 	return device.NeutralPortHint
 }
 
-// devicePort is the agent's port on the device: DevicePort, or Port when none is set.
+// devicePort is the agent's port on the device: the port the follower last found the app on, else DevicePort, or Port when none is set.
 func (dc *DeviceContext) devicePort() int {
+	dc.followMu.Lock()
+	f := dc.Follower
+	dc.followMu.Unlock()
+	if f != nil {
+		return f.DevicePort()
+	}
 	if dc.DevicePort != 0 {
 		return dc.DevicePort
 	}
