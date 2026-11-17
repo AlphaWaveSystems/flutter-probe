@@ -127,9 +127,12 @@ Measured on the framework controls (Flutter 3.44.8, a widget test that walks eac
 
 - No new dependency, no floor change, and no runtime type names, so it works under `--obfuscate`.
 - It reads what assistive technology reads, which is closer to what the person sees than a widget field.
-- **Not yet measured on `material_ui` and `cupertino_ui`.** They are copies of the frozen framework code, so the same `Semantics` are
-  expected; this has to be measured on the Flutter 3.50 scratch app before relying on it.
-- **Gaps:** `CupertinoButton` carries no enabled state; an app can override a control's semantics (`ExcludeSemantics`, its own `Semantics`
+- **Measured on `material_ui` and `cupertino_ui` too.** The same walk on Flutter 3.50.0 with `material_ui` 1.11.1 and `cupertino_ui` 1.1.7
+  (a widget test on a scratch app, one pumped state per control, run by probe-admin) gives the same properties for every row of the table:
+  `enabled` on the buttons, text fields and chips, `checked` on `Checkbox` and `Radio`, `toggled` on the switches, `selected` on the
+  chips, `tooltip` on `Tooltip` and an `IconButton`'s tooltip, and the same gap, `CupertinoButton` with `button=true` and no enabled value.
+  Not yet run: the agent reading these values, and any device.
+- **Gaps:** `CupertinoButton` carries no enabled state, in either library; an app can override a control's semantics (`ExcludeSemantics`, its own `Semantics`
   around it, `MergeSemantics`). Then there is nothing to read, and the step should refuse, not guess.
 - **Routes:** route bodies can be found without design classes through `ModalRoute.of(element)` on the elements of the tree (widgets
   layer), instead of looking for `Scaffold`, `Dialog`, `BottomSheet` or `CupertinoPageScaffold`.
@@ -140,7 +143,8 @@ Measured on the framework controls (Flutter 3.44.8, a widget test that walks eac
    that property inside the matched control's subtree, or on the way up to it.
 2. **Keep the framework class reads as a cross-check** where they apply. If the class and the `Semantics` disagree, refuse, because one of
    them is not what the app shows.
-3. **Refuse when there is nothing to read.** No class the agent knows, and no `Semantics` with the property: the step fails with "cannot be
+3. **Refuse when there is nothing to read.** (This also covers a related gap on main, issue #860: the enabled reader did not look below
+   the target, so a disabled button behind an id wrapper read as enabled; #861 fixes it with the framework classes now.) No class the agent knows, and no `Semantics` with the property: the step fails with "cannot be
    evaluated", as the stopgap does now. Never fall back to a default.
 4. **Routes through `ModalRoute`**, the tooltip selector through `SemanticsProperties.tooltip`, and the device view's interactive marking
    through `Semantics` `button`/`textField`/`toggled`/`checked`, plus `EditableText`.
