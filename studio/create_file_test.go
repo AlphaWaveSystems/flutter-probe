@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -133,12 +134,12 @@ func TestCreateFileRefusesTheSameNameInAnotherCaseOrNormalisation(t *testing.T) 
 
 func TestCreateFileRefusesNamesAFileSystemOrWindowsCannotHold(t *testing.T) {
 	a, dir := createFixture(t)
-	for _, bad := range []string{"CON.probe", "con.probe", "NUL.probe", "Aux.probe", "COM1.probe", "lpt9.probe", "CON.x.probe", "a..probe", "a .probe", "..probe", "a\u200bb.probe", "a\u202eb.probe", "a:b.probe", "a*b.probe", strings.Repeat("x", 251) + ".probe", "x.PROBE", "x.txt"} {
+	for _, bad := range []string{"CON.probe", "con.probe", "NUL.probe", "Aux.probe", "COM1.probe", "lpt9.probe", "CON.x.probe", "a..probe", "a .probe", "..probe", "a\u200bb.probe", "a\u202eb.probe", "a:b.probe", "a*b.probe", strings.Repeat("x", 251) + ".probe", "x.PROBE", "x.txt", ".x.probe", ".hidden.probe"} {
 		if err := a.CreateFile(filepath.Join(dir, bad), "x"); err == nil {
 			t.Errorf("%q was created", bad)
 		}
 	}
-	for _, good := range []string{"console.probe", "com10.probe", "lpt.probe", "a.b.probe", "ok name.probe", "\u00e9.probe"} {
+	for _, good := range []string{"console.probe", "com10.probe", "com0.probe", "lpt0.probe", "lpt10.probe", "com.probe", "lpt.probe", "a.b.probe", "ok name.probe", "\u00e9.probe"} {
 		if err := a.CreateFile(filepath.Join(dir, good), "x"); err != nil {
 			t.Errorf("%q refused: %v", good, err)
 		}
@@ -206,5 +207,68 @@ func TestCreateFileNeverReplacesAFileThatAppearsBetweenTheListingAndTheCreate(t 
 	}
 	if b, _ := os.ReadFile(p); string(b) != "theirs" {
 		t.Errorf("the file was replaced: %q", b)
+	}
+}
+
+// A write that fails part way leaves no half-written file, and the error is the writer's.
+func TestCreateFileRemovesAHalfWrittenFile(t *testing.T) {
+	a, dir := createFixture(t)
+	p := filepath.Join(dir, "half.probe")
+	boom := errors.New("disk full")
+	createFileWrite = func(f *os.File, content string) (int, error) {
+		n, _ := f.WriteString(content[:2])
+		return n, boom
+	}
+	t.Cleanup(func() {
+		createFileWrite = func(f *os.File, content string) (int, error) { return f.WriteString(content) }
+	})
+	if err := a.CreateFile(p, "test \"x\"\n"); !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want the writer's error", err)
+	}
+	if _, err := os.Lstat(p); !os.IsNotExist(err) {
+		t.Errorf("the half-written file is still there: %v", err)
+	}
+}
+
+// A new file has a size cap; one byte over is refused before anything is created, the cap itself is written.
+func TestCreateFileHasASizeCap(t *testing.T) {
+	a, dir := createFixture(t)
+	over := filepath.Join(dir, "over.probe")
+	if err := a.CreateFile(over, strings.Repeat("x", maxNewFileBytes+1)); err == nil || !strings.Contains(err.Error(), "at most") {
+		t.Fatalf("err = %v, want a size refusal", err)
+	}
+	if _, err := os.Lstat(over); !os.IsNotExist(err) {
+		t.Error("a refused file was created")
+	}
+	at := filepath.Join(dir, "at.probe")
+	if err := a.CreateFile(at, strings.Repeat("x", maxNewFileBytes)); err != nil {
+		t.Fatalf("a file of exactly the cap was refused: %v", err)
+	}
+}
+
+// On a case-sensitive file system the exclusive create cannot see a twin that differs in case or normalisation: only the folded listing does.
+// APFS and NTFS (case-insensitive) answer that case themselves, so the test is skipped there.
+func TestCreateFileListingFoldsOnACaseSensitiveFileSystem(t *testing.T) {
+	a, dir := createFixture(t)
+	if err := os.WriteFile(filepath.Join(dir, "a.probe"), []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "A.probe")); err == nil {
+		t.Skip("this file system ignores case: the exclusive create refuses the twin without the listing")
+	}
+	for _, twin := range []string{"A.probe"} {
+		if err := a.CreateFile(filepath.Join(dir, twin), "x"); err == nil || !strings.Contains(err.Error(), "already exists") {
+			t.Errorf("%s: err = %v, want a refusal that the file exists", twin, err)
+		}
+	}
+	nfc, nfd := "\u00e9.probe", "e\u0301.probe"
+	if err := os.WriteFile(filepath.Join(dir, nfc), []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.CreateFile(filepath.Join(dir, nfd), "x"); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("the NFD twin: err = %v, want a refusal that the file exists", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.probe")); string(b) != "mine" {
+		t.Errorf("a.probe = %q", b)
 	}
 }
