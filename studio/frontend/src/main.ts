@@ -28,6 +28,7 @@ import { toast } from "./toast";
 
 import {
   CancelRun,
+  CheckInsertBefore,
   CheckReplaceLine,
   CloseWorkspace,
   SelectorFixAttempts,
@@ -2126,7 +2127,57 @@ EventsOn("run:step", (s: RunStep) => {
 // A click on a failing row asks for a file and a line (planJump decides what is allowed). Only a click moves the editor.
 document.addEventListener("studio:goto-line", (ev) => void gotoFailingLine((ev as CustomEvent<JumpTarget>).detail));
 
+// ---- Insert before the step (the rule-based fix) -----------------------------------------------------------------------------------
+//
+// The rule row under a failed see or tap offers a line to add above the step. Studio says whether it may (CheckInsertBefore: the editor must hold
+// the text the run read), and the edit is one undo step. Every line below it moves down by one, so the marks and row numbers of that run are no
+// longer right: the marks are cleared, and a row of that file does not jump until the next run.
+
+let staleRunFile: string | null = null;
+EventsOn("run:started", () => {
+  staleRunFile = null;
+});
+
+document.addEventListener("studio:insert-before", (ev) => void insertBeforeStep((ev as CustomEvent<{ file: string; line: number }>).detail));
+
+async function insertBeforeStep(t: { file: string; line: number }): Promise<void> {
+  if (!currentPath) {
+    toast("Not inserted: no file is open.", "info", 5000);
+    return;
+  }
+  const checked = model.getValue();
+  let check: { ok: boolean; line?: number; text?: string; reason?: string };
+  try {
+    check = await CheckInsertBefore(t.file, t.line, currentPath, checked);
+  } catch (err) {
+    toast(`Not inserted: ${err instanceof Error ? err.message : String(err)}`, "error", 6000);
+    return;
+  }
+  if (!check.ok || !check.line || check.text === undefined) {
+    toast(`Not inserted: ${check.reason ?? "Studio refused"}`, "info", 7000);
+    return;
+  }
+  if (model.getValue() !== checked) {
+    toast("Not inserted: the file changed while Studio was checking it. Press again.", "info", 5000);
+    return;
+  }
+  // The new line is its own line: its text and the file's line ending, put at the start of the failed line (which keeps its own ending, or none).
+  editor.pushUndoStop();
+  editor.executeEdits("insert-before-step", [{ range: new monaco.Range(check.line, 1, check.line, 1), text: check.text + model.getEOL() }]);
+  editor.pushUndoStop();
+  editor.setPosition({ lineNumber: check.line, column: 1 });
+  editor.revealLineInCenterIfOutsideViewport(check.line);
+  stepState.clear();
+  renderStepDecorations();
+  staleRunFile = t.file;
+  toast(`Inserted above line ${check.line} (the step is now line ${check.line + 1}). Not saved, not run; Undo removes it. The marks of the last run are cleared: run again.`, "success", 7000);
+}
+
 async function gotoFailingLine(target: JumpTarget): Promise<void> {
+  if (staleRunFile !== null && target?.file === staleRunFile) {
+    toast("The file changed since this run (a line was inserted): run again before using its rows.", "info", 5000);
+    return;
+  }
   const plan = planJump(target ?? {}, { openFile: currentPath, workspaceRoot });
   if (plan.kind === "refuse") {
     toast(`Not opened: ${plan.reason}`, "error", 5000);

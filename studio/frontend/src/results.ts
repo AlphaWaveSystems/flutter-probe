@@ -217,6 +217,19 @@ function onStep(s: RunStep): void {
       text.classList.add("triage-text");
       text.textContent = row.text;
       triLi.append(label, text);
+      if (row.label === "Suggested fix" && s.depth === 0 && s.line > 0) {
+        // A line to add before the step: Studio checks it against the text the run read before the editor changes (insert-before-step design).
+        const add = document.createElement("button");
+        add.type = "button";
+        add.classList.add("btn-mini", "triage-insert");
+        add.textContent = "Insert before the step";
+        add.title = "Add this line above the failed step in the editor. It is not saved and not run; Undo removes it.";
+        add.addEventListener("click", (ev) => {
+          ev.stopPropagation(); // not a click on the row (which opens the line)
+          document.dispatchEvent(new CustomEvent("studio:insert-before", { detail: { file: s.file, line: s.line } }));
+        });
+        triLi.append(add);
+      }
       triLi.addEventListener("click", () => jumpToStep(s, true));
       anchor.insertAdjacentElement("afterend", triLi);
       pendingRows.push(triLi);
