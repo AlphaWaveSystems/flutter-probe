@@ -270,4 +270,23 @@ test.describe("Keyboard shortcuts", () => {
       await expect.poll(() => count(calls, "PickWorkspace")).toBe(1);
     });
   }
+
+  for (const mod of mods) {
+    test(`sc-14 the ${mod} shortcuts work from inside a text field too (Save from the chat input, Refresh from the send panel), and a plain letter there is typed`, async ({ page }) => {
+      const calls = await recordCalls(page);
+      await openStudio(page);
+      await openPath(page, "probe-tests/counter.probe");
+      await page.locator("body").press("ControlOrMeta+Shift+a");
+      await expect(page.locator("#chat-pane")).toBeVisible();
+      await page.click("#chat-input");
+      await page.keyboard.type("s");
+      await expect(page.locator("#chat-input")).toHaveValue("s"); // a plain letter is typed, not a shortcut
+      await page.keyboard.press(`${mod}+s`);
+      await expect.poll(() => count(calls, "WriteFile")).toBe(1); // Save writes the open file from the chat input
+      const before = count(calls, "ListDevices");
+      await page.keyboard.press(`${mod}+k`);
+      await expect.poll(() => count(calls, "ListDevices")).toBe(before + 1);
+      await expect(page.locator("#chat-input")).toHaveValue("s"); // and the field's text is untouched
+    });
+  }
 });
