@@ -23,10 +23,13 @@ func TestProbeTestPrintsDeviceAndUploadIDsCleaned(t *testing.T) {
 			t.Errorf("probe test must print cleaned: %s", want)
 		}
 	}
-	if n := strings.Count(src, `statusOK(statusW, "App uploaded: %s", device.CleanOneLine(appID, 80))`); n != 2 {
-		t.Errorf("both cloud uploads must print the provider's id cleaned: %d of 2", n)
+	if n := strings.Count(src, "uploadAndStartCloudSession(ctx, provider, cloudApp, targetDevice, statusW)"); n != 2 {
+		t.Errorf("both cloud paths must upload and start through uploadAndStartCloudSession: %d of 2", n)
 	}
-	for _, raw := range []string{`"Connected to ProbeAgent on %s", deviceSerial)`, `"App uploaded: %s", appID)`, `reachable", deviceSerial)`} {
+	if !strings.Contains(src, `"Connected to ProbeAgent via relay on %s (%s)", device.CleanOneLine(targetDevice, 80)`) {
+		t.Error("the relay connect line must print the device cleaned")
+	}
+	for _, raw := range []string{`"Connected to ProbeAgent on %s", deviceSerial)`, `"App uploaded: %s", appID)`, `reachable", deviceSerial)`, `"Starting cloud session on %s (%s)...", targetDevice,`, `via relay on %s (%s)", targetDevice,`} {
 		if strings.Contains(src, raw) {
 			t.Errorf("a raw print is back: %s", raw)
 		}
