@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/text/unicode/norm"
 	"net"
 	"os"
 	"path/filepath"
@@ -101,20 +102,23 @@ type App struct {
 
 // connection holds the active agent client and cleanup callback.
 type connection struct {
-	client       probelink.ProbeClient
-	deviceCtx    *runner.DeviceContext
-	cfg          *config.Config
-	cleanup      func()
-	deviceID     string
-	deviceName   string
-	platform     device.Platform
-	toolsNote    string // set when this connection uses an adb that probe.yaml names
-	disposable   bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
-	wifiAddr     string // host:port of a WiFi connection (what a saved token is bound to); empty for any other
-	appBuild     string // what the app reports about its build (see appBuildText); empty when it reports nothing
-	streamCancel context.CancelFunc
-	streamDone   chan struct{} // closed when the streaming loop exits
-	view         *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
+	client     probelink.ProbeClient
+	deviceCtx  *runner.DeviceContext
+	cfg        *config.Config
+	cleanup    func()
+	deviceID   string
+	deviceName string
+	platform   device.Platform
+	// platformUnknown: nothing told Studio what the device is (a WiFi connection: the agent does not advertise it). platform then only steers the run's
+	// device context, as before, and is never shown as a fact: the status says nothing about the platform (see platformName).
+	platformUnknown bool
+	toolsNote       string // set when this connection uses an adb that probe.yaml names
+	disposable      bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
+	wifiAddr        string // host:port of a WiFi connection (what a saved token is bound to); empty for any other
+	appBuild        string // what the app reports about its build (see appBuildText); empty when it reports nothing
+	streamCancel    context.CancelFunc
+	streamDone      chan struct{} // closed when the streaming loop exits
+	view            *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
 }
 
 // NewApp creates a new App.
@@ -377,6 +381,112 @@ func (a *App) WriteFile(path, content string) error {
 	return os.WriteFile(real, []byte(content), 0o644)
 }
 
+// CreateFile writes content to a NEW .probe file inside the workspace a person opened or an automation folder, and never replaces a file: the file is created
+// exclusively (O_EXCL), so one that exists, whatever made it and however its name is spelled on a case-insensitive file system, fails with a word-for-word
+// "already exists", and a link in the place of the file (even a dangling one) is refused by the same flag. The folder must exist (nothing is created for it). It
+// is what Save does for a buffer with no file; WriteFile, which saves an open file in place, stays what it was.
+func (a *App) CreateFile(path, content string) error {
+	real, err := probeFileForWriteWithinRoots(a.automationRoots(), path)
+	if err != nil {
+		return err
+	}
+	name := filepath.Base(real)
+	if why := newFileNameProblem(name); why != "" {
+		return fmt.Errorf("%s: %s", name, why)
+	}
+	if len(content) > maxNewFileBytes {
+		return fmt.Errorf("%s: the file is %d bytes and a new file is at most %d", name, len(content), maxNewFileBytes)
+	}
+	// A name the file system treats as an existing one although the bytes differ (APFS and NTFS ignore case, APFS ignores Unicode normalisation) is
+	// found by listing the folder and comparing the names folded and normalised; the exclusive create below is the check that cannot race.
+	if entries, err := os.ReadDir(filepath.Dir(real)); err == nil {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		if same := sameNameAmong(names, name); same != "" {
+			return fmt.Errorf("%s already exists: Save never replaces a file", same)
+		}
+	}
+	createFileAfterListing() // test seam: a file that appears here must still not be replaced
+	f, err := os.OpenFile(real, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("%s already exists: Save never replaces a file", name)
+		}
+		return err
+	}
+	if _, err := createFileWrite(f, content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(real) // a half-written new file is not left behind
+		return err
+	}
+	return f.Close()
+}
+
+// maxNewFileBytes is the most CreateFile writes: the same 1 MiB a run keeps of a script, far above any test file and far below what a window call
+// should be able to put on disk.
+const maxNewFileBytes = 1 << 20
+
+// createFileWrite writes the content of a new file; tests make it fail part way.
+var createFileWrite = func(f *os.File, content string) (int, error) { return f.WriteString(content) }
+
+// createFileAfterListing is called between the listing and the exclusive create; tests put a file there.
+var createFileAfterListing = func() {}
+
+// sameNameAmong returns the entry that is the same name as name to a file system that ignores case and Unicode normalisation ("" when none is).
+func sameNameAmong(entries []string, name string) string {
+	want := foldedName(name)
+	for _, e := range entries {
+		if foldedName(e) == want {
+			return e
+		}
+	}
+	return ""
+}
+
+// foldedName is a file name as a file system that ignores case and Unicode normalisation sees it.
+func foldedName(s string) string {
+	return norm.NFC.String(strings.ToLower(norm.NFC.String(s)))
+}
+
+// windowsReserved are the names Windows refuses for a file, with or without an extension.
+var windowsReserved = map[string]bool{"CON": true, "PRN": true, "AUX": true, "NUL": true}
+
+// newFileNameProblem says why a name may not be given to a new file ("" when it may): a name that is not a plain .probe name, a name Windows cannot
+// hold (a reserved device name, a trailing dot or space), a control, hidden or direction character, or one over 255 bytes. The window checks the same
+// rules before it asks; they are here too because a script can call CreateFile.
+func newFileNameProblem(name string) string {
+	switch {
+	case name == "" || name == "." || name == "..":
+		return "not a file name"
+	case len(name) > 255:
+		return "the name is too long"
+	case !strings.HasSuffix(name, ".probe"):
+		return "only .probe files can be created"
+	case strings.HasPrefix(name, "."):
+		return "a file name cannot start with a dot"
+	}
+	stem := strings.TrimSuffix(name, ".probe")
+	switch {
+	case stem == "" || strings.HasSuffix(stem, ".") || strings.HasSuffix(stem, " "):
+		return "a file name cannot end with a dot or a space before .probe"
+	}
+	upper := strings.ToUpper(stem)
+	if i := strings.Index(upper, "."); i >= 0 {
+		upper = upper[:i] // CON.x.probe is CON to Windows
+	}
+	if windowsReserved[upper] || ((strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) && len(upper) == 4 && upper[3] >= '1' && upper[3] <= '9') {
+		return "a name Windows reserves for a device (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9) cannot be a file name"
+	}
+	for _, r := range name {
+		if strings.ContainsRune(`\/:*?"<>|`, r) || hiddenRune(r) || r < 0x20 {
+			return "a file name cannot have a slash, a colon, a wildcard, a quote or a hidden character"
+		}
+	}
+	return ""
+}
+
 // ---- Lint ----
 
 // Diagnostic is a single editor marker (compatible with Monaco's IMarkerData
@@ -533,6 +643,14 @@ type ConnectionStatus struct {
 	AppBuild string `json:"appBuild,omitempty"`
 }
 
+// platformName is the platform to show for the connection: "" when it is not known, never a guess.
+func (c *connection) platformName() string {
+	if c.platformUnknown {
+		return ""
+	}
+	return string(c.platform)
+}
+
 // Status returns the current connection state for the UI's connection
 // indicator. Always safe to call (returns a zero value when disconnected).
 func (a *App) Status() ConnectionStatus {
@@ -545,7 +663,7 @@ func (a *App) Status() ConnectionStatus {
 		Connected:  a.conn.client.Connected(),
 		DeviceID:   a.conn.deviceID,
 		DeviceName: a.conn.deviceName,
-		Platform:   string(a.conn.platform),
+		Platform:   a.conn.platformName(),
 		ToolsNote:  a.conn.toolsNote,
 		AppBuild:   a.conn.appBuild,
 	}
@@ -626,23 +744,25 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 
 	// WiFi connections have no host-side cleanup (no iproxy, no adb forward).
 	// The deviceID for runner/event purposes is host:port — unique enough
-	// for status display and disambiguation in logs. Platform is recorded as
-	// iOS as a best-effort default; the agent doesn't currently advertise
-	// platform in TXT records.
+	// for status display and disambiguation in logs. The agent does not advertise
+	// its platform, so it is not known: the run's device context keeps the iOS
+	// default it always had (a physical iPhone over WiFi is the case this was made
+	// for), but the status never says "ios" for an Android phone (platformUnknown).
 	deviceID := fmt.Sprintf("%s:%d", host, port)
 	streamCtx, streamCancel := context.WithCancel(context.Background())
 	streamDone := make(chan struct{})
 	newConn := &connection{
-		client:       client,
-		cfg:          cfg,
-		deviceID:     deviceID,
-		deviceName:   fmt.Sprintf("WiFi %s", host),
-		wifiAddr:     wifiAddress(host, port),
-		appBuild:     appBuildText(hs),
-		platform:     device.PlatformIOS,
-		streamCancel: streamCancel,
-		streamDone:   streamDone,
-		deviceCtx:    newStudioDeviceContext(a, cfg, device.PlatformIOS, deviceID, port, host),
+		client:          client,
+		cfg:             cfg,
+		deviceID:        deviceID,
+		deviceName:      fmt.Sprintf("WiFi %s", host),
+		wifiAddr:        wifiAddress(host, port),
+		appBuild:        appBuildText(hs),
+		platform:        device.PlatformIOS,
+		platformUnknown: true,
+		streamCancel:    streamCancel,
+		streamDone:      streamDone,
+		deviceCtx:       newStudioDeviceContext(a, cfg, device.PlatformIOS, deviceID, port, host),
 	}
 
 	a.mu.Lock()

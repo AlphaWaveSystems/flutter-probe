@@ -51,6 +51,28 @@ test.describe("Studio UI (no device needed)", () => {
     }
   });
 
+  test("04b settings edit the workspace root's probe.yaml whichever folder the file pane shows, and never create one in a subfolder", async ({ page }) => {
+    const yamlPath = path.join(workspace, "probe.yaml");
+    const sub = path.join(workspace, "probe-tests");
+    const original = fs.readFileSync(yamlPath, "utf8");
+    try {
+      await openStudio(page);
+      await page.locator("#file-list li", { hasText: "probe-tests" }).first().click(); // browse into a subfolder
+      await expect(page.locator("#file-path")).toContainText("probe-tests");
+      await page.click("#btn-settings");
+      await expect(page.locator("#settings-overlay")).toBeVisible();
+      await expect(page.locator("#settings-port")).toHaveValue(/\d+/); // the form has loaded the root file before it is edited
+      await page.fill("#settings-port", "48778");
+      await page.click("#btn-settings-save");
+      await expect(page.locator("#toast-container")).toContainText("Saved probe.yaml");
+      expect(fs.readFileSync(yamlPath, "utf8")).toMatch(/port:\s*48778/); // the root file has the new port
+      expect(fs.existsSync(path.join(sub, "probe.yaml"))).toBe(false); // and the subfolder has none
+    } finally {
+      fs.writeFileSync(yamlPath, original);
+      fs.rmSync(path.join(sub, "probe.yaml"), { force: true });
+    }
+  });
+
   test("05 the AI chat pane toggles and asks for an API key", async ({ page }) => {
     await openStudio(page);
     await expect(page.locator("#chat-pane")).toBeHidden();

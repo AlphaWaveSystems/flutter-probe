@@ -13,6 +13,8 @@ package toolpath
 
 import (
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,8 +41,12 @@ func Check(configured string, names []string, projectDir, goos string) (string, 
 		return "", errors.New("it is not an absolute path")
 	}
 	resolved, err := filepath.EvalSymlinks(filepath.Clean(configured))
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return "", errors.New("the file cannot be found")
+	}
+	if err != nil {
+		// A folder on the way that cannot be read (permission denied): the file may exist, but where it leads cannot be checked.
+		return "", errors.New("where it is cannot be verified: " + reason(err))
 	}
 	if !nameIn(filepath.Base(configured), names, goos) || !nameIn(filepath.Base(resolved), names, goos) {
 		return "", errors.New("the program is not called " + strings.Join(names, " or "))
@@ -120,15 +126,17 @@ func insideProtected(dir, resolved string) string {
 		dir = real
 	}
 	roots := RepoRoots(dir)
+	inside := "it is inside the repository of this probe.yaml"
 	if len(roots) == 0 {
-		if Within(dir, resolved) {
-			return "it is inside the folder of this probe.yaml"
-		}
-		return ""
+		roots, inside = []string{dir}, "it is inside the folder of this probe.yaml"
 	}
 	for _, root := range roots {
-		if Within(root, resolved) {
-			return "it is inside the repository of this probe.yaml"
+		in, err := within(root, resolved)
+		if err != nil {
+			return "where it is cannot be verified, so it is refused: " + err.Error()
+		}
+		if in {
+			return inside
 		}
 	}
 	return ""
@@ -155,24 +163,45 @@ func RepoRoots(dir string) []string {
 // a folder on the way cannot be read, or has no file identity to compare (hasIdentity: some Windows network shares and file systems report
 // none), the answer is "within", so the path is refused rather than run.
 func Within(folder, p string) bool {
+	in, err := within(folder, p)
+	return in || err != nil
+}
+
+// within is Within with the reason when the folders could not be compared (err != nil; the caller treats that as inside).
+func within(folder, p string) (bool, error) {
 	want, err := os.Stat(folder)
-	if err != nil || !hasIdentity(folder) {
-		return true
+	if err != nil {
+		return false, fmt.Errorf("%s cannot be read (%s)", folder, reason(err))
+	}
+	if !hasIdentity(folder) {
+		return false, fmt.Errorf("%s has no file identity to compare", folder)
 	}
 	for d := filepath.Clean(p); ; {
 		info, err := os.Stat(d)
-		if err != nil || !hasIdentity(d) {
-			return true
+		if err != nil {
+			return false, fmt.Errorf("%s cannot be read (%s)", d, reason(err))
+		}
+		if !hasIdentity(d) {
+			return false, fmt.Errorf("%s has no file identity to compare", d)
 		}
 		if os.SameFile(info, want) {
-			return true
+			return true, nil
 		}
 		parent := filepath.Dir(d)
 		if parent == d {
-			return false
+			return false, nil
 		}
 		d = parent
 	}
+}
+
+// reason is the cause of a file system error without the path the caller already names ("permission denied").
+func reason(err error) string {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		return pe.Err.Error()
+	}
+	return err.Error()
 }
 
 // IsUnder says whether p is root or inside it.
