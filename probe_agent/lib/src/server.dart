@@ -177,7 +177,7 @@ class ProbeServer {
             'agent': 'flutter_probe',
             'version': probeAgentVersion,
             // which app this agent is in (see app_id.dart); left out when unknown. Like the version, it needs no token.
-            if (probeAppIdReader() != null) 'app_id': probeAppIdReader(),
+            if (reportedAppId() != null) 'app_id': reportedAppId(),
           }));
         await req.response.close();
         continue;

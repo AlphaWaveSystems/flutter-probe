@@ -140,7 +140,7 @@ class ProbeExecutor {
         }
         // flutter_version, flutter_channel, framework_revision and dart_version describe the app's own build; each is left out when unknown.
         // app_id is the application id of the app this agent runs in, so the CLI can tell which app answered; left out when unknown.
-        final appId = probeAppIdReader();
+        final appId = reportedAppId();
         return {
           'ok': true,
           'agent_version': probeAgentVersion,

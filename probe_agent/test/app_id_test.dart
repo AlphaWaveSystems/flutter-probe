@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_probe_agent/src/agent_version.dart';
 import 'package:flutter_probe_agent/src/app_id.dart';
 import 'package:flutter_probe_agent/src/executor.dart';
 import 'package:flutter_probe_agent/src/protocol.dart';

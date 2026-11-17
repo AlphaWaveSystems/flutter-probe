@@ -66,3 +66,6 @@ String? probeAppId() {
 /// Where the ping and the status endpoint read the id. A test replaces it.
 @visibleForTesting
 String? Function() probeAppIdReader = probeAppId;
+
+/// The id the ping and the status endpoint report: this app's own, or what a test put in [probeAppIdReader].
+String? reportedAppId() => probeAppIdReader();
