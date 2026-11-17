@@ -1631,6 +1631,11 @@ function showAppBuild(text?: string): void {
   el.hidden = !text;
 }
 
+/** The platform as the status shows it: a connection that does not know its platform (WiFi) says so, and never names one. */
+function platformLabel(platform: string): string {
+  return platform || "platform unknown";
+}
+
 function setStatus(
   state: "disconnected" | "connecting" | "connected" | "error",
   text: string,
@@ -1855,8 +1860,8 @@ $("btn-connect").addEventListener("click", async () => {
     const status = (await Connect(id)) as ConnectionStatus;
     setStatus(
       "connected",
-      `${status.deviceName}  ·  ${status.platform}`,
-      `${status.deviceName} (${status.deviceId}) · ${status.platform} · USB transport`
+      `${status.deviceName}  ·  ${platformLabel(status.platform)}`,
+      `${status.deviceName} (${status.deviceId}) · ${platformLabel(status.platform)} · USB transport`
     );
     showAppBuild(status.appBuild);
     startStream();
@@ -1875,7 +1880,7 @@ EventsOn("connection:changed", (status: ConnectionStatus) => {
   resetNetworkPanel(); // another app, or none: the request log on screen is not its own
   showAppBuild(status.connected ? status.appBuild : undefined);
   if (status.connected) {
-    setStatus("connected", `${status.deviceName}  ·  ${status.platform}`);
+    setStatus("connected", `${status.deviceName}  ·  ${platformLabel(status.platform)}`);
   } else {
     stopStream();
     setStatus("disconnected", "disconnected");
@@ -2346,7 +2351,7 @@ runLint();
     const status = (await Status()) as ConnectionStatus;
     showAppBuild(status.connected ? status.appBuild : undefined);
     if (status.connected) {
-      setStatus("connected", `${status.deviceName}  ·  ${status.platform}`);
+      setStatus("connected", `${status.deviceName}  ·  ${platformLabel(status.platform)}`);
       startStream();
     } else {
       setStatus("disconnected", "disconnected");

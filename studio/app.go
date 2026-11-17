@@ -101,20 +101,23 @@ type App struct {
 
 // connection holds the active agent client and cleanup callback.
 type connection struct {
-	client       probelink.ProbeClient
-	deviceCtx    *runner.DeviceContext
-	cfg          *config.Config
-	cleanup      func()
-	deviceID     string
-	deviceName   string
-	platform     device.Platform
-	toolsNote    string // set when this connection uses an adb that probe.yaml names
-	disposable   bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
-	wifiAddr     string // host:port of a WiFi connection (what a saved token is bound to); empty for any other
-	appBuild     string // what the app reports about its build (see appBuildText); empty when it reports nothing
-	streamCancel context.CancelFunc
-	streamDone   chan struct{} // closed when the streaming loop exits
-	view         *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
+	client     probelink.ProbeClient
+	deviceCtx  *runner.DeviceContext
+	cfg        *config.Config
+	cleanup    func()
+	deviceID   string
+	deviceName string
+	platform   device.Platform
+	// platformUnknown: nothing told Studio what the device is (a WiFi connection: the agent does not advertise it). platform then only steers the run's
+	// device context, as before, and is never shown as a fact: the status says nothing about the platform (see platformName).
+	platformUnknown bool
+	toolsNote       string // set when this connection uses an adb that probe.yaml names
+	disposable      bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
+	wifiAddr        string // host:port of a WiFi connection (what a saved token is bound to); empty for any other
+	appBuild        string // what the app reports about its build (see appBuildText); empty when it reports nothing
+	streamCancel    context.CancelFunc
+	streamDone      chan struct{} // closed when the streaming loop exits
+	view            *deviceView   // the device view hub, when PROBE_STUDIO_DEVICE_VIEW=1 and the frontend asked for it
 }
 
 // NewApp creates a new App.
@@ -533,6 +536,14 @@ type ConnectionStatus struct {
 	AppBuild string `json:"appBuild,omitempty"`
 }
 
+// platformName is the platform to show for the connection: "" when it is not known, never a guess.
+func (c *connection) platformName() string {
+	if c.platformUnknown {
+		return ""
+	}
+	return string(c.platform)
+}
+
 // Status returns the current connection state for the UI's connection
 // indicator. Always safe to call (returns a zero value when disconnected).
 func (a *App) Status() ConnectionStatus {
@@ -545,7 +556,7 @@ func (a *App) Status() ConnectionStatus {
 		Connected:  a.conn.client.Connected(),
 		DeviceID:   a.conn.deviceID,
 		DeviceName: a.conn.deviceName,
-		Platform:   string(a.conn.platform),
+		Platform:   a.conn.platformName(),
 		ToolsNote:  a.conn.toolsNote,
 		AppBuild:   a.conn.appBuild,
 	}
@@ -626,23 +637,25 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 
 	// WiFi connections have no host-side cleanup (no iproxy, no adb forward).
 	// The deviceID for runner/event purposes is host:port — unique enough
-	// for status display and disambiguation in logs. Platform is recorded as
-	// iOS as a best-effort default; the agent doesn't currently advertise
-	// platform in TXT records.
+	// for status display and disambiguation in logs. The agent does not advertise
+	// its platform, so it is not known: the run's device context keeps the iOS
+	// default it always had (a physical iPhone over WiFi is the case this was made
+	// for), but the status never says "ios" for an Android phone (platformUnknown).
 	deviceID := fmt.Sprintf("%s:%d", host, port)
 	streamCtx, streamCancel := context.WithCancel(context.Background())
 	streamDone := make(chan struct{})
 	newConn := &connection{
-		client:       client,
-		cfg:          cfg,
-		deviceID:     deviceID,
-		deviceName:   fmt.Sprintf("WiFi %s", host),
-		wifiAddr:     wifiAddress(host, port),
-		appBuild:     appBuildText(hs),
-		platform:     device.PlatformIOS,
-		streamCancel: streamCancel,
-		streamDone:   streamDone,
-		deviceCtx:    newStudioDeviceContext(a, cfg, device.PlatformIOS, deviceID, port, host),
+		client:          client,
+		cfg:             cfg,
+		deviceID:        deviceID,
+		deviceName:      fmt.Sprintf("WiFi %s", host),
+		wifiAddr:        wifiAddress(host, port),
+		appBuild:        appBuildText(hs),
+		platform:        device.PlatformIOS,
+		platformUnknown: true,
+		streamCancel:    streamCancel,
+		streamDone:      streamDone,
+		deviceCtx:       newStudioDeviceContext(a, cfg, device.PlatformIOS, deviceID, port, host),
 	}
 
 	a.mu.Lock()
