@@ -106,7 +106,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 				}
 				if attempt < maxRetries {
 					fmt.Printf("  \033[33m⚠\033[0m  [%s] attempt %d failed: %v — retrying in 5s...\n",
-						po.shortID(dr.DeviceID), attempt+1, dr.Error)
+						po.shortID(dr.DeviceID), attempt+1, errShown(dr.Error))
 					time.Sleep(5 * time.Second)
 				}
 			}
@@ -115,7 +115,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 			dr.Duration = time.Since(start)
 			if dr.Error != nil {
 				fmt.Printf("  \033[31m✗\033[0m  [%s] all attempts failed: %v\n",
-					po.shortID(dr.DeviceID), dr.Error)
+					po.shortID(dr.DeviceID), errShown(dr.Error))
 			}
 		}(&po.devices[i])
 	}
@@ -145,7 +145,7 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 			func(msg string) { fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), msg) }, nil)
 		devPort := follower.DevicePort()
 		if err := po.manager.ForwardPort(ctx, dr.DeviceID, dr.Port, devPort); err != nil {
-			return nil, &connectError{fmt.Errorf("[%s] port forward: %w", dr.DeviceID, err)}
+			return nil, &connectError{fmt.Errorf("[%s] port forward: %w", po.label(dr.DeviceID), err)}
 		}
 		defer po.manager.RemoveForward(ctx, dr.DeviceID, dr.Port)
 	}
@@ -171,14 +171,14 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 			// A token that did not come from run-as does not prove the app: do not dial a port another app holds, and say so.
 			follower.NoteTokenSource(src)
 			if _, holdErr := follower.Preflight(ctx, dialTimeout); holdErr != nil {
-				return nil, &connectError{fmt.Errorf("[%s] %w", dr.DeviceID, holdErr)}
+				return nil, &connectError{fmt.Errorf("[%s] %w", po.label(dr.DeviceID), holdErr)}
 			}
 		}
 	case device.PlatformIOS:
 		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
 	}
 	if err != nil {
-		return nil, &connectError{fmt.Errorf("[%s] token: %w", dr.DeviceID, err)}
+		return nil, &connectError{fmt.Errorf("[%s] token: %w", po.label(dr.DeviceID), err)}
 	}
 
 	// Connect WebSocket
@@ -197,13 +197,13 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		if dr.Platform == device.PlatformAndroid {
 			hint = device.ConnectHint(ctx, po.manager.ADB(), dr.DeviceID, dr.Port, po.cfg.Agent.AgentDevicePort(), appID)
 		}
-		return nil, &connectError{fmt.Errorf("[%s] connect: %w%s", dr.DeviceID, err, hint)}
+		return nil, &connectError{fmt.Errorf("[%s] connect: %w%s", po.label(dr.DeviceID), err, hint)}
 	}
 	defer client.Close()
 
 	handshake, warning, err := probelink.CheckHandshakeResult(ctx, client, po.cfg.CLIVersion)
 	if err != nil {
-		return nil, &connectError{fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)}
+		return nil, &connectError{fmt.Errorf("[%s] handshake: %w", po.label(dr.DeviceID), err)}
 	}
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(warning))
@@ -281,7 +281,7 @@ func (po *ParallelOrchestrator) summaryError() error {
 	var errs []string
 	for _, dr := range po.devices {
 		if dr.Error != nil {
-			errs = append(errs, fmt.Sprintf("[%s] %v", dr.DeviceID, dr.Error))
+			errs = append(errs, fmt.Sprintf("[%s] %s", po.label(dr.DeviceID), errShown(dr.Error)))
 		}
 	}
 	if len(errs) > 0 {
@@ -312,7 +312,7 @@ func (po *ParallelOrchestrator) PrintSummary() {
 		}
 		if dr.Error != nil {
 			status = "\033[31m⚠\033[0m"
-			fmt.Printf("  %s  %-20s  error: %v\n", status, po.shortID(dr.DeviceID), dr.Error)
+			fmt.Printf("  %s  %-20s  error: %s\n", status, po.shortID(dr.DeviceID), errShown(dr.Error))
 		} else {
 			fmt.Printf("  %s  %-20s  %d passed, %d failed  (%s)\n",
 				status, po.shortID(dr.DeviceID), passed, failed, dr.Duration.Round(time.Millisecond))
@@ -329,18 +329,33 @@ func (po *ParallelOrchestrator) totalFiles() int {
 	return n
 }
 
+// deviceLabel is the device's name (or its id) for the line that lists the lanes, as plain text on one line: the name comes from adb or
+// simctl and can hold anything. Display only: the reports keep the name as it is.
 func (po *ParallelOrchestrator) deviceLabel(dr DeviceRun) string {
 	if dr.DeviceName != "" {
-		return dr.DeviceName
+		return device.CleanOneLine(dr.DeviceName, 80)
 	}
-	return dr.DeviceID
+	return po.label(dr.DeviceID)
 }
 
+// shortID is how a lane's device is named in a printed line: its serial or UDID (it comes from adb or simctl) as plain text on one line,
+// cut to 12 characters. The id itself is never changed: this is for display only.
 func (po *ParallelOrchestrator) shortID(id string) string {
-	if len(id) > 12 {
-		return id[:12]
+	r := []rune(device.CleanOneLine(id, 80))
+	if len(r) > 12 {
+		return string(r[:12])
 	}
-	return id
+	return string(r)
+}
+
+// label is the whole id of a lane's device for an error message, as plain text on one line (display only).
+func (po *ParallelOrchestrator) label(id string) string {
+	return device.CleanOneLine(id, 80)
+}
+
+// errShown is a lane's error as one clean line: it can carry text from the device or the agent (a refused handshake, adb's output).
+func errShown(err error) string {
+	return device.CleanOneLine(err.Error(), 400)
 }
 
 func joinLines(ss []string) string {

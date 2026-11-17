@@ -32,7 +32,8 @@ var deviceListCmd = &cobra.Command{
 		fmt.Printf("  %-22s %-12s %s\n", "SERIAL", "STATE", "NAME")
 		fmt.Printf("  %-22s %-12s %s\n", "------", "-----", "----")
 		for _, d := range devices {
-			fmt.Printf("  %-22s %-12s %s\n", d.ID, d.State, d.Name)
+			// Shown cleaned: the id, state and name come from adb or simctl output, and a name can hold anything.
+			fmt.Printf("  %-22s %-12s %s\n", device.CleanOneLine(d.ID, 80), device.CleanOneLine(d.State, 80), device.CleanOneLine(d.Name, 80))
 		}
 		return nil
 	},
