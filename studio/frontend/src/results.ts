@@ -99,7 +99,13 @@ function setInsertButtons(): void {
     b.disabled = runGoing;
     b.title = runGoing ? "Wait until the run has finished: an insertion moves the lines the run is still reporting." : INSERT_TITLE;
   });
+  document.querySelectorAll<HTMLButtonElement>("#results-list .triage-replace").forEach((b) => {
+    b.disabled = runGoing;
+    b.title = runGoing ? "Wait until the run has finished." : REPLACE_TITLE;
+  });
 }
+
+const REPLACE_TITLE = "Put the text the screen showed in this step, in the editor. It is not saved and not run; Undo restores the line.";
 
 const INSERT_TITLE = "Add this line above the failed step in the editor. It is not saved and not run; Undo removes it.";
 
@@ -250,6 +256,21 @@ function onStep(s: RunStep): void {
           document.dispatchEvent(new CustomEvent("studio:insert-before", { detail: { file: s.file, line: s.line } }));
         });
         triLi.append(add);
+        setInsertButtons();
+      }
+      if (row.label === "On screen" && s.depth === 0 && s.line > 0) {
+        // The same step with the text the screen showed: Studio checks it against the text the run read before the editor changes (replace-line-step design).
+        const use = document.createElement("button");
+        use.type = "button";
+        use.classList.add("btn-mini", "triage-replace");
+        use.textContent = `Use "${row.text}"`; // text, never markup
+        use.title = REPLACE_TITLE;
+        use.disabled = runGoing;
+        use.addEventListener("click", (ev) => {
+          ev.stopPropagation(); // not a click on the row (which opens the line)
+          document.dispatchEvent(new CustomEvent("studio:replace-step", { detail: { file: s.file, line: s.line } }));
+        });
+        triLi.append(use);
         setInsertButtons();
       }
       triLi.addEventListener("click", () => jumpToStep(s, true));
