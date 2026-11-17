@@ -8,12 +8,13 @@ import 'package:flutter/material.dart';
 ///
 /// A family listed here is a screen to test against, not a claim that FlutterProbe supports it: a matrix cell is changed only by a test
 /// that ran (docs/compat/README.md, rule 2).
-const widgetFamilies = <String>['selection', 'textinput'];
+const widgetFamilies = <String>['selection', 'textinput', 'buttons'];
 
 /// The screen of [family], or null when there is none.
 Widget? widgetFamilyScreen(String family) => switch (family) {
   'selection' => const SelectionFamilyScreen(),
   'textinput' => const TextInputFamilyScreen(),
+  'buttons' => const ButtonsFamilyScreen(),
   _ => null,
 };
 
@@ -229,6 +230,143 @@ class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
             'wf_cupertino_state',
             'Cupertino: ${_cupertino.isEmpty ? '(empty)' : _cupertino}',
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Elevated, filled, outlined and text buttons, an icon button with a tooltip, a floating action button, a Cupertino button, a button with an icon, a disabled
+/// button and one with both a tap and a long press. State texts (`Elevated: N`, ...) count the taps; labels are chosen so that no label is part of a state text.
+class ButtonsFamilyScreen extends StatefulWidget {
+  const ButtonsFamilyScreen({super.key});
+
+  @override
+  State<ButtonsFamilyScreen> createState() => _ButtonsFamilyScreenState();
+}
+
+class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
+  final _counts = <String, int>{
+    'elevated': 0,
+    'filled': 0,
+    'outlined': 0,
+    'text': 0,
+    'icon': 0,
+    'fab': 0,
+    'cupertino': 0,
+    'withicon': 0,
+    'disabled': 0,
+    'tap': 0,
+    'long': 0,
+  };
+
+  void _bump(String k) => setState(() => _counts[k] = _counts[k]! + 1);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Buttons')),
+      floatingActionButton: _s(
+        'wf_fab',
+        (k) => FloatingActionButton(
+          key: k,
+          tooltip: 'Compose',
+          onPressed: () => _bump('fab'),
+          child: const Icon(Icons.edit),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(8),
+        children: [
+          _s(
+            'wf_elevated',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => _bump('elevated'),
+              child: const Text('Press elevated'),
+            ),
+          ),
+          _state('wf_elevated_state', 'Elevated: ${_counts['elevated']}'),
+          _s(
+            'wf_filled',
+            (k) => FilledButton(
+              key: k,
+              onPressed: () => _bump('filled'),
+              child: const Text('Press filled'),
+            ),
+          ),
+          _state('wf_filled_state', 'Filled: ${_counts['filled']}'),
+          _s(
+            'wf_outlined',
+            (k) => OutlinedButton(
+              key: k,
+              onPressed: () => _bump('outlined'),
+              child: const Text('Press outlined'),
+            ),
+          ),
+          _state('wf_outlined_state', 'Outlined: ${_counts['outlined']}'),
+          _s(
+            'wf_text_button',
+            (k) => TextButton(
+              key: k,
+              onPressed: () => _bump('text'),
+              child: const Text('Press text'),
+            ),
+          ),
+          _state('wf_text_state', 'Text button: ${_counts['text']}'),
+          _s(
+            'wf_icon_button',
+            (k) => IconButton(
+              key: k,
+              tooltip: 'Add item',
+              icon: const Icon(Icons.add),
+              onPressed: () => _bump('icon'),
+            ),
+          ),
+          _state('wf_icon_state', 'Icon button: ${_counts['icon']}'),
+          _state('wf_fab_state', 'FAB: ${_counts['fab']}'),
+          _s(
+            'wf_cupertino_button',
+            (k) => CupertinoButton(
+              key: k,
+              onPressed: () => _bump('cupertino'),
+              child: const Text('Press cupertino'),
+            ),
+          ),
+          _state('wf_cupertino_state', 'Cupertino: ${_counts['cupertino']}'),
+          _s(
+            'wf_with_icon',
+            (k) => ElevatedButton.icon(
+              key: k,
+              onPressed: () => _bump('withicon'),
+              icon: const Icon(Icons.send),
+              label: const Text('Send now'),
+            ),
+          ),
+          _state('wf_with_icon_state', 'With icon: ${_counts['withicon']}'),
+          _s(
+            'wf_disabled',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: null,
+              child: const Text('Cannot press'),
+            ),
+          ),
+          _state('wf_disabled_state', 'Disabled: ${_counts['disabled']}'),
+          _s(
+            'wf_long_press',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => _bump('tap'),
+              onLongPress: () => _bump('long'),
+              child: const Text('Hold me'),
+            ),
+          ),
+          _state(
+            'wf_long_press_state',
+            'Hold: tap ${_counts['tap']}, long ${_counts['long']}',
+          ),
+          const SizedBox(height: 80),
         ],
       ),
     );

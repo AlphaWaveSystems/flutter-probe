@@ -1,0 +1,57 @@
+# Needs the buttons build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=buttons (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+
+before each test
+  restart the app
+
+test "the kinds of button react to a tap found by their text"
+  see "Elevated: 0"
+  tap "Press elevated"
+  see "Elevated: 1"
+  tap "Press filled"
+  see "Filled: 1"
+  tap "Press outlined"
+  see "Outlined: 1"
+  tap "Press text"
+  see "Text button: 1"
+  tap "Press cupertino"
+  see "Cupertino: 1"
+
+test "a button with an icon is found by its label"
+  tap "Send now"
+  see "With icon: 1"
+
+test "an icon button is found by its id and by its tooltip"
+  see "Icon button: 0"
+  tap #wf_icon_button
+  see "Icon button: 1"
+  tap "Add item"
+  see "Icon button: 2"
+
+test "a floating action button is found by its id and by its tooltip"
+  see "FAB: 0"
+  tap #wf_fab
+  see "FAB: 1"
+  tap "Compose"
+  see "FAB: 2"
+
+# What this proves about the disabled button: it is read as disabled, and a `tap` on it raises no error. It does NOT prove that the tap did nothing: the fixture's
+# disabled button has no handler, so nothing on this screen could ever raise its counter, and "Disabled: 0" is true by construction.
+test "a button is enabled or disabled, and a tap on a disabled one raises no error"
+  see "Press elevated" is enabled
+  see "Cannot press" is disabled
+  tap "Cannot press"
+  see "Disabled: 0"
+
+test "a long press and a tap on the same button are told apart"
+  see "Hold: tap 0, long 0"
+  long press "Hold me"
+  see "Hold: tap 0, long 1"
+  tap "Hold me"
+  see "Hold: tap 1, long 1"
+
+# Flutter's own behavior, measured: a press that is held on a button with no long-press handler ends as a tap when it is released.
+test "a long press on a button that has no long-press handler ends as a tap"
+  see "Elevated: 0"
+  long press "Press elevated"
+  see "Elevated: 1"
