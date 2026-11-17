@@ -1,7 +1,7 @@
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { getProbePath, getConvertPath, getSetting, getWorkspaceRoot } from './config';
-import { SecretValues, secretEnv, withoutSecrets } from './secretArgs';
+import { SecretValues, childEnv, secretEnv, withoutSecrets } from './secretArgs';
 import { CommandResult, Device, LintResult } from './types';
 
 export function runCommand(
@@ -12,7 +12,7 @@ export function runCommand(
   return new Promise((resolve) => {
     const proc = cp.spawn(command, args, {
       cwd: cwd ?? getWorkspaceRoot(),
-      env: { ...process.env },
+      env: childEnv(process.env), // device list and lint: not a test run, so no secrets
     });
 
     let stdout = '';
@@ -32,7 +32,12 @@ export function runCommand(
 }
 
 export async function listDevices(): Promise<Device[]> {
-  const probePath = getProbePath();
+  let probePath: string;
+  try {
+    probePath = getProbePath();
+  } catch {
+    return []; // probe was not found (see toolPath.ts); the commands that run it say so
+  }
   const result = await runCommand(probePath, ['device', 'list']);
   if (result.code !== 0) {
     return [];
@@ -79,7 +84,12 @@ export async function listDevices(): Promise<Device[]> {
 }
 
 export async function runLint(filePath: string): Promise<LintResult[]> {
-  const probePath = getProbePath();
+  let probePath: string;
+  try {
+    probePath = getProbePath();
+  } catch {
+    return []; // lint on save stays quiet when probe is not found
+  }
   const result = await runCommand(probePath, ['lint', filePath]);
   const results: LintResult[] = [];
   const output = result.stdout + result.stderr;
@@ -228,6 +238,15 @@ export function buildTestArgs(
   if (o.config) { args.push('--config', o.config); }
 
   return args;
+}
+
+// settingsSecretEnv is the environment for the secrets in the settings, for a test run that is not started through buildTestRun.
+export function settingsSecretEnv(): Record<string, string> {
+  return secretEnv({
+    cloudKey: getSetting<string>('cloudKey'),
+    cloudSecret: getSetting<string>('cloudSecret'),
+    relayToken: getSetting<string>('relayToken'),
+  });
 }
 
 // A test run: the command line, and the environment that carries its secrets (see secretArgs.ts).

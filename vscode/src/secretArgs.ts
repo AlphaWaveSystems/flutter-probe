@@ -49,6 +49,30 @@ export function terminalAction(existing: { alive: boolean; fingerprint: string }
   return existing.alive ? 'replace' : 'create';
 }
 
+// childEnv is the environment of a program the extension starts: VS Code's own environment, as every child inherits it (a ${NAME} in a
+// test reads any variable by design, so nothing else is removed), without the three secret variables unless the child is one meant to
+// receive them (allow), and with add on top. Only `probe test` is meant to: the device list, lint and the device view are not.
+export function childEnv(
+  base: Record<string, string | undefined>,
+  opts: { allow?: readonly (keyof SecretValues)[]; add?: Record<string, string> } = {},
+): Record<string, string | undefined> {
+  // Names are compared without regard to case: Windows reads Probe_Cloud_Key as PROBE_CLOUD_KEY, and Node keeps the casing it was given.
+  const dropped = new Set<string>();
+  for (const key of Object.keys(SECRET_ENV) as (keyof SecretValues)[]) {
+    if (!opts.allow?.includes(key)) { dropped.add(SECRET_ENV[key].env.toUpperCase()); }
+  }
+  const add = opts.add ?? {};
+  for (const name of Object.keys(add)) { dropped.add(name.toUpperCase()); } // add replaces any casing of its names
+  const env: Record<string, string | undefined> = {};
+  for (const [name, value] of Object.entries(base)) {
+    if (!dropped.has(name.toUpperCase())) { env[name] = value; }
+  }
+  return { ...env, ...add };
+}
+
+// ALL_SECRETS is the allow list of a child that runs tests.
+export const ALL_SECRETS = Object.keys(SECRET_ENV) as (keyof SecretValues)[];
+
 // secretFlagIn returns the first secret flag in a command line (`--cloud-key` or `--cloud-key=...`), or undefined when there is none.
 export function secretFlagIn(args: readonly string[]): string | undefined {
   const flags = Object.values(SECRET_ENV).map(s => s.flag);
