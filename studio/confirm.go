@@ -21,8 +21,9 @@ import (
 var confirmTimeout = 60 * time.Second
 
 const (
-	kindClearData = "clear-app-data"
-	maxConfirmTxt = 80
+	kindClearData      = "clear-app-data"
+	kindSendSavedToken = "send-saved-token"
+	maxConfirmTxt      = 80
 )
 
 // ConfirmRequest is what the window shows. Every field is made by Studio from its own state (the app id of the workspace and the name of the
@@ -32,6 +33,7 @@ type ConfirmRequest struct {
 	Kind       string `json:"kind"`
 	AppID      string `json:"appId"`
 	DeviceName string `json:"deviceName"`
+	Detail     string `json:"detail,omitempty"` // kind send-saved-token: the address the token would go to, and the one it was saved for
 }
 
 type pendingConfirm struct {
@@ -100,55 +102,62 @@ func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
 			a.emit("confirm:note", "Cleared data of "+dialogText(dc.AppID)+" on "+dialogText(conn.deviceName)+" ("+dialogText(conn.deviceID)+") without asking: your setting for simulators and emulators")
 			return true
 		}
-		if !a.windowReady() {
-			return false // nobody to ask: the step is not run
-		}
-		a.confirm.init()
-		select { // one request at a time; a run that ends while it waits is a no
-		case a.confirm.slot <- struct{}{}:
-		case <-run.Done():
-			return false
-		}
-		defer func() { <-a.confirm.slot }()
-
-		raw := make([]byte, 16)
-		if _, err := rand.Read(raw); err != nil {
-			return false
-		}
-		p := &pendingConfirm{id: hex.EncodeToString(raw), run: run, done: make(chan bool, 1)}
-		a.confirm.mu.Lock()
-		a.confirm.pending = p
-		a.confirm.mu.Unlock()
-		appID := dc.AppID
-		a.emit("confirm:request", ConfirmRequest{ID: p.id, Kind: kindClearData, AppID: dialogText(appID), DeviceName: dialogText(conn.deviceName)})
-
-		timer := time.NewTimer(confirmTimeout)
-		defer timer.Stop()
-		var allow, answered bool
-		var note string
-		select {
-		case allow = <-p.done:
-			answered = true
-		case <-timer.C:
-			note = "Clear app data was not run: nothing answered in the window"
-		case <-run.Done():
-			note = "Clear app data was not run: the run was cancelled"
-		}
-		a.confirm.mu.Lock()
-		if a.confirm.pending == p {
-			a.confirm.pending = nil
-		}
-		a.confirm.mu.Unlock()
-		a.emit("confirm:close", p.id)
-		if !answered {
-			a.emit("confirm:note", note)
-			return false
-		}
-		if !allow && p.reason != "" { // denied by Studio, not by the person
-			a.emit("confirm:note", p.reason)
-		}
-		return allow
+		return a.askInWindow(run, ConfirmRequest{Kind: kindClearData, AppID: dialogText(dc.AppID), DeviceName: dialogText(conn.deviceName)},
+			"Clear app data was not run: nothing answered in the window", "Clear app data was not run: the run was cancelled")
 	}
+}
+
+// askInWindow shows req in the window (with an id of its own) and returns the person's answer: yes only for a press on the yes button. Without
+// a window to ask, a timeout, or the run ending, it is a no, with one of the two notes. Questions are asked one at a time.
+func (a *App) askInWindow(run context.Context, req ConfirmRequest, timedOut, cancelled string) bool {
+	if !a.windowReady() {
+		return false // nobody to ask: the step is not run
+	}
+	a.confirm.init()
+	select { // one request at a time; a run that ends while it waits is a no
+	case a.confirm.slot <- struct{}{}:
+	case <-run.Done():
+		return false
+	}
+	defer func() { <-a.confirm.slot }()
+
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return false
+	}
+	p := &pendingConfirm{id: hex.EncodeToString(raw), run: run, done: make(chan bool, 1)}
+	req.ID = p.id
+	a.confirm.mu.Lock()
+	a.confirm.pending = p
+	a.confirm.mu.Unlock()
+	a.emit("confirm:request", req)
+
+	timer := time.NewTimer(confirmTimeout)
+	defer timer.Stop()
+	var allow, answered bool
+	var note string
+	select {
+	case allow = <-p.done:
+		answered = true
+	case <-timer.C:
+		note = timedOut
+	case <-run.Done():
+		note = cancelled
+	}
+	a.confirm.mu.Lock()
+	if a.confirm.pending == p {
+		a.confirm.pending = nil
+	}
+	a.confirm.mu.Unlock()
+	a.emit("confirm:close", p.id)
+	if !answered {
+		a.emit("confirm:note", note)
+		return false
+	}
+	if !allow && p.reason != "" { // denied by Studio, not by the person
+		a.emit("confirm:note", p.reason)
+	}
+	return allow
 }
 
 // denyPendingConfirm says no to the question that is open, if any, and the dialog closes: the device it asks about is gone.

@@ -102,6 +102,7 @@ type connection struct {
 	platform     device.Platform
 	toolsNote    string // set when this connection uses an adb that probe.yaml names
 	disposable   bool   // the device is positively a simulator or an emulator (see disposableDevice); false for a WiFi connection
+	wifiAddr     string // host:port of a WiFi connection (what a saved token is bound to); empty for any other
 	appBuild     string // what the app reports about its build (see appBuildText); empty when it reports nothing
 	streamCancel context.CancelFunc
 	streamDone   chan struct{} // closed when the streaming loop exits
@@ -591,6 +592,7 @@ func (a *App) ConnectWiFi(host string, port int, token string) (ConnectionStatus
 		cfg:          cfg,
 		deviceID:     deviceID,
 		deviceName:   fmt.Sprintf("WiFi %s", host),
+		wifiAddr:     wifiAddress(host, port),
 		appBuild:     appBuildText(hs),
 		platform:     device.PlatformIOS,
 		streamCancel: streamCancel,
