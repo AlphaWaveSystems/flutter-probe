@@ -550,11 +550,11 @@ class _DisplayFamilyScreenState extends State<DisplayFamilyScreen> {
 }
 
 /// Lists and scrolling (docs/compat/NEXT.md, items 4 and 5). The first screen is a `ListView.builder` of 200 rows ("Row 0" to "Row 199"), so
-/// a far row is not built until the list is scrolled to it, with four buttons that push a page each: a `GridView.count` of 60 cells, a
+/// a far row is not built until the list is scrolled to it, with five buttons that push a page each: a `GridView.count` of 60 cells, a
 /// `CustomScrollView` with a `SliverList` of 200 items, a `SingleChildScrollView` of 40 lines (not lazy: every line is built), and tiles
-/// (`Card`s holding `ListTile`s, and a `CupertinoListTile`). Each page keeps its state text above the scrolling part, so it is on screen after
+/// (`Card`s holding `ListTile`s, and a `CupertinoListTile`), and a `ListView.builder` of 100 rows inside a `Scrollbar`. Each page keeps its state text above the scrolling part, so it is on screen after
 /// a scroll. State texts: `Tapped row: N|none`, `Tapped cell: N|none`, `Tapped item: N|none`, `Tapped bottom: yes|no`, `Tapped: none|Alice|Bob|Carol`,
-/// `Long press: none|Alice|Bob`.
+/// `Long press: none|Alice|Bob`, `Tapped bar row: N|none`.
 class ListsFamilyScreen extends StatefulWidget {
   const ListsFamilyScreen({super.key});
 
@@ -620,6 +620,14 @@ class _ListsFamilyScreenState extends State<ListsFamilyScreen> {
                   child: const Text('Open tiles'),
                 ),
               ),
+              _s(
+                'wf_open_scrollbar',
+                (k) => TextButton(
+                  key: k,
+                  onPressed: () => _open('Scrollbar', const _ScrollbarPage()),
+                  child: const Text('Open scrollbar list'),
+                ),
+              ),
             ],
           ),
           Expanded(
@@ -641,6 +649,57 @@ class _ListsFamilyScreenState extends State<ListsFamilyScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A `ListView.builder` of 100 rows ("Bar row 0" to "Bar row 99") inside a `Scrollbar` whose thumb is always shown, sharing one
+/// controller. State text: `Tapped bar row: N|none`.
+class _ScrollbarPage extends StatefulWidget {
+  const _ScrollbarPage();
+
+  @override
+  State<_ScrollbarPage> createState() => _ScrollbarPageState();
+}
+
+class _ScrollbarPageState extends State<_ScrollbarPage> {
+  final _controller = ScrollController();
+  String _row = 'none';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _state('wf_bar_state', 'Tapped bar row: $_row'),
+        Expanded(
+          child: _s(
+            'wf_scrollbar',
+            (k) => Scrollbar(
+              key: k,
+              controller: _controller,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _controller,
+                itemCount: 100,
+                itemBuilder: (context, i) => _s(
+                  'wf_bar_row_$i',
+                  (rk) => ListTile(
+                    key: rk,
+                    title: Text('Bar row $i'),
+                    onTap: () => setState(() => _row = '$i'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
