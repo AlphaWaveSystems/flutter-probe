@@ -13,6 +13,9 @@ test "the page is shown and its title is found"
 test "type into a field, tap a button, wait for the result"
   wait until "Page loaded" appears
   type "hello" into css:"#message" in webview
+  store text of css:"#message" in webview as typed
+  type "<typed>" into #echo_input
+  see "Echo: hello"
   tap "Contact support" in webview
   wait until "Message sent" appears in webview
   see css:"#result" in webview
