@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TestDefinition, RecipeDefinition } from '../types';
-import { buildTestArgs, getProbeCommand } from '../probe';
+import { buildTestRun, getProbeCommand } from '../probe';
 import { runInTerminal } from '../terminal/probeTerminal';
 import { getWorkspaceRoot } from '../config';
 
@@ -270,18 +270,18 @@ export class TestExplorerProvider implements vscode.TreeDataProvider<TestTreeIte
 
   private runTest(test: TestDefinition): void {
     // probe test has no per-test filter in this version: this runs the file that holds the test.
-    const args = buildTestArgs(test.file, { autoConfirm: true });
-    runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+    const run = buildTestRun(test.file, { autoConfirm: true });
+    runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
   }
 
   private runFile(filePath: string): void {
-    const args = buildTestArgs(filePath, { autoConfirm: true });
-    runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+    const run = buildTestRun(filePath, { autoConfirm: true });
+    runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
   }
 
   private runFolder(folderPath: string): void {
-    const args = buildTestArgs(folderPath, { autoConfirm: true });
-    runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+    const run = buildTestRun(folderPath, { autoConfirm: true });
+    runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
   }
 }
 
