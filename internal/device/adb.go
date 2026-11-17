@@ -261,7 +261,7 @@ func (a *ADB) GetAppVersion(ctx context.Context, serial, appID string) (string, 
 			return strings.TrimPrefix(line, "versionName="), nil
 		}
 	}
-	return "", fmt.Errorf("adb: versionName not found for %s", appID)
+	return "", fmt.Errorf("adb: versionName not found for %s", CleanOneLine(appID, 80))
 }
 
 // PackageInstalled reports whether pkg is installed on the device. `pm list packages` filters by substring, so the

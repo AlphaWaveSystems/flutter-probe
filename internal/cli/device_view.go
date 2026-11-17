@@ -82,7 +82,7 @@ func runDeviceView(cmd *cobra.Command, _ []string) error {
 	conn := &viewConnector{dm: dm, cfg: cfg, dev: dev, warn: stderr}
 	defer conn.cleanup()
 
-	fmt.Fprintf(stderr, "  Connecting to the agent on %s (%s)...\n", dev.Name, dev.ID)
+	fmt.Fprintf(stderr, "  Connecting to the agent on %s (%s)...\n", device.CleanOneLine(dev.Name, 80), device.CleanOneLine(dev.ID, 80))
 	agent, err := conn.connect(ctx)
 	if err != nil {
 		return err

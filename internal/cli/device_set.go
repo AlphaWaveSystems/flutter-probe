@@ -80,10 +80,10 @@ func pickDevice(devices []device.Device, id string) (device.Device, error) {
 func checkSettable(d device.Device) (device.Device, error) {
 	// "online" is the manager's word; adb reports "device" and simctl "booted".
 	if d.State != "online" && d.State != "booted" && d.State != "device" {
-		return device.Device{}, fmt.Errorf("%s (%s) is %s: start it first", d.Name, d.ID, d.State)
+		return device.Device{}, fmt.Errorf("%s (%s) is %s: start it first", device.CleanOneLine(d.Name, 80), device.CleanOneLine(d.ID, 80), device.CleanOneLine(d.State, 80))
 	}
 	if d.Platform == device.PlatformIOS && d.Transport != "" {
-		return device.Device{}, fmt.Errorf("%s is a physical iOS device: these settings use simctl and work on simulators only", d.Name)
+		return device.Device{}, fmt.Errorf("%s is a physical iOS device: these settings use simctl and work on simulators only", device.CleanOneLine(d.Name, 80))
 	}
 	return d, nil
 }
