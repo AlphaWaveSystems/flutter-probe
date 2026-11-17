@@ -81,24 +81,26 @@ func checkSuppliedToken(token string) error {
 	return nil
 }
 
-// tokenFileName is the name of the token file of the server that listens on ip:port: http-token-<address>-<port>. An address and port belong to one
-// server at a time, so the name does too: a server on another port, or on another address with the same port (127.0.0.1 and ::1 can both be
-// bound), has its own file, and a second one on the same address and port cannot start (the listen fails before any file is touched). The address
-// is written with only letters, digits and dots (a colon or a bracket is not allowed in a file name on every system), so ::1 is __1; an IPv6 zone
-// (fe80::1%en0) is part of it, so the same link-local address on two interfaces is two files (fe80__1_en0, fe80__1_en1).
+// tokenFileName is the name of the token file of the server that listens on ip:port: http-token-<address>-<port>, with -z<hex of the zone>- before the
+// port for an IPv6 zone. An address and port belong to one server at a time, so the name does too: a server on another port, or on another address with
+// the same port (127.0.0.1 and ::1 can both be bound), has its own file, and a second one on the same address and port cannot start (the listen fails
+// before any file is touched). Different servers get different names, always: the address is its own text with each colon written as an underscore
+// (a colon is not allowed in a file name everywhere; ::1 is __1, and no address text has an underscore or a dash, so two addresses cannot give one text),
+// the zone (fe80::1%en0) is written as hexadecimal after a dash, so no zone can look like part of an address, and the segments are told apart by the dashes.
 func tokenFileName(ip net.IP, zone string, port int) string {
-	text := ip.String()
+	addr := strings.ReplaceAll(ip.String(), ":", "_")
 	if zone != "" {
-		text += "%" + zone
+		addr += "-z" + hex.EncodeToString([]byte(zone))
 	}
-	addr := strings.Map(func(r rune) rune {
-		if r == '.' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
-			return r
-		}
-		return '_'
-	}, text)
 	return fmt.Sprintf("%s-%s-%d", tokenFileBase, addr, port)
 }
+
+// boundForTokenFile is the address the token file name is made from: the bound one. A variable so a test can give it a zone (one cannot be bound
+// on every system) and see that RunHTTP's file name has it.
+var boundForTokenFile = func(a *net.TCPAddr) *net.TCPAddr { return a }
+
+// tokenFileForAddr is the token file name of the server bound to addr (what RunHTTP uses): its address, its zone and its port.
+func tokenFileForAddr(addr *net.TCPAddr) string { return tokenFileName(addr.IP, addr.Zone, addr.Port) }
 
 // writeTokenFile writes the token to dir/name and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
 // directory or an existing token file that is a link, not ours or reachable by other users, instead of repairing it. replaced reports that a token

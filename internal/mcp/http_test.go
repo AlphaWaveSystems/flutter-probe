@@ -1110,15 +1110,41 @@ func TestTheTokenFileNameFollowsThePort(t *testing.T) {
 	if tokenFileName(loopback4, "", 7391) == tokenFileName(loopback6, "", 7391) {
 		t.Error("127.0.0.1 and ::1 on one port share a token file name")
 	}
-	// one link-local address on two interfaces is two servers: the zone is in the name
-	ll := net.ParseIP("fe80::1")
-	if tokenFileName(ll, "en0", 7391) == tokenFileName(ll, "en1", 7391) || tokenFileName(ll, "en0", 7391) == tokenFileName(ll, "", 7391) {
-		t.Errorf("zones share a token file name: %q %q %q", tokenFileName(ll, "en0", 7391), tokenFileName(ll, "en1", 7391), tokenFileName(ll, "", 7391))
+	// no two different servers share a name: addresses, zones and ports in every combination, including the ones that used to collide
+	type srv struct {
+		ip   string
+		zone string
+		port int
 	}
-	for _, ip := range []string{"::1", "fe80::1%en0", "2001:db8::1", "0.0.0.0", "::"} {
-		if n := tokenFileName(net.ParseIP(strings.SplitN(ip, "%", 2)[0]), strings.Join(strings.SplitN(ip, "%", 2)[1:], ""), 80); strings.ContainsAny(n, ":[]%/\\") {
-			t.Errorf("%s: %q has a character a file name may not have", ip, n)
+	var all []srv
+	for _, ip := range []string{"127.0.0.1", "::1", "fe80::1", "fe80::1:1", "fe80::", "::", "0.0.0.0", "2001:db8::1", "::ffff:10.0.0.1"} {
+		for _, zone := range []string{"", "en0", "en1", "1", "2", "a_b", "a-b", "a%b", "z", "-z"} {
+			for _, port := range []int{80, 7391} {
+				if zone != "" && !strings.Contains(ip, ":") {
+					continue // an IPv4 address has no zone
+				}
+				all = append(all, srv{ip, zone, port})
+			}
 		}
+	}
+	seen := map[string]srv{}
+	for _, c := range all {
+		n := tokenFileName(net.ParseIP(c.ip), c.zone, c.port)
+		if strings.ContainsAny(n, ":[]%/\\ ") {
+			t.Errorf("%+v: %q has a character a file name may not have", c, n)
+		}
+		if prev, dup := seen[n]; dup && (prev.ip != c.ip || prev.zone != c.zone || prev.port != c.port) {
+			// two spellings of one address (::ffff:10.0.0.1 is 10.0.0.1) are one server, so a shared name is right for those only
+			if net.ParseIP(prev.ip).Equal(net.ParseIP(c.ip)) && prev.zone == c.zone && prev.port == c.port {
+				continue
+			}
+			t.Errorf("%+v and %+v share the token file name %q", prev, c, n)
+		}
+		seen[n] = c
+	}
+	// the numeric zone is not the address with another colon
+	if tokenFileName(net.ParseIP("fe80::1"), "1", 80) == tokenFileName(net.ParseIP("fe80::1:1"), "", 80) {
+		t.Error("fe80::1%1 and fe80::1:1 share a token file")
 	}
 }
 
@@ -1173,4 +1199,37 @@ func TestTheSamePortOnTwoAddressesHasTwoTokenFiles(t *testing.T) {
 		t.Error("stopping the IPv4 server changed the IPv6 server's file")
 	}
 	_ = stop6()
+}
+
+// The server uses the zone of the address it is bound to: the name RunHTTP takes for a bound address has the zone in it (a real zone cannot be
+// bound everywhere, so the function RunHTTP calls is tested with one).
+func TestTheTokenFileOfABoundAddressHasItsZoneAndPort(t *testing.T) {
+	ll := &net.TCPAddr{IP: net.ParseIP("fe80::1"), Zone: "en0", Port: 7391}
+	other := &net.TCPAddr{IP: net.ParseIP("fe80::1"), Zone: "en1", Port: 7391}
+	none := &net.TCPAddr{IP: net.ParseIP("fe80::1"), Port: 7391}
+	if tokenFileForAddr(ll) == tokenFileForAddr(other) || tokenFileForAddr(ll) == tokenFileForAddr(none) {
+		t.Errorf("zones share a file: %q %q %q", tokenFileForAddr(ll), tokenFileForAddr(other), tokenFileForAddr(none))
+	}
+	if tokenFileForAddr(ll) != tokenFileName(ll.IP, "en0", 7391) || tokenFileForAddr(&net.TCPAddr{IP: ll.IP, Zone: "en0", Port: 7392}) == tokenFileForAddr(ll) {
+		t.Error("the file of a bound address is not its address, zone and port")
+	}
+}
+
+// RunHTTP names its token file from the whole bound address, zone included: with a zone given to the address by a seam, the file is the one of that
+// zone and of no other.
+func TestRunHTTPTokenFileHasTheBoundZone(t *testing.T) {
+	skipWithoutFileModes(t)
+	saved := boundForTokenFile
+	defer func() { boundForTokenFile = saved }()
+	boundForTokenFile = func(a *net.TCPAddr) *net.TCPAddr { c := *a; c.Zone = "en7"; return &c }
+	dir := filepath.Join(t.TempDir(), tokenDirName)
+	url, _, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	_, portText, _ := net.SplitHostPort(strings.TrimPrefix(url, "http://"))
+	port, _ := strconv.Atoi(portText)
+	if _, err := os.Stat(filepath.Join(dir, tokenFileName(loopback4, "en7", port))); err != nil {
+		t.Errorf("the token file of the zoned address is missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, tokenFileName(loopback4, "", port))); err == nil {
+		t.Error("the token file is the one of the address without its zone")
+	}
 }
