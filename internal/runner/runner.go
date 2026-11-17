@@ -932,7 +932,7 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 				var data []byte
 				var err error
 				if !appPrivateFile(dc.AppID, remotePath) {
-					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.AppID)
+					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.appShown())
 				} else {
 					data, err = dc.Manager.ADB().Run(ctx, dc.Serial,
 						"exec-out", "run-as", shellquote.Arg(dc.AppID), "cat", shellquote.Arg(remotePath))

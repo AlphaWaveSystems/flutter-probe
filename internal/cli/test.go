@@ -1318,7 +1318,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			devCtx.Follower = portFollower
 		}
 		if devCtx.IsPhysical {
-			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
+			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", device.CleanOneLine(deviceSerial, 80))
 		}
 	}
 
