@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -256,4 +258,32 @@ func TestTheBeforeEachQuestionIsToldFromAStepQuestion(t *testing.T) {
 	if !IsBeforeEachTestQuestion(perTest) || IsBeforeEachTestQuestion(step) {
 		t.Errorf("per-test %v, step %v: %q / %q", IsBeforeEachTestQuestion(perTest), IsBeforeEachTestQuestion(step), perTest, step)
 	}
+}
+
+// Every message of the wipe gates and the wipe itself shows the app id and the device as one clean bounded line: the step's question, the
+// reinstall's question and hint, and the line that says what is being cleared.
+func TestEveryWipeMessageCleansTheAppIDAndTheDevice(t *testing.T) {
+	bad := "a.b\nFAKE\x1b[2J‮" + strings.Repeat("x", 300)
+	check := func(label, s string) {
+		t.Helper()
+		// the questions have one fixed line break of their own; nothing else may break a line, and nothing is cut by the raw ids
+		clean := strings.ReplaceAll(strings.ReplaceAll(s, "\n  SharedPreferences", " SharedPreferences"), "\n  This wipes", " This wipes")
+		if strings.ContainsAny(clean, "\n\x1b‮") || strings.Contains(s, strings.Repeat("x", 100)) {
+			t.Errorf("%s carries the raw app id or serial: %q", label, s)
+		}
+	}
+	for _, perTest := range []bool{false, true} {
+		var q string
+		(&DeviceContext{AppID: bad, Serial: bad, Platform: "android", Confirm: func(m string) bool { q = m; return false }}).AskClearData(perTest)
+		check(fmt.Sprintf("question perTest=%v", perTest), q)
+		check("hint", (&DeviceContext{AppID: bad, Serial: bad}).AskClearData(perTest).Error())
+	}
+	var rq string
+	(&DeviceContext{AppID: bad, Serial: bad, Confirm: func(m string) bool { rq = m; return false }}).AskReinstallForNotifications()
+	check("reinstall question", rq)
+	check("reinstall hint", (&DeviceContext{AppID: bad, Serial: bad}).AskReinstallForNotifications().Error())
+	out := captureStdout(t, func() {
+		_ = (&DeviceContext{AppID: bad, Serial: bad, Platform: "other"}).clearAppData(context.Background())
+	})
+	check("the clearing line", strings.TrimSuffix(regexp.MustCompile("\x1b\\[[0-9;]*m").ReplaceAllString(out, ""), "\n")) // the line's own colours and line end are not the ids'
 }
