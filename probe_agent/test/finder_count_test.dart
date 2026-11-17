@@ -96,6 +96,8 @@ void main() {
     expect(found, hasLength(1));
   });
 
+  // The key guard of the fix: on a screen with both, the Text.rich's own paragraph is a text of its own and must be kept, while the plain
+  // Text's inner paragraph must not count. A rule that dropped every RichText, or none, fails here.
   testWidgets(
       'a plain Text and a Text.rich with the same words are two matches',
       (tester) async {
