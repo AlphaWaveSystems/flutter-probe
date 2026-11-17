@@ -263,12 +263,12 @@ func TestTheBeforeEachQuestionIsToldFromAStepQuestion(t *testing.T) {
 // Every message of the wipe gates and the wipe itself shows the app id and the device as one clean bounded line: the step's question, the
 // reinstall's question and hint, and the line that says what is being cleared.
 func TestEveryWipeMessageCleansTheAppIDAndTheDevice(t *testing.T) {
-	bad := "a.b\nFAKE\x1b[2J‮" + strings.Repeat("x", 300)
+	bad := "a.b\nFAKE\x1b[2J\u202e" + strings.Repeat("x", 300)
 	check := func(label, s string) {
 		t.Helper()
 		// the questions have one fixed line break of their own; nothing else may break a line, and nothing is cut by the raw ids
 		clean := strings.ReplaceAll(strings.ReplaceAll(s, "\n  SharedPreferences", " SharedPreferences"), "\n  This wipes", " This wipes")
-		if strings.ContainsAny(clean, "\n\x1b‮") || strings.Contains(s, strings.Repeat("x", 100)) {
+		if strings.ContainsAny(clean, "\n\x1b\u202e") || strings.Contains(s, strings.Repeat("x", 100)) {
 			t.Errorf("%s carries the raw app id or serial: %q", label, s)
 		}
 	}
