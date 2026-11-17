@@ -15,6 +15,7 @@ import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
 import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
+import { connectFailureLine } from "./connect-failure";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
@@ -1785,7 +1786,10 @@ function updateConnectButton() {
   refreshFirstRun();
 }
 
-($("device-picker") as HTMLSelectElement).addEventListener("change", updateConnectButton);
+($("device-picker") as HTMLSelectElement).addEventListener("change", () => {
+  if (!connected && $("status-dot").classList.contains("status-error")) setStatus("disconnected", "disconnected"); // another device: the old failure is not about it
+  updateConnectButton();
+});
 $("btn-refresh").addEventListener("click", refreshDevices);
 
 $("btn-connect").addEventListener("click", async () => {
@@ -1816,9 +1820,9 @@ $("btn-connect").addEventListener("click", async () => {
     if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
-    setStatus("error", "connection failed", detail);
+    // The reason stays in the status (full text as the tooltip) until the person picks another device or connects again.
+    setStatus("error", connectFailureLine(detail), detail);
     toast(`Connect failed: ${detail}`, "error", 8000);
-    setTimeout(() => setStatus("disconnected", "disconnected"), 2500);
   }
 });
 
