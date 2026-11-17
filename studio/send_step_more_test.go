@@ -352,6 +352,9 @@ func measure(f func()) work {
 	return work{allocs: float64(after.Mallocs - before.Mallocs), bytes: float64(after.TotalAlloc - before.TotalAlloc), took: took}
 }
 
+// What this catches, exactly: a regression that allocates more than linearly (more allocations, or a copy of a growing slice on every step) fails on the
+// ratio, deterministically, whatever else runs on the machine. A regression that only burns CPU, with no extra allocation, is caught only if it takes longer
+// than looseBackstop: a slowdown below that passes.
 // looseBackstop is a wall-clock limit that only work that has gone wrong reaches (the linear work takes well under a second): it catches
 // slowness that allocates nothing, which counting cannot see, and is too far from the real time to fail on a busy machine.
 const looseBackstop = 30 * time.Second
