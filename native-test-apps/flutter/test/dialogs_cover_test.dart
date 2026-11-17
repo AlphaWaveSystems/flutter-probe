@@ -9,7 +9,9 @@ import 'package:probe_flutter_fixture/widget_families.dart';
 // The Cover page of the dialogs screen (PROBE_FIXTURE_WIDGETS=dialogs) is built so that a tap on its "Page button" lands on the dialog's body and a tap on its "Top button" lands
 // on the barrier, on any screen: the button is at the centre of the page, the dialog is centred and its non-interactive body spans the centre, and the top button is above the
 // dialog. The device suite (probe-tests/widgets/dialogs.probe) depends on it, so this runs the agent's own `tap` on four screen geometries (the surfaces a reviewer found different
-// in an earlier layout) and checks where each tap lands. Run it with `flutter test` in this folder; it needs no device.
+// in an earlier layout) and checks where each tap lands. Run it BY HAND with `flutter test` in this folder; it needs no device, and CI does not run it (CI runs the tests of
+// probe_agent only). The page is built for a portrait screen of at least about 400x800 dp (the four surfaces here): on a 360x640 dp screen the "Tall dialog" does not open the
+// way the suite expects, and in landscape the dialog covers the Top button.
 
 Future<Map<String, dynamic>> _agent(
   WidgetTester tester,
