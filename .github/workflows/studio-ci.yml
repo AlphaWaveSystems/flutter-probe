@@ -116,6 +116,9 @@ jobs:
       - name: Modal focus tests
         working-directory: studio/frontend
         run: npm run test:modal-focus
+      - name: Contrast tool tests
+        working-directory: studio/frontend
+        run: npm run test:contrast
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
