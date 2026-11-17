@@ -15,7 +15,7 @@ import { ProbeCodeLensProvider } from './providers/codelens';
 import { DiagnosticsProvider } from './providers/diagnostics';
 import { ProbeCompletionProvider } from './providers/completions';
 import { RunProfilePanel } from './views/runProfile';
-import { buildTestArgs, getProbeCommand } from './probe';
+import { buildTestRun, getProbeCommand } from './probe';
 import { runInTerminal } from './terminal/probeTerminal';
 import { getWorkspaceRoot } from './config';
 import { disposeAllTerminals } from './terminal/probeTerminal';
@@ -86,18 +86,18 @@ export function activate(context: vscode.ExtensionContext): void {
 
 // probe test has no per-test filter in this version: these run the file that holds the test.
 function runTestOnDevice(filePath: string, session: Session): void {
-  const args = buildTestArgs(filePath, {
+  const run = buildTestRun(filePath, {
     device: session.device.serial,
     port: session.port,
     config: session.config,
     autoConfirm: true,
   });
-  runInTerminal(`Probe: ${session.name}`, getProbeCommand(), args, getWorkspaceRoot());
+  runInTerminal(`Probe: ${session.name}`, getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
 function runTestVerbose(filePath: string): void {
-  const args = buildTestArgs(filePath, { verbose: true });
-  runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+  const run = buildTestRun(filePath, { verbose: true });
+  runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
 export function deactivate(): void {

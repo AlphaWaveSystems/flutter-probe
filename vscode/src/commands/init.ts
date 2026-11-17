@@ -16,5 +16,5 @@ async function initProject(): Promise<void> {
     return;
   }
 
-  runInTerminal('Probe: Init', getProbeCommand(), ['init'], ws);
+  runInTerminal('Probe: Init', getProbeCommand(), ['init'], ws, {});
 }

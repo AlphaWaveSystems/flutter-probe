@@ -208,10 +208,14 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 | `cloudProvider` | | Provider: `browserstack`, `saucelabs`, `lambdatest`, `aws`, `firebase` |
 | `cloudDevice` | | Device string (e.g., `Google Pixel 7-13.0`) |
 | `cloudApp` | | Path to `.apk` or `.ipa` binary |
-| `cloudKey` | | Username or Access Key ID |
-| `cloudSecret` | | Access Key or Secret (consider env vars for CI) |
+| `cloudKey` | | Username or Access Key ID. User or remote settings only |
+| `cloudSecret` | | Access Key or Secret. User or remote settings only |
 | `relayUrl` | | Relay server URL for cloud E2E |
-| `relayToken` | | Relay authentication token |
+| `relayToken` | | Relay authentication token. User or remote settings only |
+
+**The cloud key, the cloud secret and the relay token never go on the command line.** A command line is visible to other users in the process list and stays in your shell's history, so the extension gives these three to `probe test` as environment variables of its terminal (`PROBE_CLOUD_KEY`, `PROBE_CLOUD_SECRET`, `PROBE_RELAY_CLI_TOKEN`), which the CLI reads when the flag is not given. The three settings can be set only in your user (or remote) settings: a workspace's `.vscode/settings.json` cannot set them, so a repository you open cannot supply or read them through these settings, and Settings Sync leaves them out. VS Code stores settings in plain text; on a shared machine or in CI, set the environment variables instead.
+
+> **Changed in this version:** a value of `cloudKey`, `cloudSecret` or `relayToken` in a workspace's `.vscode/settings.json` is now ignored. Move it to your user settings (Preferences: Open User Settings (JSON)), or set the environment variable. A terminal already open from an earlier run is replaced on the next run when the secrets differ.
 
 ### Tool Paths
 
@@ -227,7 +231,7 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 1. Sign up at [browserstack.com](https://www.browserstack.com)
 2. Go to **App Automate** > **Account** to find your username and access key
-3. In VS Code settings:
+3. In your VS Code **user** settings (the key and the secret are not read from workspace settings):
    ```json
    {
      "flutterprobe.cloudProvider": "browserstack",
@@ -253,7 +257,7 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 ### AWS Device Farm
 
 1. Create an IAM user with `AWSDeviceFarmFullAccess`
-2. Configure:
+2. Configure, in your **user** settings:
    ```json
    {
      "flutterprobe.cloudProvider": "aws",
