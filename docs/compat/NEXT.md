@@ -22,8 +22,8 @@ A ranked list of the widgets that apps use most and that `MATRIX.md` has not ass
 | 5 | `Card` + `ListTile`, `CupertinoListTile` | 9 + 8, 2 | Layout and containers (`Card`); Lists and scrolling (the tiles) | assessed: the tiles on the `lists` screen, on a build by each Flutter on one emulator (see `MATRIX.md`); `Card` alone stays in Layout and containers | tapping a row and reading its subtitle |
 | 6 | `CircularProgressIndicator`, `LinearProgressIndicator` | 8, 1 | Text and display | not assessed | waiting for a spinner to go away |
 | 7 | `GestureDetector`, `InkWell` | 7, 5 | Gestures | not assessed | a tap on a text inside a gesture widget |
-| 8 | `AlertDialog`, `Dialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` | 5, 1, 1, 2 | Dialogs and sheets | not assessed | a dialog's text, its actions, and closing it |
-| 9 | `SnackBar` (through `ScaffoldMessenger`) | 4 | Dialogs and sheets | not assessed | a message that appears and goes away by itself |
+| 8 | `AlertDialog`, `Dialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` | 5, 1, 1, 2 | Dialogs and sheets | assessed on Android: `dialogs` screen, `AlertDialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` and a bottom sheet on a build by each Flutter on one emulator (see `MATRIX.md`); `Dialog` alone and iOS not run | a dialog's text, its actions, and closing it |
+| 9 | `SnackBar` (through `ScaffoldMessenger`) | 4 | Dialogs and sheets | assessed on Android: `dialogs` screen, a `SnackBar` with an action, on a build by each Flutter on one emulator (see `MATRIX.md`) | a message that appears and goes away by itself |
 | 10 | `CupertinoPageScaffold` + `CupertinoNavigationBar`, `CupertinoSliverNavigationBar`, `CupertinoTabScaffold` + `CupertinoTabBar` | 4, 3, 2 | Navigation | not assessed | the Cupertino bars: title, back, tabs |
 | 11 | `Stack` + `Positioned`, `Opacity`, `Visibility` | 9 + 8, 4, 1 | Layout and containers | not assessed | whether a covered or invisible widget counts as seen or tappable |
 
@@ -114,7 +114,7 @@ Each item is a new screen of the Flutter fixture app (`native-test-apps/flutter`
 
    Must fail: `see "Delete item?"` after Cancel.
 
-   Under the open dialog the page is still matched (item 2), so `see` a text of the page passes while the dialog is open, and `don't see` it fails. The suite asserts that as the rule. A `tap` on a widget of the page under the open dialog finds the widget, so what the test settles is whether the tap reaches it or the barrier takes it: the page's counter must not move.
+   Under the open dialog the page is still matched (item 2), so `see` a text of the page passes while the dialog is open, and `don't see` it fails. The suite asserts that as the rule. A `tap` on a widget of the page under the open dialog finds the widget, so what the test settles is where the tap lands: on a button behind the dialog's body it lands on the dialog (the agent warns that the target is covered by another widget), on a button outside the body it lands on the barrier, which dismisses the dialog; either way the button's own counter must not move. Which one a given widget gets depends on the screen, so the fixture fixes the geometry (the Cover page of the `dialogs` screen: a button at the centre, a tall centred dialog, a button above it) and a widget test checks it on four screen sizes.
 9. **`dialogs` screen: snack bar.** Widgets: a button that shows `SnackBar(content: Text("Saved"), action: SnackBarAction(label: "Undo"))` for 4 seconds.
 
    Steps:

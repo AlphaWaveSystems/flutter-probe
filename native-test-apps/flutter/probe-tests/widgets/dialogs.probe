@@ -1,0 +1,138 @@
+# Needs the dialogs build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=dialogs (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+#
+# A dialog, a sheet or a snack bar is still in the widget tree while it animates away, so a step that follows the tap that closes it waits with
+# `wait until "..." disappears` before it asserts that the thing is gone (a `don't see` right after the tap found it still there, measured).
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id (the last button of the screen).
+  wait until #wf_open_cover appears
+
+test "a dialog is opened and its title and text are seen; the page under it is still seen"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  see "Delete item?"
+  see "This cannot be undone."
+  see "Dialog: none"
+
+test "Cancel closes the dialog"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Cancel"
+  wait until "Delete item?" disappears
+  don't see "Delete item?"
+  see "Dialog: cancelled"
+
+test "Delete, by id, closes the dialog"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap #wf_dialog_delete
+  wait until "Delete item?" disappears
+  see "Dialog: deleted"
+
+# A text selector takes the first widget whose text contains it, and the title "Delete item?" comes before its button "Delete": `tap "Delete"` taps the title.
+test "tap by the text Delete taps the title of the dialog, not its button"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Delete"
+  see "Delete item?"
+  see "Dialog: none"
+  tap "Cancel"
+  wait until "Delete item?" disappears
+
+# Whether the dialog is already out of the tree when `go back` returns differed between my runs on the two builds (gone on 3.44.8, still there on 3.50.0, a
+# `don't see` right after `go back` failed there in 2 of 2 runs); that is an observation of the author on one device, not a measured rule, so the test waits.
+test "go back closes the dialog"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  go back
+  wait until "Delete item?" disappears
+  don't see "Delete item?"
+  see "Dialog: none"
+
+# The Cover page puts a "Page button" at the centre of the page, opens a tall dialog (a 240 dp body, centred, so its non-interactive body spans the centre of the page
+# whatever the screen) and has a "Top button" above the dialog. The covered-widget warning of the agent ("tap target ... is covered by another widget") is not asserted
+# here (a .probe file has no step for a warning); what holds the test is that the counter stays 0 and that the dialog is still open for the `tap "Close"` that follows.
+# `--fail-on-warning` would fail the covered step. The geometry is checked on four screens by test/dialogs_cover_test.dart.
+test "a tap on a button that the dialog body covers lands on the dialog"
+  tap "Open cover page"
+  wait until #wf_open_tall appears
+  tap "Open tall dialog"
+  wait until "Close" appears
+  tap "Page button"
+  see "Page taps: 0"
+  see "Tall dialog"
+  tap "Close"
+  wait until "Close" disappears
+  see "Cover dialog: closed"
+  see "Page taps: 0"
+  tap "Page button"
+  see "Page taps: 1"
+
+# A button above the dialog is under the barrier: the tap lands on the barrier, which dismisses the dialog (`showDialog` dismisses on a tap outside by default), and the
+# button's own handler does not run.
+test "a tap on a button outside the dialog body dismisses the dialog and does not press the button"
+  tap "Open cover page"
+  wait until #wf_open_tall appears
+  tap "Open tall dialog"
+  wait until "Close" appears
+  tap "Top button"
+  wait until "Close" disappears
+  see "Cover dialog: none"
+  see "Top taps: 0"
+  tap "Top button"
+  see "Top taps: 1"
+
+test "a Cupertino dialog: keep editing, then discard"
+  tap "Open Cupertino dialog"
+  wait until "Discard changes?" appears
+  see "Your edits are lost."
+  tap #wf_cupertino_keep
+  wait until "Discard changes?" disappears
+  see "Cupertino dialog: kept"
+  tap "Open Cupertino dialog"
+  wait until "Discard changes?" appears
+  tap #wf_cupertino_discard
+  wait until "Discard changes?" disappears
+  see "Cupertino dialog: discarded"
+
+test "a Cupertino action sheet: an action, then the cancel button"
+  tap "Open action sheet"
+  wait until "Share" appears
+  tap "Copy link"
+  wait until "Share" disappears
+  see "Sheet: copy"
+  tap "Open action sheet"
+  wait until "Share" appears
+  tap "Cancel"
+  wait until "Share" disappears
+  see "Sheet: cancelled"
+
+test "a bottom sheet: an option, and go back closes it without a choice"
+  tap "Open bottom sheet"
+  wait until "Option one" appears
+  tap "Option two"
+  wait until "Option one" disappears
+  see "Bottom sheet: two"
+  tap "Open bottom sheet"
+  wait until "Option one" appears
+  go back
+  wait until "Option one" disappears
+  see "Bottom sheet: none"
+
+test "a snack bar appears and its action is tapped"
+  don't see "Undo"
+  tap "Save"
+  wait until "Saved" appears
+  see "Snack: saved"
+  tap "Undo"
+  see "Snack: undone"
+  wait until "Saved" disappears
+
+test "a snack bar goes away by itself"
+  tap "Save"
+  wait until "Saved" appears
+  wait until "Saved" disappears
+  don't see "Undo"
