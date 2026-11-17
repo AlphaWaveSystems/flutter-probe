@@ -161,9 +161,76 @@ func TestInsertBeforeRefusesLinesThatHoldMoreThanTheFailedStepOrAnotherStep(t *t
 	}
 }
 
+// A line that holds two steps (`tap "A"; tap "B"`) is refused even when the second one is the step that failed: the line number does not name it.
+func TestInsertBeforeRefusesALineWithTwoSteps(t *testing.T) {
+	text := "test \"t\"\n  open the app\n  tap \"A\"; tap \"B\"\n"
+	f := newInsertFixture(t, text, 3, `tap "B"`)
+	if got := f.a.CheckInsertBefore(f.file, 3, f.file, text); got.OK || !strings.Contains(got.Reason, "does not hold the step that failed") {
+		t.Errorf("two steps on the failed line: %+v", got)
+	}
+}
+
+// A step the profile does not allow a fix to be placed before (a see with ai) is refused, though verb and text match.
+func TestInsertBeforeRefusesAStepOffTheAllowedList(t *testing.T) {
+	text := "test \"t\"\n  open the app\n  see \"Done\" with ai\n"
+	f := newInsertFixture(t, text, 3, `see "Done"`)
+	if got := f.a.CheckInsertBefore(f.file, 3, f.file, text); got.OK {
+		t.Errorf("a step off the allowed list: %+v", got)
+	}
+}
+
+// The failed step is looked up in the file that was asked about: a failed step of another file at the same line is not it.
+func TestInsertBeforeLooksUpTheStepInTheFileAskedAbout(t *testing.T) {
+	f := newInsertFixture(t, insertBase, 3, `tap "Sign in"`)
+	other := filepath.Join(filepath.Dir(f.file), "other.probe")
+	if err := os.WriteFile(other, []byte(insertBase), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.a.sources.readAndKeep(other); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.a.CheckInsertBefore(other, 3, other, insertBase); got.OK || !strings.Contains(got.Reason, "not a failed step") {
+		t.Errorf("the failed step belongs to the other file: %+v", got)
+	}
+}
+
+// A lone carriage return is a line ending too (the editor makes it one), and does not make the texts differ.
+func TestInsertBeforeLoneCarriageReturnsAreLineEndings(t *testing.T) {
+	cr := strings.ReplaceAll(insertBase, "\n", "\r")
+	f := newInsertFixture(t, cr, 3, `tap "Sign in"`)
+	if got := f.check(insertBase); !got.OK {
+		t.Errorf("a file with lone CR endings was refused: %+v", got)
+	}
+}
+
+// A file the run reads twice keeps its FIRST text; read again with other bytes it is dropped, so no insertion is offered for it.
+func TestAFileReadTwiceInARunKeepsTheFirstReadOrNothing(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.probe")
+	var s runSources
+	s.keep(file, []byte("first"))
+	s.keep(file, []byte("first")) // the same bytes again: still kept
+	if got, ok := s.keptText(dir, file); !ok || got != "first" {
+		t.Errorf("kept = %q, %v", got, ok)
+	}
+	s.keep(file, []byte("second")) // changed between the two reads
+	if got, ok := s.keptText(dir, file); ok {
+		t.Errorf("a file read twice with different bytes kept %q: the later read must not replace the first, and the first is not trustworthy", got)
+	}
+	s.keep(file, []byte("third"))
+	if _, ok := s.keptText(dir, file); ok {
+		t.Error("a later read brought the path back")
+	}
+	s.reset()
+	s.keep(file, []byte("fresh"))
+	if got, ok := s.keptText(dir, file); !ok || got != "fresh" {
+		t.Errorf("after a reset: %q, %v", got, ok)
+	}
+}
+
 // A selector that the step description cannot show as it is gets no button: the description is written with %q.
 func TestInsertBeforeRefusesSelectorsADescriptionCannotShowAsTheyAre(t *testing.T) {
-	for name, sel := range map[string]string{"backslash": `a\b`, "zero-width space": "a\u200bb", "tab": "a\tb"} {
+	for name, sel := range map[string]string{"backslash": `a\b`, "zero-width space": "a\u200bb", "tab": "a\tb", "bidi isolate": "a\u2066b", "soft hyphen": "a\u00adb"} {
 		text := "test \"t\"\n  open the app\n  tap \"" + sel + "\"\n"
 		f := newInsertFixture(t, text, 3, `tap "`+sel+`"`)
 		if got := f.a.CheckInsertBefore(f.file, 3, f.file, text); got.OK {

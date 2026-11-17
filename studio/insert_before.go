@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,11 +24,13 @@ const maxKeptSource = 1 << 20
 type runSources struct {
 	mu    sync.Mutex
 	files map[string][]byte
+	// conflicted are the paths the run read twice with different bytes: nothing is kept for them.
+	conflicted map[string]bool
 }
 
 func (s *runSources) reset() {
 	s.mu.Lock()
-	s.files = nil
+	s.files, s.conflicted = nil, nil
 	s.mu.Unlock()
 }
 
@@ -42,17 +45,33 @@ func (s *runSources) readAndKeep(path string) ([]byte, error) {
 	return b, nil
 }
 
-// keep records the bytes of a file (not a file over maxKeptSource).
+// keep records the bytes of a file (not one over maxKeptSource). The FIRST read of a path in a run is the one kept: a file the run reads twice (a test
+// file that another file `use`s, or a test file in the recipes folder) is read again from the disk, where it may have changed, and the text that was
+// parsed for the steps is the first one. A path read again with other bytes is dropped from the kept text, so no insertion is offered for it.
 func (s *runSources) keep(path string, b []byte) {
 	if len(b) > maxKeptSource {
 		return
 	}
+	key := filepath.Clean(path)
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.files == nil {
 		s.files = map[string][]byte{}
 	}
-	s.files[filepath.Clean(path)] = append([]byte(nil), b...)
-	s.mu.Unlock()
+	if s.conflicted[key] {
+		return
+	}
+	if old, seen := s.files[key]; seen {
+		if !bytes.Equal(old, b) {
+			delete(s.files, key)
+			if s.conflicted == nil {
+				s.conflicted = map[string]bool{}
+			}
+			s.conflicted[key] = true
+		}
+		return
+	}
+	s.files[key] = append([]byte(nil), b...)
 }
 
 // keptText is the kept text of the file, whichever way its path is written (a relative one is relative to the workspace).
@@ -143,7 +162,7 @@ func stepTarget(src string, line int) (verb, text string, count int, err error) 
 
 // safeSelector says whether the quoted text of a step description names the selector as it is: no backslash, quote, control, hidden or non-printable
 // character. The runner writes a step description with %q, so such a selector would be shown escaped and a wait built from the description would name
-// another selector; these get no button.
+// another selector. The row still shows the button (the window does not know), and CheckInsertBefore refuses on the press and says why.
 func safeSelector(sel string) bool {
 	if sel == "" {
 		return false
