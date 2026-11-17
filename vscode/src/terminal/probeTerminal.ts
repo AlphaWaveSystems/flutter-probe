@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import { secretFlagIn } from '../secretArgs';
 import { RunQueue } from './processRun';
 
+// What a terminal keeps of the output written before VS Code opens it.
+const MAX_EARLY = 1024 * 1024;
+
 // Each named terminal runs the tools itself (RunQueue in processRun.ts): the binary is started with its arguments as a list and no shell,
 // so no shell parses, expands or line-edits a file name, under any terminal shell or locale. The output stays in the terminal after the
 // run ends, and the next run of the same name goes to the same terminal.
@@ -20,7 +23,13 @@ function getOrCreateTerminal(name: string): Entry {
   // What is written before VS Code opens the terminal would be dropped (Pseudoterminal.onDidWrite), so it is kept until then.
   let opened = false;
   const early: string[] = [];
-  const write = (text: string): void => { if (opened) { writeEmitter.fire(text); } else { early.push(text); } };
+  let earlySize = 0;
+  const write = (text: string): void => {
+    if (opened) { writeEmitter.fire(text); return; }
+    if (earlySize >= MAX_EARLY) { return; } // a terminal that is never opened keeps at most MAX_EARLY characters
+    earlySize += text.length;
+    early.push(earlySize >= MAX_EARLY ? text + '\r\n(output before the terminal opened was cut here)\r\n' : text);
+  };
   const queue = new RunQueue(write);
   const pty: vscode.Pseudoterminal = {
     onDidWrite: writeEmitter.event,

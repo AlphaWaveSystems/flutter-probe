@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { EventEmitter, PassThrough } from 'node:stream';
-import { Child, RunQueue, RunSpec, SpawnFn, shownWord, toTerminal } from '../terminal/processRun';
+import { Child, MAX_LINE, MAX_WAITING, QueueOptions, RunQueue, RunSpec, SpawnFn, shownWord, toTerminal } from '../terminal/processRun';
 
 // The arguments a tool is run with reach it as they are: no shell parses them. Hostile text is built from code points (no raw format
 // characters in the source).
@@ -76,7 +76,7 @@ class FakeChild extends EventEmitter implements Child {
   kill(signal?: NodeJS.Signals): boolean { this.signals.push(signal); return true; }
 }
 
-function fakeQueue(): { queue: RunQueue; out: () => string; children: FakeChild[]; specs: RunSpec[] } {
+function fakeQueue(opts: QueueOptions = {}): { queue: RunQueue; out: () => string; children: FakeChild[]; specs: RunSpec[] } {
   let text = '';
   const children: FakeChild[] = [];
   const specs: RunSpec[] = [];
@@ -86,7 +86,7 @@ function fakeQueue(): { queue: RunQueue; out: () => string; children: FakeChild[
     children.push(c);
     return c;
   };
-  return { queue: new RunQueue(t => { text += t; }, spawnFn), out: () => text, children, specs };
+  return { queue: new RunQueue(t => { text += t; }, spawnFn, { graceMs: 20, ...opts }), out: () => text, children, specs };
 }
 
 const tick = (): Promise<void> => new Promise(r => setImmediate(r));
@@ -174,12 +174,146 @@ test('the command shown above the output cannot move the cursor or reorder the t
 // a shell.
 test('the terminal keeps output until it opens, and closing it stops the run', () => {
   const text = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'terminal', 'probeTerminal.ts'), 'utf8');
-  assert.match(text, /const write = \(text: string\): void => \{ if \(opened\) \{ writeEmitter\.fire\(text\); \} else \{ early\.push\(text\); \} \};/);
+  assert.match(text, /if \(opened\) \{ writeEmitter\.fire\(text\); return; \}\s*if \(earlySize >= MAX_EARLY\) \{ return; \}/);
+  assert.match(text, /early\.push\(/);
   assert.match(text, /open: \(\) => \{\s*opened = true;\s*for \(const text of early\.splice\(0\)\) \{ writeEmitter\.fire\(text\); \}/);
   assert.match(text, /close: \(\) => \{\s*queue\.stop\(\);/);
   assert.match(text, /handleInput: data => queue\.input\(data\),/);
   assert.match(text, /createTerminal\(\{ name, pty/);
   assert.doesNotMatch(text, /sendText|shellPath|child_process/);
   const run = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'terminal', 'processRun.ts'), 'utf8');
-  assert.match(run, /spawn\(command, args, \{ \.\.\.options, shell: false,/);
+  assert.match(run, /spawn\(command, args, \{ \.\.\.options, shell: false, windowsHide: true, stdio: 'pipe', detached: process\.platform !== 'win32' \}\)/);
+});
+
+const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
+
+// The review's case: a tool that ignores SIGINT and started a child of its own. Closing the terminal must leave neither running.
+test('closing the terminal ends a tool that ignores SIGINT, and the process it started', { skip: process.platform === 'win32' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-orphan-'));
+  const pids = path.join(dir, 'pids');
+  const queue = new RunQueue(() => undefined, undefined, { graceMs: 300 });
+  queue.run({ command: process.execPath, env: {}, cwd: dir, args: ['-e',
+    `process.on('SIGINT', () => {}); const c = require('child_process').spawn('/bin/sleep', ['300'], { stdio: 'ignore' }); ` +
+    `require('fs').writeFileSync(${JSON.stringify(pids)}, process.pid + ' ' + c.pid); setInterval(() => {}, 1000)`] });
+  queue.run({ command: process.execPath, env: {}, cwd: dir, args: ['-e', `require('fs').writeFileSync('second-ran', '1')`] });
+  for (let i = 0; i < 50 && !fs.existsSync(pids); i++) { await sleep(50); }
+  const [child, grandchild] = fs.readFileSync(pids, 'utf8').split(' ').map(Number);
+  queue.stop();
+  await sleep(1200);
+  const left = [alive(child), alive(grandchild)];
+  for (const p of [child, grandchild]) { try { process.kill(p, 'SIGKILL'); } catch { /* ended */ } }
+  assert.deepEqual(left, [false, false], 'the tool and its child must be ended');
+  assert.equal(fs.existsSync(path.join(dir, 'second-ran')), false, 'a waiting run is dropped when the terminal closes');
+});
+
+test('Ctrl+C reaches the processes the tool started, as in a shell', { skip: process.platform === 'win32' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-group-'));
+  const pids = path.join(dir, 'pids');
+  const queue = new RunQueue(() => undefined);
+  queue.run({ command: process.execPath, env: {}, cwd: dir, args: ['-e',
+    `process.on('SIGINT', () => {}); const c = require('child_process').spawn('/bin/sleep', ['300'], { stdio: 'ignore' }); ` +
+    `require('fs').writeFileSync(${JSON.stringify(pids)}, process.pid + ' ' + c.pid); setInterval(() => {}, 1000)`] });
+  for (let i = 0; i < 50 && !fs.existsSync(pids); i++) { await sleep(50); }
+  const [child, grandchild] = fs.readFileSync(pids, 'utf8').split(' ').map(Number);
+  queue.input('\u0003');
+  await sleep(500);
+  const grandchildAlive = alive(grandchild);
+  for (const p of [child, grandchild]) { try { process.kill(p, 'SIGKILL'); } catch { /* ended */ } }
+  assert.equal(grandchildAlive, false, 'the SIGINT goes to the process group');
+});
+
+// The review's case: a tool that closes its input and keeps running, while the person types.
+test('typing into a tool that closed its input is not an error of the extension', async () => {
+  const errors: string[] = [];
+  const onUncaught = (e: Error): void => { errors.push(String((e as NodeJS.ErrnoException).code ?? e.message)); };
+  process.on('uncaughtException', onUncaught);
+  try {
+    let out = '';
+    const done = new Promise<void>(resolve => {
+      const queue = new RunQueue(t => { out += t; if (out.includes('[exited')) { resolve(); } });
+      queue.run({ command: process.execPath, env: {}, args: ['-e', `process.stdin.destroy(); require('fs').closeSync(0); setTimeout(() => {}, 1200)`] });
+      setTimeout(() => { queue.input('hello\r'); queue.input('again\r'); }, 500);
+    });
+    await done;
+    await sleep(100);
+  } finally {
+    process.off('uncaughtException', onUncaught);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('the run\'s own env wins over the same name in VS Code\'s environment', () => {
+  const old = process.env.PROBE_CLOUD_KEY;
+  process.env.PROBE_CLOUD_KEY = 'from-vscode';
+  try {
+    const { queue, specs } = fakeQueue();
+    queue.run({ command: '/bin/probe', args: ['test'], env: { PROBE_CLOUD_KEY: 'from-setting' } });
+    assert.equal(specs[0].env.PROBE_CLOUD_KEY, 'from-setting');
+  } finally {
+    if (old === undefined) { delete process.env.PROBE_CLOUD_KEY; } else { process.env.PROBE_CLOUD_KEY = old; }
+  }
+});
+
+test('a spawn that throws says so, and the next waiting run still starts', () => {
+  let text = '';
+  let calls = 0;
+  const spawnFn: SpawnFn = () => {
+    calls++;
+    if (calls === 1) { throw new Error('spawn EINVAL'); }
+    return new FakeChild();
+  };
+  const queue = new RunQueue(t => { text += t; }, spawnFn);
+  queue.run({ command: '/bin/probe', args: ['a'], env: {} });
+  assert.match(text, /could not start \/bin\/probe: spawn EINVAL/);
+  assert.equal(calls, 1);
+  queue.run({ command: '/bin/probe', args: ['b'], env: {} });
+  assert.equal(calls, 2);
+  // a throw while another run waits: the waiting one starts
+  let n = 0;
+  const kids: FakeChild[] = [];
+  const q2 = new RunQueue(() => undefined, () => { n++; if (n === 2) { throw new Error('boom'); } const c = new FakeChild(); kids.push(c); return c; });
+  q2.run({ command: '/bin/probe', args: ['1'], env: {} });
+  q2.run({ command: '/bin/probe', args: ['2'], env: {} });
+  q2.run({ command: '/bin/probe', args: ['3'], env: {} });
+  kids[0].emit('close', 0, null);
+  assert.equal(n, 3, 'run 2 failed to start and run 3 started');
+});
+
+test('stopping escalates to SIGKILL after the grace time, and not when the tool ended in time', async () => {
+  const { queue, children } = fakeQueue({ graceMs: 30 });
+  queue.run({ command: '/bin/probe', args: [], env: {} });
+  queue.stop();
+  assert.deepEqual(children[0].signals, ['SIGINT']);
+  await sleep(80);
+  assert.deepEqual(children[0].signals, ['SIGINT', 'SIGKILL']);
+  const b = fakeQueue({ graceMs: 30 });
+  b.queue.run({ command: '/bin/probe', args: [], env: {} });
+  b.queue.stop();
+  b.children[0].emit('close', null, 'SIGINT');
+  await sleep(80);
+  assert.deepEqual(b.children[0].signals, ['SIGINT']);
+});
+
+test('on Windows a .bat or .cmd tool is refused with a clear message', () => {
+  const { queue, out, children } = fakeQueue({ platform: 'win32' });
+  queue.run({ command: 'C:\\tools\\probe.CMD', args: ['test'], env: {} });
+  assert.equal(children.length, 0);
+  assert.match(out(), /is a batch file, which Windows runs only through cmd\.exe/);
+  queue.run({ command: 'C:\\tools\\probe.exe', args: ['test'], env: {} });
+  assert.equal(children.length, 1);
+  const posix = fakeQueue({ platform: 'linux' });
+  posix.queue.run({ command: '/opt/probe.cmd', args: [], env: {} });
+  assert.equal(posix.children.length, 1, 'only Windows treats .cmd as a batch file');
+});
+
+test('the waiting runs and a typed line are capped', async () => {
+  const { queue, out, children } = fakeQueue();
+  for (let i = 0; i <= MAX_WAITING + 1; i++) { queue.run({ command: '/bin/probe', args: [String(i)], env: {} }); }
+  assert.match(out(), new RegExp(`not started: ${MAX_WAITING} runs are already waiting`));
+  let sent = '';
+  children[0].stdin.on('data', d => { sent += d; });
+  queue.input('x'.repeat(MAX_LINE + 10) + '\r');
+  await tick();
+  assert.equal(sent.length, MAX_LINE + 1);
 });
