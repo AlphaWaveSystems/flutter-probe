@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -324,22 +325,62 @@ func TestCardSearchHasNoSizeLimit(t *testing.T) {
 		}
 	}
 	// A megabyte of digit groups is read in linear work. The check counts allocations, which do not depend on how busy the machine is (a
-	// wall-clock limit failed under load): doubling the input at most doubles them, and a megabyte of one digit run allocates a handful.
-	assertLinearAllocs(t, "digit groups", func(n int) func() { in := strings.Repeat("123 ", n); return func() { _ = cardRuns(in) } }, 1<<16)
+	// wall-clock limit failed under load): doubling the input at most doubles allocations and bytes, and a megabyte of one digit run allocates a handful.
+	assertLinear(t, "digit groups", func(n int) func() { in := strings.Repeat("123 ", n); return func() { _ = cardRuns(in) } }, 1<<16)
 	one := strings.Repeat("7", 1<<20)
-	if got := testing.AllocsPerRun(1, func() { _ = cardRuns(one) }); got > 16 {
-		t.Errorf("a megabyte of one digit run allocated %v times", got)
+	if got := measure(func() { _ = cardRuns(one) }); got.allocs > 64 { // a handful; the count moves with the runtime and with -race, the doubling ratio above is the real check
+		t.Errorf("a megabyte of one digit run allocated %v times", got.allocs)
 	}
 }
 
-// assertLinearAllocs runs work(n) and work(2n) and fails when the larger one allocates more than 2.5 times as much as the smaller one.
-func assertLinearAllocs(t *testing.T, what string, work func(n int) func(), n int) {
+// work is what one measurement of a piece of code costs: how many allocations, how many bytes, and how long it took.
+type work struct {
+	allocs float64
+	bytes  float64
+	took   time.Duration
+}
+
+// measure runs f once to warm it up (compiled patterns, caches) and once more under the counters of the runtime.
+func measure(f func()) work {
+	f()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	f()
+	took := time.Since(start)
+	runtime.ReadMemStats(&after)
+	return work{allocs: float64(after.Mallocs - before.Mallocs), bytes: float64(after.TotalAlloc - before.TotalAlloc), took: took}
+}
+
+// looseBackstop is a wall-clock limit that only work that has gone wrong reaches (the linear work takes well under a second): it catches
+// slowness that allocates nothing, which counting cannot see, and is too far from the real time to fail on a busy machine.
+const looseBackstop = 30 * time.Second
+
+// assertLinear runs work(n) and work(2n) and fails when the larger one allocates more than 2.5 times as many bytes or times as often as the
+// smaller one, or takes longer than looseBackstop. Counting allocations does not depend on how busy the machine is (a tight wall-clock limit
+// failed under load), but a count alone misses work that copies a growing slice on every step (one allocation per step, quadratic bytes), so the
+// bytes are compared as well; the doubling ratio, not a fixed number, so a different input size or runtime does not move it.
+func assertLinear(t *testing.T, what string, mk func(n int) func(), n int) {
 	t.Helper()
-	small := testing.AllocsPerRun(1, work(n))
-	large := testing.AllocsPerRun(1, work(2*n))
-	if small < 1 || large > 2.5*small {
-		t.Errorf("%s: %v allocations for %d, %v for %d: not linear", what, small, n, large, 2*n)
+	for _, msg := range linearFailures(what, mk, n) {
+		t.Error(msg)
 	}
+}
+
+// linearFailures is the check of assertLinear as a list of what is wrong, so a test can show that it fails.
+func linearFailures(what string, mk func(n int) func(), n int) []string {
+	var bad []string
+	small, large := measure(mk(n)), measure(mk(2*n))
+	if small.allocs < 1 || large.allocs > 2.5*small.allocs {
+		bad = append(bad, fmt.Sprintf("%s: %v allocations for %d, %v for %d: not linear", what, small.allocs, n, large.allocs, 2*n))
+	}
+	if small.bytes < 1 || large.bytes > 2.5*small.bytes {
+		bad = append(bad, fmt.Sprintf("%s: %.0f bytes allocated for %d, %.0f for %d: not linear", what, small.bytes, n, large.bytes, 2*n))
+	}
+	if large.took > looseBackstop {
+		bad = append(bad, fmt.Sprintf("%s: %v for %d: far slower than any linear work", what, large.took, 2*n))
+	}
+	return bad
 }
 
 // More values to replace than a step may name stops the save, and the placeholders are handed out in linear time.
@@ -375,7 +416,7 @@ func TestTooManyValuesStopTheSave(t *testing.T) {
 	}
 	// The placeholders are handed out in linear work: no wall clock, which failed under load. Counting allocations instead, a body with twice the
 	// digit groups before one card allocates at most 2.5 times as much.
-	assertLinearAllocs(t, "one run of digit groups", func(n int) func() {
+	assertLinear(t, "one run of digit groups", func(n int) func() {
 		body := strings.Repeat("000 ", n) + "4111111111111111"
 		return func() {
 			_, _ = buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
@@ -659,31 +700,58 @@ func TestSaveStepCardSplitAcrossPathSegments(t *testing.T) {
 	}
 }
 
-// The linearity check fails on work that allocates more than linearly, and passes on work that allocates in proportion.
-func TestTheLinearAllocationCheckSeesQuadraticWork(t *testing.T) {
-	var sink [][]byte
-	quadratic := func(n int) func() {
+// zzSink keeps the work of the tests below on the heap: the compiler keeps an allocation that does not escape on the stack, where nothing counts it.
+var zzSink [][]byte
+
+// The linearity check fails on each kind of work that goes wrong (the mutants of the code under test, as data) and passes on work in proportion.
+func TestTheLinearCheckSeesWorkThatGoesWrong(t *testing.T) {
+	linear := func(n int) func() {
 		return func() {
-			sink = nil
+			zzSink = nil
+			for i := 0; i < n; i++ {
+				zzSink = append(zzSink, make([]byte, 16))
+			}
+		}
+	}
+	// more allocations than linear: a few more for each ones already made
+	manyAllocs := func(n int) func() {
+		return func() {
+			zzSink = nil
 			for i := 0; i < n; i++ {
 				for j := 0; j < i/64+1; j++ {
-					sink = append(sink, make([]byte, 1))
+					zzSink = append(zzSink, make([]byte, 1))
 				}
 			}
 		}
 	}
-	linear := func(n int) func() {
+	// one allocation for each step, but each copies everything so far: the count is linear, the bytes are not
+	copiesEveryStep := func(n int) func() {
 		return func() {
-			sink = nil
+			var acc []byte
 			for i := 0; i < n; i++ {
-				sink = append(sink, make([]byte, 1))
+				acc = append(append([]byte(nil), acc...), 'x')
+				zzSink = [][]byte{acc}
 			}
 		}
 	}
-	if small, large := testing.AllocsPerRun(1, linear(1000)), testing.AllocsPerRun(1, linear(2000)); large > 2.5*small {
-		t.Errorf("linear work flagged: %v %v", small, large)
+	// one extra pass that allocates a buffer as long as the input for each of n/64 outer steps
+	extraPassPerOuter := func(n int) func() {
+		return func() {
+			for i := 0; i < n/64; i++ {
+				zzSink = [][]byte{make([]byte, i*64+1)}
+			}
+		}
 	}
-	if small, large := testing.AllocsPerRun(1, quadratic(4000)), testing.AllocsPerRun(1, quadratic(8000)); large <= 2.5*small {
-		t.Errorf("quadratic work not seen: %v %v", small, large)
+	if msgs := linearFailures("linear", linear, 4000); len(msgs) != 0 {
+		t.Errorf("linear work flagged: %v", msgs)
+	}
+	for name, f := range map[string]func(n int) func(){"more allocations": manyAllocs, "a copy on every step": copiesEveryStep, "an extra pass per outer step": extraPassPerOuter} {
+		if msgs := linearFailures(name, f, 8000); len(msgs) == 0 {
+			t.Errorf("%s: not seen", name)
+		}
+	}
+	// the copy on every step has a linear allocation count: only the bytes see it
+	if bad := linearFailures("copy", copiesEveryStep, 8000); len(bad) != 1 || !strings.Contains(bad[0], "bytes") {
+		t.Errorf("a copy on every step must be caught by the bytes alone: %v", bad)
 	}
 }
