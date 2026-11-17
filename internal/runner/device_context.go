@@ -12,6 +12,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/devsettings"
 	"github.com/alphawavesystems/flutter-probe/internal/locale"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
@@ -915,7 +916,10 @@ func (dc *DeviceContext) iosTokenPath() string {
 			return cp + "/tmp/probe/token"
 		}
 	}
-	// Fallback: device-level tmp
+	// Fallback: device-level tmp, only for a simulator UDID: the serial shapes the path.
+	if !ios.ValidSimulatorUDID(dc.Serial) {
+		return ""
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
