@@ -40,7 +40,7 @@ func TestHandshakeWithoutAnAppIDIsUnchanged(t *testing.T) {
 func TestHandshakeDropsAnAppIDThatIsNotPlain(t *testing.T) {
 	hostile := []string{
 		"com.example.app\n", "com.example.app\r\n", "\ncom.example.app", "com.example.app ", " com.example.app", "com.example. app",
-		"com.example.app; rm -rf /", "com.example.app\x1b[31m", "com.example.app‮", "com.exa​mple.app", "com.example.app ",
+		"com.example.app; rm -rf /", "com.example.app\x1b[31m", "com.example.app\u202e", "com.exa\u200bmple.app", "com.example.app\u00a0",
 		"com.exämple.app", "<script>alert(1)</script>", "com.example.app:remote", "com.example.app\x00", "com.example.app/../x", "com.example.app%0a",
 		"single", ".com.example", "com..example", "com.example.", "-com.example", "com.-example", "com.example.app${IFS}", "com.example.app`id`",
 		strings.Repeat("a", 128) + "." + strings.Repeat("b", 128), // 257 characters
