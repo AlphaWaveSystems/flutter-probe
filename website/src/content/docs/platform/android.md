@@ -81,7 +81,7 @@ tools:
   adb: /path/to/platform-tools/adb
 ```
 
-The path must be absolute, to a file called `adb` outside the repository the `probe.yaml` belongs to; otherwise `probe test` stops and says why (see [Configuration](/advanced/configuration/#tools)). `--adb` is used as given.
+The path must be absolute, to a file called `adb` outside every repository the `probe.yaml` sits in (with no `.git`, outside its own folder); otherwise `probe test` stops and says why (see [Configuration](/advanced/configuration/#tools)). `--adb` is used as given.
 
 ## Permissions
 

@@ -551,7 +551,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 	// ── Parallel mode: distribute files across multiple devices ──
 	if parallelMode && !dryRun && cloudProvider == "" {
-		toolPaths, err := runToolPaths(cfg, adbPath, flutterPath)
+		toolPaths, err := runToolPaths(cfg, adbPath, flutterPath, true)
 		if err != nil {
 			return err
 		}
@@ -900,7 +900,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		} else {
 			// ── Local device path (existing behavior) ───────────────────────
 			// Resolve tool paths: CLI flags > probe.yaml (when it passes the tool path rule) > PATH
-			toolPaths, err := runToolPaths(cfg, adbPath, flutterPath)
+			toolPaths, err := runToolPaths(cfg, adbPath, flutterPath, true)
 			if err != nil {
 				return err
 			}

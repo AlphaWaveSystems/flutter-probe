@@ -109,7 +109,7 @@ func checkTests(env doctorEnv) doctorCheck {
 func checkFlutter(env doctorEnv, cfg *config.Config) doctorCheck {
 	c := doctorCheck{name: "flutter"}
 	bin := "flutter"
-	if p, err := configTool(cfg, "flutter"); err != nil {
+	if p, err := configTool(cfg, "flutter", false); err != nil {
 		c.status, c.detail = "fail", err.Error()
 		c.hint = "probe test refuses this tools.flutter; fix or remove it"
 		return c
@@ -133,7 +133,7 @@ func checkPlatformTools(env doctorEnv, cfg *config.Config) []doctorCheck {
 	if platform == "android" || platform == "both" {
 		bin := "adb"
 		c := doctorCheck{name: "adb"}
-		p, cerr := configTool(cfg, "adb")
+		p, cerr := configTool(cfg, "adb", false)
 		if p != "" {
 			bin = p
 		}
@@ -218,7 +218,7 @@ func realDoctorEnv(cmd *cobra.Command) doctorEnv {
 		tests:    func(dir string) ([]string, error) { return runner.CollectFiles([]string{dir}) },
 		devices: func(ctx context.Context, cfg *config.Config) ([]device.Device, error) {
 			// The same rule as probe test: a tools.* path from probe.yaml is run only when it passes it.
-			paths, err := runToolPaths(cfg, "", "")
+			paths, err := runToolPaths(cfg, "", "", false)
 			if err != nil {
 				return nil, err
 			}

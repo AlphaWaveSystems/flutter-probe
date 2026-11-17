@@ -2,8 +2,11 @@
 // tools.adb or tools.flutter in it names a program: a path that points into that repository would run whatever the repository carries.
 // The CLI and Studio use the same rule, so a probe.yaml means the same thing in both.
 //
-// A path passes when it is an absolute path to a regular, executable file with the tool's name, outside the repository the probe.yaml
-// belongs to (the folder above it that holds a .git; with none, outside the probe.yaml's folder). Symlinks are resolved first. A relative
+// A path passes when it is an absolute path to a regular, executable file with the tool's name, outside every repository the probe.yaml
+// sits in (each folder above it that holds a .git, up to the filesystem root, so the outer repository of a submodule counts too) and, with
+// no repository at all, outside the probe.yaml's own folder: a copy without its .git (a Docker COPY, a git archive) protects only that
+// folder. Symlinks are resolved first. "Outside" is decided on the folders themselves (os.SameFile on each folder above the file), not on
+// their spelling, so on a case-insensitive file system (macOS, Windows) /x/evil/tools/adb is inside /x/Evil. A relative
 // path is never resolved against the project or the working directory. A path the person typed (a --adb flag) is not a probe.yaml path
 // and is not checked here.
 package toolpath
@@ -46,19 +49,8 @@ func Check(configured string, names []string, projectDir, goos string) (string, 
 		return "", errors.New("it is not an executable file")
 	}
 	if projectDir != "" {
-		dir := projectDir
-		if abs, err := filepath.Abs(dir); err == nil {
-			dir = abs
-		}
-		if real, err := filepath.EvalSymlinks(dir); err == nil {
-			dir = real
-		}
-		if root := RepoRoot(dir); root != "" {
-			if IsUnder(root, resolved) {
-				return "", errors.New("it is inside the repository of this probe.yaml")
-			}
-		} else if IsUnder(dir, resolved) {
-			return "", errors.New("it is inside the folder of this probe.yaml")
+		if why := insideProtected(projectDir, resolved); why != "" {
+			return "", errors.New(why)
 		}
 	}
 	return resolved, nil
@@ -94,6 +86,85 @@ func RepoRoot(dir string) string {
 		parent := filepath.Dir(d)
 		if parent == d {
 			return ""
+		}
+		d = parent
+	}
+}
+
+// CheckIn is Check for a probe.yaml reached through a symlink: dirs are the folder of the link and the folder of the file it points to, and
+// the path must be outside what each of them protects.
+func CheckIn(configured string, names []string, dirs []string, goos string) (string, error) {
+	if len(dirs) == 0 {
+		return Check(configured, names, "", goos)
+	}
+	var resolved string
+	for i, dir := range dirs {
+		r, err := Check(configured, names, dir, goos)
+		if err != nil {
+			return "", err
+		}
+		if i == 0 {
+			resolved = r
+		}
+	}
+	return resolved, nil
+}
+
+// insideProtected says why resolved may not run for a probe.yaml in dir ("" when it may): it is inside a repository dir sits in, or, with
+// none, inside dir.
+func insideProtected(dir, resolved string) string {
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	roots := RepoRoots(dir)
+	if len(roots) == 0 {
+		if Within(dir, resolved) {
+			return "it is inside the folder of this probe.yaml"
+		}
+		return ""
+	}
+	for _, root := range roots {
+		if Within(root, resolved) {
+			return "it is inside the repository of this probe.yaml"
+		}
+	}
+	return ""
+}
+
+// RepoRoots are the folders from dir up to the filesystem root that hold a .git: the repository dir is in, and every one around it (a
+// submodule's outer repository, a nested checkout).
+func RepoRoots(dir string) []string {
+	var roots []string
+	for d := filepath.Clean(dir); ; {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			roots = append(roots, d)
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return roots
+		}
+		d = parent
+	}
+}
+
+// Within says whether p is folder or inside it, by the folders themselves: each folder from p up to the filesystem root is compared with
+// folder by os.SameFile. Spelling does not matter (case on a case-insensitive file system, a symlink to the folder). A folder that cannot
+// be read is never within.
+func Within(folder, p string) bool {
+	want, err := os.Stat(folder)
+	if err != nil {
+		return false
+	}
+	for d := filepath.Clean(p); ; {
+		if info, err := os.Stat(d); err == nil && os.SameFile(info, want) {
+			return true
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return false
 		}
 		d = parent
 	}
