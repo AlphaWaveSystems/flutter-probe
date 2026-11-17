@@ -181,3 +181,98 @@ func TestTheReportWriterIsTheSameAtomicWriter(t *testing.T) {
 	}
 	onlyFile(t, dir, "report.json")
 }
+
+// A read-only file is not replaced: the plain write it replaces failed with "permission denied", and the rename would have replaced it.
+func TestWriteFileRefusesAReadOnlyFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not describe this on Windows")
+	}
+	a, p := atomicFixture(t, "locked")
+	if err := os.Chmod(p, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	err := a.WriteFile(p, "new")
+	if err == nil || !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("err = %v, want permission denied", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "locked" {
+		t.Errorf("the read-only file changed: %q", b)
+	}
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o444 {
+		t.Errorf("mode = %v", fi.Mode().Perm())
+	}
+	onlyFile(t, filepath.Dir(p), "keep.probe")
+}
+
+// A writable file in a folder that is not writable cannot be replaced (a temporary file is needed): it fails, says why, and changes nothing.
+func TestWriteFileInAFolderThatIsNotWritableSaysSo(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("folder modes do not stop this here")
+	}
+	a, p := atomicFixture(t, "old")
+	dir := filepath.Dir(p)
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o755)
+	err := a.WriteFile(p, "new")
+	if err == nil || !strings.Contains(err.Error(), "cannot create a temporary file next to keep.probe: the folder is not writable") {
+		t.Fatalf("err = %v", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "old" {
+		t.Errorf("content = %q", b)
+	}
+}
+
+// The temporary file has a random name made exclusively: two writes use two names, and a link planted at a name one could guess is not followed.
+func TestTheTemporaryFileNameIsRandomAndALinkAtAGuessableNameIsNotFollowed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need a privilege on Windows")
+	}
+	a, p := atomicFixture(t, "old")
+	dir := filepath.Dir(p)
+	victim := filepath.Join(t.TempDir(), "victim.txt")
+	if err := os.WriteFile(victim, []byte("victim"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, guess := range []string{".probe-save", ".probe-save-0", ".probe-save-1", ".probe-save-fixed", ".probe-save.tmp", "keep.probe.tmp", ".keep.probe.tmp"} {
+		if err := os.Symlink(victim, filepath.Join(dir, guess)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var names []string
+	atomicCreateTemp = func(d, pattern string) (*os.File, error) {
+		f, err := os.CreateTemp(d, pattern)
+		if err == nil {
+			names = append(names, filepath.Base(f.Name()))
+		}
+		return f, err
+	}
+	defer func() { atomicCreateTemp = os.CreateTemp }()
+	for _, c := range []string{"one", "two"} {
+		if err := a.WriteFile(p, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(names) != 2 || names[0] == names[1] || !strings.HasPrefix(names[0], ".probe-save-") || names[0] == ".probe-save-fixed" {
+		t.Errorf("temporary names = %v, want two different random ones", names)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "victim" {
+		t.Errorf("a planted link was followed: %q", b)
+	}
+}
+
+// A panic between the creation of the temporary file and the rename does not leave it behind.
+func TestAPanicDuringTheWriteLeavesNoTemporaryFile(t *testing.T) {
+	a, p := atomicFixture(t, "old")
+	atomicWrite = func(*os.File, []byte) (int, error) { panic("boom") }
+	defer func() { atomicWrite = func(f *os.File, b []byte) (int, error) { return f.Write(b) } }()
+	func() {
+		defer func() { _ = recover() }()
+		_ = a.WriteFile(p, "new")
+	}()
+	if b, _ := os.ReadFile(p); string(b) != "old" {
+		t.Errorf("content = %q", b)
+	}
+	onlyFile(t, filepath.Dir(p), "keep.probe")
+}
