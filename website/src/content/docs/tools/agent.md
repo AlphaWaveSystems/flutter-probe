@@ -53,6 +53,7 @@ All are `--dart-define=NAME=value` at build time.
 | `PROBE_AGENT=true` | Enables the agent. Required; without it `start()` returns immediately. |
 | `PROBE_WIFI=true` | Binds to `0.0.0.0` instead of loopback so a CLI on another machine can connect (`probe test --host <ip> --token <token>`). Debug/profile builds only. |
 | `PROBE_PORT=<n>` | Move the agent off the default port 48686. Pair with `probe test --agent-port <n>`. |
+| `PROBE_APP_ID=<id>` | The application id the agent reports in `probe.ping` and `GET /probe/status`, for iOS or an app whose Android process has another name than its package. Optional: on Android the agent reads its process name. |
 | `PROBE_AGENT_FORCE=true` | Silences the console warning in an explicitly allowed release build. |
 | `PROBE_RELAY_URL`, `PROBE_RELAY_TOKEN` | Relay mode for cloud device farms: the agent connects *out* to a relay instead of listening. |
 
@@ -98,6 +99,13 @@ The `probe.ping` answer carries the agent's version and capabilities, and, when 
 `framework_revision` and `dart_version`: the Flutter and Dart that built the app (the Flutter tool records them in the app at build time; they are not the
 Flutter that published `probe_agent`). Each field is optional and left out when unknown. The CLI keeps only plain version text (letters, digits, dots, dashes
 and plus signs, at most 64 characters) and ignores the rest. A fork or a custom embedder can report values that are not the real ones.
+
+The answer also carries `app_id`, and so does `GET /probe/status` (which needs no token, like the version it reports): the application id of the app the agent runs in. On
+Android the agent reads it from its own process name (`/proc/self/cmdline`), which is the package name unless the app sets `android:process`; on iOS, or when the process has
+another name, build with `--dart-define=PROBE_APP_ID=<id>`. It is left out when it is not a plain application id (dot-separated segments of letters, digits, `_` and `-`, at
+most 255 characters), and nothing is guessed. When two apps with the agent share a device, the CLI can then tell which one answered: after the handshake it prints a **warning**
+(not a refusal) when the agent's `app_id` differs from `project.app` in `probe.yaml`, for example `the agent that answered reports app com.other.app, but project.app is
+com.example.app`. It is the app's own statement, not a proof, and an agent that does not send it (an older one) says nothing.
 
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
 not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed. The value of an obscured (password) field is never matched by a selector and never listed there; the field is found by its id, label or hint (see Password fields in the ProbeScript syntax page).

@@ -238,6 +238,8 @@ type PingResult struct {
 	FlutterChannel    OptionalText `json:"flutter_channel,omitempty"`
 	FrameworkRevision OptionalText `json:"framework_revision,omitempty"`
 	DartVersion       OptionalText `json:"dart_version,omitempty"`
+	// AppID is the application id of the app the agent runs in (see HandshakeResult). Optional: an older agent sends none.
+	AppID OptionalText `json:"app_id,omitempty"`
 }
 
 // OptionalText is a text field an app may send or not. Anything but a JSON string (a number, null, an object) reads as "": an app is not trusted to send the

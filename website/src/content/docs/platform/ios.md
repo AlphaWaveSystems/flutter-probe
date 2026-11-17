@@ -133,7 +133,7 @@ To verify the whole path with Studio in about ten minutes, with the expected res
 ```bash
 xcrun devicectl list devices                      # the phone is paired, developer mode on, state "connected"
 dns-sd -B _flutterprobe._tcp local.               # does the app advertise? (only with a ProbeAdvertiser)
-curl -s http://<phone-ip>:48686/probe/status      # {"agent":"flutter_probe","version":"..."}: the agent is reachable
+curl -s http://<phone-ip>:48686/probe/status      # {"agent":"flutter_probe","version":"...","app_id":"..."}: the agent is reachable (app_id when it is known)
 ```
 
 The status endpoint needs no token. If `curl` is refused or times out: the build has no agent or no `PROBE_WIFI=true`, the app is not in the

@@ -201,12 +201,15 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	}
 	defer client.Close()
 
-	warning, err := probelink.CheckHandshake(ctx, client, po.cfg.CLIVersion)
+	handshake, warning, err := probelink.CheckHandshakeResult(ctx, client, po.cfg.CLIVersion)
 	if err != nil {
 		return nil, &connectError{fmt.Errorf("[%s] handshake: %w", dr.DeviceID, err)}
 	}
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(warning))
+	}
+	if w := probelink.AppIDMismatchWarning(handshake, appID); w != "" {
+		fmt.Printf("  \033[33m⚠\033[0m  [%s] %s\n", po.shortID(dr.DeviceID), sysdialog.ScrubKnown(w))
 	}
 
 	fmt.Printf("  \033[32m✓\033[0m  [%s] Connected\n", po.shortID(dr.DeviceID))
