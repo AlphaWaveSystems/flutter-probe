@@ -267,6 +267,25 @@ func TestEveryApplyLinkPointsToAValidTarget(t *testing.T) {
 	}
 }
 
+var waitlistRe = regexp.MustCompile(`(?i)\bwait\s?list\b`)
+
+// Every link whose text says "waitlist" goes to the email or to the waitlist section of its page.
+func TestEveryWaitlistLinkPointsToAValidTarget(t *testing.T) {
+	found := 0
+	for _, l := range siteLinks(t) {
+		if !waitlistRe.MatchString(l.text) {
+			continue
+		}
+		found++
+		if l.href != "#waitlist" && l.href != applyEmail && !strings.HasPrefix(l.href, applyEmail+"?") {
+			t.Errorf("%s: link %q goes to %q; a waitlist link must go to %s or #waitlist", l.file, l.text, l.href, applyEmail)
+		}
+	}
+	if found == 0 {
+		t.Error("no link on the site says waitlist")
+	}
+}
+
 // Each page about the offer offers both ways to apply, so the apply path is the same everywhere.
 func TestEveryOfferPageOffersBothWaysToApply(t *testing.T) {
 	byFile := map[string][]siteLink{}

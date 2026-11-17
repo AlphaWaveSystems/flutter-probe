@@ -27,7 +27,7 @@ body:
     id: ci
     attributes:
       label: CI provider
-      description: Uploads work from GitHub Actions today.
+      description: The upload client is built for GitHub Actions runs.
       options:
         - GitHub Actions
         - Other
