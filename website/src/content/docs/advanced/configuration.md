@@ -186,8 +186,10 @@ Device/emulator management:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `adb` | string | `adb` (PATH) | Path to ADB binary |
-| `flutter` | string | `flutter` (PATH) | Path to Flutter binary |
+| `adb` | string | `adb` (PATH) | Absolute path to the ADB binary, outside the repository |
+| `flutter` | string | `flutter` (PATH) | Absolute path to the Flutter binary, outside the repository |
+
+A `probe.yaml` belongs to the repository it sits in, so a path in it that points into that repository would run a program the repository carries. `probe test` and `probe doctor` (like Studio) use `tools.adb` and `tools.flutter` only when the value is an **absolute path to an executable file with the tool's name** (`adb`, or `adb.exe` on Windows; `flutter`, or `flutter.bat` or `flutter.exe` on Windows), **outside the repository** of the `probe.yaml` (the folder above it that holds a `.git`; with none, outside the `probe.yaml`'s folder), with symlinks resolved. Anything else stops the run with a message that names the key and says why. To use a program from inside the repository on purpose, pass it as `--adb` or `--flutter`: a flag you type is used as given.
 
 ### ai
 

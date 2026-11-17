@@ -81,6 +81,8 @@ tools:
   adb: /path/to/platform-tools/adb
 ```
 
+The path must be absolute, to a file called `adb` outside the repository the `probe.yaml` belongs to; otherwise `probe test` stops and says why (see [Configuration](/advanced/configuration/#tools)). `--adb` is used as given.
+
 ## Permissions
 
 Android runtime permissions are granted via `adb shell pm grant`:

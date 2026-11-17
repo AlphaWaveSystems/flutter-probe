@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -26,6 +27,10 @@ type CompositeConfig struct {
 
 // Config represents probe.yaml at the project root.
 type Config struct {
+	// Source is the probe.yaml this config was read from (absolute), or "" when there was none. It is never read from the file. A path in
+	// the file (tools.adb) is judged against the repository this file belongs to.
+	Source string `yaml:"-"`
+
 	Project   ProjectConfig    `yaml:"project"`
 	Defaults  DefaultsConfig   `yaml:"defaults"`
 	Agent     AgentConfig      `yaml:"agent"`
@@ -289,6 +294,10 @@ func LoadFile(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	cfg.Source = path
+	if abs, err := filepath.Abs(path); err == nil {
+		cfg.Source = abs
+	}
 
 	// Apply defaults for zero-valued fields that were not set in YAML
 	applyDefaults(&cfg)
@@ -487,8 +496,8 @@ devices:
     serial: auto
 
 tools:
-  adb: ""                  # path to adb binary (empty = find in PATH)
-  flutter: ""              # path to flutter binary (empty = find in PATH)
+  adb: ""                  # absolute path to adb outside this repository (empty = find in PATH)
+  flutter: ""              # absolute path to flutter outside this repository (empty = find in PATH)
 
 # AI-powered visual assertions (optional — bring your own provider key).
 # "see "<assertion>" with ai" only works once this is configured; there is

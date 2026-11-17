@@ -109,8 +109,12 @@ func checkTests(env doctorEnv) doctorCheck {
 func checkFlutter(env doctorEnv, cfg *config.Config) doctorCheck {
 	c := doctorCheck{name: "flutter"}
 	bin := "flutter"
-	if cfg != nil && cfg.Tools.Flutter != "" {
-		bin = cfg.Tools.Flutter
+	if p, err := configTool(cfg, "flutter"); err != nil {
+		c.status, c.detail = "fail", err.Error()
+		c.hint = "probe test refuses this tools.flutter; fix or remove it"
+		return c
+	} else if p != "" {
+		bin = p
 	}
 	found, err := env.lookPath(bin)
 	if err != nil {
@@ -128,11 +132,15 @@ func checkPlatformTools(env doctorEnv, cfg *config.Config) []doctorCheck {
 	var checks []doctorCheck
 	if platform == "android" || platform == "both" {
 		bin := "adb"
-		if cfg != nil && cfg.Tools.ADB != "" {
-			bin = cfg.Tools.ADB
-		}
 		c := doctorCheck{name: "adb"}
-		if found, err := env.lookPath(bin); err != nil {
+		p, cerr := configTool(cfg, "adb")
+		if p != "" {
+			bin = p
+		}
+		if cerr != nil {
+			c.status, c.detail = "fail", cerr.Error()
+			c.hint = "probe test refuses this tools.adb; fix or remove it"
+		} else if found, err := env.lookPath(bin); err != nil {
 			c.status, c.detail = "warn", bin+" not found (needed for Android)"
 			c.hint = "install Android platform-tools, or set tools.adb in probe.yaml"
 		} else {
@@ -209,14 +217,16 @@ func realDoctorEnv(cmd *cobra.Command) doctorEnv {
 		lookPath: exec.LookPath,
 		tests:    func(dir string) ([]string, error) { return runner.CollectFiles([]string{dir}) },
 		devices: func(ctx context.Context, cfg *config.Config) ([]device.Device, error) {
-			paths := device.ToolPaths{ADB: "adb", Flutter: "flutter"}
-			if cfg != nil {
-				if cfg.Tools.ADB != "" {
-					paths.ADB = cfg.Tools.ADB
-				}
-				if cfg.Tools.Flutter != "" {
-					paths.Flutter = cfg.Tools.Flutter
-				}
+			// The same rule as probe test: a tools.* path from probe.yaml is run only when it passes it.
+			paths, err := runToolPaths(cfg, "", "")
+			if err != nil {
+				return nil, err
+			}
+			if paths.ADB == "" {
+				paths.ADB = "adb"
+			}
+			if paths.Flutter == "" {
+				paths.Flutter = "flutter"
 			}
 			return device.NewManagerWithPaths(paths).List(ctx)
 		},

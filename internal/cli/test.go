@@ -550,12 +550,9 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 	// ── Parallel mode: distribute files across multiple devices ──
 	if parallelMode && !dryRun && cloudProvider == "" {
-		toolPaths := device.ToolPaths{ADB: adbPath, Flutter: flutterPath}
-		if adbPath == "" {
-			toolPaths.ADB = cfg.Tools.ADB
-		}
-		if flutterPath == "" {
-			toolPaths.Flutter = cfg.Tools.Flutter
+		toolPaths, err := runToolPaths(cfg, adbPath, flutterPath)
+		if err != nil {
+			return err
 		}
 		dm := device.NewManagerWithPaths(toolPaths)
 
@@ -919,16 +916,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 
 		} else {
 			// ── Local device path (existing behavior) ───────────────────────
-			// Resolve tool paths: CLI flags > probe.yaml > PATH
-			toolPaths := device.ToolPaths{
-				ADB:     cfg.Tools.ADB,
-				Flutter: cfg.Tools.Flutter,
-			}
-			if adbPath != "" {
-				toolPaths.ADB = adbPath
-			}
-			if flutterPath != "" {
-				toolPaths.Flutter = flutterPath
+			// Resolve tool paths: CLI flags > probe.yaml (when it passes the tool path rule) > PATH
+			toolPaths, err := runToolPaths(cfg, adbPath, flutterPath)
+			if err != nil {
+				return err
 			}
 			dm = device.NewManagerWithPaths(toolPaths)
 			// Validate device serial if provided
