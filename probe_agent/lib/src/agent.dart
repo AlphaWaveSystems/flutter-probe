@@ -4,6 +4,7 @@ import 'advertiser.dart';
 import 'http_capture.dart';
 import 'relay_client.dart';
 import 'server.dart';
+import 'view_ready.dart';
 
 /// ProbeAgent is the top-level entry point for embedding in a Flutter app.
 ///
@@ -103,6 +104,9 @@ class ProbeAgent {
 
     // Record the app's dart:io HTTP traffic and make `mock` effective (HttpClients created from here on).
     ProbeHttpOverrides.install();
+
+    // Record the size each frame is laid out at, so a request waits for a frame laid out at the view's real size (issue #793).
+    ViewReady.instance.attach();
 
     const relayUrl = String.fromEnvironment('PROBE_RELAY_URL', defaultValue: '');
     const relayToken = String.fromEnvironment('PROBE_RELAY_TOKEN', defaultValue: '');
