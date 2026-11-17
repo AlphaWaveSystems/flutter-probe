@@ -77,6 +77,8 @@ type App struct {
 	// export holds the engine's results of the last finished run, for ExportRunResults; savePathFn replaces the native save dialog in tests.
 	export     exportSource
 	savePathFn func(defaultName, label, pattern string) (string, error)
+	// pickDirFn replaces the native folder dialog of PickWorkspace in tests.
+	pickDirFn func(title string) (string, error)
 
 	track   runTracker        // what the current/last run looks like, for automation and the UI
 	fix     selectorFixState  // previews of selector-fix requests and what this session confirmed; see ai_selector_fix.go
@@ -181,6 +183,9 @@ type FileEntry struct {
 // PickWorkspace opens a native directory picker and returns the chosen
 // path. Returns an empty string if the user cancels.
 func (a *App) PickWorkspace() (string, error) {
+	if a.pickDirFn != nil {
+		return a.pickDirFn("Open workspace")
+	}
 	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Open workspace",
 	})
@@ -375,10 +380,13 @@ func (a *App) WriteFile(path, content string) error {
 	if err != nil {
 		return err
 	}
+	if len(content) > maxSaveBytes {
+		return fmt.Errorf("%s: the file is %d bytes and a saved file is at most %d", filepath.Base(real), len(content), maxSaveBytes)
+	}
 	if err := os.MkdirAll(filepath.Dir(real), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(real, []byte(content), 0o644)
+	return replaceFileAtomically(real, []byte(content), ".probe-save-*")
 }
 
 // CreateFile writes content to a NEW .probe file inside the workspace a person opened or an automation folder, and never replaces a file: the file is created
@@ -393,6 +401,9 @@ func (a *App) CreateFile(path, content string) error {
 	name := filepath.Base(real)
 	if why := newFileNameProblem(name); why != "" {
 		return fmt.Errorf("%s: %s", name, why)
+	}
+	if len(content) > maxSaveBytes {
+		return fmt.Errorf("%s: the file is %d bytes and a saved file is at most %d", name, len(content), maxSaveBytes)
 	}
 	// A name the file system treats as an existing one although the bytes differ (APFS and NTFS ignore case, APFS ignores Unicode normalisation) is
 	// found by listing the folder and comparing the names folded and normalised; the exclusive create below is the check that cannot race.
@@ -413,13 +424,20 @@ func (a *App) CreateFile(path, content string) error {
 		}
 		return err
 	}
-	if _, err := f.WriteString(content); err != nil {
+	if _, err := createFileWrite(f, content); err != nil {
 		_ = f.Close()
 		_ = os.Remove(real) // a half-written new file is not left behind
 		return err
 	}
 	return f.Close()
 }
+
+// maxSaveBytes is the most Save writes, a new file (CreateFile) or an open one in place (WriteFile): the same 1 MiB a run keeps of a script, far above any test file and far below what a window call
+// should be able to put on disk.
+const maxSaveBytes = 1 << 20
+
+// createFileWrite writes the content of a new file; tests make it fail part way.
+var createFileWrite = func(f *os.File, content string) (int, error) { return f.WriteString(content) }
 
 // createFileAfterListing is called between the listing and the exclusive create; tests put a file there.
 var createFileAfterListing = func() {}
@@ -1349,7 +1367,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 		a.emit("run:result", rr)
 	})
 	r.OnStep(func(ev runner.StepEvent) {
-		rs := toRunStep(ev)
+		rs := toRunStep(ev, matchModeOf(conn))
 		a.track.step(rs)
 		a.emit("run:step", rs)
 	})
@@ -1396,7 +1414,7 @@ type RunStep struct {
 	Depth   int         `json:"depth"`
 }
 
-func toRunStep(ev runner.StepEvent) RunStep {
+func toRunStep(ev runner.StepEvent, matchMode string) RunStep {
 	rs := RunStep{
 		File:        ev.File,
 		Test:        ev.TestName,
@@ -1412,6 +1430,7 @@ func toRunStep(ev runner.StepEvent) RunStep {
 	}
 	if ev.Status == runner.StepFailed {
 		if t, ok := triageStep(ev.Description, ev.SelectorIsID, rs.Error, ev.Duration); ok {
+			withReplacement(&t, ev, matchMode)
 			rs.Triage = &t
 		}
 	}

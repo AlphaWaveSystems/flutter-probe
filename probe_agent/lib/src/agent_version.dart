@@ -16,6 +16,7 @@ const String probeAgentVersion = '0.27.0';
 /// step by answering ok without doing anything.
 const List<String> probeAgentCapabilities = [
   'press_key',
+  'see_filled',
   'swipe_from',
   'waits_for_view_size',
 ];

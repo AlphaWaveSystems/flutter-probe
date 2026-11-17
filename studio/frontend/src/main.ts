@@ -23,13 +23,14 @@ import { LintSession, toMarkers, type Problem } from "./lint-problems";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
-import { initResults, type RunPlan, type RunStep } from "./results";
+import { initResults, runIsGoing, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
 
 import {
   CancelRun,
   CheckInsertBefore,
+  CheckReplaceStep,
   CheckReplaceLine,
   CloseWorkspace,
   CreateFile,
@@ -2233,7 +2234,9 @@ async function insertBeforeStep(t: { file: string; line: number }): Promise<void
     toast("Not inserted: another file was opened or the text changed while Studio was checking. Press again.", "info", 5000);
     return;
   }
-  if (runInProgress) {
+  // Read here, with no await between this read and the edit: the answer came from Studio a moment ago, and a run that started since (from this window or, as
+  // the run events say, from anywhere) would be drawn at the old line numbers on the changed text.
+  if (runInProgress || runIsGoing()) {
     toast("Not inserted: a run started while Studio was checking. Wait until it has finished.", "info", 5000);
     return;
   }
@@ -2247,6 +2250,53 @@ async function insertBeforeStep(t: { file: string; line: number }): Promise<void
   renderStepDecorations();
   staleRunFile = t.file;
   toast(`Inserted above line ${check.line} (the step is now line ${check.line + 1}). Not saved, not run; Undo removes it. The marks of the last run are cleared: run again.`, "success", 7000);
+}
+
+document.addEventListener("studio:replace-step", (ev) => void replaceStepText((ev as CustomEvent<{ file: string; line: number }>).detail));
+
+// The "On screen" row under a failed see or tap offers the same step with the text the screen showed. Studio says whether it may (CheckReplaceStep: no run is
+// going and the editor holds the file exactly as the run read it) and builds the line from the run's text; the window applies only that, as one edit, when the
+// file, the editor's version and its text are still those of the click. Nothing is saved or run.
+async function replaceStepText(t: { file: string; line: number }): Promise<void> {
+  if (!currentPath) {
+    toast("Not replaced: no file is open.", "info", 5000);
+    return;
+  }
+  if (runInProgress) {
+    toast("Not replaced: a run is in progress. Wait until it has finished.", "info", 5000);
+    return;
+  }
+  const checked = model.getValue();
+  const pathAtClick = currentPath;
+  const versionAtClick = model.getVersionId(); // one editor model, never replaced (setValue, not setModel): the path and the version id identify the text
+  let check: { ok: boolean; line?: number; text?: string; reason?: string };
+  try {
+    check = await CheckReplaceStep(t.file, t.line, currentPath, checked);
+  } catch (err) {
+    toast(`Not replaced: ${err instanceof Error ? err.message : String(err)}`, "error", 6000);
+    return;
+  }
+  if (!check.ok || !check.line || check.text === undefined) {
+    toast(`Not replaced: ${check.reason ?? "Studio refused"}`, "info", 7000);
+    return;
+  }
+  if (currentPath !== pathAtClick || model.getVersionId() !== versionAtClick || model.getValue() !== checked) {
+    toast("Not replaced: another file was opened or the text changed while Studio was checking. Press again.", "info", 5000);
+    return;
+  }
+  // Read here, with no await between this read and the edit: the answer came from Studio a moment ago, and a run that started since (from this window or, as the
+  // run events say, from anywhere) would report the lines of the text the edit is about to change.
+  if (runInProgress || runIsGoing()) {
+    toast("Not replaced: a run started while Studio was checking. Wait until it has finished.", "info", 5000);
+    return;
+  }
+  // the whole line, its ending left as it is: the line count does not change, so the marks and the row numbers of the run stay true
+  editor.pushUndoStop();
+  editor.executeEdits("replace-step", [{ range: new monaco.Range(check.line, 1, check.line, model.getLineMaxColumn(check.line)), text: check.text }]);
+  editor.pushUndoStop();
+  editor.setPosition({ lineNumber: check.line, column: 1 });
+  editor.revealLineInCenterIfOutsideViewport(check.line);
+  toast(`Line ${check.line} now uses the text the screen showed. Not saved, not run; Undo restores it. Run again to check it.`, "success", 7000);
 }
 
 async function gotoFailingLine(target: JumpTarget): Promise<void> {

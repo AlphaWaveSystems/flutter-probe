@@ -123,3 +123,46 @@ func TestAnUnreadableFolderIsReportedAsUnverifiable(t *testing.T) {
 		t.Error("Within must fail closed for an unreadable folder")
 	}
 }
+
+// A folder name is chosen by whoever made the folder and reaches a terminal in the message: it is printed on one line, with no control
+// character. The escape sequence is built from code points.
+func TestAFolderNameInAMessageCarriesNoControlCharacter(t *testing.T) {
+	esc := string(rune(0x1b))
+	root := filepath.Join(t.TempDir(), "repo"+esc+"[31m"+"\n"+"line")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "adb")
+	if err := os.WriteFile(outside, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := hasIdentity
+	t.Cleanup(func() { hasIdentity = old })
+	hasIdentity = func(string) bool { return false }
+	_, err := within(root, outside)
+	if err == nil {
+		t.Fatal("no identity must give an error")
+	}
+	if strings.ContainsAny(err.Error(), esc+"\n") || !strings.Contains(err.Error(), "repo [31m line") {
+		t.Errorf("message = %q", err.Error())
+	}
+}
+
+// A symlink loop: the message says what happened without filepath's own prefix.
+func TestASymlinkLoopIsReportedPlainly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	if err := os.Symlink(b, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(a, b); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Check(filepath.Join(a, "adb"), []string{"adb"}, t.TempDir(), runtime.GOOS)
+	if err == nil || strings.Contains(err.Error(), "EvalSymlinks") || !strings.HasPrefix(err.Error(), "where it is cannot be verified: ") {
+		t.Errorf("err = %v", err)
+	}
+}
