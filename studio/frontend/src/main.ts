@@ -13,6 +13,7 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { trapFocus } from "./modal-focus";
 import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
 import { askSaveAsName, initSaveAsDialog } from "./save-as-dialog";
@@ -1014,27 +1015,20 @@ function confirmExplainSend(p: ExplainPreview): Promise<boolean> {
   $("explain-preview-text").textContent = p.text;
   overlay.hidden = false;
   return new Promise((resolve) => {
+    // Cancel has the focus (the safe choice); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("btn-explain") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
+      release();
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
-      document.removeEventListener("keydown", onKey);
       dismissExplainConfirm = null;
       resolve(ok);
     };
     const onSend = () => finish(true);
     const onCancel = () => finish(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
-      if (e.key === "Tab") {
-        // the dialog is modal: Tab stays between its two buttons
-        e.preventDefault();
-        (document.activeElement === cancel ? send : cancel).focus();
-      }
-    };
     send.addEventListener("click", onSend);
     cancel.addEventListener("click", onCancel);
-    document.addEventListener("keydown", onKey);
     dismissExplainConfirm = () => finish(false);
   });
 }
@@ -1324,27 +1318,22 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   const cancel = $("btn-fix-preview-cancel");
   $("fix-preview-note").textContent = fixPreviewNote(p.hosted, p.attempt, p.maxAttempts);
   $("fix-preview-text").textContent = p.text;
-  const opener = document.activeElement as HTMLElement | null;
   overlay.hidden = false;
-  cancel.focus(); // the safe choice has the focus: Enter does not send
   return new Promise((resolve) => {
+    // the safe choice has the focus (Enter does not send); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("btn-fix") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
-      opener?.focus?.(); // the focus goes back to where it was
+      release();
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
-      document.removeEventListener("keydown", onKey);
       dismissFixConfirm = null;
       resolve(ok);
     };
     const onSend = () => finish(true);
     const onCancel = () => finish(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
-    };
     send.addEventListener("click", onSend);
     cancel.addEventListener("click", onCancel);
-    document.addEventListener("keydown", onKey);
     dismissFixConfirm = () => finish(false);
   });
 }
@@ -1386,8 +1375,11 @@ function confirmFirstChatSend(preview: string): Promise<boolean> {
   $("ai-preview-text").textContent = preview;
   overlay.hidden = false;
   return new Promise((resolve) => {
+    // Cancel has the focus (the safe choice); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("chat-input") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
+      release();
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
       resolve(ok);
