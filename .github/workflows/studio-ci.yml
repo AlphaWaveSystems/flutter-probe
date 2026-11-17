@@ -101,6 +101,9 @@ jobs:
       - name: Still waiting tests
         working-directory: studio/frontend
         run: npm run test:still-waiting
+      - name: Recording tests
+        working-directory: studio/frontend
+        run: npm run test:recording
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
