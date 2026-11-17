@@ -66,7 +66,7 @@ the radio's own group value when it has one and otherwise the nearest `RadioGrou
 | `TextButton` (`wf_text_button`) | pass (text) | pass | not assessed | partly |
 | `CupertinoButton` (`wf_cupertino_button`) | pass (text) | pass | not assessed | partly |
 | `ElevatedButton.icon` (`wf_with_icon`) | pass (the label's text) | pass | not assessed | partly |
-| `IconButton` with a tooltip (`wf_icon_button`) | pass (`#id` and the tooltip text `Add item`; the icon itself was not a selector) | pass (both) | not assessed | pass |
+| `IconButton` with a tooltip (`wf_icon_button`) | pass (`#id` and the tooltip text `Add item`; an icon glyph as a selector was not tried) | pass (both) | not assessed | pass |
 | `FloatingActionButton` with a tooltip (`wf_fab`) | pass (`#id` and the tooltip text `Compose`) | pass (both) | not assessed | pass |
 | disabled `ElevatedButton` (`wf_disabled`) | pass (text) | **a tap raises no error and changes nothing** (the count stays 0) | pass (`is disabled`; `is enabled` fails) | pass, with the finding below |
 | `ElevatedButton` with `onPressed` and `onLongPress` (`wf_long_press`) | pass (text) | pass (`tap` runs only the tap handler; `long press` runs only the long-press handler) | not assessed | pass |
