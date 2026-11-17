@@ -380,7 +380,8 @@ class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
 class DisplayFamilyScreen extends StatelessWidget {
   const DisplayFamilyScreen({super.key});
 
-  /// The text of the ellipsis line: longer than any phone screen is wide, so it is painted cut.
+  /// The text of the ellipsis line: chosen to be longer than a phone screen is wide, so it is painted cut (an inference from its length on
+  /// the two devices used; the agent does not report the painted width).
   static const longLine =
       'Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America';
 

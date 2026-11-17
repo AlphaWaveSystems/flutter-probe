@@ -16,16 +16,19 @@ test "the spans of a Text.rich are matched as one text, and each span as a part 
   see "Hello world"
   see "Hello"
   see "world"
+  see "Hello world" contains "world"
 
 test "the spans of a RichText are matched as one text, and each span as a part of it"
   see "Painted rich text"
   see "rich text"
+  see "Painted rich text" contains "rich text"
 
 # What a user sees is cut ("Shipping address: 1600 Amphitheatre…"), but the selector matches the widget's whole string, the cut part included:
 # `see` checks the text the app gave the widget, not what was painted.
 test "a Text cut with an ellipsis is matched by its whole string, the part that is not painted included"
   see "Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America"
   see "United States of America"
+  see "Shipping address" contains "United States of America"
 
 test "every text widget is found by its id"
   see #wf_text

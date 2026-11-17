@@ -81,14 +81,14 @@ Not covered by the screen: `ButtonBar` (deprecated in the catalog), `ToggleButto
 
 ### Text and display: text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
 
-Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 6 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 6 of 6 on each, each with the message its comment states.
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 9 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 9 of 9 on each, each with the message its comment states.
 
 | Widget (fixture id) | find | read | Result |
 |---|---|---|---|
 | `Text` (`wf_text`, `Order total: 42.00`) | pass (the whole text, a part of it, `#wf_text`) | pass (`see "Order total" contains "42.00"`; a value the text does not hold fails with the text it has) | pass |
-| `Text.rich` of two spans, `Hello ` and a bold `world` (`wf_rich`) | pass (`"Hello world"`: the spans are matched as one text; `"Hello"` and `"world"` as parts of it; `#wf_rich`) | pass | pass |
-| `RichText` of two spans, `Painted ` and `rich text` (`wf_richtext`) | pass (`"Painted rich text"`, `"rich text"`, `#wf_richtext`) | pass | pass |
-| `Text` with `maxLines: 1` and `TextOverflow.ellipsis`, longer than the screen (`wf_ellipsis`) | **the whole string is matched, the part that is not painted included** (`see "...United States of America"` passes; the painted, cut form with `…` does not); `#wf_ellipsis` | pass (the whole string) | pass, with the finding below |
+| `Text.rich` of two spans, `Hello ` and a bold `world` (`wf_rich`) | pass (`"Hello world"`: the spans are matched as one text; `"Hello"` and `"world"` as parts of it; `#wf_rich`) | pass (`see "Hello world" contains "world"`; the text read is the whole `Hello world`, as a failing `contains "earth"` shows) | pass |
+| `RichText` of two spans, `Painted ` and `rich text` (`wf_richtext`) | pass (`"Painted rich text"`, `"rich text"`, `#wf_richtext`) | pass (`see "Painted rich text" contains "rich text"`; `contains "plain text"` fails) | pass |
+| `Text` with `maxLines: 1` and `TextOverflow.ellipsis`, chosen longer than the screen is wide (an inference from its length; the agent does not report the painted width) (`wf_ellipsis`) | **the whole string is matched, the part that is not painted included** (`see "...United States of America"` passes; the painted, cut form with `…` does not); `#wf_ellipsis` | pass (`see "Shipping address" contains "United States of America"`: the text read is the whole string; `contains "Canada"` fails) | pass, with the finding below |
 
 **Findings.**
 - **A text selector matches the text the app gave the widget, not what is painted.** A `Text` cut with an ellipsis is found by its whole string, including the part a user cannot see, and not by the cut form shown on screen. A test that must show that a text is fully visible cannot rely on `see`.
