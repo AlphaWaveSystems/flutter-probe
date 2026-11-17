@@ -139,11 +139,11 @@ function main() {
   const read = a.rows.filter((x) => x.r !== null);
   for (const x of read.filter((x) => !failOnly || x.r < 4.5)) console.log(`${x.r.toFixed(2).padStart(6)}  ${x.r < 3 ? "FAIL(<3)  " : x.r < 4.5 ? "below 4.5 " : "ok        "} [${x.kind}] ${x.where}  ${x.fg} on ${x.bg}`);
   const below = read.filter((x) => x.r < 4.5);
-  console.log(`\n${read.length} pairs read; ${below.length} below 4.5:1 (${read.filter((x) => x.r < 3).length} below 3:1); ${a.skipped.length} rules skipped because a colour could not be read`);
+  console.log(`\n${read.length} rows read (${read.filter((x) => x.kind === "token").length} token-on-surface rows and ${read.filter((x) => x.kind === "rule").length} rule rows; one colour pair can be in both); ${below.length} below 4.5:1 (${read.filter((x) => x.r < 3).length} below 3:1); ${a.skipped.length} rules skipped because a colour could not be read`);
   for (const s of a.skipped) console.log(`  skipped: ${s.where}: ${s.reason}`);
   if (args.includes("--suggest")) suggest(a);
   if (maxBelow !== null && below.length > maxBelow) {
-    console.error(`${below.length} pairs below 4.5:1, more than the ${maxBelow} allowed`);
+    console.error(`${below.length} rows below 4.5:1, more than the ${maxBelow} allowed`);
     process.exit(1);
   }
 }

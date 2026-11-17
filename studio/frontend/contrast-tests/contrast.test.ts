@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 // @ts-ignore: a plain .mjs tool with no declaration file
 import { analyse, parse, ratio } from "../tools/contrast.mjs";
 
@@ -11,6 +13,22 @@ describe("the formula", () => {
     near(ratio("#777777", "#ffffff"), 4.48);
     near(ratio("#767676", "#ffffff"), 4.54);
     near(ratio("#000000", "#000000"), 1);
+  });
+  it("uses the linear segment of the sRGB curve for a dark channel (10/255 and below)", () => {
+    // a channel value of 10 is below the 0.03928 knee: it is divided by 12.92, not raised to 2.4. #0a0a0a luminance = (10/255)/12.92
+    const lum = 10 / 255 / 12.92;
+    near(ratio("#ffffff", "#0a0a0a"), (1 + 0.05) / (lum + 0.05));
+    // and 11/255 is just above it: the power curve, a value the linear segment would get wrong
+    const above = ((11 / 255 + 0.055) / 1.055) ** 2.4;
+    near(ratio("#ffffff", "#0b0b0b"), (1 + 0.05) / (above + 0.05));
+  });
+  it("composites a translucent text colour over the background", () => {
+    // 50% white text on a black background is a mid grey, so far below white on black
+    const half = ratio("rgba(255,255,255,0.5)", "#000000");
+    assert.ok(half < ratio("#ffffff", "#000000") && half > 1, `${half}`);
+    // the same text on a lighter background is lower again
+    assert.ok(ratio("rgba(255,255,255,0.5)", "#555555") < half);
+    near(ratio("rgba(255,255,255,0)", "#000000"), 1); // invisible text is the background
   });
   it("reads the colours the stylesheet writes", () => {
     assert.deepEqual(parse("#fff"), { r: 255, g: 255, b: 255, a: 1 });
@@ -76,5 +94,23 @@ describe("analyse", () => {
     assert.ok(a.rows.some((r: { where: string }) => r.where === "--dim on --bg-1"));
     assert.ok(!a.rows.some((r: { where: string }) => r.where.startsWith("--fill on") || r.where.startsWith("--bg-1 on")));
     near(row(".dark-on-fill").r, ratio("#111111", "#3b82f6")); // the surface used as text is judged where a rule sets it
+  });
+});
+
+describe("the command line", () => {
+  const run = (...args: string[]) => spawnSync(process.execPath, [fileURLToPath(new URL("../tools/contrast.mjs", import.meta.url)), ...args], { encoding: "utf8" });
+  it("is a report: it exits 0 without --max-below, whatever it finds", () => {
+    const r = run();
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /rows read .*; \d+ below 4\.5:1/);
+  });
+  it("exits 1 with --max-below when more rows are below 4.5:1 than allowed, and 0 when the limit is met", () => {
+    const m = /(\d+) below 4\.5:1/.exec(run().stdout);
+    assert.ok(m, "no total line");
+    const n = Number(m[1]);
+    assert.ok(n > 0);
+    assert.equal(run("--max-below", String(n - 1)).status, 1);
+    assert.match(run("--max-below", String(n - 1)).stderr, /more than the/);
+    assert.equal(run("--max-below", String(n)).status, 0);
   });
 });

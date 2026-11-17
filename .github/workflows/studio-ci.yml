@@ -113,6 +113,9 @@ jobs:
       - name: Typing target tests
         working-directory: studio/frontend
         run: npm run test:typing-target
+      - name: Modal focus tests
+        working-directory: studio/frontend
+        run: npm run test:modal-focus
       - name: Contrast tool tests
         working-directory: studio/frontend
         run: npm run test:contrast

@@ -223,6 +223,7 @@ fi'
   step frontend studio/frontend 'npm run test:connect-failure'
   step frontend studio/frontend 'npm run test:save-as'
   step frontend studio/frontend 'npm run test:typing-target'
+  step frontend studio/frontend 'npm run test:modal-focus'
   step frontend studio/frontend 'npm run test:contrast'
   step frontend studio/frontend 'npm run check:probescript'
 
