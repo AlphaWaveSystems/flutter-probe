@@ -61,6 +61,10 @@ void main() {
     final r = await _rpc();
     expect(jsonEncode(r), isNot(contains('zq-secret-9')));
     expect(r['editable_texts'], ['visible value']);
+    expect(r['counts'],
+        {'texts': 1, 'keys': 0, 'editable_texts': 1, 'rich_texts': 0},
+        reason:
+            'an obscured field is not counted either: a count must not reveal that it holds a value');
   });
 
   testWidgets(
