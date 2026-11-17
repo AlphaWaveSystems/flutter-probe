@@ -656,7 +656,11 @@ class ProbeExecutor {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_screenFingerprint() != before) return;
       }
-      _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
+      _tapWarning = _ignoreCutsOwnHandler(box)
+          ? 'tap target ${_selDesc(sel)} is inside an IgnorePointer, so it receives no taps; the tap at '
+              '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}) did nothing and the screen did not change'
+              '${_visibleHint()}'
+          : 'tap target ${_selDesc(sel)} is covered by another widget at '
           '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top '
           'and the screen did not change (topmost hit: ${_hitPathDesc(warnCenter)})'
           '${_keyboardHint()}'
@@ -770,6 +774,28 @@ class ProbeExecutor {
     }
   }
 
+  /// Whether [r] or anything inside it takes pointers (a button's own InkWell under the matched button).
+  bool _subtreeHandlesPointer(RenderObject r) {
+    if (_handlesPointer(r)) return true;
+    var found = false;
+    r.visitChildren((c) {
+      if (!found && _subtreeHandlesPointer(c)) found = true;
+    });
+    return found;
+  }
+
+  /// Whether an [IgnorePointer] that ignores cut off a handler of [r]'s own: one inside [r], or between [r] and the IgnorePointer (a
+  /// button's InkWell). Only then is "it receives no taps" true; a passive label inside an IgnorePointer under a tile that takes the tap
+  /// does receive it (issue #842).
+  bool _ignoreCutsOwnHandler(RenderObject r) {
+    var handlerBelow = _subtreeHandlesPointer(r);
+    for (RenderObject? c = r; c != null; c = c.parent) {
+      if (_handlesPointer(c)) handlerBelow = true;
+      if (c is RenderIgnorePointer && c.ignoring && handlerBelow) return true;
+    }
+    return false;
+  }
+
   bool _handlesPointer(RenderObject r) =>
       r is RenderPointerListener || r is RenderMouseRegion || r is RenderSemanticsGestureHandler;
 
@@ -793,9 +819,20 @@ class ProbeExecutor {
     // something that handles taps (a parent GestureDetector/InkWell). Stopping
     // at a passive container or the root view means nothing received the tap
     // at that point (clipped away, off screen, under the keyboard).
+    // A widget inside an IgnorePointer is skipped by the hit test, which then stops at whatever takes pointers below it, often a
+    // scrollable's own listener around it. That is not a parent handling the tap when the IgnorePointer cut off a handler of the target's
+    // own (in the target, or between it and the IgnorePointer: a button's InkWell): then the hit is unrelated (issue #842). A passive
+    // label inside an IgnorePointer, under a parent GestureDetector that takes the tap, stays related.
     if (!related && _handlesPointer(deepest)) {
+      var handlerBelow = _subtreeHandlesPointer(target);
+      var ignoredOnTheWay = false;
       for (RenderObject? c = target; c != null; c = c.parent) {
-        if (identical(c, deepest)) related = true;
+        if (identical(c, deepest)) {
+          related = !ignoredOnTheWay;
+          break;
+        }
+        if (_handlesPointer(c)) handlerBelow = true;
+        if (c is RenderIgnorePointer && c.ignoring && handlerBelow) ignoredOnTheWay = true;
       }
     }
     return (strict: strict, related: related);
