@@ -549,6 +549,7 @@ async function saveAsInner(): Promise<void> {
   await refreshFiles(dir);
   document.querySelectorAll("#file-list li").forEach((li) => li.classList.toggle("active", (li as HTMLElement).dataset.path === path));
   toast(`Saved ${path}`, "success", 1800);
+  editor.focus(); // the file is open and saved: the person goes on typing in it (Save is disabled again, so the focus cannot go back to it)
 }
 
 async function saveCurrent() {
@@ -2671,6 +2672,7 @@ async function openApiKeyOverlay() {
 
 function closeApiKeyOverlay() {
   $("api-key-overlay").hidden = true;
+  ($("api-key-input") as HTMLInputElement).value = ""; // a key typed and not saved does not stay in the page after Escape or Cancel
   releaseFocus("api-key-overlay");
 }
 

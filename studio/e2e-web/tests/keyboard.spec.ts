@@ -36,6 +36,21 @@ const FIRST: Record<string, string> = {
   "#send-allow-overlay": "#btn-send-allow-cancel", // never Allow and send
 };
 
+// Each overlay is a named dialog to assistive technology: its role and its accessible name. The questions with a sending, discarding or wiping answer are alert dialogs.
+const DIALOG: Record<string, { role: "dialog" | "alertdialog"; name: RegExp }> = {
+  "#help-overlay": { role: "dialog", name: /Keyboard shortcuts/ },
+  "#settings-overlay": { role: "dialog", name: /Workspace settings/ },
+  "#wifi-overlay": { role: "dialog", name: /WiFi devices/ },
+  "#api-key-overlay": { role: "dialog", name: /Anthropic API key/ },
+  "#fix-preview-overlay": { role: "dialog", name: /Before Suggest a fix/ },
+  "#explain-preview-overlay": { role: "dialog", name: /Before Explain/ },
+  "#ai-preview-overlay": { role: "dialog", name: /Before this message/ },
+  "#save-as-overlay": { role: "dialog", name: /Save as a new file/ },
+  "#discard-overlay": { role: "alertdialog", name: /Discard unsaved changes/ },
+  "#confirm-overlay": { role: "alertdialog", name: /Clear app data/ },
+  "#send-allow-overlay": { role: "alertdialog", name: /Send requests/ },
+};
+
 async function measure(page: Page, overlay: string, opener: string, open: () => Promise<void>) {
   const box = page.locator(overlay);
   const inside = () => page.evaluate((sel) => !!document.querySelector(sel)?.contains(document.activeElement), overlay);
@@ -44,6 +59,9 @@ async function measure(page: Page, overlay: string, opener: string, open: () => 
   await open();
   await expect(box, `${overlay} did not open`).toBeVisible();
   const focusIn = await inside();
+  const d = DIALOG[overlay];
+  await expect(page.getByRole(d.role, { name: d.name }), `${overlay.slice(1)}: is a ${d.role} named ${d.name}`).toBeVisible();
+  expect(await page.getByRole(d.role, { name: d.name }).getAttribute("aria-modal"), `${overlay.slice(1)}: aria-modal`).toBe("true");
   const first = FIRST[overlay];
   expect(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), first), `${overlay.slice(1)}: the focus starts on ${first}`).toBe(true);
   await page.keyboard.press("Escape");
@@ -190,5 +208,19 @@ test.describe("Keyboard behaviour of the 11 overlays (4 properties each)", () =>
     await measure(page, "#send-allow-overlay", "#btn-send", async () => {
       await page.click("#btn-send");
     });
+  });
+
+  test("kbd-12 a key typed in the API-key form and not saved does not stay in the page after Escape or Cancel", async ({ page }) => {
+    await openStudio(page);
+    await page.locator("body").press("ControlOrMeta+Shift+a");
+    for (const close of ["Escape", "Cancel"]) {
+      await page.click("#btn-chat-key");
+      await expect(page.locator("#api-key-overlay")).toBeVisible();
+      await page.fill("#api-key-input", "sk-ant-typed-and-not-saved");
+      if (close === "Escape") await page.keyboard.press("Escape");
+      else await page.click("#btn-api-key-close");
+      await expect(page.locator("#api-key-overlay")).toBeHidden();
+      expect(await page.inputValue("#api-key-input"), `after ${close}`).toBe("");
+    }
   });
 });
