@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -158,6 +160,9 @@ func TestALaneAnswersClearBeforeEachTestOnlyWithYes(t *testing.T) {
 			}
 		}
 	})
+	if !strings.Contains(out, "BEFORE EVERY TEST on this device") || strings.Contains(out, "of this run") { // it is a line per device (a lane prints its own), not per run
+		t.Errorf("the line should say the wipe is per device, not per run: %q", out)
+	}
 	if strings.Count(out, "BEFORE EVERY TEST") != 1 || !strings.Contains(out, "com.example.app") || !strings.Contains(out, "R58M123ABC") {
 		t.Errorf("the log line should name the package and device once for 3 tests: %q", out)
 	}
@@ -228,4 +233,57 @@ func TestThePerTestQuestionCarriesTheSharedIOSKeychainSentence(t *testing.T) {
 			t.Errorf("%s: hint = %v", tc.platform, hint)
 		}
 	}
+}
+
+// The refusal hint cleans the app id like the question does: no control or direction character and no unbounded length reaches the line.
+func TestTheRefusalHintCleansTheAppID(t *testing.T) {
+	dc := &DeviceContext{AppID: "a.b\nFAKE\x1b[2J\u202e" + strings.Repeat("x", 500), Serial: "s"}
+	for _, perTest := range []bool{true, false} {
+		err := dc.AskClearData(perTest)
+		if err == nil {
+			t.Fatal("no confirmation and no --yes was allowed")
+		}
+		msg := err.Error()
+		if strings.ContainsAny(msg, "\n\x1b\u202e") || len([]rune(msg)) > 700 {
+			t.Errorf("perTest=%v: the hint carries the raw app id: %q", perTest, msg)
+		}
+	}
+}
+
+// The question of the before-each-test wipe says when it happens, and IsBeforeEachTestQuestion tells it from a `clear app data` step's.
+func TestTheBeforeEachQuestionIsToldFromAStepQuestion(t *testing.T) {
+	var perTest, step string
+	(&DeviceContext{AppID: "a.b", Serial: "s", Confirm: func(m string) bool { perTest = m; return false }}).AskClearData(true)
+	(&DeviceContext{AppID: "a.b", Serial: "s", Confirm: func(m string) bool { step = m; return false }}).AskClearData(false)
+	if !IsBeforeEachTestQuestion(perTest) || IsBeforeEachTestQuestion(step) {
+		t.Errorf("per-test %v, step %v: %q / %q", IsBeforeEachTestQuestion(perTest), IsBeforeEachTestQuestion(step), perTest, step)
+	}
+}
+
+// Every message of the wipe gates and the wipe itself shows the app id and the device as one clean bounded line: the step's question, the
+// reinstall's question and hint, and the line that says what is being cleared.
+func TestEveryWipeMessageCleansTheAppIDAndTheDevice(t *testing.T) {
+	bad := "a.b\nFAKE\x1b[2J\u202e" + strings.Repeat("x", 300)
+	check := func(label, s string) {
+		t.Helper()
+		// the questions have one fixed line break of their own; nothing else may break a line, and nothing is cut by the raw ids
+		clean := strings.ReplaceAll(strings.ReplaceAll(s, "\n  SharedPreferences", " SharedPreferences"), "\n  This wipes", " This wipes")
+		if strings.ContainsAny(clean, "\n\x1b\u202e") || strings.Contains(s, strings.Repeat("x", 100)) {
+			t.Errorf("%s carries the raw app id or serial: %q", label, s)
+		}
+	}
+	for _, perTest := range []bool{false, true} {
+		var q string
+		(&DeviceContext{AppID: bad, Serial: bad, Platform: "android", Confirm: func(m string) bool { q = m; return false }}).AskClearData(perTest)
+		check(fmt.Sprintf("question perTest=%v", perTest), q)
+		check("hint", (&DeviceContext{AppID: bad, Serial: bad}).AskClearData(perTest).Error())
+	}
+	var rq string
+	(&DeviceContext{AppID: bad, Serial: bad, Confirm: func(m string) bool { rq = m; return false }}).AskReinstallForNotifications()
+	check("reinstall question", rq)
+	check("reinstall hint", (&DeviceContext{AppID: bad, Serial: bad}).AskReinstallForNotifications().Error())
+	out := captureStdout(t, func() {
+		_ = (&DeviceContext{AppID: bad, Serial: bad, Platform: "other"}).clearAppData(context.Background())
+	})
+	check("the clearing line", strings.TrimSuffix(regexp.MustCompile("\x1b\\[[0-9;]*m").ReplaceAllString(out, ""), "\n")) // the line's own colours and line end are not the ids'
 }

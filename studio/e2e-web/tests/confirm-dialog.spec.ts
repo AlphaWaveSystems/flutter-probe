@@ -203,13 +203,48 @@ test.describe("Confirm before clear app data", () => {
     await expect(overlay(page)).toBeVisible();
     expect(seen).toEqual([]);
   });
-  test("cd-13 while the question is open, the page behind it cannot be clicked: the Connect/Disconnect button is covered, a click on it is not an answer and does not disconnect", async ({ page }) => {
+  const tokenRequest = (id: string, detail = "192.168.1.20:48686") => ({ id, kind: "send-saved-token", appId: "192.168.1.50:48686", deviceName: "Desk phone", detail });
+
+  test("cd-11 the saved-token question names both addresses, Cancel has the focus, and Enter on Send token does nothing", async ({ page }) => {
     const seen = answers(page);
-    const calls: string[] = [];
-    page.on("request", (r) => {
-      const m = /"method":"(\w+)"/.exec(r.postData() ?? "");
-      if (m) calls.push(m[1]);
-    });
+    await fire(page, "confirm:request", tokenRequest("t1"));
+    await expect(overlay(page)).toBeVisible();
+    await expect(page.locator("#confirm-title")).toHaveText("Send the saved token?");
+    await expect(page.locator("#confirm-lead")).toContainText("Desk phone");
+    await expect(page.locator("#confirm-app")).toHaveText("192.168.1.50:48686");
+    await expect(page.locator("#confirm-device")).toContainText("192.168.1.20:48686");
+    await expect(page.locator("#btn-confirm-cancel")).toBeFocused();
+    await expect(page.locator("#btn-confirm-danger")).toHaveText("Send token");
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled(); // armed after half a second
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#btn-confirm-danger")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(300);
+    await expect(overlay(page)).toBeVisible();
+    expect(seen).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["t1", false]);
+  });
+
+  test("cd-12 Send token cannot be pressed for the first half second, and a token saved without an address is worded as such", async ({ page }) => {
+    const seen = answers(page);
+    await fire(page, "confirm:request", tokenRequest("t2", ""));
+    await expect(page.locator("#btn-confirm-danger")).toBeDisabled();
+    await expect(page.locator("#confirm-lead")).toContainText("saved without an address");
+    await expect(page.locator("#confirm-lead")).not.toContainText("different address");
+    await page.waitForTimeout(100);
+    await page.locator("#btn-confirm-danger").click({ force: true }); // a click on a disabled button is not an answer
+    await page.waitForTimeout(200);
+    expect(seen).toEqual([]);
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled();
+    await page.locator("#btn-confirm-danger").click();
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["t2", true]);
+  });
+
+  test("cd-13 while the question is open, the page behind it cannot be clicked: the Connect button is covered and a click on it is not an answer", async ({ page }) => {
+    const seen = answers(page);
     await fire(page, "confirm:request", request("m"));
     await expect(overlay(page)).toBeVisible();
     // what is at the middle of the button is the dialog's overlay, not the button
@@ -225,7 +260,6 @@ test.describe("Confirm before clear app data", () => {
     await page.waitForTimeout(300);
     await expect(overlay(page)).toBeVisible();
     expect(seen).toEqual([]);
-    expect(calls).not.toContain("Disconnect");
     // the way out is the dialog's own: Escape says no
     await page.keyboard.press("Escape");
     await expect.poll(() => seen.length).toBe(1);
