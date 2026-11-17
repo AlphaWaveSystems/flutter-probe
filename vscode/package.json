@@ -430,6 +430,7 @@
         },
         "flutterprobe.cloudProvider": {
           "type": "string",
+          "scope": "machine",
           "default": "",
           "enum": [
             "",
@@ -447,7 +448,7 @@
             "AWS Device Farm",
             "Firebase Test Lab (deprecated by Google)"
           ],
-          "description": "Cloud device farm provider for remote testing"
+          "description": "Cloud device farm provider for remote testing. User or remote settings only: the cloud key and secret are sent to it"
         },
         "flutterprobe.cloudDevice": {
           "type": "string",
@@ -474,7 +475,8 @@
         "flutterprobe.relayUrl": {
           "type": "string",
           "default": "",
-          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers)"
+          "scope": "machine",
+          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers). User or remote settings only: the relay token is sent to it"
         },
         "flutterprobe.deviceView.fps": {
           "type": "number",

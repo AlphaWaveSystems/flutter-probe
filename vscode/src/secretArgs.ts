@@ -25,6 +25,30 @@ export function secretEnv(values: SecretValues): Record<string, string> {
   return env;
 }
 
+// withoutSecrets is the options with the three secrets taken out, so they cannot reach the argument builder.
+export function withoutSecrets<T extends SecretValues>(o: T): Omit<T, keyof SecretValues> {
+  const { cloudKey: _k, cloudSecret: _s, relayToken: _t, ...rest } = o;
+  return rest;
+}
+
+// The settings that are a secret, or that decide where a secret is sent: the relay URL receives the relay CLI token, and the provider
+// receives the cloud key and secret. All are machine-scoped (package.json), so a workspace's .vscode/settings.json cannot set them.
+export const SECRET_SETTINGS = ['cloudKey', 'cloudSecret', 'relayToken', 'relayUrl', 'cloudProvider'] as const;
+
+// staleWorkspaceSettings returns the machine-scoped settings that a workspace's settings.json still names. VS Code ignores them there, so
+// the extension says so once instead of dropping them silently. A textual match is enough for a notice: the file is JSON with comments.
+export function staleWorkspaceSettings(settingsText: string, keys: readonly string[]): string[] {
+  return keys.filter(k => new RegExp(`"flutterprobe\\.${k}"\\s*:`).test(settingsText));
+}
+
+// terminalAction decides whether a named terminal can be reused for a run: only when it is alive and was made with the same secrets,
+// since a terminal's environment is fixed when it is created.
+export function terminalAction(existing: { alive: boolean; fingerprint: string } | undefined, env: Record<string, string>): 'reuse' | 'replace' | 'create' {
+  if (!existing) { return 'create'; }
+  if (existing.alive && existing.fingerprint === envFingerprint(env)) { return 'reuse'; }
+  return existing.alive ? 'replace' : 'create';
+}
+
 // secretFlagIn returns the first secret flag in a command line (`--cloud-key` or `--cloud-key=...`), or undefined when there is none.
 export function secretFlagIn(args: readonly string[]): string | undefined {
   const flags = Object.values(SECRET_ENV).map(s => s.flag);

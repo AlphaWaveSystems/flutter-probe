@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { envFingerprint, secretFlagIn } from '../secretArgs';
+import { envFingerprint, secretFlagIn, terminalAction } from '../secretArgs';
 
 // Each terminal with the fingerprint of the environment it was made with: a terminal's environment is fixed when it is created, so a run
 // whose secrets differ gets a new terminal.
@@ -8,16 +8,16 @@ const terminals = new Map<string, { terminal: vscode.Terminal; env: string }>();
 export function getOrCreateTerminal(name: string, cwd?: string, env: Record<string, string> = {}): vscode.Terminal {
   const fingerprint = envFingerprint(env);
   const existing = terminals.get(name);
-  if (existing) {
-    // Check if the terminal is still alive
-    const alive = vscode.window.terminals.includes(existing.terminal);
-    if (alive && existing.env === fingerprint) {
-      existing.terminal.show();
-      return existing.terminal;
-    }
-    if (alive) { existing.terminal.dispose(); }
-    terminals.delete(name);
+  const action = terminalAction(
+    existing && { alive: vscode.window.terminals.includes(existing.terminal), fingerprint: existing.env },
+    env,
+  );
+  if (existing && action === 'reuse') {
+    existing.terminal.show();
+    return existing.terminal;
   }
+  if (existing && action === 'replace') { existing.terminal.dispose(); }
+  terminals.delete(name);
 
   const terminal = vscode.window.createTerminal({
     name,

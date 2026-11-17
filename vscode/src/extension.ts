@@ -20,8 +20,33 @@ import { runInTerminal } from './terminal/probeTerminal';
 import { getWorkspaceRoot } from './config';
 import { disposeAllTerminals } from './terminal/probeTerminal';
 import { Session } from './types';
+import { SECRET_SETTINGS, staleWorkspaceSettings } from './secretArgs';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// noticeStaleWorkspaceSettings says once per workspace that machine-scoped settings in its .vscode/settings.json are ignored. VS Code
+// drops them without a word; a user who had them there would otherwise see cloud runs fail with no reason.
+function noticeStaleWorkspaceSettings(context: vscode.ExtensionContext): void {
+  const ws = getWorkspaceRoot();
+  if (!ws || context.workspaceState.get<boolean>('flutterprobe.staleSettingsNoticed')) { return; }
+  let text = '';
+  try {
+    text = fs.readFileSync(path.join(ws, '.vscode', 'settings.json'), 'utf8');
+  } catch {
+    return;
+  }
+  const stale = staleWorkspaceSettings(text, SECRET_SETTINGS);
+  if (stale.length === 0) { return; }
+  void context.workspaceState.update('flutterprobe.staleSettingsNoticed', true);
+  void vscode.window.showWarningMessage(
+    `FlutterProbe ignores ${stale.map(k => 'flutterprobe.' + k).join(', ')} in this workspace's .vscode/settings.json: ` +
+    'they can be set only in your user settings now, so a repository cannot set where secrets go. Move them to your user settings.',
+  );
+}
 
 export function activate(context: vscode.ExtensionContext): void {
+  noticeStaleWorkspaceSettings(context);
+
   // Register all command groups
   registerTestCommands(context);
   registerLintCommands(context);

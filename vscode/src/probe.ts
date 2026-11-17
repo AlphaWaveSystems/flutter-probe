@@ -1,7 +1,7 @@
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { getProbePath, getConvertPath, getSetting, getWorkspaceRoot } from './config';
-import { secretEnv } from './secretArgs';
+import { SecretValues, secretEnv, withoutSecrets } from './secretArgs';
 import { CommandResult, Device, LintResult } from './types';
 
 export function runCommand(
@@ -153,10 +153,7 @@ export function buildTestArgs(
     cloudProvider?: string;
     cloudDevice?: string;
     cloudApp?: string;
-    cloudKey?: string;
-    cloudSecret?: string;
     relayUrl?: string;
-    relayToken?: string;
   }
 ): string[] {
   const args = ['test', filePath];
@@ -241,10 +238,10 @@ export interface TestRun {
 
 // buildTestRun is the command line of `probe test` and the environment of its terminal. The cloud key, the cloud secret and the relay
 // token, from the options or the settings, are in env and never in args.
-export function buildTestRun(filePath: string, options?: Parameters<typeof buildTestArgs>[1]): TestRun {
+export function buildTestRun(filePath: string, options?: Parameters<typeof buildTestArgs>[1] & SecretValues): TestRun {
   const o = options ?? {};
   return {
-    args: buildTestArgs(filePath, o),
+    args: buildTestArgs(filePath, withoutSecrets(o)),
     env: secretEnv({
       cloudKey: o.cloudKey ?? getSetting<string>('cloudKey'),
       cloudSecret: o.cloudSecret ?? getSetting<string>('cloudSecret'),
