@@ -518,7 +518,9 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       // the person saves: that is the only write
       await page.click("#btn-save");
       await expect.poll(() => calls.WriteFile ?? 0).toBe(1);
-      expect(fs.readFileSync(loginFile(), "utf8")).toContain('tap "Sign in now"');
+      // the request is counted when it is sent, not when Studio has finished writing: Save writes a new file, flushes it and renames it over the old one, so the
+      // file is read until it holds the text (a read right after the request saw the old file on a busy machine)
+      await expect.poll(() => fs.readFileSync(loginFile(), "utf8")).toContain('tap "Sign in now"');
       // no device in this suite: the next reason is the missing connection, and still nothing runs
       await expect(page.locator("#fix-rerun-hint")).toContainText("Connect a device");
       await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
