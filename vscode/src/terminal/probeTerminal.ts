@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { secretFlagIn } from '../secretArgs';
-import { RunQueue } from './processRun';
+import { RunQueue, waitAll } from './processRun';
 
 // What a terminal keeps of the output written before VS Code opens it.
 const MAX_EARLY = 1024 * 1024;
@@ -90,6 +90,5 @@ export function stopAllTerminals(): Promise<void> {
     terminals.delete(name);
   }
   // A process that never reports its exit does not hold the window open: the wait ends 2 s after the SIGKILL in any case.
-  const cap = new Promise<void>(resolve => setTimeout(resolve, DEACTIVATE_GRACE_MS + 2000));
-  return Promise.race([Promise.all(ended).then(() => undefined), cap]);
+  return waitAll(ended, DEACTIVATE_GRACE_MS + 2000);
 }

@@ -18,6 +18,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
 
 // Names are the file names a tool may have on goos. On Windows adb is adb.exe, and the Flutter SDK's launcher is flutter.bat.
@@ -171,18 +173,18 @@ func Within(folder, p string) bool {
 func within(folder, p string) (bool, error) {
 	want, err := os.Stat(folder)
 	if err != nil {
-		return false, fmt.Errorf("%s cannot be read (%s)", folder, reason(err))
+		return false, fmt.Errorf("%s cannot be read (%s)", shownPath(folder), reason(err))
 	}
 	if !hasIdentity(folder) {
-		return false, fmt.Errorf("%s has no file identity to compare", folder)
+		return false, fmt.Errorf("%s has no file identity to compare", shownPath(folder))
 	}
 	for d := filepath.Clean(p); ; {
 		info, err := os.Stat(d)
 		if err != nil {
-			return false, fmt.Errorf("%s cannot be read (%s)", d, reason(err))
+			return false, fmt.Errorf("%s cannot be read (%s)", shownPath(d), reason(err))
 		}
 		if !hasIdentity(d) {
-			return false, fmt.Errorf("%s has no file identity to compare", d)
+			return false, fmt.Errorf("%s has no file identity to compare", shownPath(d))
 		}
 		if os.SameFile(info, want) {
 			return true, nil
@@ -201,7 +203,14 @@ func reason(err error) string {
 	if errors.As(err, &pe) {
 		return pe.Err.Error()
 	}
-	return err.Error()
+	// filepath.EvalSymlinks names itself in some errors ("EvalSymlinks: too many links" for a symlink loop).
+	return strings.TrimPrefix(err.Error(), "EvalSymlinks: ")
+}
+
+// shownPath is a folder path as the message prints it: one line, with no control or hidden character (a folder name is chosen by
+// whoever made the folder, and the message reaches a terminal).
+func shownPath(p string) string {
+	return oneline.Clean(p, 300)
 }
 
 // IsUnder says whether p is root or inside it.
