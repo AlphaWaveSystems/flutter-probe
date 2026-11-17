@@ -89,6 +89,11 @@ let pendingRows: HTMLElement[] = [];
 // steps still to come would be drawn at the old line numbers on the changed text.
 let runGoing = false;
 
+/** Whether a run is going, as the run events say (run:started until run:finished): the window's own flag is set only by its own Run buttons, so a run started elsewhere (an automation client) is seen here only. */
+export function runIsGoing(): boolean {
+  return runGoing;
+}
+
 function setInsertButtons(): void {
   document.querySelectorAll<HTMLButtonElement>("#results-list .triage-insert").forEach((b) => {
     b.disabled = runGoing;
