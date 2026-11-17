@@ -13,8 +13,8 @@
 //   - links an Apply control (a link to this repository's new-issue form, or whose label is "Apply", "Apply now", "Apply as a design
 //     partner", "Apply by email"...) anywhere but the design-partner form (extra query parameters allowed) or the support address,
 //   - names a feature that is not built or an offer that waits for the legal review, as a claim (BANNED; a refund is named only next to
-//     the link to the refund policy, in its paragraph or <details> block; "upload" and "any CI" in one paragraph that does not say
-//     "GitHub Actions only"),
+//     the refund policy (its link, or the word "policy"), in its paragraph or <details> block; "upload" and "any CI" in one paragraph
+//     that does not say where uploads work ("GitHub Actions" with "only", "today" or "for now")),
 //   - has a structured-data Offer or AggregateOffer (JSON-LD, in the front matter or a script) with a price that is not an available
 //     plan's, or with none,
 //   - or claims a gate ("quality gate", "gate your pull requests", "release gating": not "gateway", "Gated", "Bill Gates").
@@ -48,10 +48,10 @@ export const BANNED = [
   [/\bpay[- ]per[- ]use\b/i, 'pay-per-use is not buyable'],
   [/\bcosts? extra\b/i, 'no price is announced for anything billed separately'],
   [/\bcancel (?:at )?any ?time\b/i, 'cancellation terms wait for the legal review'],
-  [/\b14[- ]?days?\b(?=[^.!?\n]{0,40}\b(?:refund|money|trial|guarantee)\b)|\bmoney[- ]back\b/i, 'refund terms wait for the legal review'],
+  [/\b14[- ]?days?\b(?=[^.!?\n]{0,40}\b(?:refund|money|trial|guarantee)\b)|(?<!\b(?:no|not|never|without)\s+(?:a\s+|any\s+)?)\bmoney[- ]back\b/i, 'refund terms wait for the legal review'],
 ];
 // A gate as a claim about what the product does to pull requests, merges or releases. "Gated builds" (a CI term) is not one.
-const GATE = /\b(?:quality|merge|release|deploy(?:ment)?|ci|pr|build|hosted|commit)\s+gat(?:e|es|ing)\b|\bgat(?:e|es|ed|ing)\s+(?:on\s+|your\s+|the\s+|every\s+|each\s+)?(?:pull\s+requests?|prs?|merges?|deploys?|deployments?|releases?|commits?)\b/gi;
+const GATE = /\b(?:quality|merge|release|deploy(?:ment)?|ci|pr|build|hosted|commit)\s+gat(?:e|es|ing)\b|\bgat(?:e|es|ed|ing)\s+(?:(?:on|your|the|every|each|all|of|our)\s+){0,3}(?:pull\s+requests?|prs?|merges?|deploys?|deployments?|releases?|commits?)\b/gi;
 const BUY_WORD = /\b(?:start|subscribe|checkout|check out|buy|purchase|upgrade)\b/i;
 const BUY_LABEL = /^(?:start|subscribe|checkout|check out|buy|purchase|upgrade)(?:\s+(?:now|today|team|scale|free|on-the-go|plan|the plan))*[.!]?$/i;
 const CHECKOUT_HREF = /checkout|billing|subscribe|purchase|stripe|\/buy\b|\/pay\b/i;
@@ -314,22 +314,23 @@ export function checkPage(file, raw, plans, apply) {
   for (const [re, why] of BANNED) {
     for (const m of text.matchAll(new RegExp(re.source, 'gi'))) at(m.index, m[0], why);
   }
-  // A refund is named only next to the refund policy: the terms wait for the legal review. Next to it is the same paragraph, or the same
-  // <details> block (a question and its answer).
-  for (const m of text.matchAll(/\brefund(?:s|ed|able)?\b/gi)) {
+  // A refund is named only next to the refund policy (a link to /refunds/, or a paragraph that names the policy): the terms wait for the
+  // legal review. Next to it is the same paragraph, or the same <details> block (a question and its answer). "Non-refundable" is not an
+  // offer of one.
+  for (const m of text.matchAll(/(?<!\bnon-)\brefund(?:s|ed|able)?\b/gi)) {
     const [s, e] = paragraphAt(src0, m.index);
     const open = src0.lastIndexOf('<details', m.index);
     const close = open >= 0 ? src0.indexOf('</details>', m.index) : -1;
     const inDetails = open >= 0 && close >= 0 && src0.lastIndexOf('</details>', m.index) < open;
     const near = src0.slice(s, e) + (inDetails ? src0.slice(open, close) : '');
-    if (!/\/refunds\//.test(near)) at(m.index, m[0], 'refund terms wait for the legal review: name a refund only next to the link to /refunds/');
+    if (!/\/refunds\/|\bpolicy\b/i.test(near)) at(m.index, m[0], 'refund terms wait for the legal review: name a refund only next to the link to /refunds/');
   }
   // Reports work in any CI; uploads do not: a paragraph that says both is the claim.
   const seen = new Set();
   for (const m of text.matchAll(/\bany CI\b/gi)) {
     const [s, e] = paragraphAt(src0, m.index);
     const said = text.slice(s, e);
-    if (!seen.has(s) && /\bupload/i.test(said) && !/\bGitHub Actions only\b|\bonly (?:from |on |with |in )?GitHub Actions\b/i.test(said)) {
+    if (!seen.has(s) && /\bupload/i.test(said) && !(/\bGitHub Actions\b/i.test(said) && /\b(?:only|today|for now)\b/i.test(said))) {
       seen.add(s);
       at(m.index, m[0], 'uploads work from GitHub Actions only');
     }
