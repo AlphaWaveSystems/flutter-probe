@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { notFoundPath, resolveToolPath } from './toolPath';
+import { isRegularFile, notFoundPath, resolveToolPath } from './toolPath';
 import { ProbeConfig } from './types';
 
 export function getConfig(): vscode.WorkspaceConfiguration {
@@ -20,9 +20,8 @@ export function getConvertPath(): string {
   return toolPath('convertPath', 'probe-convert');
 }
 
-// toolPath is the absolute path of the binary for a path setting (see toolPath.ts for the rules). When nothing is found it is the bare name
-// on macOS and Linux, where a bare name is looked up on PATH only; on Windows, where the system would also look in the workspace, it is
-// an error instead.
+// toolPath is the absolute path of the binary for a path setting (see toolPath.ts for the rules). When nothing is found it is an error,
+// on every system (notFoundPath).
 function toolPath(setting: string, defaultName: string): string {
   const r = resolveToolPath({
     configured: getSetting<string>(setting),
@@ -32,21 +31,14 @@ function toolPath(setting: string, defaultName: string): string {
     trusted: vscode.workspace.isTrusted,
     platform: process.platform,
     pathEnv: process.env.PATH,
-    isFile,
+    isFile: isRegularFile,
     isAbsolute: path.isAbsolute,
     join: path.join,
   });
   if ('path' in r) { return r.path; }
-  return notFoundPath(r, setting, process.platform);
+  return notFoundPath(r, setting);
 }
 
-function isFile(p: string): boolean {
-  try {
-    return fs.statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
 
 export function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
