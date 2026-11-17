@@ -381,7 +381,7 @@ func (a *App) WriteFile(path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(real), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(real, []byte(content), 0o644)
+	return replaceFileAtomically(real, []byte(content), ".probe-save-*")
 }
 
 // CreateFile writes content to a NEW .probe file inside the workspace a person opened or an automation folder, and never replaces a file: the file is created

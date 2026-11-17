@@ -59,7 +59,6 @@ test "N8 a long press by a name that the state text also holds"
   long press "Alice"
   see "Long press: Alice"
 
-# When the agent is fixed this test will PASS: it must then be flipped (the count is 1) and moved to the positive suite, or removed.
-# Expected: see exactly 1 "Row 0": Expected exactly 1 "text("Row 0")" but found 2 (a known miscount: a Text is counted twice by `see exactly`; see the finding in docs/compat/MATRIX.md)
-test "N9 see exactly counts a Text once"
-  see exactly 1 "Row 0"
+# Expected: see exactly 2 "Row 0": Expected exactly 2 "text("Row 0")" but found 1 (one Text is one match: with probe_agent 0.27.0 it was counted twice, issue #800)
+test "N9 one Text is not two matches"
+  see exactly 2 "Row 0"
