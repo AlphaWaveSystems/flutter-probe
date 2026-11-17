@@ -3,11 +3,12 @@ package mcp
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/alphawavesystems/flutter-probe/internal/secretfile"
 )
 
 // The bearer token of the HTTP transport.
@@ -81,65 +82,13 @@ func checkSuppliedToken(token string) error {
 	return nil
 }
 
-// writeTokenFile writes the token to dir/http-token and returns the path. It refuses a directory or
-// an existing token file that is a symlink or that other users can reach, instead of repairing it:
-// a token location someone else set up is not one to trust. The token is written to a new 0600
-// file that is then renamed into place, so the write never follows a link at the final name.
-// replaced reports that a token file was already there: one left by a server that was killed, or
-// the one a running server still depends on.
+// writeTokenFile writes the token to dir/http-token and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
+// directory or an existing token file that is a link, not ours or reachable by other users, instead of repairing it. replaced reports that a token
+// file was already there: one left by a server that was killed, or the one a running server still depends on.
 func writeTokenFile(dir, token string) (path string, replaced bool, err error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", false, fmt.Errorf("mcp http: token directory: %w", err)
-	}
-	di, err := os.Lstat(dir)
-	if err != nil {
-		return "", false, fmt.Errorf("mcp http: token directory: %w", err)
-	}
-	if di.Mode()&os.ModeSymlink != 0 || !di.IsDir() {
-		return "", false, fmt.Errorf("mcp http: token directory %s is a symlink or not a directory; refusing to use it", dir)
-	}
-	if permsEnforced && di.Mode().Perm()&0o077 != 0 {
-		return "", false, fmt.Errorf("mcp http: token directory %s is open to other users (mode %04o); run `chmod 700` on it or remove it", dir, di.Mode().Perm())
-	}
-
-	path = filepath.Join(dir, tokenFileName)
-	if fi, err := os.Lstat(path); err == nil {
-		replaced = true
-		if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
-			return "", false, fmt.Errorf("mcp http: token file %s is a symlink or not a regular file; refusing to use it. Remove it and start again", path)
-		}
-		if permsEnforced && fi.Mode().Perm()&0o077 != 0 {
-			return "", false, fmt.Errorf("mcp http: token file %s is open to other users (mode %04o); refusing to use it. Remove it and start again", path, fi.Mode().Perm())
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", false, fmt.Errorf("mcp http: token file: %w", err)
-	}
-
-	tmp, err := os.CreateTemp(dir, tokenFileName+".*") // created 0600, with O_EXCL
-	if err != nil {
-		return "", false, fmt.Errorf("mcp http: token file: %w", err)
-	}
-	_, werr := tmp.WriteString(token + "\n")
-	if cerr := tmp.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr == nil {
-		werr = os.Chmod(tmp.Name(), 0o600)
-	}
-	if werr == nil {
-		werr = os.Rename(tmp.Name(), path)
-	}
-	if werr != nil {
-		_ = os.Remove(tmp.Name())
-		return "", false, fmt.Errorf("mcp http: token file: %w", werr)
-	}
-	return path, replaced, nil
+	return secretfile.Write(secretfile.Options{Label: "mcp http", Dir: dir, Name: tokenFileName, Content: token + "\n"})
 }
 
-// removeTokenFile removes the token file on shutdown, but only while it still holds this server's
-// token: a second server started later has put its own token there.
-func removeTokenFile(path, token string) {
-	if b, err := os.ReadFile(path); err == nil && string(b) == token+"\n" {
-		_ = os.Remove(path)
-	}
-}
+// removeTokenFile removes the token file on shutdown, but only while it still holds this server's token: a second server started later has put its
+// own token there.
+func removeTokenFile(path, token string) { secretfile.Remove(path, token+"\n") }
