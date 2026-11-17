@@ -23,7 +23,7 @@ import { LintSession, toMarkers, type Problem } from "./lint-problems";
 import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
-import { initResults, type RunPlan, type RunStep } from "./results";
+import { initResults, runIsGoing, type RunPlan, type RunStep } from "./results";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
 
@@ -2233,7 +2233,9 @@ async function insertBeforeStep(t: { file: string; line: number }): Promise<void
     toast("Not inserted: another file was opened or the text changed while Studio was checking. Press again.", "info", 5000);
     return;
   }
-  if (runInProgress) {
+  // Read here, with no await between this read and the edit: the answer came from Studio a moment ago, and a run that started since (from this window or, as
+  // the run events say, from anywhere) would be drawn at the old line numbers on the changed text.
+  if (runInProgress || runIsGoing()) {
     toast("Not inserted: a run started while Studio was checking. Wait until it has finished.", "info", 5000);
     return;
   }
