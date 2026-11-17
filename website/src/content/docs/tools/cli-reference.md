@@ -43,7 +43,7 @@ probe test [path] [flags]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--device <serial>` | auto | Target device UDID or serial |
+| `--device <serial>` | auto | Target device UDID or serial. For an iOS simulator or device it must be its UDID, as `probe device list` shows it (the rule of `device.ios_device_id`) |
 | `--host <ip>` | `127.0.0.1` | Agent host IP (use device IP for WiFi testing) |
 | `--token <string>` | — | Agent auth token (skip auto-detection; for WiFi testing) |
 | `--parallel` | `false` | Run tests in parallel across all connected devices |
