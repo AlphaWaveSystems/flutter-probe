@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { getProbeCommand } from '../probe';
+import { getProbeCommand, settingsSecretEnv } from '../probe';
+import { ALL_SECRETS, childEnv } from '../secretArgs';
 import { getWorkspaceRoot } from '../config';
 import {
   ReportRow,
@@ -182,8 +183,10 @@ function runFile(file: vscode.Uri, run: vscode.TestRun, token: vscode.Cancellati
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flutterprobe-run-'));
   const reportPath = path.join(dir, 'report.json');
   const device = vscode.workspace.getConfiguration('flutterprobe').get<string>('defaultDevice', '');
+  // A test run: it is meant to receive the secrets, from the settings (as a terminal run gets them) or from the environment VS Code has.
   const child = spawn(getProbeCommand(), fileRunArgs(file.fsPath, reportPath, device || undefined), {
     cwd: getWorkspaceRoot(),
+    env: childEnv(process.env, { allow: ALL_SECRETS, add: settingsSecretEnv() }),
   });
   let output = '';
   const onOutput = (chunk: Buffer) => {
