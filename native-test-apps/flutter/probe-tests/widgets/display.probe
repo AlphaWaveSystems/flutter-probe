@@ -1,0 +1,34 @@
+# Needs the display build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=display (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+# A text selector matches a widget's whole text or any part of it, exactly: case and spaces count (see the negative variants).
+
+before each test
+  restart the app
+  # the last widget of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until "Painted rich text" appears
+
+test "a plain Text is seen by its whole text, a part of it, and contains"
+  see "Order total: 42.00"
+  see "42.00"
+  see "Order total" contains "42.00"
+
+test "the spans of a Text.rich are matched as one text, and each span as a part of it"
+  see "Hello world"
+  see "Hello"
+  see "world"
+
+test "the spans of a RichText are matched as one text, and each span as a part of it"
+  see "Painted rich text"
+  see "rich text"
+
+# What a user sees is cut ("Shipping address: 1600 Amphitheatre…"), but the selector matches the widget's whole string, the cut part included:
+# `see` checks the text the app gave the widget, not what was painted.
+test "a Text cut with an ellipsis is matched by its whole string, the part that is not painted included"
+  see "Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America"
+  see "United States of America"
+
+test "every text widget is found by its id"
+  see #wf_text
+  see #wf_ellipsis
+  see #wf_rich
+  see #wf_richtext

@@ -1,0 +1,36 @@
+# The negative variants of probe-tests/widgets/display.probe: every test below asserts something WRONG, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/display.probe.expect-fail /tmp/display-negative.probe
+#   probe test /tmp/display-negative.probe --device <serial> -y       # (the display build, the same probe.yaml as for display.probe)
+#
+# Expected: 0 passed, 6 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+  # the last widget of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until "Painted rich text" appears
+
+# Expected: see "Order total: 42.01": Expected to see "text("Order total: 42.01")" but it was not found
+test "N1 a number one cent off"
+  see "Order total: 42.01"
+
+# Expected: see "Order total": "text("Order total")" contains "Order total: 42.00", not "42.01"
+test "N2 contains a value the text does not hold"
+  see "Order total" contains "42.01"
+
+# Expected: see "Refund total": Expected to see "text("Refund total")" but it was not found
+test "N3 a text that is not on the screen"
+  see "Refund total"
+
+# Expected: see "hello world": Expected to see "text("hello world")" but it was not found (case counts)
+test "N4 the spans in another case"
+  see "hello world"
+
+# Expected: see "Hello  world": Expected to see "text("Hello  world")" but it was not found (spaces count: the spans are joined as written)
+test "N5 the spans with two spaces between them"
+  see "Hello  world"
+
+# Expected: see "Shipping address: 1600 Amphitheatre…": Expected to see ... but it was not found (the painted, cut form is not what is matched)
+test "N6 the painted form of the cut text"
+  see "Shipping address: 1600 Amphitheatre…"
