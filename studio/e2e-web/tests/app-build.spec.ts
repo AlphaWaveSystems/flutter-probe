@@ -78,6 +78,21 @@ test.describe("The build of the app under test", () => {
     await expect(line(page)).toHaveText("App built with Flutter 3.44.8");
   });
 
+  test("bv-05 a long line stays inside the Device pane: it wraps, and does not reach the editor", async ({ page }) => {
+    const long = "App built with Flutter 3.44.8 (stable), Dart 3.12.2 · framework revision " + "1a2b3c4d5e".repeat(12) + " · engine " + "f".repeat(80);
+    await connectWith(page, long);
+    await expect(line(page)).toBeVisible();
+    const boxes = await page.evaluate(() => {
+      const r = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+      const l = document.getElementById("app-build")!;
+      return { line: r("app-build"), pane: r("device-pane"), editor: r("editor-pane"), overflowX: l.scrollWidth > l.clientWidth };
+    });
+    expect(boxes.overflowX).toBe(false);
+    expect(boxes.line.left).toBeGreaterThanOrEqual(boxes.pane.left - 0.5);
+    expect(boxes.line.right).toBeLessThanOrEqual(boxes.pane.right + 0.5);
+    expect(boxes.line.left).toBeGreaterThanOrEqual(boxes.editor.right - 0.5); // not over the editor
+  });
+
   test("bv-06 a connection that does not know its platform (WiFi) says so, and never names one", async ({ page }) => {
     await page.route("**/__headless/call", async (route) => {
       const body = route.request().postData() ?? "";
