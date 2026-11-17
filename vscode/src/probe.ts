@@ -1,7 +1,7 @@
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { getProbePath, getConvertPath, getSetting, getWorkspaceRoot } from './config';
-import { SecretValues, secretEnv, withoutSecrets } from './secretArgs';
+import { SecretValues, childEnv, secretEnv, withoutSecrets } from './secretArgs';
 import { CommandResult, Device, LintResult } from './types';
 
 export function runCommand(
@@ -12,7 +12,7 @@ export function runCommand(
   return new Promise((resolve) => {
     const proc = cp.spawn(command, args, {
       cwd: cwd ?? getWorkspaceRoot(),
-      env: { ...process.env },
+      env: childEnv(process.env), // device list and lint: not a test run, so no secrets
     });
 
     let stdout = '';
@@ -238,6 +238,15 @@ export function buildTestArgs(
   if (o.config) { args.push('--config', o.config); }
 
   return args;
+}
+
+// settingsSecretEnv is the environment for the secrets in the settings, for a test run that is not started through buildTestRun.
+export function settingsSecretEnv(): Record<string, string> {
+  return secretEnv({
+    cloudKey: getSetting<string>('cloudKey'),
+    cloudSecret: getSetting<string>('cloudSecret'),
+    relayToken: getSetting<string>('relayToken'),
+  });
 }
 
 // A test run: the command line, and the environment that carries its secrets (see secretArgs.ts).
