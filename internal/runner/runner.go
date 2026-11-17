@@ -899,11 +899,10 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 	if dc == nil || dc.Manager == nil {
 		return
 	}
-	// A host file is copied only from the folders the run writes to (the reports folder, the parent of localDir, which holds the screenshots
-	// and the videos; localDir; the folders the caller adds) or a simulator's data folder, and a video is kept in place only in the run's
-	// folders. An artifact path can come from the agent, so it is never trusted to name another host file: the file is opened once, checked
+	// A host file is copied only from the folders the run writes to (localDir and the folders the caller adds: never a parent of them, which
+	// can be the working or the home folder) or a simulator's data folder, and a video is kept in place only in the run's folders. An artifact path can come from the agent, so it is never trusted to name another host file: the file is opened once, checked
 	// on the open file and read from it (internal/confined), so a link swapped in after the check is never followed.
-	roots := resolvedRoots(append([]string{filepath.Dir(localDir), localDir}, extraRoots...))
+	roots := resolvedRoots(append([]string{localDir}, extraRoots...))
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return
 	}
@@ -913,8 +912,7 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			// Skip video files that are already in the output directory
 			if filepath.IsAbs(remotePath) {
 				if _, err := os.Stat(remotePath); err == nil {
-					ext := filepath.Ext(remotePath)
-					if ext == ".mov" || ext == ".mp4" || ext == ".webm" {
+					if isVideo(remotePath) {
 						// Kept as the path it was given (the report shows it as before), once the open file is checked: not a link, a single
 						// name, really in the run's folders. A simulator's data folder is not one: an app controls it.
 						if _, err := confined.Check(remotePath, func(r string) bool { return underAnyRoot(roots, r) }); err == nil {
@@ -1019,6 +1017,9 @@ func copyHostArtifact(p, dst string, roots []string) error {
 		return err
 	}
 	data, real, err := confined.ReadFile(abs, func(r string) bool { return allowedHostArtifact(r, roots) })
+	if errors.Is(err, confined.ErrTooLarge) {
+		return fmt.Errorf("pulling %q: %w", p, confined.ErrTooLarge)
+	}
 	if err != nil {
 		return fmt.Errorf("pulling %q: not a file this run wrote or a simulator's", p)
 	}
@@ -1060,6 +1061,15 @@ var simulatorDataRoot = func() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, "Library", "Developer", "CoreSimulator", "Devices"), nil
+}
+
+// isVideo reports whether p names a video by its extension (.mov, .mp4, .webm, in any case).
+func isVideo(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".mov", ".mp4", ".webm":
+		return true
+	}
+	return false
 }
 
 // resolvedRoots returns roots absolute and with links resolved (as far as they exist), so the real path of an open file can be compared.

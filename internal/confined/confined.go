@@ -16,6 +16,9 @@ const maxSize = 64 << 20
 // ErrRefused is returned when the opened file is not one the caller allows.
 var ErrRefused = errors.New("the file is not one that may be read")
 
+// ErrTooLarge is returned, with ErrRefused, when the file is larger than ReadFile reads (64 MiB).
+var ErrTooLarge = errors.New("the file is larger than 64 MiB")
+
 // ReadFile opens p once (the last part of the path must not be a link, where the system can say so), checks that the opened file is a
 // regular file with a single name (a hard link could give another file an allowed name) and that its real path, asked of the open file,
 // is accepted by allowed, and then reads it from the same open file. It returns the bytes and that real path. Whatever happens to p
@@ -31,7 +34,7 @@ func ReadFile(p string, allowed func(real string) bool) ([]byte, string, error) 
 		return nil, "", err
 	}
 	if len(data) > maxSize {
-		return nil, "", fmt.Errorf("%w: larger than %d bytes", ErrRefused, maxSize)
+		return nil, "", fmt.Errorf("%w: %w", ErrRefused, ErrTooLarge)
 	}
 	return data, real, nil
 }

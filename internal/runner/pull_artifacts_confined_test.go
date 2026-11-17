@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
@@ -107,12 +108,14 @@ func TestPullArtifactsAndroidRefusesAHostFileOutsideTheRun(t *testing.T) {
 	}
 }
 
-// A video is kept only when it is in a folder the run writes to.
+// A video is kept only when it is in a folder the run writes to (the video folder the caller passes), whatever the case of its extension.
 func TestPullArtifactsKeepsOnlyTheRunsVideos(t *testing.T) {
 	localDir, _, _ := pullSetup(t)
+	videoDir := filepath.Join(filepath.Dir(localDir), "videos")
 	outside := filepath.Join(t.TempDir(), "home.mp4")
-	inside := filepath.Join(filepath.Dir(localDir), "videos", "test.mp4")
-	for _, p := range []string{outside, inside} {
+	inside := filepath.Join(videoDir, "test.mp4")
+	upper := filepath.Join(t.TempDir(), "HOME.MOV")
+	for _, p := range []string{outside, inside, upper} {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -120,8 +123,8 @@ func TestPullArtifactsKeepsOnlyTheRunsVideos(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	results := []TestResult{{Artifacts: []string{outside, inside}}}
-	PullArtifacts(context.Background(), results, iosDC(), localDir)
+	results := []TestResult{{Artifacts: []string{outside, inside, upper}}}
+	PullArtifacts(context.Background(), results, iosDC(), localDir, videoDir)
 	if len(results[0].Artifacts) != 1 || results[0].Artifacts[0] != inside {
 		t.Errorf("artifacts = %v, want only the run's video", results[0].Artifacts)
 	}
@@ -158,7 +161,7 @@ func TestPullArtifactsKeepsNoFolderNamedLikeAVideo(t *testing.T) {
 		t.Fatal(err)
 	}
 	results := []TestResult{{Artifacts: []string{dir}}}
-	PullArtifacts(context.Background(), results, iosDC(), localDir)
+	PullArtifacts(context.Background(), results, iosDC(), localDir, filepath.Dir(dir))
 	if len(results[0].Artifacts) != 0 {
 		t.Errorf("a folder was kept as a video: %v", results[0].Artifacts)
 	}
@@ -178,5 +181,79 @@ func TestPullArtifactsNeedsASimulatorUUID(t *testing.T) {
 	PullArtifacts(context.Background(), results, iosDC(), localDir)
 	if len(results[0].Artifacts) != 0 {
 		t.Error("a file outside a simulator's UUID folder was copied")
+	}
+}
+
+// With -o, the screenshots go next to the output file, and the folder of the output file can be the working folder or the home folder.
+// Only the run's own folders count: a hostile agent naming a file beside the output file (the project's probe.yaml, a key in a sub folder)
+// gets nothing copied, on iOS and on Android, and nothing listed. An upper-case video extension is checked like a video, not copied.
+func TestPullArtifactsNeverTakesTheOutputFilesFolder(t *testing.T) {
+	_, _, _ = pullSetup(t)
+	home := t.TempDir() // stands for the folder of `-o ~/x.json`
+	localDir := filepath.Join(home, "screenshots")
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfgFile := filepath.Join(home, "probe.yaml")
+	key := filepath.Join(home, "sub", "id_rsa")
+	big := filepath.Join(home, "notes.MOV")
+	for _, p := range []string{cfgFile, key, big} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, pngMagic, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	videoDir := filepath.Join(home, "videos")
+	for _, dc := range []*DeviceContext{iosDC(), {Manager: device.NewManager(), Platform: device.PlatformAndroid, Serial: "emulator-0", AppID: "com.example.app"}} {
+		results := []TestResult{{Artifacts: []string{cfgFile, key, big}}}
+		PullArtifacts(context.Background(), results, dc, localDir, videoDir)
+		if len(results[0].Artifacts) != 0 {
+			t.Errorf("%s: files beside the output file were taken: %v", dc.Platform, results[0].Artifacts)
+		}
+		entries, _ := os.ReadDir(localDir)
+		if len(entries) != 0 {
+			t.Errorf("%s: files were copied into the screenshots folder: %v", dc.Platform, entries)
+		}
+	}
+}
+
+// A file over the read limit is refused as too large, not as a file the run did not write.
+func TestPullArtifactsCopySaysTooLarge(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "huge.png")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(64<<20 + 1); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	err = copyHostArtifact(p, filepath.Join(t.TempDir(), "out.png"), resolvedRoots([]string{dir}))
+	if err == nil || !strings.Contains(err.Error(), "larger than 64 MiB") || strings.Contains(err.Error(), "not a file this run wrote") {
+		t.Errorf("want the too-large error, got %v", err)
+	}
+}
+
+// A video with an upper-case extension in the video folder is kept in place, as a video: it is not copied into the screenshots folder.
+func TestPullArtifactsKeepsAnUpperCaseVideoInPlace(t *testing.T) {
+	localDir, _, _ := pullSetup(t)
+	videoDir := filepath.Join(filepath.Dir(localDir), "videos")
+	clip := filepath.Join(videoDir, "CLIP.MOV")
+	if err := os.MkdirAll(videoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(clip, []byte("video"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results := []TestResult{{Artifacts: []string{clip}}}
+	PullArtifacts(context.Background(), results, iosDC(), localDir, videoDir)
+	if len(results[0].Artifacts) != 1 || results[0].Artifacts[0] != clip {
+		t.Errorf("artifacts = %v, want the video kept in place", results[0].Artifacts)
+	}
+	if _, err := os.Stat(filepath.Join(localDir, "CLIP.MOV")); !os.IsNotExist(err) {
+		t.Error("the video was copied into the screenshots folder")
 	}
 }

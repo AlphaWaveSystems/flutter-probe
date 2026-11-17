@@ -6,15 +6,23 @@ import (
 	"testing"
 )
 
-// probe test copies artifacts only from the folders the run writes to: it passes the probelink client's own screenshot folder to
-// PullArtifacts (the reports folder, screenshotDir and the videos under it are PullArtifacts' own roots).
+// probe test copies artifacts only from the folders the run writes to: it passes the video folder, the probelink client's screenshot folder
+// and the compare screenshot diff folder to PullArtifacts, and never the folder of the -o file.
 func TestProbeTestPassesTheClientScreenshotFolderToPullArtifacts(t *testing.T) {
 	src, err := os.ReadFile("test.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), `clientShots, _ := filepath.Abs(filepath.Join("reports", "screenshots"))`) ||
-		!strings.Contains(string(src), "runner.PullArtifacts(ctx, results, devCtx, screenshotDir, clientShots)") {
-		t.Error("probe test must pass ./reports/screenshots to PullArtifacts as an allowed folder")
+	for _, want := range []string{
+		`clientShots, _ := filepath.Abs(filepath.Join("reports", "screenshots"))`,
+		`visualDiffs, _ := filepath.Abs(filepath.Join("reports", "visual-diff"))`,
+		"runner.PullArtifacts(ctx, results, devCtx, screenshotDir, videoDir, clientShots, visualDiffs)",
+	} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("probe test must pass the run's folders to PullArtifacts: %s", want)
+		}
+	}
+	if strings.Contains(string(src), "PullArtifacts(ctx, results, devCtx, screenshotDir, filepath.Dir(outFile)") {
+		t.Error("the folder of the -o file must never be an allowed folder")
 	}
 }
