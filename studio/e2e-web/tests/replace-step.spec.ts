@@ -294,4 +294,23 @@ test.describe("Use the text on screen", () => {
       studio.stop();
     }
   });
+
+  test("rs-10 a run that starts while Studio is checking stops the edit (the run events say so), and nothing is replaced", async ({ page }) => {
+    const studio = await startStudio(base);
+    try {
+      await openLogin(page, studio);
+      await fireFailedStep(page);
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CheckReplaceStep"')) await new Promise((r) => setTimeout(r, 1200));
+        await route.continue();
+      });
+      await useButton(page).click();
+      await page.evaluate(() => (((window as any).__handlers["run:started"]) || []).forEach((cb: (...a: unknown[]) => void) => cb("tests/login.probe")));
+      await expect(toasts(page)).toContainText("a run started while Studio was checking");
+      await expect(page.locator("#editor .view-lines")).toContainText('tap "Sign in"');
+      await expect(page.locator("#editor .view-lines")).not.toContainText('tap "Sign In"');
+    } finally {
+      studio.stop();
+    }
+  });
 });
