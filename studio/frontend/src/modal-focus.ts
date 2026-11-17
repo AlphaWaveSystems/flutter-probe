@@ -24,6 +24,8 @@ export interface ModalFocus {
   /** Where the focus goes back to. The button that opened the overlay is disabled while the question is open, and a disabled button gives up the focus, so by the time
    * the overlay is shown the focus is on the page, not on it: the caller names it. Default: whatever had the focus. */
   returnTo?: HTMLElement | null;
+  /** Where the focus goes when what it should go back to cannot take it (still disabled, or gone from the page), for example the chat's input while a reply streams. */
+  fallback?: HTMLElement | null;
 }
 
 /**
@@ -33,12 +35,15 @@ export interface ModalFocus {
 export function trapFocus(overlay: HTMLElement, m: ModalFocus): () => void {
   const opener = m.returnTo ?? (document.activeElement as HTMLElement | null);
   const onKey = (e: KeyboardEvent) => {
+    // The keys this handles are not passed on: the window's own handler (which closes the help card, the settings and the WiFi list on Escape) must not also run.
     if (e.key === "Escape") {
       e.preventDefault();
+      e.stopPropagation();
       m.onEscape();
       return;
     }
     if (e.key !== "Tab") return;
+    e.stopPropagation();
     const stops = tabStops(overlay);
     if (stops.length === 0) {
       e.preventDefault();
@@ -54,6 +59,9 @@ export function trapFocus(overlay: HTMLElement, m: ModalFocus): () => void {
     document.removeEventListener("keydown", onKey);
     // After the caller's own code has run: the button that opened the overlay is disabled while the question is open and is enabled again when the
     // answer has been handled, and a disabled button cannot take the focus.
-    setTimeout(() => opener?.focus?.(), 0);
+    setTimeout(() => {
+      const target = opener && opener.isConnected && !(opener as HTMLButtonElement).disabled ? opener : m.fallback;
+      target?.focus?.();
+    }, 0);
   };
 }

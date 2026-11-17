@@ -580,6 +580,8 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "?" && !mod) {
     // A `?` typed into a field is text: the editor, the chat input, the send panel's fields, every input that takes text (typing-target.ts).
     if (document.activeElement?.closest("#editor") || isTextEntry(document.activeElement as HTMLElement | null)) return;
+    // The help card is for the window, not for a question that is open (a preview before sending, the settings): over one it would be a second layer for Escape to undo.
+    if (document.querySelector(".overlay:not([hidden])")) return;
     e.preventDefault();
     openHelpOverlay();
     return;
@@ -1385,7 +1387,7 @@ function confirmFirstChatSend(preview: string): Promise<boolean> {
   overlay.hidden = false;
   return new Promise((resolve) => {
     // Cancel has the focus (the safe choice); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
-    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("chat-input") });
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("chat-input"), fallback: $("chat-pane") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
       release();

@@ -512,6 +512,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
   font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--fg);
 }
+.ai-preview-text:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; } /* the box is a tab stop (it scrolls): a deliberate ring, brand blue on the dark surface is above 3:1 */
+#chat-pane:focus { outline: none; } /* it takes the focus only as a place to put it, not as a control */
 
 /* Explain: the bar under the Results title, the advisory card and the preview that comes before it. */
 #explain-preview-overlay .overlay-card, #fix-preview-overlay .overlay-card { width: min(720px, 92vw); }
