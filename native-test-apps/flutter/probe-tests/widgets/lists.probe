@@ -1,0 +1,90 @@
+# Needs the lists build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=lists (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id (the last button of the screen).
+  wait until #wf_open_tiles appears
+
+# A lazy list builds the rows near the top only: a far row is not in the widget tree, so `see` does not find it.
+test "a lazy list: the first rows are seen and a far row is not"
+  see "Row 0"
+  see "Tapped row: none"
+  don't see "Row 150"
+
+test "scroll down until a far row appears, then tap it"
+  scroll down until "Row 150" appears
+  tap "Row 150"
+  see "Tapped row: 150"
+
+test "scroll up until the first row appears again"
+  scroll down until "Row 150" appears
+  don't see "Row 0"
+  scroll up until "Row 0" appears
+  see "Row 0"
+
+test "a grid: scroll down to a far cell, tap it, scroll back"
+  tap "Open grid"
+  wait until "Cell 0" appears
+  don't see "Cell 55"
+  scroll down until "Cell 55" appears
+  tap "Cell 55"
+  see "Tapped cell: 55"
+  scroll up until "Cell 0" appears
+
+test "a sliver list: scroll down to a far item, tap it, scroll back"
+  tap "Open sliver list"
+  wait until "Sliver header" appears
+  don't see "Item 150"
+  scroll down until "Item 150" appears
+  tap "Item 150"
+  see "Tapped item: 150"
+  scroll up until "Sliver header" appears
+
+# A SingleChildScrollView builds every child, so a button far below is in the widget tree and `tap` scrolls it into view by itself.
+test "a single child scroll view: a far button is tapped without a scroll step"
+  tap "Open scroll view"
+  wait until "Line 0" appears
+  tap "Bottom button"
+  see "Tapped bottom: yes"
+
+test "a single child scroll view: scroll down until the bottom button appears"
+  tap "Open scroll view"
+  wait until "Line 0" appears
+  scroll down until "Bottom button" appears
+  tap "Bottom button"
+  see "Tapped bottom: yes"
+
+test "tiles: tap a title, read the subtitle, tap a Cupertino tile"
+  tap "Open tiles"
+  wait until "Alice" appears
+  see "Online"
+  tap "Alice"
+  see "Tapped: Alice"
+  tap "Carol"
+  see "Tapped: Carol"
+  see "Busy"
+
+test "tiles: a long press by id and a tap by the subtitle below the title"
+  tap "Open tiles"
+  wait until "Alice" appears
+  long press #wf_alice
+  see "Long press: Alice"
+  see "Tapped: none"
+  tap "Away" below "Bob"
+  see "Tapped: Bob"
+  see "Online" below "Alice"
+  don't see "Online" above "Alice"
+
+# A text selector matches the first widget whose text contains it. After a tap the state text "Tapped: Alice" contains "Alice" too and comes first,
+# so a long press by text lands on the state text, not on the tile; the tile has to be named by id.
+test "tiles: a name that is also in a state text selects the state text"
+  tap "Open tiles"
+  wait until "Alice" appears
+  tap "Alice"
+  see "Tapped: Alice"
+  long press "Alice"
+  see "Long press: none"
+  long press #wf_alice
+  see "Long press: Alice"

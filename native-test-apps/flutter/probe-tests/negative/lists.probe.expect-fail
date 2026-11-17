@@ -1,0 +1,64 @@
+# The negative variants of probe-tests/widgets/lists.probe: every test below asserts something WRONG, or crosses what the agent can do, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/lists.probe.expect-fail /tmp/lists-negative.probe
+#   probe test /tmp/lists-negative.probe --device <serial> -y         # (the lists build, the same probe.yaml as for lists.probe)
+#
+# Expected: 0 passed, 9 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
+# waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id (the last button of the screen).
+  wait until #wf_open_tiles appears
+
+# Expected: see "Row 150": Expected to see "text("Row 150")" but it was not found (the row is not built before the list is scrolled to it)
+test "N1 a far row of a lazy list is not seen before a scroll"
+  see "Row 150"
+
+# Expected: tap "Row 150": Widget not found: text("Row 150") (a row that is not built is not scrolled to by tap)
+test "N2 a far row of a lazy list is not tapped without a scroll step"
+  tap "Row 150"
+
+# Expected: scroll down until "Row 999" appears: not found after scrolling (the list has 200 rows and the step ends with that message, it does not run on)
+test "N3 scrolling to a row that does not exist ends with a failure"
+  scroll down until "Row 999" appears
+
+# Expected: see "Tapped row: 151": Expected to see "text("Tapped row: 151")" but it was not found (the tapped row is 150)
+test "N4 the state names the tapped row, not the next one"
+  scroll down until "Row 150" appears
+  tap "Row 150"
+  see "Tapped row: 151"
+
+# Expected: see "Cell 55": Expected to see "text("Cell 55")" but it was not found (the cell is not built before the grid is scrolled to it)
+test "N5 a far cell of a grid is not seen before a scroll"
+  tap "Open grid"
+  wait until "Cell 0" appears
+  see "Cell 55"
+
+# Expected: see "Online": Expected to see "relational("Online")" but it was not found (a subtitle is below its title, not above)
+test "N6 a subtitle is not above its title"
+  tap "Open tiles"
+  wait until "Alice" appears
+  see "Online" above "Alice"
+
+# Expected: see "Online": Expected to see "positional("Online")" but it was not found (a title is not a container of its tile: `in "Alice"` looks inside the title's own text)
+test "N7 a subtitle is not found in a tile named by its title"
+  tap "Open tiles"
+  wait until "Alice" appears
+  see "Online" in "Alice"
+
+# Expected: see "Long press: Alice": Expected to see "text("Long press: Alice")" but it was not found (the long press by text lands on the state text "Tapped: Alice", not on the tile)
+test "N8 a long press by a name that the state text also holds"
+  tap "Open tiles"
+  wait until "Alice" appears
+  tap "Alice"
+  see "Tapped: Alice"
+  long press "Alice"
+  see "Long press: Alice"
+
+# Expected: see exactly 1 "Row 0": Expected exactly 1 "text("Row 0")" but found 2 (a known miscount: a Text is counted twice by `see exactly`; see the finding in docs/compat/MATRIX.md)
+test "N9 see exactly counts a Text once"
+  see exactly 1 "Row 0"
