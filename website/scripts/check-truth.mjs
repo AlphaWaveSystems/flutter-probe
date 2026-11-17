@@ -8,6 +8,8 @@
 //   - names a feature that is not built or an offer that waits for the legal review (the banned list below),
 //   - links an "Apply" control anywhere but the design-partner form or the support address in sellable.json (apply), or names a form
 //     template that the repository does not have,
+//   - has a structured-data Offer (JSON-LD, in the front matter or a script) whose price is not the price of an available plan: search
+//     results show an Offer as something to buy,
 //   - or says "gate".
 //
 // Run: node scripts/check-truth.mjs [--site <website folder>]   (npm run check:truth; the build runs it first)
@@ -146,7 +148,9 @@ export function checkPage(file, raw, plans, apply) {
       const m = tag.match(/^(<meta\b[^>]*\bname="description"[^>]*\bcontent="|<(?:Site|Legal)\b[^>]*\bdescription=")([^"]*)"/);
       return m ? blank(m[1]) + m[2] + blank(tag.slice(m[1].length + m[2].length)) : blank(tag);
     })
-    .replace(/&#36;/g, '   $');
+    .replace(/&#36;/g, '   $')
+    // A non-breaking space between a number and its words is still a space (same length, so positions stay the file's).
+    .replace(/&nbsp;|&#160;/g, (e) => ' '.repeat(e.length));
 
   for (const m of text.matchAll(PRICE)) {
     const amount = number(m[1] ?? m[2]);
@@ -188,6 +192,16 @@ export function checkPage(file, raw, plans, apply) {
     if (!/\bapply\b/i.test(a.label)) continue;
     if (a.href !== apply.form && !(a.href === apply.email || a.href.startsWith(apply.email + '?'))) {
       at(a.pos, a.label, `an Apply link to ${a.href}, not the design-partner form or the support address in sellable.json`);
+    }
+  }
+
+  // Structured data is read from the raw source: it sits in the front matter or a script, which a reader never sees but a search engine
+  // shows as an offer.
+  const available = new Set(plans.filter((p) => p.status === 'available').map((p) => p.price_usd_month));
+  for (const m of raw.matchAll(/\{[^{}]*['"]@type['"]\s*:\s*['"]Offer['"][^{}]*\}/g)) {
+    const price = m[0].match(/['"]?price['"]?\s*:\s*['"]?(\d[\d,]*(?:\.\d+)?)/);
+    if (!price || !available.has(number(price[1]))) {
+      at(m.index, m[0].replace(/\s+/g, ' '), 'a structured-data Offer whose price is not the price of an available plan in sellable.json');
     }
   }
 

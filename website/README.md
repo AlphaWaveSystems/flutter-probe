@@ -25,9 +25,10 @@ Today only Free is available (1,000 results a month). Team, Scale and On-The-Go 
 - shows a Start, Subscribe, Checkout, Buy, Purchase or Upgrade link or button on the card of a plan that is not `"available"`
 - names a feature that is not built or an offer that waits for the legal review: Slack or email notifications, parallel orchestration, roles, priority support, pay-per-use, "costs extra", uploads from any CI, cancel any time, a 14-day refund
 - links an Apply control (a link whose text has the word "apply", in HTML or Markdown) anywhere but `apply.form`, or `apply.email` with or without a `?subject=`; or names a form template that is not in `.github/ISSUE_TEMPLATE`
+- has a structured-data `Offer` (JSON-LD, in the front matter or a script) whose price is not the price of an available plan: search results show an `Offer` as something to buy
 - says "gate" (say "verdict and failures list")
 
-The page's description is checked too, as a `<meta name="description">` or as the `description` of the page layout (`<Site description="...">`), since search results show it. The `noindex` of the draft legal pages is checked by its own test, not by this one.
+The page's description is checked too, as a `<meta name="description">` or as the `description` of the page layout (`<Site description="...">`), since search results show it. A non-breaking space (`&nbsp;`) between a number and its words counts as a space. The `noindex` of the draft legal pages is checked by its own test, not by this one.
 
 A plan card runs from its title to the next heading or section; outside a card, a heading that names a plan starts that plan's card. `go test ./scripts/` runs the same check (`scripts/site_truth_test.go`), with one broken page per rule.
 
