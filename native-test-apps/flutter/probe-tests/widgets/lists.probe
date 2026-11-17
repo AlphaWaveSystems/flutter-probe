@@ -13,6 +13,12 @@ test "a lazy list: the first rows are seen and a far row is not"
   see "Tapped row: none"
   don't see "Row 150"
 
+# One Text is one match (issue #800: with probe_agent 0.27.0 `see exactly 1` of a single Text failed with "found 2").
+test "see exactly counts a visible Text once"
+  see exactly 1 "Row 0"
+  see exactly 1 "Tapped row: none"
+  see exactly 1 "Open tiles"
+
 test "scroll down until a far row appears, then tap it"
   scroll down until "Row 150" appears
   tap "Row 150"
