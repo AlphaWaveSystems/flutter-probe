@@ -152,4 +152,27 @@ test.describe("Save as", () => {
       studio.stop();
     }
   });
+
+  test("sa-05 when Studio refuses the write because the file appeared since the listing, the buffer stays unsaved and the toast says why", async ({ page }) => {
+    const studio = await startStudio();
+    try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
+      // Go's own refusal is tested in Go; here the page is shown what it does with it
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CreateFile"')) return route.fulfill({ json: { error: "taken.probe already exists: Save never replaces a file" } });
+        await route.continue();
+      });
+      await page.goto(studio.url);
+      await typeScratch(page, 'test "x"');
+      await page.click("#btn-save");
+      await nameField(page).fill("taken");
+      await page.click("#btn-save-as-ok");
+      await expect(page.locator("#toast-container")).toContainText("already exists: Save never replaces a file");
+      await expect(page.locator("#editor-dirty")).toContainText("unsaved");
+      await expect(page.locator("#editor-filename")).not.toContainText("taken.probe");
+      expect(fs.readdirSync(studio.ws)).toEqual([]);
+    } finally {
+      studio.stop();
+    }
+  });
 });

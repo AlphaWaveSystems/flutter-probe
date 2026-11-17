@@ -31,6 +31,7 @@ import {
   CancelRun,
   CheckReplaceLine,
   CloseWorkspace,
+  CreateFile,
   SelectorFixAttempts,
   Chat,
   Connect,
@@ -514,9 +515,9 @@ async function saveAs(): Promise<void> {
   const path = `${dir.replace(/\/+$/, "")}/${name}`;
   const content = model.getValue();
   try {
-    await WriteFile(path, content);
+    await CreateFile(path, content); // exclusive: a file that appeared since the listing is not replaced
   } catch (err) {
-    toast(`Save failed: ${err}`, "error");
+    toast(`Save failed: ${String(err).replace(/^Error:\s*/, "")}`, "error", 6000);
     return;
   }
   currentPath = path;

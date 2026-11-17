@@ -377,6 +377,30 @@ func (a *App) WriteFile(path, content string) error {
 	return os.WriteFile(real, []byte(content), 0o644)
 }
 
+// CreateFile writes content to a NEW .probe file inside the workspace a person opened or an automation folder, and never replaces a file: the file is created
+// exclusively (O_EXCL), so one that exists, whatever made it and however its name is spelled on a case-insensitive file system, fails with a word-for-word
+// "already exists", and a link in the place of the file (even a dangling one) is refused by the same flag. The folder must exist (nothing is created for it). It
+// is what Save does for a buffer with no file; WriteFile, which saves an open file in place, stays what it was.
+func (a *App) CreateFile(path, content string) error {
+	real, err := probeFileForWriteWithinRoots(a.automationRoots(), path)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(real, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("%s already exists: Save never replaces a file", filepath.Base(real))
+		}
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(real) // a half-written new file is not left behind
+		return err
+	}
+	return f.Close()
+}
+
 // ---- Lint ----
 
 // Diagnostic is a single editor marker (compatible with Monaco's IMarkerData
