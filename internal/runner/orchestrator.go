@@ -106,7 +106,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 				}
 				if attempt < maxRetries {
 					fmt.Printf("  \033[33m⚠\033[0m  [%s] attempt %d failed: %v — retrying in 5s...\n",
-						po.shortID(dr.DeviceID), attempt+1, dr.Error)
+						po.shortID(dr.DeviceID), attempt+1, errShown(dr.Error))
 					time.Sleep(5 * time.Second)
 				}
 			}
@@ -115,7 +115,7 @@ func (po *ParallelOrchestrator) Run(ctx context.Context) ([]TestResult, error) {
 			dr.Duration = time.Since(start)
 			if dr.Error != nil {
 				fmt.Printf("  \033[31m✗\033[0m  [%s] all attempts failed: %v\n",
-					po.shortID(dr.DeviceID), dr.Error)
+					po.shortID(dr.DeviceID), errShown(dr.Error))
 			}
 		}(&po.devices[i])
 	}
@@ -281,7 +281,7 @@ func (po *ParallelOrchestrator) summaryError() error {
 	var errs []string
 	for _, dr := range po.devices {
 		if dr.Error != nil {
-			errs = append(errs, fmt.Sprintf("[%s] %v", po.label(dr.DeviceID), dr.Error))
+			errs = append(errs, fmt.Sprintf("[%s] %s", po.label(dr.DeviceID), errShown(dr.Error)))
 		}
 	}
 	if len(errs) > 0 {
@@ -312,7 +312,7 @@ func (po *ParallelOrchestrator) PrintSummary() {
 		}
 		if dr.Error != nil {
 			status = "\033[31m⚠\033[0m"
-			fmt.Printf("  %s  %-20s  error: %v\n", status, po.shortID(dr.DeviceID), dr.Error)
+			fmt.Printf("  %s  %-20s  error: %s\n", status, po.shortID(dr.DeviceID), errShown(dr.Error))
 		} else {
 			fmt.Printf("  %s  %-20s  %d passed, %d failed  (%s)\n",
 				status, po.shortID(dr.DeviceID), passed, failed, dr.Duration.Round(time.Millisecond))
@@ -351,6 +351,11 @@ func (po *ParallelOrchestrator) shortID(id string) string {
 // label is the whole id of a lane's device for an error message, as plain text on one line (display only).
 func (po *ParallelOrchestrator) label(id string) string {
 	return device.CleanOneLine(id, 80)
+}
+
+// errShown is a lane's error as one clean line: it can carry text from the device or the agent (a refused handshake, adb's output).
+func errShown(err error) string {
+	return device.CleanOneLine(err.Error(), 400)
 }
 
 func joinLines(ss []string) string {
