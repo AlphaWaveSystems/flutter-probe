@@ -46,6 +46,10 @@ type boundDecision struct {
 	Confirm  string   `json:"confirm"`
 	// Decision says why an aiProvider method with confirm "none" needs no confirmation, or what the window does instead.
 	Decision string `json:"decision"`
+	// Tests are the Go tests that call the method (bound_methods_tests_test.go checks that each exists and calls it). NoTests is the one-line reason a
+	// method of a pure category may have none; a method that writes, runs, asks for a key or reaches a device always has a test.
+	Tests   []string `json:"tests,omitempty"`
+	NoTests string   `json:"noTests,omitempty"`
 }
 
 // boundDecisions are the recorded decisions, read from bound_methods.json (the one place they are written), and boundMethods is their

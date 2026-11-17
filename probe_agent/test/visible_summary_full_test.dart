@@ -150,4 +150,62 @@ void main() {
     expect(s['texts'], ['Sign In', 'typed']);
     expect(s['keys'], contains('title'));
   });
+
+  testWidgets(
+      'a field and a RichText that are not visible (hidden, or laid out off the screen) are not listed',
+      (tester) async {
+    await _pump(tester, [
+      Offstage(
+          child: SizedBox(
+              width: 300,
+              child: TextField(
+                  controller: TextEditingController(text: 'offstage value')))),
+      Offstage(
+          child: RichText(
+              text: const TextSpan(
+                  text: 'offstage rich',
+                  style: TextStyle(color: Colors.black)))),
+      Visibility(
+          visible: false,
+          maintainState: true,
+          child: RichText(
+              text: const TextSpan(
+                  text: 'hidden rich', style: TextStyle(color: Colors.black)))),
+      // Past the walker (which skips Offstage and Visibility): laid out off the screen, and zero-size. Only _isVisible leaves these out.
+      Transform.translate(
+          offset: const Offset(-5000, 0),
+          child: SizedBox(
+              width: 300,
+              child: TextField(
+                  controller:
+                      TextEditingController(text: 'off-screen value')))),
+      Transform.translate(
+          offset: const Offset(-5000, 0),
+          child: RichText(
+              text: const TextSpan(
+                  text: 'off-screen rich',
+                  style: TextStyle(color: Colors.black)))),
+      SizedBox(
+          width: 300,
+          child: TextField(
+              controller: TextEditingController(text: 'shown value'))),
+    ]);
+    final r = await _rpc();
+    expect(r['editable_texts'], ['shown value']);
+    expect(r['rich_texts'], isEmpty);
+    expect(r['counts'],
+        {'texts': 1, 'keys': 0, 'editable_texts': 1, 'rich_texts': 0});
+  });
+
+  testWidgets(
+      'an Icon\'s glyph is not a rich text: 26 icons do not truncate the summary',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pump(tester, [for (var i = 0; i < 26; i++) const Icon(Icons.star)]);
+    final r = await _rpc();
+    expect(r['rich_texts'], isEmpty);
+    expect(r['truncated'], isFalse);
+  });
 }

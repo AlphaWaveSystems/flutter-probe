@@ -234,14 +234,14 @@ func TestCreateFileRemovesAHalfWrittenFile(t *testing.T) {
 func TestCreateFileHasASizeCap(t *testing.T) {
 	a, dir := createFixture(t)
 	over := filepath.Join(dir, "over.probe")
-	if err := a.CreateFile(over, strings.Repeat("x", maxNewFileBytes+1)); err == nil || !strings.Contains(err.Error(), "at most") {
+	if err := a.CreateFile(over, strings.Repeat("x", maxSaveBytes+1)); err == nil || !strings.Contains(err.Error(), "at most") {
 		t.Fatalf("err = %v, want a size refusal", err)
 	}
 	if _, err := os.Lstat(over); !os.IsNotExist(err) {
 		t.Error("a refused file was created")
 	}
 	at := filepath.Join(dir, "at.probe")
-	if err := a.CreateFile(at, strings.Repeat("x", maxNewFileBytes)); err != nil {
+	if err := a.CreateFile(at, strings.Repeat("x", maxSaveBytes)); err != nil {
 		t.Fatalf("a file of exactly the cap was refused: %v", err)
 	}
 }

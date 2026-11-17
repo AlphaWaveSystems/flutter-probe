@@ -516,8 +516,8 @@ class ProbeFinder {
   /// - `editable_texts`: the text of every visible field that is not obscured, recorded whether or not a [Text] with the same text is
   ///   already in `texts`. `texts` is de-duplicated, so a [Text] "Sign In" first hid a field holding "Sign In", which a text selector
   ///   also matches.
-  /// - `rich_texts`: the texts of visible [RichText]s that no [Text] built (a [Text]'s own paragraph is already in `texts`); a text
-  ///   selector matches them too.
+  /// - `rich_texts`: the texts of visible [RichText]s that no [Text] and no [Icon] built (a [Text]'s own paragraph is already in
+  ///   `texts`; an [Icon]'s is its glyph); a text selector matches them too.
   /// - `max`: the cap of each list; `counts`: how many distinct items each list saw before the cap; `truncated`: true when any list
   ///   saw more than `max`, so a reader knows a list is incomplete.
   /// Each list is de-duplicated by trimmed text, in tree order, and holds no empty text. An obscured field adds nothing, in any list.
@@ -542,7 +542,7 @@ class ProbeFinder {
           texts.add(trimmed); // a set: a text already there stays once
           editable.add(trimmed);
         }
-      } else if (widget is RichText && !_builtByText(e)) {
+      } else if (widget is RichText && !_builtByText(e) && !_builtByIcon(e)) {
         final trimmed = widget.text.toPlainText().trim();
         if (trimmed.isNotEmpty && !rich.contains(trimmed) && _isVisible(e)) rich.add(trimmed);
       }
@@ -554,6 +554,20 @@ class ProbeFinder {
       'counts': {for (final entry in lists.entries) entry.key: entry.value.length},
       'truncated': lists.values.any((l) => l.length > max),
     };
+  }
+
+  /// Whether an [Icon] built [e] (a [RichText] holding the icon's glyph, a private-use character): the glyph is not a text a person reads
+  /// or a test names, and a screen of icons would otherwise fill `rich_texts`.
+  bool _builtByIcon(Element e) {
+    var built = false;
+    e.visitAncestorElements((a) {
+      if (a.widget is Icon) {
+        built = true;
+        return false;
+      }
+      return a.widget is! RichText;
+    });
+    return built;
   }
 
   /// Whether a [Text] built [e] (a [RichText]): its nearest [Text] above it, with no other [RichText] between.
