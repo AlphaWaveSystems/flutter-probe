@@ -272,16 +272,16 @@ jobs:
           CHANGED_STUDIO: ${{ needs.changes.outputs.npm_studio }}
           CHANGED_VSCODE: ${{ needs.changes.outputs.npm_vscode }}
         run: |
-          targets=""
+          targets=()
           if [ "$CHANGED_GO" = "true" ] || [ "$CHANGED_GO_STUDIO" = "true" ]; then
             go install github.com/google/go-licenses@v1.6.0
-            targets="$targets go"
+            targets+=(go)
           fi
-          if [ "$CHANGED_WEBSITE" = "true" ]; then targets="$targets npm:website"; fi
-          if [ "$CHANGED_STUDIO" = "true" ]; then targets="$targets npm:studio/frontend"; fi
-          if [ "$CHANGED_VSCODE" = "true" ]; then targets="$targets npm:vscode"; fi
+          if [ "$CHANGED_WEBSITE" = "true" ]; then targets+=(npm:website); fi
+          if [ "$CHANGED_STUDIO" = "true" ]; then targets+=(npm:studio/frontend); fi
+          if [ "$CHANGED_VSCODE" = "true" ]; then targets+=(npm:vscode); fi
           # the same script as license-check.yml; the tool is this checkout's (a Dependabot branch changes manifests only)
-          bash scripts/licensecheck/check-all.sh "$PWD" "$PWD" "$RUNNER_TEMP/licences" $targets
+          bash scripts/licensecheck/check-all.sh "$PWD" "$PWD" "$RUNNER_TEMP/licences" "${targets[@]}"
 
   # ---- Auto-approve safe updates ----
   # Auto-merge is intentionally NOT triggered here — the 7-day soak period is

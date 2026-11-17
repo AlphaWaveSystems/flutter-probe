@@ -90,5 +90,11 @@ jobs:
 
       - name: Check the licences of every Go module and npm project
         run: |
-          bash "$TOOL_DIR/scripts/licensecheck/check-all.sh" "$GITHUB_WORKSPACE/repo" "$TOOL_DIR" "$RUNNER_TEMP/licences" \
+          script="$TOOL_DIR/scripts/licensecheck/check-all.sh"
+          if [ ! -f "$script" ]; then
+            # only the pull request that adds this script: the base commit has none yet, so this one run uses the script of the pull request (the tool is still the base's)
+            echo "::notice::the base commit has no check-all.sh yet; using the one of this pull request"
+            script="$GITHUB_WORKSPACE/repo/scripts/licensecheck/check-all.sh"
+          fi
+          bash "$script" "$GITHUB_WORKSPACE/repo" "$TOOL_DIR" "$RUNNER_TEMP/licences" \
             go npm:website npm:studio/frontend npm:vscode
