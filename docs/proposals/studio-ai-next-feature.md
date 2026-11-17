@@ -44,7 +44,7 @@ The model is never in the decision path of anything destructive. This is the sam
 
 ## Measurable targets
 These are proposals for the owner to confirm; each can be checked by a test or a count.
-1. **No request unless asked:** zero requests with AI off or unconfigured, and zero before the person presses the button and the preview (the existing property, extended to the new surface).
+1. **No request unless asked:** zero requests with AI off or unconfigured, and zero before the person presses the button and sees the preview (zero when off is the existing, tested property; zero before a preview is the contract this feature adds, as `ExplainLastRun` does not hold it today).
 2. **Leak check:** planted secrets of every family the redactor knows (about fourteen pattern families, plus the JWT and card-number rules), put in each of the fields this feature sends, appear in 0 of N previews. This is a proposed new test: today `TestExplainGatesEveryField` and the hidden-character sweeps cover Explain failures, and the plant-in-every-position fuzz exists only for Save as step (`FuzzSaveStep`).
 3. **Bounded:** a request is at most about 12 KB without the widget tree and about 45 KB with it, whatever the inputs.
 4. **Preview first:** the preview is shown with no network use, in under 100 ms on the seeded corpus below.
