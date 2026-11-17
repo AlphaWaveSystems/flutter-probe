@@ -850,8 +850,9 @@ class _TilesPageState extends State<_TilesPage> {
 /// Dialogs and sheets (docs/compat/NEXT.md, items 8 and 9): an `AlertDialog` ("Delete item?", actions "Cancel" and "Delete"), a
 /// `CupertinoAlertDialog` ("Discard changes?", actions "Keep editing" and "Discard"), a `CupertinoActionSheet` ("Share", actions "Copy link" and
 /// "Send", cancel button "Cancel"), a modal bottom sheet ("Option one", "Option two") and a `SnackBar` ("Saved", action "Undo", 4 seconds). A button
-/// of the page ("Page button") counts its taps, to show whether a tap reaches the page under an open dialog. State texts: `Dialog: none|cancelled|deleted`,
-/// `Cupertino dialog: none|kept|discarded`, `Sheet: none|copy|send|cancelled`, `Bottom sheet: none|one|two`, `Snack: none|saved|undone`, `Page taps: N`.
+/// of the page ("Page button", under the dialog body when a dialog is open) and one above it ("Top button", outside the dialog body, on the barrier) count their taps, to
+/// show where a tap on the page under an open dialog lands. State texts: `Dialog: none|cancelled|deleted`,
+/// `Cupertino dialog: none|kept|discarded`, `Sheet: none|copy|send|cancelled`, `Bottom sheet: none|one|two`, `Snack: none|saved|undone`, `Page taps: N`, `Top taps: N`.
 class DialogsFamilyScreen extends StatefulWidget {
   const DialogsFamilyScreen({super.key});
 
@@ -866,6 +867,7 @@ class _DialogsFamilyScreenState extends State<DialogsFamilyScreen> {
   String _bottom = 'none';
   String _snack = 'none';
   int _pageTaps = 0;
+  int _topTaps = 0;
 
   Future<void> _openDialog() async {
     final result = await showDialog<String>(
@@ -992,6 +994,15 @@ class _DialogsFamilyScreenState extends State<DialogsFamilyScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          _s(
+            'wf_top_button',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => setState(() => _topTaps++),
+              child: const Text('Top button'),
+            ),
+          ),
+          _state('wf_top_taps', 'Top taps: $_topTaps'),
           _state('wf_dialog_state', 'Dialog: $_dialog'),
           _state('wf_cupertino_state', 'Cupertino dialog: $_cupertino'),
           _state('wf_sheet_state', 'Sheet: $_sheet'),

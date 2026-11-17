@@ -42,8 +42,8 @@ test "tap by the text Delete taps the title of the dialog, not its button"
   tap "Cancel"
   wait until "Delete item?" disappears
 
-# Whether the dialog is already out of the tree when `go back` returns depends on the build: on Flutter 3.44.8 it was, on 3.50.0 it was not (a
-# `don't see` right after `go back` failed there, 2 of 2 runs), so the test waits.
+# Whether the dialog is already out of the tree when `go back` returns differed between my runs on the two builds (gone on 3.44.8, still there on 3.50.0, a
+# `don't see` right after `go back` failed there in 2 of 2 runs); that is an observation of the author on one device, not a measured rule, so the test waits.
 test "go back closes the dialog"
   tap "Open dialog"
   wait until "Delete item?" appears
@@ -52,16 +52,31 @@ test "go back closes the dialog"
   don't see "Delete item?"
   see "Dialog: none"
 
-# The page under the dialog is found, but the barrier takes the tap: the page's counter does not move.
-test "a tap on the page under an open dialog does not reach the page"
+# The button of the page is found under the open dialog, but the dialog's body is on top of it: the step passes with the warning "tap target ... is covered
+# by another widget" (`--fail-on-warning` would fail it), the tap lands on the dialog, the counter does not move and the dialog stays open.
+test "a tap on a button that the dialog body covers lands on the dialog"
   tap "Open dialog"
   wait until "Delete item?" appears
   tap "Page button"
+  see "Delete item?"
+  see "Page taps: 0"
   tap "Cancel"
   wait until "Delete item?" disappears
   see "Page taps: 0"
   tap "Page button"
   see "Page taps: 1"
+
+# A button outside the dialog body is under the barrier: the tap lands on the barrier, which dismisses the dialog (`showDialog` dismisses on a tap
+# outside by default), and the button's own handler does not run.
+test "a tap on a button outside the dialog body dismisses the dialog and does not press the button"
+  tap "Open dialog"
+  wait until "Delete item?" appears
+  tap "Top button"
+  wait until "Delete item?" disappears
+  see "Dialog: none"
+  see "Top taps: 0"
+  tap "Top button"
+  see "Top taps: 1"
 
 test "a Cupertino dialog: keep editing, then discard"
   tap "Open Cupertino dialog"
