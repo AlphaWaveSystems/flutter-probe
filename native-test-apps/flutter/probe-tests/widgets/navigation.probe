@@ -1,0 +1,38 @@
+# Needs the navigation build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=navigation (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+
+before each test
+  restart the app
+
+test "the app bar's title is seen and its action is found by its tooltip"
+  see "Inbox"
+  see "Queries: 0"
+  tap "Search"
+  see "Queries: 1"
+  tap #wf_search
+  see "Queries: 2"
+
+test "a pushed route is seen"
+  tap "Open message"
+  wait until "From: Ada" appears
+  see "Message"
+  see "From: Ada"
+
+# The route rule on a device: the first route is under the opaque second one, so its title and its texts are not matched while the second is on top
+# (probe_agent's finder, _isVisible and _routeOnScreen; unit test "ProbeFinder route-awareness (PT-03)").
+test "the route under the top one is not seen"
+  tap "Open message"
+  wait until "From: Ada" appears
+  don't see "Inbox"
+  don't see "Queries: 0"
+  don't see "Open message"
+
+# While the pop runs (Material's page transition, about 300 ms), the leaving route is still mounted and on screen, so it is still matched: measured,
+# `don't see "From: Ada"` right after `go back` and `wait until "Inbox" appears` found it. Waiting for it to go is the way to check the pop.
+test "go back returns to the first route, which is seen again"
+  tap "Open message"
+  wait until "From: Ada" appears
+  go back
+  wait until "From: Ada" disappears
+  see "Inbox"
+  see "Queries: 0"

@@ -16,7 +16,7 @@ A ranked list of the widgets that apps use most and that `MATRIX.md` has not ass
 | # | Widget(s) | Packages | Family in the matrix | State today | What the test must settle |
 |---|---|---|---|---|---|
 | 1 | `Text`, `RichText` | 32, 3 | Text and display | not assessed | how `see` matches the text a user sees |
-| 2 | `Scaffold` + `AppBar`, `Navigator` (push, pop, back) | 26 + 22, 9 | Navigation | not assessed (the route rule has an agent unit test, not a device run) | the title and actions of a bar, and what `see` matches after a push, on a device |
+| 2 | `Scaffold` + `AppBar`, `Navigator` (push, pop, back) | 26 + 22, 9 | Navigation | assessed: `navigation` screen, `AppBar` and `Navigator` on two named devices (see `MATRIX.md`) | the title and actions of a bar, and what `see` matches after a push, on a device |
 | 3 | `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` | 19, 7, 7, 5 | Text and display | not assessed | how a widget with no text is found |
 | 4 | `ListView` (and `.builder`), `SingleChildScrollView`, `CustomScrollView` + `SliverList`, `GridView`, `Scrollbar` | 12, 7, 5 + 4, 3, 3 | Lists and scrolling | not assessed | scrolling to an item that is not built yet |
 | 5 | `Card` + `ListTile`, `CupertinoListTile` | 9 + 8, 2 | Layout and containers (`Card`); Lists and scrolling (the tiles) | not assessed | tapping a row and reading its subtitle |

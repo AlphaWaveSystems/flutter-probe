@@ -1,0 +1,37 @@
+# The negative variants of probe-tests/widgets/navigation.probe: every test below asserts something WRONG, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/navigation.probe.expect-fail /tmp/navigation-negative.probe
+#   probe test /tmp/navigation-negative.probe --device <serial> -y       # (the navigation build, the same probe.yaml as for navigation.probe)
+#
+# Expected: 0 passed, 5 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+
+# Expected: see "Inbox": Expected to see "text("Inbox")" but it was not found (the first route is under the opaque message route)
+test "N1 the route under the top one is seen"
+  tap "Open message"
+  wait until "From: Ada" appears
+  see "Inbox"
+
+# Expected: see "Queries: 2": ... was not found (one tap on the action is one search)
+test "N2 one tap on the action counts twice"
+  tap "Search"
+  see "Queries: 2"
+
+# Expected: see "From: Ada": ... was not found (no route was pushed)
+test "N3 the second route before it is pushed"
+  see "From: Ada"
+
+# Expected: see "From: Ada": ... was not found (go back popped the message route)
+test "N4 the message route after go back"
+  tap "Open message"
+  wait until "From: Ada" appears
+  go back
+  wait until "From: Ada" disappears
+  see "From: Ada"
+
+# Expected: tap "Serch": Widget not found: text("Serch") — visible texts: [...]
+test "N5 a tooltip that is not on the screen"
+  tap "Serch"
