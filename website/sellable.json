@@ -1,0 +1,50 @@
+{
+  "plans": {
+    "free": {
+      "name": "Free",
+      "status": "available",
+      "price_usd_month": 0,
+      "seats": "unlimited",
+      "results_per_month": 1000,
+      "features": [
+        "CLI and Dart agent",
+        "Unlimited local test runs",
+        "Terminal, JUnit and JSON reports"
+      ]
+    },
+    "team": {
+      "name": "Team",
+      "status": "planned",
+      "price_usd_month": 49,
+      "seats": "unlimited",
+      "results_per_month": 100000,
+      "features": [
+        "Hosted test reports (Probe Cloud)",
+        "Run history",
+        "Flaky tests with evidence",
+        "A verdict and failures list per commit",
+        "Trends",
+        "Uploads from GitHub Actions"
+      ]
+    },
+    "scale": {
+      "name": "Scale",
+      "status": "planned",
+      "price_usd_month": 149,
+      "seats": "unlimited",
+      "results_per_month": 500000,
+      "features": [
+        "Everything in Team",
+        "500,000 results per month"
+      ]
+    },
+    "on_the_go": {
+      "name": "On-The-Go (pay what you use)",
+      "status": "planned",
+      "price_usd_month": null,
+      "seats": "unlimited",
+      "results_per_month": null,
+      "features": []
+    }
+  }
+}
