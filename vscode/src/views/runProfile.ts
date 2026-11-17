@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { buildTestArgs, getProbeCommand } from '../probe';
+import { buildTestRun, getProbeCommand } from '../probe';
 import { runInTerminal } from '../terminal/probeTerminal';
 import { getWorkspaceRoot } from '../config';
 
@@ -32,7 +32,7 @@ export class RunProfilePanel {
 
     this.panel.webview.onDidReceiveMessage((msg) => {
       if (msg.command === 'run') {
-        const args = buildTestArgs(msg.file || filePath, {
+        const run = buildTestRun(msg.file || filePath, {
           device: msg.device || undefined,
           timeout: msg.timeout || undefined,
           format: msg.format || undefined,
@@ -47,7 +47,7 @@ export class RunProfilePanel {
           relayUrl: msg.relayUrl || undefined,
           relayToken: msg.relayToken || undefined,
         });
-        runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+        runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
         this.panel?.dispose();
       }
     });

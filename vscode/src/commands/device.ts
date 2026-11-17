@@ -14,7 +14,7 @@ async function showDevices(): Promise<void> {
   const devices = await listDevices();
   if (devices.length === 0) {
     vscode.window.showInformationMessage('No devices found. Run "probe device list" for details.');
-    runInTerminal('Probe: Devices', getProbeCommand(), ['device', 'list'], getWorkspaceRoot());
+    runInTerminal('Probe: Devices', getProbeCommand(), ['device', 'list'], getWorkspaceRoot(), {});
     return;
   }
 
@@ -39,5 +39,5 @@ async function startDevice(): Promise<void> {
   );
   if (!platform) { return; }
 
-  runInTerminal('Probe: Device', getProbeCommand(), ['device', 'start', '--platform', platform.value], getWorkspaceRoot());
+  runInTerminal('Probe: Device', getProbeCommand(), ['device', 'start', '--platform', platform.value], getWorkspaceRoot(), {});
 }

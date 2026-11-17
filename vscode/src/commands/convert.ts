@@ -53,5 +53,5 @@ async function convertTests(): Promise<void> {
   }
   args.push('--lint');
 
-  runInTerminal('Probe: Convert', getConvertCommand(), args, getWorkspaceRoot());
+  runInTerminal('Probe: Convert', getConvertCommand(), args, getWorkspaceRoot(), {});
 }
