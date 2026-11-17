@@ -59,12 +59,12 @@ test "N8 a long press by a name that the state text also holds"
   long press "Alice"
   see "Long press: Alice"
 
-# Flipped with the fix for issue #800: one Text is now one match, so a count of 2 for one visible Text must fail.
-# Expected: see exactly 2 "Row 0": Expected exactly 2 "text("Row 0")" but found 1
-test "N9 see exactly counts a Text twice"
+# Expected: see exactly 2 "Row 0": Expected exactly 2 "text("Row 0")" but found 1 (one Text is one match: with probe_agent 0.27.0 it was counted twice, issue #800)
+test "N9 one Text is not two matches"
   see exactly 2 "Row 0"
 
-# Expected: see "Bar row 90": Expected to see "text("Bar row 90")" but it was not found (a lazy list in a Scrollbar builds the top rows only)
+# The same mechanism as N1 (a lazy list builds the top rows only): it shows that the page's list is lazy, nothing specific to the Scrollbar.
+# Expected: see "Bar row 90": Expected to see "text("Bar row 90")" but it was not found
 test "N10 a far row of the Scrollbar list seen before a scroll"
   tap "Open scrollbar list"
   wait until "Bar row 0" appears

@@ -10,10 +10,14 @@ before each test
 # A lazy list builds the rows near the top only: a far row is not in the widget tree, so `see` does not find it.
 test "a lazy list: the first rows are seen and a far row is not"
   see "Row 0"
-  # one visible Text is one match (issue #800, fixed in the agent: it used to count 2)
-  see exactly 1 "Row 0"
   see "Tapped row: none"
   don't see "Row 150"
+
+# One Text is one match (issue #800: with probe_agent 0.27.0 `see exactly 1` of a single Text failed with "found 2").
+test "see exactly counts a visible Text once"
+  see exactly 1 "Row 0"
+  see exactly 1 "Tapped row: none"
+  see exactly 1 "Open tiles"
 
 test "scroll down until a far row appears, then tap it"
   scroll down until "Row 150" appears
@@ -99,8 +103,9 @@ test "tiles: a name that is also in a state text selects the state text"
   long press #wf_alice
   see "Long press: Alice"
 
-# A Scrollbar around a lazy list (its thumb always shown, one controller for both): `scroll` moves the list under it as it moves a list
-# without one.
+# A Scrollbar around a lazy list (its thumb always shown, one controller for both) is transparent: `scroll` moves the list's ScrollPosition
+# directly, so this passes the same with no Scrollbar. It pins that the page builds and that a Scrollbar does not get in the way; the thumb
+# itself is not a selector target.
 test "a list in a Scrollbar: scroll down to a far row, tap it, scroll back"
   tap "Open scrollbar list"
   wait until "Bar row 0" appears
