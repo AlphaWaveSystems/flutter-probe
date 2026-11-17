@@ -369,7 +369,7 @@ class ProbeExecutor {
         return {'node': hit?.toJson()};
 
       case ProbeMethods.visibleSummary:
-        return _finder.visibleSummary();
+        return _finder.visibleSummaryFull();
 
       case ProbeMethods.selectorBounds:
         final sel = req.params['selector'] as Map<String, dynamic>;
@@ -1133,7 +1133,25 @@ class ProbeExecutor {
 
     final elements = _finder.findElements(sel);
 
+    final presenceCheck = check == 'filled' || check == 'empty';
+    if (presenceCheck && pattern.isNotEmpty) {
+      // The check says whether a field holds a character and never reads its text, so there is no text to match a pattern against.
+      throw ProbeError(ProbeError.invalidParams,
+          '"is $check" never reads the text of a field, so it cannot be combined with a pattern');
+    }
+
     if (negated) {
+      if (presenceCheck) {
+        // A field that is not exactly one text field has no filled or empty state: letting "no reason" count as "not matching" would pass
+        // `don't see #label is filled` silently, the way an obscured field would for a negated contains check.
+        for (final e in elements) {
+          final reason = _fieldStateProblem(e);
+          if (reason != null) {
+            throw ProbeError(ProbeError.assertFailed,
+                '"${_selDesc(sel)}" $reason, so a negated "is $check" check cannot be evaluated');
+          }
+        }
+      }
       // PT-04 (related fix): a state check suffix (e.g. "don't see #id is
       // focused") used to be silently ignored here — this branch returned
       // as soon as *any* element existed, regardless of whether it actually
@@ -1221,8 +1239,42 @@ class ProbeExecutor {
     }
   }
 
+  /// The text fields that [e] is or builds: [e] itself when it is an EditableText, else the EditableTexts below it. Only [e] and what is
+  /// below it are looked at, never an ancestor or a sibling, so a label that sits next to a field is not mistaken for it.
+  List<EditableText> _editablesAtOrBelow(Element e) {
+    final found = <EditableText>[];
+    void visit(Element x) {
+      final w = x.widget;
+      if (w is EditableText) {
+        found.add(w);
+        return;
+      }
+      x.visitChildren(visit);
+    }
+
+    visit(e);
+    return found;
+  }
+
+  /// Why [e] has no filled or empty state, or null when it is exactly one text field. Used by `is filled` and `is empty`.
+  String? _fieldStateProblem(Element e) {
+    final n = _editablesAtOrBelow(e).length;
+    if (n == 0) {
+      return 'is not a text field (a TextField, TextFormField, CupertinoTextField or EditableText), so it is neither filled nor empty; name the field by its #id';
+    }
+    if (n > 1) {
+      return 'holds $n text fields, so it cannot say which one is filled or empty; name one field by its #id';
+    }
+    return null;
+  }
+
+  /// Whether the one text field of [e] holds at least one character. Only the length is asked: the text is never returned, put in a
+  /// message or sent, and an obscured (password) field is answered the same way, because nothing of its value leaves the device. Call it
+  /// only when [_fieldStateProblem] is null.
+  bool _fieldFilled(Element e) => _editablesAtOrBelow(e).single.controller.text.isNotEmpty;
+
   /// Evaluates a `see`/`don't see` state check ("enabled", "disabled",
-  /// "contains", "focused") against [element]. Returns null if the state is
+  /// "contains", "focused", "filled", "empty") against [element]. Returns null if the state is
   /// satisfied, or a human-readable reason (for the error message, without
   /// the selector prefix) if it isn't. Shared by the positive and negated
   /// paths in [_see] so a negated state check ("don't see X is focused")
@@ -1243,6 +1295,13 @@ class ProbeExecutor {
           return 'is an obscured field, so its text cannot be checked';
         if (!text.contains(checkVal)) return 'contains "$text", not "$checkVal"';
         return null;
+      case 'filled':
+      case 'empty':
+        final problem = _fieldStateProblem(element);
+        if (problem != null) return problem;
+        final filled = _fieldFilled(element);
+        if (check == 'filled') return filled ? null : 'is empty';
+        return filled ? 'is filled' : null;
       case 'checked':
         // This case was missing: `is checked` fell through to the default and
         // passed for every widget, whatever its value.

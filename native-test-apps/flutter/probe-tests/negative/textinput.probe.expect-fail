@@ -1,0 +1,50 @@
+# The negative variants of the see ... is filled / is empty tests of probe-tests/widgets/textinput.probe: every test below asserts something WRONG, or crosses what the agent can do,
+# and every one must FAIL. They show that those tests can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/textinput.probe.expect-fail /tmp/textinput-negative.probe
+#   probe test /tmp/textinput-negative.probe --device <serial> -y     # (the textinput build, the same probe.yaml as for textinput.probe)
+#
+# Expected: 0 passed, 8 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
+# waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id (the last element of the screen).
+  wait until #wf_cupertino_state appears
+
+# Expected: see #wf_textfield is filled: "#wf_textfield" is empty (nothing was typed)
+test "N1 an empty field is not filled"
+  see #wf_textfield is filled
+
+# Expected: see #wf_textfield is empty: "#wf_textfield" is filled (a character was typed)
+test "N2 a field with text is not empty"
+  type "x" into #wf_textfield
+  see #wf_textfield is empty
+
+# Expected: see #wf_password is filled: "#wf_password" is empty (nothing was typed into the password field)
+test "N3 an empty password field is not filled"
+  see #wf_password is filled
+
+# Expected: see #wf_password is empty: "#wf_password" is filled (the answer says the field is filled and nothing about what it holds)
+test "N4 a password field with text is not empty"
+  type "secret" into #wf_password
+  see #wf_password is empty
+
+# Expected: see "Plain: (empty)" is filled: "Plain: (empty)" is not a text field (a Text that shows the field is a label, not the field)
+test "N5 a label is not a field"
+  see "Plain: (empty)" is filled
+
+# Expected: don't see "Plain: (empty)" is empty: "Plain: (empty)" is not a text field ... so a negated "is empty" check cannot be evaluated (it must not pass silently)
+test "N6 a negated check on a label refuses instead of passing"
+  don't see "Plain: (empty)" is empty
+
+# Expected: don't see #wf_textfield is empty: Expected NOT to see "#wf_textfield (empty)" but found 1 element(s) (the field is empty)
+test "N7 don't see is empty fails on an empty field"
+  don't see #wf_textfield is empty
+
+# Expected: don't see #wf_textfield is filled: Expected NOT to see "#wf_textfield (filled)" but found 1 element(s) (the field holds a character)
+test "N8 don't see is filled fails on a filled field"
+  type "x" into #wf_textfield
+  don't see #wf_textfield is filled
