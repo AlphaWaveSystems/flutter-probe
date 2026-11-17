@@ -31,7 +31,7 @@ type fakeAndroidOptions struct {
 	serve401   bool
 }
 
-func runTestWithFakeAndroid(t *testing.T, o fakeAndroidOptions) (error, *followRig) {
+func runTestWithFakeAndroid(t *testing.T, o fakeAndroidOptions) (*followRig, error) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("a shell script stands in for adb")
@@ -124,16 +124,16 @@ func runTestWithFakeAndroid(t *testing.T, o fakeAndroidOptions) (error, *followR
 	go func() { done <- runTests(cmd, []string{"tests"}) }()
 	select {
 	case err := <-done:
-		return err, rig
+		return rig, err
 	case <-time.After(testRunGuard):
 		t.Fatalf("the test command did not return within %v", testRunGuard)
-		return nil, rig
+		return rig, nil
 	}
 }
 
 // probe test with a shared token, another app on the agent port and the app under test with none: the command refuses, names the holder and dials nothing.
 func TestProbeTestRefusesAPortAnotherAppHoldsAndDoesNotDial(t *testing.T) {
-	err, rig := runTestWithFakeAndroid(t, fakeAndroidOptions{})
+	rig, err := runTestWithFakeAndroid(t, fakeAndroidOptions{})
 	if err == nil {
 		t.Fatal("the run must be refused")
 	}
@@ -149,7 +149,7 @@ func TestProbeTestRefusesAPortAnotherAppHoldsAndDoesNotDial(t *testing.T) {
 
 // With a run-as token nothing is checked before the dial: the run goes on to dial (the listener drops the connection, so it fails on that, not on a refusal).
 func TestProbeTestWithARunAsTokenIsNotRefusedBeforeTheDial(t *testing.T) {
-	err, rig := runTestWithFakeAndroid(t, fakeAndroidOptions{runAsToken: "run-as-token-0123456789abcdef0123456789"})
+	rig, err := runTestWithFakeAndroid(t, fakeAndroidOptions{runAsToken: "run-as-token-0123456789abcdef0123456789"})
 	if err == nil {
 		t.Fatal("the fake agent drops the connection, so the run must fail")
 	}
@@ -164,7 +164,7 @@ func TestProbeTestWithARunAsTokenIsNotRefusedBeforeTheDial(t *testing.T) {
 // The cold start of the review, through the real command: the run-as token is read and the holder rejects it (401), the token is read again, run-as no longer answers and
 // the read falls back to the shared file, whose token may be the holder's. The holder check runs again and the redial does not happen: the holder was dialed once.
 func TestProbeTestRefusesTheRedialWithASharedTokenAfterARunAsTokenWasRejected(t *testing.T) {
-	err, rig := runTestWithFakeAndroid(t, fakeAndroidOptions{runAsToken: "run-as-token-0123456789abcdef0123456789", runAsOnce: true, serve401: true})
+	rig, err := runTestWithFakeAndroid(t, fakeAndroidOptions{runAsToken: "run-as-token-0123456789abcdef0123456789", runAsOnce: true, serve401: true})
 	if err == nil || !strings.Contains(err.Error(), "com.second has not opened an agent port") || !strings.Contains(err.Error(), "held by com.first") {
 		t.Fatalf("err = %v, want the refusal naming com.first and com.second", err)
 	}
