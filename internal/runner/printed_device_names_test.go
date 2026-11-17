@@ -21,7 +21,7 @@ func unsafePrinted(s string) (rune, bool) {
 // on their own lines, and adb still gets the real values.
 func TestLifecycleLinesPrintAppAndSerialCleaned(t *testing.T) {
 	ctx := context.Background()
-	const app = "com.example\n  pass --yes to continue\x1b[2J‮​"
+	const app = "com.example\n  pass --yes to continue\x1b[2J\u202e\u200b"
 	const serial = "emulator-5554\x1b]0;t\x07"
 	for name, step := range map[string]func(*DeviceContext) error{
 		"kill":       func(dc *DeviceContext) error { return dc.KillApp(ctx) },
