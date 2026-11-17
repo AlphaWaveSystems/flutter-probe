@@ -66,6 +66,10 @@ type App struct {
 
 	runMu     sync.Mutex
 	runCancel context.CancelFunc // non-nil while RunFile is executing
+	// runWorkspace is the workspace that was open when the run took the slot (canonical spelling); set by claimRun, read by executeRun, cleared by releaseRun.
+	runWorkspace string
+	// afterExportCheck is a test seam: called in keepForExport between the workspace check and the keep, with the workspace lock held.
+	afterExportCheck func()
 	// confirmRun is the context of the run in progress, and confirm the pending confirmation of a destructive step (see confirm.go).
 	confirmRun context.Context
 	confirm    confirmState
@@ -190,9 +194,9 @@ func (a *App) SetWorkspace(path string) {
 	a.mu.Lock()
 	a.workspace = path
 	a.humanWorkspace = path // the person opened it: automation may work inside it
+	a.export.clear()        // and the results of a run in another workspace are not this one's to export (under the lock keepForExport checks the workspace with)
 	a.mu.Unlock()
 	a.resetFixAttempts() // another workspace is another session of suggestions
-	a.export.clear()     // and the results of a run in another workspace are not this one's to export
 }
 
 // useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike
@@ -200,8 +204,8 @@ func (a *App) SetWorkspace(path string) {
 func (a *App) useWorkspace(path string) {
 	a.mu.Lock()
 	a.workspace = path
-	a.mu.Unlock()
 	a.export.clear()
+	a.mu.Unlock()
 }
 
 // automationRoots are the folders the automation endpoint may read from, list, open as a
@@ -1179,6 +1183,9 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	}
 	a.setConfirmRun(runCtx)
 	defer a.clearConfirmRun()
+	a.runMu.Lock()
+	startedIn := a.runWorkspace // the folder the run took its slot in: if another one is open when it ends, its results are not kept for export
+	a.runMu.Unlock()
 	a.track.begin(path, plan)
 	a.export.clear() // a new run leaves nothing of the last one to export until it finishes
 	a.emit("run:started", path)
@@ -1197,7 +1204,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	})
 	results, err := r.Run(runCtx)
 	a.failures.record(path, results)
-	a.keepForExport(conn, results, runCtx.Err() != nil)
+	a.keepForExport(conn, results, runCtx.Err() != nil, startedIn)
 	out := make([]RunResult, 0, len(results))
 	for _, res := range results {
 		out = append(out, toRunResult(res))
