@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/toolpath"
 )
 
 // Which adb Studio runs, and why a repository cannot choose it just by being opened.
@@ -55,11 +56,7 @@ func standardADBLocations(getenv func(string) string, home, goos string) []strin
 
 // isExecutableFile says whether p is a regular file the system can run (on Windows, a regular file).
 func isExecutableFile(p string) bool {
-	info, err := os.Stat(p)
-	if err != nil || !info.Mode().IsRegular() {
-		return false
-	}
-	return runtime.GOOS == "windows" || info.Mode()&0o111 != 0
+	return toolpath.IsExecutableFile(p, runtime.GOOS)
 }
 
 // defaultADBSearch finds the default adb: ("", true) when it is on PATH (the manager's default name is used), (path, true) for the first standard
@@ -95,61 +92,19 @@ func newDefaultManager() *device.Manager {
 // repository carries is what an untrusted repository would name, whichever folder of it the workspace is. Symlinks are resolved first. A relative
 // path is never resolved against the workspace or the working directory.
 func workspaceADB(configured, workspace, goos string) (string, error) {
-	if configured == "" {
-		return "", nil
-	}
-	fail := func(why string) (string, error) {
-		return "", fmt.Errorf("tools.adb in probe.yaml is not used: %s. Set it to the full path of adb outside this folder, or remove it to use the adb Studio finds", why)
-	}
-	if !filepath.IsAbs(configured) {
-		return fail("it is not an absolute path")
-	}
-	resolved, err := filepath.EvalSymlinks(filepath.Clean(configured))
+	resolved, err := toolpath.Check(configured, toolpath.Names("adb", goos), workspace, goos)
 	if err != nil {
-		return fail("the file cannot be found")
-	}
-	want := adbName(goos)
-	if filepath.Base(configured) != want || filepath.Base(resolved) != want {
-		return fail("the program is not called " + want)
-	}
-	if !isExecutableFile(resolved) {
-		return fail("it is not an executable file")
-	}
-	if workspace != "" {
-		ws := workspace
-		if real, err := filepath.EvalSymlinks(workspace); err == nil {
-			ws = real
-		}
-		if root := repoRoot(ws); root != "" {
-			if isUnder(root, resolved) {
-				return fail("it is inside the repository this folder belongs to")
-			}
-		} else if isUnder(ws, resolved) {
-			return fail("it is inside this folder")
-		}
+		return "", fmt.Errorf("tools.adb in probe.yaml is not used: %s. Set it to the full path of adb outside this folder, or remove it to use the adb Studio finds", studioReason(err))
 	}
 	return resolved, nil
 }
 
-// repoRoot is the folder above (or at) dir that holds a .git entry, a directory or a file (a worktree or a submodule has a file), or "" when there
-// is none. A workspace is often a subfolder of a repository: a program anywhere in that repository came with the repository.
-func repoRoot(dir string) string {
-	for d := filepath.Clean(dir); ; {
-		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
-			return d
-		}
-		parent := filepath.Dir(d)
-		if parent == d {
-			return ""
-		}
-		d = parent
-	}
-}
-
-// isUnder says whether p is root or inside it.
-func isUnder(root, p string) bool {
-	rel, err := filepath.Rel(root, p)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+// studioReason words the shared rule's reason the way Studio always has: Studio speaks of the folder it opened, not of a probe.yaml.
+func studioReason(err error) string {
+	return strings.NewReplacer(
+		"inside the repository of this probe.yaml", "inside the repository this folder belongs to",
+		"inside the folder of this probe.yaml", "inside this folder",
+	).Replace(err.Error())
 }
 
 // adbNote is the one line that says why Android devices would be missing: adb was not found where Studio looks. It names what was searched

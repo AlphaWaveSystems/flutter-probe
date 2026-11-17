@@ -13,6 +13,9 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { recordedScript, recordingHeader } from "./recording-script";
+import { askDiscard, initDiscardDialog } from "./discard-dialog";
+import { connectFailureLine } from "./connect-failure";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
@@ -25,7 +28,9 @@ import { toast } from "./toast";
 
 import {
   CancelRun,
+  CheckInsertBefore,
   CheckReplaceLine,
+  CloseWorkspace,
   SelectorFixAttempts,
   Chat,
   Connect,
@@ -373,7 +378,7 @@ async function onFileClick(path: string, isDir: boolean) {
 // outside the workspace, with a .. segment, through a link out of it, and a file that is not there) and changes nothing until that has
 // worked. It returns whether the file is open now.
 async function openProbeFile(path: string): Promise<boolean> {
-  if (dirty && !confirm("Discard unsaved changes?")) return false;
+  if (dirty && !(await askDiscard())) return false;
   try {
     const content = await ReadFile(path);
     model.setValue(content);
@@ -434,6 +439,7 @@ async function pickWorkspace() {
     await SetWorkspace(path);
     resetAIPreview();
     workspaceRoot = path;
+    showWorkspaceClose();
     resetNetworkPanel();
     refreshFiles(path);
     void refreshWorkspaceNote();
@@ -444,6 +450,45 @@ async function pickWorkspace() {
 }
 
 $("btn-pick-workspace").addEventListener("click", pickWorkspace);
+
+// The Close button is there only while a workspace is open. Closing brings back the state of a first start (no workspace, no file, the guidance in
+// the panes), and forgets the remembered folder, so the next start does not reopen it. PROBE_STUDIO_WORKSPACE, when set, still opens its folder at start.
+function showWorkspaceClose(): void {
+  ($("btn-close-workspace") as HTMLButtonElement).hidden = workspaceRoot === "";
+}
+
+async function closeWorkspace(): Promise<void> {
+  if (workspaceRoot === "") return;
+  if (dirty && !(await askDiscard())) return; // unsaved changes: the same question as opening another file
+  try {
+    await CloseWorkspace(); // Go refuses while a run or a recording is going (and says so)
+  } catch (err) {
+    toast(String(err).replace(/^Error:\s*/, ""), "info", 4000);
+    return;
+  }
+  localStorage.removeItem(WORKSPACE_KEY);
+  workspaceRoot = "";
+  resetAIPreview();
+  resetNetworkPanel();
+  model.setValue("");
+  currentPath = null;
+  $("editor-filename").textContent = "untitled.probe";
+  setDirty(false);
+  updateRunButton();
+  showWorkspaceClose();
+  void refreshWorkspaceNote();
+  // The tree is cleared here, not listed again: with a folder from the environment still reachable, a listing of a relative path would be refused and say so.
+  currentDir = "tests";
+  $("file-path").textContent = currentDir;
+  const list = $("file-list");
+  clearChildren(list);
+  listing = "empty";
+  renderEmptyPane(list);
+  refreshFirstRun();
+  toast("Workspace closed", "info", 1800);
+}
+
+$("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 
 // ---- Save ---------------------------------------------------------------
 
@@ -1674,24 +1719,24 @@ async function refreshDevices() {
   try {
     const devs = ((await ListDevices()) ?? []) as DeviceInfo[];
     if (seq !== refreshSeq) return;
-    // Read the selection when the list has arrived, not when the refresh started: the user may have
-    // picked a device while it was in flight, and that pick must survive the rebuild below.
-    const previous = select.value;
-    clearChildren(select);
-    select.appendChild(makeOption("", "— select device —"));
+    // Everything that is asked for is asked for before the list is touched: the picker is rebuilt in one synchronous step, never emptied while a
+    // question is in flight (a dropdown that is open when its options are replaced loses the pick: the first selection after a launch was ignored).
+    let note = "";
+    try {
+      note = (await DeviceListNote()) ?? "";
+    } catch {
+      note = "";
+    }
+    if (seq !== refreshSeq) return; // a newer refresh started while the note was read
+    adbNote = note;
     lastDeviceList = devs;
     devicesLoaded = true;
-    try {
-      adbNote = (await DeviceListNote()) ?? "";
-    } catch {
-      adbNote = "";
-    }
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
     const sorted = [...devs].sort(
       (a, b) => Number(b.booted) - Number(a.booted) || a.name.localeCompare(b.name)
     );
-    for (const d of sorted) {
+    const entries = sorted.map((d) => {
       const tag = d.kind === "physical" ? "physical" : d.platform;
       const model = d.model && !d.name.includes(d.model) ? ` (${d.model})` : "";
       const via = d.transport === "network" ? "  · WiFi only" : d.transport === "usb" ? "  · USB" : "";
@@ -1700,12 +1745,24 @@ async function refreshDevices() {
         : d.kind === "physical"
           ? `${d.name}${model}  ·  ${tag}${via}`
           : `${d.name}  ·  ${tag}  · shutdown`;
-      const opt = makeOption(d.id, label);
-      if (!d.booted) opt.dataset.booted = "false";
-      select.appendChild(opt);
-    }
-    if (previous && devs.some((d) => d.id === previous)) {
-      select.value = previous;
+      return { id: d.id, label, booted: d.booted };
+    });
+    // A list that is the same as the one shown is left alone, so an open dropdown and the pick in it are not disturbed by a refresh that found nothing new.
+    const shown = Array.from(select.options).slice(1).map((o) => `${o.value}\u0000${o.textContent}\u0000${o.dataset.booted ?? ""}`);
+    const wanted = entries.map((e) => `${e.id}\u0000${e.label}\u0000${e.booted ? "" : "false"}`);
+    const unchanged = select.options.length === entries.length + 1 && select.options[0].value === "" && shown.every((x, i) => x === wanted[i]);
+    if (!unchanged) {
+      const previous = select.value; // read when the list is replaced, so a pick made while the refresh was in flight survives
+      clearChildren(select);
+      select.appendChild(makeOption("", "— select device —"));
+      for (const e of entries) {
+        const opt = makeOption(e.id, e.label);
+        if (!e.booted) opt.dataset.booted = "false";
+        select.appendChild(opt);
+      }
+      if (previous && devs.some((d) => d.id === previous)) {
+        select.value = previous;
+      }
     }
     if (devs.length === 0) {
       toast("No simulators, emulators or phones detected. Start one, or plug in a phone, and click ↻. A phone on WiFi: use the 📡 button.", "info");
@@ -1771,9 +1828,13 @@ function updateConnectButton() {
   refreshFirstRun();
 }
 
-($("device-picker") as HTMLSelectElement).addEventListener("change", updateConnectButton);
+($("device-picker") as HTMLSelectElement).addEventListener("change", () => {
+  if (!connected && $("status-dot").classList.contains("status-error")) setStatus("disconnected", "disconnected"); // another device: the old failure is not about it
+  updateConnectButton();
+});
 $("btn-refresh").addEventListener("click", refreshDevices);
 
+let connectAttempt = 0;
 $("btn-connect").addEventListener("click", async () => {
   if (connected) {
     try {
@@ -1788,6 +1849,7 @@ $("btn-connect").addEventListener("click", async () => {
   const select = $("device-picker") as HTMLSelectElement;
   const id = select.value;
   if (!id) return;
+  const attempt = ++connectAttempt; // a result that comes back after a newer attempt started is not about the screen any more
   setStatus("connecting", "connecting…");
   try {
     const status = (await Connect(id)) as ConnectionStatus;
@@ -1802,9 +1864,10 @@ $("btn-connect").addEventListener("click", async () => {
     if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
-    setStatus("error", "connection failed", detail);
+    if (attempt !== connectAttempt) return; // superseded: a newer Connect is under way or has finished, and its result is the one shown
+    // The reason stays in the status (full text as the tooltip) until the person picks another device or connects again.
+    setStatus("error", connectFailureLine(detail), detail);
     toast(`Connect failed: ${detail}`, "error", 8000);
-    setTimeout(() => setStatus("disconnected", "disconnected"), 2500);
   }
 });
 
@@ -1870,6 +1933,7 @@ if (inspectorSearch) {
 initResults();
 initNetworkPanel();
 initConfirmDialog();
+initDiscardDialog();
 // Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
 // Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
 // parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.
@@ -2063,7 +2127,70 @@ EventsOn("run:step", (s: RunStep) => {
 // A click on a failing row asks for a file and a line (planJump decides what is allowed). Only a click moves the editor.
 document.addEventListener("studio:goto-line", (ev) => void gotoFailingLine((ev as CustomEvent<JumpTarget>).detail));
 
+// ---- Insert before the step (the rule-based fix) -----------------------------------------------------------------------------------
+//
+// The rule row under a failed see or tap offers a line to add above the step. Studio says whether it may (CheckInsertBefore: the editor must hold
+// the text the run read), and the edit is one undo step. Every line below it moves down by one, so the marks and row numbers of that run are no
+// longer right: the marks are cleared, and a row of that file does not jump until the next run.
+
+let staleRunFile: string | null = null;
+EventsOn("run:started", () => {
+  staleRunFile = null;
+});
+
+document.addEventListener("studio:insert-before", (ev) => void insertBeforeStep((ev as CustomEvent<{ file: string; line: number }>).detail));
+
+async function insertBeforeStep(t: { file: string; line: number }): Promise<void> {
+  if (!currentPath) {
+    toast("Not inserted: no file is open.", "info", 5000);
+    return;
+  }
+  if (runInProgress) {
+    toast("Not inserted: a run is in progress. Wait until it has finished.", "info", 5000);
+    return;
+  }
+  const checked = model.getValue();
+  const pathAtClick = currentPath; // what was asked about: the file and the exact state of the editor's text
+  const versionAtClick = model.getVersionId();
+  // The path and the version id identify the text because there is one editor model and it is never replaced (setValue, not setModel). If a second
+  // model is ever introduced, this check must compare the model itself too.
+  let check: { ok: boolean; line?: number; text?: string; reason?: string };
+  try {
+    check = await CheckInsertBefore(t.file, t.line, currentPath, checked);
+  } catch (err) {
+    toast(`Not inserted: ${err instanceof Error ? err.message : String(err)}`, "error", 6000);
+    return;
+  }
+  if (!check.ok || !check.line || check.text === undefined) {
+    toast(`Not inserted: ${check.reason ?? "Studio refused"}`, "info", 7000);
+    return;
+  }
+  // The answer was for the file and the text of the click. Another file may be open now (even one with the very same text), or the text may have changed.
+  if (currentPath !== pathAtClick || model.getVersionId() !== versionAtClick || model.getValue() !== checked) {
+    toast("Not inserted: another file was opened or the text changed while Studio was checking. Press again.", "info", 5000);
+    return;
+  }
+  if (runInProgress) {
+    toast("Not inserted: a run started while Studio was checking. Wait until it has finished.", "info", 5000);
+    return;
+  }
+  // The new line is its own line: its text and the file's line ending, put at the start of the failed line (which keeps its own ending, or none).
+  editor.pushUndoStop();
+  editor.executeEdits("insert-before-step", [{ range: new monaco.Range(check.line, 1, check.line, 1), text: check.text + model.getEOL() }]);
+  editor.pushUndoStop();
+  editor.setPosition({ lineNumber: check.line, column: 1 });
+  editor.revealLineInCenterIfOutsideViewport(check.line);
+  stepState.clear();
+  renderStepDecorations();
+  staleRunFile = t.file;
+  toast(`Inserted above line ${check.line} (the step is now line ${check.line + 1}). Not saved, not run; Undo removes it. The marks of the last run are cleared: run again.`, "success", 7000);
+}
+
 async function gotoFailingLine(target: JumpTarget): Promise<void> {
+  if (staleRunFile !== null && target?.file === staleRunFile) {
+    toast("The file changed since this run (a line was inserted): run again before using its rows.", "info", 5000);
+    return;
+  }
   const plan = planJump(target ?? {}, { openFile: currentPath, workspaceRoot });
   if (plan.kind === "refuse") {
     toast(`Not opened: ${plan.reason}`, "error", 5000);
@@ -2135,13 +2262,14 @@ insertTapBtn.addEventListener("click", () => {
   editor.focus();
 });
 
+let recordingHead = "";
+
 $("btn-record").addEventListener("click", async () => {
   if (!connected) return;
 
   if (!recording) {
-    const now = new Date().toLocaleString();
-    const header = `# Recorded on ${now}\n\ntest "recorded flow"\n  open the app`;
-    model.setValue(header);
+    recordingHead = recordingHeader(new Date().toLocaleString());
+    model.setValue(recordingHead);
     currentPath = null;
     $("editor-filename").textContent = "recorded.probe";
     setDirty(true);
@@ -2156,7 +2284,8 @@ $("btn-record").addEventListener("click", async () => {
     try {
       const script = await StopRecording();
       if (script && script.trim()) {
-        model.setValue(script);
+        // the header the recording started with stays: the steps go under its test block
+        model.setValue(recordedScript(recordingHead, script));
       }
     } catch (err) {
       toast(`Stop failed: ${enrichError(err)}`, "error");
@@ -2186,6 +2315,7 @@ initDeviceSettings();
     await SetWorkspace(ws);
     resetAIPreview();
     workspaceRoot = ws;
+    showWorkspaceClose();
     resetNetworkPanel();
     void refreshWorkspaceNote();
     await refreshFiles(ws);

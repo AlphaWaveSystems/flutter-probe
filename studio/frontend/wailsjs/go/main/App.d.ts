@@ -20,9 +20,13 @@ export function CancelRun():Promise<void>;
 
 export function Chat(arg1:Array<main.ChatMessage>,arg2:string):Promise<main.ChatResponse>;
 
+export function CheckInsertBefore(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.InsertBeforeCheck>;
+
 export function CheckReplaceLine(arg1:string,arg2:string,arg3:string):Promise<main.ReplaceLineCheck>;
 
 export function CheckTarget(arg1:string):Promise<main.TargetInfo>;
+
+export function CloseWorkspace():Promise<void>;
 
 export function Connect(arg1:string):Promise<main.ConnectionStatus>;
 

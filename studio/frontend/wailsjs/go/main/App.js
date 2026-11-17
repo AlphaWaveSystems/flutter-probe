@@ -38,12 +38,20 @@ export function Chat(arg1, arg2) {
   return window['go']['main']['App']['Chat'](arg1, arg2);
 }
 
+export function CheckInsertBefore(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CheckInsertBefore'](arg1, arg2, arg3, arg4);
+}
+
 export function CheckReplaceLine(arg1, arg2, arg3) {
   return window['go']['main']['App']['CheckReplaceLine'](arg1, arg2, arg3);
 }
 
 export function CheckTarget(arg1) {
   return window['go']['main']['App']['CheckTarget'](arg1);
+}
+
+export function CloseWorkspace() {
+  return window['go']['main']['App']['CloseWorkspace']();
 }
 
 export function Connect(arg1) {

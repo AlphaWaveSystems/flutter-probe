@@ -64,6 +64,7 @@
           <span>Workspace</span>
           <span class="pane-actions">
             <button id="btn-pick-workspace" class="btn-mini" title="Open folder">📂</button>
+            <button id="btn-close-workspace" class="btn-mini" title="Close the workspace (back to the empty first-run state)" hidden>✕</button>
             <button id="btn-files-up" class="btn-mini" title="Up one directory">↑</button>
             <button id="btn-files-refresh" class="btn-mini" title="Refresh">↻</button>
           </span>
@@ -441,6 +442,16 @@
         <div class="confirm-buttons">
           <button type="button" id="btn-confirm-cancel" class="btn btn-primary"></button>
           <button type="button" id="btn-confirm-danger" class="btn btn-danger"></button>
+        </div>
+      </div>
+    </div>
+    <div id="discard-overlay" class="overlay" hidden>
+      <div class="overlay-card confirm-card" id="discard-card" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-lead">
+        <div class="overlay-header"><h2 id="discard-title">Discard unsaved changes?</h2></div>
+        <p id="discard-lead">The open file has changes that are not saved. Opening another file throws them away.</p>
+        <div class="confirm-buttons">
+          <button type="button" id="btn-discard-cancel" class="btn btn-primary">Keep editing</button>
+          <button type="button" id="btn-discard-ok" class="btn btn-danger">Discard changes</button>
         </div>
       </div>
     </div>

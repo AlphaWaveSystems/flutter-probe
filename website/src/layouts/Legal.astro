@@ -1,19 +1,21 @@
 ---
-// The legal and plain-text pages (terms, privacy, refunds, contact) in the shared frame. They are drafts and say so.
+// The legal and plain-text pages (terms, privacy, refunds, contact, subprocessors, company) in the shared frame. They are drafts and say so.
 import Site from './Site.astro';
 
 interface Props {
   title: string;
   description: string;
   path?: string;
+  updated?: string;
+  noindex?: boolean;
 }
-const { title, description, path } = Astro.props;
+const { title, description, path, updated = 'Last updated: 10 October 2026', noindex = false } = Astro.props;
 const here = path ?? Astro.url.pathname;
 ---
-<Site title={`${title} - FlutterProbe`} description={description} path={here}>
+<Site title={`${title} - FlutterProbe`} description={description} path={here} noindex={noindex}>
   <div class="prose">
     <h1>{title}</h1>
-    <p class="updated">Last updated: 10 October 2026</p>
+    <p class="updated">{updated}</p>
     <div class="draft">Draft for review: this page is not final and does not take effect until it is confirmed.</div>
     <slot />
   </div>
