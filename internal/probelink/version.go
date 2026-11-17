@@ -26,6 +26,10 @@ type HandshakeResult struct {
 	FlutterChannel    string
 	FrameworkRevision string
 	DartVersion       string
+	// AppID is the application id (Android package name, iOS bundle id) of the app the agent says it runs in, or "" when the agent does not send it (an
+	// older agent, an id it could not read) and when what it sent is not a plain application id (letters, digits, '_' and '-' in dot-separated segments, at
+	// most 255 characters). It is the app's own statement, shown in a warning and never used to run anything.
+	AppID string
 }
 
 // maxBuildFieldLen is the longest build field (version, channel, revision) accepted from an agent.
@@ -47,6 +51,52 @@ func plainBuildText(s string) string {
 	return s
 }
 
+// maxAppIDLen is the longest application id accepted from an agent (the Android limit).
+const maxAppIDLen = 255
+
+// plainAppID returns s when it is a plain application id (two or more dot-separated segments of letters, digits, '_' and '-', the first character of a segment a
+// letter or digit, at most 255 characters), else "".
+func plainAppID(s string) string {
+	if s == "" || len(s) > maxAppIDLen {
+		return ""
+	}
+	segments := 1
+	segStart := true
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '.':
+			if segStart {
+				return ""
+			}
+			segments++
+			segStart = true
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+			segStart = false
+		case c == '_' || c == '-':
+			if segStart {
+				return ""
+			}
+		default:
+			return ""
+		}
+	}
+	if segStart || segments < 2 {
+		return ""
+	}
+	return s
+}
+
+// AppIDMismatchWarning returns the warning for an agent that says it runs in another app than the one the run is about (want, the project's app id), and "" when
+// they are the same or when either is not known: an agent that does not report an id, or a project with no app id, says nothing. It is a warning, not a refusal:
+// an id is the app's own statement, and a build can run under a suffixed id.
+func AppIDMismatchWarning(h HandshakeResult, want string) string {
+	if want == "" || h.AppID == "" || h.AppID == want {
+		return ""
+	}
+	return fmt.Sprintf("the agent that answered reports app %s, but project.app is %s: the run may be going to another app on this device (stop the other app, or give the app under test its own agent port)", h.AppID, want)
+}
+
 // newHandshakeResult is what both clients make of an agent's ping answer.
 func newHandshakeResult(res PingResult) *HandshakeResult {
 	return &HandshakeResult{
@@ -56,6 +106,7 @@ func newHandshakeResult(res PingResult) *HandshakeResult {
 		FlutterChannel:    plainBuildText(string(res.FlutterChannel)),
 		FrameworkRevision: plainBuildText(string(res.FrameworkRevision)),
 		DartVersion:       plainBuildText(string(res.DartVersion)),
+		AppID:             plainAppID(string(res.AppID)),
 	}
 }
 

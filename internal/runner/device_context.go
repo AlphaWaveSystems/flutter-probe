@@ -831,13 +831,16 @@ func (dc *DeviceContext) dialReconnect(ctx context.Context, dialOpts probelink.D
 // handshakeNewClient runs the connect-time version handshake on a client dialed after a reconnect, prints the version
 // warning, and closes the client when the handshake fails.
 func (dc *DeviceContext) handshakeNewClient(ctx context.Context, client probelink.ProbeClient) error {
-	warning, err := probelink.CheckHandshake(ctx, client, dc.CLIVersion)
+	handshake, warning, err := probelink.CheckHandshakeResult(ctx, client, dc.CLIVersion)
 	if err != nil {
 		client.Close()
 		return err
 	}
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  %s\n", sysdialog.ScrubKnown(warning))
+	}
+	if w := probelink.AppIDMismatchWarning(handshake, dc.AppID); w != "" {
+		fmt.Printf("  \033[33m⚠\033[0m  %s\n", sysdialog.ScrubKnown(w))
 	}
 	return nil
 }

@@ -1190,15 +1190,18 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			}
 
 			trace("handshake: comparing CLI v%s against agent", cfg.CLIVersion)
-			agentVersion, warning, err := probelink.CheckHandshakeVersion(ctx, client, cfg.CLIVersion)
+			handshake, warning, err := probelink.CheckHandshakeResult(ctx, client, cfg.CLIVersion)
 			if err != nil {
 				trace("handshake: rejected: %v", err)
 				return fmt.Errorf("agent handshake failed: %w", err)
 			}
-			trace("handshake: accepted")
-			announceRun(agentVersion)
+			trace("handshake: accepted (agent app %q)", handshake.AppID)
+			announceRun(handshake.AgentVersion)
 			if warning != "" {
 				printAgentWarning(statusW, warning)
+			}
+			if w := probelink.AppIDMismatchWarning(handshake, cfg.Project.App); w != "" {
+				printAgentWarning(statusW, w)
 			}
 			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
 		}

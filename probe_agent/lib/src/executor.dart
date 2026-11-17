@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'agent_version.dart';
+import 'app_id.dart';
 import 'build_info.dart';
 import 'biometric.dart' as biometric;
 import 'device_view.dart';
@@ -138,11 +139,14 @@ class ProbeExecutor {
           stdout.writeln('ProbeAgent: CLI version $clientVersion connected (agent $probeAgentVersion)');
         }
         // flutter_version, flutter_channel, framework_revision and dart_version describe the app's own build; each is left out when unknown.
+        // app_id is the application id of the app this agent runs in, so the CLI can tell which app answered; left out when unknown.
+        final appId = reportedAppId();
         return {
           'ok': true,
           'agent_version': probeAgentVersion,
           'capabilities': probeAgentCapabilities,
           ...probeBuildInfo(),
+          if (appId != null) 'app_id': appId,
         };
 
       case ProbeMethods.settled:
