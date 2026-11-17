@@ -224,4 +224,24 @@ test.describe("Open the failing line", () => {
     await expect(page.locator("#results-list li.pass", { hasText: "all good" })).toBeVisible();
     await expect(page.locator("#results-list li.goto")).toHaveCount(0);
   });
+
+  test("gl-07 a click on the error text under a failing step moves the caret like the row, and selecting the text to copy it does not", async ({ page }) => {
+    await open(page, "counter.probe");
+    await fireFailedRun(page, { file: path.join(tests, "counter.probe"), test: "t", line: 5, description: 'tap "x"' });
+    await page.waitForTimeout(300);
+    await expect(activeLine(page)).not.toHaveText("5");
+    const err = page.locator("#results-list li.step-err", { hasText: "no widget" });
+    // a selection inside the error is a copy, not a jump
+    const box = (await err.boundingBox())!;
+    await page.mouse.move(box.x + 50, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 100, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).not.toBe("");
+    await page.waitForTimeout(300);
+    await expect(activeLine(page)).not.toHaveText("5");
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await err.click();
+    await expect(activeLine(page)).toHaveText("5");
+  });
 });
