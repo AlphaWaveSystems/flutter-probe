@@ -784,19 +784,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 					statusOK(statusW, "Relay session: %s", relaySessionID)
 				}
 
-				// Upload app
-				statusInfo(statusW, "Uploading app to %s...", provider.Name())
-				appID, err := provider.UploadApp(ctx, cloudApp)
+				// Upload the app and start the cloud session (the app launches on the device)
+				sess, err := uploadAndStartCloudSession(ctx, provider, cloudApp, targetDevice, statusW)
 				if err != nil {
-					return fmt.Errorf("cloud upload: %w", err)
-				}
-				statusOK(statusW, "App uploaded: %s", appID)
-
-				// Start cloud session (app launches on device)
-				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
-				sess, err := provider.StartSession(ctx, appID, targetDevice)
-				if err != nil {
-					return fmt.Errorf("cloud session: %w", err)
+					return err
 				}
 				sess.RelayURL = relayURL
 				sess.CLIToken = cliToken
@@ -850,23 +841,14 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if warning != "" {
 					printAgentWarning(statusW, warning)
 				}
-				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent via relay on %s (%s)", device.CleanOneLine(targetDevice, 80), provider.Name())
 			} else {
 				// ── Direct path: port forwarding (existing behavior) ──────
 
-				// Step 1: Upload app
-				statusInfo(statusW, "Uploading app to %s...", provider.Name())
-				appID, err := provider.UploadApp(ctx, cloudApp)
+				// Upload the app and start the session
+				sess, err := uploadAndStartCloudSession(ctx, provider, cloudApp, targetDevice, statusW)
 				if err != nil {
-					return fmt.Errorf("cloud upload: %w", err)
-				}
-				statusOK(statusW, "App uploaded: %s", appID)
-
-				// Step 2: Start session
-				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
-				sess, err := provider.StartSession(ctx, appID, targetDevice)
-				if err != nil {
-					return fmt.Errorf("cloud session: %w", err)
+					return err
 				}
 				cloudSession = &sess
 				defer func() {
@@ -911,7 +893,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if warning != "" {
 					printAgentWarning(statusW, warning)
 				}
-				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", device.CleanOneLine(targetDevice, 80), provider.Name())
 			}
 
 			// Use cloud device info as the "serial" for reporting
@@ -1101,7 +1083,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			} else {
 				// Android: verify ADB is available and device is reachable,
 				// clean up stale port forwards
-				trace("android: ensuring adb + device %s reachable", deviceSerial)
+				trace("android: ensuring adb + device %s reachable", device.CleanOneLine(deviceSerial, 80))
 				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
 					trace("android: EnsureADB failed: %v", err)
 					return fmt.Errorf("android setup: %w", err)
@@ -1201,7 +1183,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				printAgentWarning(statusW, warning)
 			}
 			printAppIDWarning(statusW, handshake, cfg.Project.App, platform)
-			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
+			statusOK(statusW, "Connected to ProbeAgent on %s", device.CleanOneLine(deviceSerial, 80)) // an auto-picked id is the device's own
 		}
 	}
 	_ = cloudSession // used by deferred StopSession above
@@ -1318,7 +1300,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			devCtx.Follower = portFollower
 		}
 		if devCtx.IsPhysical {
-			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
+			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", device.CleanOneLine(deviceSerial, 80))
 		}
 	}
 
@@ -1787,4 +1769,21 @@ func junitOptionsFromFlags(cmd *cobra.Command) runner.JUnitOptions {
 		}
 	}
 	return o
+}
+
+// uploadAndStartCloudSession uploads the app to the cloud provider and starts a session on targetDevice. The printed lines show the id the
+// provider returned and the device as plain text on one line; the provider gets the values as they are.
+func uploadAndStartCloudSession(ctx context.Context, provider cloud.CloudProvider, appPath, targetDevice string, statusW io.Writer) (cloud.Session, error) {
+	statusInfo(statusW, "Uploading app to %s...", provider.Name())
+	appID, err := provider.UploadApp(ctx, appPath)
+	if err != nil {
+		return cloud.Session{}, fmt.Errorf("cloud upload: %w", err)
+	}
+	statusOK(statusW, "App uploaded: %s", device.CleanOneLine(appID, 80)) // the id the provider returned
+	statusInfo(statusW, "Starting cloud session on %s (%s)...", device.CleanOneLine(targetDevice, 80), provider.Name())
+	sess, err := provider.StartSession(ctx, appID, targetDevice)
+	if err != nil {
+		return cloud.Session{}, fmt.Errorf("cloud session: %w", err)
+	}
+	return sess, nil
 }

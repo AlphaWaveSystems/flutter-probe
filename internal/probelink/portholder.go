@@ -8,8 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
@@ -162,30 +160,9 @@ func holderPID(s string) string {
 	return "?"
 }
 
-// cleanHolderText makes the name lsof printed for a process safe to put in a message: every control, format (bidi, zero-width), private-use, surrogate, separator
-// and invalid character and every space becomes one space, runs collapse, the ends are trimmed and at most maxRunes runes are kept (a cut ends in an ellipsis).
-// It is a small copy of the rules of device.CleanOneLine: this package cannot import device (device imports this package).
-func cleanHolderText(s string, maxRunes int) string {
-	var b strings.Builder
-	space := true
-	for _, r := range s {
-		if r == utf8.RuneError || unicode.IsControl(r) || unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Co, r) || unicode.Is(unicode.Cs, r) ||
-			r == '\u2028' || r == '\u2029' || (r >= 0xFE00 && r <= 0xFE0F) || r == '\u3164' || r == '\u115F' || r == '\uFFA0' || r == '\u2800' || r == '\uFFFC' {
-			if !space {
-				b.WriteByte(' ')
-				space = true
-			}
-			continue
-		}
-		b.WriteRune(r)
-		space = false
-	}
-	out := []rune(strings.TrimRight(b.String(), " "))
-	if len(out) > maxRunes {
-		out = append(out[:maxRunes-1], '…')
-	}
-	return string(out)
-}
+// cleanHolderText makes the name lsof printed for a process safe to put in a message: it is oneline.Clean (the single implementation of the
+// rules, which device.CleanOneLine also uses), at most maxRunes runes.
+func cleanHolderText(s string, maxRunes int) string { return oneline.Clean(s, maxRunes) }
 
 // portHolderHint is appended to dial errors: what already owns the agent
 // port on this machine, and how to move off it. Empty for remote hosts and

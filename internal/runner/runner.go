@@ -900,11 +900,26 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 		return
 	}
 	// A host file is copied only from the folders the run writes to (localDir and the folders the caller adds: never a parent of them, which
-	// can be the working or the home folder) or a simulator's data folder, and a video is kept in place only in the run's folders. An artifact path can come from the agent, so it is never trusted to name another host file: the file is opened once, checked
-	// on the open file and read from it (internal/confined), so a link swapped in after the check is never followed.
-	roots := resolvedRoots(append([]string{localDir}, extraRoots...))
+	// can be the working or the home folder) or a simulator's data folder, and a video is kept in place only in the run's folders. An
+	// artifact path can come from the agent, so it is never trusted to name another host file: the file is opened once, checked on the open
+	// file and read from it (internal/confined), so a link swapped in after the check is never followed. The roots are checked too
+	// (artifactRoot): a root that is a link, or as wide as a filesystem root, the working folder or the home folder, is not one.
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return
+	}
+	local, ok := artifactRoot(localDir, true)
+	if !ok {
+		// The folder the copies would go to is a link or too wide: nothing is copied into it, and no path the agent named is kept.
+		for i := range results {
+			results[i].Artifacts = nil
+		}
+		return
+	}
+	roots := []string{local}
+	for _, r := range extraRoots {
+		if rr, ok := artifactRoot(r, false); ok {
+			roots = append(roots, rr)
+		}
 	}
 	for i := range results {
 		var localPaths []string
@@ -945,7 +960,7 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 				var data []byte
 				var err error
 				if !appPrivateFile(dc.AppID, remotePath) {
-					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.AppID)
+					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.appShown())
 				} else {
 					data, err = dc.Manager.ADB().Run(ctx, dc.Serial,
 						"exec-out", "run-as", shellquote.Arg(dc.AppID), "cat", shellquote.Arg(remotePath))
@@ -1072,21 +1087,46 @@ func isVideo(p string) bool {
 	return false
 }
 
-// resolvedRoots returns roots absolute and with links resolved (as far as they exist), so the real path of an open file can be compared.
-func resolvedRoots(roots []string) []string {
+// artifactRoot returns dir absolute and with links resolved when it may hold artifacts: it exists, its last part is not a link (a folder
+// planted as a link to a host folder would make that folder allowed), it is absolute unless relativeOK (localDir may be given relative to
+// the working folder; a caller's extra folder may not), and it is not as wide as a filesystem root, the working folder, the home folder or
+// a folder above either of them.
+func artifactRoot(dir string, relativeOK bool) (string, bool) {
+	if dir == "" || (!relativeOK && !filepath.IsAbs(dir)) {
+		return "", false
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	if info, err := os.Lstat(abs); err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", false
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil || filepath.Dir(real) == real {
+		return "", false
+	}
+	for _, wide := range wideFolders() {
+		if isUnderDir(real, wide) { // real is wide itself or a folder above it
+			return "", false
+		}
+	}
+	return real, true
+}
+
+// wideFolders are the working folder and the home folder, resolved: no artifact root may be one of them or a folder above them.
+var wideFolders = func() []string {
 	var out []string
-	for _, root := range roots {
-		if root == "" {
-			continue
+	if wd, err := os.Getwd(); err == nil {
+		out = append(out, wd)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		out = append(out, home)
+	}
+	for i, p := range out {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			out[i] = r
 		}
-		r, err := filepath.Abs(root)
-		if err != nil {
-			continue
-		}
-		if rr, err := filepath.EvalSymlinks(r); err == nil {
-			r = rr
-		}
-		out = append(out, r)
 	}
 	return out
 }
