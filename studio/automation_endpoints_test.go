@@ -123,3 +123,103 @@ func TestEndpointMethodsWithoutAConnection(t *testing.T) {
 		t.Errorf("disconnect with nothing connected must be a no-op, got %s", out["error"])
 	}
 }
+
+// ---- the endpoint's guards, with the six methods as the thing being protected --------------------------------------------------------------------------
+
+// rpcRaw posts a body as it is, with the headers the caller sets, and returns the status and the body text.
+func rpcRaw(t *testing.T, s *automationServer, body string, header map[string]string) (int, string) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, s.URL()+"/rpc", strings.NewReader(body))
+	for k, v := range header {
+		req.Header.Set(k, v)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var sb strings.Builder
+	buf := make([]byte, 4096)
+	for {
+		n, err := resp.Body.Read(buf)
+		sb.Write(buf[:n])
+		if err != nil {
+			break
+		}
+	}
+	return resp.StatusCode, sb.String()
+}
+
+// The token is compared whole: a prefix of it, the token with something after it, another letter case and a scheme other than Bearer are all refused, and
+// no backend method is reached.
+func TestEndpointTokenIsComparedWhole(t *testing.T) {
+	s, fb, _ := startTest(t)
+	fb.connected = "dev-1"
+	good := s.token
+	for name, auth := range map[string]string{
+		"a prefix of the token":   "Bearer " + good[:len(good)-1],
+		"half of the token":       "Bearer " + good[:len(good)/2],
+		"one character":           "Bearer " + good[:1],
+		"the token and one more":  "Bearer " + good + "x",
+		"the token twice":         "Bearer " + good + good,
+		"the token in other case": "Bearer " + strings.ToUpper(good),
+		"no token after Bearer":   "Bearer ",
+		"another scheme":          "Basic " + good,
+		"a lower-case scheme":     "bearer " + good,
+		"nothing":                 "",
+	} {
+		hdr := map[string]string{}
+		if auth != "" {
+			hdr["Authorization"] = auth
+		}
+		code, body := rpcRaw(t, s, `{"method":"disconnect"}`, hdr)
+		if code != http.StatusUnauthorized {
+			t.Errorf("%s: %d %s, want 401", name, code, body)
+		}
+	}
+	if fb.connected != "dev-1" {
+		t.Error("a refused request reached the backend")
+	}
+	if code, _ := rpcRaw(t, s, `{"method":"status"}`, map[string]string{"Authorization": "Bearer " + good}); code != http.StatusOK {
+		t.Errorf("the whole token: %d", code)
+	}
+}
+
+// Any Origin header is a web page: https, http, another port of this machine, and the opaque origin "null" (a sandboxed frame, a file page) are all refused.
+func TestEndpointRefusesAnyOriginHeader(t *testing.T) {
+	s, fb, _ := startTest(t)
+	fb.connected = "dev-1"
+	for _, origin := range []string{"https://evil.example", "http://evil.example", "http://127.0.0.1:1", "http://localhost:3000", "null", "file://", "*"} {
+		code, body := rpcRaw(t, s, `{"method":"disconnect"}`, map[string]string{"Authorization": "Bearer " + s.token, "Origin": origin})
+		if code != http.StatusForbidden {
+			t.Errorf("Origin %q: %d %s, want 403", origin, code, body)
+		}
+	}
+	if fb.connected != "dev-1" {
+		t.Error("a request with an Origin reached the backend")
+	}
+}
+
+// The body is read up to 1 MiB: a larger one is cut and then is not the JSON it was meant to be, so it is refused (400) and nothing is reached.
+func TestEndpointBodyIsLimitedToOneMebibyte(t *testing.T) {
+	s, fb, _ := startTest(t)
+	fb.connected = "dev-1"
+	auth := map[string]string{"Authorization": "Bearer " + s.token}
+	// a valid request whose last bytes are beyond the limit: padding inside a JSON string, so only the cut makes it invalid
+	pad := strings.Repeat("x", (1<<20)+1000)
+	code, body := rpcRaw(t, s, `{"method":"disconnect","params":{"pad":"`+pad+`"}}`, auth)
+	if code != http.StatusBadRequest {
+		t.Errorf("a body over 1 MiB: %d %s, want 400", code, body)
+	}
+	if fb.connected != "dev-1" {
+		t.Error("a body over the limit reached the backend")
+	}
+	// a body under the limit with the same shape is served
+	small := strings.Repeat("x", 100000)
+	if code, body := rpcRaw(t, s, `{"method":"disconnect","params":{"pad":"`+small+`"}}`, auth); code != http.StatusOK || !strings.Contains(body, "ok") {
+		t.Errorf("a body under the limit: %d %s", code, body)
+	}
+	if fb.connected != "" {
+		t.Error("the request under the limit did not reach the backend")
+	}
+}
