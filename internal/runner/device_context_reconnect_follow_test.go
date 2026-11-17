@@ -170,11 +170,13 @@ func TestReconnectFollowsTheAppsPortWithASharedToken(t *testing.T) {
 func TestReconnectWithARunAsTokenStartsOnTheFollowedPortAndMakesNoExtraCall(t *testing.T) {
 	hostPort, _ := countingListener(t)
 	r := newReconnectRig(t, hostPort, listenRow(48911, 10100)+listenRow(48912, 10200), "package:com.first uid:10100\npackage:com.second uid:10200\n", "run-as-token-0123456789abcdef0123456789")
-	fwd := &recordingForwarder{}
-	f := device.NewPortFollower(procAdb{tcp6: "  sl l r st\n" + listenRow(48911, 10100) + listenRow(48912, 10200), pm: "package:com.first uid:10100\npackage:com.second uid:10200\n"},
-		fwd, "emulator-5554", "com.second", hostPort, 48911, nil, nil)
+	// the follower uses the same adb script as the context, so every look at the sockets would be in the log
+	f := device.NewPortFollower(r.dc.Manager.ADB(), r.dc.Manager, "emulator-5554", "com.second", hostPort, 48911, nil, nil)
 	if !f.Suspect(context.Background()) || f.DevicePort() != 48912 {
 		t.Fatalf("setup: the follower did not move to 48912")
+	}
+	if err := os.WriteFile(r.log, nil, 0o644); err != nil { // forget the calls of the setup: the reconnect is what is measured
+		t.Fatal(err)
 	}
 	r.dc.Follower = f
 	client, _ := r.dc.Reconnect(context.Background()) // the dial fails (the listener drops it): only the adb calls matter here
