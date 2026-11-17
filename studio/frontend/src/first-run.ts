@@ -56,7 +56,7 @@ export function recordReason(i: FirstRunInput): string {
 
 /** Why Save is disabled, or "". */
 export function saveReason(i: FirstRunInput): string {
-  if (!i.fileOpen) return "Open a .probe file to save.";
+  if (!i.fileOpen && !i.dirty) return "Open a .probe file to save.";
   return i.dirty ? "" : "There are no unsaved changes.";
 }
 
