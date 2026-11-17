@@ -95,7 +95,8 @@ export class RunQueue {
 
   constructor(private readonly write: (text: string) => void, private readonly spawnFn: SpawnFn = spawnNoShell, opts: QueueOptions = {}) {
     this.signal = opts.signal ?? signalTree;
-    this.graceMs = opts.graceMs ?? 5000;
+    // probe record, on SIGINT, waits up to 5 s for the agent to stop recording and then writes the file: 15 s leaves it room to save.
+    this.graceMs = opts.graceMs ?? 15000;
     this.platform = opts.platform ?? process.platform;
   }
 
