@@ -28,3 +28,26 @@ func TestIOSDeviceIDMustBeAUDID(t *testing.T) {
 		}
 	}
 }
+
+// The load error points at `probe device list`, and LoadForRepair keeps the value and reports it on its own.
+func TestIOSDeviceIDErrorAndRepairLoad(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("device:\n  ios_device_id: \"iPhone 16\"\nagent:\n  port: 4444\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "probe device list") {
+		t.Errorf("Load must point at probe device list: %v", err)
+	}
+	cfg, iosErr, err := LoadForRepair(dir)
+	if err != nil || iosErr == nil || iosErr.ID != "iPhone 16" || cfg.Device.IOSDeviceID != "iPhone 16" || cfg.Agent.Port != 4444 {
+		t.Errorf("LoadForRepair = %+v, %v, %v; want the config with the value kept and the iOS error on its own", cfg, iosErr, err)
+	}
+	// Every other rule still fails the repair load.
+	if err := os.WriteFile(filepath.Join(dir, "probe.yaml"), []byte("project:\n  app: \"bad app\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadForRepair(dir); err == nil {
+		t.Error("LoadForRepair must still refuse an invalid project.app")
+	}
+}

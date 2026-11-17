@@ -278,18 +278,46 @@ func Load(dir string) (*Config, error) {
 // LoadFile reads a specific YAML config file. Falls back to defaults if the file doesn't exist.
 // This allows platform-specific configs like probe.ios.yaml or probe.android.yaml.
 func LoadFile(path string) (*Config, error) {
+	cfg, iosErr, err := loadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if iosErr != nil {
+		return nil, iosErr
+	}
+	return cfg, nil
+}
+
+// IOSDeviceIDError is the error of a device.ios_device_id that is not a simulator or a device UDID.
+type IOSDeviceIDError struct {
+	ID   string // the value as written
+	Path string // the probe.yaml it is in
+}
+
+func (e *IOSDeviceIDError) Error() string {
+	return fmt.Sprintf("invalid device.ios_device_id %q in %s: use the UDID of a simulator or of a device, as `probe device list` shows it (or xcrun simctl list devices / xcrun devicectl list devices)", e.ID, e.Path)
+}
+
+// LoadForRepair reads probe.yaml from dir like Load, except that a device.ios_device_id that is not a UDID does not fail the load: the
+// value is kept in the config and its error is returned on its own (iosErr), every other rule still fails the load. It is for an editor that
+// must show the value so it can be fixed (Studio's Settings); a run never uses it.
+func LoadForRepair(dir string) (cfg *Config, iosErr *IOSDeviceIDError, err error) {
+	return loadFile(dir + "/probe.yaml")
+}
+
+func loadFile(path string) (*Config, *IOSDeviceIDError, error) {
 	cfg := defaultConfig
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &cfg, nil
+			return &cfg, nil, nil
 		}
-		return nil, fmt.Errorf("reading %s: %w", path, err)
+		return nil, nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+		return nil, nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
 	// Apply defaults for zero-valued fields that were not set in YAML
@@ -297,25 +325,26 @@ func LoadFile(path string) (*Config, error) {
 
 	// Validate security-sensitive fields
 	if cfg.Project.App != "" && !validAppID.MatchString(cfg.Project.App) {
-		return nil, fmt.Errorf("invalid project.app %q: must be alphanumeric with dots/underscores (e.g. com.example.myapp)", cfg.Project.App)
+		return nil, nil, fmt.Errorf("invalid project.app %q: must be alphanumeric with dots/underscores (e.g. com.example.myapp)", cfg.Project.App)
 	}
 
 	// device.ios_device_id becomes a simulator or device id, and a simulator id shapes host paths: only a UDID is accepted.
+	var iosErr *IOSDeviceIDError
 	if id := cfg.Device.IOSDeviceID; id != "" && !ios.ValidSimulatorUDID(id) && !ios.ValidDeviceUDID(id) {
-		return nil, fmt.Errorf("invalid device.ios_device_id %q in %s: use the UDID of a simulator or of a device, as `probe device list` shows it (or xcrun simctl list devices / xcrun devicectl list devices)", id, path)
+		iosErr = &IOSDeviceIDError{ID: id, Path: path}
 	}
 
 	if p := cfg.Agent.DriverPort; p != 0 && (p < 1024 || p > 65535) {
-		return nil, fmt.Errorf("invalid agent.driver_port %d: use a value between 1024 and 65535", p)
+		return nil, nil, fmt.Errorf("invalid agent.driver_port %d: use a value between 1024 and 65535", p)
 	}
 
 	if cfg.ProbeVersion != "" {
 		if _, err := ParseProbeVersion(cfg.ProbeVersion); err != nil {
-			return nil, fmt.Errorf("invalid probe_version in %s: %w", path, err)
+			return nil, nil, fmt.Errorf("invalid probe_version in %s: %w", path, err)
 		}
 	}
 
-	return &cfg, nil
+	return &cfg, iosErr, nil
 }
 
 // AgentDevicePort returns the on-device port the agent listens on.
