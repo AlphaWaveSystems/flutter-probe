@@ -136,15 +136,17 @@ func (a *App) claimRun() (context.Context, context.CancelFunc, error) {
 		parent = context.Background()
 	}
 	runCtx, cancel := context.WithCancel(parent)
-	a.mu.Lock()
-	ws := canonicalWorkspace(a.workspace) // the folder this run belongs to, taken with the slot
-	a.mu.Unlock()
+	// The slot and the workspace are taken in one step, under the run slot's lock and then a.mu (the order CloseWorkspace uses): a close cannot fall
+	// between them, so a run never holds the slot with a workspace that was closed before it got the slot.
 	a.runMu.Lock()
 	defer a.runMu.Unlock()
 	if a.runCancel != nil {
 		cancel()
 		return nil, nil, errRunInProgress
 	}
+	a.mu.Lock()
+	ws := canonicalWorkspace(a.workspace) // the folder this run belongs to, taken with the slot
+	a.mu.Unlock()
 	a.runCancel = cancel
 	a.runWorkspace = ws
 	return runCtx, cancel, nil

@@ -42,7 +42,7 @@ func Check(configured string, names []string, projectDir, goos string) (string, 
 	if err != nil {
 		return "", errors.New("the file cannot be found")
 	}
-	if !nameIn(filepath.Base(configured), names) || !nameIn(filepath.Base(resolved), names) {
+	if !nameIn(filepath.Base(configured), names, goos) || !nameIn(filepath.Base(resolved), names, goos) {
 		return "", errors.New("the program is not called " + strings.Join(names, " or "))
 	}
 	if !IsExecutableFile(resolved, goos) {
@@ -56,10 +56,10 @@ func Check(configured string, names []string, projectDir, goos string) (string, 
 	return resolved, nil
 }
 
-// nameIn compares exactly, as Studio always has: "ADB.EXE" is not "adb.exe" here, even on Windows.
-func nameIn(name string, names []string) bool {
+// nameIn compares the file name with names: exactly, except on Windows, where file names are case-insensitive and "ADB.EXE" is adb.exe.
+func nameIn(name string, names []string, goos string) bool {
 	for _, n := range names {
-		if name == n {
+		if name == n || (goos == "windows" && strings.EqualFold(name, n)) {
 			return true
 		}
 	}
@@ -151,15 +151,20 @@ func RepoRoots(dir string) []string {
 }
 
 // Within says whether p is folder or inside it, by the folders themselves: each folder from p up to the filesystem root is compared with
-// folder by os.SameFile. Spelling does not matter (case on a case-insensitive file system, a symlink to the folder). A folder that cannot
-// be read is never within.
+// folder by os.SameFile. Spelling does not matter (case on a case-insensitive file system, a symlink to the folder). It fails closed: when
+// a folder on the way cannot be read, or has no file identity to compare (hasIdentity: some Windows network shares and file systems report
+// none), the answer is "within", so the path is refused rather than run.
 func Within(folder, p string) bool {
 	want, err := os.Stat(folder)
-	if err != nil {
-		return false
+	if err != nil || !hasIdentity(folder) {
+		return true
 	}
 	for d := filepath.Clean(p); ; {
-		if info, err := os.Stat(d); err == nil && os.SameFile(info, want) {
+		info, err := os.Stat(d)
+		if err != nil || !hasIdentity(d) {
+			return true
+		}
+		if os.SameFile(info, want) {
 			return true
 		}
 		parent := filepath.Dir(d)

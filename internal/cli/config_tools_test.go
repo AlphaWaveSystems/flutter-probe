@@ -2,10 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -133,17 +135,17 @@ func TestDoctorFailsARefusedToolsPath(t *testing.T) {
 	}
 }
 
-// No code takes a tools path from probe.yaml as it is: every non-test Go file of the CLI, Studio and the commands that reads .Tools.ADB or
-// .Tools.Flutter is one of the two that check it (configTool here; Studio's workspaceADB, which calls toolpath.Check). A new reader fails
-// this test until it goes through the check and is added here.
+// No code takes a tools path from probe.yaml as it is: every non-test Go file of the CLI, Studio and the commands is parsed, and any use of
+// a field called Tools (cfg.Tools.ADB, but also t := cfg.Tools; t.ADB) must be in one of the two files that check it (configTool here;
+// Studio's workspaceADB, which calls toolpath.Check). A new reader fails this test until it goes through the check and is added here.
 func TestToolsFromProbeYAMLAreAlwaysChecked(t *testing.T) {
 	allowed := map[string]bool{
 		filepath.Join("internal", "cli", "config_tools.go"): true,
 		filepath.Join("studio", "app.go"):                   true,
 	}
-	reader := regexp.MustCompile(`\.Tools\.(ADB|Flutter)\b`)
 	root := filepath.Join("..", "..")
-	seen := 0
+	fset := token.NewFileSet()
+	seen := map[string]bool{}
 	for _, top := range []string{"internal", "studio", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, top), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -155,25 +157,30 @@ func TestToolsFromProbeYAMLAreAlwaysChecked(t *testing.T) {
 			if d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return nil
 			}
-			src, err := os.ReadFile(p)
+			f, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
 			if err != nil {
 				return err
 			}
 			rel, _ := filepath.Rel(root, p)
-			if reader.Match(src) {
-				seen++
-				if !allowed[rel] {
-					t.Errorf("%s reads a tools path from probe.yaml; go through configTool (CLI) or toolpath.Check (Studio)", rel)
+			ast.Inspect(f, func(n ast.Node) bool {
+				if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "Tools" {
+					seen[rel] = true
+					if !allowed[rel] {
+						t.Errorf("%s:%d uses a Tools field of the config; go through configTool (CLI) or toolpath.Check (Studio)", rel, fset.Position(sel.Pos()).Line)
+					}
 				}
-			}
+				return true
+			})
 			return nil
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	if seen < len(allowed) {
-		t.Errorf("only %d readers found: the walk missed the known ones", seen)
+	for f := range allowed {
+		if !seen[f] {
+			t.Errorf("%s no longer uses the Tools field: the walk or the allowlist is out of date", f)
+		}
 	}
 }
 

@@ -75,7 +75,8 @@ void main() {
       expect(result['agent_version'], equals(probeAgentVersion));
       expect(result['capabilities'], equals(probeAgentCapabilities));
       // the new fields are optional: when present they are plain version text, and nothing else is added
-      const known = {'ok', 'agent_version', 'capabilities', 'flutter_version', 'flutter_channel', 'framework_revision', 'dart_version'};
+      // view_ready_ms: how long the request waited for the view's real size (issue #793), an int, 0 when it did not wait
+      const known = {'ok', 'agent_version', 'capabilities', 'flutter_version', 'flutter_channel', 'framework_revision', 'dart_version', 'view_ready_ms'};
       expect(known.containsAll(result.keys), isTrue, reason: '${result.keys}');
       for (final k in ['flutter_version', 'flutter_channel', 'framework_revision', 'dart_version']) {
         if (result.containsKey(k)) {

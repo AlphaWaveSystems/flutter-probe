@@ -9,7 +9,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 
 | Family | Examples | find | tap | type | scroll | read | fixture | device test |
 |---|---|---|---|---|---|---|---|---|
-| Text and display | `Text`, `RichText`, `Icon`, `Image` | see below (`Text`, `RichText` only) | not assessed | n/a | not assessed | see below | `display` screen | `probe-tests/widgets/display.probe` |
+| Text and display | `Text`, `RichText`, `Icon`, `Image`, `CircleAvatar`, `FlutterLogo` | see below | see below (`FlutterLogo` only) | n/a | not assessed | see below (a semantic label is not read) | `display` screen | `probe-tests/widgets/display.probe` |
 | Buttons | `ElevatedButton`, `TextButton`, `IconButton`, `CupertinoButton` | see below | see below | n/a | not assessed | see below | `buttons` screen | `probe-tests/widgets/buttons.probe` |
 | Text input | `TextField`, `TextFormField`, `CupertinoTextField` | see below | see below | see below | not assessed | see below | `textinput` screen | `probe-tests/widgets/textinput.probe` |
 | Selection controls | `Checkbox`, `Switch`, `Radio`, `Slider`, `CupertinoSwitch` | see below | see below | n/a | not assessed | see below | `selection` screen | `probe-tests/widgets/selection.probe` |
@@ -112,7 +112,25 @@ Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulat
 - **A text selector matches the whole text or any part of it, exactly:** case counts (`"hello world"` fails) and spaces count (`"Hello  world"` fails); the spans of a `Text.rich` or a `RichText` are matched as one text, joined as written.
 - **Right after `restart the app`, the screen can still be being built** (issue #793): on `Compat-Pixel-API35`, without a wait 3 of 10 runs failed, with a wait for the first item 1 of 10, and with a wait for the screen's last widget 10 of 10 passed. The suite waits for the last widget after the restart.
 
-Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` inside other widgets (buttons are their own family), text scale and `textScaler`, right-to-left and other scripts, a `Text` with `semanticsLabel` (item 3 asks how a semantic label is matched), soft wrapping without `maxLines`, and `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` (item 3). Flutter 3.50.0 was not run for this family.
+Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` inside other widgets (buttons are their own family), text scale and `textScaler`, right-to-left and other scripts, a `Text` with `semanticsLabel`, soft wrapping without `maxLines`. Flutter 3.50.0 was not run for this family.
+
+### Text and display: widgets without text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
+
+Measured on Flutter 3.44.8 with the agent from main at `edb0fce` (it waits for a laid-out view, issue #793), on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): the suite (8 tests, the text tests above included) passed 3 of 3 runs on each device, and the 12 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed on both, each with the message in its comment. An exploratory run of 16 single steps gave the same result on both devices. No text on the screen holds "Favorite", "Logo" or "AB" (the logo's state text is `Taps: N`), so each match below comes from the widget itself.
+
+| Widget (fixture id) | find | tap | read | Result |
+|---|---|---|---|---|
+| `Icon(Icons.favorite, semanticLabel: "Favorite")` (`wf_icon`) | pass (`#wf_icon`; the semantic label `"Favorite"`; `"Favourite"` fails) | not assessed (`tap "Favorite"` completes, but the icon has no handler to show it arrived) | **not supported**: `see "Favorite" contains "Favorite"` fails, the label reads as `""` | partly |
+| `Image.memory` with `semanticLabel: "Logo"` (`wf_image`; an inline PNG, so the fixture needs no asset) | pass (`#wf_image`; the semantic label `"Logo"`) | not assessed | **not supported**: `see "Logo" contains "Logo"` reads `""` | partly |
+| `CircleAvatar` with the child `Text("AB")` (`wf_avatar`) | pass (`#wf_avatar`; `"AB"`, its `Text`) | not assessed | pass (`see "AB" contains "AB"`) | pass |
+| `FlutterLogo` inside a `GestureDetector` that counts taps (`wf_logo` on the logo) | pass (`#wf_logo`) | pass (`tap #wf_logo` makes `Taps: 1`: the tap lands on the logo's center and reaches the detector around it) | n/a | pass |
+
+**Findings.**
+- **A semantic label is a text selector.** When no visible text matches, the agent falls back to a `Semantics` label (an `Icon` and an `Image` put their `semanticLabel` in one) or a `Tooltip` message, so an icon or an image with a label is found by it, as an icon button is by its tooltip. The label is matched exactly, like a text (`"Favourite"` fails).
+- **A semantic label is found but not read** (agent: `_textOf` in `probe_agent/lib/src/executor.dart` reads only `Text`, `RichText` and text fields, while the match is the `Semantics` element; issue #818). `see "Logo"` passes and `see "Logo" contains "Logo"` fails with `contains "", not "Logo"`. Not measured here: whether an icon button found by its tooltip reads the same way (the same code path suggests it does).
+- **A tap by id on a widget with no handler of its own reaches a detector around it**: the tap is delivered at the widget's center, and the hit test finds the `GestureDetector` above.
+
+Not covered by the screen: `Image.network` and `Image.asset` (loading, an error image), an `Icon` with no label (found by `#id` only; an icon glyph as a selector was not tried), `ImageIcon`, `Ink.image`, `CircleAvatar` with a `backgroundImage` and no child, and `ExcludeSemantics` or `Semantics(excludeSemantics:)` around a labelled widget. Flutter 3.50.0 was not run for this part.
 
 ### Lists and scrolling (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=lists`, `probe-tests/widgets/lists.probe`)
 
