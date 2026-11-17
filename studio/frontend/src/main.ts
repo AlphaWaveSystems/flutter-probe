@@ -28,6 +28,7 @@ import { toast } from "./toast";
 import {
   CancelRun,
   CheckReplaceLine,
+  CloseWorkspace,
   SelectorFixAttempts,
   Chat,
   Connect,
@@ -456,15 +457,11 @@ function showWorkspaceClose(): void {
 
 async function closeWorkspace(): Promise<void> {
   if (workspaceRoot === "") return;
-  if (runInProgress || recording) {
-    toast(runInProgress ? "A run is in progress: cancel it before closing the workspace." : "Stop the recording before closing the workspace.", "info", 4000);
-    return;
-  }
   if (dirty && !(await askDiscard())) return; // unsaved changes: the same question as opening another file
   try {
-    await SetWorkspace("");
+    await CloseWorkspace(); // Go refuses while a run or a recording is going (and says so)
   } catch (err) {
-    toast(`Close failed: ${err}`, "error");
+    toast(String(err).replace(/^Error:\s*/, ""), "info", 4000);
     return;
   }
   localStorage.removeItem(WORKSPACE_KEY);
@@ -478,7 +475,14 @@ async function closeWorkspace(): Promise<void> {
   updateRunButton();
   showWorkspaceClose();
   void refreshWorkspaceNote();
-  await refreshFiles("tests");
+  // The tree is cleared here, not listed again: with a folder from the environment still reachable, a listing of a relative path would be refused and say so.
+  currentDir = "tests";
+  $("file-path").textContent = currentDir;
+  const list = $("file-list");
+  clearChildren(list);
+  listing = "empty";
+  renderEmptyPane(list);
+  refreshFirstRun();
   toast("Workspace closed", "info", 1800);
 }
 

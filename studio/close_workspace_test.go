@@ -50,3 +50,40 @@ func TestAnEmptyWorkspaceReachesNoFolder(t *testing.T) {
 		}
 	}
 }
+
+// Closing is refused while a run or a recording is going, by Go and not only by the page: a script with the bridge token cannot pull the workspace from
+// under either. Refused, nothing changes (the workspace stays open and its folder stays reachable).
+func TestCloseWorkspaceIsRefusedWhileARunOrARecordingIsGoing(t *testing.T) {
+	t.Setenv("PROBE_STUDIO_WORKSPACE", "")
+	t.Setenv("PROBE_STUDIO_AUTOMATION_ROOTS", "")
+	dir := t.TempDir()
+	open := func() *App {
+		a := NewApp()
+		a.SetWorkspace(dir)
+		return a
+	}
+	// a run holds the slot
+	a := open()
+	_, cancel, err := a.claimRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.CloseWorkspace(); err != errCloseDuringRun {
+		t.Errorf("during a run: %v, want %v", err, errCloseDuringRun)
+	}
+	if len(a.automationRoots()) != 1 {
+		t.Error("a refused close changed the workspace")
+	}
+	a.releaseRun(cancel)
+	if err := a.CloseWorkspace(); err != nil || len(a.automationRoots()) != 0 {
+		t.Errorf("after the run: %v, roots %v", err, a.automationRoots())
+	}
+	// a recording is on
+	b := open()
+	b.mu.Lock()
+	b.recActive = true
+	b.mu.Unlock()
+	if err := b.CloseWorkspace(); err != errCloseDuringRecording || len(b.automationRoots()) != 1 {
+		t.Errorf("during a recording: %v, roots %v", err, b.automationRoots())
+	}
+}
