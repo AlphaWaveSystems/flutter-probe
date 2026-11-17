@@ -5,6 +5,12 @@
   "version": "0.27.0",
   "publisher": "flutterprobe",
   "icon": "resources/probe-icon.png",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "FlutterProbe runs the probe CLI, adb and flutter, and probe test reads the workspace's probe.yaml and test files. It runs only in a trusted workspace."
+    }
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -326,7 +332,8 @@
         "flutterprobe.probePath": {
           "type": "string",
           "default": "probe",
-          "description": "Path to the probe CLI binary"
+          "scope": "machine",
+          "description": "Path to the probe CLI binary. User or remote settings only: a workspace cannot set it. Without it, bin/probe in a trusted workspace, else probe on PATH"
         },
         "flutterprobe.autoLint": {
           "type": "boolean",
@@ -416,17 +423,20 @@
         "flutterprobe.adbPath": {
           "type": "string",
           "default": "",
-          "description": "Custom path to adb binary"
+          "scope": "machine",
+          "description": "Custom path to adb binary. User or remote settings only: a workspace cannot set it"
         },
         "flutterprobe.flutterPath": {
           "type": "string",
           "default": "",
-          "description": "Custom path to flutter binary"
+          "scope": "machine",
+          "description": "Custom path to flutter binary. User or remote settings only: a workspace cannot set it"
         },
         "flutterprobe.convertPath": {
           "type": "string",
           "default": "probe-convert",
-          "description": "Path to the probe-convert binary"
+          "scope": "machine",
+          "description": "Path to the probe-convert binary. User or remote settings only: a workspace cannot set it. Without it, bin/probe-convert in a trusted workspace, else probe-convert on PATH"
         },
         "flutterprobe.cloudProvider": {
           "type": "string",

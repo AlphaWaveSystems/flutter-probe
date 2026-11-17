@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { resolveToolPath } from './toolPath';
 import { ProbeConfig } from './types';
 
 export function getConfig(): vscode.WorkspaceConfiguration {
@@ -12,33 +13,23 @@ export function getSetting<T>(key: string): T | undefined {
 }
 
 export function getProbePath(): string {
-  const configured = getSetting<string>('probePath');
-  if (configured && configured !== 'probe') {
-    return configured;
-  }
-  const ws = getWorkspaceRoot();
-  if (ws) {
-    const localBin = path.join(ws, 'bin', 'probe');
-    if (fs.existsSync(localBin)) {
-      return localBin;
-    }
-  }
-  return 'probe';
+  return toolPath('probePath', 'probe');
 }
 
 export function getConvertPath(): string {
-  const configured = getSetting<string>('convertPath');
-  if (configured && configured !== 'probe-convert') {
-    return configured;
-  }
-  const ws = getWorkspaceRoot();
-  if (ws) {
-    const localBin = path.join(ws, 'bin', 'probe-convert');
-    if (fs.existsSync(localBin)) {
-      return localBin;
-    }
-  }
-  return 'probe-convert';
+  return toolPath('convertPath', 'probe-convert');
+}
+
+// toolPath is the binary for a path setting: the setting, else bin/<name> in a trusted workspace, else <name> on PATH (see toolPath.ts).
+function toolPath(setting: string, defaultName: string): string {
+  return resolveToolPath({
+    configured: getSetting<string>(setting),
+    defaultName,
+    workspaceRoot: getWorkspaceRoot(),
+    trusted: vscode.workspace.isTrusted,
+    exists: fs.existsSync,
+    join: path.join,
+  });
 }
 
 export function getWorkspaceRoot(): string | undefined {

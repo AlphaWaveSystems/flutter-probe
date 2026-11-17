@@ -173,8 +173,8 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `probePath` | `probe` | Path to the probe CLI binary |
-| `convertPath` | `probe-convert` | Path to the probe-convert binary |
+| `probePath` | `probe` | Path to the probe CLI binary. User or remote settings only. Without it: `bin/probe` in a trusted workspace, else `probe` on PATH |
+| `convertPath` | `probe-convert` | Path to the probe-convert binary. User or remote settings only. Without it: `bin/probe-convert` in a trusted workspace, else `probe-convert` on PATH |
 | `autoLint` | `true` | Lint `.probe` files on save |
 | `defaultDevice` | | Default device serial |
 | `defaultTimeout` | `30s` | Per-step timeout |
@@ -217,8 +217,12 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `adbPath` | | Custom ADB binary path |
-| `flutterPath` | | Custom Flutter binary path |
+| `adbPath` | | Custom ADB binary path. User or remote settings only |
+| `flutterPath` | | Custom Flutter binary path. User or remote settings only |
+
+**Which binaries run.** The four settings that name a binary (`probePath`, `convertPath`, `adbPath`, `flutterPath`) can be set only in your user (or remote) settings: a repository's `.vscode/settings.json` cannot point the extension at a binary of its own. The extension runs only in a trusted workspace (VS Code's Restricted Mode keeps it off until you trust the folder), and it uses a `bin/probe` inside the workspace only when the workspace is trusted. `probe test` still reads the workspace's `probe.yaml`, whose `tools:` section can name `adb` and `flutter` binaries: trust a folder only if you trust what it runs.
+
+> **Changed in this version:** a value of `probePath`, `convertPath`, `adbPath` or `flutterPath` in a workspace's `.vscode/settings.json` is now ignored. Move it to your user settings (Preferences: Open User Settings (JSON)).
 | `studioPort` | `9191` | Port for probe studio |
 
 ## Cloud Provider Setup
