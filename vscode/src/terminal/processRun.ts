@@ -36,20 +36,31 @@ export type Signaller = (child: Child, signal: 'SIGINT' | 'SIGKILL') => void;
 // signalTree: on macOS and Linux, the signal goes to the tool's process group. Windows has no Ctrl+C for another process (Node's kill
 // ends it at once, whatever the signal), so there the tool and every process it started are ended with taskkill /T /F, run by its full
 // path (a bare name could be found in the current folder first).
-export const signalTree: Signaller = (child, signal) => {
-  if (child.pid === undefined) { child.kill(signal); return; }
-  if (process.platform === 'win32') {
-    const taskkill = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    const k = spawn(taskkill, ['/T', '/F', '/PID', String(child.pid)], { shell: false, windowsHide: true, stdio: 'ignore' });
-    k.on('error', () => child.kill(signal));
-    return;
-  }
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    child.kill(signal);
-  }
-};
+export function makeSignalTree(
+  platform: string,
+  spawnKill: (command: string, args: string[]) => { on(event: 'error', listener: (err: Error) => void): unknown },
+  systemRoot: string | undefined,
+): Signaller {
+  return (child, signal) => {
+    if (child.pid === undefined) { child.kill(signal); return; }
+    if (platform === 'win32') {
+      const taskkill = path.win32.join(systemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+      spawnKill(taskkill, ['/T', '/F', '/PID', String(child.pid)]).on('error', () => child.kill(signal));
+      return;
+    }
+    try {
+      process.kill(-child.pid, signal);
+    } catch {
+      child.kill(signal);
+    }
+  };
+}
+
+export const signalTree: Signaller = makeSignalTree(
+  process.platform,
+  (command, args) => spawn(command, args, { shell: false, windowsHide: true, stdio: 'ignore' }),
+  process.env.SystemRoot,
+);
 
 // The limits of what a terminal keeps for a person: runs waiting, and the characters of one typed line.
 export const MAX_WAITING = 100;
@@ -89,6 +100,8 @@ export class RunQueue {
   private readonly waiting: RunSpec[] = [];
   private line = '';
   private killTimer?: ReturnType<typeof setTimeout>;
+  private killAt = Infinity;
+  private readonly endWaiters: (() => void)[] = [];
   private readonly signal: Signaller;
   private readonly graceMs: number;
   private readonly platform: string;
@@ -138,6 +151,8 @@ export class RunQueue {
       ended = true;
       clearTimeout(this.killTimer);
       this.killTimer = undefined;
+      this.killAt = Infinity;
+      for (const resolve of this.endWaiters.splice(0)) { resolve(); }
       this.write(toTerminal(`\n[${status}]\n`));
       this.running = undefined;
       this.line = '';
@@ -186,11 +201,24 @@ export class RunQueue {
   // stop drops the runs that are waiting and interrupts the running one: the terminal is being closed. A tool that has not ended after
   // graceMs (it ignores SIGINT, or hangs) gets SIGKILL, with the processes it started, so nothing is left running.
   stop(): void {
+    void this.shutdown(this.graceMs);
+  }
+
+  // shutdown is stop with its own grace time, and a promise that resolves when the running tool has ended (at once when none runs). The
+  // extension's deactivate uses a short grace: the window is closing, VS Code waits only briefly, and the extension host exits soon after,
+  // taking the SIGKILL timer with it. A later stop never moves the SIGKILL later than one already set.
+  shutdown(graceMs: number): Promise<void> {
     this.waiting.length = 0;
     const child = this.running;
-    if (!child) { return; }
+    if (!child) { return Promise.resolve(); }
+    const ended = new Promise<void>(resolve => this.endWaiters.push(resolve));
     this.signal(child, 'SIGINT');
-    clearTimeout(this.killTimer);
-    this.killTimer = setTimeout(() => { if (this.running === child) { this.signal(child, 'SIGKILL'); } }, this.graceMs);
+    const at = Date.now() + graceMs;
+    if (at < this.killAt) {
+      this.killAt = at;
+      clearTimeout(this.killTimer);
+      this.killTimer = setTimeout(() => { if (this.running === child) { this.signal(child, 'SIGKILL'); } }, graceMs);
+    }
+    return ended;
   }
 }

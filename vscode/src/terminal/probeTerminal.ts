@@ -76,9 +76,20 @@ export function disposeTerminal(name: string): void {
   }
 }
 
-export function disposeAllTerminals(): void {
-  for (const [name, { terminal }] of terminals) {
+// DEACTIVATE_GRACE_MS is how long a tool has after SIGINT when the extension is deactivated (the window closes) before it and the programs
+// it started get SIGKILL. A recording is not saved then.
+export const DEACTIVATE_GRACE_MS = 1000;
+
+// stopAllTerminals is the extension's deactivate: every running tool gets SIGINT, then SIGKILL after DEACTIVATE_GRACE_MS, and the promise
+// resolves when they have all ended, so nothing it started outlives the extension host.
+export function stopAllTerminals(): Promise<void> {
+  const ended: Promise<void>[] = [];
+  for (const [name, { terminal, queue }] of terminals) {
+    ended.push(queue.shutdown(DEACTIVATE_GRACE_MS));
     terminal.dispose();
     terminals.delete(name);
   }
+  // A process that never reports its exit does not hold the window open: the wait ends 2 s after the SIGKILL in any case.
+  const cap = new Promise<void>(resolve => setTimeout(resolve, DEACTIVATE_GRACE_MS + 2000));
+  return Promise.race([Promise.all(ended).then(() => undefined), cap]);
 }

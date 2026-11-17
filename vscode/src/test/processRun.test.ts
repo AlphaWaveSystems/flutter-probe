@@ -1,10 +1,10 @@
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { EventEmitter, PassThrough } from 'node:stream';
-import { Child, MAX_LINE, MAX_WAITING, QueueOptions, RunQueue, RunSpec, SpawnFn, shownWord, toTerminal } from '../terminal/processRun';
+import { Child, MAX_LINE, MAX_WAITING, QueueOptions, RunQueue, RunSpec, SpawnFn, makeSignalTree, shownWord, toTerminal } from '../terminal/processRun';
 
 // The arguments a tool is run with reach it as they are: no shell parses them. Hostile text is built from code points (no raw format
 // characters in the source).
@@ -316,4 +316,105 @@ test('the waiting runs and a typed line are capped', async () => {
   queue.input('x'.repeat(MAX_LINE + 10) + '\r');
   await tick();
   assert.equal(sent.length, MAX_LINE + 1);
+});
+
+// The review's deactivate case: the extension host exits soon after deactivate, taking any timer with it, so the tool must be gone by the
+// time the promise resolves.
+test('shutdown resolves only once a tool that ignores SIGINT has ended', { skip: process.platform === 'win32' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-deact-'));
+  const pidFile = path.join(dir, 'pid');
+  const queue = new RunQueue(() => undefined);
+  queue.run({ command: process.execPath, env: {}, args: ['-e',
+    `process.on('SIGINT', () => {}); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000)`] });
+  for (let i = 0; i < 50 && !fs.existsSync(pidFile); i++) { await sleep(50); }
+  const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+  const started = Date.now();
+  await queue.shutdown(300);
+  const waited = Date.now() - started;
+  const stillAlive = alive(pid);
+  if (stillAlive) { process.kill(pid, 'SIGKILL'); }
+  assert.equal(stillAlive, false, 'the tool must have ended when shutdown resolves');
+  assert.ok(waited >= 250 && waited < 3000, `waited ${waited} ms`);
+  assert.equal(queue.busy, false);
+});
+
+test('shutdown with nothing running resolves at once and signals nothing', async () => {
+  const { queue, children } = fakeQueue();
+  queue.run({ command: '/bin/probe', args: [], env: {} });
+  children[0].emit('close', 0, null);
+  await queue.shutdown(10);
+  queue.stop();
+  await sleep(40);
+  assert.deepEqual(children[0].signals, [], 'a run that already ended is not signalled');
+});
+
+test('a later stop does not move the SIGKILL of a shutdown later', async () => {
+  const { queue, children } = fakeQueue({ graceMs: 10_000 });
+  queue.run({ command: '/bin/probe', args: [], env: {} });
+  void queue.shutdown(30);
+  queue.stop(); // the terminal's own close, after deactivate
+  await sleep(80);
+  assert.deepEqual(children[0].signals, ['SIGINT', 'SIGINT', 'SIGKILL']);
+});
+
+test('the default grace before SIGKILL is 15 s', () => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  try {
+    const children: FakeChild[] = [];
+    const queue = new RunQueue(() => undefined, () => { const c = new FakeChild(); children.push(c); return c; });
+    queue.run({ command: '/bin/probe', args: [], env: {} });
+    queue.stop();
+    mock.timers.tick(14_999);
+    assert.deepEqual(children[0].signals, ['SIGINT']);
+    mock.timers.tick(1);
+    assert.deepEqual(children[0].signals, ['SIGINT', 'SIGKILL']);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('on Windows the tree is ended with taskkill /T /F by its full path', () => {
+  const calls: { command: string; args: string[] }[] = [];
+  const fakeSpawn = (command: string, args: string[]) => { calls.push({ command, args }); return new EventEmitter(); };
+  const child = new FakeChild();
+  (child as unknown as { pid: number }).pid = 4242;
+  makeSignalTree('win32', fakeSpawn, 'D:\\Win')(child, 'SIGINT');
+  assert.deepEqual(calls, [{ command: 'D:\\Win\\System32\\taskkill.exe', args: ['/T', '/F', '/PID', '4242'] }]);
+  assert.deepEqual(child.signals, [], 'Node\'s kill is not used on Windows');
+  makeSignalTree('win32', fakeSpawn, undefined)(child, 'SIGKILL');
+  assert.equal(calls[1].command, 'C:\\Windows\\System32\\taskkill.exe');
+  // taskkill cannot be started: the tool is ended by Node's kill
+  const failing = (): EventEmitter => { const e = new EventEmitter(); setImmediate(() => e.emit('error', new Error('ENOENT'))); return e; };
+  makeSignalTree('win32', failing, 'C:\\Windows')(child, 'SIGINT');
+  return new Promise<void>(resolve => setImmediate(() => { assert.deepEqual(child.signals, ['SIGINT']); resolve(); }));
+});
+
+test('a refused .cmd tool lets the next waiting run start', () => {
+  const { queue, out, children } = fakeQueue({ platform: 'win32' });
+  queue.run({ command: 'C:\\tools\\probe.exe', args: ['1'], env: {} });
+  queue.run({ command: 'C:\\tools\\probe.cmd', args: ['2'], env: {} });
+  queue.run({ command: 'C:\\tools\\probe.exe', args: ['3'], env: {} });
+  children[0].emit('close', 0, null);
+  assert.match(out(), /is a batch file/);
+  assert.equal(children.length, 2, 'run 3 started after run 2 was refused');
+});
+
+test('deactivate waits for the tools to end, with a short grace and a cap', () => {
+  const ext = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'extension.ts'), 'utf8');
+  assert.match(ext, /export function deactivate\(\): Promise<void> \{\s*disposeDeviceView\(\);\s*return stopAllTerminals\(\);\s*\}/);
+  const term = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'terminal', 'probeTerminal.ts'), 'utf8');
+  assert.match(term, /export const DEACTIVATE_GRACE_MS = 1000;/);
+  assert.match(term, /ended\.push\(queue\.shutdown\(DEACTIVATE_GRACE_MS\)\);/);
+  assert.match(term, /setTimeout\(resolve, DEACTIVATE_GRACE_MS \+ 2000\)/);
+});
+
+test('after a stopped run ends, stopping the next run still escalates', async () => {
+  const { queue, children } = fakeQueue({ graceMs: 30 });
+  queue.run({ command: '/bin/probe', args: ['1'], env: {} });
+  void queue.shutdown(5);
+  children[0].emit('close', null, 'SIGINT');
+  queue.run({ command: '/bin/probe', args: ['2'], env: {} });
+  queue.stop();
+  await sleep(80);
+  assert.deepEqual(children[1].signals, ['SIGINT', 'SIGKILL']);
 });
