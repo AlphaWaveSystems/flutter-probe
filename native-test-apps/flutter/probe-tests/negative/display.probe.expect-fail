@@ -4,12 +4,12 @@
 #   cp probe-tests/negative/display.probe.expect-fail /tmp/display-negative.probe
 #   probe test /tmp/display-negative.probe --device <serial> -y       # (the display build, the same probe.yaml as for display.probe)
 #
-# Expected: 0 passed, 9 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 12 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 
 before each test
   restart the app
   # the last widget of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
-  wait until "Painted rich text" appears
+  wait until "Taps: 0" appears
 
 # Expected: see "Order total: 42.01": Expected to see "text("Order total: 42.01")" but it was not found
 test "N1 a number one cent off"
@@ -47,3 +47,16 @@ test "N8 the RichText read as holding a phrase it does not"
 # Expected: see "Shipping address": "text("Shipping address")" contains "Shipping address: 1600 Amphitheatre Parkway, ...", not "Canada"
 test "N9 the cut text read as holding a tail it does not"
   see "Shipping address" contains "Canada"
+
+# Expected: see "Favourite": Expected to see "text("Favourite")" but it was not found (a semantic label is matched as written)
+test "N10 the icon's label in another spelling"
+  see "Favourite"
+
+# Expected: see "#wf_missing": Expected to see "#wf_missing" but it was not found
+test "N11 an id that is not on the screen"
+  see #wf_missing
+
+# Expected: see "Taps: 0": Expected to see "text("Taps: 0")" but it was not found (the tap on the logo arrived)
+test "N12 the tap on the logo did not arrive"
+  tap #wf_logo
+  see "Taps: 0"
