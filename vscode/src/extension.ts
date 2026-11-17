@@ -18,7 +18,7 @@ import { RunProfilePanel } from './views/runProfile';
 import { buildTestRun, getProbeCommand } from './probe';
 import { runInTerminal } from './terminal/probeTerminal';
 import { getWorkspaceRoot } from './config';
-import { disposeAllTerminals } from './terminal/probeTerminal';
+import { stopAllTerminals } from './terminal/probeTerminal';
 import { Session } from './types';
 import { SECRET_SETTINGS, staleWorkspaceSettings } from './secretArgs';
 import { TOOL_SETTINGS } from './toolPath';
@@ -127,7 +127,8 @@ function runTestVerbose(filePath: string): void {
   runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
-export function deactivate(): void {
-  disposeAllTerminals();
+// deactivate returns when the tools the extension started have ended (stopAllTerminals), so none outlives the extension host.
+export function deactivate(): Promise<void> {
   disposeDeviceView();
+  return stopAllTerminals();
 }

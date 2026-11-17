@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { SECRET_ENV, SECRET_SETTINGS, envFingerprint, secretEnv, secretFlagIn, staleWorkspaceSettings, terminalAction, withoutSecrets } from '../secretArgs';
+import { SECRET_ENV, SECRET_SETTINGS, secretEnv, secretFlagIn, staleWorkspaceSettings, withoutSecrets } from '../secretArgs';
 
 test('each secret goes to the environment variable the CLI reads', () => {
   assert.deepEqual(
@@ -27,25 +27,14 @@ test('a secret flag is found on a command line, in either form', () => {
   assert.equal(secretFlagIn(['test', 'a.probe', '--cloud-provider', 'aws', '--relay-url', 'wss://r', '--device', 'x']), undefined);
 });
 
-test('the fingerprint tells two environments apart and holds no value', () => {
-  const a = envFingerprint({ PROBE_CLOUD_SECRET: 'first-secret' });
-  const b = envFingerprint({ PROBE_CLOUD_SECRET: 'other-secret' });
-  assert.notEqual(a, b);
-  assert.equal(a, envFingerprint({ PROBE_CLOUD_SECRET: 'first-secret' }));
-  assert.equal(envFingerprint({ A: '1', B: '2' }), envFingerprint({ B: '2', A: '1' }));
-  assert.ok(!a.includes('first-secret'));
-  assert.equal(envFingerprint({}), '');
-});
-
-// runInTerminal imports vscode, so a unit test cannot call it: its source must refuse a secret flag and create the terminal with the env.
-test('runInTerminal refuses a secret flag and gives the terminal its environment', () => {
+// runInTerminal imports vscode, so a unit test cannot call it: its source must refuse a secret flag and hand the run, env included, to the
+// queue that starts the process (processRun.ts, tested on its own).
+test('runInTerminal refuses a secret flag and gives the process its environment', () => {
   const file = path.join(__dirname, '..', '..', 'src', 'terminal', 'probeTerminal.ts');
   const text = fs.readFileSync(file, 'utf8');
   assert.match(text, /const secret = secretFlagIn\(args\);\s*if \(secret\) \{\s*throw new Error/);
-  assert.match(text, /createTerminal\(\{[^}]*\benv,?\s*\}\)/);
-  assert.match(text, /getOrCreateTerminal\(name, cwd, env\)/);
-  assert.match(text, /if \(existing && action === 'reuse'\) \{/);
-  assert.match(text, /if \(existing && action === 'replace'\) \{ existing\.terminal\.dispose\(\); \}/);
+  assert.match(text, /entry\.queue\.run\(\{ command, args, cwd, env \}\);/);
+  assert.doesNotMatch(text, /sendText/);
 });
 
 // The extension's sources name a secret flag only in secretArgs.ts: anything else that writes one would put a secret on a command line.
@@ -85,15 +74,6 @@ test('the secret settings and the settings that decide where secrets go are mach
   for (const key of SECRET_SETTINGS) {
     assert.equal(props[`flutterprobe.${key}`]?.scope, 'machine', `flutterprobe.${key} must be machine-scoped`);
   }
-});
-
-test('a terminal is reused only when it is alive and was made with the same secrets', () => {
-  const env = { PROBE_CLOUD_SECRET: 'one' };
-  assert.equal(terminalAction(undefined, env), 'create');
-  assert.equal(terminalAction({ alive: true, fingerprint: envFingerprint(env) }, env), 'reuse');
-  assert.equal(terminalAction({ alive: true, fingerprint: envFingerprint({ PROBE_CLOUD_SECRET: 'two' }) }, env), 'replace');
-  assert.equal(terminalAction({ alive: true, fingerprint: envFingerprint({}) }, env), 'replace');
-  assert.equal(terminalAction({ alive: false, fingerprint: envFingerprint(env) }, env), 'create');
 });
 
 test('a workspace settings file that still names a machine-scoped setting is found', () => {
