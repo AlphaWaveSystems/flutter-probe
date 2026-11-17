@@ -1,37 +1,48 @@
 import * as vscode from 'vscode';
-import { envFingerprint, secretFlagIn, terminalAction } from '../secretArgs';
-import { argWord, commandWord } from '../toolPath';
+import { secretFlagIn } from '../secretArgs';
+import { RunQueue } from './processRun';
 
-// Each terminal with the fingerprint of the environment it was made with: a terminal's environment is fixed when it is created, so a run
-// whose secrets differ gets a new terminal.
-const terminals = new Map<string, { terminal: vscode.Terminal; env: string }>();
+// Each named terminal runs the tools itself (RunQueue in processRun.ts): the binary is started with its arguments as a list and no shell,
+// so no shell parses, expands or line-edits a file name, under any terminal shell or locale. The output stays in the terminal after the
+// run ends, and the next run of the same name goes to the same terminal.
+interface Entry { terminal: vscode.Terminal; queue: RunQueue }
+const terminals = new Map<string, Entry>();
 
-export function getOrCreateTerminal(name: string, cwd?: string, env: Record<string, string> = {}): vscode.Terminal {
-  const fingerprint = envFingerprint(env);
+function getOrCreateTerminal(name: string): Entry {
   const existing = terminals.get(name);
-  const action = terminalAction(
-    existing && { alive: vscode.window.terminals.includes(existing.terminal), fingerprint: existing.env },
-    env,
-  );
-  if (existing && action === 'reuse') {
+  if (existing && vscode.window.terminals.includes(existing.terminal)) {
     existing.terminal.show();
-    return existing.terminal;
+    return existing;
   }
-  if (existing && action === 'replace') { existing.terminal.dispose(); }
   terminals.delete(name);
 
-  const terminal = vscode.window.createTerminal({
-    name,
-    cwd,
-    env,
-  });
-  terminals.set(name, { terminal, env: fingerprint });
+  const writeEmitter = new vscode.EventEmitter<string>();
+  // What is written before VS Code opens the terminal would be dropped (Pseudoterminal.onDidWrite), so it is kept until then.
+  let opened = false;
+  const early: string[] = [];
+  const write = (text: string): void => { if (opened) { writeEmitter.fire(text); } else { early.push(text); } };
+  const queue = new RunQueue(write);
+  const pty: vscode.Pseudoterminal = {
+    onDidWrite: writeEmitter.event,
+    open: () => {
+      opened = true;
+      for (const text of early.splice(0)) { writeEmitter.fire(text); }
+    },
+    close: () => {
+      queue.stop();
+      terminals.delete(name);
+    },
+    handleInput: data => queue.input(data),
+  };
+  const terminal = vscode.window.createTerminal({ name, pty, iconPath: new vscode.ThemeIcon('beaker') });
+  const entry = { terminal, queue };
+  terminals.set(name, entry);
   terminal.show();
-  return terminal;
+  return entry;
 }
 
-// runInTerminal types the command into a terminal, so the command line ends up in shell history: it must hold no secret. The secrets go
-// in env, the environment the terminal is created with (see secretArgs.ts).
+// runInTerminal runs the tool in the terminal of that name. The secrets go in env, the environment of the process, never in args: the
+// command line of a process can be read by other processes of the same user (see secretArgs.ts).
 export function runInTerminal(
   name: string,
   command: string,
@@ -41,14 +52,11 @@ export function runInTerminal(
 ): vscode.Terminal {
   const secret = secretFlagIn(args);
   if (secret) {
-    throw new Error(`${secret} must not be on the command line: pass it in the terminal's environment`);
+    throw new Error(`${secret} must not be on the command line: pass it in the environment`);
   }
-  const terminal = getOrCreateTerminal(name, cwd, env);
-  // The command is quoted for the terminal's shell, so a path with a space stays one word (commandWord in toolPath.ts).
-  const shown = commandWord(command, process.platform, vscode.env.shell);
-  const fullCommand = [shown, ...args.map(a => argWord(a, process.platform, vscode.env.shell))].join(' ');
-  terminal.sendText(fullCommand);
-  return terminal;
+  const entry = getOrCreateTerminal(name);
+  entry.queue.run({ command, args, cwd, env });
+  return entry.terminal;
 }
 
 export function disposeTerminal(name: string): void {
