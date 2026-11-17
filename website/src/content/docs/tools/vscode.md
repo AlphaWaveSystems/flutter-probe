@@ -69,10 +69,16 @@ Then press `F5` in VS Code to launch an Extension Development Host with the exte
 
 ## Configuration
 
-The extension looks for the `probe` binary on your PATH. If it is installed elsewhere, configure it in VS Code settings:
+The extension looks for the `probe` binary on your PATH. If it is installed elsewhere, configure it in your **user** settings (a workspace's `.vscode/settings.json` cannot set it):
 
 ```json
 {
   "flutterprobe.probePath": "/path/to/bin/probe"
 }
 ```
+
+## Security
+
+- **Secrets never go on a command line.** The cloud key, the cloud secret and the relay token reach `probe test` as environment variables of its terminal (`PROBE_CLOUD_KEY`, `PROBE_CLOUD_SECRET`, `PROBE_RELAY_CLI_TOKEN`). These settings, and the relay URL and cloud provider that decide where they are sent, can be set only in your user (or remote) settings.
+- **A workspace cannot choose the binaries.** `probePath`, `convertPath`, `adbPath` and `flutterPath` are user (or remote) settings, the binary is run by its absolute path from PATH (never from the workspace folder), and a `bin/probe` in the workspace is used only with `flutterprobe.useWorkspaceBinaries`. The extension runs only in a trusted workspace.
+- **What the programs the extension starts inherit.** Every program the extension starts (`probe`, and through it `adb` and `flutter`) inherits VS Code's environment, as programs do. Nothing is filtered out except the three secret variables, which only a test run receives: the device list, lint and the device view get the environment without them. A `${NAME}` in a test reads any environment variable by design, so the environment is not reduced further. The boundary is the trust model above: which binaries run, and in which workspaces. A `probe.yaml` is read by `probe test` and its `tools:` section can name `adb` and `flutter`, so trust a folder only if you trust what it runs.
