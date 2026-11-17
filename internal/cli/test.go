@@ -670,6 +670,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	// ── Single-device mode (default) ──
 	// Connect to ProbeAgent (skip if dry-run)
 	var client probelink.ProbeClient
+	var portFollower *device.PortFollower // Android: the follower of the agent port, kept for the device context's reconnects
 	var dm *device.Manager
 	var platform device.Platform
 	var cloudSession *cloud.Session           // non-nil when using a cloud provider
@@ -1117,28 +1118,44 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 					}
 				}
 
-				// Android: forward port via ADB
-				trace("android: forwarding host:%d -> device:%d", cfg.Agent.Port, cfg.Agent.AgentDevicePort())
-				if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+				// Android: forward port via ADB. The follower keeps the device port: the configured one until a failed dial shows that the app under test
+				// listens on another (two apps with the agent on one device), see device.PortFollower.
+				follower := device.NewPortFollower(dm.ADB(), dm, deviceSerial, cfg.Project.App, cfg.Agent.Port, cfg.Agent.AgentDevicePort(),
+					func(msg string) { statusWarn(statusW, "%s", msg) }, nil)
+				portFollower = follower
+				trace("android: forwarding host:%d -> device:%d", cfg.Agent.Port, follower.DevicePort())
+				if err := dm.ForwardPort(ctx, deviceSerial, cfg.Agent.Port, follower.DevicePort()); err != nil {
 					trace("android: ForwardPort failed: %v", err)
 					return fmt.Errorf("port forward: %w", err)
 				}
 				dialOpts.OnConnectRefused = func(c context.Context) {
-					if err := dm.ForwardPort(c, deviceSerial, cfg.Agent.Port, cfg.Agent.AgentDevicePort()); err != nil {
+					if err := dm.ForwardPort(c, deviceSerial, cfg.Agent.Port, follower.DevicePort()); err != nil {
 						trace("android: re-forward failed: %v", err)
 					}
 				}
+				dialOpts.OnPortSuspect = follower.Suspect
 				defer func() {
 					trace("android: removing port forward for host:%d", cfg.Agent.Port)
 					_ = dm.RemoveForward(ctx, deviceSerial, cfg.Agent.Port)
 				}()
 
 				fmt.Fprintln(statusW, msgWaitingForToken)
-				token, err := dm.ReadTokenAndroid(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App, trace)
+				token, tokenSource, err := dm.ReadTokenAndroidSource(ctx, deviceSerial, cfg.Agent.TokenReadTimeout, cfg.Project.App, trace)
 				if err != nil {
 					return fmt.Errorf("agent token: %w — is the app running with probe_agent?", err)
 				}
 				dialOpts.Token = token
+				// A token that did not come from run-as does not prove which app it belongs to: do not stay on a port another app holds.
+				follower.NoteTokenSource(tokenSource)
+				moved, holdErr := follower.Preflight(ctx, cfg.Agent.DialTimeout)
+				if holdErr != nil {
+					// Another app holds the agent port and the app under test has none: dialing could reach the other app, so the run does not connect.
+					connectFailed = true
+					return fmt.Errorf("agent port: %w", holdErr)
+				}
+				if moved {
+					trace("android: moved the forward to device port %d before the first dial", follower.DevicePort())
+				}
 				// Right after a cold launch the token read above can still be the
 				// previous app instance's: re-read it on a 401 instead of failing (FP-19).
 				dialOpts.OwnAdbForward = true
@@ -1147,15 +1164,20 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				// just rejected, fall back to the newest one in logcat.
 				lastToken := token
 				dialOpts.RefreshToken = func(c context.Context) (string, error) {
-					t, err := dm.ReadTokenAndroid(c, deviceSerial, 5*time.Second, cfg.Project.App, trace)
+					t, src, err := dm.ReadTokenAndroidSource(c, deviceSerial, 5*time.Second, cfg.Project.App, trace)
 					if err == nil && t == lastToken {
 						if lt := dm.ReadTokenAndroidLogcat(c, deviceSerial); lt != "" && lt != t {
 							trace("android: token file is stale (rejected), using the newest token from logcat")
 							t = lt
+							src = device.TokenSourceLogcat
 						}
 					}
 					if err == nil {
 						lastToken = t
+						// A refreshed token that is not from run-as may be the other app's: check the holder again before the redial (see PortFollower.CheckRefreshedToken).
+						if holdErr := follower.CheckRefreshedToken(c, src, cfg.Agent.DialTimeout); holdErr != nil {
+							return "", holdErr
+						}
 					}
 					return t, err
 				}
@@ -1291,6 +1313,9 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		}
 		devCtx = singleDeviceContext(ctx, dm, cfg, platform, deviceSerial, agentHost, autoYes, noGrantOnClear,
 			confirmWithPrefs(confirmFunc(), prefs.ClearDataWithoutAsking, func() bool { return dm.IsVerifiedDisposable(ctx, platform, deviceSerial) }, os.Stderr, cfg.Project.App, deviceSerial))
+		if portFollower != nil {
+			devCtx.Follower = portFollower
+		}
 		if devCtx.IsPhysical {
 			fmt.Fprintf(statusW, "  \033[36mℹ\033[0m  Physical device detected: %s\n", deviceSerial)
 		}
