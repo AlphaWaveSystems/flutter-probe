@@ -259,6 +259,7 @@ let currentDir = "tests";
 // settings overlay and the chat line read the same file. currentDir moves when the file pane is browsed; this does not.
 let workspaceRoot = "";
 let dirty = false;
+let saveAsOpener: HTMLElement | null = null;
 let saving = false; // a new file is being written (Save as): no second Save may list the folder before the write has landed
 // First-run guidance: nothing is said while the workspace is still being opened at start-up, and the device list is not judged empty
 // before its first listing has arrived.
@@ -505,6 +506,7 @@ async function saveAs(): Promise<void> {
     toast("Saving: wait until the file is written.", "info", 2500);
     return;
   }
+  saveAsOpener = document.activeElement as HTMLElement | null; // taken before Save is disabled below: a disabled button gives up the focus, and this is where it goes back to
   saving = true;
   setDirty(dirty); // disables Save while the name is asked and the file is written
   try {
@@ -530,7 +532,7 @@ async function saveAsInner(): Promise<void> {
     return;
   }
   const typed = $("editor-filename").textContent === "recorded.probe" ? "recorded.probe" : "untitled.probe";
-  const name = await askSaveAsName(typed, existing, dir);
+  const name = await askSaveAsName(typed, existing, dir, saveAsOpener);
   if (name === null) return;
   const path = `${dir.replace(/\/+$/, "")}/${name}`;
   const content = model.getValue();
@@ -628,11 +630,26 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// The focus handling of the overlays that are not a question with a Cancel: Tab stays inside, Escape closes, the focus goes back to what opened it (modal-focus.ts).
+// Each overlay's release is kept here and called by its close function, which is also what the global Escape handler and the close button call.
+const overlayReleases = new Map<string, () => void>();
+function holdFocus(id: string, initialId: string, onEscape: () => void): void {
+  overlayReleases.get(id)?.();
+  overlayReleases.set(id, trapFocus($(id), { initial: $(initialId), onEscape }));
+}
+function releaseFocus(id: string): void {
+  const release = overlayReleases.get(id);
+  overlayReleases.delete(id);
+  release?.();
+}
+
 function openHelpOverlay() {
   $("help-overlay").hidden = false;
+  holdFocus("help-overlay", "btn-help-close", closeHelpOverlay);
 }
 function closeHelpOverlay() {
   $("help-overlay").hidden = true;
+  releaseFocus("help-overlay");
 }
 $("btn-help-close").addEventListener("click", closeHelpOverlay);
 $("help-overlay").addEventListener("click", (e) => {
@@ -647,6 +664,7 @@ async function openSettingsOverlay() {
   const noWorkspace = $("settings-no-workspace") as HTMLElement;
   const form = $("settings-form") as HTMLFormElement;
   overlay.hidden = false;
+  holdFocus("settings-overlay", "btn-settings-close", closeSettingsOverlay);
 
   if (!workspaceRoot) {
     noWorkspace.hidden = false;
@@ -710,6 +728,7 @@ $("settings-clear-data-sim").addEventListener("change", async (e) => {
 
 function closeSettingsOverlay() {
   $("settings-overlay").hidden = true;
+  releaseFocus("settings-overlay");
 }
 
 $("btn-settings").addEventListener("click", openSettingsOverlay);
@@ -1497,11 +1516,13 @@ function openWiFiOverlay() {
   $("wifi-manual-msg").hidden = true;
   restoreManualWiFi();
   $("wifi-overlay").hidden = false;
+  holdFocus("wifi-overlay", "btn-wifi-close", closeWiFiOverlay);
   StartWiFiDiscovery().catch((err) => toast(`mDNS browse failed: ${err}`, "error"));
 }
 
 function closeWiFiOverlay() {
   $("wifi-overlay").hidden = true;
+  releaseFocus("wifi-overlay");
   StopWiFiDiscovery();
 }
 
@@ -2645,10 +2666,12 @@ async function openApiKeyOverlay() {
   }
   input.placeholder = saved ? "A key is saved. Type a new key to replace it." : "sk-ant-…";
   $("api-key-overlay").hidden = false;
+  holdFocus("api-key-overlay", "api-key-input", closeApiKeyOverlay); // the field first: the person came to type a key
 }
 
 function closeApiKeyOverlay() {
   $("api-key-overlay").hidden = true;
+  releaseFocus("api-key-overlay");
 }
 
 $("btn-api-key-close").addEventListener("click", closeApiKeyOverlay);
