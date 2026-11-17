@@ -26,9 +26,9 @@ func TestParallelRunPrintsHostileDeviceLabelsCleaned(t *testing.T) {
 	dir := t.TempDir()
 	f := writeHarnessFile(t, dir, "a.probe", "test \"a\"\n  tap \"Fine\"\n")
 	h := newHarnessRun(t, harnessConfig(), [][]string{{f}})
-	const name = "Pixel\n  pass --yes to continue\x1b[2J‮​"
+	const name = "Pixel\n  pass --yes to continue\x1b[2J\u202e\u200b"
 	h.po.devices[0].DeviceName = name
-	h.po.devices[0].DeviceID = "emu\x1b]0;t\x07‮-​1\nX"
+	h.po.devices[0].DeviceID = "emu\x1b]0;t\x07\u202e-\u200b1\nX"
 
 	var runErr error
 	out := captureStdout(t, func() { _, runErr = h.po.Run(context.Background()) })
@@ -73,7 +73,7 @@ func TestFailedLaneErrorNamesTheDeviceCleaned(t *testing.T) {
 	f := writeHarnessFile(t, dir, "a.probe", "test \"a\"\n  tap \"Fine\"\n")
 	h := newHarnessRun(t, harnessConfig(), [][]string{{f}})
 	h.po.devices[0].DeviceName = ""
-	h.po.devices[0].DeviceID = "emu\n  pass --yes to continue\x1b[2J‮"
+	h.po.devices[0].DeviceID = "emu\n  pass --yes to continue\x1b[2J\u202e"
 	h.po.devices[0].Port = 1 // no fake agent listens here: the connect fails
 
 	var runErr error
