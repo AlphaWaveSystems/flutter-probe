@@ -9,7 +9,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 
 | Family | Examples | find | tap | type | scroll | read | fixture | device test |
 |---|---|---|---|---|---|---|---|---|
-| Text and display | `Text`, `RichText`, `Icon`, `Image` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Text and display | `Text`, `RichText`, `Icon`, `Image` | see below (`Text`, `RichText` only) | not assessed | n/a | not assessed | see below | `display` screen | `probe-tests/widgets/display.probe` |
 | Buttons | `ElevatedButton`, `TextButton`, `IconButton`, `CupertinoButton` | see below | see below | n/a | not assessed | see below | `buttons` screen | `probe-tests/widgets/buttons.probe` |
 | Text input | `TextField`, `TextFormField`, `CupertinoTextField` | see below | see below | see below | not assessed | see below | `textinput` screen | `probe-tests/widgets/textinput.probe` |
 | Selection controls | `Checkbox`, `Switch`, `Radio`, `Slider`, `CupertinoSwitch` | see below | see below | n/a | not assessed | see below | `selection` screen | `probe-tests/widgets/selection.probe` |
@@ -96,6 +96,23 @@ Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulat
 - **During a pop, the leaving route is still matched.** Right after `go back`, `wait until "Inbox" appears` passes at once while the message route is still on screen in Material's page transition, and `don't see "From: Ada"` then finds it. Measured on both devices with those steps alone, 5 runs each: `Compat-Pixel-API35` 4 of 5 runs, `Compat-iPhone` 5 of 5. A test that checks a pop waits for the leaving route to go: `wait until "From: Ada" disappears`.
 
 Not covered by the screen: `NavigationBar`, `TabBar`, `Drawer`, a route that is not opaque (a dialog, a popup menu, a bottom sheet: the page under it stays matched by design; item 8 of `NEXT.md`), named routes and `go_router`, the Android system back key and the iOS edge swipe (`go back` pops in the app, it does not press either), a nested `Navigator`, and Cupertino routes (item 10 of `NEXT.md`). Flutter 3.50.0 was not run for this family.
+### Text and display: text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
+
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 9 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 9 of 9 on each, each with the message its comment states.
+
+| Widget (fixture id) | find | read | Result |
+|---|---|---|---|
+| `Text` (`wf_text`, `Order total: 42.00`) | pass (the whole text, a part of it, `#wf_text`) | pass (`see "Order total" contains "42.00"`; a value the text does not hold fails with the text it has) | pass |
+| `Text.rich` of two spans, `Hello ` and a bold `world` (`wf_rich`) | pass (`"Hello world"`: the spans are matched as one text; `"Hello"` and `"world"` as parts of it; `#wf_rich`) | pass (`see "Hello world" contains "world"`; the text read is the whole `Hello world`, as a failing `contains "earth"` shows) | pass |
+| `RichText` of two spans, `Painted ` and `rich text` (`wf_richtext`) | pass (`"Painted rich text"`, `"rich text"`, `#wf_richtext`) | pass (`see "Painted rich text" contains "rich text"`; `contains "plain text"` fails) | pass |
+| `Text` with `maxLines: 1` and `TextOverflow.ellipsis`, chosen longer than the screen is wide (an inference from its length; the agent does not report the painted width) (`wf_ellipsis`) | **the whole string is matched, the part that is not painted included** (`see "...United States of America"` passes; the painted, cut form with `…` does not); `#wf_ellipsis` | pass (`see "Shipping address" contains "United States of America"`: the text read is the whole string; `contains "Canada"` fails) | pass, with the finding below |
+
+**Findings.**
+- **A text selector matches the text the app gave the widget, not what is painted.** A `Text` cut with an ellipsis is found by its whole string, including the part a user cannot see, and not by the cut form shown on screen. A test that must show that a text is fully visible cannot rely on `see`.
+- **A text selector matches the whole text or any part of it, exactly:** case counts (`"hello world"` fails) and spaces count (`"Hello  world"` fails); the spans of a `Text.rich` or a `RichText` are matched as one text, joined as written.
+- **Right after `restart the app`, the screen can still be being built** (issue #793): on `Compat-Pixel-API35`, without a wait 3 of 10 runs failed, with a wait for the first item 1 of 10, and with a wait for the screen's last widget 10 of 10 passed. The suite waits for the last widget after the restart.
+
+Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` inside other widgets (buttons are their own family), text scale and `textScaler`, right-to-left and other scripts, a `Text` with `semanticsLabel` (item 3 asks how a semantic label is matched), soft wrapping without `maxLines`, and `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` (item 3). Flutter 3.50.0 was not run for this family.
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 
