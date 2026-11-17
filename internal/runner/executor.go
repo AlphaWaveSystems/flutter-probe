@@ -1329,6 +1329,10 @@ func (e *Executor) runAssert(ctx context.Context, a parser.AssertStep) error {
 		checkStr = "contains"
 	case parser.StateFocused:
 		checkStr = "focused"
+	case parser.StateFilled:
+		checkStr = "filled"
+	case parser.StateEmpty:
+		checkStr = "empty"
 	}
 	// Resolve variables in selector text (for data-driven tests)
 	sel := e.resolveSelector(a.Sel)

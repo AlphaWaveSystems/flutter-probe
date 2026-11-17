@@ -25,3 +25,15 @@ test("a reason without a fix renders one row", () => {
 test("an empty fix is not shown", () => {
   assert.deepEqual(triageRows({ fix: "", reason: "x" }), [{ label: "Reason", text: "x" }]);
 });
+
+// A step the screen explained: the text the screen showed is a row of its own (the Go side leaves the fix out then), before the reason.
+test("a replacement renders an On screen row before the reason, and no fix row", () => {
+  assert.deepEqual(triageRows({ replacement: "Sign In", reason: 'tap found no "Sign in" on screen after 1.0 s; the screen shows "Sign In".' }), [
+    { label: "On screen", text: "Sign In" },
+    { label: "Reason", text: 'tap found no "Sign in" on screen after 1.0 s; the screen shows "Sign In".' },
+  ]);
+});
+
+test("an empty replacement is not shown", () => {
+  assert.deepEqual(triageRows({ replacement: "", reason: "x" }), [{ label: "Reason", text: "x" }]);
+});
