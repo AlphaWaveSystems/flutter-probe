@@ -57,7 +57,9 @@ type App struct {
 	wifiLimit wifiLimiter
 	// lookupHost resolves a hostname for the WiFi target policy; nil uses the system resolver (tests replace it).
 	lookupHost func(ctx context.Context, host string) ([]net.IP, error)
-	workspace  string // directory whose probe.yaml governs connections; "" → cwd
+	// connectWiFi is what ConnectWiFiSaved dials through; nil is ConnectWiFi (tests record what it is given).
+	connectWiFi func(host string, port int, token string) (ConnectionStatus, error)
+	workspace   string // directory whose probe.yaml governs connections; "" → cwd
 	// humanWorkspace is the last workspace a person opened in the window; it is what automation
 	// may work inside (see automationRoots).
 	humanWorkspace string

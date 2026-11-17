@@ -17,9 +17,20 @@ func wifiTokenUser(device string) string { return "wifi-token:" + device }
 // saved token is sent. A token saved before this binding existed has no address.
 func wifiAddrUser(device string) string { return "wifi-addr:" + device }
 
-// wifiAddress is host:port in one form (no brackets, lower case), so two spellings of one address compare equal.
+// wifiHostKey is a host in one spelling: no surrounding space, no brackets, no trailing dot, lower case. Two spellings that become one are the
+// same host to the resolver too, so the key is also what is dialled (never the raw spelling: "127.0.0.1." compares equal to "127.0.0.1" but a
+// resolver may treat the dotted one as a name).
+func wifiHostKey(host string) string {
+	h := strings.TrimSpace(host)
+	for i := 0; i < 3; i++ {
+		h = strings.Trim(strings.TrimSuffix(h, "."), "[]")
+	}
+	return strings.ToLower(h)
+}
+
+// wifiAddress is host:port in one form, so two spellings of one address compare equal.
 func wifiAddress(host string, port int) string {
-	return net.JoinHostPort(strings.ToLower(strings.TrimSuffix(strings.Trim(strings.TrimSpace(host), "[]"), ".")), strconv.Itoa(port))
+	return net.JoinHostPort(wifiHostKey(host), strconv.Itoa(port))
 }
 
 // WiFiTokenSaved reports whether a WiFi token is saved for the named device. The token itself is not returned:
@@ -96,13 +107,20 @@ func (a *App) ConnectWiFiSaved(host string, port int, device string) (Connection
 				"Paste the token to connect there", dialogText(device), dialogText(addr), savedForText(bound))
 		}
 	}
-	st, err := a.ConnectWiFi(host, port, token)
+	// The address that was compared (or asked about) is the address that is dialled: the normalised host, not the raw spelling.
+	connect := a.connectWiFi
+	if connect == nil {
+		connect = a.ConnectWiFi
+	}
+	st, err := connect(wifiHostKey(host), port, token)
 	if err != nil {
-		return st, err
+		return st, err // a connection that failed binds nothing
 	}
 	if asked {
-		if err := keychainSetItem(wifiAddrUser(device), addr); err != nil {
-			return st, nil // connected; the next use asks again
+		// Bind only if the token saved now is still the one this connection used: a token replaced while the question was open (or while the
+		// connection was made) is another token, and it has not been approved for this address.
+		if now, err := keychainGetItem(wifiTokenUser(device)); err == nil && now == token {
+			_ = keychainSetItem(wifiAddrUser(device), addr) // a keychain that refuses it leaves the token unbound: the next use asks again
 		}
 	}
 	return st, nil
@@ -115,11 +133,19 @@ func savedForText(bound string) string {
 	return dialogText(bound)
 }
 
+// savedForDetail is what the window shows as the address the token was saved for: empty for a token saved without one, which the window words as such.
+func savedForDetail(bound string) string {
+	if bound == "" {
+		return ""
+	}
+	return dialogText(bound)
+}
+
 // confirmSendSavedToken asks in the window whether the saved token of device may be sent to addr. Every text in the question is made by
 // Studio (the name and addresses are cleaned and bounded). With no window, or a bridge, or no answer, it is a no.
 func (a *App) confirmSendSavedToken(device, addr, bound string) bool {
 	ctx, cancel := context.WithTimeout(a.ctx, confirmTimeout)
 	defer cancel()
-	return a.askInWindow(ctx, ConfirmRequest{Kind: kindSendSavedToken, DeviceName: dialogText(device), AppID: dialogText(addr), Detail: savedForText(bound)},
+	return a.askInWindow(ctx, ConfirmRequest{Kind: kindSendSavedToken, DeviceName: dialogText(device), AppID: dialogText(addr), Detail: savedForDetail(bound)},
 		"The saved token was not sent: nothing answered in the window", "The saved token was not sent: the connection was cancelled")
 }

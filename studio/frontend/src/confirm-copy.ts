@@ -17,10 +17,12 @@ export function confirmCopy(r: ConfirmRequest): { title: string; lead: string; a
     // appId carries the address the token would go to, deviceName the name that was announced
     return {
       title: "Send the saved token?",
-      lead: `A device on your network calls itself "${r.deviceName || "(unknown device)"}", the name of a device whose token is saved, but at a different address:`,
+      lead: r.detail
+        ? `A device on your network calls itself "${r.deviceName || "(unknown device)"}", the name of a device whose token is saved, but at a different address:`
+        : `A device on your network calls itself "${r.deviceName || "(unknown device)"}", the name of a device whose token is saved without an address:`,
       appLabel: "Address it announced",
       app: r.appId || "(unknown address)",
-      device: `the token was saved for ${r.detail || "(unknown)"}`,
+      device: r.detail ? `the token was saved for ${r.detail}` : "the token was saved before tokens were tied to an address",
       warning: "The saved token is sent to that address. Any device on the network can announce any name: if you do not recognise the address, press Cancel. Nothing is sent unless you press Send token.",
       cancel: "Cancel",
       danger: "Send token",

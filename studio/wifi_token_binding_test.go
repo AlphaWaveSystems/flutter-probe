@@ -179,8 +179,8 @@ func TestATokenWithNoAddressAsksOnceAndIsThenBound(t *testing.T) {
 	}
 	out := b.connectSaved("127.0.0.1", agent.port, "Old phone")
 	req := b.next(t, "confirm:request")[0].(ConfirmRequest)
-	if !strings.Contains(req.Detail, "no address") {
-		t.Errorf("the question does not say the token has no address: %+v", req)
+	if req.Detail != "" { // the window words a token with no address as such
+		t.Errorf("a token with no address has a saved-for address in the question: %+v", req)
 	}
 	b.a.AnswerConfirm(req.ID, true)
 	if err := result(t, out); err != nil {
@@ -259,5 +259,72 @@ func TestWifiAddressNormalises(t *testing.T) {
 	}
 	if wifiAddress("Phone.LOCAL.", 1) != "phone.local:1" || wifiAddress("fe80::1", 2) != "[fe80::1]:2" {
 		t.Error("host names and IPv6 addresses are not normalised")
+	}
+}
+
+// Spellings of one host that compare equal are one host everywhere: the host that is dialled is the normalised one, never the raw spelling (a host
+// written with a trailing dot compares equal to the bound address, and a resolver may treat it as a name).
+func TestEverySpellingOfTheBoundHostIsDialledAsTheBoundHost(t *testing.T) {
+	b := newBindApp(t, true)
+	agent := newFakeAgent(t)
+	b.savedAt(t, agent, "Desk phone")
+	var dialled []string
+	b.a.connectWiFi = func(host string, port int, token string) (ConnectionStatus, error) {
+		dialled = append(dialled, fmt.Sprintf("%s:%d", host, port))
+		return ConnectionStatus{}, nil
+	}
+	want := fmt.Sprintf("127.0.0.1:%d", agent.port)
+	for _, spelling := range []string{"127.0.0.1.", "[127.0.0.1]", " 127.0.0.1 ", "127.0.0.1..", "[127.0.0.1.]"} {
+		dialled = nil
+		if err := result(t, b.connectSaved(spelling, agent.port, "Desk phone")); err != nil {
+			t.Fatalf("%q: %v", spelling, err)
+		}
+		if len(dialled) != 1 || dialled[0] != want {
+			t.Errorf("%q was dialled as %v, want %s", spelling, dialled, want)
+		}
+	}
+	for _, in := range []struct{ host, want string }{{"PHONE.local.", "phone.local"}, {"[FE80::1]", "fe80::1"}, {" Phone.Local ", "phone.local"}} {
+		if got := wifiHostKey(in.host); got != in.want {
+			t.Errorf("%q -> %q, want %q", in.host, got, in.want)
+		}
+	}
+}
+
+// A yes whose connection then fails binds nothing: the address was approved for a connection that did not happen.
+func TestAYesWhoseConnectionFailsBindsNothing(t *testing.T) {
+	b := newBindApp(t, true)
+	real := newFakeAgent(t)
+	b.savedAt(t, real, "Desk phone")
+	realAddr := boundTo(t, "Desk phone")
+	closed := newFakeAgent(t)
+	port := closed.port
+	closed.srv.Close() // nothing listens there any more
+	out := b.connectSaved("127.0.0.1", port, "Desk phone")
+	req := b.next(t, "confirm:request")[0].(ConfirmRequest)
+	b.a.AnswerConfirm(req.ID, true)
+	if err := result(t, out); err == nil {
+		t.Fatal("a connection to a closed port succeeded")
+	}
+	if boundTo(t, "Desk phone") != realAddr {
+		t.Errorf("a failed connection changed the binding to %q", boundTo(t, "Desk phone"))
+	}
+}
+
+// A token replaced while the question was open is another token: the address the person approved for the old one is not bound to it.
+func TestATokenReplacedDuringTheQuestionIsNotBoundToTheApprovedAddress(t *testing.T) {
+	b := newBindApp(t, true)
+	real, other := newFakeAgent(t), newFakeAgent(t)
+	b.savedAt(t, real, "Desk phone")
+	out := b.connectSaved("127.0.0.1", other.port, "Desk phone")
+	req := b.next(t, "confirm:request")[0].(ConfirmRequest)
+	if err := keychainSetItem(wifiTokenUser("Desk phone"), goodToken+"-new"); err != nil { // the token is replaced while the question is open
+		t.Fatal(err)
+	}
+	b.a.AnswerConfirm(req.ID, true)
+	if err := result(t, out); err != nil {
+		t.Fatal(err)
+	}
+	if got := boundTo(t, "Desk phone"); got != fmt.Sprintf("127.0.0.1:%d", real.port) {
+		t.Errorf("the replaced token was bound to %q", got)
 	}
 }
