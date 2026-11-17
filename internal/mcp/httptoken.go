@@ -14,8 +14,9 @@ import (
 // The bearer token of the HTTP transport.
 //
 // By default a new token (32 bytes from crypto/rand, hex) is made on every start and written to
-// <user config dir>/flutter-probe-mcp/http-token, mode 0600 in a 0700 directory. The file is
-// removed when the server stops. A token that changes on every start is the safer default: one
+// <user config dir>/flutter-probe-mcp/http-token-<port>, mode 0600 in a 0700 directory, one file for
+// each port a server listens on, so two servers of one user never overwrite each other's token. The
+// file is removed when the server stops. A token that changes on every start is the safer default: one
 // that leaked (a shell history, a screen share, a copied config) stops working with the process.
 // Someone who wants a token that stays the same supplies their own in PROBE_MCP_HTTP_TOKEN; then
 // nothing is written to disk.
@@ -28,7 +29,7 @@ const (
 	TokenEnv = "PROBE_MCP_HTTP_TOKEN"
 
 	tokenDirName  = "flutter-probe-mcp"
-	tokenFileName = "http-token"
+	tokenFileBase = "http-token"
 	tokenBytes    = 32
 	// minSuppliedToken is the shortest supplied token accepted: 32 bytes in base64 are 43 characters.
 	minSuppliedToken = 43
@@ -82,11 +83,15 @@ func checkSuppliedToken(token string) error {
 	return nil
 }
 
-// writeTokenFile writes the token to dir/http-token and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
+// tokenFileName is the name of the token file of the server that listens on port. A port belongs to one server at a time, so the name does too:
+// a second server on another port has its own file, and one on the same port cannot start (the listen fails before any file is touched).
+func tokenFileName(port int) string { return fmt.Sprintf("%s-%d", tokenFileBase, port) }
+
+// writeTokenFile writes the token to dir/name and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
 // directory or an existing token file that is a link, not ours or reachable by other users, instead of repairing it. replaced reports that a token
 // file was already there: one left by a server that was killed, or the one a running server still depends on.
-func writeTokenFile(dir, token string) (path string, replaced bool, err error) {
-	return secretfile.Write(secretfile.Options{Label: "mcp http", Dir: dir, Name: tokenFileName, Content: token + "\n"})
+func writeTokenFile(dir, name, token string) (path string, replaced bool, err error) {
+	return secretfile.Write(secretfile.Options{Label: "mcp http", Dir: dir, Name: name, Content: token + "\n"})
 }
 
 // removeTokenFile removes the token file on shutdown, but only while it still holds this server's token: a second server started later has put its

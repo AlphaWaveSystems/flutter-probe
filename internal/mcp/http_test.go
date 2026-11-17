@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -526,7 +527,7 @@ func TestTokenFileModes(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), "cfg", tokenDirName)
 	token, _ := newToken()
-	path, replaced, err := writeTokenFile(dir, token)
+	path, replaced, err := writeTokenFile(dir, tokenFileName(7001), token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,7 +548,7 @@ func TestTokenFileModes(t *testing.T) {
 	}
 	// A second start replaces the token and leaves nothing else in the directory.
 	second, _ := newToken()
-	if _, replaced, err := writeTokenFile(dir, second); err != nil || !replaced {
+	if _, replaced, err := writeTokenFile(dir, tokenFileName(7001), second); err != nil || !replaced {
 		t.Fatalf("second write: replaced = %v, err = %v; want replaced and no error", replaced, err)
 	}
 	if b, _ := os.ReadFile(path); string(b) != second+"\n" || second == token {
@@ -592,7 +593,7 @@ func TestTokenFileRefusals(t *testing.T) {
 	token, _ := newToken()
 	t.Run("file 0644", func(t *testing.T) {
 		dir := privateDir(t)
-		path := filepath.Join(dir, tokenFileName)
+		path := filepath.Join(dir, tokenFileName(7001))
 		for _, mode := range []os.FileMode{0o644, 0o640, 0o604, 0o660} {
 			if err := os.WriteFile(path, []byte("old\n"), 0o600); err != nil {
 				t.Fatal(err)
@@ -600,7 +601,7 @@ func TestTokenFileRefusals(t *testing.T) {
 			if err := os.Chmod(path, mode); err != nil {
 				t.Fatal(err)
 			}
-			_, _, err := writeTokenFile(dir, token)
+			_, _, err := writeTokenFile(dir, tokenFileName(7001), token)
 			wantRefusal(t, err, "token file", path, "is open to other users")
 			if b, _ := os.ReadFile(path); string(b) != "old\n" {
 				t.Errorf("mode %04o: the refused file was written", mode)
@@ -609,7 +610,7 @@ func TestTokenFileRefusals(t *testing.T) {
 	})
 	t.Run("file link", func(t *testing.T) {
 		dir := privateDir(t)
-		path := filepath.Join(dir, tokenFileName)
+		path := filepath.Join(dir, tokenFileName(7001))
 		target := filepath.Join(privateDir(t), "elsewhere")
 		if err := os.WriteFile(target, []byte("keep\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -617,7 +618,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := writeTokenFile(dir, token)
+		_, _, err := writeTokenFile(dir, tokenFileName(7001), token)
 		wantRefusal(t, err, "token file", path, "is a symlink or not a regular file")
 		if b, _ := os.ReadFile(target); string(b) != "keep\n" {
 			t.Error("the link target was written")
@@ -628,12 +629,12 @@ func TestTokenFileRefusals(t *testing.T) {
 	})
 	t.Run("dangling link", func(t *testing.T) {
 		dir := privateDir(t)
-		path := filepath.Join(dir, tokenFileName)
+		path := filepath.Join(dir, tokenFileName(7001))
 		target := filepath.Join(privateDir(t), "not-there")
 		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := writeTokenFile(dir, token)
+		_, _, err := writeTokenFile(dir, tokenFileName(7001), token)
 		wantRefusal(t, err, "token file", path, "is a symlink or not a regular file")
 		if _, err := os.Stat(target); !os.IsNotExist(err) {
 			t.Error("the token was written through the link")
@@ -645,7 +646,7 @@ func TestTokenFileRefusals(t *testing.T) {
 			if err := os.Chmod(dir, mode); err != nil {
 				t.Fatal(err)
 			}
-			_, _, err := writeTokenFile(dir, token)
+			_, _, err := writeTokenFile(dir, tokenFileName(7001), token)
 			wantRefusal(t, err, "token directory", dir, "is open to other users")
 			if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 				t.Errorf("mode %04o: the token was written into the refused directory", mode)
@@ -658,7 +659,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(real, link); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := writeTokenFile(link, token)
+		_, _, err := writeTokenFile(link, tokenFileName(7001), token)
 		wantRefusal(t, err, "token directory", link, "is a symlink or not a directory")
 		if entries, _ := os.ReadDir(real); len(entries) != 0 {
 			t.Error("the token was written through the directory link")
@@ -738,12 +739,37 @@ func (s *syncBuffer) String() string {
 
 var listenLine = regexp.MustCompile(`MCP over HTTP at (http://\S+)/mcp`)
 
+// tokenPathOf is the token file of the server at url in dir: one file for each port.
+func tokenPathOf(t *testing.T, dir, url string) string {
+	t.Helper()
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(url, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, _ := strconv.Atoi(port)
+	return filepath.Join(dir, tokenFileName(n))
+}
+
+// freeAddr is a loopback address with a port nothing listens on now.
+func freeAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().String()
+}
+
 // startRunHTTP runs RunHTTP on a free loopback port and returns its URL, its log and a stop
 // function that waits for it to return.
 func startRunHTTP(t *testing.T, opts HTTPOptions) (string, *syncBuffer, func() error) {
 	t.Helper()
 	logs := &syncBuffer{}
-	opts.Addr, opts.Log = "127.0.0.1:0", logs
+	if opts.Addr == "" {
+		opts.Addr = "127.0.0.1:0"
+	}
+	opts.Log = logs
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- RunHTTP(ctx, opts) }()
@@ -782,7 +808,7 @@ func TestRunHTTPNeverLogsTheToken(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), tokenDirName)
 	url, logs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir})
-	path := filepath.Join(dir, tokenFileName)
+	path := tokenPathOf(t, dir, url)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -819,8 +845,11 @@ func TestRunHTTPNeverLogsTheToken(t *testing.T) {
 func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), tokenDirName)
+	addr := freeAddr(t)
+	_, portText, _ := net.SplitHostPort(addr)
+	port, _ := strconv.Atoi(portText)
 	read := func() string {
-		b, err := os.ReadFile(filepath.Join(dir, tokenFileName))
+		b, err := os.ReadFile(filepath.Join(dir, tokenFileName(port)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -828,10 +857,10 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	}
 	// A token file left by a server that was killed is replaced, never reused.
 	stale, _ := newToken()
-	if _, _, err := writeTokenFile(dir, stale); err != nil {
+	if _, _, err := writeTokenFile(dir, tokenFileName(port), stale); err != nil {
 		t.Fatal(err)
 	}
-	firstURL, firstLogs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	firstURL, firstLogs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: addr})
 	first := read()
 	if out := firstLogs.String(); !strings.Contains(out, "has been replaced") || strings.Contains(out, stale) || strings.Contains(out, first) {
 		t.Errorf("replacing a token file: the log must say so and name no token:\n%s", strings.ReplaceAll(strings.ReplaceAll(out, stale, "<stale>"), first, "<token>"))
@@ -845,7 +874,7 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}
-	url, secondLogs, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	url, secondLogs, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: addr})
 	second := read()
 	if strings.Contains(secondLogs.String(), "has been replaced") {
 		t.Error("a start with no token file on disk reports a replaced one")
@@ -981,8 +1010,8 @@ func TestHTTPBearerMustBeTheTokenAlone(t *testing.T) {
 func TestRunHTTPFailedStartLeavesTheRunningServerAlone(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), tokenDirName)
-	path := filepath.Join(dir, tokenFileName)
 	url, _, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	path := tokenPathOf(t, dir, url)
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -1012,5 +1041,62 @@ func TestRunHTTPFailedStartLeavesTheRunningServerAlone(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
 		t.Errorf("token dir holds %d entries after the failed start, want 1", len(entries))
+	}
+}
+
+// Two servers of one user, on two ports, have a token file each: the second does not replace the first's, both tokens work, and stopping one
+// removes only its own file.
+func TestTwoServersHaveATokenFileEach(t *testing.T) {
+	skipWithoutFileModes(t)
+	dir := filepath.Join(t.TempDir(), tokenDirName)
+	url1, logs1, stop1 := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	url2, logs2, stop2 := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	p1, p2 := tokenPathOf(t, dir, url1), tokenPathOf(t, dir, url2)
+	if p1 == p2 {
+		t.Fatalf("two servers share the token file %s", p1)
+	}
+	read := func(p string) string {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("a token file is missing: %v", err)
+		}
+		return strings.TrimSpace(string(b))
+	}
+	t1, t2 := read(p1), read(p2)
+	if t1 == t2 {
+		t.Error("two servers have the same token")
+	}
+	for name, out := range map[string]string{"first": logs1.String(), "second": logs2.String()} {
+		if strings.Contains(out, "has been replaced") {
+			t.Errorf("the %s server says it replaced a token file: %s", name, out)
+		}
+	}
+	for url, tok := range map[string]string{url1: t1, url2: t2} {
+		if resp, _ := (&httpFixture{url: url, token: tok}).post(t, listReq, nil); resp.StatusCode != http.StatusOK {
+			t.Errorf("%s: its own token was refused: %d", url, resp.StatusCode)
+		}
+	}
+	if resp, _ := (&httpFixture{url: url1, token: t2}).post(t, listReq, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("the other server's token was accepted: %d", resp.StatusCode)
+	}
+	if err := stop1(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p1); !os.IsNotExist(err) {
+		t.Error("the first server's file is still there after it stopped")
+	}
+	if read(p2) != t2 {
+		t.Error("stopping the first server changed the second's token file")
+	}
+	_ = stop2()
+	if _, err := os.Stat(p2); !os.IsNotExist(err) {
+		t.Error("the second server's file is still there after it stopped")
+	}
+}
+
+// The name is a function of the port, so a port is one file.
+func TestTheTokenFileNameFollowsThePort(t *testing.T) {
+	if tokenFileName(7391) != "http-token-7391" || tokenFileName(7391) == tokenFileName(7392) {
+		t.Errorf("names: %q %q", tokenFileName(7391), tokenFileName(7392))
 	}
 }
