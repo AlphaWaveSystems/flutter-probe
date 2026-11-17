@@ -184,7 +184,7 @@ test.describe("Keyboard shortcuts", () => {
     const before = calls.length;
     for (const k of ["s", "r", "b", "p", "k"]) await page.locator("body").press(k);
     await page.waitForTimeout(300);
-    expect(calls.slice(before).map((c) => c.method).filter((m) => ["WriteFile", "RunFile", "PickWorkspace", "Connect"].includes(m))).toEqual([]);
+    expect(calls.slice(before).map((c) => c.method).filter((m) => ["WriteFile", "RunFile", "RunFileScoped", "PickWorkspace", "Connect", "Disconnect", "ListDevices", "StartRecording"].includes(m))).toEqual([]);
     await openPath(page, "probe-tests/counter.probe");
     await page.locator("#editor .view-line").first().click();
     await page.keyboard.type("?");
@@ -238,6 +238,11 @@ test.describe("Keyboard shortcuts", () => {
     }
     expect(await prevented({ key: "a", ctrlKey: true, shiftKey: true }), "Ctrl+Shift+A").toBe(true);
     expect(await prevented({ key: "a", ctrlKey: true }), "Ctrl+A alone is the browser's select all").toBe(false);
+    // and with the help card open the keys are still taken (the browser's Save or Print must not run under the card), though they do nothing
+    await page.locator("body").press("?");
+    await expect(page.locator("#help-overlay")).toBeVisible();
+    for (const key of ["s", "p", "r"]) expect(await prevented({ key, ctrlKey: true }), `Ctrl+${key} with the help card open`).toBe(true);
+    expect(await prevented({ key: "a", ctrlKey: true }), "Ctrl+A with the help card open").toBe(false);
     expect(await prevented({ key: "s" }), "a plain s").toBe(false);
   });
 });

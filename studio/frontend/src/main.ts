@@ -585,7 +585,11 @@ window.addEventListener("keydown", (e) => {
   if (!mod) return;
   // While the help card is open the other shortcuts are off: the card is a question on top of the window, and a Cmd+P under it would open a folder dialog the
   // person cannot see the reason for. Escape and the card's own button close it.
-  if (!$("help-overlay").hidden) return;
+  if (!$("help-overlay").hidden) {
+    // still the browser's own Save, Print and reload must not run under the card: the shortcuts' keys are taken, and do nothing
+    if ("srbpk".includes(e.key.toLowerCase()) || (e.key.toLowerCase() === "a" && e.shiftKey)) e.preventDefault();
+    return;
+  }
   switch (e.key.toLowerCase()) {
     case "s":
       e.preventDefault();
