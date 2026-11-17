@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -35,28 +36,36 @@ const (
 	catConfirm       = "confirm"       // answers a question the window asked about a destructive step: only a person in the window may
 )
 
-var boundMethods = map[string]string{
-	// pure
-	"AIChatLabel": catUI, "AIChatLabelParts": catUI, "ExplainAvailability": catUI, "InitialWorkspace": catUI, "Lint": catUI, "RunState": catUI,
-	"Status": catUI, "BuildCallStep": catUI, "CheckReplaceLine": catUI, "SelectorFixAttempts": catUI, // reads Studio's own record of a suggestion and the text it is given; writes nothing
-	// the workspace
-	"AnswerConfirm": catConfirm, "ExportRunResults": catWritesOutside, "GetStudioPrefs": catUserPrefs, "SetClearDataWithoutAsking": catUserPrefs, "CanExportRunResults": catUI, "WorkspaceNote": catReadsWS, "DeviceListNote": catDevice, "ListDir": catReadsWS, "ReadFile": catReadsWS, "LintProblems": catReadsWS, "LoadAISettings": catReadsWS, "LoadWorkspaceSettings": catReadsWS,
-	"WriteFile": catWritesWS, "SaveAISettings": catWritesWS, "SaveWorkspaceSettings": catWritesWS,
-	"SetWorkspace": catWorkspaceRoot, "PickWorkspace": catWorkspaceRoot,
-	// the keychain
-	"SetAPIKey": catSecrets, "GetAPIKey": catSecrets, "DeleteAPIKey": catSecrets, "SaveWiFiToken": catSecrets, "ForgetWiFiToken": catSecrets, "WiFiTokenSaved": catSecrets,
-	// the network
-	"AllowHost": catNetwork, "CheckTarget": catNetwork, "SendRequest": catNetwork, "FindLocalModels": catNetwork,
-	"StartWiFiDiscovery": catNetwork, "StopWiFiDiscovery": catNetwork,
-	// an AI provider
-	"Chat": catAIProvider, "PreviewAIChat": catAIProvider, "ExplainLastRun": catAIProvider, "ExplainPreviewed": catAIProvider, "PreviewExplain": catAIProvider,
-	"ListAIModels": catAIProvider, "TestAIConnection": catAIProvider, "PreviewSelectorFix": catAIProvider, "SelectorFixPreviewed": catAIProvider,
-	// a device
-	"Connect": catDevice, "ConnectWiFi": catDevice, "ConnectWiFiSaved": catDevice, "Disconnect": catDevice, "ListDevices": catDevice, "TestWiFi": catDevice,
-	"ApplyDeviceSetting": catDevice, "GetDeviceSettings": catDevice, "GetDeviceView": catDevice, "GetWidgetTree": catDevice, "TakeScreenshot": catDevice,
-	"HTTPExchange": catDevice, "HTTPExchanges": catDevice,
-	// runs and recordings
-	"RunFile": catRunControl, "RunFileAsync": catRunControl, "RunFileScoped": catRunControl, "CancelRun": catRunControl, "StartRecording": catRunControl, "StopRecording": catRunControl,
+// boundDecision is one entry of bound_methods.json: what the method does, who may call it and what it touches.
+type boundDecision struct {
+	Method   string   `json:"method"`
+	Category string   `json:"category"`
+	Does     string   `json:"does"`
+	Callers  []string `json:"callers"`
+	Touches  []string `json:"touches"`
+	Confirm  string   `json:"confirm"`
+}
+
+// boundDecisions are the recorded decisions, read from bound_methods.json (the one place they are written), and boundMethods is their
+// method-to-category view that the tests below use.
+var boundDecisions, boundMethods = loadBoundDecisions()
+
+func loadBoundDecisions() ([]boundDecision, map[string]string) {
+	raw, err := os.ReadFile("bound_methods.json")
+	if err != nil {
+		panic("bound_methods.json: " + err.Error())
+	}
+	var f struct {
+		Methods []boundDecision `json:"methods"`
+	}
+	if err := json.Unmarshal(raw, &f); err != nil {
+		panic("bound_methods.json is not valid: " + err.Error())
+	}
+	cats := map[string]string{}
+	for _, d := range f.Methods {
+		cats[d.Method] = d.Category
+	}
+	return f.Methods, cats
 }
 
 // bridgeBlocked are the methods the headless bridge refuses by name (headless.go methodsNotOverHTTP): they need a native window.
@@ -257,6 +266,215 @@ func TestAutomationEndpointCannotAnswerAConfirmation(t *testing.T) {
 	for _, m := range automationRPC {
 		if strings.Contains(strings.ToLower(m), "confirm") {
 			t.Errorf("the automation endpoint accepts %q", m)
+		}
+	}
+}
+
+// skeleton is the entry to paste into bound_methods.json for a method that has none.
+func skeleton(m string) string {
+	return fmt.Sprintf(`{"method": %q, "category": "<one of the categories in bound_methods_test.go>", "does": "<one sentence: what it does>", `+
+		`"callers": ["window", "bridge", "automation"], "touches": ["files", "devices", "network", "keychain"], "confirm": "none|asks|answers|native-dialog"}`, m)
+}
+
+var (
+	validCallers = map[string]bool{"window": true, "bridge": true, "automation": true}
+	validTouches = map[string]bool{"files": true, "devices": true, "network": true, "keychain": true}
+	validConfirm = map[string]bool{"none": true, "asks": true, "answers": true, "native-dialog": true}
+)
+
+func has(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+// checkDecisions returns what is wrong with a set of decisions, given the methods the code has and the facts the code states about
+// who can call them. It is a function so that the test can be shown to fail on each kind of mistake.
+func checkDecisions(decisions []boundDecision, have, blocked, automation []string) []string {
+	var bad []string
+	seen := map[string]bool{}
+	for _, d := range decisions {
+		if seen[d.Method] {
+			bad = append(bad, d.Method+": two entries")
+		}
+		seen[d.Method] = true
+	}
+	var names []string
+	for n := range seen {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	undecided, stale := diff(have, names)
+	for _, m := range undecided {
+		bad = append(bad, fmt.Sprintf("%s: an exported App method with no entry in studio/bound_methods.json. Every App method is callable from the window and, in the headless build, from a page script with the bridge token: add\n    %s", m, skeleton(m)))
+	}
+	for _, m := range stale {
+		bad = append(bad, m+": an entry in studio/bound_methods.json for a method that does not exist (renamed or removed): delete or rename the entry")
+	}
+	for _, d := range decisions {
+		if !haveCat(d.Category) {
+			bad = append(bad, d.Method+": unknown category "+strconv.Quote(d.Category))
+		}
+		if len(strings.TrimSpace(d.Does)) < 10 {
+			bad = append(bad, d.Method+": 'does' must say what the method does")
+		}
+		if !validConfirm[d.Confirm] {
+			bad = append(bad, d.Method+": confirm must be none, asks, answers or native-dialog")
+		}
+		if !has(d.Callers, "window") {
+			bad = append(bad, d.Method+": every bound method can be called from the window; callers must include it")
+		}
+		for _, c := range d.Callers {
+			if !validCallers[c] {
+				bad = append(bad, d.Method+": unknown caller "+strconv.Quote(c))
+			}
+		}
+		for _, x := range d.Touches {
+			if !validTouches[x] {
+				bad = append(bad, d.Method+": unknown touches value "+strconv.Quote(x))
+			}
+		}
+		// the entry says what the code says
+		if has(d.Callers, "bridge") == has(blocked, d.Method) {
+			bad = append(bad, d.Method+": callers disagrees with the headless bridge's block list (headless.go): a blocked method must not list 'bridge', every other one must")
+		}
+		if has(d.Callers, "automation") != has(automation, d.Method) {
+			bad = append(bad, d.Method+": callers disagrees with the methods the automation endpoint reaches")
+		}
+		if has(d.Callers, "automation") && has(d.Touches, "keychain") && d.Method != "Connect" {
+			bad = append(bad, d.Method+": the automation endpoint must not reach the keychain")
+		}
+		// the category says what it touches
+		switch d.Category {
+		case catSecrets:
+			if !has(d.Touches, "keychain") {
+				bad = append(bad, d.Method+": a secrets method touches the keychain")
+			}
+		case catNetwork, catAIProvider:
+			if !has(d.Touches, "network") && d.Method != "PreviewAIChat" && d.Method != "StopWiFiDiscovery" {
+				bad = append(bad, d.Method+": a network or AI-provider method touches the network")
+			}
+		case catDevice, catRunControl:
+			if !has(d.Touches, "devices") && d.Method != "DeviceListNote" {
+				bad = append(bad, d.Method+": a device or run-control method touches devices")
+			}
+		case catWritesWS, catWritesOutside, catUserPrefs:
+			if !has(d.Touches, "files") {
+				bad = append(bad, d.Method+": a method that writes touches files")
+			}
+		case catConfirm:
+			if d.Confirm != "answers" {
+				bad = append(bad, d.Method+": a confirm method answers a confirmation")
+			}
+		case catUI:
+			if len(d.Touches) > 0 {
+				bad = append(bad, d.Method+": a pure method touches nothing")
+			}
+		}
+		// what may destroy or send is gated, or only a person in a native dialog can drive it
+		if (d.Category == catRunControl && (strings.HasPrefix(d.Method, "RunFile"))) && d.Confirm != "asks" {
+			bad = append(bad, d.Method+": a run can reach `clear app data`: confirm must be 'asks'")
+		}
+		if d.Category == catUserPrefs && d.Method != "GetStudioPrefs" && d.Confirm != "native-dialog" {
+			bad = append(bad, d.Method+": a preference that answers destructive questions is changed by a person in the window only: confirm must be native-dialog")
+		}
+	}
+	return bad
+}
+
+func haveCat(c string) bool {
+	switch c {
+	case catUI, catReadsWS, catWritesWS, catWorkspaceRoot, catSecrets, catNetwork, catAIProvider, catDevice, catRunControl, catUserPrefs, catWritesOutside, catConfirm:
+		return true
+	}
+	return false
+}
+
+// bound_methods.json records, for every exported method of App, what it does, who may call it, what it touches and whether it needs a
+// confirmation, and the entry must agree with the code. A new method without an entry fails here, with the entry to add.
+func TestEveryBoundMethodIsRecordedInTheAllowlistFile(t *testing.T) {
+	have := exportedMethods(reflect.TypeOf(&App{}))
+	for _, msg := range checkDecisions(boundDecisions, have, bridgeBlocked, automationBackendMethods) {
+		t.Error(msg)
+	}
+}
+
+// The check itself fails on each kind of mistake (the mutants of the guard, run as data).
+func TestTheAllowlistCheckFailsOnEachKindOfMistake(t *testing.T) {
+	have := exportedMethods(reflect.TypeOf(&App{}))
+	clone := func() []boundDecision {
+		out := make([]boundDecision, len(boundDecisions))
+		copy(out, boundDecisions)
+		return out
+	}
+	without := func(name string) []boundDecision {
+		var out []boundDecision
+		for _, d := range boundDecisions {
+			if d.Method != name {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+	if bad := checkDecisions(boundDecisions, have, bridgeBlocked, automationBackendMethods); len(bad) != 0 {
+		t.Fatalf("the real file is not clean: %v", bad)
+	}
+	contains := func(bad []string, want string) bool {
+		for _, b := range bad {
+			if strings.Contains(b, want) {
+				return true
+			}
+		}
+		return false
+	}
+	// a new method with no entry names the method and the entry to add
+	if bad := checkDecisions(boundDecisions, append(append([]string{}, have...), "BrandNewMethod"), bridgeBlocked, automationBackendMethods); !contains(bad, "BrandNewMethod: an exported App method with no entry") || !contains(bad, `"method": "BrandNewMethod"`) {
+		t.Errorf("a new method was not caught, or the message does not say what to add: %v", bad)
+	}
+	// an entry removed
+	if bad := checkDecisions(without("WriteFile"), have, bridgeBlocked, automationBackendMethods); !contains(bad, "WriteFile: an exported App method with no entry") {
+		t.Errorf("a removed entry was not caught: %v", bad)
+	}
+	// a stale entry for a method that was removed
+	stale := append(clone(), boundDecision{Method: "GoneMethod", Category: catUI, Does: "A method that was removed.", Callers: []string{"window", "bridge"}, Confirm: "none"})
+	if bad := checkDecisions(stale, have, bridgeBlocked, automationBackendMethods); !contains(bad, "GoneMethod: an entry in studio/bound_methods.json for a method that does not exist") {
+		t.Errorf("a stale entry was not caught: %v", bad)
+	}
+	// two entries, an empty does, a wrong caller list, a wrong touches, a missing confirm
+	dup := append(clone(), boundDecisions[0])
+	if bad := checkDecisions(dup, have, bridgeBlocked, automationBackendMethods); !contains(bad, "two entries") {
+		t.Errorf("a duplicate was not caught: %v", bad)
+	}
+	edit := func(name string, f func(d *boundDecision)) []boundDecision {
+		out := clone()
+		for i := range out {
+			if out[i].Method == name {
+				f(&out[i])
+			}
+		}
+		return out
+	}
+	for label, c := range map[string]struct {
+		in   []boundDecision
+		want string
+	}{
+		"empty does":                {edit("Lint", func(d *boundDecision) { d.Does = "" }), "'does' must say"},
+		"bridge listed but blocked": {edit("AnswerConfirm", func(d *boundDecision) { d.Callers = append(d.Callers, "bridge") }), "headless bridge's block list"},
+		"bridge missing":            {edit("Lint", func(d *boundDecision) { d.Callers = []string{"window"} }), "headless bridge's block list"},
+		"automation reach hidden":   {edit("Connect", func(d *boundDecision) { d.Callers = []string{"window", "bridge"} }), "automation endpoint reaches"},
+		"automation reach added":    {edit("WriteFile", func(d *boundDecision) { d.Callers = append(d.Callers, "automation") }), "automation endpoint reaches"},
+		"secret without keychain":   {edit("SetAPIKey", func(d *boundDecision) { d.Touches = nil }), "touches the keychain"},
+		"pure method touching":      {edit("Lint", func(d *boundDecision) { d.Touches = []string{"files"} }), "touches nothing"},
+		"run without ask":           {edit("RunFile", func(d *boundDecision) { d.Confirm = "none" }), "confirm must be 'asks'"},
+		"pref without native":       {edit("SetClearDataWithoutAsking", func(d *boundDecision) { d.Confirm = "none" }), "native-dialog"},
+		"unknown category":          {edit("Lint", func(d *boundDecision) { d.Category = "misc" }), "unknown category"},
+		"window not a caller":       {edit("Lint", func(d *boundDecision) { d.Callers = []string{"bridge"} }), "callers must include it"},
+	} {
+		if bad := checkDecisions(c.in, have, bridgeBlocked, automationBackendMethods); !contains(bad, c.want) {
+			t.Errorf("%s: not caught (want %q): %v", label, c.want, bad)
 		}
 	}
 }
