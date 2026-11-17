@@ -248,7 +248,9 @@ Supports the full ProbeScript syntax:
   Keyboard:        press enter — the keyboard action key on the focused text field.
   Keys:            press tab, escape, backspace, space, up, down, left or right acts on the focused field or moves the focus (press enter stays separate). With nothing focused, tab moves the focus to the first focusable widget and escape does nothing; backspace and space warn; an arrow moves the focus into a field in its direction when one exists. Android and iOS.
   Password fields: the value of an obscured (password) field is never matched by see, wait, tap or any selector; find the field by its id, label or hint and assert
-                     what the screen shows about it (e.g. see "Password length: 6").
+                     what the screen shows about it (e.g. see "Password length: 6"). see #pw is filled / see #pw is empty say whether a text field holds a character
+                     without reading it, also on a password field: name the field by its #id (a label or a container is refused); they need a probe_agent that reports
+                     see_filled.
   See any of:      see any of "A", "B" — passes when any alternative is on screen (don't see any of: none).
   Any of:          wait until any of "A", "B", "C" appears — whichever text shows first
                      (an optional consent dialog, a login or home screen).

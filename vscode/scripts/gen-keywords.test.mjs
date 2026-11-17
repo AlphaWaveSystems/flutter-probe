@@ -12,6 +12,7 @@ import {
   examplePhrase,
   leadOf,
   splitExamples,
+  exampleSnippet,
 } from "./gen-keywords.mjs";
 
 // quotedList reads the strings of the array that starts at `name` in the generated module, one entry per line.
@@ -103,4 +104,11 @@ test("the TextMate generated-keywords rule matches every completion word", () =>
   const match = new RegExp(textMateMatch(readFileSync(TEXTMATE_PATH, "utf8")));
   const unmatched = words.filter((word) => !match.test(word));
   assert.deepEqual(unmatched, [], "these completion words are not matched by the grammar rule");
+});
+
+test("an #id selector of an example becomes a tab stop, so the completion is a complete step", () => {
+  assert.equal(exampleSnippet("see #password is filled"), "see #${1:password} is filled");
+  assert.equal(exampleSnippet("drag #source to #target"), "drag #${1:source} to #${2:target}");
+  // a hash inside a quoted text is part of the text, not a selector
+  assert.equal(exampleSnippet('tap "#not-a-selector" 2 times'), 'tap "${1:#not-a-selector}" ${2:2} times');
 });
