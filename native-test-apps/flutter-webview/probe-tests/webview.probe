@@ -1,0 +1,39 @@
+# ProbeScript against a Flutter app with a WebView: the WebView steps (`... in webview`) work on the page, the other steps on the Flutter widgets around it.
+# Needs the build in the README: flutter build apk --debug --dart-define=PROBE_AGENT=true, and a local Android device or emulator (the WebView steps are Android only).
+# The page is assets/page.html (the same ids as native-test-apps/android-webview). What each test shows is in docs/compat/MATRIX.md, "WebView content".
+
+before each test
+  restart the app
+
+test "the page is shown and its title is found"
+  wait until "Page loaded" appears
+  see "Getting Started" in webview
+  don't see css:"#nope" in webview
+
+test "type into a field, tap a button, wait for the result"
+  wait until "Page loaded" appears
+  type "hello" into css:"#message" in webview
+  tap "Contact support" in webview
+  wait until "Message sent" appears in webview
+  see css:"#result" in webview
+
+test "stored text has its runs of spaces collapsed, and can be typed into a Flutter field"
+  wait until "Page loaded" appears
+  store text of css:"#total" in webview as total
+  type "<total>" into #echo_input
+  see "Echo: Total: 42.00 USD"
+
+test "stored text drops the characters that show nothing"
+  wait until "Page loaded" appears
+  store text of css:"#hidden" in webview as hidden
+  type "<hidden>" into #echo_input
+  see "Echo: abc d"
+
+test "a Flutter button reloads the page and the page starts again"
+  wait until "Page loaded (1)" appears
+  tap "Contact support" in webview
+  wait until "Message sent" appears in webview
+  tap "Reload page"
+  wait until "Page loaded (2)" appears
+  don't see "Message sent" in webview
+  see "Getting Started" in webview

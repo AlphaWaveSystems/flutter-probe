@@ -1,0 +1,28 @@
+name: probe_flutter_webview
+description: "A Flutter app with a WebView, to run probe's WebView steps through `probe test`."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_probe_agent:
+    # Path dependency: inside this repo the fixture always tests against the current agent.
+    path: ../../probe_agent
+  # Exact pins (no caret): the fixture is built from this lock file, and docs/compat/RELEASES.md records what was read in the release notes of these versions.
+  # webview_flutter_android 4.12 and later need Flutter 3.44 / Dart 3.12.
+  webview_flutter: 4.14.1
+  webview_flutter_android: 4.14.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/page.html
