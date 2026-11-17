@@ -7,7 +7,7 @@ check them. It is plain Java built with the Android SDK command-line tools: no G
 The app is **not** a ProbeAgent host. It has no probe agent, so `probe test` cannot run a ProbeScript against it: the CLI connects to the agent
 first and fails with "agent token not found". The WebView steps reach the page through the WebView's own DevTools socket (`adb forward`), so the
 tests below drive the executor directly and need no agent; they need `PROBE_WEBVIEW_SERIAL` and `PROBE_WEBVIEW_APP`. To run ProbeScript WebView
-steps through `probe test`, use a Flutter app with a WebView and `probe_agent`.
+steps through `probe test`, use `native-test-apps/flutter-webview`, a Flutter app with a WebView and the agent.
 
 ## Build and install
 

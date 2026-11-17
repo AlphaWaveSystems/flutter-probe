@@ -839,7 +839,7 @@ func (dc *DeviceContext) handshakeNewClient(ctx context.Context, client probelin
 	if warning != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  %s\n", sysdialog.ScrubKnown(warning))
 	}
-	if w := probelink.AppIDMismatchWarning(handshake, dc.AppID); w != "" {
+	if w := probelink.AppIDMismatchWarning(handshake, dc.AppID, dc.Platform == device.PlatformIOS); w != "" {
 		fmt.Printf("  \033[33m⚠\033[0m  %s\n", sysdialog.ScrubKnown(w))
 	}
 	return nil

@@ -90,8 +90,11 @@ func plainAppID(s string) string {
 // AppIDMismatchWarning returns the warning for an agent that says it runs in another app than the one the run is about (want, the project's app id), and "" when
 // they are the same or when either is not known: an agent that does not report an id, or a project with no app id, says nothing. It is a warning, not a refusal:
 // an id is the app's own statement, and a build can run under a suffixed id.
-func AppIDMismatchWarning(h HandshakeResult, want string) string {
-	if want == "" || h.AppID == "" || h.AppID == want {
+//
+// The comparison is exact (case-sensitive): an Android package name is case-sensitive, so com.Example.app and com.example.app are two apps. ignoreCase is for iOS,
+// where a bundle id is the same id whatever its case: the callers pass true for an iOS device, and a difference of case alone then says nothing.
+func AppIDMismatchWarning(h HandshakeResult, want string, ignoreCase bool) string {
+	if want == "" || h.AppID == "" || h.AppID == want || (ignoreCase && strings.EqualFold(h.AppID, want)) {
 		return ""
 	}
 	return fmt.Sprintf("the agent that answered reports app %s, but project.app is %s: the run may be going to another app on this device (stop the other app, or give the app under test its own agent port)", h.AppID, want)

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +16,8 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
+	"github.com/gorilla/websocket"
 	"github.com/spf13/pflag"
 )
 
@@ -29,6 +33,9 @@ type fakeAndroidOptions struct {
 	runAsToken string
 	runAsOnce  bool
 	serve401   bool
+	// serveAgent answers the handshake and every other call like an agent would, reporting agentAppID (empty: no app_id), instead of dropping the connection.
+	serveAgent bool
+	agentAppID string
 }
 
 func runTestWithFakeAndroid(t *testing.T, o fakeAndroidOptions) (*followRig, error) {
@@ -40,7 +47,41 @@ func runTestWithFakeAndroid(t *testing.T, o fakeAndroidOptions) (*followRig, err
 	t.Chdir(dir)
 	rig := &followRig{conns: &atomic.Int32{}}
 	var port int
-	if o.serve401 {
+	if o.serveAgent {
+		upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			rig.conns.Add(1)
+			for {
+				_, data, err := conn.ReadMessage()
+				if err != nil {
+					return
+				}
+				var req probelink.Request
+				if json.Unmarshal(data, &req) != nil {
+					return
+				}
+				body := map[string]any{"ok": true}
+				if req.Method == probelink.MethodPing {
+					body["agent_version"] = "0.27.0"
+					if o.agentAppID != "" {
+						body["app_id"] = o.agentAppID
+					}
+				}
+				raw, _ := json.Marshal(body)
+				resp, _ := json.Marshal(probelink.Response{JSONRPC: "2.0", ID: req.ID, Result: raw})
+				if conn.WriteMessage(websocket.TextMessage, resp) != nil {
+					return
+				}
+			}
+		}))
+		t.Cleanup(srv.Close)
+		port = srv.Listener.Addr().(*net.TCPAddr).Port
+	} else if o.serve401 {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rig.conns.Add(1)
 			w.WriteHeader(http.StatusUnauthorized)
@@ -170,5 +211,61 @@ func TestProbeTestRefusesTheRedialWithASharedTokenAfterARunAsTokenWasRejected(t 
 	}
 	if rig.conns.Load() != 1 {
 		t.Errorf("%d dial(s) reached the holder, want exactly the first one with the run-as token", rig.conns.Load())
+	}
+}
+
+// stdoutOf runs fn with os.Stdout replaced by a pipe and returns what was written to it: probe test writes its status lines (the warning among them) to stdout.
+func stdoutOf(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	done := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- string(b)
+	}()
+	defer func() { os.Stdout = old }()
+	fn()
+	w.Close()
+	os.Stdout = old
+	return <-done
+}
+
+// The `probe test` site of the app id warning, through the real command: an agent that says it is another app than project.app (com.second) is warned about, once; the
+// same app, and an agent that says nothing, are not. The run still goes on to connect: a warning, not a refusal.
+func TestProbeTestWarnsWhenTheAgentReportsAnotherApp(t *testing.T) {
+	for _, tc := range []struct {
+		name, reported string
+		wantWarn       bool
+	}{
+		{"another app", "com.other.app", true},
+		{"a difference of case alone is another app on Android", "com.Second", true},
+		{"the same app", "com.second", false},
+		{"the agent does not say", "", false},
+	} {
+		var out string
+		var err error
+		var rig *followRig
+		out = stdoutOf(t, func() {
+			rig, err = runTestWithFakeAndroid(t, fakeAndroidOptions{runAsToken: "run-as-token-0123456789abcdef0123456789", serveAgent: true, agentAppID: tc.reported})
+		})
+		_ = err
+		if rig.conns.Load() == 0 {
+			t.Fatalf("%s: the agent was never reached (%v)\n%s", tc.name, err, out)
+		}
+		has := strings.Contains(out, "reports app "+tc.reported+", but project.app is com.second")
+		if has != tc.wantWarn {
+			t.Errorf("%s: warning printed = %v, want %v\n%s", tc.name, has, tc.wantWarn, out)
+		}
+		if tc.wantWarn && strings.Count(out, "reports app") != 1 {
+			t.Errorf("%s: the warning must be printed once:\n%s", tc.name, out)
+		}
+		if !strings.Contains(out, "Connected to ProbeAgent") {
+			t.Errorf("%s: a warning is not a refusal, the run must connect:\n%s", tc.name, out)
+		}
 	}
 }

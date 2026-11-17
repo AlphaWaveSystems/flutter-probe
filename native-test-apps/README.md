@@ -23,6 +23,11 @@ characters, an empty and a long element, and one element of each input kind). It
 `android-webview/build.sh` (no Gradle, no APK committed) and is the target of the opt-in real-device tests of the WebView steps. It is
 not a ProbeAgent host. See `android-webview/README.md`.
 
+## flutter-webview/ — a Flutter app with a WebView, for the WebView steps through `probe test`
+
+A Flutter app (Android) that hosts the ProbeAgent and shows the same page as `android-webview/` through `webview_flutter` (pinned), loaded from its own assets, with a few Flutter widgets next to it. It is where ProbeScript runs the
+`... in webview` steps next to the ordinary steps; `probe-tests/webview.probe` is the suite. See `flutter-webview/README.md` and `docs/compat/MATRIX.md` ("WebView content").
+
 ## Widget families (in `flutter/`)
 
 The Flutter app also has one screen per widget family from the compatibility catalog (`docs/compat/`), built with `--dart-define=PROBE_FIXTURE_WIDGETS=<family>`, and a test per family in `flutter/probe-tests/widgets/`. The results are in

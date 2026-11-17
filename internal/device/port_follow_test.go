@@ -522,6 +522,43 @@ func TestCheckRefreshedToken(t *testing.T) {
 	})
 }
 
+// When the dial has a deadline, CheckRefreshedToken looks for the app's port only until that deadline (less one retry), however long the window it was given:
+// a refresh does not hold a dial that is about to expire for an hour.
+func TestCheckRefreshedTokenIsBoundedByTheDialDeadline(t *testing.T) {
+	adb := twoApps(48911, 0) // another app holds the port, the app has none: the check keeps looking until its window ends
+	var notices []string
+	var changes []int
+	f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+	sleeps := fakeTime(f, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	err := f.CheckRefreshedToken(ctx, TokenSourceLogcat, time.Hour)
+	var held *PortHeldError
+	if !errors.As(err, &held) {
+		t.Fatalf("err = %v, want a *PortHeldError", err)
+	}
+	// the deadline is about 4 s away, less one retry: about 3 waits of a second; an hour would be 3600
+	if *sleeps < 1 || *sleeps > 4 {
+		t.Errorf("waited %d time(s), want about 3 (the deadline of the dial, not the hour it was given)", *sleeps)
+	}
+}
+
+// A dial deadline that has already passed leaves no window at all: one look, then the refusal, no wait.
+func TestCheckRefreshedTokenWithAnExpiredDeadlineDoesNotWait(t *testing.T) {
+	adb := twoApps(48911, 0)
+	var notices []string
+	var changes []int
+	f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+	sleeps := fakeTime(f, nil)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Millisecond))
+	defer cancel()
+	err := f.CheckRefreshedToken(ctx, TokenSourceTmpFile, time.Hour)
+	var held *PortHeldError
+	if !errors.As(err, &held) || *sleeps != 0 {
+		t.Errorf("err = %v after %d wait(s), want a refusal with no wait", err, *sleeps)
+	}
+}
+
 func TestPortHeldErrorRefusesTheDial(t *testing.T) {
 	var err error = &PortHeldError{Port: 1, Holders: []string{"a"}, App: "b"}
 	var r interface{ RefuseDial() bool }
