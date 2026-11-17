@@ -182,6 +182,54 @@ void main() {
     expect((await see('#bare', 'filled')).containsKey('error'), isFalse);
   });
 
+  // A text selector (`see "Email" is filled`) finds the label widget `Text` that the field builds inside itself, not the field, so it answers like any other
+  // label: "is not a text field". The field is named by its `#id`. This pins that path, so a label can never shadow the field or its obscured value.
+  Future<Map<String, dynamic>> seeText(String text, String check,
+      {bool negated = false}) async {
+    await executor.dispatch(ProbeRequest(
+      jsonrpc: '2.0',
+      id: nextId++,
+      method: ProbeMethods.see,
+      params: {
+        'selector': {'kind': 'text', 'text': text},
+        'negated': negated,
+        'check': check,
+      },
+    ));
+    return jsonDecode(sent.last) as Map<String, dynamic>;
+  }
+
+  testWidgets(
+      'a text selector that finds the label or hint of a field is refused, never answered for the field',
+      (tester) async {
+    final c = TextEditingController(text: _secret);
+    await tester.pumpWidget(app([
+      TextField(
+        key: const ValueKey('pw'),
+        obscureText: true,
+        controller: c,
+        decoration: const InputDecoration(labelText: 'Password label'),
+      ),
+      const TextField(
+          key: ValueKey('search'),
+          decoration: InputDecoration(hintText: 'Search hint')),
+    ]));
+    for (final text in ['Password label', 'Search hint']) {
+      final answer = await seeText(text, 'filled');
+      expect(answer.containsKey('error'), isTrue,
+          reason:
+              'see "$text" is filled must not pass through a text selector: $answer');
+      expect(errorOf(answer),
+          anyOf(contains('is not a text field'), contains('was not found')),
+          reason: 'by text "$text"');
+      final negated = await seeText(text, 'empty', negated: true);
+      expect(negated.containsKey('error'), isTrue,
+          reason:
+              "don't see \"$text\" is empty must not pass silently: $negated");
+    }
+    expectNoSecretAnywhere();
+  });
+
   testWidgets('a field that is not on screen is not found', (tester) async {
     await tester.pumpWidget(app([const TextField(key: ValueKey('f'))]));
     expect(errorOf(await see('#nope', 'filled')), contains('was not found'));
