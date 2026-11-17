@@ -33,6 +33,7 @@ async function startStudio(loginText: string, failedLine = 3, description = 'tap
   fs.mkdirSync(path.join(ws, "tests"));
   fs.writeFileSync(path.join(ws, "tests", "login.probe"), loginText);
   fs.writeFileSync(path.join(ws, "tests", "other.probe"), 'test "other"\n  open the app\n');
+  fs.writeFileSync(path.join(ws, "tests", "dup.probe"), loginText); // a twin of login.probe: the same text in another file
   const selector = /"([^"]*)"/.exec(description)![1];
   const seed = {
     results: [{ name: "login", file: "tests/login.probe", passed: false, skipped: false, durationMs: 9, error: "element not found" }],
@@ -227,6 +228,52 @@ test.describe("Insert before the step", () => {
       expect(fs.readFileSync(path.join(b.ws, "tests", "login.probe"), "utf8")).toBe('test "login"\n  open the app\n  wait until "Sign in" appears\n  tap "Sign in"');
     } finally {
       b.stop();
+    }
+  });
+
+  test("ib-07 the answer is for the file of the click: switching to a twin file while Studio checks inserts nothing in either", async ({ page }) => {
+    const studio = await startStudio(base);
+    try {
+      await openLogin(page, studio);
+      await fireFailedStep(page);
+      // hold Studio's answer back, so there is time to open the twin (same text, other file) before it arrives
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CheckInsertBefore"')) await new Promise((r) => setTimeout(r, 1200));
+        await route.continue();
+      });
+      await insertButton(page).click();
+      await page.locator("#file-list li", { hasText: "dup.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("dup.probe");
+      await expect(toasts(page)).toContainText("another file was opened or the text changed");
+      await expect(page.locator("#editor .view-lines")).not.toContainText("wait until"); // the twin has no wait
+      await page.locator("#file-list li", { hasText: "login.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("login.probe");
+      await expect(page.locator("#editor .view-lines")).not.toContainText("wait until"); // and neither has the file of the click
+      expect(fs.readFileSync(path.join(studio.ws, "tests", "dup.probe"), "utf8")).toBe(base);
+    } finally {
+      studio.stop();
+    }
+  });
+
+  test("ib-08 the button is off while a run is going, and on again when it has finished", async ({ page }) => {
+    const studio = await startStudio(base);
+    try {
+      await openLogin(page, studio);
+      await page.evaluate(() => {
+        const fire = (name: string, ...args: unknown[]) => (((window as any).__handlers[name]) || []).forEach((cb: (...a: unknown[]) => void) => cb(...args));
+        const base = { file: "tests/login.probe", test: "login", line: 3, description: 'tap "Sign in"', durationMs: 5, attempt: 0, depth: 0 };
+        fire("run:started", "tests/login.probe");
+        fire("run:step", { ...base, status: "started" });
+        fire("run:step", { ...base, status: "failed", error: "element not found", triage: { fix: 'wait until "Sign in" appears', reason: "found no element" } });
+        // no run:finished yet: the run is still going (its later steps are still to come)
+      });
+      await expect(insertButton(page)).toBeDisabled();
+      await page.evaluate(() => (((window as any).__handlers["run:finished"]) || []).forEach((cb: (...a: unknown[]) => void) => cb([])));
+      await expect(insertButton(page)).toBeEnabled();
+      await insertButton(page).click();
+      await expect(toasts(page)).toContainText("Inserted above line 3");
+    } finally {
+      studio.stop();
     }
   });
 });

@@ -2145,7 +2145,13 @@ async function insertBeforeStep(t: { file: string; line: number }): Promise<void
     toast("Not inserted: no file is open.", "info", 5000);
     return;
   }
+  if (runInProgress) {
+    toast("Not inserted: a run is in progress. Wait until it has finished.", "info", 5000);
+    return;
+  }
   const checked = model.getValue();
+  const pathAtClick = currentPath; // what was asked about: the file and the exact state of the editor's text
+  const versionAtClick = model.getVersionId();
   let check: { ok: boolean; line?: number; text?: string; reason?: string };
   try {
     check = await CheckInsertBefore(t.file, t.line, currentPath, checked);
@@ -2157,8 +2163,13 @@ async function insertBeforeStep(t: { file: string; line: number }): Promise<void
     toast(`Not inserted: ${check.reason ?? "Studio refused"}`, "info", 7000);
     return;
   }
-  if (model.getValue() !== checked) {
-    toast("Not inserted: the file changed while Studio was checking it. Press again.", "info", 5000);
+  // The answer was for the file and the text of the click. Another file may be open now (even one with the very same text), or the text may have changed.
+  if (currentPath !== pathAtClick || model.getVersionId() !== versionAtClick || model.getValue() !== checked) {
+    toast("Not inserted: another file was opened or the text changed while Studio was checking. Press again.", "info", 5000);
+    return;
+  }
+  if (runInProgress) {
+    toast("Not inserted: a run started while Studio was checking. Wait until it has finished.", "info", 5000);
     return;
   }
   // The new line is its own line: its text and the file's line ending, put at the start of the failed line (which keeps its own ending, or none).
