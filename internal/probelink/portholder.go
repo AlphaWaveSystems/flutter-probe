@@ -3,7 +3,6 @@ package probelink
 import (
 	"context"
 	"fmt"
-	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -11,6 +10,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
 
 // PortHolder describes the process listening on a loopback TCP port, e.g.

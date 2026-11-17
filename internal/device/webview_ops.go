@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"math"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
 
 // The lookups inside a WebView page are fixed pieces of JavaScript that live here and nowhere else. A selector or a text from a script is NEVER part of the JavaScript: it travels as a JSON value in the
