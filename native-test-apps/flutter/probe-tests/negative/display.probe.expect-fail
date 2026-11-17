@@ -31,8 +31,8 @@ test "N4 the spans in another case"
 test "N5 the spans with two spaces between them"
   see "Hello  world"
 
-# Expected: see "Shipping address: 1600 Amphitheatre…": Expected to see ... but it was not found (the painted, cut form is not what is matched;
-# this variant shows the finding by its construction: it fails because the selector is matched against the whole string)
+# This variant shows the finding by its construction: it fails because the selector is matched against the whole string.
+# Expected: see "Shipping address: 1600 Amphitheatre…": Expected to see ... but it was not found (the painted, cut form is not what is matched)
 test "N6 the painted form of the cut text"
   see "Shipping address: 1600 Amphitheatre…"
 

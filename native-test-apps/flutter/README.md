@@ -8,11 +8,11 @@ Flutter twin of the native fixture apps in `../android` and `../ios` — see the
 One screen per widget family of the compatibility catalog (`docs/compat/MATRIX.md`), chosen at build time. Every element has a semantics identifier and a key of the same name (`wf_...`) and shows its state as text.
 
 ```bash
-flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=selection   # or textinput, buttons, display
+flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=selection   # or textinput, buttons, navigation, display
 probe test probe-tests/widgets/selection.probe --config probe.yaml --device <serial>
 ```
 
-Families so far: `selection` (checkbox, switch, radio group, slider, Cupertino switch), `textinput` (plain, form, obscured, multi-line and Cupertino fields), `buttons` (elevated, filled, outlined, text, icon, floating action, Cupertino, with an icon, disabled, with a long press) and `display` (a plain `Text`, a `Text` cut with an ellipsis, `Text.rich` and `RichText`). The negative variants of a suite (every test must fail) are in `probe-tests/negative/`, named `.probe.expect-fail` so a directory run never picks them up; the header of each says how to run it. A screen is something to test against: it is not a claim that
+Families so far: `selection` (checkbox, switch, radio group, slider, Cupertino switch), `textinput` (plain, form, obscured, multi-line and Cupertino fields), `buttons` (elevated, filled, outlined, text, icon, floating action, Cupertino, with an icon, disabled, with a long press) `navigation` (an app bar with a title and a search action, a pushed route, `go back`) and `display` (a plain `Text`, a `Text` cut with an ellipsis, `Text.rich` and `RichText`). The negative variants of a suite (every test must fail) are in `probe-tests/negative/`, named `.probe.expect-fail` so a directory run never picks them up; the header of each says how to run it. A screen is something to test against: it is not a claim that
 FlutterProbe supports a widget, and the matrix cell for it changes only from a test that ran. On a shared emulator give the agent its own port, as for the other screens.
 
 ## The list screen (scroll checks)
