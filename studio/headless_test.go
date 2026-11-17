@@ -76,7 +76,12 @@ func TestHeadlessServesIndexWithTheBridgeAndAssets(t *testing.T) {
 // Studio does not make a token: the launcher gives it in the environment, it must be long enough, and Studio does not pass it on.
 func TestHeadlessNeedsALongTokenFromTheLauncherAndKeepsItToItself(t *testing.T) {
 	assets := fstest.MapFS{"index.html": {Data: []byte("<html><head></head></html>")}}
-	for name, tok := range map[string]string{"none": "", "short": "abc", "one under": strings.Repeat("x", minHeadlessToken-1)} {
+	for name, tok := range map[string]string{
+		"none": "", "short": "abc", "one under": strings.Repeat("x", minHeadlessToken-1),
+		"only spaces": strings.Repeat(" ", minHeadlessToken), "spaces around a short one": "  abc" + strings.Repeat(" ", minHeadlessToken),
+		"a line break inside": strings.Repeat("x", 20) + "\n" + strings.Repeat("x", 20), "a tab": strings.Repeat("x", 40) + "\t",
+		"not ASCII": strings.Repeat("é", 20), "a control character": strings.Repeat("x", 40) + "\x07",
+	} {
 		t.Setenv(headlessTokenEnv, tok)
 		if s, err := startHeadless(NewApp(), assets); err == nil {
 			s.Close()

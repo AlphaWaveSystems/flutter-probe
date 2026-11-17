@@ -96,11 +96,25 @@ const headlessTokenEnv = "PROBE_STUDIO_HEADLESS_TOKEN"
 // minHeadlessToken is the shortest token the bridge accepts: 32 characters, so a guessable word is not one.
 const minHeadlessToken = 32
 
+// validHeadlessToken says whether a token is long enough and made of visible characters only: a token of spaces or with a line break in it is
+// not one, whatever its length, and it could not travel in a header.
+func validHeadlessToken(t string) bool {
+	if len(t) < minHeadlessToken {
+		return false
+	}
+	for i := 0; i < len(t); i++ {
+		if t[i] <= ' ' || t[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
 func startHeadless(a *App, assets fs.FS) (*headlessServer, error) {
 	token := os.Getenv(headlessTokenEnv)
 	_ = os.Unsetenv(headlessTokenEnv) // the programs Studio starts (adb, simctl) do not inherit it
-	if len(token) < minHeadlessToken {
-		return nil, fmt.Errorf("headless mode needs %s: a random string of at least %d characters, which the program that drives the page sends as the X-Headless-Token header (Studio does not make or serve one)", headlessTokenEnv, minHeadlessToken)
+	if !validHeadlessToken(token) {
+		return nil, fmt.Errorf("headless mode needs %s: a random string of at least %d visible characters (no spaces), which the program that drives the page sends as the X-Headless-Token header (Studio does not make or serve one)", headlessTokenEnv, minHeadlessToken)
 	}
 	port := os.Getenv("PROBE_STUDIO_HEADLESS_PORT")
 	if port == "" {
