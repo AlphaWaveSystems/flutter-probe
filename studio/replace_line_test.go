@@ -24,6 +24,23 @@ func replaceBody() string {
 	}, "\n")
 }
 
+// checkReplace asks CheckReplaceLine as if the last run had failed this suggestion's step at the top level and had read exactly the text the editor
+// holds: it isolates the rules about the suggestion and the line from the run anchor (running, depth, the text of the run), which have their own tests
+// below. A suggestion that is not stored is asked about as it is.
+func checkReplace(a *App, id, open, content string) ReplaceLineCheck {
+	a.fix.mu.Lock()
+	r, ok := a.fix.results[id]
+	a.fix.mu.Unlock()
+	if ok {
+		a.track.begin(r.file, RunPlan{})
+		a.track.step(RunStep{File: r.file, Line: r.line, Description: strings.TrimSpace(r.original), Status: "failed"})
+		a.track.finish(nil, nil)
+		a.sources.reset()
+		a.sources.keep(r.file, []byte(content))
+	}
+	return a.CheckReplaceLine(id, open, content)
+}
+
 func replaceApp(suggestion string, changed bool) (*App, string) {
 	a := &App{}
 	id := a.rememberFix(fixStored{file: replaceFile, line: 6, original: `  tap "Sign in"`}, suggestion, changed)
@@ -32,13 +49,13 @@ func replaceApp(suggestion string, changed bool) (*App, string) {
 
 func TestReplaceLineAcceptsOneStepOfTheSameKind(t *testing.T) {
 	a, id := replaceApp(`tap "Sign in now"`, false)
-	got := a.CheckReplaceLine(id, replaceFile, replaceBody())
+	got := checkReplace(a, id, replaceFile, replaceBody())
 	if !got.OK || got.Line != 6 || got.Text != `  tap "Sign in now"` {
 		t.Fatalf("%+v", got)
 	}
 	// CRLF files, and a path written another way, are the same file.
 	crlf := strings.ReplaceAll(replaceBody(), "\n", "\r\n")
-	if got := a.CheckReplaceLine(id, "./tests/login.probe", crlf); !got.OK || got.Text != `  tap "Sign in now"` {
+	if got := checkReplace(a, id, "./tests/login.probe", crlf); !got.OK || got.Text != `  tap "Sign in now"` {
 		t.Fatalf("crlf: %+v", got)
 	}
 }
@@ -66,7 +83,7 @@ func TestReplaceLineRefusesWhatIsNotOneStepOfTheSameKind(t *testing.T) {
 		"not a step":         `this is not probescript at all`,
 	} {
 		a, id := replaceApp(suggestion, false)
-		if got := a.CheckReplaceLine(id, replaceFile, replaceBody()); got.OK || got.Reason == "" {
+		if got := checkReplace(a, id, replaceFile, replaceBody()); got.OK || got.Reason == "" {
 			t.Errorf("%s: %q was accepted: %+v", name, suggestion, got)
 		}
 	}
@@ -86,18 +103,18 @@ func TestReplaceLineNeedsTheSameLineInTheSameFile(t *testing.T) {
 		"the line is now a comment": {replaceFile, strings.Replace(body, `  tap "Sign in"`, `  # tap "Sign in"`, 1)},
 		"the indentation changed":   {replaceFile, strings.Replace(body, `  tap "Sign in"`, `    tap "Sign in"`, 1)},
 	} {
-		if got := a.CheckReplaceLine(id, c.file, c.content); got.OK || got.Reason == "" {
+		if got := checkReplace(a, id, c.file, c.content); got.OK || got.Reason == "" {
 			t.Errorf("%s: accepted: %+v", name, got)
 		}
 	}
-	if got := a.CheckReplaceLine("no-such-id", replaceFile, body); got.OK {
+	if got := checkReplace(a, "no-such-id", replaceFile, body); got.OK {
 		t.Errorf("an unknown id: %+v", got)
 	}
 }
 
 func TestReplaceLineRefusesAChangedSuggestionAnAStepThatHoldsOthersAndAnExpiredOne(t *testing.T) {
 	a, id := replaceApp(`type "[email]" into "Email"`, true)
-	if got := a.CheckReplaceLine(id, replaceFile, replaceBody()); got.OK {
+	if got := checkReplace(a, id, replaceFile, replaceBody()); got.OK {
 		t.Errorf("a changed suggestion: %+v", got)
 	}
 	// the failed step is a block header
@@ -129,7 +146,7 @@ func TestReplaceLineKeepsAtMostFourSuggestions(t *testing.T) {
 	if len(a.fix.results) != fixMaxResult {
 		t.Fatalf("%d kept", len(a.fix.results))
 	}
-	if got := a.CheckReplaceLine(ids[5], replaceFile, replaceBody()); !got.OK {
+	if got := checkReplace(a, ids[5], replaceFile, replaceBody()); !got.OK {
 		t.Errorf("the newest: %+v", got)
 	}
 }
@@ -146,14 +163,14 @@ func TestReplaceLineSaysWhy(t *testing.T) {
 		"too long":     {`tap "` + strings.Repeat("a", 400) + `"`, "too long"},
 	} {
 		a, id := replaceApp(c.suggestion, false)
-		if got := a.CheckReplaceLine(id, replaceFile, replaceBody()); got.OK || !strings.Contains(got.Reason, c.want) {
+		if got := checkReplace(a, id, replaceFile, replaceBody()); got.OK || !strings.Contains(got.Reason, c.want) {
 			t.Errorf("%s: %+v", name, got)
 		}
 	}
 	// a line that is not a step, and a place with no file
 	a := &App{}
 	id := a.rememberFix(fixStored{file: replaceFile, line: 1, original: `recipe greet`}, `tap "x"`, false)
-	if got := a.CheckReplaceLine(id, replaceFile, replaceBody()); got.OK {
+	if got := checkReplace(a, id, replaceFile, replaceBody()); got.OK {
 		t.Errorf("a recipe header: %+v", got)
 	}
 	a2 := &App{}
@@ -164,7 +181,7 @@ func TestReplaceLineSaysWhy(t *testing.T) {
 	a3 := &App{}
 	body := strings.Replace(replaceBody(), "  open the app\n", "  # note\n", 1)
 	id3 := a3.rememberFix(fixStored{file: replaceFile, line: 5, original: `  # note`}, `tap "x"`, false)
-	if got := a3.CheckReplaceLine(id3, replaceFile, body); got.OK || !strings.Contains(got.Reason, "comment") {
+	if got := checkReplace(a3, id3, replaceFile, body); got.OK || !strings.Contains(got.Reason, "comment") {
 		t.Errorf("a comment line: %+v", got)
 	}
 }
@@ -182,6 +199,7 @@ func TestReplaceLineThroughASuggestion(t *testing.T) {
 	if fix.ID == "" || fix.Changed {
 		t.Fatalf("%+v", fix)
 	}
+	a.sources.keep("tests/login.probe", []byte(file)) // what the run read
 	if got := a.CheckReplaceLine(fix.ID, "tests/login.probe", file); !got.OK || got.Line != 4 || got.Text != `  tap "Sign in now"` {
 		t.Fatalf("%+v", got)
 	}
@@ -197,7 +215,7 @@ func TestReplaceLineThroughASuggestion(t *testing.T) {
 func replaceAt(body string, n int, original, suggestion string) ReplaceLineCheck {
 	a := &App{}
 	id := a.rememberFix(fixStored{file: replaceFile, line: n, original: original}, suggestion, false)
-	return a.CheckReplaceLine(id, replaceFile, body)
+	return checkReplace(a, id, replaceFile, body)
 }
 
 // A suggestion keeps the verb and the flags of the step it replaces: for a failed `tap "Sign in"` none of these is accepted, and each says

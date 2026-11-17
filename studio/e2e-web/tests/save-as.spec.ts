@@ -72,7 +72,7 @@ test.describe("Save as", () => {
       await page.keyboard.press("Enter");
       await expect(overlay(page)).toBeHidden();
       const file = path.join(studio.ws, "my flow.probe");
-      expect(fs.readFileSync(file, "utf8")).toContain('test "new"');
+      await expect.poll(() => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "")).toContain('test "new"'); // the file is read until it is there: the write is flushed before it takes its name
       await expect(page.locator("#editor-filename")).toContainText("my flow.probe");
       await expect(page.locator("#editor-dirty")).toBeEmpty();
       await expect(page.locator("#btn-save")).toBeDisabled(); // saved: no unsaved changes
