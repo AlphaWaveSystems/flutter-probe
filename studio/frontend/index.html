@@ -244,6 +244,7 @@
             <span>Preferred iOS UDID</span>
             <input id="settings-ios" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
           </label>
+          <p id="settings-ios-problem" class="ai-error" role="alert" hidden></p>
           <label class="settings-row">
             <span>Preferred Android serial</span>
             <input id="settings-android" type="text" placeholder="(none)" autocomplete="off" spellcheck="false" />
@@ -440,6 +441,16 @@
         <div class="confirm-buttons">
           <button type="button" id="btn-confirm-cancel" class="btn btn-primary"></button>
           <button type="button" id="btn-confirm-danger" class="btn btn-danger"></button>
+        </div>
+      </div>
+    </div>
+    <div id="discard-overlay" class="overlay" hidden>
+      <div class="overlay-card confirm-card" id="discard-card" role="alertdialog" aria-modal="true" aria-labelledby="discard-title" aria-describedby="discard-lead">
+        <div class="overlay-header"><h2 id="discard-title">Discard unsaved changes?</h2></div>
+        <p id="discard-lead">The open file has changes that are not saved. Opening another file throws them away.</p>
+        <div class="confirm-buttons">
+          <button type="button" id="btn-discard-cancel" class="btn btn-primary">Keep editing</button>
+          <button type="button" id="btn-discard-ok" class="btn btn-danger">Discard changes</button>
         </div>
       </div>
     </div>

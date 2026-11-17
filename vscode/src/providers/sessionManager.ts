@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Session, Device } from '../types';
-import { listDevices, buildTestArgs, getProbeCommand } from '../probe';
+import { listDevices, buildTestRun, getProbeCommand } from '../probe';
 import { runInTerminal } from '../terminal/probeTerminal';
 import { getWorkspaceRoot } from '../config';
 
@@ -176,14 +176,14 @@ export class SessionManagerProvider implements vscode.TreeDataProvider<SessionTr
     const ws = getWorkspaceRoot();
     if (!ws) { return; }
 
-    const args = buildTestArgs(ws, {
+    const run = buildTestRun(ws, {
       device: session.device.serial,
       port: session.port,
       config: session.config,
       autoConfirm: true,
     });
 
-    runInTerminal(`Probe: ${session.name}`, getProbeCommand(), args, ws);
+    runInTerminal(`Probe: ${session.name}`, getProbeCommand(), run.args, ws, run.env);
     session.status = 'running';
     this.refresh();
   }
@@ -194,14 +194,14 @@ export class SessionManagerProvider implements vscode.TreeDataProvider<SessionTr
     if (!editor) { return; }
 
     const session = item.session;
-    const args = buildTestArgs(editor.document.uri.fsPath, {
+    const run = buildTestRun(editor.document.uri.fsPath, {
       device: session.device.serial,
       port: session.port,
       config: session.config,
       autoConfirm: true,
     });
 
-    runInTerminal(`Probe: ${session.name}`, getProbeCommand(), args, getWorkspaceRoot());
+    runInTerminal(`Probe: ${session.name}`, getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
     session.status = 'running';
     this.refresh();
   }
@@ -216,14 +216,14 @@ export class SessionManagerProvider implements vscode.TreeDataProvider<SessionTr
     }
 
     for (const session of this.sessions) {
-      const args = buildTestArgs(ws, {
+      const run = buildTestRun(ws, {
         device: session.device.serial,
         port: session.port,
         config: session.config,
         autoConfirm: true,
       });
 
-      runInTerminal(`Probe: ${session.name}`, getProbeCommand(), args, ws);
+      runInTerminal(`Probe: ${session.name}`, getProbeCommand(), run.args, ws, run.env);
       session.status = 'running';
     }
 

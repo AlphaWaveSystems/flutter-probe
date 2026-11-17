@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -618,24 +616,8 @@ func (c *Client) Screenshot(ctx context.Context, name string) (string, error) {
 		return "", err
 	}
 
-	// If base64 data is included (cloud mode), save locally.
-	if result.Data != "" {
-		decoded, decErr := base64Decode(result.Data)
-		if decErr == nil && len(decoded) > 0 {
-			localDir := filepath.Join("reports", "screenshots")
-			_ = os.MkdirAll(localDir, 0755)
-			localPath := filepath.Join(localDir, filepath.Base(result.Path))
-			if writeErr := os.WriteFile(localPath, decoded, 0644); writeErr == nil {
-				absPath, _ := filepath.Abs(localPath)
-				if absPath != "" {
-					return absPath, nil
-				}
-				return localPath, nil
-			}
-		}
-	}
-
-	return result.Path, nil
+	// The agent's path is never used as a host path as it is: see savedScreenshot.
+	return savedScreenshot(result)
 }
 
 func (c *Client) DumpWidgetTree(ctx context.Context) (string, error) {

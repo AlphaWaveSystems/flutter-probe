@@ -5,6 +5,12 @@
   "version": "0.27.0",
   "publisher": "flutterprobe",
   "icon": "resources/probe-icon.png",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "FlutterProbe runs the probe CLI, adb and flutter, and probe test reads the workspace's probe.yaml and test files. It runs only in a trusted workspace."
+    }
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -326,7 +332,8 @@
         "flutterprobe.probePath": {
           "type": "string",
           "default": "probe",
-          "description": "Path to the probe CLI binary"
+          "scope": "machine",
+          "description": "Path to the probe CLI binary. User or remote settings only: a workspace cannot set it. Without it, probe on PATH (bin/probe of a trusted workspace only with flutterprobe.useWorkspaceBinaries)"
         },
         "flutterprobe.autoLint": {
           "type": "boolean",
@@ -416,20 +423,30 @@
         "flutterprobe.adbPath": {
           "type": "string",
           "default": "",
-          "description": "Custom path to adb binary"
+          "scope": "machine",
+          "description": "Custom path to adb binary. User or remote settings only: a workspace cannot set it"
         },
         "flutterprobe.flutterPath": {
           "type": "string",
           "default": "",
-          "description": "Custom path to flutter binary"
+          "scope": "machine",
+          "description": "Custom path to flutter binary. User or remote settings only: a workspace cannot set it"
+        },
+        "flutterprobe.useWorkspaceBinaries": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Run bin/probe and bin/probe-convert from the open workspace when there is no probePath or convertPath. Off by default: trusting a folder is not consent to run its binaries. User or remote settings only"
         },
         "flutterprobe.convertPath": {
           "type": "string",
           "default": "probe-convert",
-          "description": "Path to the probe-convert binary"
+          "scope": "machine",
+          "description": "Path to the probe-convert binary. User or remote settings only: a workspace cannot set it. Without it, probe-convert on PATH (bin/probe-convert of a trusted workspace only with flutterprobe.useWorkspaceBinaries)"
         },
         "flutterprobe.cloudProvider": {
           "type": "string",
+          "scope": "machine",
           "default": "",
           "enum": [
             "",
@@ -447,7 +464,7 @@
             "AWS Device Farm",
             "Firebase Test Lab (deprecated by Google)"
           ],
-          "description": "Cloud device farm provider for remote testing"
+          "description": "Cloud device farm provider for remote testing. User or remote settings only: the cloud key and secret are sent to it"
         },
         "flutterprobe.cloudDevice": {
           "type": "string",
@@ -462,17 +479,20 @@
         "flutterprobe.cloudKey": {
           "type": "string",
           "default": "",
-          "description": "Cloud provider username or access key ID"
+          "scope": "machine",
+          "description": "Cloud provider username or access key ID. User or remote settings only (a workspace cannot set it, and Settings Sync leaves it out); passed to probe as PROBE_CLOUD_KEY, never on the command line"
         },
         "flutterprobe.cloudSecret": {
           "type": "string",
           "default": "",
-          "description": "Cloud provider access key or secret (stored in settings — consider using env vars for CI)"
+          "scope": "machine",
+          "description": "Cloud provider access key or secret. User or remote settings only (a workspace cannot set it, and Settings Sync leaves it out); passed to probe as PROBE_CLOUD_SECRET, never on the command line. Settings are stored in plain text: in CI, set PROBE_CLOUD_SECRET instead"
         },
         "flutterprobe.relayUrl": {
           "type": "string",
           "default": "",
-          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers)"
+          "scope": "machine",
+          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers). User or remote settings only: the relay token is sent to it"
         },
         "flutterprobe.deviceView.fps": {
           "type": "number",
@@ -491,7 +511,8 @@
         "flutterprobe.relayToken": {
           "type": "string",
           "default": "",
-          "description": "Relay authentication token"
+          "scope": "machine",
+          "description": "Relay authentication token. User or remote settings only (a workspace cannot set it, and Settings Sync leaves it out); passed to probe as PROBE_RELAY_CLI_TOKEN, never on the command line"
         }
       }
     },
