@@ -77,6 +77,8 @@ type App struct {
 	// export holds the engine's results of the last finished run, for ExportRunResults; savePathFn replaces the native save dialog in tests.
 	export     exportSource
 	savePathFn func(defaultName, label, pattern string) (string, error)
+	// pickDirFn replaces the native folder dialog of PickWorkspace in tests.
+	pickDirFn func(title string) (string, error)
 
 	track   runTracker        // what the current/last run looks like, for automation and the UI
 	fix     selectorFixState  // previews of selector-fix requests and what this session confirmed; see ai_selector_fix.go
@@ -181,6 +183,9 @@ type FileEntry struct {
 // PickWorkspace opens a native directory picker and returns the chosen
 // path. Returns an empty string if the user cancels.
 func (a *App) PickWorkspace() (string, error) {
+	if a.pickDirFn != nil {
+		return a.pickDirFn("Open workspace")
+	}
 	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Open workspace",
 	})
