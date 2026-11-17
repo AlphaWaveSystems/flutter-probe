@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,7 +22,7 @@ import (
 // Headless mode (PROBE_STUDIO_HEADLESS=1) serves the built frontend over HTTP and exposes the bound App
 // methods and events to it, so the real UI can be driven by a browser test runner with no native window,
 // cursor or focus. It exists for tests: it is off by default, listens on loopback only and needs a token
-// printed at start. It exposes every exported App method (including file writes), so it is not an
+// that the program driving the page gives it (PROBE_STUDIO_HEADLESS_TOKEN) and sends as a header; Studio never serves one. It exposes every exported App method (including file writes), so it is not an
 // automation interface for agents; that is the automation endpoint, which is confined to the project.
 
 //go:embed headless/bridge.js
@@ -90,10 +88,19 @@ func methodRefusedOverHTTP(name string) bool {
 	return methodsNotOverHTTP[name]
 }
 
+// headlessTokenEnv is where the launcher gives Studio the token of the bridge. Studio never makes one and never serves one: a token in a page that any
+// local process can fetch separates nothing, and one in a URL ends up in logs and history. The test runner that started Studio sends the token with
+// every request it makes (a browser context's extra headers), and the server checks it on every call and on the event stream.
+const headlessTokenEnv = "PROBE_STUDIO_HEADLESS_TOKEN"
+
+// minHeadlessToken is the shortest token the bridge accepts: 32 characters, so a guessable word is not one.
+const minHeadlessToken = 32
+
 func startHeadless(a *App, assets fs.FS) (*headlessServer, error) {
-	raw := make([]byte, 24)
-	if _, err := rand.Read(raw); err != nil {
-		return nil, err
+	token := os.Getenv(headlessTokenEnv)
+	_ = os.Unsetenv(headlessTokenEnv) // the programs Studio starts (adb, simctl) do not inherit it
+	if len(token) < minHeadlessToken {
+		return nil, fmt.Errorf("headless mode needs %s: a random string of at least %d characters, which the program that drives the page sends as the X-Headless-Token header (Studio does not make or serve one)", headlessTokenEnv, minHeadlessToken)
 	}
 	port := os.Getenv("PROBE_STUDIO_HEADLESS_PORT")
 	if port == "" {
@@ -108,7 +115,7 @@ func startHeadless(a *App, assets fs.FS) (*headlessServer, error) {
 		_ = ln.Close()
 		return nil, fmt.Errorf("frontend not built (run `npm run build` in studio/frontend): %w", err)
 	}
-	s := &headlessServer{app: a, token: hex.EncodeToString(raw), ln: ln, hub: newEventHub(), files: http.FileServer(http.FS(assets))}
+	s := &headlessServer{app: a, token: token, ln: ln, hub: newEventHub(), files: http.FileServer(http.FS(assets))}
 	bridge := `<script src="/__headless/bridge.js"></script>`
 	s.index = []byte(strings.Replace(string(indexHTML), "<head>", "<head>\n    "+bridge, 1))
 	a.hub = s.hub
@@ -153,10 +160,11 @@ func (s *headlessServer) tokenOK(got string) bool {
 	return got != "" && subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
 }
 
+// handleBridge serves the page script. It holds no secret: the token travels in a header the page's requests carry, never in the script.
 func (s *headlessServer) handleBridge(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = io.WriteString(w, strings.Replace(headlessBridgeJS, "__TOKEN__", s.token, 1))
+	_, _ = io.WriteString(w, headlessBridgeJS)
 }
 
 func (s *headlessServer) handleStatic(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +238,7 @@ func callAppMethod(app *App, name string, args []json.RawMessage) (any, error) {
 }
 
 func (s *headlessServer) handleEvents(w http.ResponseWriter, r *http.Request) {
-	if !s.tokenOK(r.URL.Query().Get("token")) {
+	if !s.tokenOK(r.Header.Get("X-Headless-Token")) { // a header, never the address: an address is logged and kept in history
 		http.Error(w, "missing or wrong token", http.StatusUnauthorized)
 		return
 	}

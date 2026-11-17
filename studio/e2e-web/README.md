@@ -5,7 +5,7 @@ Drives the **real Studio frontend and Go backend** with Playwright, without a na
 Studio started with `PROBE_STUDIO_HEADLESS=1` serves its built frontend over HTTP on `127.0.0.1` (random port, or
 `PROBE_STUDIO_HEADLESS_PORT`), injects a small bridge that stands in for the Wails runtime (`window.go.main.App.*`
 calls become HTTP calls to the same Go methods, `EventsOn` becomes a server-sent event stream) and prints
-`PROBE_STUDIO_HEADLESS_URL=...`. It is for tests only: it needs a per-launch token (embedded in the bridge it serves),
+`PROBE_STUDIO_HEADLESS_URL=...`. It is for tests only: it needs a token that the launcher gives it in `PROBE_STUDIO_HEADLESS_TOKEN` (at least 32 characters; Studio makes none and serves none) and that the driving browser sends as the `X-Headless-Token` header on every request (`extraHTTPHeaders` in `playwright.config.ts`; never in a script or an address),
 refuses non-loopback hosts and cross-origin pages, and exposes every exported `App` method, so it is **not** the interface
 for agents (that is the confined automation endpoint, `PROBE_STUDIO_AUTOMATION=1`).
 

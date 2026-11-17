@@ -14,8 +14,11 @@ import (
 	"time"
 )
 
+const testHeadlessToken = "0123456789abcdef0123456789abcdef-test"
+
 func startHeadlessTest(t *testing.T) (*headlessServer, *App) {
 	t.Helper()
+	t.Setenv(headlessTokenEnv, testHeadlessToken)
 	assets := fstest.MapFS{"index.html": {Data: []byte("<html><head><title>x</title></head><body>studio</body></html>")}, "app.js": {Data: []byte("1")}}
 	a := NewApp()
 	s, err := startHeadless(a, assets)
@@ -60,10 +63,36 @@ func TestHeadlessServesIndexWithTheBridgeAndAssets(t *testing.T) {
 	if string(b) != "1" {
 		t.Fatalf("asset: %q", b)
 	}
-	resp, _ = http.Get(s.URL() + "/__headless/bridge.js")
-	b, _ = io.ReadAll(resp.Body)
-	if !strings.Contains(string(b), s.token) || strings.Contains(string(b), "__TOKEN__") {
-		t.Fatal("the bridge must carry this launch's token")
+	// The script and the page hold no secret: a process that fetches them learns nothing it can call with.
+	for _, path := range []string{"/__headless/bridge.js", "/", "/index.html", "/app.js"} {
+		resp, _ = http.Get(s.URL() + path)
+		b, _ = io.ReadAll(resp.Body)
+		if strings.Contains(string(b), s.token) || strings.Contains(string(b), "__TOKEN__") || strings.Contains(strings.ToLower(string(b)), "token = ") {
+			t.Fatalf("%s carries the token or a place for it", path)
+		}
+	}
+}
+
+// Studio does not make a token: the launcher gives it in the environment, it must be long enough, and Studio does not pass it on.
+func TestHeadlessNeedsALongTokenFromTheLauncherAndKeepsItToItself(t *testing.T) {
+	assets := fstest.MapFS{"index.html": {Data: []byte("<html><head></head></html>")}}
+	for name, tok := range map[string]string{"none": "", "short": "abc", "one under": strings.Repeat("x", minHeadlessToken-1)} {
+		t.Setenv(headlessTokenEnv, tok)
+		if s, err := startHeadless(NewApp(), assets); err == nil {
+			s.Close()
+			t.Errorf("%s: the bridge started with a token it should refuse", name)
+		} else if !strings.Contains(err.Error(), headlessTokenEnv) {
+			t.Errorf("%s: the refusal does not name %s: %v", name, headlessTokenEnv, err)
+		}
+	}
+	t.Setenv(headlessTokenEnv, strings.Repeat("x", minHeadlessToken))
+	s, err := startHeadless(NewApp(), assets)
+	if err != nil {
+		t.Fatalf("a token of exactly %d characters was refused: %v", minHeadlessToken, err)
+	}
+	defer s.Close()
+	if os.Getenv(headlessTokenEnv) != "" {
+		t.Error("the token is still in Studio's environment, so every program it starts inherits it")
 	}
 }
 
@@ -132,7 +161,9 @@ func TestHeadlessCallsAppMethodsLikeWails(t *testing.T) {
 
 func TestHeadlessEventsReachTheBrowser(t *testing.T) {
 	s, a := startHeadlessTest(t)
-	resp, err := http.Get(s.URL() + "/__headless/events?token=" + s.token)
+	req, _ := http.NewRequest(http.MethodGet, s.URL()+"/__headless/events", nil)
+	req.Header.Set("X-Headless-Token", s.token)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,8 +192,17 @@ func TestHeadlessEventsReachTheBrowser(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("no event arrived")
 	}
-	bad, _ := http.Get(s.URL() + "/__headless/events?token=nope")
+	bad, _ := http.Get(s.URL() + "/__headless/events")
 	if bad.StatusCode != http.StatusUnauthorized {
 		t.Errorf("events need the token: %d", bad.StatusCode)
+	}
+	wrong, _ := http.NewRequest(http.MethodGet, s.URL()+"/__headless/events", nil)
+	wrong.Header.Set("X-Headless-Token", "nope")
+	if resp, _ := http.DefaultClient.Do(wrong); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("events with a wrong token: %d", resp.StatusCode)
+	}
+	// the right token in the address is not a token: an address is logged and kept in history
+	if resp, _ := http.Get(s.URL() + "/__headless/events?token=" + s.token); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("a token in the query string was accepted: %d", resp.StatusCode)
 	}
 }
