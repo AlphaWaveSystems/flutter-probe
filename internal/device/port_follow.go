@@ -16,6 +16,8 @@ package device
 //     app holds it, the run does not dial it: the follower looks for the app's own port for the whole dial window (the app may still be starting), and when it finds
 //     none the connect is REFUSED with a PortHeldError that names the holder. Failing closed is the point: the token may be the holder's, and dialing it would run the
 //     tests against the wrong app without a sign of it.
+//   - The same check runs again for a token that was read again after the agent rejected one, when that token is not from run-as (CheckRefreshedToken): on a cold
+//     start the run-as read can fail and fall back to a shared source, and the dial loop stops on the refusal (probelink: RefuseDial) instead of dialing the holder.
 //   - Nothing is shared between connections: every connection (every lane of a parallel run) has its own PortFollower.
 //
 // What it does not cover: when /proc/net cannot be read, nobody can say who holds the port, so nothing is refused; with an agent too old to move its port and an app that
