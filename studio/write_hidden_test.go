@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // Save never writes into a hidden folder of the workspace (.git, .github, a tool's own folder) or to a file whose name starts with a dot, and a saved
@@ -37,6 +41,9 @@ func TestWriteFileRefusesHiddenFoldersAndNames(t *testing.T) {
 		".config/probe/x.probe",
 		".x.probe",
 		"sub/.x.probe",
+		"sub/./.git/x.probe", // written unclean: judged after it is cleaned
+		"sub//.git///x.probe",
+		"./.git/x.probe",
 	} {
 		p := filepath.Join(dir, filepath.FromSlash(rel))
 		err := a.WriteFile(p, "test \"x\"\n")
@@ -133,5 +140,45 @@ func TestWriteFileHasTheSameSizeCapAsCreateFile(t *testing.T) {
 	}
 	if _, e := os.Stat(filepath.Join(dir, "newfolder")); e == nil {
 		t.Error("a refused save created its folder")
+	}
+}
+
+// The results export is not a Save: it writes a report the person chose in the native dialog, and the new Save rules (a hidden folder, 1 MiB) do not reach
+// it. A report above 1 MiB, in a folder that starts with a dot, inside the open workspace, is still written.
+func TestTheResultsExportIsNotHeldToTheSaveRules(t *testing.T) {
+	t.Setenv("PROBE_STUDIO_WORKSPACE", "")
+	t.Setenv("PROBE_STUDIO_AUTOMATION_ROOTS", "")
+	ws, _ := filepath.EvalSymlinks(t.TempDir())
+	folder := filepath.Join(ws, ".reports", "ci")
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(folder, "probe-results.json")
+	var results []runner.TestResult
+	for i := 0; i < 6000; i++ {
+		results = append(results, runner.TestResult{TestName: strings.Repeat("t", 100) + string(rune('a'+i%26)), File: ws + "/a.probe", Passed: true, Duration: time.Second, Attempts: 1})
+	}
+	a := &App{ctx: context.Background()}
+	a.SetWorkspace(ws)
+	a.export.keep(results, runner.RunMetadata{DeviceName: "Pixel Test", Platform: "android", ProbeVersion: "9.9.9"}, ws)
+	a.savePathFn = func(string, string, string) (string, error) { return out, nil }
+	o, err := a.ExportRunResults("json")
+	if err != nil || !o.Saved {
+		t.Fatalf("export = %+v, %v", o, err)
+	}
+	fi, err := os.Stat(out)
+	if err != nil || fi.Size() <= maxSaveBytes {
+		t.Fatalf("the report is %v bytes (%v): the fixture is not above the Save cap", fi, err)
+	}
+}
+
+// Only a real dot makes a name hidden to the operating system: a look-alike (a full-width full stop, a one-dot leader, a dot with a combining mark
+// before it) is an ordinary name, so it is written, and the refusal is not widened to characters that merely look like a dot.
+func TestLookAlikesOfADotAreOrdinaryNames(t *testing.T) {
+	a, dir := hiddenFixture(t)
+	for _, name := range []string{"\uff0egit/x.probe", "\u2024git/x.probe", "x\u0301.probe"} {
+		if err := a.WriteFile(filepath.Join(dir, name), "x"); err != nil {
+			t.Errorf("%q was refused: %v", name, err)
+		}
 	}
 }
