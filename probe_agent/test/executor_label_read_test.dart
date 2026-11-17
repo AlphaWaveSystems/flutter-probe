@@ -20,6 +20,19 @@ Future<String?> _seeError(String text, Map<String, String> check) async {
   return error == null ? null : '$error';
 }
 
+Future<String?> _seeErrorSel(
+    Map<String, dynamic> sel, Map<String, String> check) async {
+  String? sent;
+  final executor = ProbeExecutor((msg) => sent = msg);
+  await executor.dispatch(ProbeRequest(
+      jsonrpc: '2.0',
+      id: 1,
+      method: ProbeMethods.see,
+      params: {'selector': sel, ...check}));
+  final error = (jsonDecode(sent!) as Map<String, dynamic>)['error'];
+  return error == null ? null : '$error';
+}
+
 Future<String?> _contains(String text, String value) =>
     _seeError(text, {'check': 'contains', 'check_val': value});
 
@@ -89,5 +102,81 @@ void main() {
     expect(await _contains('Order total', '42.00'), isNull);
     expect(await _contains('Order total', 'Total label'),
         contains('contains "Order total: 42.00"'));
+  });
+
+  // A labelled wrapper around a text field still reads as the field's text: the label is read only for a widget with no text of its own.
+  Future<String?> byId(String id, String value) => _seeErrorSel(
+      {'kind': 'id', 'text': '#$id'},
+      {'check': 'contains', 'check_val': value});
+
+  testWidgets(
+      'a Semantics with a label around a TextField, found by id, reads as the field',
+      (tester) async {
+    await _pump(
+        tester,
+        Semantics(
+            identifier: 'email_id',
+            label: 'Email',
+            child: TextField(
+                controller: TextEditingController(text: 'typed value'))));
+    expect(await byId('email_id', 'typed value'), isNull);
+    expect(await byId('email_id', 'Email'),
+        contains('contains "typed value", not "Email"'));
+  });
+
+  testWidgets(
+      'a Semantics with a label around a TextField, found by the label, reads as the field',
+      (tester) async {
+    await _pump(
+        tester,
+        Semantics(
+            label: 'Email field',
+            child: TextField(
+                controller: TextEditingController(text: 'typed value'))));
+    expect(await _contains('Email field', 'typed value'), isNull);
+  });
+
+  testWidgets(
+      'a Tooltip around a TextField, found by the message, reads as the field',
+      (tester) async {
+    await _pump(
+        tester,
+        Tooltip(
+            message: 'Name',
+            child: SizedBox(
+                width: 200,
+                child: TextField(
+                    controller: TextEditingController(text: 'Ada')))));
+    expect(await _contains('Name', 'Ada'), isNull);
+  });
+
+  testWidgets(
+      'a labelled Semantics around an obscured field still reads as nothing',
+      (tester) async {
+    await _pump(
+        tester,
+        Semantics(
+            identifier: 'pw_id',
+            label: 'Password',
+            child: TextField(
+                obscureText: true,
+                controller: TextEditingController(text: 'zq-secret-1'))));
+    final error = await byId('pw_id', 'Password');
+    expect(error, contains('obscured field'),
+        reason: 'the label must not stand in for an obscured field');
+    expect(error, isNot(contains('zq-secret-1')));
+  });
+
+  // Out of scope (documented): found by id, an icon button is the IconButton, not its Tooltip, so it reads as "".
+  testWidgets('an IconButton found by id reads as empty, not as its tooltip',
+      (tester) async {
+    await _pump(
+        tester,
+        IconButton(
+            key: const ValueKey('add_id'),
+            onPressed: () {},
+            tooltip: 'Add item',
+            icon: const Icon(Icons.add)));
+    expect(await byId('add_id', 'Add'), contains('contains "", not "Add"'));
   });
 }
