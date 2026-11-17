@@ -323,18 +323,27 @@ func TestCardSearchHasNoSizeLimit(t *testing.T) {
 			}
 		}
 	}
-	start := time.Now()
-	big := strings.Repeat("123 ", 1<<18) // 1 MB
-	_ = cardRuns(big)
-	_ = cardRuns(strings.Repeat("7", 1<<20))
-	if d := time.Since(start); d > 3*time.Second {
-		t.Errorf("a megabyte of digit groups took %v", d)
+	// A megabyte of digit groups is read in linear work. The check counts allocations, which do not depend on how busy the machine is (a
+	// wall-clock limit failed under load): doubling the input at most doubles them, and a megabyte of one digit run allocates a handful.
+	assertLinearAllocs(t, "digit groups", func(n int) func() { in := strings.Repeat("123 ", n); return func() { _ = cardRuns(in) } }, 1<<16)
+	one := strings.Repeat("7", 1<<20)
+	if got := testing.AllocsPerRun(1, func() { _ = cardRuns(one) }); got > 16 {
+		t.Errorf("a megabyte of one digit run allocated %v times", got)
+	}
+}
+
+// assertLinearAllocs runs work(n) and work(2n) and fails when the larger one allocates more than 2.5 times as much as the smaller one.
+func assertLinearAllocs(t *testing.T, what string, work func(n int) func(), n int) {
+	t.Helper()
+	small := testing.AllocsPerRun(1, work(n))
+	large := testing.AllocsPerRun(1, work(2*n))
+	if small < 1 || large > 2.5*small {
+		t.Errorf("%s: %v allocations for %d, %v for %d: not linear", what, small, n, large, 2*n)
 	}
 }
 
 // More values to replace than a step may name stops the save, and the placeholders are handed out in linear time.
 func TestTooManyValuesStopTheSave(t *testing.T) {
-	start := time.Now()
 	// 300 separate cards (a letter between them, so each is its own run) are more than a step may name.
 	body := strings.Repeat("4111111111111111 x ", 300)
 	if s, err := buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body}); err == nil {
@@ -364,9 +373,14 @@ func TestTooManyValuesStopTheSave(t *testing.T) {
 	if _, err := buildCallStep(SaveStepInput{Method: "GET", URL: "https://a.example.test/x?" + strings.Join(parts, "&")}); err != nil {
 		t.Errorf("199 query values: %v", err)
 	}
-	if d := time.Since(start); d > 3*time.Second {
-		t.Errorf("took %v", d)
-	}
+	// The placeholders are handed out in linear work: no wall clock, which failed under load. Counting allocations instead, a body with twice the
+	// digit groups before one card allocates at most 2.5 times as much.
+	assertLinearAllocs(t, "one run of digit groups", func(n int) func() {
+		body := strings.Repeat("000 ", n) + "4111111111111111"
+		return func() {
+			_, _ = buildCallStep(SaveStepInput{Method: "POST", URL: "https://a.example.test/x", Body: body})
+		}
+	}, 50000)
 }
 
 // A card number written with other digits around it is replaced with its whole run of digit groups, and a longer number that passes is not cut at a shorter prefix.
@@ -642,5 +656,34 @@ func TestSaveStepCardSplitAcrossPathSegments(t *testing.T) {
 		if err != nil || stepOf(t, s).URL != u {
 			t.Errorf("%q: %v %+v", u, err, s.Lines)
 		}
+	}
+}
+
+// The linearity check fails on work that allocates more than linearly, and passes on work that allocates in proportion.
+func TestTheLinearAllocationCheckSeesQuadraticWork(t *testing.T) {
+	var sink [][]byte
+	quadratic := func(n int) func() {
+		return func() {
+			sink = nil
+			for i := 0; i < n; i++ {
+				for j := 0; j < i/64+1; j++ {
+					sink = append(sink, make([]byte, 1))
+				}
+			}
+		}
+	}
+	linear := func(n int) func() {
+		return func() {
+			sink = nil
+			for i := 0; i < n; i++ {
+				sink = append(sink, make([]byte, 1))
+			}
+		}
+	}
+	if small, large := testing.AllocsPerRun(1, linear(1000)), testing.AllocsPerRun(1, linear(2000)); large > 2.5*small {
+		t.Errorf("linear work flagged: %v %v", small, large)
+	}
+	if small, large := testing.AllocsPerRun(1, quadratic(4000)), testing.AllocsPerRun(1, quadratic(8000)); large <= 2.5*small {
+		t.Errorf("quadratic work not seen: %v %v", small, large)
 	}
 }
