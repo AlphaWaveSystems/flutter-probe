@@ -229,4 +229,42 @@ test.describe("First-run guidance", () => {
       fs.rmSync(ws, { recursive: true, force: true });
     }
   });
+
+  test("fr-07 a workspace can be closed: the guidance of a first start comes back, the remembered folder is forgotten, and unsaved changes are asked about", async ({ page }) => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "studio-close-ws-"));
+    fs.mkdirSync(path.join(ws, "tests"));
+    fs.writeFileSync(path.join(ws, "tests", "a.probe"), 'test "a"\n  open the app\n');
+    const studio = await startStudio(ws);
+    try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
+      await page.goto(studio.url);
+      const close = page.locator("#btn-close-workspace");
+      await expect(close).toBeVisible(); // a workspace is open
+      await page.locator("#file-list li", { hasText: "tests" }).first().click();
+      await page.locator("#file-list li", { hasText: "a.probe" }).first().click();
+      await expect(page.locator("#editor-filename")).toContainText("a.probe");
+      // unsaved changes: the question in the page; Keep editing leaves everything as it was
+      await page.locator("#editor .view-line").first().click();
+      await page.keyboard.type("!!");
+      await expect(page.locator("#editor-dirty")).toContainText("unsaved");
+      await close.click();
+      await expect(page.locator("#discard-overlay")).toBeVisible();
+      await page.click("#btn-discard-cancel");
+      await expect(page.locator("#discard-overlay")).toBeHidden();
+      await expect(close).toBeVisible();
+      await expect(page.locator("#editor-filename")).toContainText("a.probe");
+      // Discard changes closes it
+      await close.click();
+      await expect(page.locator("#btn-discard-ok")).toBeEnabled(); // armed after half a second
+      await page.click("#btn-discard-ok");
+      await expect(page.locator("#file-list .pane-empty")).toContainText("No workspace open");
+      await expect(strip(page)).toContainText("Open your project folder");
+      await expect(close).toBeHidden();
+      await expect(page.locator("#editor-filename")).toHaveText("untitled.probe");
+      await expectReasons(page, ["btn-run"]);
+      expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /workspace/i.test(k)).map((k) => localStorage.getItem(k)))).toEqual([]);
+    } finally {
+      studio.stop();
+    }
+  });
 });

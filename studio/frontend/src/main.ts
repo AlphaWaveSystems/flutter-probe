@@ -436,6 +436,7 @@ async function pickWorkspace() {
     await SetWorkspace(path);
     resetAIPreview();
     workspaceRoot = path;
+    showWorkspaceClose();
     resetNetworkPanel();
     refreshFiles(path);
     void refreshWorkspaceNote();
@@ -446,6 +447,42 @@ async function pickWorkspace() {
 }
 
 $("btn-pick-workspace").addEventListener("click", pickWorkspace);
+
+// The Close button is there only while a workspace is open. Closing brings back the state of a first start (no workspace, no file, the guidance in
+// the panes), and forgets the remembered folder, so the next start does not reopen it. PROBE_STUDIO_WORKSPACE, when set, still opens its folder at start.
+function showWorkspaceClose(): void {
+  ($("btn-close-workspace") as HTMLButtonElement).hidden = workspaceRoot === "";
+}
+
+async function closeWorkspace(): Promise<void> {
+  if (workspaceRoot === "") return;
+  if (runInProgress || recording) {
+    toast(runInProgress ? "A run is in progress: cancel it before closing the workspace." : "Stop the recording before closing the workspace.", "info", 4000);
+    return;
+  }
+  if (dirty && !(await askDiscard())) return; // unsaved changes: the same question as opening another file
+  try {
+    await SetWorkspace("");
+  } catch (err) {
+    toast(`Close failed: ${err}`, "error");
+    return;
+  }
+  localStorage.removeItem(WORKSPACE_KEY);
+  workspaceRoot = "";
+  resetAIPreview();
+  resetNetworkPanel();
+  model.setValue("");
+  currentPath = null;
+  $("editor-filename").textContent = "untitled.probe";
+  setDirty(false);
+  updateRunButton();
+  showWorkspaceClose();
+  void refreshWorkspaceNote();
+  await refreshFiles("tests");
+  toast("Workspace closed", "info", 1800);
+}
+
+$("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 
 // ---- Save ---------------------------------------------------------------
 
@@ -2203,6 +2240,7 @@ initDeviceSettings();
     await SetWorkspace(ws);
     resetAIPreview();
     workspaceRoot = ws;
+    showWorkspaceClose();
     resetNetworkPanel();
     void refreshWorkspaceNote();
     await refreshFiles(ws);
