@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -1118,7 +1119,7 @@ func TestTheTokenFileNameFollowsThePort(t *testing.T) {
 	}
 	var all []srv
 	for _, ip := range []string{"127.0.0.1", "::1", "fe80::1", "fe80::1:1", "fe80::", "::", "0.0.0.0", "2001:db8::1", "::ffff:10.0.0.1"} {
-		for _, zone := range []string{"", "en0", "en1", "1", "2", "a_b", "a-b", "a%b", "z", "-z"} {
+		for _, zone := range []string{"", "en0", "en1", "1", "2", "a_b", "a-b", "a%b", "z", "-z", "x", "78", strings.Repeat("e", 33), strings.Repeat("e", 34), strings.Repeat("f", 200)} {
 			for _, port := range []int{80, 7391} {
 				if zone != "" && !strings.Contains(ip, ":") {
 					continue // an IPv4 address has no zone
@@ -1141,6 +1142,33 @@ func TestTheTokenFileNameFollowsThePort(t *testing.T) {
 			t.Errorf("%+v and %+v share the token file name %q", prev, c, n)
 		}
 		seen[n] = c
+	}
+	// the zone joined with another separator would read as part of an address: fe80::1%x is hex 78, as in fe80::1:78
+	if tokenFileName(net.ParseIP("fe80::1"), "x", 80) == tokenFileName(net.ParseIP("fe80::1:78"), "", 80) || tokenFileName(net.ParseIP("fe80::1"), "x", 80) == tokenFileName(net.ParseIP("fe80::1"), "78", 80) {
+		t.Error("a zone and an address (or another zone) share a token file name")
+	}
+	// the spellings are fixed, so a script can find a file: a colon is an underscore
+	for ip, want := range map[string]string{"127.0.0.1": "http-token-127.0.0.1-80", "::1": "http-token-__1-80", "fe80::1": "http-token-fe80__1-80", "::": "http-token-__-80"} {
+		if got := tokenFileName(net.ParseIP(ip), "", 80); got != want {
+			t.Errorf("%s: %q, want %q", ip, got, want)
+		}
+	}
+	if got := tokenFileName(net.ParseIP("fe80::1"), "en0", 80); got != "http-token-fe80__1-z656e30-80" {
+		t.Errorf("a zone: %q", got)
+	}
+	// a zone of any length gives a short name, and a long zone differs from a short one and from another long one
+	long1, long2 := strings.Repeat("e", 300), strings.Repeat("e", 301)
+	n1, n2 := tokenFileName(net.ParseIP("fe80::1"), long1, 80), tokenFileName(net.ParseIP("fe80::1"), long2, 80)
+	if len(n1) > 120 || len(n2) > 120 || n1 == n2 || n1 == tokenFileName(net.ParseIP("fe80::1"), "e", 80) {
+		t.Errorf("long zones: %d %d characters, %q %q", len(n1), len(n2), n1, n2)
+	}
+	// a long zone's hash must not be mistaken for a short zone that happens to be those very bytes
+	sum := sha256.Sum256([]byte(long1))
+	if n1 == tokenFileName(net.ParseIP("fe80::1"), string(sum[:16]), 80) || !strings.Contains(n1, "-h") {
+		t.Errorf("a hashed zone shares a name with a zone of the hash's bytes: %q", n1)
+	}
+	if tokenFileName(net.ParseIP("fe80::1"), strings.Repeat("a", 32), 80) != "http-token-fe80__1-z"+strings.Repeat("61", 32)+"-80" {
+		t.Error("a zone of exactly the cap is not written as it is")
 	}
 	// the numeric zone is not the address with another colon
 	if tokenFileName(net.ParseIP("fe80::1"), "1", 80) == tokenFileName(net.ParseIP("fe80::1:1"), "", 80) {
