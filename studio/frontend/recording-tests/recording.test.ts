@@ -9,7 +9,7 @@ const stopBranch = main.slice(main.indexOf("const script = await StopRecording()
 
 describe("Record and Stop in main.ts", () => {
   it("Stop puts the test header in front of the recorded steps", () => {
-    assert.equal(stopBranch.includes("model.setValue(recordingBuffer(recordedAt, script))"), true);
+    assert.equal(stopBranch.includes("model.setValue(recordedScript(recordingHead, script))"), true);
   });
 
   it("Stop refreshes the Run button, because the buffer has no file yet", () => {

@@ -27,7 +27,7 @@ async function generateReport(): Promise<void> {
   if (!outputFile) { return; }
 
   const args = ['report', '--input', inputFile[0].fsPath, '-o', outputFile.fsPath, '--open'];
-  runInTerminal('Probe: Report', getProbeCommand(), args, getWorkspaceRoot());
+  runInTerminal('Probe: Report', getProbeCommand(), args, getWorkspaceRoot(), {});
 }
 
 async function openReport(): Promise<void> {

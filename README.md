@@ -880,13 +880,15 @@ Run tests on real devices without managing your own device lab. Bring your own a
 Cloud runs need a relay service that implements the relay API (it is not part of this repository, and the hosted Probe Cloud service is not live yet), because no farm lets the CLI connect into a rented device. Local devices are the tested path. Details, what was checked against each vendor's documentation and the Firebase migration note: [Cloud device farms](https://flutterprobe.dev/tools/cloud-farms/). Maestro Cloud runs Maestro flows only and is not a FlutterProbe provider.
 
 ```bash
+# The key and the secret come from the environment, so they stay out of the process list and shell history.
+export PROBE_CLOUD_KEY=YOUR_KEY PROBE_CLOUD_SECRET=YOUR_SECRET
 probe test tests/ \
   --cloud-provider browserstack \
   --cloud-device "Google Pixel 7-13.0" \
-  --cloud-app app-release.apk \
-  --cloud-key YOUR_KEY \
-  --cloud-secret YOUR_SECRET
+  --cloud-app app-release.apk
 ```
+
+`--cloud-key`, `--cloud-secret` and `--relay-token` still work as flags (a flag that is given wins), but their values are then visible to other users of the machine. The environment variables are `PROBE_CLOUD_KEY`, `PROBE_CLOUD_SECRET` and `PROBE_RELAY_CLI_TOKEN`.
 
 ## Migrating from Other Frameworks
 
@@ -945,8 +947,8 @@ visual:
   pixel_delta: 8
 
 tools:
-  adb: /path/to/adb          # optional override
-  flutter: /path/to/flutter  # optional override
+  adb: /path/to/adb          # optional override: an absolute path outside this repository
+  flutter: /path/to/flutter  # optional override: an absolute path outside this repository
 
 ai:
   api_key: sk-ant-...        # for probe generate and self-healing

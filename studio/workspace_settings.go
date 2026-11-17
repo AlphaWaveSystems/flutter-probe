@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
@@ -30,6 +31,9 @@ type WorkspaceSettings struct {
 	AndroidDeviceID         string `json:"androidDeviceId"`         // probe.yaml: device.android_device_id
 	AIContextRunResults     bool   `json:"aiContextRunResults"`     // probe.yaml: studio.ai_context.run_results (off unless set)
 	AIContextWidgetTree     bool   `json:"aiContextWidgetTree"`     // probe.yaml: studio.ai_context.widget_tree (off unless set)
+	// IOSDeviceIDProblem says why the iOS device in probe.yaml is refused (it is not a UDID): the form shows the value and this, so it can be
+	// fixed here; a run refuses that probe.yaml until then. Load sets it; Save ignores it.
+	IOSDeviceIDProblem string `json:"iosDeviceIdProblem,omitempty"`
 	// Base is the form as it was loaded. Save writes only the fields that differ from it, and refuses when probe.yaml has changed on disk
 	// since then for any of them (an editor, git or another window may have written it), so a field the person did not touch is never put
 	// back to an old value.
@@ -43,9 +47,14 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 	if workspace == "" {
 		return WorkspaceSettings{}, fmt.Errorf("workspace path is required")
 	}
-	cfg, err := config.Load(workspace)
+	// An iOS device that is not a UDID does not fail the load here: the form shows it and says why, so it can be fixed (a run refuses it).
+	cfg, iosErr, err := config.LoadForRepair(workspace)
 	if err != nil {
 		return WorkspaceSettings{}, fmt.Errorf("loading probe.yaml: %w", err)
+	}
+	problem := ""
+	if iosErr != nil {
+		problem = fmt.Sprintf("%q is not a UDID: use the UDID of a simulator or of a device, as `probe device list` shows it; a run refuses this probe.yaml until it is fixed", iosErr.ID)
 	}
 	ai, err := readAIContext(workspace)
 	if err != nil {
@@ -62,6 +71,7 @@ func (a *App) LoadWorkspaceSettings(workspace string) (WorkspaceSettings, error)
 		AndroidDeviceID:         cfg.Device.AndroidDeviceID,
 		AIContextRunResults:     ai.RunResults,
 		AIContextWidgetTree:     ai.WidgetTree,
+		IOSDeviceIDProblem:      problem,
 	}, nil
 }
 
@@ -84,9 +94,13 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 	if err != nil {
 		return err
 	}
-	// What the file says now, as the form shows it. A probe.yaml the engine cannot read leaves nothing to compare with.
+	// What the file says now, as the form shows it. A probe.yaml the engine cannot read (other than an iOS device that is not a UDID, which
+	// the form shows so it can be fixed) leaves nothing to compare with: no change on disk is claimed then, and the checks below refuse the
+	// save with the real reason.
 	var disk WorkspaceSettings
-	if cur, err := a.LoadWorkspaceSettings(workspace); err == nil {
+	cur, loadErr := a.LoadWorkspaceSettings(workspace)
+	diskRead := loadErr == nil
+	if diskRead {
 		disk = cur
 	}
 	base := disk
@@ -105,6 +119,10 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 	}
 	if err := validateRunKnobs(s, base); err != nil {
 		return err
+	}
+	// device.ios_device_id follows the CLI's rule (config load): a simulator UDID or a device UDID, or nothing.
+	if id := strings.TrimSpace(s.IOSDeviceID); s.IOSDeviceID != base.IOSDeviceID && id != "" && !ios.ValidSimulatorUDID(id) && !ios.ValidDeviceUDID(id) {
+		return fmt.Errorf("iosDeviceId %q is not a UDID: use the UDID of a simulator or of a device, as `probe device list` shows it", id)
 	}
 	type edit struct {
 		name    string
@@ -125,7 +143,7 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 		{"the AI run results switch", s.AIContextRunResults != base.AIContextRunResults, disk.AIContextRunResults == base.AIContextRunResults, s.AIContextRunResults, []string{"studio", "ai_context", "run_results"}},
 		{"the AI widget tree switch", s.AIContextWidgetTree != base.AIContextWidgetTree, disk.AIContextWidgetTree == base.AIContextWidgetTree, s.AIContextWidgetTree, []string{"studio", "ai_context", "widget_tree"}},
 	} {
-		if e.changed && !e.onDisk {
+		if e.changed && diskRead && !e.onDisk {
 			return fmt.Errorf("probe.yaml changed on disk since the form was loaded (%s): close Settings and open it again, then make the change again", e.name)
 		}
 	}

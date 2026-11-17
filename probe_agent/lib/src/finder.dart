@@ -192,7 +192,7 @@ class ProbeFinder {
               }
             });
           }
-          return results;
+          return _oncePerText(results);
         }
         raw = _findByText(text);
 
@@ -242,7 +242,7 @@ class ProbeFinder {
         results.add(e);
       }
     });
-    if (results.isNotEmpty) return results;
+    if (results.isNotEmpty) return _oncePerText(results);
     // Nothing shows this text: fall back to what the app labels for assistive
     // technology and hover help — a Semantics label or a Tooltip message (an
     // icon button has no Text, only a tooltip). Only when no visible text matches, so
@@ -294,6 +294,27 @@ class ProbeFinder {
       _loose ? foldedContains(haystack, needle) : haystack.contains(needle);
 
   bool _loose = false;
+
+  /// One element per visible text (issue #800): a [Text] builds a [RichText] inside it, and both match the same text, so `see exactly 1`
+  /// found 2 and an ordinal could pick the inner one. A [RichText] whose nearest [Text] above it (the one that built it) is also in
+  /// [matches] is left out; the [Text] stays (its render object is the same paragraph). A [RichText] of its own, and a `Text.rich` (which
+  /// matches only through its [RichText]), are kept.
+  List<Element> _oncePerText(List<Element> matches) {
+    final texts = matches.where((e) => e.widget is Text).toSet();
+    if (texts.isEmpty) return matches;
+    return matches.where((e) {
+      if (e.widget is! RichText) return true;
+      Element? builtBy;
+      e.visitAncestorElements((a) {
+        if (a.widget is Text) {
+          builtBy = a;
+          return false;
+        }
+        return a.widget is! RichText; // stop at another RichText: this one is not the inner paragraph of a Text above it
+      });
+      return builtBy == null || !texts.contains(builtBy);
+    }).toList();
+  }
 
   /// Whether [e] is a widget that shows [text]. The value of an obscured field (a password) is never a match target: a selector that could
   /// find a field by the text it holds would let a test learn the value by asking about it, one prefix at a time. The field is still found by its

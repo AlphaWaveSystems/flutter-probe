@@ -1,0 +1,970 @@
+{
+ "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none; asks (Go itself requires a person's answer in the window, and without a window or an answer the action is not done: no window means no); previewed (Go compares what the call names with what it holds and refuses on a mismatch: a destination label that must still be the current one, a preview id that must exist, a host that must have been checked. For an id or a checked host an earlier preview must have happened, for a destination label only the comparison does. Nothing in Go asks a person, and a script that holds the bridge token can make the preview itself); answers (it is the answer); native-dialog (only a person in a native dialog can drive it). decision: required for an aiProvider or network method with confirm none and for every previewed method, to say why no person is asked in Go (or what the window does instead). touches is checked against the code, for the four kinds the walk knows (keychain, files, network, devices): a call graph of the Studio sources is walked from each method (bound_methods_derive_test.go), following every name of the package that a function mentions, package variables that hold functions, and any use of a sink package's name (a call, a function value, a package client such as http.DefaultClient); a sink that the method can reach and the entry does not list fails the test. An entry may list more. The sinks are listed at the top of that file. What the walk does not see, so touches can still understate there: a function value or an interface that is assigned inside another function (only package variables are followed), a method called on a value that is not named like a function of the package, calls through reflection, a package that is not a listed sink (the Wails runtime, os/signal, the standard library's other file and network calls), the runner functions other than New and NewExecutor, and what a sink package does beyond the functions listed for it. automationInternal: the unexported methods the automation endpoint reaches, which are not bound but are what a script that holds its token can do.",
+ "methods": [
+  {
+   "method": "AIChatLabel",
+   "category": "readsWorkspace",
+   "does": "The chat header's line (provider and model), made from the workspace's probe.yaml and the keychain's saved key (the key is read to know whether one is set, never shown).",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "AIChatLabelParts",
+   "category": "readsWorkspace",
+   "does": "The chat header's line in three parts for the header, made from the same settings as AIChatLabel (probe.yaml and the keychain's saved key).",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "AllowHost",
+   "category": "network",
+   "does": "Allows requests to one host:port for the rest of the session, at the strength CheckTarget showed.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "network"
+   ],
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go requires an earlier CheckTarget for the host and refuses an address that is never allowed, but nothing in Go asks a person. The window shows where the host leads and asks before it calls AllowHost; a bridge-token script can call CheckTarget and AllowHost itself."
+  },
+  {
+   "method": "AnswerConfirm",
+   "category": "confirm",
+   "does": "The window's answer to a pending confirmation (clear data, a send); counts only for the request with that id.",
+   "callers": [
+    "window"
+   ],
+   "touches": [],
+   "confirm": "answers"
+  },
+  {
+   "method": "ApplyDeviceSetting",
+   "category": "device",
+   "does": "Changes one setting (language, dark mode, ...) on the connected device.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "BuildCallStep",
+   "category": "ui",
+   "does": "Builds the step lines for a request typed in the panel; reads nothing and writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "CanExportRunResults",
+   "category": "ui",
+   "does": "Says whether a finished run's report exists and no run is going.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "CancelRun",
+   "category": "runControl",
+   "does": "Stops the run in progress.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "Chat",
+   "category": "aiProvider",
+   "does": "Sends a conversation, the open file and (when their switches are on) the last run and the widget tree to the provider the workspace configures, after the outbound gate (redaction and bounds).",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Decided: no confirmation in Go. The window asks before the first send to a destination it has not confirmed (confirmFirstChatSend, after PreviewAIChat shows the text and where it goes); nothing in Go ties a send to a preview, so a script with the bridge token can call Chat without one, as it can ExplainLastRun. The same gap the AI plan already records for Explain; closing it is a product decision, not made here."
+  },
+  {
+   "method": "CheckReplaceLine",
+   "category": "ui",
+   "does": "Says whether a suggestion may replace the failed step's line in the text the window holds; reads nothing from disk and writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "CheckTarget",
+   "category": "network",
+   "does": "Says where a request to a URL would go and whether its host is allowed yet; looks the name up.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Looks the name up and reports where a request would go; it sends no request and no content."
+  },
+  {
+   "method": "CloseWorkspace",
+   "category": "workspaceRoot",
+   "does": "Closes the workspace a person opened: it does what SetWorkspace does with no folder (so the reads and writes of the old folder stop being allowed) but only in memory, which is why touches is empty; refused while a run or a recording is going, checked under the run slot's lock and the state lock together with the change; a run takes the slot and its workspace under the same two locks, so one of the two wins. A connection that exists is not dropped.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "Connect",
+   "category": "device",
+   "does": "Connects to a simulator, emulator or USB device and its agent (forwards a port, reads the token).",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "ConnectWiFi",
+   "category": "device",
+   "does": "Connects to an agent by address, port and a token that was typed or given.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "network"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "ConnectWiFiSaved",
+   "category": "device",
+   "does": "Connects to an agent with the token saved in the keychain for a device name; the token never reaches the window.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "asks"
+  },
+  {
+   "method": "DeleteAPIKey",
+   "category": "secrets",
+   "does": "Removes the stored AI API key from the keychain.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "DeviceListNote",
+   "category": "device",
+   "does": "One line about why Android devices may be missing (adb not found); looks for adb.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "Disconnect",
+   "category": "device",
+   "does": "Closes the agent connection and its port forwards.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "ExplainAvailability",
+   "category": "readsWorkspace",
+   "does": "Says whether an explanation can be offered for the last run's failure.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "ExplainLastRun",
+   "category": "aiProvider",
+   "does": "Asks the AI provider for advice on each failed test of the last run.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Decided: no confirmation in Go; the window shows the preview of a hosted destination first and sends through ExplainPreviewed, which rechecks the destination. ExplainLastRun is the unpreviewed form, still bound (the same gap as Chat)."
+  },
+  {
+   "method": "ExplainPreviewed",
+   "category": "aiProvider",
+   "does": "Sends the explain request the person previewed, only to the destination the preview showed.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go compares the destination label it is given with the current one and stops on a mismatch (no preview has to have happened first); nothing in Go asks a person. The window shows the preview of a hosted destination first."
+  },
+  {
+   "method": "ExportRunResults",
+   "category": "writesOutside",
+   "does": "Saves the last run's results as JSON or JUnit to a path chosen in a native dialog.",
+   "callers": [
+    "window"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "native-dialog"
+  },
+  {
+   "method": "FindLocalModels",
+   "category": "network",
+   "does": "Asks the machine's own model server which models it has.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Asks model servers on this machine (loopback only) which models they have and sends no workspace content, so there is nothing to confirm."
+  },
+  {
+   "method": "ForgetWiFiToken",
+   "category": "secrets",
+   "does": "Removes the WiFi token saved for a device name.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "GetAPIKey",
+   "category": "secrets",
+   "does": "Reports whether an AI API key is saved; never returns the key.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "GetDeviceSettings",
+   "category": "device",
+   "does": "What the settings panel can offer for the connected device.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "GetDeviceView",
+   "category": "device",
+   "does": "Starts the device view hub for the connected device and returns its address.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "network"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "GetStudioPrefs",
+   "category": "userPrefs",
+   "does": "The person's Studio preferences for the settings form.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "GetWidgetTree",
+   "category": "device",
+   "does": "One widget tree of the connected app.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "HTTPExchange",
+   "category": "device",
+   "does": "One recorded HTTP exchange of the app, redacted and cut.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "HTTPExchanges",
+   "category": "device",
+   "does": "The app's recorded HTTP exchanges, redacted, newest 500 at most.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "InitialWorkspace",
+   "category": "ui",
+   "does": "The workspace to open at start.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "Lint",
+   "category": "ui",
+   "does": "Parses ProbeScript text and returns diagnostics; reads nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "LintProblems",
+   "category": "readsWorkspace",
+   "does": "Checks an open file's editor text with the rules of `probe lint`; reads project files.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "ListAIModels",
+   "category": "aiProvider",
+   "does": "The model names the configured local endpoint reports.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Asks the configured local endpoint for its model names; no workspace content is sent, so there is nothing to confirm."
+  },
+  {
+   "method": "ListDevices",
+   "category": "device",
+   "does": "Connected emulators, simulators and USB devices.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "ListDir",
+   "category": "readsWorkspace",
+   "does": "Lists a folder inside the open workspace.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "LoadAISettings",
+   "category": "readsWorkspace",
+   "does": "Reads the provider form from the workspace's probe.yaml.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "LoadWorkspaceSettings",
+   "category": "readsWorkspace",
+   "does": "Reads the managed fields of the workspace's probe.yaml.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "PickWorkspace",
+   "category": "workspaceRoot",
+   "does": "Opens a native folder picker and returns the chosen path.",
+   "callers": [
+    "window"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "native-dialog"
+  },
+  {
+   "method": "PreviewAIChat",
+   "category": "aiProvider",
+   "does": "The text the next chat turn would send and where, after the gate; sends nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Sends nothing: it builds the text of the next chat turn and names the destination, so the person can decide."
+  },
+  {
+   "method": "PreviewExplain",
+   "category": "aiProvider",
+   "does": "What ExplainLastRun would send and where; sends nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Sends nothing: it builds what ExplainLastRun would send and names the destination."
+  },
+  {
+   "method": "PreviewSelectorFix",
+   "category": "aiProvider",
+   "does": "What a selector fix would send and where; sends nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Sends nothing: it builds what a selector fix would send and names the destination (the send is SelectorFixPreviewed, by the id this returns)."
+  },
+  {
+   "method": "ReadFile",
+   "category": "readsWorkspace",
+   "does": "Reads a .probe file inside the open workspace.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "RunFile",
+   "category": "runControl",
+   "does": "Parses and runs a .probe file on the connected device, in process.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "network"
+   ],
+   "confirm": "asks"
+  },
+  {
+   "method": "RunFileAsync",
+   "category": "runControl",
+   "does": "Starts RunFile in the background and returns at once.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "network"
+   ],
+   "confirm": "asks"
+  },
+  {
+   "method": "RunFileScoped",
+   "category": "runControl",
+   "does": "Runs part of a file (one test, a tag, or the failed tests).",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "network"
+   ],
+   "confirm": "asks"
+  },
+  {
+   "method": "RunState",
+   "category": "ui",
+   "does": "A snapshot of the current or last run.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "SaveAISettings",
+   "category": "writesWorkspace",
+   "does": "Writes the provider form into the workspace's probe.yaml; never writes a key.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "SaveWiFiToken",
+   "category": "secrets",
+   "does": "Keeps a WiFi token for a device name in the keychain.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "SaveWorkspaceSettings",
+   "category": "writesWorkspace",
+   "does": "Writes the changed managed fields of the workspace's probe.yaml.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "SelectorFixAttempts",
+   "category": "ui",
+   "does": "Studio's own record of selector-fix suggestions; writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "SelectorFixPreviewed",
+   "category": "aiProvider",
+   "does": "Sends the selector-fix request a preview returned, once.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go sends only the suggestion whose preview id it returned, once, and a change after the preview stops the send; nothing in Go asks a person (the window shows the preview)."
+  },
+  {
+   "method": "SendRequest",
+   "category": "network",
+   "does": "Sends an HTTP request to a host that was allowed; returns the answer redacted.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "network"
+   ],
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go refuses a host that was not allowed (AllowHost, at the strength CheckTarget showed), but nothing in Go asks a person; a bridge-token script can run CheckTarget, AllowHost and SendRequest without a window question. The window asks before AllowHost."
+  },
+  {
+   "method": "SetAPIKey",
+   "category": "secrets",
+   "does": "Stores the AI API key in the keychain.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "SetClearDataWithoutAsking",
+   "category": "userPrefs",
+   "does": "Turns the simulator/emulator shortcut for `clear app data` on or off; window only.",
+   "callers": [
+    "window"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "native-dialog"
+  },
+  {
+   "method": "SetWorkspace",
+   "category": "workspaceRoot",
+   "does": "Records the open workspace; reads and writes are confined to it.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "StartRecording",
+   "category": "runControl",
+   "does": "Tells the agent to record interactions as ProbeScript.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "StartWiFiDiscovery",
+   "category": "network",
+   "does": "Browses the local network for agents announcing _flutterprobe._tcp.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Listens for agents that announce themselves on the local network (mDNS) and sends no workspace content; a found device is never connected to or sent a token without ConnectWiFi or ConnectWiFiSaved, the second of which asks."
+  },
+  {
+   "method": "Status",
+   "category": "ui",
+   "does": "The current connection state for the indicator.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "StopRecording",
+   "category": "runControl",
+   "does": "Stops the recording and returns the assembled ProbeScript.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "devices"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "StopWiFiDiscovery",
+   "category": "network",
+   "does": "Cancels the network browse.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Stops the listening above; it sends nothing."
+  },
+  {
+   "method": "TakeScreenshot",
+   "category": "device",
+   "does": "One PNG of the connected device.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "TestAIConnection",
+   "category": "aiProvider",
+   "does": "Runs the checks of `probe ai doctor` against the saved provider (sends a fixed prompt).",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files",
+    "keychain",
+    "network"
+   ],
+   "confirm": "none",
+   "decision": "Sends one fixed test prompt and no workspace content; a person starts it from the settings dialog."
+  },
+  {
+   "method": "TestWiFi",
+   "category": "device",
+   "does": "Checks that an agent is reachable and accepts a token, then closes the connection.",
+   "callers": [
+    "window",
+    "bridge",
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "network"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "WiFiTokenSaved",
+   "category": "secrets",
+   "does": "Whether a WiFi token is saved for a device name; never returns it.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "keychain"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "WorkspaceNote",
+   "category": "readsWorkspace",
+   "does": "Checks the workspace's probe.yaml with the loader runs use.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
+   "method": "WriteFile",
+   "category": "writesWorkspace",
+   "does": "Saves a .probe file inside the open workspace.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  }
+ ],
+ "automationInternal": [
+  {
+   "method": "runFileAsync",
+   "category": "runControl",
+   "does": "Starts a run of a .probe file inside the automation roots on the connected device (the endpoint's run_file). A step `clear app data` reaches the same gate as a run from the window: it asks the window, and without a window it is not run; the person's own setting for simulators and emulators can answer it without asking.",
+   "callers": [
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "network"
+   ],
+   "confirm": "asks"
+  },
+  {
+   "method": "automationRoots",
+   "category": "readsWorkspace",
+   "does": "The folders the endpoint may read, list, open and run from: the workspace a person opened, PROBE_STUDIO_WORKSPACE and PROBE_STUDIO_AUTOMATION_ROOTS.",
+   "callers": [
+    "automation"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "useWorkspace",
+   "category": "workspaceRoot",
+   "does": "Opens a workspace for the endpoint's open_workspace without widening the roots the endpoint may touch.",
+   "callers": [
+    "automation"
+   ],
+   "touches": [],
+   "confirm": "none"
+  }
+ ]
+}

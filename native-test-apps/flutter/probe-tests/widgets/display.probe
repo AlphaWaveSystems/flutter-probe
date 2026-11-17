@@ -1,0 +1,58 @@
+# Needs the display build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=display (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+# A text selector matches a widget's whole text or any part of it, exactly: case and spaces count (see the negative variants).
+
+before each test
+  restart the app
+  # the last widget of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until "Taps: 0" appears
+
+test "a plain Text is seen by its whole text, a part of it, and contains"
+  see "Order total: 42.00"
+  see "42.00"
+  see "Order total" contains "42.00"
+
+test "the spans of a Text.rich are matched as one text, and each span as a part of it"
+  see "Hello world"
+  see "Hello"
+  see "world"
+  see "Hello world" contains "world"
+
+test "the spans of a RichText are matched as one text, and each span as a part of it"
+  see "Painted rich text"
+  see "rich text"
+  see "Painted rich text" contains "rich text"
+
+# What a user sees is cut ("Shipping address: 1600 Amphitheatre…"), but the selector matches the widget's whole string, the cut part included:
+# `see` checks the text the app gave the widget, not what was painted.
+test "a Text cut with an ellipsis is matched by its whole string, the part that is not painted included"
+  see "Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America"
+  see "United States of America"
+  see "Shipping address" contains "United States of America"
+
+test "every widget of the screen is found by its id"
+  see #wf_text
+  see #wf_ellipsis
+  see #wf_rich
+  see #wf_richtext
+  see #wf_icon
+  see #wf_image
+  see #wf_avatar
+  see #wf_logo
+
+# Widgets without text (docs/compat/NEXT.md, item 3). No text on this screen holds "Favorite", "Logo" or "AB", so each match below comes
+# from the widget itself. A semantic label is a text selector: when no visible text matches, the agent falls back to a Semantics label
+# (an Icon and an Image put their semanticLabel in one), as it does to a Tooltip message for an icon button. Reading that label back is
+# not supported yet: `see "Logo" contains "Logo"` reads "" (issue #818), so no test here reads it.
+test "an Icon and an Image are found by their semantic label"
+  see "Favorite"
+  see "Logo"
+
+test "a CircleAvatar is found and read by its text"
+  see "AB"
+  see "AB" contains "AB"
+
+test "tap on a FlutterLogo by its id reaches the GestureDetector around it"
+  see "Taps: 0"
+  tap #wf_logo
+  see "Taps: 1"

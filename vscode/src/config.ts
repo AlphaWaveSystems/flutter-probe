@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { isRegularFile, notFoundPath, resolveToolPath } from './toolPath';
 import { ProbeConfig } from './types';
 
 export function getConfig(): vscode.WorkspaceConfiguration {
@@ -12,34 +13,32 @@ export function getSetting<T>(key: string): T | undefined {
 }
 
 export function getProbePath(): string {
-  const configured = getSetting<string>('probePath');
-  if (configured && configured !== 'probe') {
-    return configured;
-  }
-  const ws = getWorkspaceRoot();
-  if (ws) {
-    const localBin = path.join(ws, 'bin', 'probe');
-    if (fs.existsSync(localBin)) {
-      return localBin;
-    }
-  }
-  return 'probe';
+  return toolPath('probePath', 'probe');
 }
 
 export function getConvertPath(): string {
-  const configured = getSetting<string>('convertPath');
-  if (configured && configured !== 'probe-convert') {
-    return configured;
-  }
-  const ws = getWorkspaceRoot();
-  if (ws) {
-    const localBin = path.join(ws, 'bin', 'probe-convert');
-    if (fs.existsSync(localBin)) {
-      return localBin;
-    }
-  }
-  return 'probe-convert';
+  return toolPath('convertPath', 'probe-convert');
 }
+
+// toolPath is the absolute path of the binary for a path setting (see toolPath.ts for the rules). When nothing is found it is an error,
+// on every system (notFoundPath).
+function toolPath(setting: string, defaultName: string): string {
+  const r = resolveToolPath({
+    configured: getSetting<string>(setting),
+    defaultName,
+    workspaceRoot: getWorkspaceRoot(),
+    useWorkspaceBinaries: getSetting<boolean>('useWorkspaceBinaries') === true,
+    trusted: vscode.workspace.isTrusted,
+    platform: process.platform,
+    pathEnv: process.env.PATH,
+    isFile: isRegularFile,
+    isAbsolute: path.isAbsolute,
+    join: path.join,
+  });
+  if ('path' in r) { return r.path; }
+  return notFoundPath(r, setting);
+}
+
 
 export function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

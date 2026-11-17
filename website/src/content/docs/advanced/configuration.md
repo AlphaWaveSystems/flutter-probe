@@ -164,7 +164,7 @@ Device/emulator management:
 | `boot_poll_interval` | duration | `2s` | Polling interval during boot |
 | `token_file_retries` | int | `5` | Retries for reading token file |
 | `restart_delay` | duration | `500ms` | Delay after force-stop before relaunch |
-| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag |
+| `ios_device_id` | string | — | Preferred iOS simulator UDID or physical device UDID. Overridden by `--device` flag. Must be a UDID: a simulator UDID (a UUID) or a device UDID, as `probe device list` shows it; anything else stops the config load. |
 | `android_device_id` | string | — | Preferred Android emulator serial or device serial. Overridden by `--device` flag |
 
 ### video
@@ -186,8 +186,12 @@ Device/emulator management:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `adb` | string | `adb` (PATH) | Path to ADB binary |
-| `flutter` | string | `flutter` (PATH) | Path to Flutter binary |
+| `adb` | string | `adb` (PATH) | Absolute path to the ADB binary, outside the repository |
+| `flutter` | string | `flutter` (PATH) | Absolute path to the Flutter binary, outside the repository |
+
+A `probe.yaml` belongs to the repository it sits in, so a path in it that points into that repository would run a program the repository carries. `probe test` and `probe doctor` (like Studio) use `tools.adb` and `tools.flutter` only when the value is an **absolute path to an executable file with the tool's name** (`adb`, or `adb.exe` on Windows; `flutter`, or `flutter.bat` or `flutter.exe` on Windows), **outside every repository the `probe.yaml` sits in** (each folder above it that holds a `.git`, up to the filesystem root, so a submodule's outer repository counts too), with symlinks resolved; a `probe.yaml` reached through a symlink is protected where it really is as well. Folders are compared as folders, not as text, so another spelling of the same folder (letter case on macOS or Windows) is still inside. Anything else stops the run with a message that names the key and says why.
+
+**Without a `.git`** (a Docker `COPY`, a `git archive`, a copied folder), only the `probe.yaml`'s own folder is protected: a tools path elsewhere in that copy passes. Keep the `.git`, or pass `--adb`/`--flutter` explicitly, when you run a copy you did not make yourself. To use a program from inside the repository on purpose, pass it as `--adb` or `--flutter`: a flag you type is used as given.
 
 ### ai
 

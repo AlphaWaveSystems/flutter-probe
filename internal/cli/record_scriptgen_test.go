@@ -37,7 +37,7 @@ func TestAnEventWithASelectorWithoutTextDoesNotPanic(t *testing.T) {
 		{At: time.Now(), Params: map[string]interface{}{"action": "type", "text": "hi", "selector": map[string]interface{}{}}},
 	}
 	got := generateProbeScript(events)
-	for _, want := range []string{"  tap the element\n", "  long press on \"Item\"\n", "  type \"hi\"\n"} {
+	for _, want := range []string{"  # could not record a selector for tap: add the step by hand.\n", "  long press on \"Item\"\n", "  type \"hi\"\n"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}

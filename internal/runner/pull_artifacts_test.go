@@ -45,7 +45,7 @@ func TestPullArtifacts_AndroidCopiesAHostScreenshotIntoTheReportsDir(t *testing.
 	dc := &DeviceContext{Manager: device.NewManager(), Platform: device.PlatformAndroid, Serial: "emulator-0"}
 	results := []TestResult{{Artifacts: []string{src}}}
 
-	PullArtifacts(context.Background(), results, dc, out)
+	PullArtifacts(context.Background(), results, dc, out, filepath.Dir(src)) // src's folder stands for the probelink client's save folder
 
 	got, err := os.ReadFile(filepath.Join(out, "failure.png"))
 	if err != nil || !bytes.Equal(got, pngMagic) {

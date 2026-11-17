@@ -38,11 +38,11 @@ func (e *Executor) reconnectHint(ctx context.Context) string {
 	if !p.alive(cctx) {
 		switch {
 		case e.appStopped:
-			return fmt.Sprintf(" — the app %s is not running: the test stopped it (`kill the app`); start it again with `open the app` or `restart the app`", dc.AppID)
+			return fmt.Sprintf(" — the app %s is not running: the test stopped it (`kill the app`); start it again with `open the app` or `restart the app`", dc.appShown())
 		case dc.CrashEvidence:
-			return fmt.Sprintf(" — the app %s is not running: it ended during this step (see the crash evidence for this test)", dc.AppID)
+			return fmt.Sprintf(" — the app %s is not running: it ended during this step (see the crash evidence for this test)", dc.appShown())
 		default:
-			return fmt.Sprintf(" — the app %s is not running: it ended during this step (run with --crash-evidence to see why)", dc.AppID)
+			return fmt.Sprintf(" — the app %s is not running: it ended during this step (run with --crash-evidence to see why)", dc.appShown())
 		}
 	}
 	return device.ConnectHint(cctx, runner, dc.Serial, dc.Port, dc.devicePort(), dc.AppID)
