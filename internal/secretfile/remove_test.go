@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -136,5 +137,153 @@ func TestStaleTemporaryFilesAreCleanedAtTheNextWrite(t *testing.T) {
 	}
 	if _, err := os.Lstat(foreign); err != nil {
 		t.Error("a temporary file of another user was removed")
+	}
+}
+
+// Only the temporary files this package makes are removed: a name that merely starts with the file's name is the person's own file.
+func TestOnlyExactTemporaryNamesAreRemoved(t *testing.T) {
+	skipWithoutModes(t)
+	dir := priv(t)
+	old := time.Now().Add(-time.Hour)
+	mk := func(name string, mode os.FileMode) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("data\n"), mode); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Chmod(p, mode)
+		_ = os.Chtimes(p, old, old)
+		return p
+	}
+	gone := []string{mk("secret.123", 0o600), mk("secret.4294967295", 0o600), mk("secret.0", 0o600)}
+	kept := map[string]string{
+		"a backup":                   mk("secret.bak", 0o600),
+		"notes":                      mk("secret.notes.txt", 0o600),
+		"digits and letters":         mk("secret.123abc", 0o600),
+		"letters and digits":         mk("secret.abc123", 0o600),
+		"too many digits":            mk("secret.12345678901", 0o600),
+		"a dot and nothing":          mk("secret.", 0o600),
+		"two suffixes":               mk("secret.12.34", 0o600),
+		"a temporary name, mode 644": mk("secret.555", 0o644),
+		"another name":               mk("secrets.123", 0o600),
+		"a prefix only":              mk("secre.123", 0o600),
+		"the file itself":            mk("secret", 0o600),
+	}
+	_ = os.Mkdir(filepath.Join(dir, "secret.456"), 0o700)
+	if err := os.Symlink(filepath.Join(dir, "secret"), filepath.Join(dir, "secret.789")); err == nil {
+		_ = exec.Command("touch", "-h", "-t", "200001010000", filepath.Join(dir, "secret.789")).Run()
+	}
+	if _, _, err := Write(opts(dir)); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range gone {
+		if _, err := os.Lstat(p); !os.IsNotExist(err) {
+			t.Errorf("%s: a stale temporary file was left", filepath.Base(p))
+		}
+	}
+	for what, p := range kept {
+		if _, err := os.Lstat(p); err != nil {
+			t.Errorf("%s (%s) was removed: it is not a temporary file of this package", what, filepath.Base(p))
+		}
+	}
+	if fi, err := os.Lstat(filepath.Join(dir, "secret.456")); err != nil || !fi.IsDir() {
+		t.Error("a folder named like a temporary file was removed")
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "secret.789")); err != nil {
+		t.Error("a link named like a temporary file was removed")
+	}
+}
+
+// A name made of glob characters widens nothing: with the file named `*`, the person's other files stay.
+func TestAGlobNameRemovesNothingElse(t *testing.T) {
+	skipWithoutModes(t)
+	dir := priv(t)
+	old := time.Now().Add(-time.Hour)
+	for _, n := range []string{"keep.txt", "keep.123", "a.123", "b.123", "x.123"} {
+		p := filepath.Join(dir, n)
+		_ = os.WriteFile(p, []byte("mine\n"), 0o600)
+		_ = os.Chtimes(p, old, old)
+	}
+	for _, name := range []string{"*", "[ab]", "?"} {
+		o := opts(dir)
+		o.Name = name
+		if _, _, err := Write(o); err != nil {
+			t.Fatalf("name %q: %v", name, err)
+		}
+	}
+	for _, n := range []string{"keep.txt", "keep.123", "a.123", "b.123", "x.123"} {
+		if _, err := os.Lstat(filepath.Join(dir, n)); err != nil {
+			t.Errorf("%s was removed through a glob name", n)
+		}
+	}
+}
+
+// The name is swapped between the check and the open (a race an attacker in a writable folder could try): what was swapped in is not removed, and
+// a pipe swapped in does not make Remove wait.
+func TestARaceBetweenTheCheckAndTheOpenRemovesNothingElse(t *testing.T) {
+	skipWithoutModes(t)
+	saved := removeHook
+	defer func() { removeHook = saved }()
+	t.Run("another file with the same content", func(t *testing.T) {
+		dir := priv(t)
+		path := filepath.Join(dir, "secret")
+		_ = os.WriteFile(path, []byte("token-1\n"), 0o600)
+		other := filepath.Join(dir, "other")
+		_ = os.WriteFile(other, []byte("token-1\n"), 0o600)
+		removeHook = func() { _ = os.Rename(other, path) } // a different file, same size and content, is at the name now
+		Remove(path, "token-1\n")
+		if b, err := os.ReadFile(path); err != nil || string(b) != "token-1\n" {
+			t.Error("a file that was swapped in after the check was removed")
+		}
+	})
+	t.Run("a link to a file with the same content", func(t *testing.T) {
+		dir := priv(t)
+		path := filepath.Join(dir, "secret")
+		_ = os.WriteFile(path, []byte("token-1\n"), 0o600)
+		target := filepath.Join(priv(t), "t")
+		_ = os.WriteFile(target, []byte("token-1\n"), 0o600)
+		removeHook = func() { _ = os.Remove(path); _ = os.Symlink(target, path) }
+		Remove(path, "token-1\n")
+		if _, err := os.Stat(target); err != nil {
+			t.Error("the link's target was removed")
+		}
+		if _, err := os.Lstat(path); err != nil {
+			t.Error("a link that was swapped in after the check was removed")
+		}
+	})
+	t.Run("a pipe", func(t *testing.T) {
+		dir := priv(t)
+		path := filepath.Join(dir, "secret")
+		_ = os.WriteFile(path, []byte("token-1\n"), 0o600)
+		removeHook = func() {
+			_ = os.Remove(path)
+			_ = syscall.Mkfifo(path, 0o600)
+		}
+		within(t, 3*time.Second, "Remove with a pipe swapped in", func() { Remove(path, "token-1\n") })
+	})
+}
+
+// A huge file at the name is not read into memory: the size is checked before the open, and a read is capped at the content's size plus one.
+func TestRemoveDoesNotReadAHugeFile(t *testing.T) {
+	skipWithoutModes(t)
+	dir := priv(t)
+	path := filepath.Join(dir, "secret")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(1 << 30); err != nil { // a sparse file of a gigabyte
+		f.Close()
+		t.Skipf("no sparse files here: %v", err)
+	}
+	f.Close()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	Remove(path, "token-1\n")
+	runtime.ReadMemStats(&after)
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 8<<20 {
+		t.Errorf("Remove allocated %d bytes for a file it should not have read", grew)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Error("a file of another size was removed")
 	}
 }
