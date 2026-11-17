@@ -186,8 +186,8 @@ func init() {
 	f.String("cloud-provider", "", "cloud device farm provider (browserstack, aws, saucelabs, lambdatest, firebase [deprecated by its vendor]); all are implemented but not yet verified on a live account, and every one needs a relay service (see https://flutterprobe.dev/tools/cloud-farms/)")
 	f.String("cloud-app", "", "path to app binary (.apk/.ipa) to upload to cloud provider")
 	f.String("cloud-device", "", "target device name on the cloud provider")
-	f.String("cloud-key", "", "cloud provider API key or username")
-	f.String("cloud-secret", "", "cloud provider API secret or access key")
+	f.String("cloud-key", "", "cloud provider API key or username (or set PROBE_CLOUD_KEY, which keeps it out of the process list and shell history)")
+	f.String("cloud-secret", "", "cloud provider API secret or access key (or set PROBE_CLOUD_SECRET, which keeps it out of the process list and shell history)")
 
 	// x402 pay-per-use
 	f.String("pay", "", `experimental: payment method for uploads to a cloud endpoint you configure (no hosted service is provided yet)`)
@@ -197,7 +197,7 @@ func init() {
 	f.Bool("relay", false, "force enable relay mode for cloud device farm testing")
 	f.Bool("no-relay", false, "force disable relay mode (use direct port forwarding)")
 	f.String("relay-url", "", "reuse an existing relay session (WebSocket URL) — skips relay creation")
-	f.String("relay-token", "", "CLI auth token for the existing relay session (used with --relay-url)")
+	f.String("relay-token", "", "CLI auth token for the existing relay session (used with --relay-url; or set PROBE_RELAY_CLI_TOKEN, which keeps it out of the process list and shell history)")
 	f.String("relay-session-id", "", "existing relay session ID for status polling and cleanup")
 
 	// Animation control
@@ -537,8 +537,8 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 	cloudProvider, _ := cmd.Flags().GetString("cloud-provider")
 	cloudApp, _ := cmd.Flags().GetString("cloud-app")
 	cloudDevice, _ := cmd.Flags().GetString("cloud-device")
-	cloudKey, _ := cmd.Flags().GetString("cloud-key")
-	cloudSecret, _ := cmd.Flags().GetString("cloud-secret")
+	cloudKey := secretFlag(cmd, "cloud-key")
+	cloudSecret := secretFlag(cmd, "cloud-secret")
 
 	// Apply CLI overrides for cloud provider config
 	if cloudProvider == "" {
@@ -747,7 +747,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				// Check if an existing relay session was provided (pre-created
 				// in CI so the relay URL can be baked into the APK at build time)
 				existingRelayURL, _ := cmd.Flags().GetString("relay-url")
-				existingRelayToken, _ := cmd.Flags().GetString("relay-token")
+				existingRelayToken := secretFlag(cmd, "relay-token")
 				existingRelaySessionID, _ := cmd.Flags().GetString("relay-session-id")
 
 				var relayURL, cliToken, relaySessionID string

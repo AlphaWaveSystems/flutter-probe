@@ -15,13 +15,39 @@ import { ProbeCodeLensProvider } from './providers/codelens';
 import { DiagnosticsProvider } from './providers/diagnostics';
 import { ProbeCompletionProvider } from './providers/completions';
 import { RunProfilePanel } from './views/runProfile';
-import { buildTestArgs, getProbeCommand } from './probe';
+import { buildTestRun, getProbeCommand } from './probe';
 import { runInTerminal } from './terminal/probeTerminal';
 import { getWorkspaceRoot } from './config';
 import { disposeAllTerminals } from './terminal/probeTerminal';
 import { Session } from './types';
+import { SECRET_SETTINGS, staleWorkspaceSettings } from './secretArgs';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// noticeStaleWorkspaceSettings says once per workspace that machine-scoped settings in its .vscode/settings.json are ignored. VS Code
+// drops them without a word; a user who had them there would otherwise see cloud runs fail with no reason.
+function noticeStaleWorkspaceSettings(context: vscode.ExtensionContext): void {
+  const ws = getWorkspaceRoot();
+  if (!ws || context.workspaceState.get<boolean>('flutterprobe.staleSettingsNoticed')) { return; }
+  let text = '';
+  try {
+    text = fs.readFileSync(path.join(ws, '.vscode', 'settings.json'), 'utf8');
+  } catch {
+    return;
+  }
+  const stale = staleWorkspaceSettings(text, SECRET_SETTINGS);
+  if (stale.length === 0) { return; }
+  void context.workspaceState.update('flutterprobe.staleSettingsNoticed', true);
+  void vscode.window.showWarningMessage(
+    `FlutterProbe ignores ${stale.map(k => 'flutterprobe.' + k).join(', ')} in this workspace's .vscode/settings.json: ` +
+    'they can be set only in your user settings now: the secrets, and the relay URL and the cloud provider that decide where they are sent, ' +
+    'cannot come from a workspace. Which binary the extension runs is a separate setting (Tool Paths in the README). Move them to your user settings.',
+  );
+}
 
 export function activate(context: vscode.ExtensionContext): void {
+  noticeStaleWorkspaceSettings(context);
+
   // Register all command groups
   registerTestCommands(context);
   registerLintCommands(context);
@@ -86,18 +112,18 @@ export function activate(context: vscode.ExtensionContext): void {
 
 // probe test has no per-test filter in this version: these run the file that holds the test.
 function runTestOnDevice(filePath: string, session: Session): void {
-  const args = buildTestArgs(filePath, {
+  const run = buildTestRun(filePath, {
     device: session.device.serial,
     port: session.port,
     config: session.config,
     autoConfirm: true,
   });
-  runInTerminal(`Probe: ${session.name}`, getProbeCommand(), args, getWorkspaceRoot());
+  runInTerminal(`Probe: ${session.name}`, getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
 function runTestVerbose(filePath: string): void {
-  const args = buildTestArgs(filePath, { verbose: true });
-  runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+  const run = buildTestRun(filePath, { verbose: true });
+  runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
 export function deactivate(): void {
