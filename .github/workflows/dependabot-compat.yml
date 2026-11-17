@@ -26,6 +26,9 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       npm: ${{ steps.filter.outputs.npm }}
       actions: ${{ steps.filter.outputs.actions }}
+      go_studio: ${{ steps.filter.outputs.go_studio }}
+      npm_studio: ${{ steps.filter.outputs.npm_studio }}
+      npm_vscode: ${{ steps.filter.outputs.npm_vscode }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -42,6 +45,15 @@ jobs:
               - 'website/package-lock.json'
             actions:
               - '.github/workflows/**'
+            go_studio:
+              - 'studio/go.mod'
+              - 'studio/go.sum'
+            npm_studio:
+              - 'studio/frontend/package.json'
+              - 'studio/frontend/package-lock.json'
+            npm_vscode:
+              - 'vscode/package.json'
+              - 'vscode/package-lock.json'
 
   # ---- Go dependency updates ----
   go-compat:
@@ -173,10 +185,12 @@ jobs:
         run: go test ./... -count=1 -timeout 5m
 
   # ---- Security audit ----
+  # The npm audit runs for every npm project whose files changed (the website, Studio's frontend, the VS Code extension); it fails on a high or critical
+  # finding in a production dependency. A finding in a dev dependency (the two moderate minimatch ones in vsce, today) is known and does not fail it.
   security:
     name: Security audit
     needs: changes
-    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true'
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true' || needs.changes.outputs.npm_studio == 'true' || needs.changes.outputs.npm_vscode == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -198,65 +212,88 @@ jobs:
           cd tools/probe-convert && govulncheck ./... || true
 
       - uses: actions/setup-node@v7
-        if: needs.changes.outputs.npm == 'true'
+        if: needs.changes.outputs.npm == 'true' || needs.changes.outputs.npm_studio == 'true' || needs.changes.outputs.npm_vscode == 'true'
         with:
           node-version: "22.23.4"
 
       - name: npm audit
-        if: needs.changes.outputs.npm == 'true'
+        if: needs.changes.outputs.npm == 'true' || needs.changes.outputs.npm_studio == 'true' || needs.changes.outputs.npm_vscode == 'true'
+        env:
+          CHANGED_WEBSITE: ${{ needs.changes.outputs.npm }}
+          CHANGED_STUDIO: ${{ needs.changes.outputs.npm_studio }}
+          CHANGED_VSCODE: ${{ needs.changes.outputs.npm_vscode }}
         run: |
-          cd website && npm ci
-          npm audit --omit=dev || true
-          # Fail only on critical/high vulnerabilities
-          npm audit --omit=dev --audit-level=high
+          dirs=""
+          if [ "$CHANGED_WEBSITE" = "true" ]; then dirs="$dirs website"; fi
+          if [ "$CHANGED_STUDIO" = "true" ]; then dirs="$dirs studio/frontend"; fi
+          if [ "$CHANGED_VSCODE" = "true" ]; then dirs="$dirs vscode"; fi
+          for d in $dirs; do
+            echo "=== npm audit: $d ==="
+            (cd "$d" && npm ci --ignore-scripts --no-fund)
+            (cd "$d" && npm audit --omit=dev || true)
+            # Fail only on critical/high vulnerabilities of production dependencies
+            (cd "$d" && npm audit --omit=dev --audit-level=high)
+          done
 
   # ---- License compliance ----
+  # FlutterProbe is BSL 1.1 (CLI) and MIT (parts of the repository): a dependency under a strong copyleft licence (GPL, AGPL, SSPL, EUPL) that is mandatory for
+  # its users cannot be shipped. scripts/licensecheck reads the licence EXPRESSION (the old `license-checker --failOn` compared the whole string with a list, so
+  # "GPL-3.0-or-later" and "(GPL-3.0 AND MIT)" passed it). It checks the three Go modules and the three npm projects; an LGPL, unknown or custom licence is a note,
+  # and the reviewed ones are in scripts/licensecheck/allowlist.txt, each with a reason. The check tests itself first, so it cannot rot unnoticed.
   license:
     name: License compliance
     needs: changes
-    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.npm == 'true'
+    if: >-
+      needs.changes.outputs.go == 'true' || needs.changes.outputs.go_studio == 'true' || needs.changes.outputs.npm == 'true' ||
+      needs.changes.outputs.npm_studio == 'true' || needs.changes.outputs.npm_vscode == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
-        if: needs.changes.outputs.go == 'true'
         with:
           go-version: "1.26.10"
           check-latest: true
           cache: true
 
-      - name: Check Go dependency licenses
-        if: needs.changes.outputs.go == 'true'
-        run: |
-          go install github.com/google/go-licenses@latest
-          echo "=== Checking for GPL/AGPL/SSPL licenses (incompatible with BSL) ==="
-          VIOLATIONS=$(go-licenses report ./... 2>/dev/null | grep -iE "GPL|AGPL|SSPL|EUPL" | grep -v "Apache" || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "⚠️  Potentially incompatible licenses found:"
-            echo "$VIOLATIONS"
-            echo ""
-            echo "FlutterProbe uses BSL 1.1. GPL/AGPL dependencies may create license conflicts."
-            echo "Review these dependencies before merging."
-            exit 1
-          fi
-          echo "✓ No incompatible licenses detected"
-
       - uses: actions/setup-node@v7
-        if: needs.changes.outputs.npm == 'true'
+        if: needs.changes.outputs.npm == 'true' || needs.changes.outputs.npm_studio == 'true' || needs.changes.outputs.npm_vscode == 'true'
         with:
           node-version: "22.23.4"
 
-      - name: Check npm dependency licenses
-        if: needs.changes.outputs.npm == 'true'
+      - name: Self-test of the licence check
+        run: go test ./scripts/licensecheck/ -count=1
+
+      - name: Check Go dependency licenses
+        if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_studio == 'true'
         run: |
-          cd website && npm ci
-          npx license-checker --failOn "GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;SSPL-1.0;EUPL-1.1;EUPL-1.2" \
-            --excludePrivatePackages 2>&1 || {
-            echo "⚠️  Incompatible license found in npm dependencies"
-            exit 1
-          }
-          echo "✓ No incompatible npm licenses detected"
+          go install github.com/google/go-licenses@v1.6.0
+          # Studio embeds its built frontend; go-licenses only needs the pattern to match
+          mkdir -p studio/frontend/dist && echo '<html></html>' > studio/frontend/dist/index.html
+          for m in . tools/probe-convert studio; do
+            out="$RUNNER_TEMP/go-licenses-$(echo "$m" | tr / -).csv"
+            echo "=== Go licences: $m ==="
+            (cd "$m" && "$(go env GOPATH)/bin/go-licenses" report ./... > "$out" 2> "$RUNNER_TEMP/go-licenses.err") || { cat "$RUNNER_TEMP/go-licenses.err"; exit 1; }
+            go run ./scripts/licensecheck go "$out" --own github.com/alphawavesystems/ --allow scripts/licensecheck/allowlist.txt
+          done
+
+      - name: Check npm dependency licenses
+        if: needs.changes.outputs.npm == 'true' || needs.changes.outputs.npm_studio == 'true' || needs.changes.outputs.npm_vscode == 'true'
+        env:
+          CHANGED_WEBSITE: ${{ needs.changes.outputs.npm }}
+          CHANGED_STUDIO: ${{ needs.changes.outputs.npm_studio }}
+          CHANGED_VSCODE: ${{ needs.changes.outputs.npm_vscode }}
+        run: |
+          dirs=""
+          if [ "$CHANGED_WEBSITE" = "true" ]; then dirs="$dirs website"; fi
+          if [ "$CHANGED_STUDIO" = "true" ]; then dirs="$dirs studio/frontend"; fi
+          if [ "$CHANGED_VSCODE" = "true" ]; then dirs="$dirs vscode"; fi
+          for d in $dirs; do
+            out="$RUNNER_TEMP/license-checker-$(echo "$d" | tr / -).json"
+            echo "=== npm licences: $d ==="
+            (cd "$d" && npm ci --ignore-scripts --no-audit --no-fund && npx --yes license-checker@25.0.1 --excludePrivatePackages --json > "$out")
+            go run ./scripts/licensecheck npm "$out" --allow scripts/licensecheck/allowlist.txt
+          done
 
   # ---- Auto-approve safe updates ----
   # Auto-merge is intentionally NOT triggered here — the 7-day soak period is

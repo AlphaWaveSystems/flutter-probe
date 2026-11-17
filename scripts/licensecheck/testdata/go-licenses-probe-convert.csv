@@ -1,0 +1,15 @@
+github.com/alphawavesystems/probe-convert,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/catalog,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/cmd,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/convert,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/convert/appium,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/convert/detox,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/convert/gherkin,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/convert/maestro,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/convert/robot,Unknown,Unknown
+github.com/alphawavesystems/probe-convert/ui,Unknown,Unknown
+github.com/spf13/cobra,https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt,Apache-2.0
+github.com/spf13/pflag,https://github.com/spf13/pflag/blob/v1.1.0/LICENSE,BSD-3-Clause
+golang.org/x/sys/unix,https://cs.opensource.google/go/x/sys/+/v0.50.0:LICENSE,BSD-3-Clause
+golang.org/x/term,https://cs.opensource.google/go/x/term/+/v0.48.0:LICENSE,BSD-3-Clause
+gopkg.in/yaml.v3,https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE,MIT

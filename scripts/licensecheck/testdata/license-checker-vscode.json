@@ -1,0 +1,46 @@
+{
+  "@types/node@26.6.6": {
+    "licenses": "MIT",
+    "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+  },
+  "@vscode/vsce-sign-darwin-arm64@2.0.8": {
+    "licenses": "UNKNOWN",
+    "repository": "https://github.com/Microsoft/node-vscode-sign"
+  },
+  "@vscode/vsce-sign@2.1.1": {
+    "licenses": "Custom: https://dev.azure.com/monacotools/Monaco/",
+    "repository": ""
+  },
+  "@vscode/vsce@4.1.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/Microsoft/vsce"
+  },
+  "binaryextensions@6.11.0": {
+    "licenses": "Artistic-2.0",
+    "repository": "https://github.com/bevry/binaryextensions"
+  },
+  "editions@6.22.0": {
+    "licenses": "Artistic-2.0",
+    "repository": "https://github.com/bevry/editions"
+  },
+  "flutterprobe@0.27.0": {
+    "licenses": "UNKNOWN",
+    "repository": "https://github.com/AlphaWaveSystems/flutter-probe"
+  },
+  "istextorbinary@9.5.0": {
+    "licenses": "Artistic-2.0",
+    "repository": "https://github.com/bevry/istextorbinary"
+  },
+  "textextensions@6.11.0": {
+    "licenses": "Artistic-2.0",
+    "repository": "https://github.com/bevry/textextensions"
+  },
+  "typescript@7.0.2": {
+    "licenses": "Apache-2.0",
+    "repository": "https://github.com/microsoft/TypeScript"
+  },
+  "version-range@4.15.0": {
+    "licenses": "Artistic-2.0",
+    "repository": "https://github.com/bevry/version-range"
+  }
+}
