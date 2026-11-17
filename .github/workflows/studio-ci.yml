@@ -107,6 +107,9 @@ jobs:
       - name: Frontend tests (connect failure line)
         working-directory: studio/frontend
         run: npm run test:connect-failure
+      - name: Frontend tests (save as)
+        working-directory: studio/frontend
+        run: npm run test:save-as
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
@@ -136,6 +139,14 @@ jobs:
       - name: Test
         working-directory: studio
         run: go test ./...
+      # The Windows build of Studio is a shipped target, and the end-to-end driver and the process code are the files that differ by OS: vet both
+      # OSes, so a call that has no Windows equivalent fails here and not at a release.
+      - name: Vet
+        working-directory: studio
+        run: go vet ./...
+      - name: Vet for Windows
+        working-directory: studio
+        run: GOOS=windows go vet ./...
 
   vscode:
     name: VS Code extension tests

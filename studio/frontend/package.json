@@ -26,6 +26,7 @@
     "test:lint": "node --test lint-tests/",
     "test:confirm": "node --test confirm-tests/",
     "test:connect-failure": "node --test connect-failure-tests/",
+    "test:save-as": "node --test save-as-tests/",
     "test:result-notes": "node --test result-notes-tests/",
     "test:still-waiting": "node --test still-waiting-tests/",
     "test:recording": "node --test recording-tests/"
