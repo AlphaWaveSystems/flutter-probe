@@ -4,7 +4,7 @@
 #   cp probe-tests/negative/display.probe.expect-fail /tmp/display-negative.probe
 #   probe test /tmp/display-negative.probe --device <serial> -y       # (the display build, the same probe.yaml as for display.probe)
 #
-# Expected: 0 passed, 12 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 13 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 
 before each test
   restart the app
@@ -60,3 +60,7 @@ test "N11 an id that is not on the screen"
 test "N12 the tap on the logo did not arrive"
   tap #wf_logo
   see "Taps: 0"
+
+# Expected: see "Logo": "text("Logo")" contains "Logo", not "Banner" (the image reads as its semantic label)
+test "N13 the image's semantic label read as another word"
+  see "Logo" contains "Banner"
