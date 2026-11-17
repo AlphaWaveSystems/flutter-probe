@@ -223,6 +223,7 @@ fi'
   step frontend studio/frontend 'npm run test:connect-failure'
   step frontend studio/frontend 'npm run test:save-as'
   step frontend studio/frontend 'npm run test:typing-target'
+  step frontend studio/frontend 'npm run test:modal-focus'
   step frontend studio/frontend 'npm run check:probescript'
 
   job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.10" "studio-ci.yml:studio-go"
