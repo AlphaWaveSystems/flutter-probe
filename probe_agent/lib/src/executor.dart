@@ -2111,9 +2111,25 @@ class ProbeExecutor {
   /// selector matches is usually the `Text` inside a button, so the nearest enclosing
   /// control (button, icon button, FAB, text field, switch, checkbox) decides — a
   /// grey `ElevatedButton(onPressed: null, child: Text("Submit"))` is disabled.
+  ///
+  /// Below the target too (issue #860): an id on a wrapper (`SizedBox(key: ...)`, `KeyedSubtree`, `Semantics(identifier: ...)`) around a
+  /// disabled button used to read as enabled. The order is the checked reader's: the target, then what it holds (the first control on
+  /// each branch), then what holds it.
   bool _isDisabled(Element e) {
     final own = _controlDisabled(e.widget);
     if (own != null) return own;
+    bool? below;
+    void visit(Element c) {
+      if (below != null) return;
+      final d = _controlDisabled(c.widget);
+      if (d != null) {
+        below = d;
+        return;
+      }
+      c.visitChildren(visit);
+    }
+    e.visitChildren(visit);
+    if (below != null) return below!;
     bool? found;
     var depth = 0;
     e.visitAncestorElements((a) {
