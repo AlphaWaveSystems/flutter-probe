@@ -283,7 +283,7 @@ test.describe("Open the failing line", () => {
       await page.waitForTimeout(250);
       await expect(activeLine(page)).not.toHaveText("5");
       await page.evaluate(() => window.getSelection()?.removeAllRanges());
-      await row.click();
+      await row.locator(".triage-text").click(); // the text, not the Insert button the fix row now has in its middle
       await expect(activeLine(page)).toHaveText("5");
       await open(page, "form.probe"); // move the caret away for the next row
       await open(page, "counter.probe");
