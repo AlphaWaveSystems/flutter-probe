@@ -108,4 +108,21 @@ test.describe("The build of the app under test", () => {
     await expect(page.locator("#status-text")).toHaveText("WiFi 192.0.2.7  ·  platform unknown");
     await expect(page.locator("#status-text")).not.toContainText(/ios|android/i);
   });
+
+  test("bv-07 the device settings title shows no empty parentheses when the platform is unknown", async ({ page }) => {
+    let platform = "";
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"GetDeviceSettings"')) return route.fulfill({ json: { result: { deviceName: "WiFi 192.0.2.7", platform, available: false, reason: "not addressable" } } });
+      await route.continue();
+    });
+    await openStudio(page);
+    await page.click("#btn-device-settings");
+    await expect(page.locator("#device-settings .ds-head")).toHaveText("WiFi 192.0.2.7");
+    await expect(page.locator("#device-settings")).not.toContainText("()");
+    platform = "android";
+    await page.click("#btn-device-settings");
+    await page.click("#btn-device-settings");
+    await expect(page.locator("#device-settings .ds-head")).toHaveText("WiFi 192.0.2.7 (android)");
+  });
 });

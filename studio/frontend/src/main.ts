@@ -15,6 +15,7 @@ import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
 import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
+import { connectFailureLine } from "./connect-failure";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
@@ -27,7 +28,9 @@ import { toast } from "./toast";
 
 import {
   CancelRun,
+  CheckInsertBefore,
   CheckReplaceLine,
+  CloseWorkspace,
   SelectorFixAttempts,
   Chat,
   Connect,
@@ -436,6 +439,7 @@ async function pickWorkspace() {
     await SetWorkspace(path);
     resetAIPreview();
     workspaceRoot = path;
+    showWorkspaceClose();
     resetNetworkPanel();
     refreshFiles(path);
     void refreshWorkspaceNote();
@@ -446,6 +450,45 @@ async function pickWorkspace() {
 }
 
 $("btn-pick-workspace").addEventListener("click", pickWorkspace);
+
+// The Close button is there only while a workspace is open. Closing brings back the state of a first start (no workspace, no file, the guidance in
+// the panes), and forgets the remembered folder, so the next start does not reopen it. PROBE_STUDIO_WORKSPACE, when set, still opens its folder at start.
+function showWorkspaceClose(): void {
+  ($("btn-close-workspace") as HTMLButtonElement).hidden = workspaceRoot === "";
+}
+
+async function closeWorkspace(): Promise<void> {
+  if (workspaceRoot === "") return;
+  if (dirty && !(await askDiscard())) return; // unsaved changes: the same question as opening another file
+  try {
+    await CloseWorkspace(); // Go refuses while a run or a recording is going (and says so)
+  } catch (err) {
+    toast(String(err).replace(/^Error:\s*/, ""), "info", 4000);
+    return;
+  }
+  localStorage.removeItem(WORKSPACE_KEY);
+  workspaceRoot = "";
+  resetAIPreview();
+  resetNetworkPanel();
+  model.setValue("");
+  currentPath = null;
+  $("editor-filename").textContent = "untitled.probe";
+  setDirty(false);
+  updateRunButton();
+  showWorkspaceClose();
+  void refreshWorkspaceNote();
+  // The tree is cleared here, not listed again: with a folder from the environment still reachable, a listing of a relative path would be refused and say so.
+  currentDir = "tests";
+  $("file-path").textContent = currentDir;
+  const list = $("file-list");
+  clearChildren(list);
+  listing = "empty";
+  renderEmptyPane(list);
+  refreshFirstRun();
+  toast("Workspace closed", "info", 1800);
+}
+
+$("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 
 // ---- Save ---------------------------------------------------------------
 
@@ -1790,9 +1833,13 @@ function updateConnectButton() {
   refreshFirstRun();
 }
 
-($("device-picker") as HTMLSelectElement).addEventListener("change", updateConnectButton);
+($("device-picker") as HTMLSelectElement).addEventListener("change", () => {
+  if (!connected && $("status-dot").classList.contains("status-error")) setStatus("disconnected", "disconnected"); // another device: the old failure is not about it
+  updateConnectButton();
+});
 $("btn-refresh").addEventListener("click", refreshDevices);
 
+let connectAttempt = 0;
 $("btn-connect").addEventListener("click", async () => {
   if (connected) {
     try {
@@ -1807,6 +1854,7 @@ $("btn-connect").addEventListener("click", async () => {
   const select = $("device-picker") as HTMLSelectElement;
   const id = select.value;
   if (!id) return;
+  const attempt = ++connectAttempt; // a result that comes back after a newer attempt started is not about the screen any more
   setStatus("connecting", "connecting…");
   try {
     const status = (await Connect(id)) as ConnectionStatus;
@@ -1821,9 +1869,10 @@ $("btn-connect").addEventListener("click", async () => {
     if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
-    setStatus("error", "connection failed", detail);
+    if (attempt !== connectAttempt) return; // superseded: a newer Connect is under way or has finished, and its result is the one shown
+    // The reason stays in the status (full text as the tooltip) until the person picks another device or connects again.
+    setStatus("error", connectFailureLine(detail), detail);
     toast(`Connect failed: ${detail}`, "error", 8000);
-    setTimeout(() => setStatus("disconnected", "disconnected"), 2500);
   }
 });
 
@@ -2083,7 +2132,70 @@ EventsOn("run:step", (s: RunStep) => {
 // A click on a failing row asks for a file and a line (planJump decides what is allowed). Only a click moves the editor.
 document.addEventListener("studio:goto-line", (ev) => void gotoFailingLine((ev as CustomEvent<JumpTarget>).detail));
 
+// ---- Insert before the step (the rule-based fix) -----------------------------------------------------------------------------------
+//
+// The rule row under a failed see or tap offers a line to add above the step. Studio says whether it may (CheckInsertBefore: the editor must hold
+// the text the run read), and the edit is one undo step. Every line below it moves down by one, so the marks and row numbers of that run are no
+// longer right: the marks are cleared, and a row of that file does not jump until the next run.
+
+let staleRunFile: string | null = null;
+EventsOn("run:started", () => {
+  staleRunFile = null;
+});
+
+document.addEventListener("studio:insert-before", (ev) => void insertBeforeStep((ev as CustomEvent<{ file: string; line: number }>).detail));
+
+async function insertBeforeStep(t: { file: string; line: number }): Promise<void> {
+  if (!currentPath) {
+    toast("Not inserted: no file is open.", "info", 5000);
+    return;
+  }
+  if (runInProgress) {
+    toast("Not inserted: a run is in progress. Wait until it has finished.", "info", 5000);
+    return;
+  }
+  const checked = model.getValue();
+  const pathAtClick = currentPath; // what was asked about: the file and the exact state of the editor's text
+  const versionAtClick = model.getVersionId();
+  // The path and the version id identify the text because there is one editor model and it is never replaced (setValue, not setModel). If a second
+  // model is ever introduced, this check must compare the model itself too.
+  let check: { ok: boolean; line?: number; text?: string; reason?: string };
+  try {
+    check = await CheckInsertBefore(t.file, t.line, currentPath, checked);
+  } catch (err) {
+    toast(`Not inserted: ${err instanceof Error ? err.message : String(err)}`, "error", 6000);
+    return;
+  }
+  if (!check.ok || !check.line || check.text === undefined) {
+    toast(`Not inserted: ${check.reason ?? "Studio refused"}`, "info", 7000);
+    return;
+  }
+  // The answer was for the file and the text of the click. Another file may be open now (even one with the very same text), or the text may have changed.
+  if (currentPath !== pathAtClick || model.getVersionId() !== versionAtClick || model.getValue() !== checked) {
+    toast("Not inserted: another file was opened or the text changed while Studio was checking. Press again.", "info", 5000);
+    return;
+  }
+  if (runInProgress) {
+    toast("Not inserted: a run started while Studio was checking. Wait until it has finished.", "info", 5000);
+    return;
+  }
+  // The new line is its own line: its text and the file's line ending, put at the start of the failed line (which keeps its own ending, or none).
+  editor.pushUndoStop();
+  editor.executeEdits("insert-before-step", [{ range: new monaco.Range(check.line, 1, check.line, 1), text: check.text + model.getEOL() }]);
+  editor.pushUndoStop();
+  editor.setPosition({ lineNumber: check.line, column: 1 });
+  editor.revealLineInCenterIfOutsideViewport(check.line);
+  stepState.clear();
+  renderStepDecorations();
+  staleRunFile = t.file;
+  toast(`Inserted above line ${check.line} (the step is now line ${check.line + 1}). Not saved, not run; Undo removes it. The marks of the last run are cleared: run again.`, "success", 7000);
+}
+
 async function gotoFailingLine(target: JumpTarget): Promise<void> {
+  if (staleRunFile !== null && target?.file === staleRunFile) {
+    toast("The file changed since this run (a line was inserted): run again before using its rows.", "info", 5000);
+    return;
+  }
   const plan = planJump(target ?? {}, { openFile: currentPath, workspaceRoot });
   if (plan.kind === "refuse") {
     toast(`Not opened: ${plan.reason}`, "error", 5000);
@@ -2208,6 +2320,7 @@ initDeviceSettings();
     await SetWorkspace(ws);
     resetAIPreview();
     workspaceRoot = ws;
+    showWorkspaceClose();
     resetNetworkPanel();
     void refreshWorkspaceNote();
     await refreshFiles(ws);

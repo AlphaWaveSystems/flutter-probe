@@ -131,6 +131,17 @@
    "confirm": "none"
   },
   {
+   "method": "CheckInsertBefore",
+   "category": "ui",
+   "does": "Says whether the rule-based fix of a failed see or tap may be inserted above it in the text the window holds: only while that text is the text the run read; reads nothing from disk and writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
    "method": "CheckTarget",
    "category": "network",
    "does": "Says where a request to a URL would go and whether its host is allowed yet; looks the name up.",
@@ -143,6 +154,17 @@
    ],
    "confirm": "none",
    "decision": "Looks the name up and reports where a request would go; it sends no request and no content."
+  },
+  {
+   "method": "CloseWorkspace",
+   "category": "workspaceRoot",
+   "does": "Closes the workspace a person opened: it does what SetWorkspace does with no folder (so the reads and writes of the old folder stop being allowed) but only in memory, which is why touches is empty; refused while a run or a recording is going, checked under the run slot's lock and the state lock together with the change; a run takes the slot and its workspace under the same two locks, so one of the two wins. A connection that exists is not dropped.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
   },
   {
    "method": "Connect",

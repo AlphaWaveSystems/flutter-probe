@@ -104,6 +104,9 @@ jobs:
       - name: Recording tests
         working-directory: studio/frontend
         run: npm run test:recording
+      - name: Frontend tests (connect failure line)
+        working-directory: studio/frontend
+        run: npm run test:connect-failure
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
