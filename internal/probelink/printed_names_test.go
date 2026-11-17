@@ -45,3 +45,16 @@ func TestHostileHandshakeAppIDNeverReachesTheWarning(t *testing.T) {
 		t.Errorf("a plain id is still reported: %q", w)
 	}
 }
+
+// The pid field of lsof's output is printed cleaned too (lsof prints digits, but nothing checks that): an escape or a bidi override in it
+// does not reach the terminal, and it is cut to 20 runes.
+func TestPortHolderCleansThePid(t *testing.T) {
+	got := parseLsofHolders("p42\x1b[2J" + string(rune(0x202e)) + "x\ncRunner\n")
+	if got != "pid 42 [2J x (Runner)" {
+		t.Errorf("parseLsofHolders = %q, want the pid cleaned", got)
+	}
+	long := parseLsofHolders("p" + strings.Repeat("9", 40) + "\ncRunner\n")
+	if !strings.HasPrefix(long, "pid "+strings.Repeat("9", 19)+string(rune(0x2026))+" (Runner)") {
+		t.Errorf("a long pid must be cut to 20 runes: %q", long)
+	}
+}
