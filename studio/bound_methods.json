@@ -131,6 +131,17 @@
    "confirm": "none"
   },
   {
+   "method": "CheckInsertBefore",
+   "category": "ui",
+   "does": "Says whether the rule-based fix of a failed see or tap may be inserted above it in the text the window holds: only while that text is the text the run read; reads nothing from disk and writes nothing.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
    "method": "CheckTarget",
    "category": "network",
    "does": "Says where a request to a URL would go and whether its host is allowed yet; looks the name up.",

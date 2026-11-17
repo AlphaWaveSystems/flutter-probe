@@ -693,6 +693,24 @@ export namespace main {
 		}
 	}
 	
+	export class InsertBeforeCheck {
+	    ok: boolean;
+	    line?: number;
+	    text?: string;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new InsertBeforeCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class ReplaceLineCheck {
 	    ok: boolean;
 	    reason: string;
