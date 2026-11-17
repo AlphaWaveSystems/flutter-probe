@@ -103,3 +103,17 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
 - **Tool requirements (tool source at the 3.44.8 tag commit, `058e0af2c2b57e369d905a03ac9748b0ebf543c6`, which a scratch clone of the tag has):** Gradle 8.7.0 error / 8.14.0 warn / 9.1.0 template; AGP 8.6.0 / 8.11.1 / 9.0.1; Kotlin Gradle plugin 2.0.0 / 2.2.20 / 2.3.20; Java 17; `minSdk` 23 / 24; Xcode 15.
 - **Release notes and breaking changes:** not assessed. **Fixture suite on this version:** run on the fixtures as raised for 3.50.0 (Gradle 9.5.0, AGP 9.3.1, Kotlin 2.4.20): 5 of 5 on emulator-5600 (see the 3.50.0 entry). The fixtures as they were before the raise (the template defaults of this release) were not built here.
 - **Dart 3.12.2 changes:** not assessed.
+
+## Packages the fixture apps depend on
+
+A package a fixture app is built from, pinned, with what was read in its release notes. These are not Flutter releases: the weekly check does not read this section.
+
+### `webview_flutter` 4.14.1 and `webview_flutter_android` 4.14.1 (`native-test-apps/flutter-webview`, pinned exactly in `pubspec.yaml` and locked in `pubspec.lock`; a test keeps them equal)
+
+- **Source:** the `CHANGELOG.md` of each package as published (read from the downloaded packages), which give no release dates. `webview_flutter_platform_interface` 2.15.1 and `webview_flutter_wkwebview` 3.26.2 are resolved with them
+  (3.27.2 of the latter is newer; it is the iOS implementation, which the fixture does not use).
+- **What matters for FlutterProbe:** `webview_flutter_android` 4.12.1 "migrates to Built-in Kotlin to support AGP 9" and "updates the minimum supported SDK version to Flutter 3.44 / Dart 3.12", so the fixture needs **Flutter 3.44 or newer**; its
+  `minSdk` is 24. 4.14.0 adds `setWebAuthenticationSupport`, 4.13.0 a way to reach the native `WebView` from a plugin binding, 4.12.0 cookie retrieval, 4.11.0 `setInsetsForWebContentToIgnore`: none is used. `webview_flutter` 4.14.0 raises its minimum to
+  Flutter 3.38 / Dart 3.10. The API the fixture needs is `AndroidWebViewController.enableDebugging(bool)`, a static method that turns on WebView debugging, which the WebView steps need (they reach the page through its DevTools socket).
+- **Done:** both packages pinned exactly; the fixture builds on Flutter 3.44.8 and 3.50.0 (the 3.50.0 build with the Gradle, AGP and Kotlin versions of the Flutter fixture) and `webview.probe` passes 5 of 5 on each (see `MATRIX.md`, "WebView content").
+- **Not assessed:** the iOS implementation, any version after 4.14.1, the Dart changes of these packages beyond their changelogs.
