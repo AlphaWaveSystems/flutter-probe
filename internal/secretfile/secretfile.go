@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -103,9 +104,10 @@ func Write(o Options) (path string, replaced bool, err error) {
 // there would make a plain open wait for a writer), and at most one byte more than the content is read.
 func Remove(path, content string) {
 	fi, err := os.Lstat(path)
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() != int64(len(content)) {
+	if err != nil || !fi.Mode().IsRegular() {
 		return
 	}
+	removeHook() // a test seam: the name is swapped here to prove the open is checked
 	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return
@@ -120,18 +122,44 @@ func Remove(path, content string) {
 	}
 }
 
+// removeHook runs in Remove between the check of the name and the open of it; nothing in the program sets it.
+var removeHook = func() {}
+
 // staleTempAge is how old a temporary file of ours must be before a new write removes it: a write that is under way is a few milliseconds.
 const staleTempAge = 10 * time.Second
 
 // removeStaleTemps removes the temporary files an earlier write of this name left behind when the process died between making the file and renaming
 // it into place (the file holds the secret, mode 0600). Only a regular file of this user, named like our temporary files and old enough, is removed.
 func removeStaleTemps(dir, name string) {
-	matches, _ := filepath.Glob(filepath.Join(dir, name+".*"))
-	for _, m := range matches {
+	entries, err := os.ReadDir(dir) // no glob: a name or a folder with glob characters in it must not widen what is matched
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !isTempName(e.Name(), name) {
+			continue
+		}
+		m := filepath.Join(dir, e.Name())
 		fi, err := os.Lstat(m)
-		if err != nil || !fi.Mode().IsRegular() || !ownedByUs(fi) || time.Since(fi.ModTime()) < staleTempAge {
+		// os.CreateTemp makes these 0600 and exclusive; anything else with a similar name is the person's own file
+		if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 || !ownedByUs(fi) || time.Since(fi.ModTime()) < staleTempAge {
 			continue
 		}
 		_ = os.Remove(m)
 	}
+}
+
+// isTempName says whether a file name is exactly what os.CreateTemp(dir, name+".*") makes: the name, a dot, and a random number in decimal (at most
+// ten digits, the size of a 32-bit number). secret.bak, secret.notes.txt and secret.123abc are not.
+func isTempName(file, name string) bool {
+	suffix, ok := strings.CutPrefix(file, name+".")
+	if !ok || suffix == "" || len(suffix) > 10 {
+		return false
+	}
+	for i := 0; i < len(suffix); i++ {
+		if suffix[i] < '0' || suffix[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

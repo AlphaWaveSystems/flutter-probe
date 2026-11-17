@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The discovery file holds the automation token, so it is written through the one writer of secret files and judged the way the MCP token file is:
@@ -127,6 +128,14 @@ func TestAStaleDiscoveryFileIsReplacedAndOnlyOwnIsRemoved(t *testing.T) {
 	d := discoveryDir(t)
 	file := filepath.Join(d, "automation.json")
 	_ = os.WriteFile(file, []byte(`{"pid":1}`), 0o600)
+	// the person's own files next to it, old enough to be taken for leftovers if the match were loose
+	var mine []string
+	for _, n := range []string{"automation.json.bak", "automation.json.notes.txt", "automation.json.123abc"} {
+		p := filepath.Join(d, n)
+		_ = os.WriteFile(p, []byte("mine"), 0o600)
+		_ = os.Chtimes(p, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour))
+		mine = append(mine, p)
+	}
 	t.Setenv("PROBE_STUDIO_AUTOMATION_FILE", file)
 	first, err := startAutomation(&fakeBackend{})
 	if err != nil {
@@ -146,5 +155,10 @@ func TestAStaleDiscoveryFileIsReplacedAndOnlyOwnIsRemoved(t *testing.T) {
 	second.Close()
 	if _, err := os.Stat(file); !os.IsNotExist(err) {
 		t.Error("the last server did not remove its own file")
+	}
+	for _, p := range mine {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s, a file of the person's own, was removed at start-up", filepath.Base(p))
+		}
 	}
 }
