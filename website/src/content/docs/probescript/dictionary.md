@@ -51,7 +51,7 @@ Commands that verify the state of the UI.
 | `don't see` | `don't see "Text"` | Assert that text is NOT visible (`dont see` is accepted too) |
 | `see native` | `see native "..."` | Assert a native (non-Flutter) UI element matching the query is present — matched by uiautomator's text or resource-id. Android only; treated as "not found" on other platforms |
 | `don't see native` | `don't see native "..."` | Assert a native UI element matching the query is NOT present |
-| `see exactly` | `see exactly 3 "Item"` | Assert exact count of matching widgets |
+| `see exactly` | `see exactly 3 "Item"` | Assert exact count of matching widgets: each visible text counts once (a `Text`, a `Text.rich`, a `RichText`, a button's label), so one `Text` is 1 |
 | `see enabled` | `see "Submit" is enabled` | Assert widget is enabled |
 | `see disabled` | `see "Submit" is disabled` | Assert widget is disabled |
 | `see checked` | `see "Agree" is checked` | Assert the switch, checkbox, radio (or their list tiles, filter or choice chips) is on; "not a checkable control" for anything else. `don't see "Agree" is checked` asserts it is off |
