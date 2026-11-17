@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -103,7 +102,7 @@ func Launch(ctx context.Context, opts LaunchOptions) (*Studio, error) {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	// Own process group so Close can kill helpers Studio spawns (iproxy etc.).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	ownProcessGroup(cmd)
 	var logf *os.File
 	if opts.LogPath != "" {
 		_ = os.MkdirAll(filepath.Dir(opts.LogPath), 0o755)
@@ -134,13 +133,13 @@ func Launch(ctx context.Context, opts LaunchOptions) (*Studio, error) {
 // Close terminates Studio and its process group.
 func (s *Studio) Close() {
 	if s.cmd != nil && s.cmd.Process != nil {
-		_ = syscall.Kill(-s.PID, syscall.SIGTERM)
+		killGroup(s.PID, false)
 		done := make(chan struct{})
 		go func() { _ = s.cmd.Wait(); close(done) }()
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			_ = syscall.Kill(-s.PID, syscall.SIGKILL)
+			killGroup(s.PID, true)
 		}
 	}
 	if s.log != nil {

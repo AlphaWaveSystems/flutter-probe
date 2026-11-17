@@ -167,6 +167,19 @@
    "confirm": "none"
   },
   {
+   "method": "CreateFile",
+   "category": "writesWorkspace",
+   "does": "Writes a NEW .probe file inside the workspace (Save for a buffer with no file): created exclusively, so a file that exists, or a link in its place, is never replaced and the answer says it already exists; the folder must exist; at most 1 MiB.",
+   "callers": [
+    "window",
+    "bridge"
+   ],
+   "touches": [
+    "files"
+   ],
+   "confirm": "none"
+  },
+  {
    "method": "Connect",
    "category": "device",
    "does": "Connects to a simulator, emulator or USB device and its agent (forwards a port, reads the token).",
@@ -931,7 +944,7 @@
   {
    "method": "WriteFile",
    "category": "writesWorkspace",
-   "does": "Saves a .probe file inside the open workspace.",
+   "does": "Saves an open .probe file in place inside the open workspace: it replaces the file's content and creates missing folders. A new file is made with CreateFile, which never replaces one.",
    "callers": [
     "window",
     "bridge"

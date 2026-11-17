@@ -54,6 +54,10 @@ export function CloseWorkspace() {
   return window['go']['main']['App']['CloseWorkspace']();
 }
 
+export function CreateFile(arg1, arg2) {
+  return window['go']['main']['App']['CreateFile'](arg1, arg2);
+}
+
 export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }

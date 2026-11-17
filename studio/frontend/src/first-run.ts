@@ -56,7 +56,11 @@ export function recordReason(i: FirstRunInput): string {
 
 /** Why Save is disabled, or "". */
 export function saveReason(i: FirstRunInput): string {
-  if (!i.fileOpen) return "Open a .probe file to save.";
+  if (!i.fileOpen) {
+    // an unsaved buffer (a recording, a scratch buffer) is saved as a new file in the workspace: Save asks for a name
+    if (i.dirty) return i.workspaceOpen ? "" : "Open a workspace first: Save needs a folder to put the new file in.";
+    return "Open a .probe file to save.";
+  }
   return i.dirty ? "" : "There are no unsaved changes.";
 }
 

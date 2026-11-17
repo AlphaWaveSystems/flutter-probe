@@ -1,0 +1,75 @@
+---
+// The frame of the landing page, pricing, Probe Cloud and the legal pages: head, nav, footer and the one shared stylesheet.
+// No script, cookie or analytics is added here; the only third-party request is the fonts stylesheet the landing page already used.
+import '../styles/site.css';
+
+interface Props {
+  title: string;
+  description: string;
+  path: string; // the page's own path, for the canonical link: "/pricing/"
+  jsonLd?: object; // only facts that are true today
+  noindex?: boolean; // a draft page that search engines should not list
+}
+const { title, description, path, jsonLd, noindex = false } = Astro.props;
+const url = `https://flutterprobe.dev${path}`;
+---
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  {noindex && <meta name="robots" content="noindex" />}
+  <link rel="canonical" href={url} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={url} />
+  <meta property="og:image" content="https://flutterprobe.dev/og-image.png" />
+  <meta property="og:site_name" content="FlutterProbe" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content="https://flutterprobe.dev/og-image.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <nav aria-label="Main">
+    <a href="/" class="nav-logo">
+      <svg viewBox="0 0 28 28" width="28" height="28" fill="none" aria-hidden="true"><rect x="2" y="2" width="24" height="24" rx="6" stroke="#3bf0e4" stroke-width="2"/><path d="M9 14l3 3 7-7" stroke="#3bf0e4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      FlutterProbe
+    </a>
+    <div class="nav-r">
+      <a href="/getting-started/installation/">Docs</a>
+      <a href="/probescript/syntax/">ProbeScript</a>
+      <a href="/tutorials/flutter-login-test/">Tutorials</a>
+      <a href="/probe-cloud/">Probe Cloud</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>
+      <a href="/getting-started/installation/" class="btn-sm">Install</a>
+    </div>
+  </nav>
+  <main id="main">
+    <slot />
+  </main>
+  <footer>
+    <span>FlutterProbe &middot; BSL 1.1 (CLI), MIT (agent) &middot; &copy; 2026 Alpha Wave Systems S.A. de C.V.</span>
+    <div class="foot-links">
+      <a href="/terms/">Terms</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/refunds/">Refunds</a>
+      <a href="/subprocessors/">Subprocessors</a>
+      <a href="/company/">Company</a>
+      <a href="/contact/">Contact</a>
+      <a href="/getting-started/installation/">Docs</a>
+      <a href="https://github.com/AlphaWaveSystems/flutter-probe/wiki">Wiki</a>
+      <a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>
