@@ -944,7 +944,7 @@
   {
    "method": "WriteFile",
    "category": "writesWorkspace",
-   "does": "Saves an open .probe file in place inside the open workspace: it replaces the file's content and creates missing folders. A new file is made with CreateFile, which never replaces one.",
+   "does": "Saves an open .probe file in place inside the open workspace: it replaces the file's content through a new file in the same folder that is flushed and renamed over it (a failed write leaves the file as it was), and creates missing folders. A new file is made with CreateFile, which never replaces one.",
    "callers": [
     "window",
     "bridge"
