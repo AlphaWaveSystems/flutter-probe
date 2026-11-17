@@ -76,7 +76,7 @@ void main() {
   });
 
   testWidgets(
-      'a metrics change starts a new episode: the agent waits again for a size that is on its way',
+      'a new size starts a new episode; other metrics (insets, pixel ratio) do not',
       (tester) async {
     ViewReady.instance.attach();
     tester.view.physicalSize = Size.zero;
@@ -85,12 +85,36 @@ void main() {
     ViewReady.instance.wait();
     await tester.pump(ViewReady.cap + const Duration(milliseconds: 50));
     expect(ViewReady.instance.gaveUp, isTrue);
-    tester.view.physicalSize =
-        Size.zero; // the engine reports new metrics (still zero)
+    // A keyboard inset or a pixel ratio change, the size unchanged: still the same episode.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
     tester.view.devicePixelRatio = 2;
+    await tester.pump();
+    expect(ViewReady.instance.gaveUp, isTrue);
+    expect(ViewReady.instance.isReady, isTrue);
+    // A new size (still empty): a new episode, the agent waits again.
+    tester.view.physicalSize = const Size(0, 10);
     await tester.pump();
     expect(ViewReady.instance.gaveUp, isFalse);
     expect(ViewReady.instance.isReady, isFalse);
+  });
+
+  testWidgets(
+      'a real size with no frame laid out at it within the cap: the same episode is not waited for again',
+      (tester) async {
+    ViewReady.instance.attach();
+    tester.view.physicalSize = Size.zero;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_list());
+    tester.view.physicalSize = const Size(1080, 2400);
+    var waited = -1;
+    ViewReady.instance.wait().then((ms) => waited = ms);
+    // time passes, no frame is drawn: the cap ends the wait
+    await tester.binding
+        .delayed(ViewReady.cap + const Duration(milliseconds: 100));
+    expect(waited, isNot(-1));
+    expect(ViewReady.instance.gaveUp, isTrue);
+    expect(ViewReady.instance.isReady, isTrue,
+        reason: 'one capped wait per episode');
   });
 
   testWidgets('an app in the background is never waited for', (tester) async {

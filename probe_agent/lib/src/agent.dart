@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
+
 import 'advertiser.dart';
 import 'http_capture.dart';
 import 'relay_client.dart';
@@ -105,7 +107,10 @@ class ProbeAgent {
     // Record the app's dart:io HTTP traffic and make `mock` effective (HttpClients created from here on).
     ProbeHttpOverrides.install();
 
-    // Record the size each frame is laid out at, so a request waits for a frame laid out at the view's real size (issue #793).
+    // Record the size each frame is laid out at, so a request waits for a frame laid out at the view's real size (issue #793). The app
+    // may call start() before its binding exists (before runApp): the binding is made here, as runApp would. attach never throws: if it
+    // cannot take effect, the agent keeps the earlier rule (a real size is ready) instead of failing the app's launch.
+    WidgetsFlutterBinding.ensureInitialized();
     ViewReady.instance.attach();
 
     const relayUrl = String.fromEnvironment('PROBE_RELAY_URL', defaultValue: '');

@@ -46,12 +46,19 @@ class ViewReady with WidgetsBindingObserver {
   /// Records the size each frame is laid out at. Called once when the agent starts (after the app's binding exists).
   void attach() {
     if (_attached) return;
-    _attached = true;
-    WidgetsBinding.instance.addPersistentFrameCallback((_) {
-      final views = ViewReady.views();
-      _laidOut = views.isEmpty ? null : views.first.physicalSize;
-    });
+    try {
+      WidgetsBinding.instance.addPersistentFrameCallback((_) {
+        final views = ViewReady.views();
+        _laidOut = views.isEmpty ? null : views.first.physicalSize;
+      });
+      _attached = true;
+    } catch (_) {
+      // No binding (or it refused the callback): keep the earlier rule rather than fail.
+    }
   }
+
+  /// Whether [attach] took effect (for tests and diagnostics).
+  bool get attached => _attached;
 
   /// Set when [cap] was reached; cleared when the view's metrics change (a new size may be on its way).
   bool _gaveUp = false;
@@ -110,12 +117,12 @@ class ViewReady with WidgetsBindingObserver {
           }
           // The size is real: wait for a frame laid out at it, within the cap.
           await Future.any([binding.endOfFrame, capped.future]);
-          if (_laidOut == size || capped.isCompleted) {
-            return watch.elapsedMilliseconds;
-          }
+          if (_laidOut == size) return watch.elapsedMilliseconds;
+          // A size with no frame laid out at it within the cap: the same episode, not waited for again.
+          if (capped.isCompleted) break;
         }
       }
-      _gaveUp = true;
+      _giveUp();
       return watch.elapsedMilliseconds;
     } finally {
       capTimer.cancel();
@@ -130,7 +137,21 @@ class ViewReady with WidgetsBindingObserver {
 
   @override
   void didChangeMetrics() {
-    _gaveUp = false;
+    // Only a new size starts a new episode: other metrics (keyboard insets, padding) change without it, and a view that stays 0×0 by
+    // design must not be waited for again on every such change.
+    if (!_gaveUp) return;
+    final views = ViewReady.views();
+    final size = views.isEmpty ? null : views.first.physicalSize;
+    if (size != _sizeAtGiveUp) _gaveUp = false;
+  }
+
+  /// The size of the view when the cap was reached.
+  Size? _sizeAtGiveUp;
+
+  void _giveUp() {
+    _gaveUp = true;
+    final views = ViewReady.views();
+    _sizeAtGiveUp = views.isEmpty ? null : views.first.physicalSize;
   }
 
   /// Forgets a capped wait, the laid-out size and the attach, and stops observing. For tests.
