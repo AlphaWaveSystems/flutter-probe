@@ -87,4 +87,33 @@ void main() {
     expect(await _see('list', 'enabled'), isNull);
     expect(watch.elapsedMilliseconds, lessThan(2000));
   });
+
+  testWidgets(
+      'a wrapper holding controls that disagree refuses; controls that agree give their answer',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Column(children: [
+          Row(key: const ValueKey('mixed'), children: [
+            ElevatedButton(onPressed: () {}, child: const Text('On')),
+            const ElevatedButton(onPressed: null, child: Text('Off')),
+          ]),
+          const Row(key: ValueKey('both_off'), children: [
+            ElevatedButton(onPressed: null, child: Text('Off 1')),
+            IconButton(onPressed: null, icon: Icon(Icons.add)),
+          ]),
+        ]),
+      ),
+    ));
+    for (final check in ['enabled', 'disabled']) {
+      expect(await _see('mixed', check),
+          contains('holds 2 controls that disagree'),
+          reason: check);
+      expect(await _see('mixed', check, negated: true),
+          contains('cannot be evaluated'),
+          reason: 'negated $check');
+    }
+    expect(await _see('both_off', 'disabled'), isNull);
+    expect(await _see('both_off', 'enabled'), contains('is disabled'));
+  });
 }
