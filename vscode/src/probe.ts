@@ -1,6 +1,7 @@
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { getProbePath, getConvertPath, getSetting, getWorkspaceRoot } from './config';
+import { SecretValues, secretEnv, withoutSecrets } from './secretArgs';
 import { CommandResult, Device, LintResult } from './types';
 
 export function runCommand(
@@ -162,10 +163,7 @@ export function buildTestArgs(
     cloudProvider?: string;
     cloudDevice?: string;
     cloudApp?: string;
-    cloudKey?: string;
-    cloudSecret?: string;
     relayUrl?: string;
-    relayToken?: string;
   }
 ): string[] {
   const args = ['test', filePath];
@@ -181,17 +179,10 @@ export function buildTestArgs(
   const cloudApp = o.cloudApp ?? getSetting<string>('cloudApp');
   if (cloudApp) { args.push('--cloud-app', cloudApp); }
 
-  const cloudKey = o.cloudKey ?? getSetting<string>('cloudKey');
-  if (cloudKey) { args.push('--cloud-key', cloudKey); }
-
-  const cloudSecret = o.cloudSecret ?? getSetting<string>('cloudSecret');
-  if (cloudSecret) { args.push('--cloud-secret', cloudSecret); }
+  // The cloud key, the cloud secret and the relay token are not arguments: buildTestRun passes them as environment variables.
 
   const relayUrl = o.relayUrl ?? getSetting<string>('relayUrl');
   if (relayUrl) { args.push('--relay-url', relayUrl); }
-
-  const relayToken = o.relayToken ?? getSetting<string>('relayToken');
-  if (relayToken) { args.push('--relay-token', relayToken); }
 
   // Local device flags (only when not using cloud provider)
   if (!cloudProvider) {
@@ -247,6 +238,26 @@ export function buildTestArgs(
   if (o.config) { args.push('--config', o.config); }
 
   return args;
+}
+
+// A test run: the command line, and the environment that carries its secrets (see secretArgs.ts).
+export interface TestRun {
+  args: string[];
+  env: Record<string, string>;
+}
+
+// buildTestRun is the command line of `probe test` and the environment of its terminal. The cloud key, the cloud secret and the relay
+// token, from the options or the settings, are in env and never in args.
+export function buildTestRun(filePath: string, options?: Parameters<typeof buildTestArgs>[1] & SecretValues): TestRun {
+  const o = options ?? {};
+  return {
+    args: buildTestArgs(filePath, withoutSecrets(o)),
+    env: secretEnv({
+      cloudKey: o.cloudKey ?? getSetting<string>('cloudKey'),
+      cloudSecret: o.cloudSecret ?? getSetting<string>('cloudSecret'),
+      relayToken: o.relayToken ?? getSetting<string>('relayToken'),
+    }),
+  };
 }
 
 export function getProbeCommand(): string {

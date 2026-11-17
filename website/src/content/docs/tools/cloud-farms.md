@@ -22,7 +22,8 @@ The farms are optional. Local emulators, simulators and physical devices are the
 No farm lets your computer connect to a port inside the app on a rented device. FlutterProbe's cloud mode therefore works the other way round: the agent in the app connects **out** to a relay, and the CLI connects to the same relay.
 
 - The relay is a service that implements `POST /api/v1/relay/sessions` at `cloud.url` (see `internal/cloud/relay.go`). **The relay server is not part of this repository, and the hosted Probe Cloud service is not live.** Until you operate a compatible relay, an end-to-end farm run is not possible. Without a relay the providers' direct port forwarding returns an error that says so.
-- The agent must be built with `PROBE_RELAY_URL` and `PROBE_RELAY_TOKEN`, so the relay session is created before the build (`--relay-url`, `--relay-token`).
+- The agent must be built with `PROBE_RELAY_URL` and `PROBE_RELAY_TOKEN`, so the relay session is created before the build (`--relay-url`, `--relay-token`). `PROBE_RELAY_TOKEN` is the session's agent token; `--relay-token` is its CLI token, a different value.
+- **Keep secrets off the command line.** A command line is visible to other users in the process list and stays in shell history. `probe test` reads `--cloud-key`, `--cloud-secret` and `--relay-token` from `PROBE_CLOUD_KEY`, `PROBE_CLOUD_SECRET` and `PROBE_RELAY_CLI_TOKEN` when the flag is not given (a flag that is given wins). The CLI token's variable is not `PROBE_RELAY_TOKEN`, so a job that exports the agent token for the build does not hand it to the CLI.
 - Whether each farm allows the device to make that outbound connection, and how real iOS devices re-sign the app, was not tested. Check your plan with the vendor.
 
 ## What was checked against the vendors' documentation

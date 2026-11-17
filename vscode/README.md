@@ -205,13 +205,21 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `cloudProvider` | | Provider: `browserstack`, `saucelabs`, `lambdatest`, `aws`, `firebase` |
+| `cloudProvider` | | Provider: `browserstack`, `saucelabs`, `lambdatest`, `aws`, `firebase`. User or remote settings only |
 | `cloudDevice` | | Device string (e.g., `Google Pixel 7-13.0`) |
 | `cloudApp` | | Path to `.apk` or `.ipa` binary |
-| `cloudKey` | | Username or Access Key ID |
-| `cloudSecret` | | Access Key or Secret (consider env vars for CI) |
-| `relayUrl` | | Relay server URL for cloud E2E |
-| `relayToken` | | Relay authentication token |
+| `cloudKey` | | Username or Access Key ID. User or remote settings only |
+| `cloudSecret` | | Access Key or Secret. User or remote settings only |
+| `relayUrl` | | Relay server URL for cloud E2E. User or remote settings only |
+| `relayToken` | | Relay authentication token. User or remote settings only |
+
+**The cloud key, the cloud secret and the relay token never go on the command line.** A command line is visible to other users in the process list and stays in your shell's history, so the extension gives these three to `probe test` as environment variables of its terminal (`PROBE_CLOUD_KEY`, `PROBE_CLOUD_SECRET`, `PROBE_RELAY_CLI_TOKEN`), which the CLI reads when the flag is not given.
+
+**Where they live.** The values stay in that terminal's environment for as long as the terminal is open: every command you type in it, and every program `probe` starts from it (`adb`, `flutter`), inherits them. A terminal is replaced when a run's secrets differ from those it was made with. Whether VS Code keeps or restores a terminal's environment when it restores terminals after a restart was not verified; close the FlutterProbe terminals to be sure the values are gone.
+
+**What a workspace cannot set.** `cloudKey`, `cloudSecret` and `relayToken`, and the two settings that decide where they are sent, `relayUrl` (the relay token is sent to it) and `cloudProvider` (the key and secret are sent to it), can be set only in your user (or remote) settings. A repository's `.vscode/settings.json` cannot set them, and Settings Sync leaves them out. This covers the extension's settings only: `probe test` also reads the workspace's `probe.yaml`, whose `cloud:` section can name a provider and a relay service URL. Which binary the extension runs is a separate set of settings, restricted the same way (see Tool Paths); `probe.yaml`'s `tools:` section can still name `adb` and `flutter`. VS Code stores settings in plain text; on a shared machine or in CI, set the environment variables instead.
+
+> **Changed in this version:** a value of `cloudKey`, `cloudSecret`, `relayToken`, `relayUrl` or `cloudProvider` in a workspace's `.vscode/settings.json` is now ignored, and the extension says so once for that workspace. Move it to your user settings (Preferences: Open User Settings (JSON)), or set the environment variable.
 
 ### Tool Paths
 
@@ -237,7 +245,7 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 1. Sign up at [browserstack.com](https://www.browserstack.com)
 2. Go to **App Automate** > **Account** to find your username and access key
-3. In VS Code settings:
+3. In your VS Code **user** settings (the key and the secret are not read from workspace settings):
    ```json
    {
      "flutterprobe.cloudProvider": "browserstack",
@@ -263,7 +271,7 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 ### AWS Device Farm
 
 1. Create an IAM user with `AWSDeviceFarmFullAccess`
-2. Configure:
+2. Configure, in your **user** settings:
    ```json
    {
      "flutterprobe.cloudProvider": "aws",

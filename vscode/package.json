@@ -446,6 +446,7 @@
         },
         "flutterprobe.cloudProvider": {
           "type": "string",
+          "scope": "machine",
           "default": "",
           "enum": [
             "",
@@ -463,7 +464,7 @@
             "AWS Device Farm",
             "Firebase Test Lab (deprecated by Google)"
           ],
-          "description": "Cloud device farm provider for remote testing"
+          "description": "Cloud device farm provider for remote testing. User or remote settings only: the cloud key and secret are sent to it"
         },
         "flutterprobe.cloudDevice": {
           "type": "string",
@@ -478,17 +479,20 @@
         "flutterprobe.cloudKey": {
           "type": "string",
           "default": "",
-          "description": "Cloud provider username or access key ID"
+          "scope": "machine",
+          "description": "Cloud provider username or access key ID. User or remote settings only (a workspace cannot set it, and Settings Sync leaves it out); passed to probe as PROBE_CLOUD_KEY, never on the command line"
         },
         "flutterprobe.cloudSecret": {
           "type": "string",
           "default": "",
-          "description": "Cloud provider access key or secret (stored in settings — consider using env vars for CI)"
+          "scope": "machine",
+          "description": "Cloud provider access key or secret. User or remote settings only (a workspace cannot set it, and Settings Sync leaves it out); passed to probe as PROBE_CLOUD_SECRET, never on the command line. Settings are stored in plain text: in CI, set PROBE_CLOUD_SECRET instead"
         },
         "flutterprobe.relayUrl": {
           "type": "string",
           "default": "",
-          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers)"
+          "scope": "machine",
+          "description": "Relay server URL for cloud E2E testing (required for Firebase Test Lab and relay-mode cloud providers). User or remote settings only: the relay token is sent to it"
         },
         "flutterprobe.deviceView.fps": {
           "type": "number",
@@ -507,7 +511,8 @@
         "flutterprobe.relayToken": {
           "type": "string",
           "default": "",
-          "description": "Relay authentication token"
+          "scope": "machine",
+          "description": "Relay authentication token. User or remote settings only (a workspace cannot set it, and Settings Sync leaves it out); passed to probe as PROBE_RELAY_CLI_TOKEN, never on the command line"
         }
       }
     },
