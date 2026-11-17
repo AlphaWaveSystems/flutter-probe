@@ -9,14 +9,14 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 
 | Family | Examples | find | tap | type | scroll | read | fixture | device test |
 |---|---|---|---|---|---|---|---|---|
-| Text and display | `Text`, `RichText`, `Icon`, `Image` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Text and display | `Text`, `RichText`, `Icon`, `Image` | see below (`Text`, `RichText` only) | not assessed | n/a | not assessed | see below | `display` screen | `probe-tests/widgets/display.probe` |
 | Buttons | `ElevatedButton`, `TextButton`, `IconButton`, `CupertinoButton` | see below | see below | n/a | not assessed | see below | `buttons` screen | `probe-tests/widgets/buttons.probe` |
 | Text input | `TextField`, `TextFormField`, `CupertinoTextField` | see below | see below | see below | not assessed | see below | `textinput` screen | `probe-tests/widgets/textinput.probe` |
 | Selection controls | `Checkbox`, `Switch`, `Radio`, `Slider`, `CupertinoSwitch` | see below | see below | n/a | not assessed | see below | `selection` screen | `probe-tests/widgets/selection.probe` |
 | Pickers and menus | `DropdownButton`, `PopupMenuButton`, `DatePickerDialog`, `CupertinoPicker` | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
 | Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `PageView` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
 | Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
-| Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | not assessed | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
 | Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
 | Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | not assessed | not assessed | n/a | not assessed | n/a | not assessed | not assessed |
 | WebView content | an embedded web page (`webview_flutter`) | see below | see below | see below | not assessed | see below | `native-test-apps/flutter-webview` | `native-test-apps/flutter-webview/probe-tests/webview.probe` |
@@ -78,6 +78,41 @@ the radio's own group value when it has one and otherwise the nearest `RadioGrou
 
 Not covered by the screen: `ButtonBar` (deprecated in the catalog), `ToggleButtons` and `SegmentedButton` (selection), `PopupMenuButton` and `DropdownButton` (pickers and menus), a button inside a dialog or a list, a double tap, a button that scrolls into view, and a button under an overlay. The 8 variants of the suite that must fail
 (`probe-tests/negative/buttons.probe.expect-fail`) were run: all 8 fail with the message that says why (a count one too many, `is disabled` on an enabled button and `is enabled` on a disabled one, the disabled button's counter expected above 0, a held press taken for no tap, a label that is not on the screen, a tap taken for a long press, one button's tooltip finding another).
+
+### Navigation (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=navigation`, `probe-tests/widgets/navigation.probe`)
+
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`), 4 of 4 three times on each; the 5 variants that must fail (`probe-tests/negative/navigation.probe.expect-fail`) failed, 5 of 5 on each, each with the message its comment states.
+
+| Widget or behavior (fixture id) | find | tap | read | Result |
+|---|---|---|---|---|
+| `AppBar` title (`Inbox`) | pass (`see "Inbox"`) | n/a | pass (its text) | pass |
+| `AppBar` action: an `IconButton` with the tooltip `Search` (`wf_search`) | pass (the tooltip text and `#wf_search`) | pass (both; the state text `Queries: N` counts) | n/a | pass |
+| `Navigator.push` of a `MaterialPageRoute` (`wf_open_message`, the route titled `Message`) | pass (`see "Message"`, `see "From: Ada"` after `wait until ... appears`) | pass (`tap "Open message"`) | pass | pass |
+| the route under an opaque route | **not matched** (the same test first sees `"Inbox"` and `"Queries: 0"`, then, while the message route is on top, `don't see "Inbox"`, `"Queries: 0"`, `"Open message"` all pass; `see "Inbox"` fails) | n/a | n/a | pass: the agent's route rule (PT-03) holds on a device |
+| `go back` (the agent calls `Navigator.pop()` on the app's navigator; not a system back key) | pass (the first route is seen again) | n/a | n/a | pass, with the finding below |
+
+**Findings.**
+- **The route under an opaque route is not matched, on a device.** The agent's rule (`_isVisible` and `_routeOnScreen` in `probe_agent/lib/src/finder.dart`, unit test "ProbeFinder route-awareness (PT-03)") holds on both devices: while the message route is on top, the first route's title, texts and button are not found, and `see "Inbox"` fails.
+- **During a pop, the leaving route is still matched.** Right after `go back`, `wait until "Inbox" appears` passes at once while the message route is still on screen in Material's page transition, and `don't see "From: Ada"` then finds it. Measured on both devices with those steps alone, 5 runs each: `Compat-Pixel-API35` 4 of 5 runs, `Compat-iPhone` 5 of 5. A test that checks a pop waits for the leaving route to go: `wait until "From: Ada" disappears`.
+
+Not covered by the screen: `NavigationBar`, `TabBar`, `Drawer`, a route that is not opaque (a dialog, a popup menu, a bottom sheet: the page under it stays matched by design; item 8 of `NEXT.md`), named routes and `go_router`, the Android system back key and the iOS edge swipe (`go back` pops in the app, it does not press either), a nested `Navigator`, and Cupertino routes (item 10 of `NEXT.md`). Flutter 3.50.0 was not run for this family.
+### Text and display: text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
+
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 9 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 9 of 9 on each, each with the message its comment states.
+
+| Widget (fixture id) | find | read | Result |
+|---|---|---|---|
+| `Text` (`wf_text`, `Order total: 42.00`) | pass (the whole text, a part of it, `#wf_text`) | pass (`see "Order total" contains "42.00"`; a value the text does not hold fails with the text it has) | pass |
+| `Text.rich` of two spans, `Hello ` and a bold `world` (`wf_rich`) | pass (`"Hello world"`: the spans are matched as one text; `"Hello"` and `"world"` as parts of it; `#wf_rich`) | pass (`see "Hello world" contains "world"`; the text read is the whole `Hello world`, as a failing `contains "earth"` shows) | pass |
+| `RichText` of two spans, `Painted ` and `rich text` (`wf_richtext`) | pass (`"Painted rich text"`, `"rich text"`, `#wf_richtext`) | pass (`see "Painted rich text" contains "rich text"`; `contains "plain text"` fails) | pass |
+| `Text` with `maxLines: 1` and `TextOverflow.ellipsis`, chosen longer than the screen is wide (an inference from its length; the agent does not report the painted width) (`wf_ellipsis`) | **the whole string is matched, the part that is not painted included** (`see "...United States of America"` passes; the painted, cut form with `…` does not); `#wf_ellipsis` | pass (`see "Shipping address" contains "United States of America"`: the text read is the whole string; `contains "Canada"` fails) | pass, with the finding below |
+
+**Findings.**
+- **A text selector matches the text the app gave the widget, not what is painted.** A `Text` cut with an ellipsis is found by its whole string, including the part a user cannot see, and not by the cut form shown on screen. A test that must show that a text is fully visible cannot rely on `see`.
+- **A text selector matches the whole text or any part of it, exactly:** case counts (`"hello world"` fails) and spaces count (`"Hello  world"` fails); the spans of a `Text.rich` or a `RichText` are matched as one text, joined as written.
+- **Right after `restart the app`, the screen can still be being built** (issue #793): on `Compat-Pixel-API35`, without a wait 3 of 10 runs failed, with a wait for the first item 1 of 10, and with a wait for the screen's last widget 10 of 10 passed. The suite waits for the last widget after the restart.
+
+Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` inside other widgets (buttons are their own family), text scale and `textScaler`, right-to-left and other scripts, a `Text` with `semanticsLabel` (item 3 asks how a semantic label is matched), soft wrapping without `maxLines`, and `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` (item 3). Flutter 3.50.0 was not run for this family.
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 

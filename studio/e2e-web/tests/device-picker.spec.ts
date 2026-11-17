@@ -65,4 +65,30 @@ test.describe("Device picker", () => {
     await expect(page.locator("#device-picker")).toHaveValue("");
     await expect(page.locator("#btn-connect")).toBeDisabled();
   });
+
+  test("dp-04 an older refresh that finishes after a newer one does not put its list back", async ({ page }) => {
+    // The first refresh (start-up) is held at DeviceListNote; a click on the refresh button starts a second one that finishes first with another list.
+    // When the first one is let go, its list is out of date and the seq check after the note must drop it.
+    const three = [...two, dev("emu-3", "Pixel Three")];
+    let lists = 0;
+    let notes = 0;
+    let releaseFirstNote: () => void = () => {};
+    const firstNoteHeld = new Promise<void>((r) => (releaseFirstNote = r));
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"ListDevices"')) return route.fulfill({ json: { result: lists++ === 0 ? two : three } });
+      if (body.includes('"method":"DeviceListNote"')) {
+        if (notes++ === 0) await firstNoteHeld;
+        return route.fulfill({ json: { result: "" } });
+      }
+      await route.continue();
+    });
+    await openStudio(page);
+    await expect.poll(() => notes, { timeout: 10_000 }).toBe(1); // the first refresh is now waiting for its note
+    await page.click("#btn-refresh");
+    await expect.poll(async () => (await options(page)).length, { timeout: 10_000 }).toBe(4); // the second one finished first
+    releaseFirstNote();
+    await page.waitForTimeout(600); // the first one resumes here and must not replace the newer list with its own
+    expect((await options(page)).length).toBe(4);
+  });
 });

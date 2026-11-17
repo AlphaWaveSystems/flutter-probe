@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { buildTestArgs, getProbeCommand } from '../probe';
+import { buildTestRun, getProbeCommand } from '../probe';
 import { runInTerminal } from '../terminal/probeTerminal';
 import { getWorkspaceRoot } from '../config';
 
@@ -20,8 +20,8 @@ async function runTestAtCursor(): Promise<void> {
     return;
   }
 
-  const args = buildTestArgs(editor.document.uri.fsPath);
-  runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+  const run = buildTestRun(editor.document.uri.fsPath);
+  runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
 async function runCurrentFile(): Promise<void> {
@@ -37,8 +37,8 @@ async function runCurrentFile(): Promise<void> {
     return;
   }
 
-  const args = buildTestArgs(filePath);
-  runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+  const run = buildTestRun(filePath);
+  runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }
 
 async function runByTag(): Promise<void> {
@@ -54,8 +54,8 @@ async function runByTag(): Promise<void> {
     return;
   }
 
-  const args = buildTestArgs(ws, { tags: [tag] });
-  runInTerminal('Probe: Test', getProbeCommand(), args, ws);
+  const run = buildTestRun(ws, { tags: [tag] });
+  runInTerminal('Probe: Test', getProbeCommand(), run.args, ws, run.env);
 }
 
 async function runWithOptions(): Promise<void> {
@@ -88,12 +88,12 @@ async function runWithOptions(): Promise<void> {
   );
 
   const target = filePath.endsWith('.probe') ? filePath : filePath;
-  const args = buildTestArgs(target, {
+  const run = buildTestRun(target, {
     device: device || undefined,
     timeout: timeout || undefined,
     format: format || undefined,
     video: videoChoice === 'Yes',
   });
 
-  runInTerminal('Probe: Test', getProbeCommand(), args, getWorkspaceRoot());
+  runInTerminal('Probe: Test', getProbeCommand(), run.args, getWorkspaceRoot(), run.env);
 }

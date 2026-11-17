@@ -181,7 +181,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("start recording: %w", err)
 	}
 
-	fmt.Printf("\n  \033[32m●\033[0m  Recording on %s — interact with your app\n", deviceSerial)
+	fmt.Printf("\n  \033[32m●\033[0m  Recording on %s — interact with your app\n", device.CleanOneLine(deviceSerial, 80))
 	fmt.Println("  Press Ctrl+C or wait for timeout to stop and save.")
 
 	// Wait for timeout or interrupt

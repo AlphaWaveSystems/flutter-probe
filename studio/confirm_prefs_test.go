@@ -244,3 +244,27 @@ func TestTheProductionDeviceCheckGatesTheShortcut(t *testing.T) {
 		t.Error("an emulator that says so was asked about")
 	}
 }
+
+// The note says when the wipe happens when it is the before-every-test question that was answered without asking, and says "Cleared data" for a step.
+func TestTheNoQuestionNoteSaysWhenTheWipeHappens(t *testing.T) {
+	withPrefs(t, true)
+	verified(t, true)
+	for _, tc := range []struct {
+		message string
+		want    string
+		notWant string
+	}{
+		{"This will permanently delete ALL app data for a.b on s BEFORE EVERY TEST of this run.", "Will clear data before every test", "Cleared data of"},
+		{"This will permanently delete ALL app data for a.b on s.", "Cleared data of", "before every test"},
+	} {
+		c := newConfirmApp(t, true)
+		c.a.conn.disposable = true
+		out := make(chan bool, 1)
+		go func() { out <- c.a.confirmClearData(c.dc)(tc.message) }()
+		answerOf(t, out)
+		note := c.next(t, "confirm:note")[0].(string)
+		if !strings.Contains(note, tc.want) || strings.Contains(note, tc.notWant) || !strings.Contains(note, "com.example.app") {
+			t.Errorf("%q: note %q", tc.message, note)
+		}
+	}
+}

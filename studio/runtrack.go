@@ -136,6 +136,9 @@ func (a *App) claimRun() (context.Context, context.CancelFunc, error) {
 		parent = context.Background()
 	}
 	runCtx, cancel := context.WithCancel(parent)
+	a.mu.Lock()
+	ws := canonicalWorkspace(a.workspace) // the folder this run belongs to, taken with the slot
+	a.mu.Unlock()
 	a.runMu.Lock()
 	defer a.runMu.Unlock()
 	if a.runCancel != nil {
@@ -143,6 +146,7 @@ func (a *App) claimRun() (context.Context, context.CancelFunc, error) {
 		return nil, nil, errRunInProgress
 	}
 	a.runCancel = cancel
+	a.runWorkspace = ws
 	return runCtx, cancel, nil
 }
 
@@ -161,6 +165,7 @@ func (a *App) runActive() bool {
 func (a *App) releaseRun(cancel context.CancelFunc) {
 	a.runMu.Lock()
 	a.runCancel = nil
+	a.runWorkspace = ""
 	a.runMu.Unlock()
 	cancel()
 }
