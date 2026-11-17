@@ -78,7 +78,13 @@ type NetDetail struct {
 	ResponseBody        NetBody     `json:"responseBody"`
 }
 
+// netRowRedacted is called once for every entry that is turned into a row (redacted); tests count it, nothing else sets it.
+var netRowRedacted func()
+
 func netRow(e probelink.HTTPEntry) NetRow {
+	if netRowRedacted != nil {
+		netRowRedacted()
+	}
 	reqBytes, respBytes := e.RequestBytes, e.ResponseBytes
 	if reqBytes == 0 {
 		reqBytes = int64(len(e.RequestBody)) // an agent that does not report sizes
