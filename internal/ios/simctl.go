@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -161,7 +162,7 @@ func (s *SimCtl) WaitForBoot(ctx context.Context, udid string, timeout, pollInte
 		}
 		time.Sleep(pollInterval)
 	}
-	return fmt.Errorf("simctl: simulator %s did not boot within %s", udid, timeout)
+	return fmt.Errorf("simctl: simulator %s did not boot within %s", oneline.Clean(udid, 80), timeout)
 }
 
 // Install installs an .app bundle on the simulator.
@@ -268,16 +269,23 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 	// Secondary: glob ALL data containers for this simulator — handles the case
 	// where multiple installs exist and get_app_container returns a stale container
 	// that doesn't match the one the currently running app is writing to.
-	allContainerGlob := filepath.Join(s.simDataPath(udid), "Containers", "Data", "Application", "*", "tmp", "probe", "token")
+	// Only for a simulator UDID: with anything else the data path is "" and a glob or a fallback built on it would be relative to the
+	// working directory, or the shared /tmp.
+	dataPath := s.simDataPath(udid)
 	var globbed []string
-	if matches, err := filepath.Glob(allContainerGlob); err == nil {
-		globbed = matches
-		tokenPaths = append(tokenPaths, matches...)
+	if dataPath != "" {
+		allContainerGlob := filepath.Join(dataPath, "Containers", "Data", "Application", "*", "tmp", "probe", "token")
+		if matches, err := filepath.Glob(allContainerGlob); err == nil {
+			globbed = matches
+			tokenPaths = append(tokenPaths, matches...)
+		}
 	}
 	noApp := len(bundleID) == 0 || bundleID[0] == ""
 
 	// Fallback: device-level tmp (legacy path)
-	tokenPaths = append(tokenPaths, s.simDataPath(udid)+"/tmp/probe/token")
+	if dataPath != "" {
+		tokenPaths = append(tokenPaths, dataPath+"/tmp/probe/token")
+	}
 
 	// Poll token file until timeout. Re-resolve the app container path
 	// periodically in case the container changed (e.g. after clear app data).
@@ -399,7 +407,7 @@ func (s *SimCtl) AppBundlePath(ctx context.Context, udid, bundleID string) strin
 func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
 	app := s.AppBundlePath(ctx, udid, bundleID)
 	if app == "" {
-		return fmt.Errorf("reinstall: %s is not installed on %s", bundleID, udid)
+		return fmt.Errorf("reinstall: %s is not installed on %s", oneline.Clean(bundleID, 80), oneline.Clean(udid, 80))
 	}
 	tmp, err := os.MkdirTemp("", "probe-reinstall-*")
 	if err != nil {
@@ -421,8 +429,16 @@ func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
 }
 
 // simDataPath returns the data directory for a simulator UDID.
+// It is "" for anything but a simulator UDID: the path is read from (and globbed), so an id with "..", a separator or a glob character
+// must not shape it.
 func (s *SimCtl) simDataPath(udid string) string {
-	home, _ := os.UserHomeDir()
+	if !ValidSimulatorUDID(udid) {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
 	return home + "/Library/Developer/CoreSimulator/Devices/" + udid + "/data"
 }
 
