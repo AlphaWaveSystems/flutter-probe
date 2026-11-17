@@ -7,13 +7,18 @@ package secretfile
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 // permsEnforced is false where the file mode does not describe who can read a file.
 var permsEnforced = runtime.GOOS != "windows"
+
+// renameFile moves the finished temporary file into place; a variable so a test can make it fail.
+var renameFile = os.Rename
 
 // ownedByUs says whether a file or folder belongs to this user; a variable so a test can say it does not.
 var ownedByUs = ownedByUser
@@ -71,6 +76,7 @@ func Write(o Options) (path string, replaced bool, err error) {
 		return "", false, fmt.Errorf("%s: token file: %w", o.Label, err)
 	}
 
+	removeStaleTemps(o.Dir, o.Name)
 	tmp, err := os.CreateTemp(o.Dir, o.Name+".*") // created 0600, with O_EXCL
 	if err != nil {
 		return "", false, fmt.Errorf("%s: token file: %w", o.Label, err)
@@ -83,7 +89,7 @@ func Write(o Options) (path string, replaced bool, err error) {
 		werr = os.Chmod(tmp.Name(), 0o600)
 	}
 	if werr == nil {
-		werr = os.Rename(tmp.Name(), path)
+		werr = renameFile(tmp.Name(), path)
 	}
 	if werr != nil {
 		_ = os.Remove(tmp.Name())
@@ -93,8 +99,39 @@ func Write(o Options) (path string, replaced bool, err error) {
 }
 
 // Remove removes the file on shutdown, but only while it still holds this process's content: a second process started later has put its own there.
+// It never blocks on what is at the name: only a regular file of exactly the content's size is opened (without waiting, as a pipe someone planted
+// there would make a plain open wait for a writer), and at most one byte more than the content is read.
 func Remove(path, content string) {
-	if b, err := os.ReadFile(path); err == nil && string(b) == content {
+	fi, err := os.Lstat(path)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() != int64(len(content)) {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || !os.SameFile(fi, st) {
+		return // the name was changed between the check and the open
+	}
+	b, err := io.ReadAll(io.LimitReader(f, int64(len(content))+1))
+	if err == nil && string(b) == content {
 		_ = os.Remove(path)
+	}
+}
+
+// staleTempAge is how old a temporary file of ours must be before a new write removes it: a write that is under way is a few milliseconds.
+const staleTempAge = 10 * time.Second
+
+// removeStaleTemps removes the temporary files an earlier write of this name left behind when the process died between making the file and renaming
+// it into place (the file holds the secret, mode 0600). Only a regular file of this user, named like our temporary files and old enough, is removed.
+func removeStaleTemps(dir, name string) {
+	matches, _ := filepath.Glob(filepath.Join(dir, name+".*"))
+	for _, m := range matches {
+		fi, err := os.Lstat(m)
+		if err != nil || !fi.Mode().IsRegular() || !ownedByUs(fi) || time.Since(fi.ModTime()) < staleTempAge {
+			continue
+		}
+		_ = os.Remove(m)
 	}
 }
