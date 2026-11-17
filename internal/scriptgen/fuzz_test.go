@@ -29,9 +29,9 @@ func FuzzStep(f *testing.F) {
 		{1, 0, "field", "", "", "", `Say "hi"`, false},
 		{1, 1, "Name", "", "", "", "line one\nline two\ttabbed", false},
 		{1, 1, "Name", "", "", "", `back\slash and \n and trailing\`, false},
-		{1, 1, "Name", "", "", "", "‮​  bidi, zero width, no-break", false},
+		{1, 1, "Name", "", "", "", "\u202e\u200b  bidi, zero width, no-break", false},
 		{1, 1, "Name", "", "", "", "💳 é世\x00\x1b", false},
-		{1, 1, "Name", "", "", "", "a b", false},
+		{1, 1, "Name", "", "", "", "a\u2028b", false},
 		{1, 1, "Name", "", "", "", "\xff\xfe", false},
 		{1, 0, "Password", "", "", "", "hunter2", true},
 		{0, 2, "Switch", "", "", "", "", false},
@@ -47,7 +47,7 @@ func FuzzStep(f *testing.F) {
 		{5, 3, "", "", "", "", "", false},
 		{6, 1, "Total", "", "", "", "", false},
 		{7, 3, "", "", "", "", "", false},
-		{8, 3, "x\ny‮" + strings.Repeat("z", 200), "", "", "", "", false},
+		{8, 3, "x\ny\u202e" + strings.Repeat("z", 200), "", "", "", "", false},
 		{1, 1, "Name", "", "", "", strings.Repeat("long text ", 20000), false},
 		{0, 1, "${HOME} and <random.email>", "", "", "", "", false},
 		{1, 1, "Name", "", "", "", "${SECRET} <name>", false},
@@ -83,7 +83,7 @@ func FuzzStep(f *testing.F) {
 		}
 		for _, line := range lines {
 			for _, r := range line {
-				if unicode.IsControl(r) || r == ' ' || r == ' ' {
+				if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
 					t.Fatalf("a line holds the control or separator character %U: %q", r, line)
 				}
 			}

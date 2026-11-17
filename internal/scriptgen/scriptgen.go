@@ -213,20 +213,6 @@ func typeName(s string) bool {
 	return s != ""
 }
 
-// holdable says whether text can be written into a script line as it is (an id, a widget type): valid UTF-8 and no control character or line
-// separator. A lookup that is not holdable is not written; Selector falls back to the next one.
-func holdable(s string) bool {
-	if !utf8.ValidString(s) {
-		return false
-	}
-	for _, r := range s {
-		if unholdable(r) {
-			return false
-		}
-	}
-	return true
-}
-
 // unholdable is a character a script line cannot hold: a control character (the escapes for tab and newline are Quote's), or a line or
 // paragraph separator.
 func unholdable(r rune) bool { return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' }
