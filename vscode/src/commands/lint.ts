@@ -23,7 +23,7 @@ function lintCurrentFile(): void {
     return;
   }
 
-  runInTerminal('Probe: Lint', getProbeCommand(), ['lint', filePath], getWorkspaceRoot());
+  runInTerminal('Probe: Lint', getProbeCommand(), ['lint', filePath], getWorkspaceRoot(), {});
 }
 
 function lintWorkspace(): void {
@@ -33,5 +33,5 @@ function lintWorkspace(): void {
     return;
   }
 
-  runInTerminal('Probe: Lint', getProbeCommand(), ['lint', ws], ws);
+  runInTerminal('Probe: Lint', getProbeCommand(), ['lint', ws], ws, {});
 }

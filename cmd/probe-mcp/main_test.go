@@ -177,8 +177,8 @@ func TestBinary(t *testing.T) {
 		t.Fatalf("the server did not announce itself:\n%s", stderr.String())
 	}
 	// macOS puts the config dir under "Library/Application Support"; the path regexp stops at the space.
-	matches, _ := filepath.Glob(filepath.Join(home, "*", "*", "flutter-probe-mcp", "http-token"))
-	more, _ := filepath.Glob(filepath.Join(home, "*", "flutter-probe-mcp", "http-token"))
+	matches, _ := filepath.Glob(filepath.Join(home, "*", "*", "flutter-probe-mcp", "http-token-*"))
+	more, _ := filepath.Glob(filepath.Join(home, "*", "flutter-probe-mcp", "http-token-*"))
 	matches = append(matches, more...)
 	if len(matches) != 1 || !strings.HasPrefix(matches[0], file) {
 		t.Fatalf("token file: found %v, stderr names %q", matches, file)

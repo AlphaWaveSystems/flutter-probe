@@ -39,7 +39,11 @@ func (d *DeviceCtl) Launch(ctx context.Context, udid, bundleID string) error {
 // Returns nil if the app is not running.
 func (d *DeviceCtl) Terminate(ctx context.Context, udid, bundleID string) error {
 	pid, err := d.FindPID(ctx, udid, bundleID)
-	if err != nil || pid == 0 {
+	if err != nil {
+		// Not "not running": the process list could not be read (or the id was refused), so the app may still run. The caller says so.
+		return fmt.Errorf("devicectl terminate: the app's process could not be looked up: %w", err)
+	}
+	if pid == 0 {
 		return nil // not running
 	}
 	cmd := exec.CommandContext(ctx, "xcrun", "devicectl", "device", "process", "terminate",
@@ -65,8 +69,18 @@ func (d *DeviceCtl) Install(ctx context.Context, udid, appPath string) error {
 // FindPID looks up the process ID of a running app by its bundle ID.
 // Returns 0 if the app is not running.
 func (d *DeviceCtl) FindPID(ctx context.Context, udid, bundleID string) (int, error) {
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("devicectl-procs-%s.json", udid[:8]))
-	defer os.Remove(tmpFile)
+	// devicectl writes the list to a file. The file is in a new private folder (0700, its name chosen by the system), never under a name
+	// built from the device id: a crafted id such as "../../x" would otherwise name a file outside the temporary folder, and the cleanup
+	// would delete it. The id is also checked before anything runs.
+	if !ValidDeviceUDID(udid) {
+		return 0, fmt.Errorf("devicectl info processes: %q is not a device id", udid)
+	}
+	dir, err := os.MkdirTemp("", "probe-devicectl-")
+	if err != nil {
+		return 0, fmt.Errorf("devicectl info processes: %w", err)
+	}
+	defer os.RemoveAll(dir)
+	tmpFile := filepath.Join(dir, "processes.json")
 
 	cmd := exec.CommandContext(ctx, "xcrun", "devicectl", "device", "info", "processes",
 		"--device", udid, "--json-output", tmpFile)

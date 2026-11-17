@@ -74,7 +74,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
 
   <!-- Proof: a real test beside a real report -->
   <section class="sec" aria-labelledby="proof-h">
-    <div class="sec-h"><h2 id="proof-h">A real test next to its real report</h2><p>Both come from one run of the repository's own fixture app, on an Android emulator. Nothing is mocked up.</p></div>
+    <div class="sec-h"><h2 id="proof-h">A real test next to its real report</h2><p>Excerpts from real runs of the repository's own fixture app on an Android emulator.</p></div>
     <div class="split">
       <div class="codebox">
         <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="fname">webview.probe</span></div>
@@ -85,7 +85,8 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
   type <span class="str">"&lt;typed&gt;"</span> into #echo_input
   see <span class="str">"Echo: hello"</span>
   tap <span class="str">"Contact support"</span> in webview
-  wait until <span class="str">"Message sent"</span> appears in webview</pre>
+  wait until <span class="str">"Message sent"</span> appears in webview
+  see css:<span class="str">"#result"</span> in webview</pre>
       </div>
       <div class="codebox">
         <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="fname">probe test</span></div>
@@ -103,7 +104,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
      WebView page "Fixture page" matches "Getting Stopped"</pre>
       </div>
     </div>
-    <p class="note">The six passing lines are one run of <a href="https://github.com/AlphaWaveSystems/flutter-probe/blob/main/native-test-apps/flutter-webview/probe-tests/webview.probe">webview.probe</a> (Flutter 3.44.8, emulator, Android 15). The last test is a variant that is written to fail, from the same app: it shows the message you get when a step cannot find what it looks for (one repeated prefix is trimmed from the message). The WebView steps are Android only; every other step works on iOS too.</p>
+    <p class="note">The left listing is a whole test of the file, and the six passing lines are one run of that file: <a href="https://github.com/AlphaWaveSystems/flutter-probe/blob/main/native-test-apps/flutter-webview/probe-tests/webview.probe">webview.probe</a> (Flutter 3.44.8, emulator, Android 15). The failing block is not part of that run: it is a test written to fail, from a separate run of a variant file of the same app (<a href="https://github.com/AlphaWaveSystems/flutter-probe/blob/main/native-test-apps/flutter-webview/probe-tests/negative/webview.probe.expect-fail">webview.probe.expect-fail</a>), to show the message you get when a step cannot find what it looks for; one repeated prefix is trimmed from that message. The WebView steps are Android only; every other step works on iOS too.</p>
   </section>
   <div class="divider"></div>
 
@@ -206,7 +207,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
   <section class="sec" aria-labelledby="arch-h">
     <div class="sec-h"><h2 id="arch-h">Architecture</h2><p>Two components. One WebSocket.</p></div>
     <div class="arch">
-      <div class="arch-box"><h3>probe CLI</h3><p>Parses .probe files, manages devices, dispatches commands, generates reports</p><span class="tag">Go &middot; 15MB binary</span></div>
+      <div class="arch-box"><h3>probe CLI</h3><p>Parses .probe files, manages devices, dispatches commands, generates reports</p><span class="tag">Go &middot; one binary</span></div>
       <div class="arch-arrow"><span style="font-size:2rem">&#8652;</span><span>JSON-RPC 2.0</span><span>WebSocket :48686</span></div>
       <div class="arch-box"><h3>ProbeAgent</h3><p>Runs inside your app. Walks widget tree, executes actions, captures screenshots</p><span class="tag">Dart &middot; dev dependency</span></div>
     </div>

@@ -21,7 +21,7 @@ adb -s <serial> shell am start -n com.alphawavesystems.probe_flutter_webview/.Ma
 probe test probe-tests/webview.probe --device <serial> -y
 ```
 
-`probe-tests/webview.probe` has 5 tests and restarts the app before each. What each shows, and what it does not, is in `docs/compat/MATRIX.md` ("WebView content").
+`probe-tests/webview.probe` has 6 tests and restarts the app before each. `probe-tests/negative/webview.probe.expect-fail` holds the 9 variants that must fail (copy it to a `.probe` file to run it; its header says how). What each shows, and what it does not, is in `docs/compat/MATRIX.md` ("WebView content").
 
 ## Versions
 

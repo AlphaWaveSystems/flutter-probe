@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/sysdialog"
 )
 
@@ -43,6 +45,14 @@ func statusWarn(w io.Writer, format string, a ...any) {
 // are. A warning can name the widget a step acted on, and that label can be a value the script took from the environment.
 func printAgentWarning(w io.Writer, msg string) {
 	statusWarn(w, "%s", sysdialog.ScrubKnown(msg))
+}
+
+// printAppIDWarning warns when the app the agent reports is not the project's app (`project.app`). Whether two ids that differ only in case are the
+// same app depends on the platform (see device.Platform.AppIDIsCaseInsensitive). `probe test` calls it after the handshake.
+func printAppIDWarning(w io.Writer, h probelink.HandshakeResult, projectApp string, platform device.Platform) {
+	if msg := probelink.AppIDMismatchWarning(h, projectApp, platform.AppIDIsCaseInsensitive()); msg != "" {
+		printAgentWarning(w, msg)
+	}
 }
 
 // statusFail writes a failure status line (red ✗) to w.

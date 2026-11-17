@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -526,7 +528,7 @@ func TestTokenFileModes(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), "cfg", tokenDirName)
 	token, _ := newToken()
-	path, replaced, err := writeTokenFile(dir, token)
+	path, replaced, err := writeTokenFile(dir, tokenFileName(loopback4, "", 7001), token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,7 +549,7 @@ func TestTokenFileModes(t *testing.T) {
 	}
 	// A second start replaces the token and leaves nothing else in the directory.
 	second, _ := newToken()
-	if _, replaced, err := writeTokenFile(dir, second); err != nil || !replaced {
+	if _, replaced, err := writeTokenFile(dir, tokenFileName(loopback4, "", 7001), second); err != nil || !replaced {
 		t.Fatalf("second write: replaced = %v, err = %v; want replaced and no error", replaced, err)
 	}
 	if b, _ := os.ReadFile(path); string(b) != second+"\n" || second == token {
@@ -592,7 +594,7 @@ func TestTokenFileRefusals(t *testing.T) {
 	token, _ := newToken()
 	t.Run("file 0644", func(t *testing.T) {
 		dir := privateDir(t)
-		path := filepath.Join(dir, tokenFileName)
+		path := filepath.Join(dir, tokenFileName(loopback4, "", 7001))
 		for _, mode := range []os.FileMode{0o644, 0o640, 0o604, 0o660} {
 			if err := os.WriteFile(path, []byte("old\n"), 0o600); err != nil {
 				t.Fatal(err)
@@ -600,7 +602,7 @@ func TestTokenFileRefusals(t *testing.T) {
 			if err := os.Chmod(path, mode); err != nil {
 				t.Fatal(err)
 			}
-			_, _, err := writeTokenFile(dir, token)
+			_, _, err := writeTokenFile(dir, tokenFileName(loopback4, "", 7001), token)
 			wantRefusal(t, err, "token file", path, "is open to other users")
 			if b, _ := os.ReadFile(path); string(b) != "old\n" {
 				t.Errorf("mode %04o: the refused file was written", mode)
@@ -609,7 +611,7 @@ func TestTokenFileRefusals(t *testing.T) {
 	})
 	t.Run("file link", func(t *testing.T) {
 		dir := privateDir(t)
-		path := filepath.Join(dir, tokenFileName)
+		path := filepath.Join(dir, tokenFileName(loopback4, "", 7001))
 		target := filepath.Join(privateDir(t), "elsewhere")
 		if err := os.WriteFile(target, []byte("keep\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -617,7 +619,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := writeTokenFile(dir, token)
+		_, _, err := writeTokenFile(dir, tokenFileName(loopback4, "", 7001), token)
 		wantRefusal(t, err, "token file", path, "is a symlink or not a regular file")
 		if b, _ := os.ReadFile(target); string(b) != "keep\n" {
 			t.Error("the link target was written")
@@ -628,12 +630,12 @@ func TestTokenFileRefusals(t *testing.T) {
 	})
 	t.Run("dangling link", func(t *testing.T) {
 		dir := privateDir(t)
-		path := filepath.Join(dir, tokenFileName)
+		path := filepath.Join(dir, tokenFileName(loopback4, "", 7001))
 		target := filepath.Join(privateDir(t), "not-there")
 		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := writeTokenFile(dir, token)
+		_, _, err := writeTokenFile(dir, tokenFileName(loopback4, "", 7001), token)
 		wantRefusal(t, err, "token file", path, "is a symlink or not a regular file")
 		if _, err := os.Stat(target); !os.IsNotExist(err) {
 			t.Error("the token was written through the link")
@@ -645,7 +647,7 @@ func TestTokenFileRefusals(t *testing.T) {
 			if err := os.Chmod(dir, mode); err != nil {
 				t.Fatal(err)
 			}
-			_, _, err := writeTokenFile(dir, token)
+			_, _, err := writeTokenFile(dir, tokenFileName(loopback4, "", 7001), token)
 			wantRefusal(t, err, "token directory", dir, "is open to other users")
 			if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 				t.Errorf("mode %04o: the token was written into the refused directory", mode)
@@ -658,7 +660,7 @@ func TestTokenFileRefusals(t *testing.T) {
 		if err := os.Symlink(real, link); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := writeTokenFile(link, token)
+		_, _, err := writeTokenFile(link, tokenFileName(loopback4, "", 7001), token)
 		wantRefusal(t, err, "token directory", link, "is a symlink or not a directory")
 		if entries, _ := os.ReadDir(real); len(entries) != 0 {
 			t.Error("the token was written through the directory link")
@@ -738,12 +740,41 @@ func (s *syncBuffer) String() string {
 
 var listenLine = regexp.MustCompile(`MCP over HTTP at (http://\S+)/mcp`)
 
+// tokenPathOf is the token file of the server at url in dir: one file for each port.
+func tokenPathOf(t *testing.T, dir, url string) string {
+	t.Helper()
+	host, port, err := net.SplitHostPort(strings.TrimPrefix(url, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, _ := strconv.Atoi(port)
+	zone := ""
+	if i := strings.Index(host, "%"); i >= 0 {
+		host, zone = host[:i], host[i+1:]
+	}
+	return filepath.Join(dir, tokenFileName(net.ParseIP(strings.Trim(host, "[]")), zone, n))
+}
+
+// freeAddr is a loopback address with a port nothing listens on now.
+func freeAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().String()
+}
+
 // startRunHTTP runs RunHTTP on a free loopback port and returns its URL, its log and a stop
 // function that waits for it to return.
 func startRunHTTP(t *testing.T, opts HTTPOptions) (string, *syncBuffer, func() error) {
 	t.Helper()
 	logs := &syncBuffer{}
-	opts.Addr, opts.Log = "127.0.0.1:0", logs
+	if opts.Addr == "" {
+		opts.Addr = "127.0.0.1:0"
+	}
+	opts.Log = logs
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- RunHTTP(ctx, opts) }()
@@ -782,7 +813,7 @@ func TestRunHTTPNeverLogsTheToken(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), tokenDirName)
 	url, logs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir})
-	path := filepath.Join(dir, tokenFileName)
+	path := tokenPathOf(t, dir, url)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -819,8 +850,11 @@ func TestRunHTTPNeverLogsTheToken(t *testing.T) {
 func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), tokenDirName)
+	addr := freeAddr(t)
+	_, portText, _ := net.SplitHostPort(addr)
+	port, _ := strconv.Atoi(portText)
 	read := func() string {
-		b, err := os.ReadFile(filepath.Join(dir, tokenFileName))
+		b, err := os.ReadFile(filepath.Join(dir, tokenFileName(loopback4, "", port)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -828,12 +862,12 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	}
 	// A token file left by a server that was killed is replaced, never reused.
 	stale, _ := newToken()
-	if _, _, err := writeTokenFile(dir, stale); err != nil {
+	if _, _, err := writeTokenFile(dir, tokenFileName(loopback4, "", port), stale); err != nil {
 		t.Fatal(err)
 	}
-	firstURL, firstLogs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	firstURL, firstLogs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: addr})
 	first := read()
-	if out := firstLogs.String(); !strings.Contains(out, "has been replaced") || strings.Contains(out, stale) || strings.Contains(out, first) {
+	if out := firstLogs.String(); !strings.Contains(out, "has been replaced") || !strings.Contains(out, "did not stop cleanly") || strings.Contains(out, stale) || strings.Contains(out, first) {
 		t.Errorf("replacing a token file: the log must say so and name no token:\n%s", strings.ReplaceAll(strings.ReplaceAll(out, stale, "<stale>"), first, "<token>"))
 	}
 	if first == stale {
@@ -845,7 +879,7 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	if err := stop(); err != nil {
 		t.Fatal(err)
 	}
-	url, secondLogs, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	url, secondLogs, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: addr})
 	second := read()
 	if strings.Contains(secondLogs.String(), "has been replaced") {
 		t.Error("a start with no token file on disk reports a replaced one")
@@ -981,8 +1015,8 @@ func TestHTTPBearerMustBeTheTokenAlone(t *testing.T) {
 func TestRunHTTPFailedStartLeavesTheRunningServerAlone(t *testing.T) {
 	skipWithoutFileModes(t)
 	dir := filepath.Join(t.TempDir(), tokenDirName)
-	path := filepath.Join(dir, tokenFileName)
 	url, _, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	path := tokenPathOf(t, dir, url)
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -1012,5 +1046,218 @@ func TestRunHTTPFailedStartLeavesTheRunningServerAlone(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
 		t.Errorf("token dir holds %d entries after the failed start, want 1", len(entries))
+	}
+}
+
+// Two servers of one user, on two ports, have a token file each: the second does not replace the first's, both tokens work, and stopping one
+// removes only its own file.
+func TestTwoServersHaveATokenFileEach(t *testing.T) {
+	skipWithoutFileModes(t)
+	dir := filepath.Join(t.TempDir(), tokenDirName)
+	url1, logs1, stop1 := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	url2, logs2, stop2 := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	p1, p2 := tokenPathOf(t, dir, url1), tokenPathOf(t, dir, url2)
+	if p1 == p2 {
+		t.Fatalf("two servers share the token file %s", p1)
+	}
+	read := func(p string) string {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("a token file is missing: %v", err)
+		}
+		return strings.TrimSpace(string(b))
+	}
+	t1, t2 := read(p1), read(p2)
+	if t1 == t2 {
+		t.Error("two servers have the same token")
+	}
+	for name, out := range map[string]string{"first": logs1.String(), "second": logs2.String()} {
+		if strings.Contains(out, "has been replaced") {
+			t.Errorf("the %s server says it replaced a token file: %s", name, out)
+		}
+	}
+	for url, tok := range map[string]string{url1: t1, url2: t2} {
+		if resp, _ := (&httpFixture{url: url, token: tok}).post(t, listReq, nil); resp.StatusCode != http.StatusOK {
+			t.Errorf("%s: its own token was refused: %d", url, resp.StatusCode)
+		}
+	}
+	if resp, _ := (&httpFixture{url: url1, token: t2}).post(t, listReq, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("the other server's token was accepted: %d", resp.StatusCode)
+	}
+	if err := stop1(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p1); !os.IsNotExist(err) {
+		t.Error("the first server's file is still there after it stopped")
+	}
+	if read(p2) != t2 {
+		t.Error("stopping the first server changed the second's token file")
+	}
+	_ = stop2()
+	if _, err := os.Stat(p2); !os.IsNotExist(err) {
+		t.Error("the second server's file is still there after it stopped")
+	}
+}
+
+var loopback4 = net.IPv4(127, 0, 0, 1)
+
+// The name is a function of the address and the port, so one of each is one file.
+func TestTheTokenFileNameFollowsThePort(t *testing.T) {
+	if got := tokenFileName(loopback4, "", 7391); got != "http-token-127.0.0.1-7391" || got == tokenFileName(loopback4, "", 7392) {
+		t.Errorf("names: %q %q", got, tokenFileName(loopback4, "", 7392))
+	}
+	// the same port on two addresses is two names, and no name has a character a file name may not have on Windows
+	loopback6 := net.ParseIP("::1")
+	if tokenFileName(loopback4, "", 7391) == tokenFileName(loopback6, "", 7391) {
+		t.Error("127.0.0.1 and ::1 on one port share a token file name")
+	}
+	// no two different servers share a name: addresses, zones and ports in every combination, including the ones that used to collide
+	type srv struct {
+		ip   string
+		zone string
+		port int
+	}
+	var all []srv
+	for _, ip := range []string{"127.0.0.1", "::1", "fe80::1", "fe80::1:1", "fe80::", "::", "0.0.0.0", "2001:db8::1", "::ffff:10.0.0.1"} {
+		for _, zone := range []string{"", "en0", "en1", "1", "2", "a_b", "a-b", "a%b", "z", "-z", "x", "78", strings.Repeat("e", 33), strings.Repeat("e", 34), strings.Repeat("f", 200)} {
+			for _, port := range []int{80, 7391} {
+				if zone != "" && !strings.Contains(ip, ":") {
+					continue // an IPv4 address has no zone
+				}
+				all = append(all, srv{ip, zone, port})
+			}
+		}
+	}
+	seen := map[string]srv{}
+	for _, c := range all {
+		n := tokenFileName(net.ParseIP(c.ip), c.zone, c.port)
+		if strings.ContainsAny(n, ":[]%/\\ ") {
+			t.Errorf("%+v: %q has a character a file name may not have", c, n)
+		}
+		if prev, dup := seen[n]; dup && (prev.ip != c.ip || prev.zone != c.zone || prev.port != c.port) {
+			// two spellings of one address (::ffff:10.0.0.1 is 10.0.0.1) are one server, so a shared name is right for those only
+			if net.ParseIP(prev.ip).Equal(net.ParseIP(c.ip)) && prev.zone == c.zone && prev.port == c.port {
+				continue
+			}
+			t.Errorf("%+v and %+v share the token file name %q", prev, c, n)
+		}
+		seen[n] = c
+	}
+	// the zone joined with another separator would read as part of an address: fe80::1%x is hex 78, as in fe80::1:78
+	if tokenFileName(net.ParseIP("fe80::1"), "x", 80) == tokenFileName(net.ParseIP("fe80::1:78"), "", 80) || tokenFileName(net.ParseIP("fe80::1"), "x", 80) == tokenFileName(net.ParseIP("fe80::1"), "78", 80) {
+		t.Error("a zone and an address (or another zone) share a token file name")
+	}
+	// the spellings are fixed, so a script can find a file: a colon is an underscore
+	for ip, want := range map[string]string{"127.0.0.1": "http-token-127.0.0.1-80", "::1": "http-token-__1-80", "fe80::1": "http-token-fe80__1-80", "::": "http-token-__-80"} {
+		if got := tokenFileName(net.ParseIP(ip), "", 80); got != want {
+			t.Errorf("%s: %q, want %q", ip, got, want)
+		}
+	}
+	if got := tokenFileName(net.ParseIP("fe80::1"), "en0", 80); got != "http-token-fe80__1-z656e30-80" {
+		t.Errorf("a zone: %q", got)
+	}
+	// a zone of any length gives a short name, and a long zone differs from a short one and from another long one
+	long1, long2 := strings.Repeat("e", 300), strings.Repeat("e", 301)
+	n1, n2 := tokenFileName(net.ParseIP("fe80::1"), long1, 80), tokenFileName(net.ParseIP("fe80::1"), long2, 80)
+	if len(n1) > 120 || len(n2) > 120 || n1 == n2 || n1 == tokenFileName(net.ParseIP("fe80::1"), "e", 80) {
+		t.Errorf("long zones: %d %d characters, %q %q", len(n1), len(n2), n1, n2)
+	}
+	// a long zone's hash must not be mistaken for a short zone that happens to be those very bytes
+	sum := sha256.Sum256([]byte(long1))
+	if n1 == tokenFileName(net.ParseIP("fe80::1"), string(sum[:16]), 80) || !strings.Contains(n1, "-h") {
+		t.Errorf("a hashed zone shares a name with a zone of the hash's bytes: %q", n1)
+	}
+	if tokenFileName(net.ParseIP("fe80::1"), strings.Repeat("a", 32), 80) != "http-token-fe80__1-z"+strings.Repeat("61", 32)+"-80" {
+		t.Error("a zone of exactly the cap is not written as it is")
+	}
+	// the numeric zone is not the address with another colon
+	if tokenFileName(net.ParseIP("fe80::1"), "1", 80) == tokenFileName(net.ParseIP("fe80::1:1"), "", 80) {
+		t.Error("fe80::1%1 and fe80::1:1 share a token file")
+	}
+}
+
+// The same port on two addresses (127.0.0.1 and ::1 can both be bound) is two servers with a token file each: the second does not overwrite the
+// first's, and each server's token works only on its own.
+func TestTheSamePortOnTwoAddressesHasTwoTokenFiles(t *testing.T) {
+	skipWithoutFileModes(t)
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback here: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	if l4, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port))); err != nil {
+		t.Skipf("the port is taken on 127.0.0.1: %v", err)
+	} else {
+		l4.Close()
+	}
+	dir := filepath.Join(t.TempDir(), tokenDirName)
+	url4, logs4, stop4 := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: net.JoinHostPort("127.0.0.1", strconv.Itoa(port))})
+	url6, logs6, stop6 := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: net.JoinHostPort("::1", strconv.Itoa(port))})
+	p4, p6 := tokenPathOf(t, dir, url4), tokenPathOf(t, dir, url6)
+	if p4 == p6 {
+		t.Fatalf("two servers on one port share the token file %s", p4)
+	}
+	for name, out := range map[string]string{"IPv4": logs4.String(), "IPv6": logs6.String()} {
+		if strings.Contains(out, "has been replaced") {
+			t.Errorf("the %s server says it replaced a token file: %s", name, out)
+		}
+	}
+	read := func(p string) string {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("a token file is missing: %v", err)
+		}
+		return strings.TrimSpace(string(b))
+	}
+	t4, t6 := read(p4), read(p6)
+	if t4 == t6 {
+		t.Error("two servers have one token")
+	}
+	if resp, _ := (&httpFixture{url: url4, token: t4}).post(t, listReq, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("IPv4 server, its token: %d", resp.StatusCode)
+	}
+	if resp, _ := (&httpFixture{url: url4, token: t6}).post(t, listReq, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("IPv4 server, the IPv6 server's token: %d", resp.StatusCode)
+	}
+	if err := stop4(); err != nil {
+		t.Fatal(err)
+	}
+	if read(p6) != t6 {
+		t.Error("stopping the IPv4 server changed the IPv6 server's file")
+	}
+	_ = stop6()
+}
+
+// The server uses the zone of the address it is bound to: the name RunHTTP takes for a bound address has the zone in it (a real zone cannot be
+// bound everywhere, so the function RunHTTP calls is tested with one).
+func TestTheTokenFileOfABoundAddressHasItsZoneAndPort(t *testing.T) {
+	ll := &net.TCPAddr{IP: net.ParseIP("fe80::1"), Zone: "en0", Port: 7391}
+	other := &net.TCPAddr{IP: net.ParseIP("fe80::1"), Zone: "en1", Port: 7391}
+	none := &net.TCPAddr{IP: net.ParseIP("fe80::1"), Port: 7391}
+	if tokenFileForAddr(ll) == tokenFileForAddr(other) || tokenFileForAddr(ll) == tokenFileForAddr(none) {
+		t.Errorf("zones share a file: %q %q %q", tokenFileForAddr(ll), tokenFileForAddr(other), tokenFileForAddr(none))
+	}
+	if tokenFileForAddr(ll) != tokenFileName(ll.IP, "en0", 7391) || tokenFileForAddr(&net.TCPAddr{IP: ll.IP, Zone: "en0", Port: 7392}) == tokenFileForAddr(ll) {
+		t.Error("the file of a bound address is not its address, zone and port")
+	}
+}
+
+// RunHTTP names its token file from the whole bound address, zone included: with a zone given to the address by a seam, the file is the one of that
+// zone and of no other.
+func TestRunHTTPTokenFileHasTheBoundZone(t *testing.T) {
+	skipWithoutFileModes(t)
+	saved := boundForTokenFile
+	defer func() { boundForTokenFile = saved }()
+	boundForTokenFile = func(a *net.TCPAddr) *net.TCPAddr { c := *a; c.Zone = "en7"; return &c }
+	dir := filepath.Join(t.TempDir(), tokenDirName)
+	url, _, _ := startRunHTTP(t, HTTPOptions{TokenDir: dir})
+	_, portText, _ := net.SplitHostPort(strings.TrimPrefix(url, "http://"))
+	port, _ := strconv.Atoi(portText)
+	if _, err := os.Stat(filepath.Join(dir, tokenFileName(loopback4, "en7", port))); err != nil {
+		t.Errorf("the token file of the zoned address is missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, tokenFileName(loopback4, "", port))); err == nil {
+		t.Error("the token file is the one of the address without its zone")
 	}
 }

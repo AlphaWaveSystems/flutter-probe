@@ -1,0 +1,58 @@
+name: Design partner application
+description: Apply to try Probe Cloud, the hosted report service in preview, as a design partner.
+title: "Design partner: "
+labels: ["design-partner"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This issue is public.** Everything you write here can be read by anyone. If you prefer, email support@alphawavesystems.com instead.
+
+        Probe Cloud is a preview and the hosted service is not live yet. The first 10 teams try it free during the beta and get 50% off for life when paid plans launch. The beta may change or end.
+  - type: input
+    id: team
+    attributes:
+      label: Team name
+      description: The team or company that would use Probe Cloud.
+    validations:
+      required: true
+  - type: input
+    id: repo-owner
+    attributes:
+      label: GitHub owner of the repository
+      description: The user or organization that owns the repository you would upload reports from, for example `my-org`.
+    validations:
+      required: true
+  - type: dropdown
+    id: ci
+    attributes:
+      label: CI provider
+      description: The upload client is built for GitHub Actions runs.
+      options:
+        - GitHub Actions
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: devices
+    attributes:
+      label: Device types
+      description: What your tests run on.
+      options:
+        - label: Android emulator
+        - label: iOS simulator
+        - label: Physical device
+  - type: textarea
+    id: today
+    attributes:
+      label: What you test today
+      description: Your app's main flows, how you test them now, and what you want to see in test reports.
+    validations:
+      required: true
+  - type: input
+    id: email
+    attributes:
+      label: Contact email (optional)
+      description: "This issue is public: an email address here is visible to everyone. Leave it empty and we reply on the issue, or email support@alphawavesystems.com instead."
+    validations:
+      required: false

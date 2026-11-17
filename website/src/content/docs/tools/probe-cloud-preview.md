@@ -7,6 +7,8 @@ description: An opt-in preview that uploads a scrubbed copy of a test report to 
 > exactly what it would send. Paid plans are listed as planned on the [pricing page](/pricing/); nothing here changes the
 > free, local-first behaviour of the CLI. Nothing is ever uploaded unless you turn it on.
 
+Design partners get access first when the service goes live: [apply on GitHub](https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml) with the design partner form (the issue is public), or [apply by email](mailto:support@alphawavesystems.com?subject=Probe%20Cloud%20design%20partner) to support@alphawavesystems.com. See the [design-partner guide](/tools/design-partner-guide/).
+
 ## Turn it on
 
 ```bash
