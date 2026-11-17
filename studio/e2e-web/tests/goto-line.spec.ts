@@ -2,7 +2,7 @@ import { expect, Page, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { openStudio, workspace } from "./helpers";
+import { expectNoCall, openStudio, recordCalls, workspace } from "./helpers";
 
 // Open the failing line: a click on a failing row in Results opens the file the result names and puts the cursor on the line. Rows are
 // built by firing the run events a real run emits (the handlers the page registered), so no device is needed. Only a click moves the
@@ -51,14 +51,7 @@ async function fireFailedRun(page: Page, step: Step, opts: { verdictFile?: strin
   );
 }
 
-const calls = (page: Page) => {
-  const seen: Record<string, number> = {};
-  page.on("request", (r) => {
-    const m = /"method":"(\w+)"/.exec(r.postData() ?? "");
-    if (m) seen[m[1]] = (seen[m[1]] ?? 0) + 1;
-  });
-  return seen;
-};
+const calls = recordCalls; // the shared recorder (helpers.ts): a zero is asserted with expectNoCall, which proves the recorder works first
 
 const activeLine = (page: Page) => page.locator("#editor .active-line-number");
 const filename = (page: Page) => page.locator("#editor-filename");
@@ -87,8 +80,8 @@ test.describe("Open the failing line", () => {
     await expect(activeLine(page)).not.toHaveText("5"); // the run failed; the editor did not move by itself
     await stepRow(page, 'tap "x"').click();
     await expect(activeLine(page)).toHaveText("5");
-    expect(seen.ReadFile ?? 0).toBe(0); // the same file: nothing was read again
-    expect(seen.WriteFile ?? 0).toBe(0);
+    await expectNoCall(page, seen, "ReadFile"); // the same file: nothing was read again
+    await expectNoCall(page, seen, "WriteFile");
   });
 
   test("gl-02 the same click on a row of another file opens that file first, on the right line (a relative name too)", async ({ page }) => {
@@ -99,7 +92,7 @@ test.describe("Open the failing line", () => {
     await expect(filename(page)).toContainText("form.probe");
     await expect(activeLine(page)).toHaveText("3");
     expect(seen.ReadFile).toBe(1);
-    expect(seen.WriteFile ?? 0).toBe(0);
+    await expectNoCall(page, seen, "WriteFile");
     // a relative name, as a seeded run writes it
     await open(page, "counter.probe");
     await fireFailedRun(page, { file: "probe-tests/form.probe", test: "t", line: 2, description: 'tap "z"' });
@@ -137,7 +130,7 @@ test.describe("Open the failing line", () => {
     await page.waitForTimeout(300);
     await expect(filename(page)).toContainText("counter.probe");
     expect(await page.locator("#editor .view-lines").innerText()).toBe(before);
-    expect(seen.ReadFile ?? 0).toBe(0);
+    await expectNoCall(page, seen, "ReadFile");
     await stepRow(page, 'tap "q"').click();
     await page.click("#btn-discard-cancel"); // Keep editing
     await expect(page.locator("#discard-overlay")).toBeHidden();
@@ -146,7 +139,7 @@ test.describe("Open the failing line", () => {
     await page.click("#btn-discard-ok");
     await expect(filename(page)).toContainText("form.probe");
     await expect(activeLine(page)).toHaveText("3");
-    expect(seen.WriteFile ?? 0).toBe(0);
+    await expectNoCall(page, seen, "WriteFile");
   });
 
   test("gl-04 a name with .., outside the workspace, a link out of it or a file that is gone is refused, and the editor is untouched", async ({ page }) => {
@@ -180,7 +173,7 @@ test.describe("Open the failing line", () => {
         await expect(activeLine(page)).toHaveText("3"); // and the cursor did not move
         await page.evaluate(() => document.getElementById("toast-container")?.replaceChildren());
       }
-      expect(seen.WriteFile ?? 0).toBe(0);
+      await expectNoCall(page, seen, "WriteFile");
     } finally {
       fs.rmSync(link, { force: true });
       fs.rmSync(outside, { recursive: true, force: true });
