@@ -455,6 +455,19 @@
         </div>
       </div>
     </div>
+    <div id="save-as-overlay" class="overlay" hidden>
+      <div class="overlay-card confirm-card" id="save-as-card" role="dialog" aria-modal="true" aria-labelledby="save-as-title" aria-describedby="save-as-lead">
+        <div class="overlay-header"><h2 id="save-as-title">Save as a new file</h2></div>
+        <p id="save-as-lead">This buffer has no file yet. Choose a name for it in <code id="save-as-folder"></code>. Save never replaces a file that exists.</p>
+        <label for="save-as-name">File name</label>
+        <input type="text" id="save-as-name" autocomplete="off" spellcheck="false" aria-describedby="save-as-error" />
+        <p id="save-as-error" class="dim" role="alert"></p>
+        <div class="confirm-buttons">
+          <button type="button" id="btn-save-as-cancel" class="btn">Cancel</button>
+          <button type="button" id="btn-save-as-ok" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
     <div id="help-overlay" class="overlay" hidden>
       <div class="overlay-card">
         <div class="overlay-header">

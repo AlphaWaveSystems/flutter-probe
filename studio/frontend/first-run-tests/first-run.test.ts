@@ -61,6 +61,9 @@ describe("the reasons a primary button is disabled", () => {
   it("Save needs a file with changes", () => {
     assert.equal(saveReason(at({ dirty: true })), "");
     assert.equal(saveReason(at({ fileOpen: false })), "Open a .probe file to save.");
+    // an unsaved buffer with no file (a recording): Save asks for a name when there is a workspace to put it in
+    assert.equal(saveReason(at({ fileOpen: false, dirty: true, workspaceOpen: true })), "");
+    assert.match(saveReason(at({ fileOpen: false, dirty: true, workspaceOpen: false })), /Open a workspace first/);
     assert.equal(saveReason(ready), "There are no unsaved changes.");
   });
   it("Connect says to pick a device, or what a shut-down one needs (its own hint first)", () => {

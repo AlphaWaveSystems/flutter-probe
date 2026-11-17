@@ -107,6 +107,9 @@ jobs:
       - name: Frontend tests (connect failure line)
         working-directory: studio/frontend
         run: npm run test:connect-failure
+      - name: Frontend tests (save as)
+        working-directory: studio/frontend
+        run: npm run test:save-as
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
