@@ -245,4 +245,29 @@ test.describe("Keyboard shortcuts", () => {
     expect(await prevented({ key: "a", ctrlKey: true }), "Ctrl+A with the help card open").toBe(false);
     expect(await prevented({ key: "s" }), "a plain s").toBe(false);
   });
+
+  for (const mod of mods) {
+    test(`sc-13 with the settings or the WiFi overlay open (not only the help card) ${mod}+P, ${mod}+K and ${mod}+Shift+A do nothing; closed again they work`, async ({ page }) => {
+      const calls = await recordCalls(page);
+      await openStudio(page);
+      const pane = page.locator("#chat-pane");
+      const chatBefore = await pane.isHidden();
+      for (const [opener, overlay] of [["#btn-settings", "#settings-overlay"], ["#btn-wifi", "#wifi-overlay"]] as const) {
+        await page.click(opener);
+        await expect(page.locator(overlay)).toBeVisible();
+        const listBefore = count(calls, "ListDevices");
+        await page.locator("body").press(`${mod}+p`);
+        await page.locator("body").press(`${mod}+k`);
+        await page.locator("body").press(`${mod}+Shift+a`);
+        await page.waitForTimeout(300);
+        expect(count(calls, "PickWorkspace"), `${overlay}: PickWorkspace`).toBe(0);
+        expect(count(calls, "ListDevices"), `${overlay}: ListDevices`).toBe(listBefore);
+        expect(await pane.isHidden(), `${overlay}: chat pane`).toBe(chatBefore);
+        await page.keyboard.press("Escape");
+        await expect(page.locator(overlay)).toBeHidden();
+      }
+      await page.locator("body").press(`${mod}+p`);
+      await expect.poll(() => count(calls, "PickWorkspace")).toBe(1);
+    });
+  }
 });
