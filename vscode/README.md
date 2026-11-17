@@ -173,8 +173,8 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 
 | Setting | Default | Description |
 |---|---|---|
-| `probePath` | `probe` | Path to the probe CLI binary. User or remote settings only. Without it: `bin/probe` in a trusted workspace, else `probe` on PATH |
-| `convertPath` | `probe-convert` | Path to the probe-convert binary. User or remote settings only. Without it: `bin/probe-convert` in a trusted workspace, else `probe-convert` on PATH |
+| `probePath` | `probe` | Path to the probe CLI binary. User or remote settings only. Without it: `probe` on PATH (see Tool Paths) |
+| `convertPath` | `probe-convert` | Path to the probe-convert binary. User or remote settings only. Without it: `probe-convert` on PATH (see Tool Paths) |
 | `autoLint` | `true` | Lint `.probe` files on save |
 | `defaultDevice` | | Default device serial |
 | `defaultTimeout` | `30s` | Per-step timeout |
@@ -219,11 +219,17 @@ All settings are under `flutterprobe.*` in VS Code settings. They follow the res
 |---|---|---|
 | `adbPath` | | Custom ADB binary path. User or remote settings only |
 | `flutterPath` | | Custom Flutter binary path. User or remote settings only |
-
-**Which binaries run.** The four settings that name a binary (`probePath`, `convertPath`, `adbPath`, `flutterPath`) can be set only in your user (or remote) settings: a repository's `.vscode/settings.json` cannot point the extension at a binary of its own. The extension runs only in a trusted workspace (VS Code's Restricted Mode keeps it off until you trust the folder), and it uses a `bin/probe` inside the workspace only when the workspace is trusted. `probe test` still reads the workspace's `probe.yaml`, whose `tools:` section can name `adb` and `flutter` binaries: trust a folder only if you trust what it runs.
-
-> **Changed in this version:** a value of `probePath`, `convertPath`, `adbPath` or `flutterPath` in a workspace's `.vscode/settings.json` is now ignored. Move it to your user settings (Preferences: Open User Settings (JSON)).
+| `useWorkspaceBinaries` | `false` | Run `bin/probe` and `bin/probe-convert` from the open workspace when `probePath` or `convertPath` is not set. User or remote settings only |
 | `studioPort` | `9191` | Port for probe studio |
+
+**Which binaries run.**
+
+- The settings that name a binary (`probePath`, `convertPath`, `adbPath`, `flutterPath`) and `useWorkspaceBinaries` can be set only in your user settings, or in the **remote** settings when VS Code is connected to a remote machine (SSH, WSL, a container): set them there, since a value in the workspace's `.vscode/settings.json` is ignored. A repository cannot point the extension at a binary of its own.
+- The extension resolves the binary itself and runs it by its absolute path: the `probePath` you set (an absolute path, or a command name looked up on PATH), else `probe` on PATH. Only the absolute folders of PATH are searched, never the workspace: on Windows the system would otherwise look in the current folder first (Node's `spawn` and cmd.exe do), so a `probe.exe` in a repository could run instead of yours. On Windows, when `probe` is on no folder of PATH, the extension says so rather than let the system search the workspace.
+- A `bin/probe` inside the workspace is used only when you turn on `useWorkspaceBinaries` and the workspace is trusted. Trusting a folder in VS Code is not consent to run its binaries.
+- The extension runs only in a trusted workspace (VS Code's Restricted Mode keeps it off until you trust the folder). `probe test` still reads the workspace's `probe.yaml`, whose `tools:` section can name `adb` and `flutter` binaries: trust a folder only if you trust what it runs.
+
+> **Changed in this version:** a value of `probePath`, `convertPath`, `adbPath` or `flutterPath` in a workspace's `.vscode/settings.json` is now ignored: move it to your user (or remote) settings. A `bin/probe` in the workspace is no longer picked up on its own: turn on `useWorkspaceBinaries` in your user settings to use it.
 
 ## Cloud Provider Setup
 

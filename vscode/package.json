@@ -333,7 +333,7 @@
           "type": "string",
           "default": "probe",
           "scope": "machine",
-          "description": "Path to the probe CLI binary. User or remote settings only: a workspace cannot set it. Without it, bin/probe in a trusted workspace, else probe on PATH"
+          "description": "Path to the probe CLI binary. User or remote settings only: a workspace cannot set it. Without it, probe on PATH (bin/probe of a trusted workspace only with flutterprobe.useWorkspaceBinaries)"
         },
         "flutterprobe.autoLint": {
           "type": "boolean",
@@ -432,11 +432,17 @@
           "scope": "machine",
           "description": "Custom path to flutter binary. User or remote settings only: a workspace cannot set it"
         },
+        "flutterprobe.useWorkspaceBinaries": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Run bin/probe and bin/probe-convert from the open workspace when there is no probePath or convertPath. Off by default: trusting a folder is not consent to run its binaries. User or remote settings only"
+        },
         "flutterprobe.convertPath": {
           "type": "string",
           "default": "probe-convert",
           "scope": "machine",
-          "description": "Path to the probe-convert binary. User or remote settings only: a workspace cannot set it. Without it, bin/probe-convert in a trusted workspace, else probe-convert on PATH"
+          "description": "Path to the probe-convert binary. User or remote settings only: a workspace cannot set it. Without it, probe-convert on PATH (bin/probe-convert of a trusted workspace only with flutterprobe.useWorkspaceBinaries)"
         },
         "flutterprobe.cloudProvider": {
           "type": "string",
