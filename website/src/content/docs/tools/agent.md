@@ -95,6 +95,8 @@ and AI agents can reason about behavior.
 | App control | `probe.run_dart`, `probe.mock`, `probe.open_link`, `probe.set_time_dilation`, `probe.set_next_token`, clipboard and recording methods |
 | Signals from tests | `probe.biometric_signal`, `probe.signal`, `probe.set_output`, `probe.drain_output` |
 
+The `probe.visible_summary` answer lists what a person could see now: `texts` (each visible `Text` and the value of each visible field that is not obscured, de-duplicated by trimmed text) and `keys` (string `ValueKey`s), each cut at 25 in tree order. It also carries keys an older CLI ignores: `editable_texts` (the value of every visible field that is not obscured, recorded even when a `Text` with the same text is already in `texts`, since a text selector also matches a field by its value), `rich_texts` (the texts of visible `RichText`s that no `Text` built, which a text selector also matches), `max` (the cap, 25), `counts` (how many distinct items each list saw, cut or not) and `truncated` (true when any list saw more than `max`). The agent never cuts or leaves out an item for its length; an obscured field adds nothing to any list.
+
 The `probe.ping` answer carries the agent's version and capabilities, and, when the app's build knows them, `flutter_version`, `flutter_channel`,
 `framework_revision` and `dart_version`: the Flutter and Dart that built the app (the Flutter tool records them in the app at build time; they are not the
 Flutter that published `probe_agent`). Each field is optional and left out when unknown. The CLI keeps only plain version text (letters, digits, dots, dashes
