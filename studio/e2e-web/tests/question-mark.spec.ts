@@ -38,7 +38,7 @@ test.describe("The ? key", () => {
     await expect(page.locator("#editor-dirty")).toContainText("unsaved");
   });
 
-  test("qm-04 a ? with nothing to type into opens the help card and types nothing, and with a button focused too", async ({ page }) => {
+  test("qm-04 a ? with nothing to type into opens the help card, and with a button focused too", async ({ page }) => {
     await openStudio(page);
     await page.locator("body").press("?");
     await expect(page.locator("#help-overlay")).toBeVisible();
