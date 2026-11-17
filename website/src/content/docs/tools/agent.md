@@ -111,6 +111,8 @@ com.example.app`. It is the app's own statement, not a proof, and an agent that 
 of it. A `Text` builds a `RichText` inside it; the agent counts that pair once, so `see exactly 1 "<text>"` passes for one `Text`, an ordinal (`2nd "Row"`)
 counts separate texts, and a button's label is one match. Before the fix for issue #800 (`probe_agent` 0.27.0 and earlier), a plain `Text` counted twice: `see exactly 2` passed for one `Text`, and `2nd "8"` found the inner paragraph of a single "8"; with the fix both fail, and the real count and `tap "8"` are what to write.
 
+**A widget with no text is found, and read, by its label.** When no visible text matches, a text selector falls back to a `Semantics` label (an `Icon` or an `Image` with a `semanticLabel`) or a `Tooltip` message (an icon button). That widget reads as its label, so `see "Logo" contains "Logo"` and `see "Add item" contains "Add"` check it; before the fix for issue #818 (`probe_agent` 0.27.0 and earlier) it read as an empty text. A widget found by `#id` whose only text is a tooltip still reads as empty.
+
 **The agent answers once the app's view has its real size.** After a relaunch, an app can draw its first frames with a 0×0 view for about a second (measured on an
 Android 15 emulator), and a list laid out then holds only its first item: a step that ran in that window saw half the screen (issue #793). The size changes the moment
 the engine reports it, but the widgets are laid out at it only in the next frame, so the agent records the size each frame was laid out at, and waits, before it
