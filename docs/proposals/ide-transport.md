@@ -34,10 +34,10 @@ The decision table for the methods Studio binds (`studio/bound_methods_test.go`)
 | a stale or crashed server | leave a token file behind | write by rename, remove only if it still holds this server's token, check `pid` on read |
 
 ## What exists that should be fixed first
-Reading the code for this note found these. None is a vulnerability a web page can use; each makes the same-user and workspace cases worse than they need to be.
+Reading the code for this note found these. None is a vulnerability a web page can use; findings 1, 2 and 4 to 6 make the same-user and workspace cases worse than they need to be, and finding 3 is recorded as the trust model.
 1. **The VS Code extension puts cloud secrets and a relay token in the arguments of a command sent to the terminal** (`--cloud-secret`, `--cloud-key`, `--relay-token`, from the workspace settings). They reach shell history and the process list. They should come from the environment of the child, or a file, and never from workspace-scoped settings.
 2. **`flutterprobe.probePath` and `<workspace>/bin/probe`**: a repository can make the extension run a binary it contains. The setting should be user-scoped (or require VS Code's workspace trust), and a binary found inside the workspace should ask once.
-3. **The extension spawns children with the whole environment.** It should pass what the child needs.
+3. **The extension spawns children with the whole environment. This is a documented trust-model fact, not a bug to fix.** An allowlist would break the documented ProbeScript `${NAME}`, which reads any environment variable when a step runs (`internal/runner/executor.go`, `expandEnv`; `probescript/syntax.md`); most runs go through terminals the user opened, whose shell loads its own profile; and once the binary the extension runs is one the user chose (finding 2), the children are the user's own programs. What ships instead is the small mitigation: the three cloud secrets are removed from the environment of children that do not need them.
 4. **The automation discovery file** is written with 0600 in a 0700 folder created for it, but an existing folder or file is not re-checked, a symbolic link is not refused, and with no user config folder it falls back to the system temp folder. `probe-mcp --http` already does all three checks (`writeTokenFile`); the same function should serve both.
 5. **The headless bridge's token** is served in an unauthenticated script and the event stream takes it in a URL. It is a test-only surface that must stay that way: it is off by default, and the docs and the decision table must never describe it as a transport for an editor.
 6. **Two `probe-mcp --http` servers of one user overwrite each other's token file.** It warns; a per-port file name would remove the surprise.
@@ -55,7 +55,7 @@ Recommendation: **A first**, then B for the cases that need Studio's live connec
 - The editor's UI may show a question (the editor's own dialog), but the answer travels to the process that asks and counts only for the pending request with that identifier, once, as `AnswerConfirm` does; a script cannot answer it.
 
 ## First slice
-1. Fix the three extension items above (secrets out of argv and workspace settings, `probePath` scope and trust, a narrow environment), each with a test in the extension's suite and a CHANGELOG line.
+1. Findings 1 and 2 (secrets out of argv and workspace settings; `probePath` scope and trust) and the stripping of the three cloud secrets from children that do not need them, each with a test in the extension's suite and a CHANGELOG line. Finding 3 itself is decided: the environment is documented, not narrowed. (Findings 1 and 2 are in review as separate changes; findings 4 to 6 follow as three small ones.)
 2. Make `writeTokenFile` the one writer of token files and use it for the automation discovery file, with the refusal tests it already has.
 3. `probe ide serve` over stdio with two read-only methods, `lint_text` and `list_devices`, through the same code as the CLI commands; a protocol test (one request, one answer, malformed input, oversize input, closing stdin ends it) and rows in the decision table.
 4. A short page for extension authors: what the transport is, what it will never do, how consent works.
