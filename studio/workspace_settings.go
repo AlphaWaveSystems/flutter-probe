@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
@@ -105,6 +106,10 @@ func (a *App) SaveWorkspaceSettings(workspace string, s WorkspaceSettings) error
 	}
 	if err := validateRunKnobs(s, base); err != nil {
 		return err
+	}
+	// device.ios_device_id follows the CLI's rule (config load): a simulator UDID or a device UDID, or nothing.
+	if id := strings.TrimSpace(s.IOSDeviceID); s.IOSDeviceID != base.IOSDeviceID && id != "" && !ios.ValidSimulatorUDID(id) && !ios.ValidDeviceUDID(id) {
+		return fmt.Errorf("iosDeviceId %q is not a UDID: use the UDID of a simulator or of a device, as `probe device list` shows it", id)
 	}
 	type edit struct {
 		name    string

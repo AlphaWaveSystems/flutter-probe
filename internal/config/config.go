@@ -302,7 +302,7 @@ func LoadFile(path string) (*Config, error) {
 
 	// device.ios_device_id becomes a simulator or device id, and a simulator id shapes host paths: only a UDID is accepted.
 	if id := cfg.Device.IOSDeviceID; id != "" && !ios.ValidSimulatorUDID(id) && !ios.ValidDeviceUDID(id) {
-		return nil, fmt.Errorf("invalid device.ios_device_id %q in %s: use the UDID of a simulator (xcrun simctl list devices) or of a device (xcrun devicectl list devices)", id, path)
+		return nil, fmt.Errorf("invalid device.ios_device_id %q in %s: use the UDID of a simulator or of a device, as `probe device list` shows it (or xcrun simctl list devices / xcrun devicectl list devices)", id, path)
 	}
 
 	if p := cfg.Agent.DriverPort; p != 0 && (p < 1024 || p > 65535) {
