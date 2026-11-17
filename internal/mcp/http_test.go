@@ -862,7 +862,7 @@ func TestRunHTTPNewTokenOnEveryStart(t *testing.T) {
 	}
 	firstURL, firstLogs, stop := startRunHTTP(t, HTTPOptions{TokenDir: dir, Addr: addr})
 	first := read()
-	if out := firstLogs.String(); !strings.Contains(out, "has been replaced") || strings.Contains(out, stale) || strings.Contains(out, first) {
+	if out := firstLogs.String(); !strings.Contains(out, "has been replaced") || !strings.Contains(out, "did not stop cleanly") || strings.Contains(out, stale) || strings.Contains(out, first) {
 		t.Errorf("replacing a token file: the log must say so and name no token:\n%s", strings.ReplaceAll(strings.ReplaceAll(out, stale, "<stale>"), first, "<token>"))
 	}
 	if first == stale {
