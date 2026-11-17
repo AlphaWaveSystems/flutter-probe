@@ -3,6 +3,8 @@
 
 before each test
   restart the app
+  # the last element of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until #wf_cupertino_state appears
 
 test "a plain text field takes typed text and can be cleared"
   see "Plain: (empty)"

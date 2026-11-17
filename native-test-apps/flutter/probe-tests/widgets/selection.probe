@@ -3,6 +3,8 @@
 
 before each test
   restart the app
+  # the last element of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until #wf_cupertino_switch_state appears
 
 # `don't see "..." is checked` also passes when the element is absent; the `see "..." is checked` steps of the same tests are its positive twins.
 test "a checkbox turns on and off"

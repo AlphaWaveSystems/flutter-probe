@@ -8,6 +8,8 @@
 
 before each test
   restart the app
+  # the last element of the screen: right after a restart the agent can answer while the screen is still being built (issue #793)
+  wait until #wf_long_press_state appears
 
 # Expected: line 2: see "Elevated: 2": Expected to see "text("Elevated: 2")" but it was not found
 test "N1 a count that is one too many"
