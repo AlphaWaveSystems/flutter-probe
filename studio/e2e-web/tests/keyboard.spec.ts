@@ -20,6 +20,22 @@ async function describeFocus(page: Page): Promise<string> {
   });
 }
 
+// The element that must have the focus when each overlay opens. For the questions with a destructive or sending answer it is the safe one (Cancel, Keep editing),
+// so that Enter or Space on a freshly opened dialog never allows, sends, discards or wipes.
+const FIRST: Record<string, string> = {
+  "#help-overlay": "#btn-help-close",
+  "#settings-overlay": "#btn-settings-close",
+  "#wifi-overlay": "#btn-wifi-close",
+  "#api-key-overlay": "#api-key-input",
+  "#fix-preview-overlay": "#btn-fix-preview-cancel",
+  "#explain-preview-overlay": "#btn-explain-preview-cancel",
+  "#ai-preview-overlay": "#btn-ai-preview-cancel",
+  "#save-as-overlay": "#save-as-name",
+  "#discard-overlay": "#btn-discard-cancel", // Keep editing, never Discard changes
+  "#confirm-overlay": "#btn-confirm-cancel", // never Clear data
+  "#send-allow-overlay": "#btn-send-allow-cancel", // never Allow and send
+};
+
 async function measure(page: Page, overlay: string, opener: string, open: () => Promise<void>) {
   const box = page.locator(overlay);
   const inside = () => page.evaluate((sel) => !!document.querySelector(sel)?.contains(document.activeElement), overlay);
@@ -28,6 +44,8 @@ async function measure(page: Page, overlay: string, opener: string, open: () => 
   await open();
   await expect(box, `${overlay} did not open`).toBeVisible();
   const focusIn = await inside();
+  const first = FIRST[overlay];
+  expect(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), first), `${overlay.slice(1)}: the focus starts on ${first}`).toBe(true);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   const closes = await box.isHidden();
