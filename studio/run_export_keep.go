@@ -1,6 +1,8 @@
 package main
 
 import (
+	"path/filepath"
+
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
@@ -13,15 +15,33 @@ func (a *App) keepForExport(conn *connection, results []runner.TestResult, stopp
 	if len(results) == 0 || conn == nil || stopped {
 		return
 	}
+	// The check and the keep are one step under a.mu, which SetWorkspace and useWorkspace hold while they change the workspace and clear the export:
+	// a workspace change cannot fall between them, so results of a run in another folder are never stored as the open workspace's.
 	a.mu.Lock()
+	defer a.mu.Unlock()
 	ws := a.workspace
-	a.mu.Unlock()
-	if ws != startedIn {
+	if canonicalWorkspace(ws) != startedIn {
 		return
+	}
+	if a.afterExportCheck != nil {
+		a.afterExportCheck()
 	}
 	meta := runner.RunMetadata{DeviceName: conn.deviceName, DeviceID: conn.deviceID, Platform: string(conn.platform), ProbeVersion: Version}
 	if conn.cfg != nil {
 		meta.AppID = conn.cfg.Project.App
 	}
 	a.export.keep(results, meta, ws)
+}
+
+// canonicalWorkspace is a workspace path in one spelling (cleaned, links resolved), so the same folder written with a trailing slash, as a
+// relative path or through a link is the same workspace; a path that cannot be resolved keeps its cleaned spelling.
+func canonicalWorkspace(p string) string {
+	if p == "" {
+		return ""
+	}
+	p = filepath.Clean(p)
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
+	}
+	return p
 }

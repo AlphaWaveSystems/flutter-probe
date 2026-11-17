@@ -288,3 +288,118 @@ func TestTheSameWorkspaceReopenedDuringARunKeepsItsResults(t *testing.T) {
 		t.Error("the results of a run in the workspace that is still open are not exportable")
 	}
 }
+
+// The workspace check and the keep are one step: a workspace change that arrives between them (forced here by a seam that opens another workspace
+// from inside keepForExport, after the check) waits for the keep and then clears it, so results of a run in A are never left attributed to A while B is open.
+func TestAWorkspaceChangeBetweenTheCheckAndTheKeepLeavesNothing(t *testing.T) {
+	a, file, fake := blockedApp(t)
+	other := t.TempDir()
+	done := make(chan struct{})
+	a.afterExportCheck = func() {
+		go func() { a.SetWorkspace(other); close(done) }()
+		time.Sleep(100 * time.Millisecond) // the change is waiting for the lock the keep holds
+	}
+	if err := a.RunFileAsync(file); err != nil {
+		t.Fatal(err)
+	}
+	waitStarted(t, fake)
+	close(fake.gate)
+	waitFree(t, a)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("SetWorkspace never returned")
+	}
+	if a.CanExportRunResults() {
+		results, _, ws := a.export.get()
+		t.Errorf("%d results of a run in the old workspace are kept as %q while %q is open", len(results), ws, other)
+	}
+}
+
+// The workspace a run belongs to is the one open when it took the slot: a switch between the claim and the start of the run (the automation path,
+// useWorkspace) is not the run's workspace.
+func TestTheRunsWorkspaceIsTheOneOpenWhenItTookTheSlot(t *testing.T) {
+	a, file, fake := blockedApp(t)
+	ctx, cancel, err := a.claimRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.useWorkspace(t.TempDir()) // after the slot was taken, before the run began
+	path, err := probeFileWithinRoots(append(a.automationRoots(), filepath.Dir(file)), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sel, plan, err := a.resolveRunScope(path, RunScope{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(fake.gate)
+	if _, err := a.executeRun(ctx, path, sel, plan); err != nil {
+		t.Fatal(err)
+	}
+	a.releaseRun(cancel)
+	if a.CanExportRunResults() {
+		t.Error("a run that took its slot in one workspace was kept for export in the one that was open when it began")
+	}
+}
+
+// The automation path (useWorkspace) during a run drops the results the same way SetWorkspace does.
+func TestUseWorkspaceDuringARunLeavesNothingToExport(t *testing.T) {
+	a, file, fake := blockedApp(t)
+	if err := a.RunFileAsync(file); err != nil {
+		t.Fatal(err)
+	}
+	waitStarted(t, fake)
+	a.useWorkspace(t.TempDir())
+	close(fake.gate)
+	waitFree(t, a)
+	if a.CanExportRunResults() {
+		t.Error("useWorkspace during a run left its results to export")
+	}
+}
+
+// A kept run's report is made relative to its workspace: the base the export holds is the open workspace, as the run left it.
+func TestAKeptRunHoldsItsWorkspaceAsTheReportBase(t *testing.T) {
+	a, file, fake := blockedApp(t)
+	if err := a.RunFileAsync(file); err != nil {
+		t.Fatal(err)
+	}
+	waitStarted(t, fake)
+	close(fake.gate)
+	waitFree(t, a)
+	results, meta, base := a.export.get()
+	a.mu.Lock()
+	open := a.workspace
+	a.mu.Unlock()
+	if len(results) != 1 || base != open || base != filepath.Dir(file) {
+		t.Errorf("results %d, base %q, open workspace %q, file folder %q", len(results), base, open, filepath.Dir(file))
+	}
+	if meta.ProbeVersion == "" {
+		t.Error("the report lacks the version of the tool that made it")
+	}
+}
+
+// The same folder written another way (a trailing slash, through a link) is the same workspace: re-opening it during a run keeps the results, while
+// another folder drops them.
+func TestADifferentSpellingOfTheSameWorkspaceKeepsTheResults(t *testing.T) {
+	for name, spell := range map[string]func(dir string) string{
+		"a trailing slash": func(d string) string { return d + string(filepath.Separator) },
+		"a dot segment":    func(d string) string { return filepath.Join(d, "sub", "..") + string(filepath.Separator) },
+		"through a link":   func(d string) string { l := filepath.Join(t.TempDir(), "link"); _ = os.Symlink(d, l); return l },
+	} {
+		a, file, fake := blockedApp(t)
+		if err := os.MkdirAll(filepath.Join(filepath.Dir(file), "sub"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.RunFileAsync(file); err != nil {
+			t.Fatal(err)
+		}
+		waitStarted(t, fake)
+		a.useWorkspace(spell(filepath.Dir(file)))
+		close(fake.gate)
+		waitFree(t, a)
+		if !a.CanExportRunResults() {
+			t.Errorf("%s: the same workspace was taken for another one", name)
+		}
+	}
+}
