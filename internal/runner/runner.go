@@ -1,11 +1,12 @@
 package runner
 
 import (
-	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/perf"
+	"math/rand/v2"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,24 +27,24 @@ import (
 
 // TestResult captures the outcome of a single test run.
 type TestResult struct {
-	TestName   string
-	File       string
-	Passed     bool
-	Skipped    bool
-	Duration   time.Duration
-	Error      error
-	Row        int // data-driven row index, -1 = not data-driven
-	Tags       []string // the test's tags, as the file writes them (the reports clean them: ReportTags)
-	Artifacts  []string
-	VideoURL   string // cloud provider video URL (session-level)
-	DeviceID   string // device serial/UDID that ran this test
-	DeviceName string // human-readable device name
-	Perf       []perf.Metrics // measurements the test took (`start measuring` ... `stop measuring`)
-	PerfNew    []string       // measurements with no entry in the baseline (not compared)
-	PerfSkipped int           // measurements not compared: the window spans an app restart or has no memory/frame data
-	Attempts   int    // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
-	StartedAt  time.Time        // when the (last) attempt started
-	AttemptLog []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
+	TestName    string
+	File        string
+	Passed      bool
+	Skipped     bool
+	Duration    time.Duration
+	Error       error
+	Row         int      // data-driven row index, -1 = not data-driven
+	Tags        []string // the test's tags, as the file writes them (the reports clean them: ReportTags)
+	Artifacts   []string
+	VideoURL    string           // cloud provider video URL (session-level)
+	DeviceID    string           // device serial/UDID that ran this test
+	DeviceName  string           // human-readable device name
+	Perf        []perf.Metrics   // measurements the test took (`start measuring` ... `stop measuring`)
+	PerfNew     []string         // measurements with no entry in the baseline (not compared)
+	PerfSkipped int              // measurements not compared: the window spans an app restart or has no memory/frame data
+	Attempts    int              // how many times the test ran (1 unless defaults.retry_failed_tests re-ran it)
+	StartedAt   time.Time        // when the (last) attempt started
+	AttemptLog  []AttemptOutcome // every attempt in order, including the failed ones a retry replaced
 	// FailedSelector is the selector step the test failed on, nil when it failed elsewhere or passed.
 	FailedSelector *FailedSelector
 	// Proposal is advisory report text set after the run by `probe test --ai-heal`. It never changes Passed or Error.
@@ -83,19 +84,19 @@ type AttemptOutcome struct {
 type Runner struct {
 	cfg             *config.Config
 	client          probelink.ProbeClient
-	deviceCtx       *DeviceContext  // nil in dry-run mode
-	clip            clipboardTaint  // the clipboard taint of a run that has no device context
+	deviceCtx       *DeviceContext // nil in dry-run mode
+	clip            clipboardTaint // the clipboard taint of a run that has no device context
 	opts            RunOptions
 	recipes         map[string]parser.RecipeDef
 	baseRecipes     map[string]parser.RecipeDef // recipes_folder only; dry-run starts every file from it
-	missingUses     []string                     // `use` targets that do not exist, for error messages
-	confine         *lintConfinement             // set by a lint given LintWithRoot; nil for runs and for the CLI's lint
-	visual          *visual.Comparator  // nil if visual regression is not configured
-	onResult        func(TestResult)    // optional per-result callback for streaming
+	missingUses     []string                    // `use` targets that do not exist, for error messages
+	confine         *lintConfinement            // set by a lint given LintWithRoot; nil for runs and for the CLI's lint
+	visual          *visual.Comparator          // nil if visual regression is not configured
+	onResult        func(TestResult)            // optional per-result callback for streaming
 	recorder        StepRecorder
-	onStep          func(StepEvent)     // optional per-step callback (live highlight)
-	compositeRunner *CompositeRunner    // nil if composite tests are not configured
-	curFile         string              // attribution for StepEvents from newExecutor
+	onStep          func(StepEvent)  // optional per-step callback (live highlight)
+	compositeRunner *CompositeRunner // nil if composite tests are not configured
+	curFile         string           // attribution for StepEvents from newExecutor
 	curTest         string
 	curAttempt      int
 	restartHook     func(context.Context) error // tests only: replaces the restart step after a timed-out attempt
@@ -121,13 +122,13 @@ type RunOptions struct {
 	TestNames    []string // run only the tests with these names (composite tests too); nil runs every test
 	Watch        bool     // re-run on file change
 	Timeout      time.Duration
-	DryRun       bool   // parse only
+	DryRun       bool // parse only
 	Verbose      bool
-	VideoEnabled bool   // record device screen during tests
-	VideoDir     string // directory to store video recordings
-	DeviceID     string // device serial/UDID (for tagging results)
-	DeviceName   string // human-readable device name
-	Grant        []string // permissions to pre-grant before the first test (--grant)
+	VideoEnabled bool      // record device screen during tests
+	VideoDir     string    // directory to store video recordings
+	DeviceID     string    // device serial/UDID (for tagging results)
+	DeviceName   string    // human-readable device name
+	Grant        []string  // permissions to pre-grant before the first test (--grant)
 	ClearGate    ClearGate // how `clear app data` is answered on the lanes of a parallel or composite run (see ClearGate)
 
 	MeasureAll    bool           // open a measuring window around every test that does not measure itself
@@ -907,14 +908,20 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return
 	}
-	local, ok := artifactRoot(localDir, true)
+	local, checked, ok := checkedArtifactRoot(localDir, true)
+	var out *os.Root
+	if ok {
+		out, ok = openArtifactDir(local, checked)
+	}
 	if !ok {
-		// The folder the copies would go to is a link or too wide: nothing is copied into it, and no path the agent named is kept.
+		// The folder the copies would go to is a link, too wide, or changed while it was opened: nothing is copied into it, and no path
+		// the agent named is kept.
 		for i := range results {
 			results[i].Artifacts = nil
 		}
 		return
 	}
+	defer out.Close()
 	roots := []string{local}
 	for _, r := range extraRoots {
 		if rr, ok := artifactRoot(r, false); ok {
@@ -937,8 +944,12 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 					}
 				}
 			}
-			// Copy screenshots to the local reports directory
-			localPath := filepath.Join(localDir, filepath.Base(remotePath))
+			// Copy screenshots to the local reports directory: by name only, into the folder opened once (out)
+			name := filepath.Base(remotePath)
+			if name == "." || name == ".." || name == string(filepath.Separator) {
+				continue
+			}
+			localPath := filepath.Join(localDir, name)
 			var pullErr error
 			// Android screenshots arrive as base64 in the RPC reply and are
 			// already saved on the host by the probelink client; such a path is
@@ -948,11 +959,11 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			// not one the run wrote goes on to the device branch, which reads
 			// only the app's private storage.
 			hostCopied := dc.Platform != device.PlatformIOS && filepath.IsAbs(remotePath) && fileExists(remotePath) &&
-				copyHostArtifact(remotePath, localPath, roots) == nil
+				copyHostArtifact(remotePath, out, local, name, roots) == nil
 			switch {
 			case dc.Platform == device.PlatformIOS:
 				// iOS simulator: the file is already on the host; it is copied only from a folder the run writes to or a simulator's data folder
-				pullErr = copyHostArtifact(remotePath, localPath, roots)
+				pullErr = copyHostArtifact(remotePath, out, local, name, roots)
 			case hostCopied:
 			default:
 				// Android: screenshots are in the app's private cache dir,
@@ -974,7 +985,7 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 					// out as an image.
 					pullErr = fmt.Errorf("pulling %s: not an image (%s)", remotePath, strings.TrimSpace(string(data[:min(len(data), 120)])))
 				default:
-					pullErr = writeFileReplacing(localPath, data)
+					pullErr = writeInDir(out, name, data)
 				}
 			}
 			if pullErr == nil {
@@ -1023,10 +1034,11 @@ func looksLikeImage(data []byte) bool {
 	return bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G'}) || bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF})
 }
 
-// copyHostArtifact copies the host file p to dst when it is a regular file with a single name in one of roots or in a simulator's data
-// folder: it is opened once, checked on the open file and read from it (confined.ReadFile), and the bytes are written with
-// writeFileReplacing. When p already is dst (an artifact saved into the destination folder), nothing is written.
-func copyHostArtifact(p, dst string, roots []string) error {
+// copyHostArtifact copies the host file p into out (the folder opened once, whose real path is outPath) as name, when p is a regular file
+// with a single name in one of roots or in a simulator's data folder: it is opened once, checked on the open file and read from it
+// (confined.ReadFile), and the bytes are written with writeInDir. When p already is that file (an artifact saved into the destination
+// folder), nothing is written.
+func copyHostArtifact(p string, out *os.Root, outPath, name string, roots []string) error {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return err
@@ -1038,32 +1050,66 @@ func copyHostArtifact(p, dst string, roots []string) error {
 	if err != nil {
 		return fmt.Errorf("pulling %q: not a file this run wrote or a simulator's", p)
 	}
-	if d, err := filepath.Abs(dst); err == nil {
-		if rd, err := filepath.EvalSymlinks(d); err == nil && rd == real {
-			return nil
-		}
+	if real == filepath.Join(outPath, name) {
+		return nil
 	}
-	return writeFileReplacing(dst, data)
+	return writeInDir(out, name, data)
 }
 
-// writeFileReplacing writes data to a new file next to dst and renames it over dst, so a link (or any file) already named dst is replaced,
-// never written through.
-func writeFileReplacing(dst string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(dst), ".probe-artifact-*")
+// openArtifactDir opens dir (a real path checkedArtifactRoot returned) once, and only when what was opened is the folder that was checked
+// (checked, what Lstat said of it before its real path was read): dir's last part is a folder, not a link, and both it and the opened
+// folder are that same folder. Every write goes through the returned root, so a
+// swap of the path after this (a link put in the folder's place) cannot redirect a write.
+func openArtifactDir(dir string, checked os.FileInfo) (*os.Root, bool) {
+	before, err := os.Lstat(dir) // a link is not a directory to Lstat
+	if err != nil || !before.IsDir() {
+		return nil, false
+	}
+	beforeOpenArtifactDir(dir)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, false
+	}
+	opened, err := root.Stat(".")
+	if err != nil || !os.SameFile(checked, opened) {
+		_ = root.Close()
+		return nil, false
+	}
+	return root, true
+}
+
+// beforeResolveArtifactRoot runs between the Lstat of a root and the reading of its real path; a test swaps the folder there.
+var beforeResolveArtifactRoot = func(string) {}
+
+// beforeOpenArtifactDir runs between the check of the folder and its opening; a test swaps the folder there.
+var beforeOpenArtifactDir = func(string) {}
+
+// writeInDir writes data to a new file in dir and renames it to name, so a link (or any file) already named name is replaced, never
+// written through; both steps go through dir, the folder opened once.
+func writeInDir(dir *os.Root, name string, data []byte) error {
+	var tmp string
+	var f *os.File
+	var err error
+	for i := 0; i < 10; i++ {
+		tmp = fmt.Sprintf(".probe-artifact-%d-%d", os.Getpid(), rand.Int64())
+		f, err = dir.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if !errors.Is(err, os.ErrExist) {
+			break
+		}
+	}
 	if err != nil {
 		return err
 	}
 	_, werr := f.Write(data)
-	cerr := f.Close()
-	if werr == nil && cerr == nil {
-		werr = os.Chmod(f.Name(), 0o644)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
 	}
-	if werr != nil || cerr != nil {
-		_ = os.Remove(f.Name())
-		return errors.Join(werr, cerr)
+	if werr != nil {
+		_ = dir.Remove(tmp)
+		return werr
 	}
-	if err := os.Rename(f.Name(), dst); err != nil {
-		_ = os.Remove(f.Name())
+	if err := dir.Rename(tmp, name); err != nil {
+		_ = dir.Remove(tmp)
 		return err
 	}
 	return nil
@@ -1092,26 +1138,36 @@ func isVideo(p string) bool {
 // the working folder; a caller's extra folder may not), and it is not as wide as a filesystem root, the working folder, the home folder or
 // a folder above either of them.
 func artifactRoot(dir string, relativeOK bool) (string, bool) {
+	real, _, ok := checkedArtifactRoot(dir, relativeOK)
+	return real, ok
+}
+
+// checkedArtifactRoot is artifactRoot, and also returns what Lstat said of dir: the folder that was checked. Its real path is read after
+// that, so a swap in between can make the real path name another folder; openArtifactDir compares the folder it opens with this one.
+func checkedArtifactRoot(dir string, relativeOK bool) (string, os.FileInfo, bool) {
 	if dir == "" || (!relativeOK && !filepath.IsAbs(dir)) {
-		return "", false
+		return "", nil, false
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
-	if info, err := os.Lstat(abs); err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return "", false
+	// Lstat does not follow a link: a link is not a directory to it, so a folder planted as a link is refused here.
+	info, err := os.Lstat(abs)
+	if err != nil || !info.IsDir() {
+		return "", nil, false
 	}
+	beforeResolveArtifactRoot(abs)
 	real, err := filepath.EvalSymlinks(abs)
 	if err != nil || filepath.Dir(real) == real {
-		return "", false
+		return "", nil, false
 	}
 	for _, wide := range wideFolders() {
 		if isUnderDir(real, wide) { // real is wide itself or a folder above it
-			return "", false
+			return "", nil, false
 		}
 	}
-	return real, true
+	return real, info, true
 }
 
 // wideFolders are the working folder and the home folder, resolved: no artifact root may be one of them or a folder above them.

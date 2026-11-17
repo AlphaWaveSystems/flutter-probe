@@ -231,7 +231,13 @@ func TestPullArtifactsCopySaysTooLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = f.Close()
-	err = copyHostArtifact(p, filepath.Join(t.TempDir(), "out.png"), func() []string { r, _ := artifactRoot(dir, false); return []string{r} }())
+	outDir, checked, _ := checkedArtifactRoot(t.TempDir(), false)
+	out, ok := openArtifactDir(outDir, checked)
+	if !ok {
+		t.Fatal("cannot open the output folder")
+	}
+	defer out.Close()
+	err = copyHostArtifact(p, out, outDir, "out.png", func() []string { r, _ := artifactRoot(dir, false); return []string{r} }())
 	if err == nil || !strings.Contains(err.Error(), "larger than 64 MiB") || strings.Contains(err.Error(), "not a file this run wrote") {
 		t.Errorf("want the too-large error, got %v", err)
 	}

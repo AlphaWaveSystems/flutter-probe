@@ -39,7 +39,11 @@ func (d *DeviceCtl) Launch(ctx context.Context, udid, bundleID string) error {
 // Returns nil if the app is not running.
 func (d *DeviceCtl) Terminate(ctx context.Context, udid, bundleID string) error {
 	pid, err := d.FindPID(ctx, udid, bundleID)
-	if err != nil || pid == 0 {
+	if err != nil {
+		// Not "not running": the process list could not be read (or the id was refused), so the app may still run. The caller says so.
+		return fmt.Errorf("devicectl terminate: the app's process could not be looked up: %w", err)
+	}
+	if pid == 0 {
 		return nil // not running
 	}
 	cmd := exec.CommandContext(ctx, "xcrun", "devicectl", "device", "process", "terminate",

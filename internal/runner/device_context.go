@@ -939,7 +939,10 @@ func (dc *DeviceContext) KillApp(ctx context.Context) error {
 		}
 	case device.PlatformIOS:
 		if dc.IsPhysical {
-			_ = dc.Manager.DeviceCtl().Terminate(ctx, dc.Serial, dc.AppID)
+			// A failure here leaves the app running: say so in one line (the error quotes the device id with %q).
+			if err := dc.Manager.DeviceCtl().Terminate(ctx, dc.Serial, dc.AppID); err != nil {
+				fmt.Printf("    \033[33m⚠\033[0m  the app was not stopped: %v\n", err)
+			}
 		} else {
 			_ = dc.Manager.SimCtl().Terminate(ctx, dc.Serial, dc.AppID)
 		}
