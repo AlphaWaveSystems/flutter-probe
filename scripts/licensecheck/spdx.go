@@ -6,7 +6,10 @@ package main
 //   - a licence that is one choice of an OR is not: `(MIT OR GPL-3.0)` passes, with a note, because the user can take MIT;
 //   - the same holds for `WITH <exception>`: a strong licence with an exception (Classpath, for example) is a note to review, not a failure;
 //   - LGPL, UNKNOWN, UNLICENSED, a custom or "SEE LICENSE IN" licence and anything that cannot be read are notes, never a failure on their own;
-//   - an expression that cannot be parsed but names a strong licence fails (closed): a spelling nobody foresaw must not let one through.
+//   - an expression that cannot be parsed but names a strong licence fails (closed): a spelling nobody foresaw must not let one through. The same holds for one
+//     identifier that is not a known strong one but contains a strong licence's name (LicenseRef-GPL-3.0, GNU-GPL-3.0, MIT/GPL-3.0, MIT;GPL-3.0): it fails, and the
+//     allowlist cannot silence it.
+//   - any exception after WITH downgrades the strong licence it belongs to to a note, not only the Classpath one: a reader has to look at it.
 //
 // The tool this replaces compared the whole string with a list (license-checker --failOn), so it caught "GPL-3.0" and missed "GPL-3.0-or-later",
 // "AGPL-3.0-only" and "(GPL-3.0 AND MIT)". Matching is case-insensitive and on the identifier, not on the whole expression.
@@ -15,6 +18,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // strongRE matches the identifiers of the licences that cannot be shipped under this project's licences: GPL and AGPL in any version spelling ("GPL-2.0",
@@ -81,6 +85,9 @@ func (l leaf) resolve() outcome {
 		return outcome{notes: []string{id + " with an exception (" + l.exception + "): the exception may allow linking; read it"}}
 	case strongRE.MatchString(id):
 		return outcome{strong: true, notes: []string{id + " is a strong copyleft licence"}}
+	case strongAnywhereRE.MatchString(id):
+		// not an identifier of the list, but it names a strong licence: fail closed
+		return outcome{strong: true, notes: []string{id + " is not a recognised licence identifier and names a strong copyleft licence"}}
 	case strings.HasPrefix(low, "lgpl"):
 		return outcome{notes: []string{id + " is a weak copyleft licence (linking is allowed, changes to the library are not)"}}
 	case low == "unknown" || low == "unlicensed" || low == "":
@@ -140,7 +147,7 @@ func tokenize(s string) []string {
 		case r == '(' || r == ')':
 			flush()
 			toks = append(toks, string(r))
-		case r == ' ' || r == '\t' || r == '\n':
+		case unicode.IsSpace(r): // also the no-break space and the other spaces that are not ' '
 			flush()
 		default:
 			cur.WriteRune(r)

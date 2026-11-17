@@ -41,6 +41,21 @@ func TestEvaluate(t *testing.T) {
 		// what cannot be read: a note, unless it names a strong licence (then it fails, closed)
 		{"(MIT OR", false, "cannot be read"}, {"Some Proprietary Terms", false, "cannot be read"},
 		{"MIT, GPL-3.0", true, "names a strong copyleft licence"}, {"GPL-3.0 AND (", true, "names a strong copyleft licence"}, {"(GPL-2.0-only OR", true, "names a strong"},
+		// one identifier that is not a known strong one but contains a strong licence's name: fail closed (the six of the review of this check)
+		{"LicenseRef-GPL-3.0", true, "names a strong copyleft licence"}, {"GNU-GPL-3.0", true, "names a strong copyleft licence"},
+		{"MIT/GPL-3.0", true, "names a strong copyleft licence"}, {"MIT,GPL-3.0", true, "names a strong copyleft licence"},
+		{"MIT;GPL-3.0", true, "names a strong copyleft licence"}, {"MIT\u00a0AND\u00a0GPL-3.0", true, ""}, {"MIT\u2003AND\u2003AGPL-3.0-only", true, ""},
+		{"(MIT\u00a0OR\u00a0GPL-3.0)", false, "one of the choices is a strong copyleft licence"}, // read as a choice, not as one strange identifier
+		{"LicenseRef-AGPL", true, "names a strong copyleft licence"}, {"Foo-SSPL-1.0", true, "names a strong copyleft licence"},
+		// precedence: AND binds tighter than OR, with no parentheses at the top level
+		{"MIT OR GPL-3.0", false, "one of the choices is a strong copyleft licence"},
+		{"GPL-3.0 OR MIT AND ISC", false, "one of the choices is a strong copyleft licence"},
+		{"MIT AND GPL-3.0 OR Apache-2.0", false, "one of the choices is a strong copyleft licence"},
+		{"GPL-3.0 AND MIT OR GPL-2.0", true, ""},
+		{"MIT AND ISC OR Apache-2.0", false, ""},
+		{"GPL-2.0-only OR GPL-3.0-only OR AGPL-3.0-only", true, ""},
+		// names that merely look like a strong licence, or contain one inside a longer word
+		{"LGPL-3.0-only", false, "weak copyleft"}, {"LicenseRef-LGPL-2.1", false, ""}, {"Apache-2.0", false, ""}, {"MIT-0", false, ""},
 		// names that only look like a strong licence
 		{"Apache-2.0", false, ""}, {"Unlicense", false, ""}, {"BlueOak-1.0.0", false, ""},
 	}

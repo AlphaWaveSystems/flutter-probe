@@ -56,6 +56,8 @@ func TestAllowlistNeverSilencesAStrongLicence(t *testing.T) {
 	}{
 		{`"GPL-3.0-or-later"`, 1, true},
 		{`"(GPL-3.0 AND MIT)"`, 1, true},
+		{`"MIT/GPL-3.0"`, 1, true},
+		{`"LicenseRef-GPL-3.0"`, 1, true},
 		{`"LGPL-3.0-or-later"`, 0, false},
 		{`"UNKNOWN"`, 0, false},
 	} {
