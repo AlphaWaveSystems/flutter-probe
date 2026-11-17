@@ -1,26 +1,32 @@
 {
- "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none, asks (a window confirmation or a preview gates what it does), answers (it is the answer), native-dialog (only a person in a native dialog can drive it).",
+ "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none, asks (a window confirmation or a preview gates what it does), answers (it is the answer), native-dialog (only a person in a native dialog can drive it). decision: required for an aiProvider method with confirm none, to say why no confirmation is needed (or what the window does instead). touches is checked against the code: a call graph of the Studio sources is walked from each method (bound_methods_derive_test.go), and a keychain, file or network call that the method can reach and the entry does not list fails the test, so an entry cannot understate; an entry may list more. automationInternal: the unexported methods the automation endpoint reaches, which are not bound but are what a script that holds its token can do.",
  "methods": [
   {
    "method": "AIChatLabel",
-   "category": "ui",
-   "does": "The chat header's line (provider and model) from the resolved settings.",
+   "category": "readsWorkspace",
+   "does": "The chat header's line (provider and model), made from the workspace's probe.yaml and the keychain's saved key (the key is read to know whether one is set, never shown).",
    "callers": [
     "window",
     "bridge"
    ],
-   "touches": [],
+   "touches": [
+    "files",
+    "keychain"
+   ],
    "confirm": "none"
   },
   {
    "method": "AIChatLabelParts",
-   "category": "ui",
-   "does": "The chat header's line in three parts for the header.",
+   "category": "readsWorkspace",
+   "does": "The chat header's line in three parts for the header, made from the same settings as AIChatLabel (probe.yaml and the keychain's saved key).",
    "callers": [
     "window",
     "bridge"
    ],
-   "touches": [],
+   "touches": [
+    "files",
+    "keychain"
+   ],
    "confirm": "none"
   },
   {
@@ -98,15 +104,18 @@
   {
    "method": "Chat",
    "category": "aiProvider",
-   "does": "Sends a conversation to the AI provider the workspace configures, after the outbound gate.",
+   "does": "Sends a conversation, the open file and (when their switches are on) the last run and the widget tree to the provider the workspace configures, after the outbound gate (redaction and bounds).",
    "callers": [
     "window",
     "bridge"
    ],
    "touches": [
+    "files",
+    "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Decided: no confirmation in Go. The window asks before the first send to a destination it has not confirmed (confirmFirstChatSend, after PreviewAIChat shows the text and where it goes); nothing in Go ties a send to a preview, so a script with the bridge token can call Chat without one, as it can ExplainLastRun. The same gap the AI plan already records for Explain; closing it is a product decision, not made here."
   },
   {
    "method": "CheckReplaceLine",
@@ -143,7 +152,7 @@
    ],
    "touches": [
     "devices",
-    "keychain"
+    "files"
    ],
    "confirm": "none"
   },
@@ -158,6 +167,7 @@
    ],
    "touches": [
     "devices",
+    "files",
     "network"
    ],
    "confirm": "none"
@@ -172,10 +182,11 @@
    ],
    "touches": [
     "devices",
+    "files",
     "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "asks"
   },
   {
    "method": "DeleteAPIKey",
@@ -220,13 +231,16 @@
   },
   {
    "method": "ExplainAvailability",
-   "category": "ui",
+   "category": "readsWorkspace",
    "does": "Says whether an explanation can be offered for the last run's failure.",
    "callers": [
     "window",
     "bridge"
    ],
-   "touches": [],
+   "touches": [
+    "files",
+    "keychain"
+   ],
    "confirm": "none"
   },
   {
@@ -238,10 +252,12 @@
     "bridge"
    ],
    "touches": [
+    "files",
     "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Decided: no confirmation in Go; the window shows the preview of a hosted destination first and sends through ExplainPreviewed, which rechecks the destination. ExplainLastRun is the unpreviewed form, still bound (the same gap as Chat)."
   },
   {
    "method": "ExplainPreviewed",
@@ -252,6 +268,7 @@
     "bridge"
    ],
    "touches": [
+    "files",
     "keychain",
     "network"
    ],
@@ -432,9 +449,12 @@
     "bridge"
    ],
    "touches": [
+    "files",
+    "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Asks the configured local endpoint for its model names; no workspace content is sent, so there is nothing to confirm."
   },
   {
    "method": "ListDevices",
@@ -446,7 +466,8 @@
     "automation"
    ],
    "touches": [
-    "devices"
+    "devices",
+    "files"
    ],
    "confirm": "none"
   },
@@ -511,10 +532,12 @@
     "bridge"
    ],
    "touches": [
+    "files",
     "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Sends nothing: it builds the text of the next chat turn and names the destination, so the person can decide."
   },
   {
    "method": "PreviewExplain",
@@ -525,9 +548,12 @@
     "bridge"
    ],
    "touches": [
+    "files",
+    "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Sends nothing: it builds what ExplainLastRun would send and names the destination."
   },
   {
    "method": "PreviewSelectorFix",
@@ -538,9 +564,12 @@
     "bridge"
    ],
    "touches": [
+    "files",
+    "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Sends nothing: it builds what a selector fix would send and names the destination (the send is SelectorFixPreviewed, by the id this returns)."
   },
   {
    "method": "ReadFile",
@@ -672,6 +701,7 @@
     "bridge"
    ],
    "touches": [
+    "files",
     "keychain",
     "network"
    ],
@@ -802,7 +832,8 @@
     "automation"
    ],
    "touches": [
-    "devices"
+    "devices",
+    "files"
    ],
    "confirm": "none"
   },
@@ -815,10 +846,12 @@
     "bridge"
    ],
    "touches": [
+    "files",
     "keychain",
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Sends one fixed test prompt and no workspace content; a person starts it from the settings dialog."
   },
   {
    "method": "TestWiFi",
@@ -872,6 +905,42 @@
    "touches": [
     "files"
    ],
+   "confirm": "none"
+  }
+ ],
+ "automationInternal": [
+  {
+   "method": "runFileAsync",
+   "category": "runControl",
+   "does": "Starts a run of a .probe file inside the automation roots on the connected device (the endpoint's run_file). A step `clear app data` reaches the same gate as a run from the window: it asks the window, and without a window it is not run; the person's own setting for simulators and emulators can answer it without asking.",
+   "callers": [
+    "automation"
+   ],
+   "touches": [
+    "devices",
+    "files",
+    "network"
+   ],
+   "confirm": "asks"
+  },
+  {
+   "method": "automationRoots",
+   "category": "readsWorkspace",
+   "does": "The folders the endpoint may read, list, open and run from: the workspace a person opened, PROBE_STUDIO_WORKSPACE and PROBE_STUDIO_AUTOMATION_ROOTS.",
+   "callers": [
+    "automation"
+   ],
+   "touches": [],
+   "confirm": "none"
+  },
+  {
+   "method": "useWorkspace",
+   "category": "workspaceRoot",
+   "does": "Opens a workspace for the endpoint's open_workspace without widening the roots the endpoint may touch.",
+   "callers": [
+    "automation"
+   ],
+   "touches": [],
    "confirm": "none"
   }
  ]

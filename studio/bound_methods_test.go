@@ -44,11 +44,30 @@ type boundDecision struct {
 	Callers  []string `json:"callers"`
 	Touches  []string `json:"touches"`
 	Confirm  string   `json:"confirm"`
+	// Decision says why an aiProvider method with confirm "none" needs no confirmation, or what the window does instead.
+	Decision string `json:"decision"`
 }
 
 // boundDecisions are the recorded decisions, read from bound_methods.json (the one place they are written), and boundMethods is their
 // method-to-category view that the tests below use.
 var boundDecisions, boundMethods = loadBoundDecisions()
+
+// automationInternal are the unexported methods the automation endpoint reaches: not bound, but what a script that holds its token can do.
+var automationInternal = loadAutomationInternal()
+
+func loadAutomationInternal() []boundDecision {
+	raw, err := os.ReadFile("bound_methods.json")
+	if err != nil {
+		panic("bound_methods.json: " + err.Error())
+	}
+	var f struct {
+		Internal []boundDecision `json:"automationInternal"`
+	}
+	if err := json.Unmarshal(raw, &f); err != nil {
+		panic("bound_methods.json is not valid: " + err.Error())
+	}
+	return f.Internal
+}
 
 func loadBoundDecisions() ([]boundDecision, map[string]string) {
 	raw, err := os.ReadFile("bound_methods.json")
@@ -344,7 +363,7 @@ func checkDecisions(decisions []boundDecision, have, blocked, automation []strin
 		if has(d.Callers, "automation") != has(automation, d.Method) {
 			bad = append(bad, d.Method+": callers disagrees with the methods the automation endpoint reaches")
 		}
-		if has(d.Callers, "automation") && has(d.Touches, "keychain") && d.Method != "Connect" {
+		if has(d.Callers, "automation") && has(d.Touches, "keychain") {
 			bad = append(bad, d.Method+": the automation endpoint must not reach the keychain")
 		}
 		// the category says what it touches
@@ -373,6 +392,9 @@ func checkDecisions(decisions []boundDecision, have, blocked, automation []strin
 			if len(d.Touches) > 0 {
 				bad = append(bad, d.Method+": a pure method touches nothing")
 			}
+		}
+		if d.Category == catAIProvider && d.Confirm == "none" && len(strings.TrimSpace(d.Decision)) < 40 {
+			bad = append(bad, d.Method+": an AI-provider method with confirm none needs a 'decision' that says why (or what the window does instead)")
 		}
 		// what may destroy or send is gated, or only a person in a native dialog can drive it
 		if (d.Category == catRunControl && (strings.HasPrefix(d.Method, "RunFile"))) && d.Confirm != "asks" {
