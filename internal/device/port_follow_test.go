@@ -150,8 +150,8 @@ func TestPortFollowerHappyPathMakesNoAdbCall(t *testing.T) {
 		t.Fatalf("DevicePort = %d, want the configured 48911", f.DevicePort())
 	}
 	f.NoteTokenSource(TokenSourceRunAs)
-	if f.Preflight(context.Background()) {
-		t.Errorf("a run-as token proves the app: no preflight move")
+	if moved, err := f.Preflight(context.Background(), time.Minute); moved || err != nil {
+		t.Errorf("a run-as token proves the app: no preflight move and no refusal (got %v, %v)", moved, err)
 	}
 	if len(adb.calls) != 0 || len(fwd.calls) != 0 || len(notices) != 0 || len(changes) != 0 {
 		t.Errorf("the happy path made %d adb call(s), %d forward(s), %d notice(s), %d change(s); want none", len(adb.calls), len(fwd.calls), len(notices), len(changes))
@@ -221,16 +221,32 @@ func TestPortFollowerKeepsThePortWhenTheForwardFails(t *testing.T) {
 	}
 }
 
+// fakeTime gives a follower a clock that only moves when Preflight sleeps, so the retry window is exercised without waiting. onSleep, when set, runs at every sleep
+// with the number of sleeps so far, to change what the device shows while the window lasts.
+func fakeTime(f *PortFollower, onSleep func(n int)) *int {
+	clock := time.Unix(5000, 0)
+	sleeps := 0
+	f.now = func() time.Time { return clock }
+	f.sleep = func(ctx context.Context, d time.Duration) {
+		sleeps++
+		clock = clock.Add(d)
+		if onSleep != nil {
+			onSleep(sleeps)
+		}
+	}
+	return &sleeps
+}
+
 func TestPortFollowerPreflight(t *testing.T) {
-	t.Run("a token that does not prove the app, another app holds the port: moves", func(t *testing.T) {
+	t.Run("a token that does not prove the app, another app holds the port, the app is on the next one: moves", func(t *testing.T) {
 		adb := twoApps(48911, 48912)
 		fwd := &fakeFwd{}
 		var notices []string
 		var changes []int
 		f := newTestFollower(adb, fwd, &notices, &changes)
 		f.NoteTokenSource(TokenSourceLogcat)
-		if !f.Preflight(context.Background()) || f.DevicePort() != 48912 {
-			t.Errorf("preflight did not move to 48912 (port %d)", f.DevicePort())
+		if moved, err := f.Preflight(context.Background(), time.Minute); !moved || err != nil || f.DevicePort() != 48912 {
+			t.Errorf("preflight did not move to 48912 (moved %v, err %v, port %d)", moved, err, f.DevicePort())
 		}
 	})
 	t.Run("a token that does not prove the app, nobody else holds the port: stays", func(t *testing.T) {
@@ -241,19 +257,104 @@ func TestPortFollowerPreflight(t *testing.T) {
 		var changes []int
 		f := newTestFollower(adb, fwd, &notices, &changes)
 		f.NoteTokenSource(TokenSourceTmpFile)
-		if f.Preflight(context.Background()) || len(fwd.calls) != 0 || f.DevicePort() != 48911 {
-			t.Errorf("moved although the app holds its own port (forwards %v)", fwd.calls)
+		if moved, err := f.Preflight(context.Background(), time.Minute); moved || err != nil || len(fwd.calls) != 0 || f.DevicePort() != 48911 {
+			t.Errorf("moved or refused although the app holds its own port (%v, %v, forwards %v)", moved, err, fwd.calls)
 		}
 	})
-	t.Run("another app holds the port and the app is nowhere: stays, the failure hint names the holder", func(t *testing.T) {
+	// The wrong-app case: the token is a shared one (the holder's, maybe), another app holds the port, and the app under test has opened none. Dialing could reach the
+	// holder, so the connect is refused, after the whole dial window, naming the holder.
+	t.Run("another app holds the port and the app has none: refused after the window, never dialed", func(t *testing.T) {
+		for _, src := range []TokenSource{TokenSourceNone, TokenSourceTmpFile, TokenSourceLogcat} {
+			adb := twoApps(48911, 0)
+			fwd := &fakeFwd{}
+			var notices []string
+			var changes []int
+			f := newTestFollower(adb, fwd, &notices, &changes)
+			sleeps := fakeTime(f, nil)
+			f.NoteTokenSource(src)
+			moved, err := f.Preflight(context.Background(), 5*time.Second)
+			var held *PortHeldError
+			if moved || !errors.As(err, &held) {
+				t.Fatalf("source %v: got (%v, %v), want a *PortHeldError", src, moved, err)
+			}
+			if held.Port != 48911 || len(held.Holders) != 1 || held.Holders[0] != "com.first" || held.App != "com.second" {
+				t.Errorf("source %v: error fields = %+v", src, *held)
+			}
+			for _, want := range []string{"agent port 48911", "com.first", "com.second has not opened an agent port", "not connecting"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("source %v: message lacks %q: %s", src, want, err)
+				}
+			}
+			if *sleeps != 5 {
+				t.Errorf("source %v: waited %d time(s), want 5 (a second each for the 5 s window)", src, *sleeps)
+			}
+			if len(fwd.calls) != 0 || f.DevicePort() != 48911 || len(notices) != 0 {
+				t.Errorf("source %v: the forward or the port changed (%v, %d, %q)", src, fwd.calls, f.DevicePort(), notices)
+			}
+		}
+	})
+	t.Run("the app is still starting: it opens its port during the window and the run follows it", func(t *testing.T) {
 		adb := twoApps(48911, 0)
 		fwd := &fakeFwd{}
 		var notices []string
 		var changes []int
 		f := newTestFollower(adb, fwd, &notices, &changes)
-		f.NoteTokenSource(TokenSourceNone)
-		if f.Preflight(context.Background()) || len(fwd.calls) != 0 {
-			t.Errorf("moved to a port that is not the app's")
+		sleeps := fakeTime(f, func(n int) {
+			if n == 2 {
+				adb.tcp6 = procHeader + procRow(48911, 10100) + procRow(48912, 10200)
+			}
+		})
+		f.NoteTokenSource(TokenSourceLogcat)
+		moved, err := f.Preflight(context.Background(), 30*time.Second)
+		if !moved || err != nil || f.DevicePort() != 48912 || *sleeps != 2 {
+			t.Errorf("got (%v, %v), port %d after %d wait(s), want (true, nil), 48912 after 2", moved, err, f.DevicePort(), *sleeps)
+		}
+	})
+	t.Run("the holder leaves during the window: nobody else holds the port, no refusal", func(t *testing.T) {
+		adb := twoApps(48911, 0)
+		fwd := &fakeFwd{}
+		var notices []string
+		var changes []int
+		f := newTestFollower(adb, fwd, &notices, &changes)
+		fakeTime(f, func(n int) { adb.tcp6 = procHeader })
+		f.NoteTokenSource(TokenSourceLogcat)
+		if moved, err := f.Preflight(context.Background(), 30*time.Second); moved || err != nil {
+			t.Errorf("got (%v, %v), want (false, nil)", moved, err)
+		}
+	})
+	t.Run("no window: one look, then the refusal", func(t *testing.T) {
+		adb := twoApps(48911, 0)
+		var notices []string
+		var changes []int
+		f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+		sleeps := fakeTime(f, nil)
+		f.NoteTokenSource(TokenSourceLogcat)
+		if _, err := f.Preflight(context.Background(), 0); err == nil || *sleeps != 0 {
+			t.Errorf("err %v after %d wait(s), want a refusal without waiting", err, *sleeps)
+		}
+	})
+	t.Run("a cancelled run stops waiting", func(t *testing.T) {
+		adb := twoApps(48911, 0)
+		var notices []string
+		var changes []int
+		f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+		ctx, cancel := context.WithCancel(context.Background())
+		sleeps := fakeTime(f, func(n int) { cancel() })
+		f.NoteTokenSource(TokenSourceLogcat)
+		if _, err := f.Preflight(ctx, time.Hour); !errors.Is(err, context.Canceled) || *sleeps != 1 {
+			t.Errorf("err %v after %d wait(s), want context.Canceled after the first", err, *sleeps)
+		}
+	})
+	// The combination that stays unprotected, and the docs say so: when /proc/net cannot be read nobody can say who holds the port, so nothing is refused.
+	t.Run("the socket table cannot be read: nothing is known, nothing is refused", func(t *testing.T) {
+		adb := twoApps(48911, 0)
+		adb.fail = map[string]bool{"tcp6": true, "tcp": true}
+		var notices []string
+		var changes []int
+		f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+		f.NoteTokenSource(TokenSourceLogcat)
+		if moved, err := f.Preflight(context.Background(), time.Minute); moved || err != nil {
+			t.Errorf("got (%v, %v), want (false, nil)", moved, err)
 		}
 	})
 }
@@ -301,8 +402,8 @@ func TestPortFollowerPreflightWithoutAnAppMakesNoCall(t *testing.T) {
 	fwd := &fakeFwd{}
 	f := NewPortFollower(adb, fwd, "emulator-5554", "", 48686, 48911, nil, nil)
 	f.NoteTokenSource(TokenSourceLogcat)
-	if f.Preflight(context.Background()) || f.Suspect(context.Background()) {
-		t.Errorf("moved without an app id")
+	if moved, err := f.Preflight(context.Background(), time.Minute); moved || err != nil || f.Suspect(context.Background()) {
+		t.Errorf("moved or refused without an app id (%v, %v)", moved, err)
 	}
 	if len(adb.calls) != 0 || len(fwd.calls) != 0 {
 		t.Errorf("made %d adb call(s) and %d forward(s) without an app id, want none", len(adb.calls), len(fwd.calls))

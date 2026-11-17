@@ -768,9 +768,11 @@ func (dc *DeviceContext) Reconnect(ctx context.Context) (probelink.ProbeClient, 
 		var src device.TokenSource
 		token, src, err = dc.Manager.ReadTokenAndroidSource(ctx, dc.Serial, tokenTimeout, dc.AppID, nil)
 		if err == nil && follower != nil {
-			// A token that did not come from run-as does not prove the app: do not go back to a port another app holds.
+			// A token that did not come from run-as does not prove the app: do not dial a port another app holds, and say so.
 			follower.NoteTokenSource(src)
-			follower.Preflight(ctx)
+			if _, holdErr := follower.Preflight(ctx, dc.dialTimeoutVal()); holdErr != nil {
+				return nil, fmt.Errorf("reconnect: %w", holdErr)
+			}
 		}
 	case device.PlatformIOS:
 		token, err = dc.Manager.ReadTokenIOS(ctx, dc.Serial, tokenTimeout, dc.AppID)

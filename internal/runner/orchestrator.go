@@ -158,14 +158,21 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 		tokenTimeout = 30 * time.Second
 	}
 
+	dialTimeout := po.cfg.Agent.DialTimeout
+	if dialTimeout == 0 {
+		dialTimeout = 30 * time.Second
+	}
+
 	switch dr.Platform {
 	case device.PlatformAndroid:
 		var src device.TokenSource
 		token, src, err = po.manager.ReadTokenAndroidSource(ctx, dr.DeviceID, tokenTimeout, appID, nil)
 		if err == nil {
-			// A token that did not come from run-as does not prove the app: do not stay on a port another app holds.
+			// A token that did not come from run-as does not prove the app: do not dial a port another app holds, and say so.
 			follower.NoteTokenSource(src)
-			follower.Preflight(ctx)
+			if _, holdErr := follower.Preflight(ctx, dialTimeout); holdErr != nil {
+				return nil, &connectError{fmt.Errorf("[%s] %w", dr.DeviceID, holdErr)}
+			}
 		}
 	case device.PlatformIOS:
 		token, err = po.manager.ReadTokenIOS(ctx, dr.DeviceID, tokenTimeout, appID)
@@ -175,11 +182,6 @@ func (po *ParallelOrchestrator) runOnDevice(ctx context.Context, dr *DeviceRun) 
 	}
 
 	// Connect WebSocket
-	dialTimeout := po.cfg.Agent.DialTimeout
-	if dialTimeout == 0 {
-		dialTimeout = 30 * time.Second
-	}
-
 	dialOpts := probelink.DialOptions{
 		Host:        "127.0.0.1",
 		Port:        dr.Port,

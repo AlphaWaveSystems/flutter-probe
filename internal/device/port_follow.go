@@ -12,12 +12,15 @@ package device
 //   - The port is found by the uid of the listening socket, which must be exactly the uid of the app's package (`pm list packages -U`), and the package must be the
 //     only one with that uid (a shared uid proves nothing). The candidates are the ports [base, base+portFollowRange) of the configured port; exactly one must
 //     belong to the app (or the configured one is among them, and then nothing moves). None, or several without the configured one, change nothing.
-//   - A token that did not come from run-as (a file or a log shared by every app) does not prove the app, so before the first dial the port is checked: when another
-//     app holds it, the run does not stay on it.
+//   - A token that did not come from run-as (a file or a log shared by every app) does not prove the app, so before the first dial the port is checked. When another
+//     app holds it, the run does not dial it: the follower looks for the app's own port for the whole dial window (the app may still be starting), and when it finds
+//     none the connect is REFUSED with a PortHeldError that names the holder. Failing closed is the point: the token may be the holder's, and dialing it would run the
+//     tests against the wrong app without a sign of it.
 //   - Nothing is shared between connections: every connection (every lane of a parallel run) has its own PortFollower.
 //
-// What it does not cover: the case where /proc/net cannot be read, the agent is too old to move its port, the app is not debuggable (no run-as) and the token comes
-// from a shared source. There the token and the port can both belong to another app, and nothing here can tell.
+// What it does not cover: when /proc/net cannot be read, nobody can say who holds the port, so nothing is refused; with an agent too old to move its port and an app that
+// is not debuggable (no run-as), the token and the port can then both belong to another app, and nothing here can tell. Studio, `probe record`, the device view, the
+// Wi-Fi target of Studio, the cloud path and the first connect of a composite test do not use the follower (see the CHANGELOG).
 
 import (
 	"context"
@@ -34,7 +37,22 @@ const (
 	portFollowRange = 10
 	// portFollowInterval is the least time between two lookups of one follower, so a dial that keeps failing does not run adb every second.
 	portFollowInterval = 3 * time.Second
+	// preflightRetryInterval is how long Preflight waits between two looks for the app's own port while the dial window lasts.
+	preflightRetryInterval = time.Second
 )
+
+// PortHeldError says that another app holds the agent port and the app under test has opened none (yet), with a token that does not prove which app it belongs to.
+// The connect is refused instead of dialed: it could reach the other app.
+type PortHeldError struct {
+	Port    int
+	Holders []string
+	App     string
+}
+
+func (e *PortHeldError) Error() string {
+	return fmt.Sprintf("agent port %d on the device is held by %s, and %s has not opened an agent port; not connecting, because the token read here may belong to %s: stop it, or give the app under test another port (--dart-define=PROBE_PORT=<n>, and agent.port / agent.device_port in probe.yaml to match)",
+		e.Port, strings.Join(e.Holders, ", "), e.App, strings.Join(e.Holders, ", "))
+}
 
 // listeningPortsOf returns, sorted and without repeats, the ports in [lo, hi) with a socket in LISTEN state, bound to a loopback or the any address, in the text of
 // /proc/net/tcp or /proc/net/tcp6, whose owner is uid.
@@ -165,12 +183,21 @@ type PortFollower struct {
 	source     TokenSource
 	lastLookup time.Time
 	now        func() time.Time
+	sleep      func(ctx context.Context, d time.Duration)
 }
 
 // NewPortFollower returns a follower for the app appID on the device serial, whose agent port on the device is devicePort and is forwarded from hostPort. notice, when
 // not nil, receives the one line said when the port moves; onChange, when not nil, receives the new device port, so that the caller's own copy of it follows.
 func NewPortFollower(runner AdbRunner, fwd PortForwarder, serial, appID string, hostPort, devicePort int, notice func(string), onChange func(int)) *PortFollower {
-	return &PortFollower{runner: runner, fwd: fwd, serial: serial, appID: appID, hostPort: hostPort, base: devicePort, current: devicePort, notice: notice, onChange: onChange, now: time.Now}
+	return &PortFollower{runner: runner, fwd: fwd, serial: serial, appID: appID, hostPort: hostPort, base: devicePort, current: devicePort, notice: notice, onChange: onChange, now: time.Now, sleep: sleepCtx}
+}
+
+// sleepCtx waits for d or for ctx to end.
+func sleepCtx(ctx context.Context, d time.Duration) {
+	select {
+	case <-ctx.Done():
+	case <-time.After(d):
+	}
 }
 
 // DevicePort is the port on the device the forward should point at now.
@@ -187,19 +214,34 @@ func (f *PortFollower) NoteTokenSource(src TokenSource) {
 	f.mu.Unlock()
 }
 
-// Preflight runs once before the first dial. A token read through run-as proves the app, so nothing is checked and no adb call is made. Any other source does
-// not, and when another app holds the port, the run must not stay on it: the follower looks for the app's own port. It reports whether the forward was moved.
-func (f *PortFollower) Preflight(ctx context.Context) bool {
+// Preflight runs once before the first dial. A token read through run-as proves the app, so nothing is checked and no adb call is made. Any other source does not,
+// and then the run must not dial a port that another app holds: the follower looks for the app's own port, again every second until window has passed (the app may
+// still be starting), and moves the forward when it finds it. When it does not, Preflight returns a *PortHeldError and the caller must not dial. It returns true when
+// the forward was moved, and (false, nil) when nobody else holds the port or when that cannot be read. A cancelled ctx gives its error.
+func (f *PortFollower) Preflight(ctx context.Context, window time.Duration) (bool, error) {
 	f.mu.Lock()
 	src, cur := f.source, f.current
 	f.mu.Unlock()
 	if src == TokenSourceRunAs {
-		return false
+		return false, nil
 	}
-	if len(PortOwners(ctx, f.runner, f.serial, cur, f.appID)) == 0 {
-		return false
+	deadline := f.now().Add(window)
+	for {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		holders := PortOwners(ctx, f.runner, f.serial, cur, f.appID)
+		if len(holders) == 0 {
+			return false, nil
+		}
+		if f.follow(ctx) {
+			return true, nil
+		}
+		if !f.now().Before(deadline) {
+			return false, &PortHeldError{Port: cur, Holders: holders, App: f.appID}
+		}
+		f.sleep(ctx, preflightRetryInterval)
 	}
-	return f.follow(ctx)
 }
 
 // Suspect is for a dial that failed: the port may belong to another app. It looks for the app's own port and moves the forward when it finds exactly one other. It

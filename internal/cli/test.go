@@ -1147,7 +1147,13 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				dialOpts.Token = token
 				// A token that did not come from run-as does not prove which app it belongs to: do not stay on a port another app holds.
 				follower.NoteTokenSource(tokenSource)
-				if follower.Preflight(ctx) {
+				moved, holdErr := follower.Preflight(ctx, cfg.Agent.DialTimeout)
+				if holdErr != nil {
+					// Another app holds the agent port and the app under test has none: dialing could reach the other app, so the run does not connect.
+					connectFailed = true
+					return fmt.Errorf("agent port: %w", holdErr)
+				}
+				if moved {
 					trace("android: moved the forward to device port %d before the first dial", follower.DevicePort())
 				}
 				// Right after a cold launch the token read above can still be the
