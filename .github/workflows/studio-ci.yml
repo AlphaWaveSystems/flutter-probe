@@ -113,6 +113,9 @@ jobs:
       - name: Typing target tests
         working-directory: studio/frontend
         run: npm run test:typing-target
+      - name: Contrast tool tests
+        working-directory: studio/frontend
+        run: npm run test:contrast
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
