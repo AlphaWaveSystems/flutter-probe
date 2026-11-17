@@ -8,13 +8,19 @@ import 'package:flutter/material.dart';
 ///
 /// A family listed here is a screen to test against, not a claim that FlutterProbe supports it: a matrix cell is changed only by a test
 /// that ran (docs/compat/README.md, rule 2).
-const widgetFamilies = <String>['selection', 'textinput', 'buttons'];
+const widgetFamilies = <String>[
+  'selection',
+  'textinput',
+  'buttons',
+  'navigation',
+];
 
 /// The screen of [family], or null when there is none.
 Widget? widgetFamilyScreen(String family) => switch (family) {
   'selection' => const SelectionFamilyScreen(),
   'textinput' => const TextInputFamilyScreen(),
   'buttons' => const ButtonsFamilyScreen(),
+  'navigation' => const NavigationFamilyScreen(),
   _ => null,
 };
 
@@ -367,6 +373,64 @@ class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
             'Hold: tap ${_counts['tap']}, long ${_counts['long']}',
           ),
           const SizedBox(height: 80),
+        ],
+      ),
+    );
+  }
+}
+
+/// The app bar and the routes (docs/compat/NEXT.md, item 2): a `Scaffold` whose `AppBar` is titled "Inbox", with a search action (an
+/// `IconButton` with the tooltip "Search"), and a button that pushes a second route titled "Message". State texts: `Queries: N` on the
+/// first route, `From: Ada` on the second (no label is part of a state text: text selectors match substrings). The second route is a `MaterialPageRoute` (opaque), so the first one is under it.
+class NavigationFamilyScreen extends StatefulWidget {
+  const NavigationFamilyScreen({super.key});
+
+  @override
+  State<NavigationFamilyScreen> createState() => _NavigationFamilyScreenState();
+}
+
+class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
+  int _searches = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Inbox'),
+        actions: [
+          _s(
+            'wf_search',
+            (k) => IconButton(
+              key: k,
+              tooltip: 'Search',
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _searches++),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _state('wf_searches', 'Queries: $_searches'),
+          _s(
+            'wf_open_message',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Message')),
+                    body: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _state('wf_message_body', 'From: Ada'),
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('Open message'),
+            ),
+          ),
         ],
       ),
     );
