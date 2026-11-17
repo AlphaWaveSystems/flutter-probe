@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/alphawavesystems/flutter-probe/internal/secretfile"
 )
@@ -36,9 +35,6 @@ const (
 	// use at least this many different characters.
 	minSuppliedDistinct = 16
 )
-
-// permsEnforced is false where the file mode does not describe who can read a file.
-var permsEnforced = runtime.GOOS != "windows"
 
 // DefaultTokenDir is the directory of the token file.
 func DefaultTokenDir() (string, error) {
