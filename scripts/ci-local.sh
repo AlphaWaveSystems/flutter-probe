@@ -43,13 +43,14 @@
 #   130  FAIL (interrupted)
 # --list, --plan and --help run nothing and exit 0.
 #
-# The Studio frontend check (a hosted workflow that only runs for changes under studio/ and
-# vscode/) is added to a run with no --all and no --job when the change since the base
-# touches website/src/content/docs/probescript/*.md, studio/frontend/scripts/gen-probescript-dictionary.mjs
-# or studio/frontend/src/probescript/: those files feed the generated dictionary, and the
-# check (`npm run check:probescript` and `npm run test:probescript`, among others) fails when it
-# is out of date. It is an optional check: a failure is FAIL, a missing node or npm is PARTIAL
-# (exit 5), never a silent pass. The run says which file added it.
+# The Studio frontend and VS Code extension checks (hosted workflows that only run for changes
+# under studio/ and vscode/) are added to a run with no --all and no --job when the change since
+# the base touches website/src/content/docs/probescript/*.md, studio/frontend/scripts/gen-probescript-dictionary.mjs
+# or studio/frontend/src/probescript/: those files feed Studio's generated dictionary and the
+# extension's generated keywords and snippets, and each check (`npm run check:probescript` in
+# studio/frontend, `npm test` in vscode, among others) fails when its generated files are out of
+# date. They are optional checks: a failure is FAIL, a missing node or npm is PARTIAL (exit 5),
+# never a silent pass. The run says which file added them.
 #
 # Exit status of --release-dry-run. It runs no checks, never prints PASS, and cannot
 # be combined with --all, --job, --allow-skip, --base, --report or --pr-text:
@@ -219,6 +220,7 @@ fi'
   step frontend studio/frontend 'npm run test:result-notes'
   step frontend studio/frontend 'npm run test:still-waiting'
   step frontend studio/frontend 'npm run test:recording'
+  step frontend studio/frontend 'npm run test:connect-failure'
   step frontend studio/frontend 'npm run check:probescript'
 
   job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.10" "studio-ci.yml:studio-go"
@@ -381,8 +383,8 @@ unset BASH_ENV ENV
 HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || { echo "ci-local: not a git repository" >&2; exit 2; }
 BASE_SHA=$(git rev-parse --verify -q "${BASE_REF}^{commit}" 2>/dev/null || true)
 export CI_LOCAL_BASE_SHA="$BASE_SHA" CI_LOCAL_HEAD_SHA="$HEAD_SHA"
-# The Studio frontend check joins a default run when the change touches what the generated
-# dictionary is made from (see the header). Nothing is added to --all, --job or a release dry run.
+# The Studio frontend and VS Code extension checks join a default run when the change touches
+# what their generated files are made from (see the header). Nothing is added to --all, --job or a release dry run.
 AUTO_NOTE=""
 if [ "$ALL" -eq 0 ] && [ "$RELEASE" -eq 0 ] && [ "${#WANTED[@]}" -eq 0 ] && [ -n "$BASE_SHA" ]; then
   while IFS= read -r changed_path; do
@@ -392,7 +394,7 @@ if [ "$ALL" -eq 0 ] && [ "$RELEASE" -eq 0 ] && [ "${#WANTED[@]}" -eq 0 ] && [ -n
     esac
   done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA" 2>/dev/null)
   if [ -n "$AUTO_NOTE" ]; then
-    SELECTED+=("$(job_index frontend)")
+    SELECTED+=("$(job_index frontend)" "$(job_index vscode)")
   fi
 fi
 # The last line names a base that is not the default.
@@ -401,7 +403,7 @@ if [ "$BASE_REF" != "origin/main" ]; then BASE_NOTE=" (base $BASE_REF)"; fi
 SELF="ci-local"
 if [ "$PLAN" -eq 1 ]; then
   for i in "${SELECTED[@]}"; do printf '%s\n' "${JOB_NAME[$i]}"; done
-  if [ -n "$AUTO_NOTE" ]; then echo "(Studio frontend added: the change touches $AUTO_NOTE)"; fi
+  if [ -n "$AUTO_NOTE" ]; then echo "(Studio frontend and VS Code extension tests added: the change touches $AUTO_NOTE)"; fi
   exit 0
 fi
 if [ "$RELEASE" -eq 1 ]; then SELF="release-dry-run"; fi
@@ -610,7 +612,7 @@ fi
 R_STATUS=(); R_DETAIL=(); R_SECS=()
 GUARD_SCANNED=""
 echo "ci-local: $HEAD_SHA, ${#SELECTED[@]} check(s), logs in $LOG_DIR"
-if [ -n "$AUTO_NOTE" ]; then echo "ci-local: Studio frontend added: the change touches $AUTO_NOTE"; fi
+if [ -n "$AUTO_NOTE" ]; then echo "ci-local: Studio frontend and VS Code extension tests added: the change touches $AUTO_NOTE"; fi
 for i in "${SELECTED[@]}"; do
   id=${JOB_ID[$i]}; name=${JOB_NAME[$i]}; log="$LOG_DIR/$id.log"
   STATUS="PASS"; DETAIL=""

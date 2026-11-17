@@ -175,7 +175,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 #files       { grid-area: files; background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
 #editor-pane { grid-area: editor; background: var(--bg-1); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-#device-pane { grid-area: device; background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
+#device-pane { grid-area: device; background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+/* what the app says about its own build: it wraps inside the pane (a long version string breaks anywhere), never past the pane's edge */
+.app-build { flex-shrink: 0; padding: 4px 12px; font-size: 11px; line-height: 1.4; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; min-width: 0; }
 #inspector-pane { grid-area: inspector; background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
 #results-pane { grid-area: results; background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
 
@@ -319,16 +321,17 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 /* Step rows nest under their test; depth indents nested recipe/block steps. */
 #results-list li.step { padding-left: 28px; cursor: pointer; color: var(--fg-muted); }
-#results-list li.step:hover { background: var(--bg-hover, rgba(255,255,255,0.04)); }
+#results-list li.step:hover { background: var(--hover); }
 #results-list li.step .line { color: var(--fg-muted); font-size: 11px; min-width: 32px; }
 #results-list li.step .name { color: var(--fg-muted); }
 #results-list li.step.running .name { color: var(--fg); }
 #results-list li.step.fail .name { color: var(--fail); }
 #results-list li.step.skip .name { font-style: italic; }
 #results-list li.step .dot { width: 6px; height: 6px; }
-#results-list li.step-err { color: var(--fail); padding-left: 44px; white-space: pre-wrap; }
+#results-list li.step-err { color: var(--fail); padding-left: 44px; white-space: pre-wrap; cursor: pointer; }
+#results-list li.step-err:hover, #results-list li.step-triage:hover { background: var(--hover); }
 /* The rule-based suggestion under a failed selector step: a fix line, then the reason. */
-#results-list li.step-triage { padding-left: 44px; color: var(--fg-muted); font-size: 12px; white-space: pre-wrap; }
+#results-list li.step-triage { padding-left: 44px; color: var(--fg-muted); font-size: 12px; white-space: pre-wrap; cursor: pointer; }
 #results-list li.step-triage .triage-label { font-weight: 600; margin-right: 8px; }
 #results-list li.step-triage .triage-text { font-family: ui-monospace, SF Mono, Menlo, monospace; }
 

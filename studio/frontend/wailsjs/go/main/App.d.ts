@@ -24,6 +24,8 @@ export function CheckReplaceLine(arg1:string,arg2:string,arg3:string):Promise<ma
 
 export function CheckTarget(arg1:string):Promise<main.TargetInfo>;
 
+export function CloseWorkspace():Promise<void>;
+
 export function Connect(arg1:string):Promise<main.ConnectionStatus>;
 
 export function ConnectWiFi(arg1:string,arg2:number,arg3:string):Promise<main.ConnectionStatus>;
