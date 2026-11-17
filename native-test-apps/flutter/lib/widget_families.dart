@@ -18,6 +18,7 @@ const widgetFamilies = <String>[
   'display',
   'lists',
   'dialogs',
+  'gestures',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -29,6 +30,7 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'display' => const DisplayFamilyScreen(),
   'lists' => const ListsFamilyScreen(),
   'dialogs' => const DialogsFamilyScreen(),
+  'gestures' => const GesturesFamilyScreen(),
   _ => null,
 };
 
@@ -1196,6 +1198,113 @@ class _CoverPageState extends State<_CoverPage> {
                 child: const Text('Open tall dialog'),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Gestures (docs/compat/NEXT.md, item 7): a text inside a gesture widget, as apps build custom buttons and rows. Each handler counts in the
+/// state line: a `GestureDetector` with `onTap` ("Tap me"), an `InkWell` ("Ink me"), a `GestureDetector` with only `onDoubleTap`
+/// ("Double me") and only `onLongPress` ("Hold me"), a `GestureDetector` inside another ("Nested": inner and outer counts), a detector
+/// with both `onTap` and `onDoubleTap` ("Tap or double"), and a detector inside a `Semantics` wrapper that carries the key ("Key on
+/// wrapper", the structure that taps by id were reported to miss on physical devices).
+class GesturesFamilyScreen extends StatefulWidget {
+  const GesturesFamilyScreen({super.key});
+
+  @override
+  State<GesturesFamilyScreen> createState() => _GesturesFamilyScreenState();
+}
+
+class _GesturesFamilyScreenState extends State<GesturesFamilyScreen> {
+  final _n = <String, int>{};
+
+  void _c(String k) => setState(() => _n[k] = (_n[k] ?? 0) + 1);
+  String _v(String k) => '${_n[k] ?? 0}';
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+    child: Text(text),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Gestures')),
+      body: ListView(
+        children: [
+          _s(
+            'wf_g_tap',
+            (k) => GestureDetector(
+              key: k,
+              onTap: () => _c('tap'),
+              child: _label('Tap me'),
+            ),
+          ),
+          _s(
+            'wf_g_ink',
+            (k) => InkWell(
+              key: k,
+              onTap: () => _c('ink'),
+              child: _label('Ink me'),
+            ),
+          ),
+          _s(
+            'wf_g_double',
+            (k) => GestureDetector(
+              key: k,
+              onDoubleTap: () => _c('double'),
+              child: _label('Double me'),
+            ),
+          ),
+          _s(
+            'wf_g_hold',
+            (k) => GestureDetector(
+              key: k,
+              onLongPress: () => _c('hold'),
+              child: _label('Hold me'),
+            ),
+          ),
+          _s(
+            'wf_g_outer',
+            (k) => GestureDetector(
+              key: k,
+              onTap: () => _c('outer'),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: _s(
+                  'wf_g_inner',
+                  (ik) => GestureDetector(
+                    key: ik,
+                    onTap: () => _c('inner'),
+                    child: _label('Nested'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _s(
+            'wf_g_both',
+            (k) => GestureDetector(
+              key: k,
+              onTap: () => _c('single'),
+              onDoubleTap: () => _c('twice'),
+              child: _label('Tap or double'),
+            ),
+          ),
+          Semantics(
+            identifier: 'wf_g_wrapper',
+            key: const ValueKey('wf_g_wrapper'),
+            child: GestureDetector(
+              onTap: () => _c('wrapper'),
+              child: _label('Key on wrapper'),
+            ),
+          ),
+          _state(
+            'wf_g_state',
+            'Tap: ${_v('tap')}, Ink: ${_v('ink')}, Double: ${_v('double')}, Hold: ${_v('hold')}, Outer: ${_v('outer')}, '
+                'Inner: ${_v('inner')}, Single: ${_v('single')}, Twice: ${_v('twice')}, Wrapper: ${_v('wrapper')}',
           ),
         ],
       ),
