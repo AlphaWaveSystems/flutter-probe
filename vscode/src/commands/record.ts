@@ -48,7 +48,7 @@ async function startRecording(): Promise<void> {
     args.push('--device', deviceSerial);
   }
 
-  runInTerminal('Probe: Record', getProbeCommand(), args, ws);
+  runInTerminal('Probe: Record', getProbeCommand(), args, ws, {});
 
   // Show recording status
   recordingStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
