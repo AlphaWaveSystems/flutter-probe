@@ -143,3 +143,25 @@ func TestPrefsCommand(t *testing.T) {
 		t.Error("off was not saved")
 	}
 }
+
+// The line that says a wipe was answered without a question says when the wipe happens, for the before-every-test question, and names the package and
+// the device in both.
+func TestTheNoQuestionLineSaysWhenTheWipeHappens(t *testing.T) {
+	var out bytes.Buffer
+	yes := func() bool { return true }
+	f := confirmWithPrefs(nil, true, yes, &out, "com.example.app", "emulator-5554")
+	perTest := (&runner.DeviceContext{AppID: "com.example.app", Serial: "emulator-5554", Confirm: func(m string) bool { out.Reset(); return f(m) }}).AskClearData(true)
+	if perTest != nil {
+		t.Fatalf("the per-test question was not answered: %v", perTest)
+	}
+	for _, want := range []string{"com.example.app", "emulator-5554", "BEFORE EVERY TEST"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the per-test line lacks %q: %q", want, out.String())
+		}
+	}
+	out.Reset()
+	(&runner.DeviceContext{AppID: "com.example.app", Serial: "emulator-5554", Confirm: func(m string) bool { out.Reset(); return f(m) }}).AskClearData(false)
+	if strings.Contains(out.String(), "BEFORE EVERY TEST") || !strings.Contains(out.String(), "com.example.app") {
+		t.Errorf("the step's line: %q", out.String())
+	}
+}
