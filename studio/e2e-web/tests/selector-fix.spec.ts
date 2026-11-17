@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as net from "node:net";
 import * as path from "node:path";
-import { openPath, openStudio, workspace } from "./helpers";
+import { expectNoCall, openPath, openStudio, recordCalls, workspace } from "./helpers";
 import { seedEmail, seedLoginText, seedToken } from "./explain-seed";
 
 // Suggest a fix, against a fake provider on 127.0.0.1 and the failed run (with its failed step) that Studio starts with. No hosted
@@ -12,12 +12,15 @@ import { seedEmail, seedLoginText, seedToken } from "./explain-seed";
 interface Fake {
   url: string;
   requests: () => number;
+  /** Asserts the provider was asked nothing, after proving that its counter counts a request made in this test (one flagged as a control, which requests() and bodies() leave out). */
+  expectNoRequests: () => Promise<void>;
   bodies: () => string[];
   close: () => Promise<void>;
 }
 
 async function fakeProvider(reply: string, delayMs = 0): Promise<Fake> {
   const bodies: string[] = [];
+  const control: boolean[] = []; // one per request that was counted: true for the request a test makes to prove the counter works
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (c) => chunks.push(c));
@@ -25,6 +28,7 @@ async function fakeProvider(reply: string, delayMs = 0): Promise<Fake> {
       res.setHeader("Content-Type", "application/json");
       if (req.method === "POST" && (req.url ?? "").endsWith("/chat/completions")) {
         bodies.push(Buffer.concat(chunks).toString("utf8"));
+        control.push(req.headers["x-probe-control"] === "1");
         setTimeout(() => res.end(JSON.stringify({ choices: [{ message: { content: reply } }] })), delayMs);
         return;
       }
@@ -33,7 +37,18 @@ async function fakeProvider(reply: string, delayMs = 0): Promise<Fake> {
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as net.AddressInfo).port;
-  return { url: `http://127.0.0.1:${port}`, requests: () => bodies.length, bodies: () => bodies, close: () => new Promise((resolve) => server.close(() => resolve())) };
+  const real = () => bodies.filter((_, i) => !control[i]);
+  let proven = false;
+  const expectNoRequests = async () => {
+    if (!proven) {
+      const before = bodies.length;
+      await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, { method: "POST", headers: { "x-probe-control": "1" }, body: "{}" });
+      expect(bodies.length, "the provider's counter did not count a request it was sent").toBe(before + 1);
+      proven = true;
+    }
+    expect(real().length, "the provider was asked").toBe(0);
+  };
+  return { url: `http://127.0.0.1:${port}`, requests: () => real().length, expectNoRequests, bodies: () => real(), close: () => new Promise((resolve) => server.close(() => resolve())) };
 }
 
 const yamlPath = path.join(workspace, "probe.yaml");
@@ -67,16 +82,7 @@ async function captureRunStarted(page: Page) {
 const overlay = (page: Page) => page.locator("#fix-preview-overlay");
 const card = (page: Page) => page.locator("#fix-card");
 
-/** Counts what the page asks Studio to do, by method name. */
-function countCalls(page: Page) {
-  const calls: Record<string, number> = {};
-  page.on("request", (r) => {
-    const body = r.postData() ?? "";
-    const m = /"method":"(\w+)"/.exec(body);
-    if (m) calls[m[1]] = (calls[m[1]] ?? 0) + 1;
-  });
-  return calls;
-}
+const countCalls = recordCalls; // the shared recorder (helpers.ts); a zero is asserted with expectNoCall, which proves the recorder works first
 
 const hostileReply = 'Here:\n```probe\ntap "Sign in now"\n```\nThe label changed. <img src=x onerror="window.__fixXss=1"> <script>window.__fixXss=2</script>​';
 
@@ -112,25 +118,25 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await expect(page.locator("#fix-preview-text img, #fix-preview-text script")).toHaveCount(0); // the error text holds markup: it stays text
       expect(await page.evaluate(() => (window as any).__explainXss)).toBeUndefined();
       expect(text).toContain("<img src=x"); // and it is shown as the text it is
-      expect(f.requests()).toBe(0);
+      await f.expectNoRequests();
       expect(calls.PreviewSelectorFix).toBe(1);
-      expect(calls.SelectorFixPreviewed ?? 0).toBe(0); // nothing asks Studio to send before Send
+      await expectNoCall(page, calls, "SelectorFixPreviewed"); // nothing asks Studio to send before Send
       await expect(page.locator("#btn-fix-preview-cancel")).toBeFocused(); // the safe choice has the focus
       await expect(page.locator("#fix-preview-overlay [role=dialog]")).toHaveAttribute("aria-modal", "true");
       await page.click("#btn-fix-preview-cancel");
       await expect(overlay(page)).toBeHidden();
       await expect(card(page)).toBeHidden();
       await expect(page.locator("#btn-fix")).toBeEnabled(); // settled: the click has been handled to its end
-      expect(f.requests()).toBe(0);
-      expect(calls.SelectorFixPreviewed ?? 0).toBe(0);
+      await f.expectNoRequests();
+      await expectNoCall(page, calls, "SelectorFixPreviewed");
 
       await page.click("#btn-fix");
       await expect(overlay(page)).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(overlay(page)).toBeHidden();
       await expect(page.locator("#btn-fix")).toBeEnabled();
-      expect(f.requests()).toBe(0);
-      expect(calls.SelectorFixPreviewed ?? 0).toBe(0);
+      await f.expectNoRequests();
+      await expectNoCall(page, calls, "SelectorFixPreviewed");
     } finally {
       await f.close();
     }
@@ -246,8 +252,8 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
         await expect(page.locator("#fix-preview-note")).toContainText("before every suggestion");
         expect(f.requests()).toBe(i - 1);
         await page.click("#btn-fix-preview-send");
-        await expect(card(page).locator(".explain-place")).toHaveText("hosted");
-        expect(f.requests()).toBe(i);
+        await expect(card(page).locator(".explain-place")).toHaveText("hosted"); // from the second suggestion on this can be the card of the one before
+        await expect.poll(() => f.requests(), `the provider was asked ${i} times`).toBe(i);
       }
     } finally {
       await f.close();
@@ -265,7 +271,7 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await page.click("#btn-fix-preview-send");
       await expect(page.locator("#explain-status")).toContainText("changed since the preview");
       await expect(card(page)).toBeHidden();
-      expect(f.requests()).toBe(0);
+      await f.expectNoRequests();
       // And the next suggestion works from a new preview.
       await page.click("#btn-fix");
       await expect(overlay(page)).toBeVisible();
@@ -327,8 +333,8 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await runStarted();
       await expect(overlay(page)).toBeHidden();
       await expect(page.locator("#btn-fix")).toBeEnabled(); // not stuck disabled
-      expect(f.requests()).toBe(0);
-      expect(calls.SelectorFixPreviewed ?? 0).toBe(0);
+      await f.expectNoRequests();
+      await expectNoCall(page, calls, "SelectorFixPreviewed");
       // A card on screen is removed by a new run.
       await page.click("#btn-fix");
       await expect(overlay(page)).toBeVisible();
@@ -422,9 +428,9 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await expect(card(page)).toBeVisible(); // the card stays, with the Re-run button
       await expect(page.locator("#btn-fix-rerun")).toBeVisible();
       expect(fs.readFileSync(loginFile(), "utf8")).toBe(loginText); // the file on disk is untouched
-      expect(calls.WriteFile ?? 0).toBe(0);
-      expect(calls.RunFile ?? 0).toBe(0);
-      expect(calls.RunFileScoped ?? 0).toBe(0);
+      await expectNoCall(page, calls, "WriteFile");
+      await expectNoCall(page, calls, "RunFile");
+      await expectNoCall(page, calls, "RunFileScoped");
       // one Undo restores the line
       await lines(page).locator(".view-line", { hasText: "Welcome" }).click(); // focus the editor
       await page.keyboard.press("ControlOrMeta+z");
@@ -512,9 +518,9 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await expect(page.locator("#btn-fix-rerun")).toBeVisible();
       await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
       await expect(page.locator("#fix-rerun-hint")).toContainText("Save the file first"); // the replacement is unsaved
-      expect(calls.WriteFile ?? 0).toBe(0);
-      expect(calls.RunFileScoped ?? 0).toBe(0);
-      expect(calls.RunFile ?? 0).toBe(0);
+      await expectNoCall(page, calls, "WriteFile");
+      await expectNoCall(page, calls, "RunFileScoped");
+      await expectNoCall(page, calls, "RunFile");
       // the person saves: that is the only write
       await page.click("#btn-save");
       await expect.poll(() => calls.WriteFile ?? 0).toBe(1);
@@ -526,7 +532,7 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
       await expect(page.locator("#btn-fix-rerun")).toBeDisabled();
       await page.locator("#btn-fix-rerun").click({ force: true }); // a disabled button does nothing
       await page.waitForTimeout(300);
-      expect(calls.RunFileScoped ?? 0).toBe(0);
+      await expectNoCall(page, calls, "RunFileScoped");
     } finally {
       await f.close();
     }
