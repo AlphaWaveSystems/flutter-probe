@@ -161,35 +161,7 @@ func checkExportPath(path, ext string) error {
 // writeReportFile writes the report next to its final name and renames it into place, so a failure never leaves half a report where one was.
 // An existing file keeps its permissions; a new one is readable by others, like the CLI's report. The content is the same as `probe test --format json|junit` writes: error messages are written as the engine produced them and can contain local paths, so check a report before sharing it.
 func writeReportFile(path string, data []byte) error {
-	mode := os.FileMode(0o644)
-	if info, err := os.Stat(path); err == nil {
-		mode = info.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".probe-export-*")
-	if err != nil {
-		return fmt.Errorf("writing the report: %w", err)
-	}
-	name := tmp.Name()
-	fail := func(err error) error {
-		tmp.Close()
-		_ = os.Remove(name)
-		return fmt.Errorf("writing the report: %w", err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return fmt.Errorf("writing the report: %w", err)
-	}
-	if err := os.Rename(name, path); err != nil {
-		_ = os.Remove(name)
+	if err := replaceFileAtomically(path, data, ".probe-export-*"); err != nil {
 		return fmt.Errorf("writing the report: %w", err)
 	}
 	return nil
