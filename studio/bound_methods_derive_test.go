@@ -27,7 +27,6 @@ var sinkPackages = map[string]string{
 	"io/ioutil":                     "files",
 	"github.com/alphawavesystems/flutter-probe/internal/userprefs":  "files",
 	"github.com/alphawavesystems/flutter-probe/internal/secretfile": "files",
-	"github.com/alphawavesystems/flutter-probe/internal/httpcall":   "network",
 	"github.com/grandcat/zeroconf":                                  "network",
 	// a call into these reaches a device or its agent: the agent link (probelink, which holds the WebSocket and HTTP clients of the agent), the
 	// device managers (adb, simctl), the device view, the device settings, the performance reader, and any process
@@ -37,13 +36,17 @@ var sinkPackages = map[string]string{
 	"github.com/alphawavesystems/flutter-probe/internal/deviceview":  "devices",
 	"github.com/alphawavesystems/flutter-probe/internal/devsettings": "devices",
 	"github.com/alphawavesystems/flutter-probe/internal/perf":        "devices",
-	"os/exec": "devices",
+	"os/exec":                      "devices",
+	"github.com/gorilla/websocket": "devices",
+	"nhooyr.io/websocket":          "devices",
 }
 
 var sinkFuncs = map[string]map[string]string{
-	"github.com/alphawavesystems/flutter-probe/internal/runner": {"New": "devices", "NewExecutor": "devices"}, // the others (reporters, lint, validation) are pure
-	"github.com/alphawavesystems/flutter-probe/internal/config": {"Load": "files", "LoadForRepair": "files"},
-	"github.com/alphawavesystems/flutter-probe/internal/ai":     {"NewTextCompleter": "network", "NewChatCompleter": "network", "Triage": "network", "Doctor": "network"},
+	"github.com/alphawavesystems/flutter-probe/internal/toolpath": {"IsExecutableFile": "files", "Check": "files", "CheckIn": "files"},
+	"github.com/alphawavesystems/flutter-probe/internal/httpcall": {"Do": "network"},                            // the rest of the package is types, errors and the address classes
+	"github.com/alphawavesystems/flutter-probe/internal/runner":   {"New": "devices", "NewExecutor": "devices"}, // the others (reporters, lint, validation) are pure
+	"github.com/alphawavesystems/flutter-probe/internal/config":   {"Load": "files", "LoadForRepair": "files"},
+	"github.com/alphawavesystems/flutter-probe/internal/ai":       {"NewTextCompleter": "network", "NewChatCompleter": "network", "Triage": "network", "Doctor": "network"},
 	"os": {"ReadFile": "files", "WriteFile": "files", "Open": "files", "OpenFile": "files", "Create": "files", "ReadDir": "files", "Stat": "files", "Lstat": "files",
 		"Mkdir": "files", "MkdirAll": "files", "MkdirTemp": "files", "CreateTemp": "files", "Remove": "files", "RemoveAll": "files", "Rename": "files",
 		"Chmod": "files", "Truncate": "files", "Readlink": "files", "Symlink": "files"},
@@ -70,13 +73,31 @@ func loadPackageSources() (*pkgSources, error) {
 	if err != nil {
 		return nil, err
 	}
-	ps := &pkgSources{funcs: map[string][]*ast.FuncDecl{}, imports: map[*ast.FuncDecl]map[string]string{}}
-	fset := token.NewFileSet()
+	srcs := map[string]string{}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		f, err := parser.ParseFile(fset, name, nil, 0)
+		raw, err := os.ReadFile(name)
+		if err != nil {
+			return nil, err
+		}
+		srcs[name] = string(raw)
+	}
+	return parseSources(srcs)
+}
+
+// parseSources builds the call graph of the given files (name to text).
+func parseSources(srcs map[string]string) (*pkgSources, error) {
+	ps := &pkgSources{funcs: map[string][]*ast.FuncDecl{}, imports: map[*ast.FuncDecl]map[string]string{}}
+	fset := token.NewFileSet()
+	var names []string
+	for n := range srcs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		f, err := parser.ParseFile(fset, name, srcs[name], 0)
 		if err != nil {
 			return nil, err
 		}
@@ -147,21 +168,19 @@ func (ps *pkgSources) reachVia(name string) map[string]string {
 			selNames := map[*ast.Ident]bool{} // the name after a dot is followed by the SelectorExpr case below, not again as a bare name
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
 				switch x := node.(type) {
-				case *ast.CallExpr:
-					// only a call into a package is a touch (a type or a constant of it is not)
-					if sel, ok := x.Fun.(*ast.SelectorExpr); ok {
-						if id, ok := sel.X.(*ast.Ident); ok {
-							if path, isPkg := imps[id.Name]; isPkg {
-								for _, t := range []string{sinkPackages[path], sinkFuncs[path][sel.Sel.Name]} {
-									if t != "" && touched[t] == "" {
-										touched[t] = strings.Join(chain, " -> ") + " -> " + id.Name + "." + sel.Sel.Name
-									}
+				case *ast.SelectorExpr:
+					selNames[x.Sel] = true
+					// any use of a sink package's name counts, called or not: a function held in a variable (`runDoctor = ai.Doctor`), a client held in a
+					// package variable (`http.DefaultClient.Do`) and a value of the package whose method is called later are all ways to reach it
+					if id, ok := x.X.(*ast.Ident); ok {
+						if path, isPkg := imps[id.Name]; isPkg {
+							for _, t := range []string{sinkPackages[path], sinkFuncs[path][x.Sel.Name]} {
+								if t != "" && touched[t] == "" {
+									touched[t] = strings.Join(chain, " -> ") + " -> " + id.Name + "." + x.Sel.Name
 								}
 							}
 						}
 					}
-				case *ast.SelectorExpr:
-					selNames[x.Sel] = true
 					if _, ok := ps.funcs[x.Sel.Name]; ok && !notFollowed[x.Sel.Name] {
 						visit(x.Sel.Name)
 					}
@@ -256,6 +275,9 @@ func TestTheTouchCheckFailsOnAnUnderstatedEntry(t *testing.T) {
 	// the walk follows a function held in a package variable and a method through its name, and does not follow Close
 	if got := ps.reach("Chat"); !has(got, "keychain") || !has(got, "files") || !has(got, "network") || !has(got, "devices") {
 		t.Errorf("the walk from Chat found %v, want files, keychain, network and devices (the widget tree is read from the device)", got)
+	}
+	if got := ps.reach("TestAIConnection"); !has(got, "network") {
+		t.Errorf("TestAIConnection reaches the provider through a function variable (runDoctor = ai.Doctor) and the walk found %v", got)
 	}
 	if got := ps.reach("ExportRunResults"); has(got, "devices") {
 		t.Errorf("a pure runner helper was taken for a device: %v", got)
@@ -402,6 +424,8 @@ func TestEveryAsksEntryHasAGateInTheCode(t *testing.T) {
 			t.Errorf("%s is recorded as asks and no gate in the code is known for it: add it to the gates of this test with the name of its question, or label it previewed or none with a decision", d.Method)
 		case known && d.Confirm != "asks":
 			t.Errorf("%s has a gate (%s) and is recorded as %q: the label must say asks", d.Method, gate, d.Confirm)
+		case known && gate == "deviceCtx" && !(ps.mentions(d.Method, "executeRun") || d.Method == "executeRun"):
+			t.Errorf("%s no longer runs through executeRun, where the run is bound to its confirmations", d.Method)
 		case known && !ps.mentions(d.Method, gate):
 			t.Errorf("%s no longer reaches %s: the question that makes it asks", d.Method, gate)
 		case d.Method == "ConnectWiFiSaved" && !ps.refusesUnless(d.Method, gate):
@@ -443,4 +467,73 @@ func (ps *pkgSources) refusesUnless(fn, callee string) bool {
 		}
 	}
 	return false
+}
+
+// The walk is tried on small sources of its own: each way of reaching a sink that the review found slipping is a case, and so are the things that
+// must not count.
+func TestTheWalkSeesEachWayToReachASink(t *testing.T) {
+	src := func(body string) *pkgSources {
+		ps, err := parseSources(map[string]string{"x.go": "package main\nimport (\n\"net/http\"\n\"os\"\n\"github.com/gorilla/websocket\"\n\"github.com/zalando/go-keyring\"\n\"github.com/alphawavesystems/flutter-probe/internal/ai\"\n\"github.com/alphawavesystems/flutter-probe/internal/httpcall\"\n)\n" + body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ps
+	}
+	for name, c := range map[string]struct{ code, want string }{
+		"a package client":                  {"func A() { _, _ = http.DefaultClient.Do(nil) }", "network"},
+		"a client built in place":           {"func A() { _, _ = (&http.Client{}).Do(nil) }", "network"},
+		"a sink held in a local variable":   {"func A() { f := os.Remove; _ = f(\"x\") }", "files"},
+		"a sink held in a package variable": {"var zzD = ai.Triage\nfunc A() { _ = zzD }", "network"},
+		"a sink assigned to a function var": {"var runDoctor = ai.Doctor\nfunc A() { _ = runDoctor }", "network"},
+		"the websocket dialer":              {"func A() { _, _, _ = websocket.DefaultDialer.Dial(\"x\", nil) }", "devices"},
+		"the keychain":                      {"func A() { _, _ = keyring.Get(\"a\", \"b\") }", "keychain"},
+		"a sink through two functions":      {"func A() { b() }\nfunc b() { c() }\nfunc c() { _ = os.Remove(\"x\") }", "files"},
+		"the request helper":                {"func A() { _, _ = httpcall.Do(nil, httpcall.Request{}, httpcall.Options{}) }", "network"},
+	} {
+		if got := src(c.code).reach("A"); !has(got, c.want) {
+			t.Errorf("%s: the walk found %v, want %s", name, got, c.want)
+		}
+	}
+	for name, code := range map[string]string{
+		"a constant of the request helper": "func A() { _ = httpcall.MaxURLBytes }",
+		"a type of the standard library":   "func A() { var _ os.FileMode }",
+		"a function nobody calls":          "func A() {}\nfunc b() { _ = os.Remove(\"x\") }",
+	} {
+		if got := src(code).reach("A"); len(got) != 0 {
+			t.Errorf("%s: the walk found %v, want nothing", name, got)
+		}
+	}
+}
+
+// A run asks for a clear step through the connection's device context, and two tests show it with a real App: a clear reaches the device only on a
+// yes (nothing answering, a no, or a context of another connection is a no), and executeRun binds the confirmations to the run it starts. The guard
+// does not run them again; it fails when either is deleted or renamed, or when executeRun stops binding the run, so the label "asks" on the run
+// methods cannot outlive the evidence for it.
+func TestTheRunsAskLabelHasItsEvidence(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "confirm_test.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, d := range f.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok {
+			have[fn.Name.Name] = true
+		}
+	}
+	for _, name := range []string{"TestStudioClearAppDataReachesTheDeviceOnlyOnAYes", "TestExecuteRunSetsTheRunItsConfirmationsBelongTo", "TestConfirmWithNobodyToAskDenies"} {
+		if !have[name] {
+			t.Errorf("%s is gone from confirm_test.go: it is the evidence that a run's clear step asks", name)
+		}
+	}
+	ps, err := loadPackageSources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ps.mentions("executeRun", "setConfirmRun") {
+		t.Error("executeRun no longer binds the confirmations to its run (setConfirmRun): a question would be asked for no run")
+	}
+	if !ps.mentions("executeRun", "deviceCtx") {
+		t.Error("executeRun no longer runs with the connection's device context")
+	}
 }
