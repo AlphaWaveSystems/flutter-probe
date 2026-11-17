@@ -68,16 +68,16 @@ the radio's own group value when it has one and otherwise the nearest `RadioGrou
 | `ElevatedButton.icon` (`wf_with_icon`) | pass (the label's text) | pass | not assessed | partly |
 | `IconButton` with a tooltip (`wf_icon_button`) | pass (`#id` and the tooltip text `Add item`; an icon glyph as a selector was not tried) | pass (both) | not assessed | pass |
 | `FloatingActionButton` with a tooltip (`wf_fab`) | pass (`#id` and the tooltip text `Compose`) | pass (both) | not assessed | pass |
-| disabled `ElevatedButton` (`wf_disabled`) | pass (text) | **a tap raises no error and changes nothing** (the count stays 0) | pass (`is disabled`; `is enabled` fails) | pass, with the finding below |
+| disabled `ElevatedButton` (`wf_disabled`) | pass (text) | **a tap raises no error** (the fixture's count stays 0, but it has no handler, so that is true by construction: it does not show that the tap did nothing) | pass (`is disabled`; `is enabled` fails) | pass, with the finding below |
 | `ElevatedButton` with `onPressed` and `onLongPress` (`wf_long_press`) | pass (text) | pass (`tap` runs only the tap handler; `long press` runs only the long-press handler) | not assessed | pass |
 
 **Findings.**
-- **A tap on a disabled button is not an error.** The step passes and nothing happens (the fixture's count stays 0). A test that wants to know a button is disabled must say `see "..." is disabled`; `tap` will not tell it.
-- **A held press on a button with no long-press handler ends as a tap** (`long press "Press elevated"` makes `Elevated: 1`). This is Flutter's own behavior (the tap recogniser has no timeout), not a fault of the step; the suite pins it so a change in either shows up.
+- **A tap on a disabled button is not an error.** The step passes. Whether the tap reached the button is not measured: the fixture's disabled button has no handler, so its count cannot go up and "stays 0" proves nothing about the tap. A test that wants to know a button is disabled must say `see "..." is disabled`; `tap` will not tell it.
+- **A held press on a button with no long-press handler ends as a tap** (`long press "Press elevated"` makes `Elevated: 1`; measured on Flutter 3.44.8 and 3.50.0). This is Flutter's own behavior (the tap recogniser has no timeout), not a fault of the step; the suite pins it so a change in either shows up.
 - **Tooltips are selectors**: an icon button or a floating action button, which show no text, are found by their tooltip text, the same way they are by `#id`.
 
 Not covered by the screen: `ButtonBar` (deprecated in the catalog), `ToggleButtons` and `SegmentedButton` (selection), `PopupMenuButton` and `DropdownButton` (pickers and menus), a button inside a dialog or a list, a double tap, a button that scrolls into view, and a button under an overlay. The 8 variants of the suite that must fail
-(`probe-tests/negative/buttons.probe.expect-fail`) were run: all 8 fail with the message that says why (a count one too many, `is disabled` on an enabled button and `is enabled` on a disabled one, a tap on a disabled button counted, a held press taken for no tap, a label that is not on the screen, a tap taken for a long press, one button's tooltip finding another).
+(`probe-tests/negative/buttons.probe.expect-fail`) were run: all 8 fail with the message that says why (a count one too many, `is disabled` on an enabled button and `is enabled` on a disabled one, the disabled button's counter expected above 0, a held press taken for no tap, a label that is not on the screen, a tap taken for a long press, one button's tooltip finding another).
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 

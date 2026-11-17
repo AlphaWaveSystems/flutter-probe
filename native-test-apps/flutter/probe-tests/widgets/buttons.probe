@@ -35,7 +35,9 @@ test "a floating action button is found by its id and by its tooltip"
   tap "Compose"
   see "FAB: 2"
 
-test "a button is enabled or disabled, and a disabled one does nothing when tapped"
+# What this proves about the disabled button: it is read as disabled, and a `tap` on it raises no error. It does NOT prove that the tap did nothing: the fixture's
+# disabled button has no handler, so nothing on this screen could ever raise its counter, and "Disabled: 0" is true by construction.
+test "a button is enabled or disabled, and a tap on a disabled one raises no error"
   see "Press elevated" is enabled
   see "Cannot press" is disabled
   tap "Cannot press"
