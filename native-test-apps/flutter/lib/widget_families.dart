@@ -8,12 +8,21 @@ import 'package:flutter/material.dart';
 ///
 /// A family listed here is a screen to test against, not a claim that FlutterProbe supports it: a matrix cell is changed only by a test
 /// that ran (docs/compat/README.md, rule 2).
-const widgetFamilies = <String>['selection', 'textinput'];
+const widgetFamilies = <String>[
+  'selection',
+  'textinput',
+  'buttons',
+  'navigation',
+  'display',
+];
 
 /// The screen of [family], or null when there is none.
 Widget? widgetFamilyScreen(String family) => switch (family) {
   'selection' => const SelectionFamilyScreen(),
   'textinput' => const TextInputFamilyScreen(),
+  'buttons' => const ButtonsFamilyScreen(),
+  'navigation' => const NavigationFamilyScreen(),
+  'display' => const DisplayFamilyScreen(),
   _ => null,
 };
 
@@ -228,6 +237,261 @@ class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
           _state(
             'wf_cupertino_state',
             'Cupertino: ${_cupertino.isEmpty ? '(empty)' : _cupertino}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Elevated, filled, outlined and text buttons, an icon button with a tooltip, a floating action button, a Cupertino button, a button with an icon, a disabled
+/// button and one with both a tap and a long press. State texts (`Elevated: N`, ...) count the taps; labels are chosen so that no label is part of a state text.
+class ButtonsFamilyScreen extends StatefulWidget {
+  const ButtonsFamilyScreen({super.key});
+
+  @override
+  State<ButtonsFamilyScreen> createState() => _ButtonsFamilyScreenState();
+}
+
+class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
+  final _counts = <String, int>{
+    'elevated': 0,
+    'filled': 0,
+    'outlined': 0,
+    'text': 0,
+    'icon': 0,
+    'fab': 0,
+    'cupertino': 0,
+    'withicon': 0,
+    'disabled': 0,
+    'tap': 0,
+    'long': 0,
+  };
+
+  void _bump(String k) => setState(() => _counts[k] = _counts[k]! + 1);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Buttons')),
+      floatingActionButton: _s(
+        'wf_fab',
+        (k) => FloatingActionButton(
+          key: k,
+          tooltip: 'Compose',
+          onPressed: () => _bump('fab'),
+          child: const Icon(Icons.edit),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(8),
+        children: [
+          _s(
+            'wf_elevated',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => _bump('elevated'),
+              child: const Text('Press elevated'),
+            ),
+          ),
+          _state('wf_elevated_state', 'Elevated: ${_counts['elevated']}'),
+          _s(
+            'wf_filled',
+            (k) => FilledButton(
+              key: k,
+              onPressed: () => _bump('filled'),
+              child: const Text('Press filled'),
+            ),
+          ),
+          _state('wf_filled_state', 'Filled: ${_counts['filled']}'),
+          _s(
+            'wf_outlined',
+            (k) => OutlinedButton(
+              key: k,
+              onPressed: () => _bump('outlined'),
+              child: const Text('Press outlined'),
+            ),
+          ),
+          _state('wf_outlined_state', 'Outlined: ${_counts['outlined']}'),
+          _s(
+            'wf_text_button',
+            (k) => TextButton(
+              key: k,
+              onPressed: () => _bump('text'),
+              child: const Text('Press text'),
+            ),
+          ),
+          _state('wf_text_state', 'Text button: ${_counts['text']}'),
+          _s(
+            'wf_icon_button',
+            (k) => IconButton(
+              key: k,
+              tooltip: 'Add item',
+              icon: const Icon(Icons.add),
+              onPressed: () => _bump('icon'),
+            ),
+          ),
+          _state('wf_icon_state', 'Icon button: ${_counts['icon']}'),
+          _state('wf_fab_state', 'FAB: ${_counts['fab']}'),
+          _s(
+            'wf_cupertino_button',
+            (k) => CupertinoButton(
+              key: k,
+              onPressed: () => _bump('cupertino'),
+              child: const Text('Press cupertino'),
+            ),
+          ),
+          _state('wf_cupertino_state', 'Cupertino: ${_counts['cupertino']}'),
+          _s(
+            'wf_with_icon',
+            (k) => ElevatedButton.icon(
+              key: k,
+              onPressed: () => _bump('withicon'),
+              icon: const Icon(Icons.send),
+              label: const Text('Send now'),
+            ),
+          ),
+          _state('wf_with_icon_state', 'With icon: ${_counts['withicon']}'),
+          _s(
+            'wf_disabled',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: null,
+              child: const Text('Cannot press'),
+            ),
+          ),
+          _state('wf_disabled_state', 'Disabled: ${_counts['disabled']}'),
+          _s(
+            'wf_long_press',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => _bump('tap'),
+              onLongPress: () => _bump('long'),
+              child: const Text('Hold me'),
+            ),
+          ),
+          _state(
+            'wf_long_press_state',
+            'Hold: tap ${_counts['tap']}, long ${_counts['long']}',
+          ),
+          const SizedBox(height: 80),
+        ],
+      ),
+    );
+  }
+}
+
+/// The app bar and the routes (docs/compat/NEXT.md, item 2): a `Scaffold` whose `AppBar` is titled "Inbox", with a search action (an
+/// `IconButton` with the tooltip "Search"), and a button that pushes a second route titled "Message". State texts: `Queries: N` on the
+/// first route, `From: Ada` on the second (no label is part of a state text: text selectors match substrings). The second route is a `MaterialPageRoute` (opaque), so the first one is under it.
+class NavigationFamilyScreen extends StatefulWidget {
+  const NavigationFamilyScreen({super.key});
+
+  @override
+  State<NavigationFamilyScreen> createState() => _NavigationFamilyScreenState();
+}
+
+class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
+  int _searches = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Inbox'),
+        actions: [
+          _s(
+            'wf_search',
+            (k) => IconButton(
+              key: k,
+              tooltip: 'Search',
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _searches++),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _state('wf_searches', 'Queries: $_searches'),
+          _s(
+            'wf_open_message',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Message')),
+                    body: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _state('wf_message_body', 'From: Ada'),
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('Open message'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Text and display, the text part (docs/compat/NEXT.md, item 1): a plain `Text`, a one-line `Text` that is cut with an ellipsis, a
+/// `Text.rich` of two spans ("Hello " and a bold "world") and a `RichText` of two spans ("Painted " and "rich text"). Nothing is tapped;
+/// the screen asks what `see` matches.
+class DisplayFamilyScreen extends StatelessWidget {
+  const DisplayFamilyScreen({super.key});
+
+  /// The text of the ellipsis line: chosen to be longer than a phone screen is wide, so it is painted cut (an inference from its length on
+  /// the two devices used; the agent does not report the painted width).
+  static const longLine =
+      'Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Display')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _s('wf_text', (k) => Text('Order total: 42.00', key: k)),
+          _s(
+            'wf_ellipsis',
+            (k) => Text(
+              longLine,
+              key: k,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _s(
+            'wf_rich',
+            (k) => Text.rich(
+              key: k,
+              const TextSpan(
+                text: 'Hello ',
+                children: [
+                  TextSpan(
+                    text: 'world',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _s(
+            'wf_richtext',
+            (k) => RichText(
+              key: k,
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                text: 'Painted ',
+                children: const [TextSpan(text: 'rich text')],
+              ),
+            ),
           ),
         ],
       ),

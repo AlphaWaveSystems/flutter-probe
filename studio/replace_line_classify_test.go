@@ -110,9 +110,7 @@ func TestEveryParserVerbWaitAndStepIsClassified(t *testing.T) {
 	// WaitKind's constants are an iota block: the first has the type, the rest follow it
 	classified(t, "wait kind", consts["WaitKind"], allowedWaitConsts, deniedWaitConsts)
 	var stepTypes []string
-	for _, s := range steps {
-		stepTypes = append(stepTypes, s)
-	}
+	stepTypes = append(stepTypes, steps...)
 	classified(t, "step type", stepTypes, allowedStepTypes, deniedStepTypes)
 }
 

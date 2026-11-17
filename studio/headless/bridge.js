@@ -2,12 +2,10 @@
 // frontend can be driven by Playwright without a native window. Served by Studio itself when it
 // is started with PROBE_STUDIO_HEADLESS=1; it is never part of the desktop app.
 (function () {
-  const TOKEN = "__TOKEN__";
-
   async function call(method, args) {
     const resp = await fetch("/__headless/call", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Headless-Token": TOKEN },
+      headers: { "Content-Type": "application/json" }, // the token is not here: whoever drives this page adds it to every request (Playwright: extraHTTPHeaders)
       body: JSON.stringify({ method, args }),
     });
     const out = await resp.json();
@@ -22,7 +20,7 @@
   };
 
   const listeners = {}; // event name -> [{cb, left}]
-  const source = new EventSource("/__headless/events?token=" + encodeURIComponent(TOKEN));
+  const source = new EventSource("/__headless/events");
   source.onmessage = (e) => {
     const { name, data } = JSON.parse(e.data);
     const list = listeners[name];

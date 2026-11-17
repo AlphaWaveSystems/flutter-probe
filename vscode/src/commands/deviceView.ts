@@ -1,3 +1,4 @@
+import { childEnv } from '../secretArgs';
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import { getProbeCommand } from '../probe';
@@ -14,7 +15,7 @@ import { clampViewConfig, statusBarText } from '../deviceView/viewConfig';
 const LAST_DEVICE_KEY = 'flutterprobe.deviceView.lastDevice';
 
 const nodeSpawn: SpawnFn = (command, args, cwd) =>
-  cp.spawn(command, args, { cwd, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] });
+  cp.spawn(command, args, { cwd, env: childEnv(process.env), stdio: ['pipe', 'pipe', 'pipe'] }); // not a test run: no secrets
 
 interface Session {
   panel: vscode.WebviewPanel;

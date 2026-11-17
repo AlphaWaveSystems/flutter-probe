@@ -1,0 +1,53 @@
+# The negative variants of probe-tests/widgets/buttons.probe: every test below asserts something WRONG, or crosses what the agent can do, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/buttons.probe.expect-fail /tmp/buttons-negative.probe
+#   probe test /tmp/buttons-negative.probe --device <serial> -y       # (the buttons build, the same probe.yaml as for buttons.probe)
+#
+# Expected: 0 passed, 8 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
+# waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id. `wait until ... appears` matches only what is on screen, so this needs a screen tall enough to show that element
+  # (measured on a Pixel 6 profile); on a shorter one the wait would time out. A wait for an earlier element was not enough (measured).
+  wait until #wf_long_press_state appears
+
+# Expected: line 2: see "Elevated: 2": Expected to see "text("Elevated: 2")" but it was not found
+test "N1 a count that is one too many"
+  tap "Press elevated"
+  see "Elevated: 2"
+
+# Expected: see "Press elevated": "text("Press elevated")" is enabled
+test "N2 an enabled button is not disabled"
+  see "Press elevated" is disabled
+
+# Expected: see "Cannot press": "text("Cannot press")" is disabled
+test "N3 a disabled button is not enabled"
+  see "Cannot press" is enabled
+
+# Expected: see "Disabled: 1": ... was not found (the disabled button has no handler, so its counter cannot go up; this shows the assertion can fail, not that the tap did nothing)
+test "N4 the disabled button's counter cannot go up"
+  tap "Cannot press"
+  see "Disabled: 1"
+
+# Expected: see "Elevated: 0": ... was not found (a held press on a button with no long-press handler ends as a tap: the count is 1)
+test "N5 a long press on a button with no long press handler leaves the count at 0"
+  long press "Press elevated"
+  see "Elevated: 0"
+
+# Expected: tap "Press elevatd": Widget not found: text("Press elevatd") — visible texts: [...]
+test "N6 a label that is not on the screen"
+  tap "Press elevatd"
+
+# Expected: see "Hold: tap 0, long 1": ... was not found (a tap is not a long press)
+test "N7 a tap is not a long press"
+  tap "Hold me"
+  see "Hold: tap 0, long 1"
+
+# Expected: see "Icon button: 1": ... was not found (the tooltip of the floating action button does not find the icon button)
+test "N8 the tooltip of one button does not find another"
+  tap "Compose"
+  see "Icon button: 1"

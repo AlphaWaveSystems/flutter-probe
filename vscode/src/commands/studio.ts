@@ -31,7 +31,7 @@ async function openStudio(): Promise<void> {
     args.push('--device', deviceSerial);
   }
 
-  runInTerminal('Probe: Studio', getProbeCommand(), args, getWorkspaceRoot());
+  runInTerminal('Probe: Studio', getProbeCommand(), args, getWorkspaceRoot(), {});
 
   // Open in browser after a short delay to let the server start
   setTimeout(() => {

@@ -1213,6 +1213,7 @@ export namespace main {
 	    androidDeviceId: string;
 	    aiContextRunResults: boolean;
 	    aiContextWidgetTree: boolean;
+	    iosDeviceIdProblem?: string;
 	    base?: WorkspaceSettings;
 	
 	    static createFrom(source: any = {}) {
@@ -1231,6 +1232,7 @@ export namespace main {
 	        this.androidDeviceId = source["androidDeviceId"];
 	        this.aiContextRunResults = source["aiContextRunResults"];
 	        this.aiContextWidgetTree = source["aiContextWidgetTree"];
+	        this.iosDeviceIdProblem = source["iosDeviceIdProblem"];
 	        this.base = this.convertValues(source["base"], WorkspaceSettings);
 	    }
 	

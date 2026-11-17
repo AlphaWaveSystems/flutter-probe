@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -11,6 +12,10 @@ import { seedExchanges, seedRunWithSteps } from "./tests/explain-seed";
 //   STUDIO_WORKSPACE  a copy of the fixture workspace (tests may change it)
 //   STUDIO_E2E_UDID   optional: a booted device running the fixture app (device tests are skipped without it)
 const port = process.env.STUDIO_E2E_PORT ?? "34890";
+// The token of the bridge. Studio makes none and serves none: this runner makes it once (the workers read it from the environment this process sets before
+// they start), gives it to the server it starts, and sends it with every request of every page (extraHTTPHeaders).
+process.env.STUDIO_E2E_HEADLESS_TOKEN = process.env.STUDIO_E2E_HEADLESS_TOKEN || crypto.randomBytes(32).toString("hex");
+const headlessToken = process.env.STUDIO_E2E_HEADLESS_TOKEN;
 // A finished run with failed tests, for the specs of Explain. The file is inside the workspace, which Studio requires, and it is
 // written here, before the server starts, because Studio reads it once at launch (headless builds only).
 const seedPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WORKSPACE, ".e2e-seed", "run.json") : "";
@@ -43,6 +48,7 @@ export default defineConfig({
   outputDir: path.join(out, "artifacts"),
   use: {
     baseURL: `http://127.0.0.1:${port}`,
+    extraHTTPHeaders: { "X-Headless-Token": headlessToken },
     headless: process.env.STUDIO_E2E_HEADED !== "1", // STUDIO_E2E_HEADED=1 to watch; the window then opens in the browser, not Studio
     actionTimeout: 15_000,
     screenshot: "only-on-failure",
@@ -57,6 +63,7 @@ export default defineConfig({
     env: {
       PROBE_STUDIO_HEADLESS: "1",
       PROBE_STUDIO_HEADLESS_PORT: port,
+      PROBE_STUDIO_HEADLESS_TOKEN: headlessToken,
       PROBE_STUDIO_WORKSPACE: process.env.STUDIO_WORKSPACE ?? "",
       PROBE_STUDIO_DEVICE_VIEW: process.env.STUDIO_E2E_DEVICE_VIEW ?? "", // "1" runs Studio with the shared device view
       PROBE_STUDIO_TEST_USER_CONFIG_DIR: process.env.PROBE_STUDIO_TEST_USER_CONFIG_DIR || path.join(os.tmpdir(), "studio-e2e-userconfig"), // never the real preferences folder

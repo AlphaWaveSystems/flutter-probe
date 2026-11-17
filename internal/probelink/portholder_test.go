@@ -4,6 +4,8 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
 
 func TestParseLsofHolders(t *testing.T) {
@@ -134,5 +136,19 @@ func TestHolderTextIsCleanedBeforeItIsPrinted(t *testing.T) {
 	fake := describeHolders(48686, []Holder{{PID: "9", Name: "Runner", Command: "/x/CoreSimulator/Devices/x;rm -rf ~/data/Containers/Runner"}})
 	if strings.Contains(fake, "simctl") || strings.Contains(fake, "rm -rf") {
 		t.Errorf("an id that is not a UUID must not reach a command line: %q", fake)
+	}
+}
+
+// cleanHolderText is oneline.Clean: one implementation of the rules. The old hand copy here missed some hidden characters (the combining
+// grapheme joiner, noncharacters, the supplementary variation selectors) and turned joiners into spaces.
+func TestCleanHolderTextIsOnelineClean(t *testing.T) {
+	cp := func(rs ...rune) string { return string(rs) }
+	for _, in := range []string{
+		"Runner", "a\x1b[2Jb\nc", "x" + cp(0x034F) + "y" + cp(0xFDD0) + "z", cp(0x845B, 0xE0100) + "w",
+		cp(0x1F468, 0x200D, 0x1F469), "a" + cp(0x202E) + "b" + cp(0x200B) + "c", strings.Repeat("long", 40), "",
+	} {
+		if got, want := cleanHolderText(in, 48), oneline.Clean(in, 48); got != want {
+			t.Errorf("cleanHolderText(%q) = %q, oneline.Clean = %q", in, got, want)
+		}
 	}
 }

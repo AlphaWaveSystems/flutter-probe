@@ -22,6 +22,10 @@ const (
 	PlatformIOS     Platform = "ios"
 )
 
+// AppIDIsCaseInsensitive reports whether two application ids that differ only in case name the same app on this platform: they do on iOS (a bundle id), and they do
+// not on Android (a package name is case-sensitive). probelink.AppIDMismatchWarning takes it as its ignoreCase argument.
+func (p Platform) AppIDIsCaseInsensitive() bool { return p == PlatformIOS }
+
 // Device represents a connected emulator or simulator.
 type Device struct {
 	ID        string   // ADB serial or iOS UDID
@@ -171,7 +175,7 @@ func (m *Manager) EnsureADB(ctx context.Context, serial string, hostPort int) er
 		}
 	}
 	if !found {
-		return fmt.Errorf("adb: device %s not found or not online — check USB connection", serial)
+		return fmt.Errorf("adb: device %s not found or not online — check USB connection", CleanOneLine(serial, 80))
 	}
 
 	// Clean up stale port forwards for this port to avoid conflicts
@@ -304,7 +308,7 @@ func (m *Manager) StartIOSNamed(ctx context.Context, udid, name string) (*Device
 		}
 		if found := ios.FindByName(sims, name); found != nil {
 			if udid != "" && udid != found.UDID {
-				return nil, fmt.Errorf("simulator %q is %s, not %s", name, found.UDID, udid)
+				return nil, fmt.Errorf("simulator %q is %s, not %s", name, CleanOneLine(found.UDID, 80), CleanOneLine(udid, 80))
 			}
 			udid = found.UDID
 		} else {
@@ -323,7 +327,7 @@ func (m *Manager) StartIOSNamed(ctx context.Context, udid, name string) (*Device
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("  Created simulator %q (%s)\n", name, newUDID)
+			fmt.Printf("  Created simulator %q (%s)\n", name, CleanOneLine(newUDID, 80))
 			udid = newUDID
 		}
 	}
@@ -376,35 +380,35 @@ func (m *Manager) ADB() *ADB {
 func (m *Manager) InstallAndLaunchApp(ctx context.Context, serial string, platform Platform, appPath, appID string, grantPerms bool) error {
 	switch platform {
 	case PlatformAndroid:
-		fmt.Printf("  Installing %s on %s...\n", appPath, serial)
+		fmt.Printf("  Installing %s on %s...\n", CleanOneLine(appPath, 80), CleanOneLine(serial, 80))
 		if err := m.adb.Install(ctx, serial, appPath); err != nil {
 			return fmt.Errorf("install: %w", err)
 		}
 		if grantPerms {
-			fmt.Printf("  Granting all permissions for %s...\n", appID)
+			fmt.Printf("  Granting all permissions for %s...\n", CleanOneLine(appID, 80))
 			for _, perms := range AndroidPermissions {
 				for _, perm := range perms {
 					_ = m.adb.GrantPermission(ctx, serial, appID, perm)
 				}
 			}
 		}
-		fmt.Printf("  Launching %s...\n", appID)
+		fmt.Printf("  Launching %s...\n", CleanOneLine(appID, 80))
 		if err := m.adb.LaunchApp(ctx, serial, appID); err != nil {
 			return fmt.Errorf("launch: %w", err)
 		}
 
 	case PlatformIOS:
-		fmt.Printf("  Installing %s on %s...\n", appPath, serial)
+		fmt.Printf("  Installing %s on %s...\n", CleanOneLine(appPath, 80), CleanOneLine(serial, 80))
 		if err := m.simctl.Install(ctx, serial, appPath); err != nil {
 			return fmt.Errorf("install: %w", err)
 		}
 		if grantPerms {
-			fmt.Printf("  Granting all permissions for %s...\n", appID)
+			fmt.Printf("  Granting all permissions for %s...\n", CleanOneLine(appID, 80))
 			for _, svc := range IOSPrivacyServices {
 				_ = m.simctl.GrantPrivacy(ctx, serial, appID, svc)
 			}
 		}
-		fmt.Printf("  Launching %s...\n", appID)
+		fmt.Printf("  Launching %s...\n", CleanOneLine(appID, 80))
 		if err := m.simctl.Launch(ctx, serial, appID); err != nil {
 			return fmt.Errorf("launch: %w", err)
 		}
@@ -640,7 +644,7 @@ const AppNotRunningMarker = "is not running"
 
 // TokenAppNotRunningError is the error of a token read that timed out while the app had no process.
 func TokenAppNotRunningError(timeout time.Duration, appID string) error {
-	return fmt.Errorf("android: probe token not found within %s: the app process %s "+AppNotRunningMarker+" (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, appID)
+	return fmt.Errorf("android: probe token not found within %s: the app process %s "+AppNotRunningMarker+" (it exited or crashed — a `go back` at the root route used to do this; check `adb logcat` for a crash)", timeout, CleanOneLine(appID, 80))
 }
 
 // latestProbeToken scans a `logcat -d` dump for PROBE_TOKEN= lines and
