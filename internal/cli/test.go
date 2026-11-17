@@ -922,37 +922,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			}
 
 			// Pick device and detect platform
-			platform = device.Platform(cfg.Defaults.Platform)
-			// Apply probe.yaml device preference when --device flag not provided
-			if deviceSerial == "" {
-				if platform == device.PlatformIOS && cfg.Device.IOSDeviceID != "" {
-					deviceSerial = cfg.Device.IOSDeviceID
-				} else if platform == device.PlatformAndroid && cfg.Device.AndroidDeviceID != "" {
-					deviceSerial = cfg.Device.AndroidDeviceID
-				}
-			}
-			if deviceSerial == "" {
-				devices, err := listDevices(ctx, dm)
-				first, ok := defaultDevice(devices)
-				if err != nil || !ok {
-					return noDeviceError(err)
-				}
-				deviceSerial = first.ID
-				platform = first.Platform
-			} else {
-				// Detect platform from device list when serial is specified manually
-				devices, _ := listDevices(ctx, dm)
-				for _, d := range devices {
-					if d.ID == deviceSerial {
-						platform = d.Platform
-						break
-					}
-				}
-				// An iOS id shapes host paths (a simulator's data folder) and devicectl arguments: --device follows the rule of
-				// device.ios_device_id, a simulator or a device UDID.
-				if err := validIOSDeviceFlag(platform, deviceSerial); err != nil {
-					return err
-				}
+			deviceSerial, platform, err = pickLocalDevice(deviceSerial, device.Platform(cfg.Defaults.Platform), cfg.Device.IOSDeviceID,
+				cfg.Device.AndroidDeviceID, func() ([]device.Device, error) { return listDevices(ctx, dm) })
+			if err != nil {
+				return err
 			}
 
 			// Use the application ID this device has installed (see resolveDeviceAppID).
@@ -1788,11 +1761,39 @@ func uploadAndStartCloudSession(ctx context.Context, provider cloud.CloudProvide
 	return sess, nil
 }
 
-// validIOSDeviceFlag refuses a --device value for an iOS device that is not a simulator UDID or a device UDID (the rule of
-// device.ios_device_id). Other platforms keep config.ValidateDeviceSerial's rule.
-func validIOSDeviceFlag(platform device.Platform, serial string) error {
-	if platform != device.PlatformIOS || ios.ValidSimulatorUDID(serial) || ios.ValidDeviceUDID(serial) {
-		return nil
+// pickLocalDevice chooses the device of a local run and its platform. A serial given (--device) is used, else probe.yaml's preferred device
+// for the default platform, else the first device listed. A given serial takes the platform the device list shows for it; one the list does
+// not show keeps the default platform, and for iOS it must be a simulator or a device UDID (the rule of device.ios_device_id): an iOS id
+// shapes host paths (a simulator's data folder) and devicectl arguments.
+func pickLocalDevice(serial string, platform device.Platform, iosPref, androidPref string, list func() ([]device.Device, error)) (string, device.Platform, error) {
+	if serial == "" {
+		if platform == device.PlatformIOS && iosPref != "" {
+			serial = iosPref
+		} else if platform == device.PlatformAndroid && androidPref != "" {
+			serial = androidPref
+		}
 	}
-	return fmt.Errorf("invalid --device %q for an iOS device: use the UDID of a simulator or of a device, as `probe device list` shows it", serial)
+	if serial == "" {
+		devices, err := list()
+		first, ok := defaultDevice(devices)
+		if err != nil || !ok {
+			return "", platform, noDeviceError(err)
+		}
+		return first.ID, first.Platform, nil
+	}
+	devices, _ := list()
+	listed := false
+	for _, d := range devices {
+		if d.ID == serial {
+			platform, listed = d.Platform, true
+			break
+		}
+	}
+	if platform == device.PlatformIOS && !ios.ValidSimulatorUDID(serial) && !ios.ValidDeviceUDID(serial) {
+		if !listed {
+			return "", platform, fmt.Errorf("--device %q is not in the device list (see `probe device list`); for an iOS device, use its UDID", serial)
+		}
+		return "", platform, fmt.Errorf("invalid --device %q for an iOS device: use the UDID of a simulator or of a device, as `probe device list` shows it", serial)
+	}
+	return serial, platform, nil
 }
