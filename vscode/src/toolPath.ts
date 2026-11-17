@@ -109,6 +109,26 @@ export function quotePosix(word: string): string {
   return `'${word.replace(/'/g, "'\\''")}'`;
 }
 
+// CONTROL is any control character (U+0000 to U+001F, U+007F). A line-editing shell acts on them while the text is typed into the
+// terminal (readline and zle: ^U deletes back to the start of the line, ^A moves to it, ^C cancels it), so a quoted path that holds one
+// can lose its opening quote and run what follows. Refused for every shell, in the command and in every argument (shellEscape).
+export const CONTROL = /[\u0000-\u001f\u007f]/;
+
+// refuseControl throws when text holds a control character.
+export function refuseControl(text: string, what: string): void {
+  if (CONTROL.test(text)) {
+    throw new Error(`${what} ${JSON.stringify(text)} has a control character, which the terminal's shell would act on as it is typed: rename it, or install the tool in a folder without one`);
+  }
+}
+
+// quoteArg quotes one argument of the command the POSIX way (shellEscape in probeTerminal.ts). An argument with a control character is
+// refused (CONTROL): a line-editing shell would act on it as it is typed.
+export function quoteArg(arg: string): string {
+  refuseControl(arg, 'the argument');
+  if (/^[a-zA-Z0-9_./:=-]+$/.test(arg)) { return arg; }
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
 // The POSIX shells whose single quotes were checked to keep any text as one word with nothing expanded.
 const POSIX_SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
 
@@ -123,10 +143,16 @@ const METACHARACTERS = /[&|;<>^`$()'"%!\n\r]/;
 // - PowerShell: the call operator and single quotes, & '...'. PowerShell also reads the typographic quotes ‘ ’ “ ” as quotation marks
 //   (about_Quoting_Rules), so ' ‘ ’ are doubled inside the string, and a path with ‚ or ‛, which that page does not list, is refused.
 // - cmd.exe: double quotes. %NAME% still expands inside them and cmd has no escape for it on a command line, so a path with % is refused.
-// - Any other shell (fish, nu, csh, pwsh on macOS or Linux, none detected): a path of safe characters is typed as it is, one with a shell
-//   metacharacter is refused, and any other (a space) is single-quoted on macOS and Linux and typed as it is on Windows.
+// - PowerShell on macOS or Linux: a single-quoted path is a string there, not a command, so only a path of safe characters is typed;
+//   any other is refused.
+// - Any other shell (fish, nu, csh, none detected): a path of safe characters is typed as it is, one with a shell metacharacter (or, on
+//   macOS and Linux, a backslash) is refused, and any other (a space) is single-quoted on macOS and Linux and typed as it is on Windows.
+// On every system and shell a path with a control character is refused (CONTROL). The backslash counts as safe only on Windows, where it
+// separates folders; on macOS and Linux a shell would drop it from an unquoted word.
 export function commandWord(command: string, platform: string, shell: string): string {
-  if (/^[a-zA-Z0-9_.:\\/-]+$/.test(command)) { return command; }
+  refuseControl(command, 'the path of the command,');
+  const safe = platform === 'win32' ? /^[a-zA-Z0-9_.:\\/-]+$/ : /^[a-zA-Z0-9_.:/-]+$/;
+  if (safe.test(command)) { return command; }
   const name = (shell.split(/[\\/]/).pop() ?? '').toLowerCase().replace(/\.exe$/, '');
   if (POSIX_SHELLS.has(name) || (name === 'wsl' && platform === 'win32')) { return quotePosix(command); }
   if (platform === 'win32' && (name === 'powershell' || name === 'pwsh')) {
@@ -134,6 +160,9 @@ export function commandWord(command: string, platform: string, shell: string): s
       throw new Error(`the path of the command, ${JSON.stringify(command)}, has a character PowerShell may read as a quote: install it in a folder without one, or set flutterprobe.probePath to such a path`);
     }
     return `& '${command.replace(/['\u2018\u2019]/g, c => c + c)}'`;
+  }
+  if (platform !== 'win32' && (name === 'powershell' || name === 'pwsh')) {
+    throw new Error(`the path of the command, ${JSON.stringify(command)}, cannot be typed into PowerShell on this system, where a quoted path is not run: install it in a folder whose path has only letters, digits and . _ - / :, or use bash or zsh as the terminal`);
   }
   if (platform === 'win32' && name === 'cmd') {
     if (/[%"\n\r]/.test(command)) {
