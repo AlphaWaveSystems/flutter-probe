@@ -24,12 +24,24 @@ import (
 var sinkPackages = map[string]string{
 	"github.com/zalando/go-keyring": "keychain",
 	"net/http":                      "network",
+	"io/ioutil":                     "files",
 	"github.com/alphawavesystems/flutter-probe/internal/userprefs":  "files",
 	"github.com/alphawavesystems/flutter-probe/internal/secretfile": "files",
-	"io/ioutil": "files",
+	"github.com/alphawavesystems/flutter-probe/internal/httpcall":   "network",
+	"github.com/grandcat/zeroconf":                                  "network",
+	// a call into these reaches a device or its agent: the agent link (probelink, which holds the WebSocket and HTTP clients of the agent), the
+	// device managers (adb, simctl), the device view, the device settings, the performance reader, and any process
+	// the Studio starts (it starts adb and simctl)
+	"github.com/alphawavesystems/flutter-probe/internal/probelink":   "devices",
+	"github.com/alphawavesystems/flutter-probe/internal/device":      "devices",
+	"github.com/alphawavesystems/flutter-probe/internal/deviceview":  "devices",
+	"github.com/alphawavesystems/flutter-probe/internal/devsettings": "devices",
+	"github.com/alphawavesystems/flutter-probe/internal/perf":        "devices",
+	"os/exec": "devices",
 }
 
 var sinkFuncs = map[string]map[string]string{
+	"github.com/alphawavesystems/flutter-probe/internal/runner": {"New": "devices", "NewExecutor": "devices"}, // the others (reporters, lint, validation) are pure
 	"github.com/alphawavesystems/flutter-probe/internal/config": {"Load": "files", "LoadForRepair": "files"},
 	"github.com/alphawavesystems/flutter-probe/internal/ai":     {"NewTextCompleter": "network", "NewChatCompleter": "network", "Triage": "network", "Doctor": "network"},
 	"os": {"ReadFile": "files", "WriteFile": "files", "Open": "files", "OpenFile": "files", "Create": "files", "ReadDir": "files", "Stat": "files", "Lstat": "files",
@@ -42,6 +54,10 @@ var sinkFuncs = map[string]map[string]string{
 // notFollowed are method names that are, in this package, nearly always the standard library's (a Body or a connection being closed) and are also
 // the name of one of the package's own methods (the automation server's Close removes its discovery file): following them would charge every method
 // that closes a response with a file it never touches. The automation server's Close is not reachable from a bound method.
+// deviceNames are Studio's own entry points to a device that no import shows: the agent client of the connection (a value, called through its
+// methods) and the widget tree read.
+var deviceNames = map[string]bool{"clientOf": true, "GetWidgetTree": true}
+
 var notFollowed = map[string]bool{"Close": true}
 
 type pkgSources struct {
@@ -123,23 +139,29 @@ func (ps *pkgSources) reachVia(name string) map[string]string {
 		seen[n] = true
 		chain = append(chain, n)
 		defer func() { chain = chain[:len(chain)-1] }()
+		if deviceNames[n] && touched["devices"] == "" {
+			touched["devices"] = strings.Join(chain, " -> ")
+		}
 		for _, fn := range ps.funcs[n] {
 			imps := ps.imports[fn]
 			selNames := map[*ast.Ident]bool{} // the name after a dot is followed by the SelectorExpr case below, not again as a bare name
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
 				switch x := node.(type) {
-				case *ast.SelectorExpr:
-					selNames[x.Sel] = true
-					if id, ok := x.X.(*ast.Ident); ok {
-						if path, isPkg := imps[id.Name]; isPkg {
-							if t := sinkPackages[path]; t != "" && touched[t] == "" {
-								touched[t] = strings.Join(chain, " -> ") + " -> " + id.Name + "." + x.Sel.Name
-							}
-							if t := sinkFuncs[path][x.Sel.Name]; t != "" && touched[t] == "" {
-								touched[t] = strings.Join(chain, " -> ") + " -> " + id.Name + "." + x.Sel.Name
+				case *ast.CallExpr:
+					// only a call into a package is a touch (a type or a constant of it is not)
+					if sel, ok := x.Fun.(*ast.SelectorExpr); ok {
+						if id, ok := sel.X.(*ast.Ident); ok {
+							if path, isPkg := imps[id.Name]; isPkg {
+								for _, t := range []string{sinkPackages[path], sinkFuncs[path][sel.Sel.Name]} {
+									if t != "" && touched[t] == "" {
+										touched[t] = strings.Join(chain, " -> ") + " -> " + id.Name + "." + sel.Sel.Name
+									}
+								}
 							}
 						}
 					}
+				case *ast.SelectorExpr:
+					selNames[x.Sel] = true
 					if _, ok := ps.funcs[x.Sel.Name]; ok && !notFollowed[x.Sel.Name] {
 						visit(x.Sel.Name)
 					}
@@ -232,8 +254,11 @@ func TestTheTouchCheckFailsOnAnUnderstatedEntry(t *testing.T) {
 		t.Errorf("a keychain claim with no call behind it: %v", bad)
 	}
 	// the walk follows a function held in a package variable and a method through its name, and does not follow Close
-	if got := ps.reach("Chat"); !has(got, "keychain") || !has(got, "files") || !has(got, "network") {
-		t.Errorf("the walk from Chat found %v, want files, keychain and network", got)
+	if got := ps.reach("Chat"); !has(got, "keychain") || !has(got, "files") || !has(got, "network") || !has(got, "devices") {
+		t.Errorf("the walk from Chat found %v, want files, keychain, network and devices (the widget tree is read from the device)", got)
+	}
+	if got := ps.reach("ExportRunResults"); has(got, "devices") {
+		t.Errorf("a pure runner helper was taken for a device: %v", got)
 	}
 	if got := ps.reach("Disconnect"); has(got, "files") {
 		t.Errorf("Disconnect was charged with a file through a Close: %v", got)
@@ -352,6 +377,65 @@ func (ps *pkgSources) assignsConfirmFrom(fn, callee string) bool {
 					found = true
 				}
 			}
+			return true
+		})
+		if found {
+			return true
+		}
+	}
+	return false
+}
+
+// Every method that is recorded as "asks" is one the code is known to ask for: a person's answer in the window is required in Go, and no window
+// means no. Which question each one goes through is checked here, so a label cannot be "asks" without a gate behind it, and a gate cannot lose its
+// label (the run methods are checked above, through the connection's device context).
+func TestEveryAsksEntryHasAGateInTheCode(t *testing.T) {
+	gates := map[string]string{"ConnectWiFiSaved": "confirmSendSavedToken", "RunFile": "deviceCtx", "RunFileAsync": "deviceCtx", "RunFileScoped": "deviceCtx"}
+	ps, err := loadPackageSources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range boundDecisions {
+		gate, known := gates[d.Method]
+		switch {
+		case d.Confirm == "asks" && !known:
+			t.Errorf("%s is recorded as asks and no gate in the code is known for it: add it to the gates of this test with the name of its question, or label it previewed or none with a decision", d.Method)
+		case known && d.Confirm != "asks":
+			t.Errorf("%s has a gate (%s) and is recorded as %q: the label must say asks", d.Method, gate, d.Confirm)
+		case known && !ps.mentions(d.Method, gate):
+			t.Errorf("%s no longer reaches %s: the question that makes it asks", d.Method, gate)
+		case d.Method == "ConnectWiFiSaved" && !ps.refusesUnless(d.Method, gate):
+			t.Errorf("%s does not stop when %s says no: `if !%s(...) { return ... }` is the gate, and a mention of the name is not", d.Method, gate, gate)
+		}
+	}
+}
+
+// refusesUnless says whether fn has `if !<x>.callee(...) { ... return ... }` as a whole condition: the question's answer decides, and a no returns.
+func (ps *pkgSources) refusesUnless(fn, callee string) bool {
+	for _, d := range ps.funcs[fn] {
+		found := false
+		ast.Inspect(d.Body, func(n ast.Node) bool {
+			is, ok := n.(*ast.IfStmt)
+			if !ok {
+				return true
+			}
+			u, ok := is.Cond.(*ast.UnaryExpr)
+			if !ok || u.Op != token.NOT {
+				return true
+			}
+			call, ok := u.X.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if sel, ok := call.Fun.(*ast.SelectorExpr); !ok || sel.Sel.Name != callee {
+				return true
+			}
+			ast.Inspect(is.Body, func(b ast.Node) bool {
+				if _, ok := b.(*ast.ReturnStmt); ok {
+					found = true
+				}
+				return true
+			})
 			return true
 		})
 		if found {

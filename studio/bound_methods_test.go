@@ -292,13 +292,13 @@ func TestAutomationEndpointCannotAnswerAConfirmation(t *testing.T) {
 // skeleton is the entry to paste into bound_methods.json for a method that has none.
 func skeleton(m string) string {
 	return fmt.Sprintf(`{"method": %q, "category": "<one of the categories in bound_methods_test.go>", "does": "<one sentence: what it does>", `+
-		`"callers": ["window", "bridge", "automation"], "touches": ["files", "devices", "network", "keychain"], "confirm": "none|asks|answers|native-dialog"}`, m)
+		`"callers": ["window", "bridge", "automation"], "touches": ["files", "devices", "network", "keychain"], "confirm": "none|asks|previewed|answers|native-dialog"}`, m)
 }
 
 var (
 	validCallers = map[string]bool{"window": true, "bridge": true, "automation": true}
 	validTouches = map[string]bool{"files": true, "devices": true, "network": true, "keychain": true}
-	validConfirm = map[string]bool{"none": true, "asks": true, "answers": true, "native-dialog": true}
+	validConfirm = map[string]bool{"none": true, "asks": true, "previewed": true, "answers": true, "native-dialog": true}
 )
 
 func has(list []string, v string) bool {
@@ -341,7 +341,7 @@ func checkDecisions(decisions []boundDecision, have, blocked, automation []strin
 			bad = append(bad, d.Method+": 'does' must say what the method does")
 		}
 		if !validConfirm[d.Confirm] {
-			bad = append(bad, d.Method+": confirm must be none, asks, answers or native-dialog")
+			bad = append(bad, d.Method+": confirm must be none, asks, previewed, answers or native-dialog")
 		}
 		if !has(d.Callers, "window") {
 			bad = append(bad, d.Method+": every bound method can be called from the window; callers must include it")
@@ -393,8 +393,8 @@ func checkDecisions(decisions []boundDecision, have, blocked, automation []strin
 				bad = append(bad, d.Method+": a pure method touches nothing")
 			}
 		}
-		if d.Category == catAIProvider && d.Confirm == "none" && len(strings.TrimSpace(d.Decision)) < 40 {
-			bad = append(bad, d.Method+": an AI-provider method with confirm none needs a 'decision' that says why (or what the window does instead)")
+		if ((d.Category == catAIProvider || d.Category == catNetwork) && d.Confirm == "none" || d.Confirm == "previewed") && len(strings.TrimSpace(d.Decision)) < 40 {
+			bad = append(bad, d.Method+": an AI-provider or network method with confirm none, or a previewed one, needs a 'decision' that says why no person is asked in Go (or what the window does instead)")
 		}
 		// what may destroy or send is gated, or only a person in a native dialog can drive it
 		if (d.Category == catRunControl && (strings.HasPrefix(d.Method, "RunFile"))) && d.Confirm != "asks" {

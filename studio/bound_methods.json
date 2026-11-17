@@ -1,5 +1,5 @@
 {
- "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none, asks (a window confirmation or a preview gates what it does), answers (it is the answer), native-dialog (only a person in a native dialog can drive it). decision: required for an aiProvider method with confirm none, to say why no confirmation is needed (or what the window does instead). touches is checked against the code: a call graph of the Studio sources is walked from each method (bound_methods_derive_test.go), and a keychain, file or network call that the method can reach and the entry does not list fails the test, so an entry cannot understate; an entry may list more. automationInternal: the unexported methods the automation endpoint reaches, which are not bound but are what a script that holds its token can do.",
+ "_about": "One entry per exported method of App (Wails binds them all). Read by bound_methods_test.go: a method with no entry, an entry for a method that does not exist, and an entry that contradicts the code fail the test. callers: window, bridge (the headless HTTP bridge, with its token), automation (the automation endpoint). touches: files, devices, network, keychain. confirm: none, asks (Go itself requires a person's answer in the window, and without a window or an answer the action is not done: no window means no), previewed (Go requires an earlier preview of the same thing, an id or a destination, and refuses without it, but nothing in Go asks a person: a script that holds the bridge token can make the preview itself), answers (it is the answer), native-dialog (only a person in a native dialog can drive it). decision: required for an aiProvider method with confirm none, to say why no confirmation is needed (or what the window does instead). touches is checked against the code: a call graph of the Studio sources is walked from each method (bound_methods_derive_test.go), and a keychain, file or network call that the method can reach and the entry does not list fails the test, so an entry cannot understate; an entry may list more. automationInternal: the unexported methods the automation endpoint reaches, which are not bound but are what a script that holds its token can do. What the walk does not see (so touches can still understate there): calls through an interface or a function value that is assigned in another function (package variables are followed), calls through reflection, packages not listed as sinks (the Wails runtime, os/signal, the standard library's other file and network calls), and runner functions other than New and NewExecutor. decision is also required for a previewed method and for a network method with confirm none.",
  "methods": [
   {
    "method": "AIChatLabel",
@@ -40,7 +40,8 @@
    "touches": [
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go requires an earlier CheckTarget for the host and refuses an address that is never allowed, but nothing in Go asks a person. The window shows where the host leads and asks before it calls AllowHost; a bridge-token script can call CheckTarget and AllowHost itself."
   },
   {
    "method": "AnswerConfirm",
@@ -110,6 +111,7 @@
     "bridge"
    ],
    "touches": [
+    "devices",
     "files",
     "keychain",
     "network"
@@ -139,7 +141,8 @@
    "touches": [
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Looks the name up and reports where a request would go; it sends no request and no content."
   },
   {
    "method": "Connect",
@@ -272,7 +275,8 @@
     "keychain",
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go sends only to the destination the preview named, but nothing in Go asks a person; the window shows the preview of a hosted destination first."
   },
   {
    "method": "ExportRunResults",
@@ -297,7 +301,8 @@
    "touches": [
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Asks model servers on this machine (loopback only) which models they have and sends no workspace content, so there is nothing to confirm."
   },
   {
    "method": "ForgetWiFiToken",
@@ -532,6 +537,7 @@
     "bridge"
    ],
    "touches": [
+    "devices",
     "files",
     "keychain",
     "network"
@@ -564,6 +570,7 @@
     "bridge"
    ],
    "touches": [
+    "devices",
     "files",
     "keychain",
     "network"
@@ -701,11 +708,13 @@
     "bridge"
    ],
    "touches": [
+    "devices",
     "files",
     "keychain",
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go sends only the suggestion whose preview id it returned, once, and a change after the preview stops the send; nothing in Go asks a person (the window shows the preview)."
   },
   {
    "method": "SendRequest",
@@ -718,7 +727,8 @@
    "touches": [
     "network"
    ],
-   "confirm": "asks"
+   "confirm": "previewed",
+   "decision": "Previewed, not asked: Go refuses a host that was not allowed (AllowHost, at the strength CheckTarget showed), but nothing in Go asks a person; a bridge-token script can run CheckTarget, AllowHost and SendRequest without a window question. The window asks before AllowHost."
   },
   {
    "method": "SetAPIKey",
@@ -782,7 +792,8 @@
    "touches": [
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Listens for agents that announce themselves on the local network (mDNS) and sends no workspace content; a found device is never connected to or sent a token without ConnectWiFi or ConnectWiFiSaved, the second of which asks."
   },
   {
    "method": "Status",
@@ -820,7 +831,8 @@
    "touches": [
     "network"
    ],
-   "confirm": "none"
+   "confirm": "none",
+   "decision": "Stops the listening above; it sends nothing."
   },
   {
    "method": "TakeScreenshot",
