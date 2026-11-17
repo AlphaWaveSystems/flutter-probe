@@ -77,4 +77,20 @@ test.describe("The build of the app under test", () => {
     await fire(page, "connection:changed", { connected: true, deviceId: "emu-1", deviceName: "Pixel Test", platform: "android", appBuild: "App built with Flutter 3.44.8" });
     await expect(line(page)).toHaveText("App built with Flutter 3.44.8");
   });
+
+  test("bv-06 a connection that does not know its platform (WiFi) says so, and never names one", async ({ page }) => {
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"ListDevices"')) return route.fulfill({ json: { result: [{ id: "emu-1", name: "Pixel Test", platform: "android", kind: "emulator", state: "device", booted: true }] } });
+      if (body.includes('"method":"DeviceListNote"')) return route.fulfill({ json: { result: "" } });
+      if (body.includes('"method":"Connect"')) return route.fulfill({ json: { result: { connected: true, deviceId: "192.0.2.7:48686", deviceName: "WiFi 192.0.2.7", platform: "" } } });
+      await route.continue();
+    });
+    await openStudio(page);
+    await page.click("#btn-refresh");
+    await page.locator("#device-picker").selectOption({ label: "Pixel Test  ·  android" });
+    await page.click("#btn-connect");
+    await expect(page.locator("#status-text")).toHaveText("WiFi 192.0.2.7  ·  platform unknown");
+    await expect(page.locator("#status-text")).not.toContainText(/ios|android/i);
+  });
 });
