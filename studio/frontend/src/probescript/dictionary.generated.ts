@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "b1b2e860585642e88a2ad7abba3ed0665745865a5610a63071347ce2aa3d3798";
+export const SOURCE_SHA256 = "64b70168177374c44a885497cbe9a00ba168b21884c4da8760a074e53c3bccba";
 
 export const COMMANDS = [
   {
@@ -231,6 +231,18 @@ export const COMMANDS = [
     "command": "see focused",
     "syntax": "see \"Email\" is focused",
     "description": "Assert the widget currently holds keyboard focus",
+    "category": "Assertions"
+  },
+  {
+    "command": "see filled",
+    "syntax": "see #password is filled",
+    "description": "Assert that a text field holds at least one character (spaces count). It never reads the text, so it also works on a password field; name the field by its `#id` (a label, a button or a container with several fields is refused: \"not a text field\"). `don't see #password is filled` asserts it is empty. Needs a `probe_agent` that reports `see_filled`",
+    "category": "Assertions"
+  },
+  {
+    "command": "see empty",
+    "syntax": "see #password is empty",
+    "description": "Assert that a text field holds no character. Same rules as `is filled`; it cannot be combined with `matching`",
     "category": "Assertions"
   },
   {

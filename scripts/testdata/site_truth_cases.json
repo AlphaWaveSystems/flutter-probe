@@ -1,0 +1,331 @@
+{
+ "_note": "Edits of the real site the truth check must accept (benign) or refuse (false). Each case changes one file of a copy of the site: find is replaced by repl once, or append is added at the end. From the review of the check (8+ benign edits, 17+ false claims, word-boundary and structured-data cases).",
+ "cases": [
+  {
+   "kind": "benign",
+   "name": "add feature bullet to Free",
+   "file": "src/pages/pricing.astro",
+   "find": "<li>VS Code extension</li>",
+   "repl": "<li>VS Code extension</li>\n          <li>Studio desktop app</li>"
+  },
+  {
+   "kind": "benign",
+   "name": "reword probe-cloud intro",
+   "file": "src/pages/probe-cloud.astro",
+   "find": "hosted place to keep",
+   "repl": "hosted home to store"
+  },
+  {
+   "kind": "benign",
+   "name": "new blog link on landing",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p><a href=\"/blog/aggregate-reports/\">Aggregate and investigate reports</a>, navigate and delegate</p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "shell snippet $1 in preview docs",
+   "file": "src/content/docs/tools/probe-cloud-preview.md",
+   "append": "\n\n```sh\nprobe report | awk '{print $1}'\n```\n"
+  },
+  {
+   "kind": "benign",
+   "name": "docs link 'Apply a tolerance' (visual regression)",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p><a href=\"/docs/visual/\">Apply a tolerance</a></p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "'1,000 downloads' / '100,000 downloads'",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>Over 100,000 downloads and 1,000 stars.</p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "'Free' heading in unrelated section then $",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<section><h3>Scale</h3><p>Cost of a flaky test: about $50 an hour.</p></section></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "'Team' h3 then Start link (hero style)",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<h3>Team</h3><p><a href=\"/getting-started/\">Start with the docs</a></p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "form URL with prefilled title",
+   "file": "src/pages/pricing.astro",
+   "find": "design-partner.yml\">Apply as",
+   "repl": "design-partner.yml&title=Apply\">Apply as"
+  },
+  {
+   "kind": "benign",
+   "name": "word 'role' singular + 'user roles' in docs",
+   "file": "src/content/docs/tools/probe-cloud-preview.md",
+   "append": "\n\nThe agent reads the accessibility role of each widget.\n"
+  },
+  {
+   "kind": "benign",
+   "name": "nbsp in results number (benign)",
+   "file": "src/pages/pricing.astro",
+   "find": "<li>1,000 results a month",
+   "repl": "<li>1,000&nbsp;results a month"
+  },
+  {
+   "kind": "benign",
+   "name": "mention Slack in a CI tip on landing",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>Post the JUnit summary to your own Slack channel from your CI.</p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "'Bill Gates' / 'gateway' / 'gated'",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>Use an API gateway; Gated builds.</p></Site>"
+  },
+  {
+   "kind": "false",
+   "name": "Team price $59",
+   "file": "src/pages/pricing.astro",
+   "find": "$49 <small>",
+   "repl": "$59 <small>"
+  },
+  {
+   "kind": "false",
+   "name": "Scale shows $49 (wrong card)",
+   "file": "src/pages/pricing.astro",
+   "find": "$149 <small>",
+   "repl": "$49 <small>"
+  },
+  {
+   "kind": "false",
+   "name": "Start button on Team",
+   "file": "src/pages/pricing.astro",
+   "find": "<a class=\"btn-s\" href=\"#design-partners\">See the design-partner offer</a></div>\n      </div>\n\n      <div class=\"plan planned\">\n        <span class=\"pill planned\">Planned, by invitation</span>\n        <h3>Scale",
+   "repl": "<a class=\"btn-p\" href=\"/buy\">Start Team</a></div>\n      </div>\n\n      <div class=\"plan planned\">\n        <span class=\"pill planned\">Planned, by invitation</span>\n        <h3>Scale"
+  },
+  {
+   "kind": "false",
+   "name": "Apply link to other form",
+   "file": "src/pages/probe-cloud.astro",
+   "find": "issues/new?template=design-partner.yml\">Apply",
+   "repl": "issues/new?template=other.yml\">Apply"
+  },
+  {
+   "kind": "false",
+   "name": "new Enterprise card",
+   "file": "src/pages/pricing.astro",
+   "find": "<div class=\"plan planned\">\n        <span class=\"pill planned\">Planned</span>",
+   "repl": "<div class=\"plan\"><h3>Enterprise</h3></div>\n      <div class=\"plan planned\">\n        <span class=\"pill planned\">Planned</span>"
+  },
+  {
+   "kind": "false",
+   "name": "'quality gate' on landing",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>A quality gate on every pull request.</p></Site>"
+  },
+  {
+   "kind": "false",
+   "name": "Slack notifications",
+   "file": "src/pages/probe-cloud.astro",
+   "find": "</ul>\n\n    <h2>Plans",
+   "repl": "<li>Slack notifications on failures</li></ul>\n\n    <h2>Plans"
+  },
+  {
+   "kind": "false",
+   "name": "'cancel anytime'",
+   "file": "src/pages/pricing.astro",
+   "find": "<h2 id=\"dp-h\">",
+   "repl": "<h2 id=\"dp-h\">Cancel anytime. "
+  },
+  {
+   "kind": "false",
+   "name": "Team 'Priority support' bullet",
+   "file": "src/pages/pricing.astro",
+   "find": "<li>Trends over time</li>",
+   "repl": "<li>Priority support</li>"
+  },
+  {
+   "kind": "false",
+   "name": "nbsp bypass: 1&nbsp;000,000 results per month",
+   "file": "src/pages/pricing.astro",
+   "find": "<li>500,000 results a month</li>",
+   "repl": "<li>900,000&nbsp;results a month</li>"
+  },
+  {
+   "kind": "false",
+   "name": "price via nbsp '$&nbsp;79'",
+   "file": "src/pages/pricing.astro",
+   "find": "$49 <small>",
+   "repl": "$&nbsp;79 <small>"
+  },
+  {
+   "kind": "false",
+   "name": "price in frontmatter array rendered",
+   "file": "src/pages/pricing.astro",
+   "find": "import Site from '../layouts/Site.astro';",
+   "repl": "import Site from '../layouts/Site.astro';\nconst teamPrice = '$79';"
+  },
+  {
+   "kind": "false",
+   "name": "JSON-LD Offer for Team in landing frontmatter",
+   "file": "src/pages/index.astro",
+   "find": "offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },",
+   "repl": "offers: [{ '@type': 'Offer', price: '0', priceCurrency: 'USD' },{ '@type': 'Offer', price: '49', priceCurrency: 'USD' }],"
+  },
+  {
+   "kind": "false",
+   "name": "llms.txt claims Team $49 buy now",
+   "file": "public/llms.txt",
+   "find": "- Probe Cloud",
+   "repl": "- Buy Team now for $79. Probe Cloud"
+  },
+  {
+   "kind": "false",
+   "name": "14 day money back (no hyphen)",
+   "file": "src/pages/pricing.astro",
+   "find": "<h2 id=\"dp-h\">",
+   "repl": "<h2 id=\"dp-h\">14 day money back. "
+  },
+  {
+   "kind": "false",
+   "name": "'Upload from Jenkins / any CI' two sentences",
+   "file": "src/pages/probe-cloud.astro",
+   "find": "<h2>Plans</h2>",
+   "repl": "<p>Upload results. Works with any CI.</p><h2>Plans</h2>"
+  },
+  {
+   "kind": "false",
+   "name": "Apply link uppercase label 'APPLY NOW' to elsewhere",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<a href=\"https://forms.example.com/x\">APPLY NOW</a></Site>"
+  },
+  {
+   "kind": "false",
+   "name": "Buy button via <button> on Scale",
+   "file": "src/pages/pricing.astro",
+   "find": "<li>500,000 results a month</li>\n        </ul>",
+   "repl": "<li>500,000 results a month</li>\n        </ul><button>Subscribe</button>"
+  },
+  {
+   "kind": "benign",
+   "name": "Gate capitalised",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>Gate keeper</p></Site>"
+  },
+  {
+   "kind": "false",
+   "name": "gating",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>Release gating</p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "gated",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>gated</p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "gates",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>Bill Gates</p></Site>"
+  },
+  {
+   "kind": "benign",
+   "name": "aggregate investigate navigate delegate gateway propagate",
+   "file": "src/pages/index.astro",
+   "find": "</Site>",
+   "repl": "<p>aggregate investigate navigate delegate gateway propagate Gatsby</p></Site>"
+  },
+  {
+   "kind": "false",
+   "name": "gate in md docs",
+   "file": "src/content/docs/tools/probe-cloud-preview.md",
+   "append": "\nA quality gate.\n"
+  },
+  {
+   "kind": "false",
+   "name": "gate in <Site description>",
+   "file": "src/pages/probe-cloud.astro",
+   "find": "Probe Cloud is a hosted history",
+   "repl": "Probe Cloud is a hosted gate"
+  },
+  {
+   "kind": "false",
+   "name": "nbsp bypass 900,000",
+   "file": "src/pages/pricing.astro",
+   "find": "<li>500,000 results a month</li>",
+   "repl": "<li>900,000&nbsp;results a month</li>"
+  },
+  {
+   "kind": "false",
+   "name": "price $&nbsp;79",
+   "file": "src/pages/pricing.astro",
+   "find": "$49 <small>",
+   "repl": "$&nbsp;79 <small>"
+  },
+  {
+   "kind": "false",
+   "name": "JSON-LD Offer 49 array",
+   "file": "src/pages/index.astro",
+   "find": "offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },",
+   "repl": "offers: [{ '@type': 'Offer', price: '0', priceCurrency: 'USD' },{ '@type': 'Offer', price: '49', priceCurrency: 'USD' }],"
+  },
+  {
+   "kind": "false",
+   "name": "JSON-LD Offer nested priceSpecification",
+   "file": "src/pages/index.astro",
+   "find": "offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },",
+   "repl": "offers: { '@type': 'Offer', priceSpecification: { price: '49' }, priceCurrency: 'USD' },"
+  },
+  {
+   "kind": "false",
+   "name": "JSON-LD Offer price numeric 149 double-quoted",
+   "file": "src/pages/index.astro",
+   "find": "offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },",
+   "repl": "offers: { \"@type\": \"Offer\", \"price\": 149, priceCurrency: 'USD' },"
+  },
+  {
+   "kind": "false",
+   "name": "AggregateOffer low 49",
+   "file": "src/pages/index.astro",
+   "find": "offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },",
+   "repl": "offers: { '@type': 'AggregateOffer', lowPrice: '0', highPrice: '149' },"
+  },
+  {
+   "kind": "benign",
+   "name": "Offer free kept + extra property",
+   "file": "src/pages/index.astro",
+   "find": "price: '0', priceCurrency: 'USD' }",
+   "repl": "price: '0', priceCurrency: 'USD', availability: 'https://schema.org/InStock' }"
+  },
+  {
+   "kind": "false",
+   "name": "price in frontmatter const",
+   "file": "src/pages/pricing.astro",
+   "find": "import Site from '../layouts/Site.astro';",
+   "repl": "import Site from '../layouts/Site.astro';\nconst teamPrice = '$79';"
+  },
+  {
+   "kind": "false",
+   "name": "Site.astro footer claims $79 (not read)",
+   "file": "src/layouts/Site.astro",
+   "find": "</footer>",
+   "repl": "<p>Team $79</p></footer>"
+  }
+ ]
+}
