@@ -40,18 +40,21 @@ func Hidden(r rune) bool {
 		unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.Is(unicode.Co, r), unicode.Is(unicode.Cs, r),
 		r == '\u2028', r == '\u2029',
 		r >= 0xFE00 && r <= 0xFE0F, r >= 0xE0100 && r <= 0xE01EF, // variation selectors
-		r == 'ㅤ', r == 'ᅟ', r == 'ﾠ', // Hangul fillers: blank letters
-		r == '⠀', r == '͏', r >= 0x180B && r <= 0x180F, r == '￼', // braille blank, combining grapheme joiner, Mongolian free variation selectors, object replacement
+		r == '\u3164', r == '\u115F', r == '\uFFA0', // Hangul fillers: blank letters
+		r == '\u2800', r == '\u034F', r >= 0x180B && r <= 0x180F, r == '\uFFFC', // braille blank, combining grapheme joiner, Mongolian free variation selectors, object replacement
 		r >= 0xFDD0 && r <= 0xFDEF, r&0xFFFE == 0xFFFE:
 		return true
 	}
 	return false
 }
 
-// Cut keeps at most n runes of s, marking a cut with an ellipsis.
+// Cut keeps at most n runes of s, marking a cut with an ellipsis. With n below 1 nothing is kept.
 func Cut(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s
+	}
+	if n < 1 {
+		return ""
 	}
 	r := []rune(s)
 	return string(r[:n-1]) + "…"

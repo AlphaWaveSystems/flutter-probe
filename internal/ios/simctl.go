@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
 
 // Simulator represents an iOS simulator.
