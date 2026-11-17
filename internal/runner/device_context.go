@@ -375,17 +375,18 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 	if perTest {
 		what = "clear data before each test"
 	}
-	reason := "wipes all app data for " + device.CleanOneLine(dc.AppID, 80)
+	app, serial := device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80) // text from the project and the device: one clean line in every message
+	reason := "wipes all app data for " + app
 	note := ""
 	if dc.Platform == device.PlatformIOS {
 		reason += iosKeychainHint
 		note = " " + iosKeychainSentence
 	}
 	question := fmt.Sprintf("This will permanently delete ALL app data for %s on %s.\n"+
-		"  SharedPreferences, databases, and files will be wiped.%s Continue?", dc.AppID, dc.Serial, note)
+		"  SharedPreferences, databases, and files will be wiped.%s Continue?", app, serial, note)
 	if perTest {
 		question = fmt.Sprintf("This will permanently delete ALL app data for %s on %s "+beforeEveryTest+" of this run.\n"+
-			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80), note)
+			"  SharedPreferences, databases, and files will be wiped each time.%s Continue?", app, serial, note)
 	}
 	return dc.askWipe(what, reason, question)
 }
@@ -393,9 +394,10 @@ func (dc *DeviceContext) AskClearData(perTest bool) error {
 // AskReinstallForNotifications is the gate for the reinstall that resets an iOS simulator's notification decision. The reinstall deletes
 // the app's data container, so it is asked the way a clear is. Its keychain items are kept: measured, they survive an uninstall.
 func (dc *DeviceContext) AskReinstallForNotifications() error {
-	reason := fmt.Sprintf("reinstalls %s to reset its notification decision; this wipes ALL its app data (its keychain items are kept)", dc.AppID)
+	app, serial := device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80)
+	reason := fmt.Sprintf("reinstalls %s to reset its notification decision; this wipes ALL its app data (its keychain items are kept)", app)
 	question := fmt.Sprintf("This will reinstall %s on %s to reset its notification decision.\n"+
-		"  This wipes ALL its app data. Its keychain items are kept. Continue?", dc.AppID, dc.Serial)
+		"  This wipes ALL its app data. Its keychain items are kept. Continue?", app, serial)
 	return dc.askWipe("deny notifications", reason, question)
 }
 
@@ -428,7 +430,7 @@ func (dc *DeviceContext) ClearAppDataConfirmed(ctx context.Context) error {
 }
 
 func (dc *DeviceContext) clearAppData(ctx context.Context) error {
-	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", dc.AppID, dc.Serial)
+	fmt.Printf("    \033[31m⚠\033[0m  Clearing all data for %s on %s\n", device.CleanOneLine(dc.AppID, 80), device.CleanOneLine(dc.Serial, 80))
 
 	switch dc.Platform {
 	case device.PlatformAndroid:
@@ -667,7 +669,7 @@ func (dc *DeviceContext) DenyPermission(ctx context.Context, name string) error 
 				if err := dc.AskReinstallForNotifications(); err != nil {
 					return err
 				}
-				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", dc.AppID)
+				fmt.Printf("    \033[33m↻\033[0m  iOS cannot revoke notifications: reinstalling %s to reset the decision\n", device.CleanOneLine(dc.AppID, 80))
 				if err := simctl.Reinstall(ctx, dc.Serial, dc.AppID); err != nil {
 					return fmt.Errorf("deny notifications: %w", err)
 				}
