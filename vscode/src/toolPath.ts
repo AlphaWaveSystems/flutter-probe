@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+
 // Which binary the extension runs. This module has no vscode import, so the tests can load it.
 //
 // The answer is always an absolute path to a regular file, or "not found". A bare name is never handed to the system to look up: on
@@ -83,13 +85,42 @@ export function resolveToolPath(i: ToolPathInput): ToolPath {
 // notFoundPath is what the extension runs when resolveToolPath found nothing. A missing absolute path is returned as it is (running it
 // fails with "not found"); a bare name is returned on macOS and Linux, where the system looks it up on PATH only. On Windows a bare name
 // would also be looked up in the workspace, and a relative path is always relative to it, so both are an error that says what to do.
-export function notFoundPath(r: Extract<ToolPath, { notFound: string }>, setting: string, platform: string): string {
+export function notFoundPath(r: Extract<ToolPath, { notFound: string }>, setting: string): string {
   if (r.reason === 'not-a-file') { return r.notFound; }
   if (r.reason === 'relative') {
     throw new Error(`flutterprobe.${setting} is "${r.notFound}": use an absolute path or a command name on PATH`);
   }
-  if (platform === 'win32') {
-    throw new Error(`${r.notFound} was not found on PATH: install it, or set flutterprobe.${setting} to its absolute path in your user settings`);
+  // On every system: the bare name could only be found through an empty or relative entry of PATH, which is the workspace.
+  throw new Error(`${r.notFound} was not found on PATH: install it, or set flutterprobe.${setting} to its absolute path in your user settings`);
+}
+
+// isRegularFile says whether p is a regular file (a directory, a missing path or one that cannot be read is not). Symlinks are followed.
+export function isRegularFile(p: string): boolean {
+  try {
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
   }
-  return r.notFound;
+}
+
+// quotePosix quotes one word for a POSIX shell: it is left as it is when it holds only safe characters, else single-quoted.
+export function quotePosix(word: string): string {
+  if (/^[a-zA-Z0-9_./:=-]+$/.test(word)) { return word; }
+  return `'${word.replace(/'/g, "'\\''")}'`;
+}
+
+// commandWord is the command as typed into the terminal, quoted for the shell the terminal runs (vscode.env.shell). A path with a space
+// must stay one word, and each shell has its own way: PowerShell runs a quoted path only with the call operator (& 'C:\Program Files\p.exe'),
+// cmd.exe reads double quotes, and a POSIX shell (also Git Bash or WSL on Windows) single quotes. An unknown shell on Windows gets the
+// path as it is: no quoting is right for all of them.
+export function commandWord(command: string, platform: string, shell: string): string {
+  if (platform !== 'win32') { return quotePosix(command); }
+  if (/^[a-zA-Z0-9_.:\\/-]+$/.test(command)) { return command; }
+  const name = shell.split(/[\\/]/).pop()?.toLowerCase() ?? '';
+  if (name === 'pwsh.exe' || name === 'powershell.exe' || name === 'pwsh' || name === 'powershell') {
+    return `& '${command.replace(/'/g, "''")}'`;
+  }
+  if (name === 'cmd.exe' || name === 'cmd') { return `"${command}"`; }
+  if (/^(bash|sh|zsh|wsl)(\.exe)?$/.test(name)) { return quotePosix(command); }
+  return command;
 }

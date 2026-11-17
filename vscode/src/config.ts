@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { notFoundPath, resolveToolPath } from './toolPath';
+import { isRegularFile, notFoundPath, resolveToolPath } from './toolPath';
 import { ProbeConfig } from './types';
 
 export function getConfig(): vscode.WorkspaceConfiguration {
@@ -32,21 +32,14 @@ function toolPath(setting: string, defaultName: string): string {
     trusted: vscode.workspace.isTrusted,
     platform: process.platform,
     pathEnv: process.env.PATH,
-    isFile,
+    isFile: isRegularFile,
     isAbsolute: path.isAbsolute,
     join: path.join,
   });
   if ('path' in r) { return r.path; }
-  return notFoundPath(r, setting, process.platform);
+  return notFoundPath(r, setting);
 }
 
-function isFile(p: string): boolean {
-  try {
-    return fs.statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
 
 export function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

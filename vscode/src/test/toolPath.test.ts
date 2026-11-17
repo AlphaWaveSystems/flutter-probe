@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { TOOL_SETTINGS, ToolPathInput, candidates, notFoundPath, pathDirs, resolveToolPath } from '../toolPath';
+import { TOOL_SETTINGS, ToolPathInput, candidates, commandWord, isRegularFile, notFoundPath, pathDirs, quotePosix, resolveToolPath } from '../toolPath';
+import * as os from 'node:os';
 
 const posix = path.posix;
 const win = path.win32;
@@ -87,11 +88,39 @@ test('bin/probe of the workspace is used only when turned on and trusted', () =>
   assert.deepEqual(resolveToolPath(winInput(['C:\\repo\\bin\\probe.exe'], { useWorkspaceBinaries: true })), { path: 'C:\\repo\\bin\\probe.exe' });
 });
 
-test('not found: a bare name on macOS and Linux, an error on Windows, an error for a relative path', () => {
-  assert.equal(notFoundPath({ notFound: 'probe', reason: 'not-on-path' }, 'probePath', 'darwin'), 'probe');
-  assert.throws(() => notFoundPath({ notFound: 'probe', reason: 'not-on-path' }, 'probePath', 'win32'), /probe was not found on PATH.*flutterprobe\.probePath/);
-  assert.throws(() => notFoundPath({ notFound: 'tools/probe', reason: 'relative' }, 'probePath', 'linux'), /absolute path/);
-  assert.equal(notFoundPath({ notFound: '/opt/missing', reason: 'not-a-file' }, 'probePath', 'win32'), '/opt/missing');
+test('not found on PATH is an error on every system, and so is a relative path', () => {
+  // A bare name could only be found through an empty or relative PATH entry, which is the workspace: no fallback to it.
+  assert.throws(() => notFoundPath({ notFound: 'probe', reason: 'not-on-path' }, 'probePath'), /probe was not found on PATH.*flutterprobe\.probePath/);
+  assert.throws(() => notFoundPath({ notFound: 'tools/probe', reason: 'relative' }, 'probePath'), /absolute path/);
+  assert.equal(notFoundPath({ notFound: '/opt/missing', reason: 'not-a-file' }, 'probePath'), '/opt/missing');
+});
+
+// The real check against the file system: a file is one, a directory, a missing path and a link to a directory are not.
+test('isRegularFile on real files', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'toolpath-'));
+  const file = path.join(dir, 'probe');
+  fs.writeFileSync(file, '#!/bin/sh\n');
+  fs.mkdirSync(path.join(dir, 'probe-dir'));
+  assert.equal(isRegularFile(file), true);
+  assert.equal(isRegularFile(path.join(dir, 'probe-dir')), false);
+  assert.equal(isRegularFile(path.join(dir, 'missing')), false);
+  if (process.platform !== 'win32') {
+    fs.symlinkSync(path.join(dir, 'probe-dir'), path.join(dir, 'link-to-dir'));
+    fs.symlinkSync(file, path.join(dir, 'link-to-file'));
+    assert.equal(isRegularFile(path.join(dir, 'link-to-dir')), false);
+    assert.equal(isRegularFile(path.join(dir, 'link-to-file')), true);
+  }
+});
+
+test('the command is quoted for the shell of the terminal', () => {
+  assert.equal(commandWord('/usr/local/bin/probe', 'darwin', '/bin/zsh'), '/usr/local/bin/probe');
+  assert.equal(commandWord('/Users/a b/probe', 'darwin', '/bin/zsh'), "'/Users/a b/probe'");
+  assert.equal(commandWord('C:\\tools\\probe.exe', 'win32', 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'), 'C:\\tools\\probe.exe');
+  assert.equal(commandWord("C:\\Program Files\\o'p\\probe.exe", 'win32', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'), "& 'C:\\Program Files\\o''p\\probe.exe'");
+  assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', 'C:\\Windows\\System32\\cmd.exe'), '"C:\\Program Files\\probe\\probe.exe"');
+  assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', 'C:\\Program Files\\Git\\bin\\bash.exe'), "'C:\\Program Files\\probe\\probe.exe'");
+  assert.equal(commandWord('C:\\Program Files\\probe\\probe.exe', 'win32', ''), 'C:\\Program Files\\probe\\probe.exe');
+  assert.equal(quotePosix("it's"), "'it'\\''s'");
 });
 
 // The manifest: the settings that name a binary, and the opt-in, are machine-scoped; the extension needs a trusted workspace.
@@ -115,11 +144,11 @@ test('config.ts gives the resolver the opt-in, the trust, the platform and PATH,
   assert.match(text, /trusted: vscode\.workspace\.isTrusted/);
   assert.match(text, /platform: process\.platform/);
   assert.match(text, /pathEnv: process\.env\.PATH/);
-  assert.match(text, /fs\.statSync\(p\)\.isFile\(\)/);
-  assert.match(text, /return notFoundPath\(r, setting, process\.platform\)/);
+  assert.match(text, /isFile: isRegularFile,/);
+  assert.match(text, /return notFoundPath\(r, setting\);/);
   assert.doesNotMatch(text, /path\.join\(ws, 'bin'/);
   const term = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'terminal', 'probeTerminal.ts'), 'utf8');
-  assert.match(term, /const shown = process\.platform === 'win32' \? command : shellEscape\(command\);/);
+  assert.match(term, /const shown = commandWord\(command, process\.platform, vscode\.env\.shell\);/);
   assert.match(term, /\[shown, \.\.\.args\.map\(shellEscape\)\]/);
   const probe = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'probe.ts'), 'utf8');
   assert.match(probe, /try \{\n    probePath = getProbePath\(\);\n  \} catch \{\n    return \[\]; \/\/ probe was not found/);

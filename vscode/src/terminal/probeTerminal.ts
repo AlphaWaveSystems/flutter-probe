@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { envFingerprint, secretFlagIn, terminalAction } from '../secretArgs';
+import { commandWord } from '../toolPath';
 
 // Each terminal with the fingerprint of the environment it was made with: a terminal's environment is fixed when it is created, so a run
 // whose secrets differ gets a new terminal.
@@ -43,9 +44,8 @@ export function runInTerminal(
     throw new Error(`${secret} must not be on the command line: pass it in the terminal's environment`);
   }
   const terminal = getOrCreateTerminal(name, cwd, env);
-  // The command is quoted like its arguments (a path with a space stays one word). On Windows it is left as it is: the terminal's shell
-  // is not known (PowerShell takes a quoted path as a string, cmd.exe does not read single quotes), and the path is absolute (toolPath.ts).
-  const shown = process.platform === 'win32' ? command : shellEscape(command);
+  // The command is quoted for the terminal's shell, so a path with a space stays one word (commandWord in toolPath.ts).
+  const shown = commandWord(command, process.platform, vscode.env.shell);
   const fullCommand = [shown, ...args.map(shellEscape)].join(' ');
   terminal.sendText(fullCommand);
   return terminal;
