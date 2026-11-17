@@ -220,11 +220,18 @@ func TestNamesAreCleanedLikeEverywhereElseInTheEngine(t *testing.T) {
 	if want := "  # " + strings.Repeat("é", MaxNameRunes-1) + "…"; got != want {
 		t.Errorf("a long action was not cut to %d runes: %q", MaxNameRunes, got)
 	}
-	if got := Step(ev{"action": "swipe", "direction": long}); got != "  swipe "+strings.Repeat("é", MaxNameRunes-1)+"…" {
-		t.Errorf("a long direction was not cut: %q", got)
+	// A direction is up, down, left or right (trimmed, any case); anything else is a comment that does not echo it, so a hostile word cannot add steps to the line.
+	wantNote := "  # swipe was not recorded: its direction is not up, down, left or right. Add the step by hand."
+	if got := Step(ev{"action": "swipe", "direction": long}); got != wantNote {
+		t.Errorf("a direction that is not one: %q", got)
 	}
-	if got := Step(ev{"action": "swipe", "direction": "  left  "}); got != "  swipe left" {
-		t.Errorf("a direction is trimmed: %q", got)
+	if got := Step(ev{"action": "swipe", "direction": "  Left  "}); got != "  swipe left" {
+		t.Errorf("a direction is trimmed and lower-cased: %q", got)
+	}
+	for _, bad := range []string{"up steps: 1 tap \"x\"", "up\nsteps: 1", "diagonal", "", "le ft", "up up", "x", "forward", "upward"} {
+		if got := Step(ev{"action": "scroll", "direction": bad}); got != "  # scroll was not recorded: its direction is not up, down, left or right. Add the step by hand." {
+			t.Errorf("direction %q: %q", bad, got)
+		}
 	}
 }
 
@@ -468,5 +475,59 @@ func TestARefusalNeverCarriesTheText(t *testing.T) {
 				t.Errorf("a %s selector with %q: %q", kind, bad, got)
 			}
 		}
+	}
+}
+
+// An id or a widget type is written as one word. One with a space, a quote or a backslash would end the word or open a string, and the line would
+// read as more than the one step (found by FuzzStep); it falls back to the next lookup like every lookup a line cannot hold.
+func TestAnIdOrTypeThatIsNotOneWordFallsBack(t *testing.T) {
+	for _, bad := range []string{"has space", "has\ttab", `has"quote`, "has'quote", `back\slash`, "a\u00a0b", "x y z", "login-button", "a.b", "A!0", "1st", "##x", ""} {
+		if got := Step(ev{"action": "tap", "selector": sel("id", bad)}); got != "  tap the element" {
+			t.Errorf("id %q: %q", bad, got)
+		}
+		if got := Step(ev{"action": "tap", "id": bad}); got != "  tap the element" {
+			t.Errorf("flat id %q: %q", bad, got)
+		}
+		if got := Step(ev{"action": "tap", "selector": sel("id", bad), "id": "ok"}); got != "  tap #ok" {
+			t.Errorf("id %q with a flat id: %q", bad, got)
+		}
+	}
+	for _, bad := range []string{`Foo" bar`, "Foo Bar", "Foo<int>", "Foo.Bar", "", "Foo\u00a0", "0", "2nd", "9Lives", "f$000", "$x", "field", "button", "the"} {
+		if got := Step(ev{"action": "tap", "selector": sel("type", bad)}); got != "  tap the element" {
+			t.Errorf("type %q: %q", bad, got)
+		}
+	}
+	for _, good := range []string{"Switch", "_PrivateWidget", "Widget1", "Ünï"} {
+		if got := Step(ev{"action": "tap", "selector": sel("type", good)}); got != "  tap the "+good {
+			t.Errorf("type %q: %q", good, got)
+		}
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("id", "login_button2")}); got != "  tap #login_button2" {
+		t.Errorf("an ordinary id: %q", got)
+	}
+}
+
+// A type event whose lookup is a widget type is written without it: `type "x" into the TextField` does not read as one step, so the text is typed into the
+// focused field (found by FuzzStep).
+func TestATypeIntoAWidgetTypeIsTypedIntoTheFocusedField(t *testing.T) {
+	got := Step(ev{"action": "type", "text": "hi", "selector": sel("type", "TextField")})
+	if got != `  type "hi"` {
+		t.Errorf("%q", got)
+	}
+	prog, err := parser.ParseFile("test \"t\"\n" + got + "\n")
+	if err != nil || len(prog.Tests[0].Body) != 1 {
+		t.Errorf("the line does not read back as one step: %v", err)
+	}
+}
+
+// A widget type or an id that is a word of the grammar in another case still makes more than one step, so the line is read back with the real parser and
+// is not written when it does not read as one step (found by FuzzStep: a type named SAve).
+func TestALineThatDoesNotReadBackAsOneStepIsNotWritten(t *testing.T) {
+	got := Step(ev{"action": "long_press", "selector": sel("type", "SAve")})
+	if got != "  # long_press was not recorded: it could not be written as one step. Add the step by hand." {
+		t.Errorf("%q", got)
+	}
+	if got := Step(ev{"action": "tap", "selector": sel("type", "Switch")}); got != "  tap the Switch" {
+		t.Errorf("an ordinary type: %q", got)
 	}
 }
