@@ -208,4 +208,16 @@ void main() {
     expect(r['rich_texts'], isEmpty);
     expect(r['truncated'], isFalse);
   });
+
+  // Documented in agent.md: an Icon's glyph is not listed, but the matcher still finds it by a text selector made of that character,
+  // so a reader of the summary must refuse such selectors. This pins the matcher's side, so the note stays true.
+  testWidgets(
+      'an Icon\'s glyph is matchable by a text selector though it is not listed',
+      (tester) async {
+    await _pump(tester, [const Icon(Icons.add)]);
+    final glyph = String.fromCharCode(Icons.add.codePoint);
+    expect(ProbeFinder.instance.findElements({'kind': 'text', 'text': glyph}),
+        isNotEmpty);
+    expect((await _rpc())['rich_texts'], isEmpty);
+  });
 }
