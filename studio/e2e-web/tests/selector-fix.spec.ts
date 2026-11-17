@@ -4,7 +4,7 @@ import * as http from "node:http";
 import * as net from "node:net";
 import * as path from "node:path";
 import { openPath, openStudio, workspace } from "./helpers";
-import { seedEmail, seedToken } from "./explain-seed";
+import { seedEmail, seedLoginText, seedToken } from "./explain-seed";
 
 // Suggest a fix, against a fake provider on 127.0.0.1 and the failed run (with its failed step) that Studio starts with. No hosted
 // provider is called and no key is used. The failed step's error text and the model's answer are hostile on purpose.
@@ -392,7 +392,7 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
   });
 
   const loginFile = () => path.join(workspace, "probe-tests", "login.probe");
-  const loginText = 'test "sign in"\n  open the app\n  tap "Welcome"\n  tap "Sign in"\n  see "Home"\n';
+  const loginText = seedLoginText; // the text the seeded run read
   const lines = (page: Page) => page.locator("#editor .view-lines");
 
   async function suggestWith(page: Page, reply: string) {
@@ -474,18 +474,31 @@ test.describe("Suggest a fix (a fake provider on 127.0.0.1, a seeded failed run)
     }
   });
 
-  test("sf-17 one Undo takes back the replacement and nothing typed before it", async ({ page }) => {
+  test("sf-17 one Undo takes back the replacement and nothing else", async ({ page }) => {
     const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
     try {
-      await lines(page).locator(".view-line", { hasText: 'see "Home"' }).click();
-      await page.keyboard.press("End");
-      await page.keyboard.type("x"); // an edit on another line, before the replacement
       await page.click("#btn-fix-replace");
       await expect(lines(page)).toContainText('tap "Sign in now"');
       await lines(page).locator(".view-line", { hasText: "Welcome" }).click();
       await page.keyboard.press("ControlOrMeta+z");
       await expect(lines(page)).not.toContainText("Sign in now");
-      await expect(lines(page)).toContainText('see "Home"x'); // the earlier typing is still there
+      await expect(lines(page)).toContainText('tap "Sign in"');
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("sf-22 an edit anywhere in the file since the run refuses Replace the line: the run's text is the anchor", async ({ page }) => {
+    const f = await suggestWith(page, '```probe\ntap "Sign in now"\n```\nWhy.');
+    try {
+      await lines(page).locator(".view-line", { hasText: 'see "Home"' }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.type("x"); // an edit on another line: the failed step's line number is unchanged
+      await page.click("#btn-fix-replace");
+      await expect(page.locator("#explain-status")).toContainText("Not replaced");
+      await expect(page.locator("#explain-status")).toContainText("changed since the run");
+      await expect(lines(page)).not.toContainText("Sign in now");
+      await expect(lines(page)).toContainText('see "Home"x'); // the edit is still there, untouched
     } finally {
       await f.close();
     }

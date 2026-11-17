@@ -30,12 +30,16 @@ export function seedRun() {
   ];
 }
 
+/** The file the seeded failed step is in, and the text the seeded run "read" of it: Studio keeps that text at start-up (from the file on disk), and Replace the line and Insert before are refused unless the editor still holds it. The suite's config writes this file before Studio starts, and the specs that open it write the same text. */
+export const seedLoginFile = "probe-tests/login.probe";
+export const seedLoginText = 'test "sign in"\n  open the app\n  tap "Welcome"\n  tap "Sign in"\n  see "Home"\n';
+
 /** The seeded run with the failed step of the first failed test, for the Suggest a fix specs (the failed step is what a selector fix is about). */
 export function seedRunWithSteps() {
   return {
     results: seedRun(),
     steps: [
-      { file: "probe-tests/login.probe", test: "sign in", line: 4, description: 'tap "Sign in"', status: "failed", durationMs: 12, attempt: 0, depth: 0, error: seedRun()[0].error },
+      { file: seedLoginFile, test: "sign in", line: 4, description: 'tap "Sign in"', status: "failed", durationMs: 12, attempt: 0, depth: 0, error: seedRun()[0].error },
     ],
   };
 }
