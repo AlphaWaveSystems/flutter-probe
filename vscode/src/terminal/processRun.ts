@@ -85,6 +85,14 @@ export function shownWord(word: string): string {
   return `"${escaped}"`;
 }
 
+// waitAll resolves when every promise has, or after capMs, whichever comes first: a process that never reports its exit does not hold
+// the caller (the extension's deactivate) forever.
+export function waitAll(ended: Promise<void>[], capMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cap = new Promise<void>(resolve => { timer = setTimeout(resolve, capMs); });
+  return Promise.race([Promise.all(ended).then(() => undefined), cap]).finally(() => clearTimeout(timer));
+}
+
 export interface QueueOptions {
   signal?: Signaller;
   // How long a stopped tool has to end after SIGINT before it and its processes get SIGKILL.
@@ -102,6 +110,8 @@ export class RunQueue {
   private killTimer?: ReturnType<typeof setTimeout>;
   private killAt = Infinity;
   private readonly endWaiters: (() => void)[] = [];
+  // Set by stop or shutdown: the terminal is closing, so a run asked for later is not started.
+  private closing = false;
   private readonly signal: Signaller;
   private readonly graceMs: number;
   private readonly platform: string;
@@ -116,6 +126,10 @@ export class RunQueue {
   get busy(): boolean { return this.running !== undefined; }
 
   run(spec: RunSpec): void {
+    if (this.closing) {
+      this.write(toTerminal(`\n(not started: this terminal is closing)\n`));
+      return;
+    }
     if (this.running) {
       if (this.waiting.length >= MAX_WAITING) {
         this.write(toTerminal(`\n(not started: ${MAX_WAITING} runs are already waiting in this terminal)\n`));
@@ -208,6 +222,7 @@ export class RunQueue {
   // extension's deactivate uses a short grace: the window is closing, VS Code waits only briefly, and the extension host exits soon after,
   // taking the SIGKILL timer with it. A later stop never moves the SIGKILL later than one already set.
   shutdown(graceMs: number): Promise<void> {
+    this.closing = true;
     this.waiting.length = 0;
     const child = this.running;
     if (!child) { return Promise.resolve(); }

@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { EventEmitter, PassThrough } from 'node:stream';
-import { Child, MAX_LINE, MAX_WAITING, QueueOptions, RunQueue, RunSpec, SpawnFn, makeSignalTree, shownWord, toTerminal } from '../terminal/processRun';
+import { Child, MAX_LINE, MAX_WAITING, QueueOptions, RunQueue, RunSpec, SpawnFn, makeSignalTree, shownWord, toTerminal, waitAll } from '../terminal/processRun';
 
 // The arguments a tool is run with reach it as they are: no shell parses them. Hostile text is built from code points (no raw format
 // characters in the source).
@@ -405,16 +405,34 @@ test('deactivate waits for the tools to end, with a short grace and a cap', () =
   const term = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'terminal', 'probeTerminal.ts'), 'utf8');
   assert.match(term, /export const DEACTIVATE_GRACE_MS = 1000;/);
   assert.match(term, /ended\.push\(queue\.shutdown\(DEACTIVATE_GRACE_MS\)\);/);
-  assert.match(term, /setTimeout\(resolve, DEACTIVATE_GRACE_MS \+ 2000\)/);
+  assert.match(term, /return waitAll\(ended, DEACTIVATE_GRACE_MS \+ 2000\);/);
 });
 
-test('after a stopped run ends, stopping the next run still escalates', async () => {
-  const { queue, children } = fakeQueue({ graceMs: 30 });
+test('waitAll ends at the cap when a process never reports its exit, and at once when all have ended', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    let done = false;
+    void waitAll([new Promise<void>(() => undefined)], 3000).then(() => { done = true; });
+    mock.timers.tick(2999);
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(done, false, 'not before the cap');
+    mock.timers.tick(1);
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); }
+    assert.equal(done, true, 'at the cap');
+  } finally {
+    mock.timers.reset();
+  }
+  let early = false;
+  await waitAll([Promise.resolve(), Promise.resolve()], 60_000).then(() => { early = true; });
+  assert.equal(early, true);
+});
+
+test('a run asked for after the terminal started closing is not started', () => {
+  const { queue, out, children } = fakeQueue();
   queue.run({ command: '/bin/probe', args: ['1'], env: {} });
-  void queue.shutdown(5);
-  children[0].emit('close', null, 'SIGINT');
+  void queue.shutdown(10);
   queue.run({ command: '/bin/probe', args: ['2'], env: {} });
-  queue.stop();
-  await sleep(80);
-  assert.deepEqual(children[1].signals, ['SIGINT', 'SIGKILL']);
+  children[0].emit('close', null, 'SIGINT');
+  assert.equal(children.length, 1);
+  assert.match(out(), /not started: this terminal is closing/);
 });
