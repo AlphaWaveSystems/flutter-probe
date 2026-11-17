@@ -117,6 +117,12 @@ type RunOptions struct {
 	// the device's platform and OS version. It takes precedence over NewRecorder for composite runs.
 	NewCompositeRecorder func(d CompositeDevice) StepRecorder
 
+	// ReadFile, when set, reads the .probe files the run parses: the files in Files, recipe files and the targets of `use`. nil reads the disk (os.ReadFile),
+	// so the command line is unchanged. A caller that needs the exact bytes a run parsed (Studio keeps them to place an edit by the line number of a failed
+	// step) passes a reader that records what it returns. It may be called from several goroutines when the options are shared by the runners of a parallel
+	// run, so it must be safe for that.
+	ReadFile func(path string) ([]byte, error)
+
 	Files        []string // .probe files to run
 	Tags         []string // filter by tag
 	TestNames    []string // run only the tests with these names (composite tests too); nil runs every test
@@ -315,8 +321,16 @@ func (r *Runner) loadFileRecipes(ctx context.Context, path string, prog *parser.
 	return nil
 }
 
+// readSource reads a .probe file through the run's ReadFile hook, or from the disk.
+func (r *Runner) readSource(path string) ([]byte, error) {
+	if r.opts.ReadFile != nil {
+		return r.opts.ReadFile(path)
+	}
+	return os.ReadFile(path)
+}
+
 func (r *Runner) runFile(ctx context.Context, path string) ([]TestResult, error) {
-	src, err := os.ReadFile(path)
+	src, err := r.readSource(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -750,7 +764,7 @@ func (r *Runner) loadRecipes(_ context.Context) error {
 }
 
 func (r *Runner) loadRecipeFile(_ context.Context, path string) error {
-	src, err := os.ReadFile(path)
+	src, err := r.readSource(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -793,7 +807,7 @@ func (r *Runner) loadUse(ctx context.Context, from string, u parser.UseStmt, see
 		r.confine.skipRecipes = true
 		return nil
 	}
-	src, err := os.ReadFile(read)
+	src, err := r.readSource(read)
 	if err != nil {
 		if os.IsNotExist(err) {
 			r.missingUses = append(r.missingUses, fmt.Sprintf("%s:%d `use %q` -> %s", from, u.Line, u.Path, target))
