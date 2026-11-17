@@ -182,7 +182,7 @@
   "see exactly": {
     "prefix": "see exactly 3 \"Item\"",
     "body": "see exactly ${1:3} \"${2:Item}\"",
-    "description": "Assert exact count of matching widgets"
+    "description": "Assert exact count of matching widgets: each visible text counts once (a Text, a Text.rich, a RichText, a button's label), so one Text is 1"
   },
   "see exactly N requests": {
     "prefix": "see exactly 2 requests GET \"/api/orders\"",
