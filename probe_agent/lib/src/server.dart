@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'agent_version.dart';
+import 'app_id.dart';
 import 'executor.dart';
 import 'advertiser.dart';
 import 'protocol.dart';
@@ -172,7 +173,12 @@ class ProbeServer {
         req.response
           ..statusCode = HttpStatus.ok
           ..headers.contentType = ContentType.json
-          ..write('{"agent":"flutter_probe","version":"$probeAgentVersion"}');
+          ..write(jsonEncode({
+            'agent': 'flutter_probe',
+            'version': probeAgentVersion,
+            // which app this agent is in (see app_id.dart); left out when unknown. Like the version, it needs no token.
+            if (reportedAppId() != null) 'app_id': reportedAppId(),
+          }));
         await req.response.close();
         continue;
       }
