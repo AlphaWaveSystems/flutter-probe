@@ -37,7 +37,7 @@ func (r *Runner) clearBeforeTest(ctx context.Context, exec *Executor) error {
 		r.autoClear.asked = true
 		if r.deviceCtx.AllowClearData {
 			// --yes answers it; the log still says once what it is for, since nobody was shown the question
-			fmt.Printf("    \033[31m⚠\033[0m  --yes: all data of %s on %s will be wiped BEFORE EVERY TEST of this run\n", device.CleanOneLine(r.deviceCtx.AppID, 80), device.CleanOneLine(r.deviceCtx.Serial, 80))
+			fmt.Printf("    \033[31m⚠\033[0m  --yes: all data of %s on %s will be wiped "+beforeEveryTest+" on this device\n", device.CleanOneLine(r.deviceCtx.AppID, 80), device.CleanOneLine(r.deviceCtx.Serial, 80))
 		}
 		r.autoClear.answer = r.deviceCtx.AskClearData(true)
 	}

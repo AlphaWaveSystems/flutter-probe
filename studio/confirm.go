@@ -88,7 +88,7 @@ func (a *App) windowReady() bool {
 // dc, and if the window has moved to another connection since (a.conn no longer owns dc) the step is not run, so the dialog never names one
 // device while another is wiped.
 func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
-	return func(string) bool {
+	return func(message string) bool {
 		a.mu.Lock()
 		run := a.confirmRun
 		conn := a.conn
@@ -99,7 +99,11 @@ func (a *App) confirmClearData(dc *runner.DeviceContext) runner.ConfirmFunc {
 		// The person's own setting, kept outside the workspace: on a simulator or an emulator the step may run without the question. A physical
 		// device, a WiFi connection and a device that is not classified always ask.
 		if runner.AnswersWithoutQuestion(userprefs.Load().ClearDataWithoutAsking, func() bool { return conn.disposable && a.verifiedDisposable(conn) }) {
-			a.emit("confirm:note", "Cleared data of "+dialogText(dc.AppID)+" on "+dialogText(conn.deviceName)+" ("+dialogText(conn.deviceID)+") without asking: your setting for simulators and emulators")
+			what := "Cleared data of "
+			if runner.IsBeforeEachTestQuestion(message) {
+				what = "Will clear data before every test of this run, of " // the question is Studio's own; only whether it is the per-test one is read from it
+			}
+			a.emit("confirm:note", what+dialogText(dc.AppID)+" on "+dialogText(conn.deviceName)+" ("+dialogText(conn.deviceID)+") without asking: your setting for simulators and emulators")
 			return true
 		}
 		return a.askInWindow(run, ConfirmRequest{Kind: kindClearData, AppID: dialogText(dc.AppID), DeviceName: dialogText(conn.deviceName)},
