@@ -118,19 +118,31 @@ test.describe("Open the failing line", () => {
     await expect(page.locator("#editor .view-lines")).toContainText("!!"); // rendered
     const before = await page.locator("#editor .view-lines").innerText();
     await fireFailedRun(page, { file: path.join(tests, "form.probe"), test: "t", line: 3, description: 'tap "q"' });
-    let asked = 0;
-    page.once("dialog", (d) => {
-      asked++;
-      void d.dismiss();
+    // The question is in the page (the window's webview shows no native confirm): "Keep editing" has the focus, Escape and it say no, and the
+    // discard button is never the default: Enter on it does nothing, a click says yes.
+    page.on("dialog", () => {
+      throw new Error("a native dialog was shown");
     });
     await stepRow(page, 'tap "q"').click();
-    await expect.poll(() => asked).toBe(1);
+    await expect(page.locator("#discard-overlay")).toBeVisible();
+    await expect(page.locator("#btn-discard-cancel")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#btn-discard-ok")).toBeFocused();
+    await page.keyboard.press("Enter"); // Enter on Discard changes does nothing
+    await page.waitForTimeout(200);
+    await expect(page.locator("#discard-overlay")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#discard-overlay")).toBeHidden();
     await page.waitForTimeout(300);
     await expect(filename(page)).toContainText("counter.probe");
     expect(await page.locator("#editor .view-lines").innerText()).toBe(before);
     expect(seen.ReadFile ?? 0).toBe(0);
-    page.once("dialog", (d) => void d.accept());
     await stepRow(page, 'tap "q"').click();
+    await page.click("#btn-discard-cancel"); // Keep editing
+    await expect(page.locator("#discard-overlay")).toBeHidden();
+    await expect(filename(page)).toContainText("counter.probe");
+    await stepRow(page, 'tap "q"').click();
+    await page.click("#btn-discard-ok");
     await expect(filename(page)).toContainText("form.probe");
     await expect(activeLine(page)).toHaveText("3");
     expect(seen.WriteFile ?? 0).toBe(0);

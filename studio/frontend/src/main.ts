@@ -13,6 +13,7 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { askDiscard, initDiscardDialog } from "./discard-dialog";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
@@ -373,7 +374,7 @@ async function onFileClick(path: string, isDir: boolean) {
 // outside the workspace, with a .. segment, through a link out of it, and a file that is not there) and changes nothing until that has
 // worked. It returns whether the file is open now.
 async function openProbeFile(path: string): Promise<boolean> {
-  if (dirty && !confirm("Discard unsaved changes?")) return false;
+  if (dirty && !(await askDiscard())) return false;
   try {
     const content = await ReadFile(path);
     model.setValue(content);
@@ -1674,24 +1675,24 @@ async function refreshDevices() {
   try {
     const devs = ((await ListDevices()) ?? []) as DeviceInfo[];
     if (seq !== refreshSeq) return;
-    // Read the selection when the list has arrived, not when the refresh started: the user may have
-    // picked a device while it was in flight, and that pick must survive the rebuild below.
-    const previous = select.value;
-    clearChildren(select);
-    select.appendChild(makeOption("", "— select device —"));
+    // Everything that is asked for is asked for before the list is touched: the picker is rebuilt in one synchronous step, never emptied while a
+    // question is in flight (a dropdown that is open when its options are replaced loses the pick: the first selection after a launch was ignored).
+    let note = "";
+    try {
+      note = (await DeviceListNote()) ?? "";
+    } catch {
+      note = "";
+    }
+    if (seq !== refreshSeq) return; // a newer refresh started while the note was read
+    adbNote = note;
     lastDeviceList = devs;
     devicesLoaded = true;
-    try {
-      adbNote = (await DeviceListNote()) ?? "";
-    } catch {
-      adbNote = "";
-    }
     // Show booted devices first; non-booted are still listed so users see
     // their full simulator inventory, but the Connect button stays disabled.
     const sorted = [...devs].sort(
       (a, b) => Number(b.booted) - Number(a.booted) || a.name.localeCompare(b.name)
     );
-    for (const d of sorted) {
+    const entries = sorted.map((d) => {
       const tag = d.kind === "physical" ? "physical" : d.platform;
       const model = d.model && !d.name.includes(d.model) ? ` (${d.model})` : "";
       const via = d.transport === "network" ? "  · WiFi only" : d.transport === "usb" ? "  · USB" : "";
@@ -1700,12 +1701,24 @@ async function refreshDevices() {
         : d.kind === "physical"
           ? `${d.name}${model}  ·  ${tag}${via}`
           : `${d.name}  ·  ${tag}  · shutdown`;
-      const opt = makeOption(d.id, label);
-      if (!d.booted) opt.dataset.booted = "false";
-      select.appendChild(opt);
-    }
-    if (previous && devs.some((d) => d.id === previous)) {
-      select.value = previous;
+      return { id: d.id, label, booted: d.booted };
+    });
+    // A list that is the same as the one shown is left alone, so an open dropdown and the pick in it are not disturbed by a refresh that found nothing new.
+    const shown = Array.from(select.options).slice(1).map((o) => `${o.value}\u0000${o.textContent}\u0000${o.dataset.booted ?? ""}`);
+    const wanted = entries.map((e) => `${e.id}\u0000${e.label}\u0000${e.booted ? "" : "false"}`);
+    const unchanged = select.options.length === entries.length + 1 && select.options[0].value === "" && shown.every((x, i) => x === wanted[i]);
+    if (!unchanged) {
+      const previous = select.value; // read when the list is replaced, so a pick made while the refresh was in flight survives
+      clearChildren(select);
+      select.appendChild(makeOption("", "— select device —"));
+      for (const e of entries) {
+        const opt = makeOption(e.id, e.label);
+        if (!e.booted) opt.dataset.booted = "false";
+        select.appendChild(opt);
+      }
+      if (previous && devs.some((d) => d.id === previous)) {
+        select.value = previous;
+      }
     }
     if (devs.length === 0) {
       toast("No simulators, emulators or phones detected. Start one, or plug in a phone, and click ↻. A phone on WiFi: use the 📡 button.", "info");
@@ -1870,6 +1883,7 @@ if (inspectorSearch) {
 initResults();
 initNetworkPanel();
 initConfirmDialog();
+initDiscardDialog();
 // Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
 // Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
 // parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.
