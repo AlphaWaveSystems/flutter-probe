@@ -4,6 +4,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
@@ -892,10 +894,14 @@ func CollectFiles(paths []string) ([]string, error) {
 // PullArtifacts copies on-device screenshot paths to localDir and rewrites
 // TestResult.Artifacts to local paths. For Android, uses `run-as` + cat to read
 // from the app's private cache. For iOS simulators, files are already on the host.
-func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext, localDir string) {
+func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext, localDir string, extraRoots ...string) {
 	if dc == nil || dc.Manager == nil {
 		return
 	}
+	// A host file is copied (or kept, for a video) only from the folders the run writes to: the reports folder (the parent of localDir, which
+	// holds the screenshots and the videos), localDir, the folders the caller adds, and a simulator's data folder. An artifact path can come
+	// from the agent, so it is never trusted to name another host file.
+	roots := append([]string{filepath.Dir(localDir), localDir}, extraRoots...)
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return
 	}
@@ -907,7 +913,9 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 				if _, err := os.Stat(remotePath); err == nil {
 					ext := filepath.Ext(remotePath)
 					if ext == ".mov" || ext == ".mp4" || ext == ".webm" {
-						localPaths = append(localPaths, remotePath)
+						if _, ok := allowedHostArtifact(remotePath, roots); ok {
+							localPaths = append(localPaths, remotePath)
+						}
 						continue
 					}
 				}
@@ -917,9 +925,13 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			var pullErr error
 			switch {
 			case dc.Platform == device.PlatformIOS:
-				// iOS simulator: file is already on host, just copy it
-				pullErr = copyFileIfDifferent(remotePath, localPath)
-			case filepath.IsAbs(remotePath) && fileExists(remotePath):
+				// iOS simulator: the file is already on the host; it is copied only from a folder the run writes to or a simulator's data folder
+				if src, ok := allowedHostArtifact(remotePath, roots); ok {
+					pullErr = copyFileIfDifferent(src, localPath)
+				} else {
+					pullErr = fmt.Errorf("pulling %q: not a file this run wrote or a simulator's", remotePath)
+				}
+			case filepath.IsAbs(remotePath) && fileExists(remotePath) && isAllowedHostArtifact(remotePath, roots):
 				// Android screenshots arrive as base64 in the RPC reply and are
 				// already saved on the host by the probelink client; this path is
 				// that host path, not a device path. Re-reading it through
@@ -946,7 +958,7 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 					// out as an image.
 					pullErr = fmt.Errorf("pulling %s: not an image (%s)", remotePath, strings.TrimSpace(string(data[:min(len(data), 120)])))
 				default:
-					pullErr = os.WriteFile(localPath, data, 0644)
+					pullErr = writeFileReplacing(localPath, data)
 				}
 			}
 			if pullErr == nil {
@@ -1011,7 +1023,93 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0644)
+	return writeFileReplacing(dst, data)
+}
+
+// writeFileReplacing writes data to a new file next to dst and renames it over dst, so a link (or any file) already named dst is replaced,
+// never written through.
+func writeFileReplacing(dst string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(dst), ".probe-artifact-*")
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(data)
+	cerr := f.Close()
+	if werr == nil && cerr == nil {
+		werr = os.Chmod(f.Name(), 0o644)
+	}
+	if werr != nil || cerr != nil {
+		_ = os.Remove(f.Name())
+		return errors.Join(werr, cerr)
+	}
+	if err := os.Rename(f.Name(), dst); err != nil {
+		_ = os.Remove(f.Name())
+		return err
+	}
+	return nil
+}
+
+// simulatorDataRoot is the folder that holds every simulator's data. A test replaces it.
+var simulatorDataRoot = func() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "Developer", "CoreSimulator", "Devices"), nil
+}
+
+// allowedHostArtifact returns p resolved (links followed) when it is a regular file inside one of roots or inside a simulator's data
+// folder (<simulators>/<UUID>/data/...), and false otherwise.
+func allowedHostArtifact(p string, roots []string) (string, bool) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", false
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", false
+	}
+	if info, err := os.Stat(real); err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		r, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		if rr, err := filepath.EvalSymlinks(r); err == nil {
+			r = rr
+		}
+		if isUnderDir(r, real) {
+			return real, true
+		}
+	}
+	if sims, err := simulatorDataRoot(); err == nil {
+		if rr, err := filepath.EvalSymlinks(sims); err == nil {
+			sims = rr
+		}
+		if rel, err := filepath.Rel(sims, real); err == nil {
+			parts := strings.Split(rel, string(filepath.Separator))
+			if len(parts) >= 3 && ios.ValidSimulatorUDID(parts[0]) && parts[1] == "data" {
+				return real, true
+			}
+		}
+	}
+	return "", false
+}
+
+func isAllowedHostArtifact(p string, roots []string) bool {
+	_, ok := allowedHostArtifact(p, roots)
+	return ok
+}
+
+// isUnderDir reports whether p is dir or inside it.
+func isUnderDir(dir, p string) bool {
+	rel, err := filepath.Rel(dir, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 var nonAlphaNum = regexp.MustCompile(`[^a-zA-Z0-9]+`)

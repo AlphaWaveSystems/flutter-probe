@@ -1451,7 +1451,10 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 		screenshotDir = filepath.Join(filepath.Dir(outFile), "screenshots")
 	}
 	if devCtx != nil {
-		runner.PullArtifacts(ctx, results, devCtx, screenshotDir)
+		// The probelink client saves a screenshot the agent sends in ./reports/screenshots (see probelink.savedScreenshot): a folder the run
+		// writes to, as are screenshotDir, its parent and the video folder under it.
+		clientShots, _ := filepath.Abs(filepath.Join("reports", "screenshots"))
+		runner.PullArtifacts(ctx, results, devCtx, screenshotDir, clientShots)
 	} else if cloudSession != nil {
 		// In cloud mode, screenshots are saved locally by the probelink client
 		// via the probe.screenshot RPC (base64 data in response). Ensure the
