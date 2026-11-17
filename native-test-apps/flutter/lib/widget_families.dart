@@ -52,6 +52,7 @@ class SelectionFamilyScreen extends StatefulWidget {
 }
 
 class _SelectionFamilyScreenState extends State<SelectionFamilyScreen> {
+  bool _bottomTerms = false;
   bool _terms = false;
   bool _notifications = false;
   bool _cupertino = false;
@@ -131,6 +132,21 @@ class _SelectionFamilyScreenState extends State<SelectionFamilyScreen> {
             'wf_cupertino_switch_state',
             'Cupertino switch: ${_cupertino ? 'on' : 'off'}',
           ),
+          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          const SizedBox(height: 1200),
+          _s(
+            'wf_bottom_checkbox',
+            (k) => CheckboxListTile(
+              key: k,
+              title: const Text('Bottom terms'),
+              value: _bottomTerms,
+              onChanged: (v) => setState(() => _bottomTerms = v ?? false),
+            ),
+          ),
+          _state(
+            'wf_bottom_terms_state',
+            'Lower terms: ${_bottomTerms ? 'on' : 'off'}',
+          ),
         ],
       ),
     );
@@ -148,6 +164,7 @@ class TextInputFamilyScreen extends StatefulWidget {
 }
 
 class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
+  String _bottomText = '';
   final _formKey = GlobalKey<FormState>();
   String _plain = '';
   String _form = '';
@@ -244,6 +261,20 @@ class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
             'wf_cupertino_state',
             'Cupertino: ${_cupertino.isEmpty ? '(empty)' : _cupertino}',
           ),
+          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          const SizedBox(height: 1200),
+          _s(
+            'wf_bottom_field',
+            (k) => TextField(
+              key: k,
+              decoration: const InputDecoration(hintText: 'Bottom field'),
+              onChanged: (v) => setState(() => _bottomText = v),
+            ),
+          ),
+          _state(
+            'wf_bottom_field_state',
+            'Lower field: ${_bottomText.isEmpty ? '(empty)' : _bottomText}',
+          ),
         ],
       ),
     );
@@ -260,6 +291,7 @@ class ButtonsFamilyScreen extends StatefulWidget {
 }
 
 class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
+  int _bottomTaps = 0;
   final _counts = <String, int>{
     'elevated': 0,
     'filled': 0,
@@ -381,6 +413,18 @@ class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
             'Hold: tap ${_counts['tap']}, long ${_counts['long']}',
           ),
           const SizedBox(height: 80),
+          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          const SizedBox(height: 1200),
+          _s(
+            'wf_bottom_button',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => setState(() => _bottomTaps++),
+              child: const Text('Bottom button'),
+            ),
+          ),
+          _state('wf_bottom_button_state', 'Lower taps: $_bottomTaps'),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -437,6 +481,26 @@ class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
                 ),
               ),
               child: const Text('Open message'),
+            ),
+          ),
+          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          const SizedBox(height: 1200),
+          _s(
+            'wf_open_bottom_message',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Bottom message')),
+                    body: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _state('wf_bottom_message_body', 'From: Grace'),
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('Open bottom message'),
             ),
           ),
         ],
@@ -545,6 +609,12 @@ class _DisplayFamilyScreenState extends State<DisplayFamilyScreen> {
             ],
           ),
           _state('wf_logo_taps', 'Taps: $_logoTaps'),
+          // Below the fold on every screen size: a test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          const SizedBox(height: 1200),
+          _s(
+            'wf_bottom_text',
+            (k) => Text('Bottom text: end of the list', key: k),
+          ),
         ],
       ),
     );

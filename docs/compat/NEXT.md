@@ -160,7 +160,7 @@ These cells are "partly" or "not assessed" inside families that already have a s
   - `is enabled` and `is disabled` on the other button kinds (only `ElevatedButton` is read);
   - a button inside a dialog (item 8) and inside a list (item 4);
   - a `double tap`.
-- **Scroll** is "not assessed" in every family: item 4 settles it for lists, and each existing screen needs one widget below the fold, reached with `scroll down until ... appears`.
+- **Scroll:** settled for lists (item 4) and, with one widget below the fold on each screen, for text and display, buttons, text input, selection controls and navigation (Android, both Flutter versions). It stays "not assessed" for WebView content (there is no scroll step for page content), and on iOS for every family but lists.
 - **WebView content:** scrolling in the page (there is no WebView scroll step), and iOS (`webview_flutter_wkwebview`).
 
 ## Limits
