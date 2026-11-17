@@ -203,4 +203,43 @@ test.describe("Confirm before clear app data", () => {
     await expect(overlay(page)).toBeVisible();
     expect(seen).toEqual([]);
   });
+  const tokenRequest = (id: string, detail = "192.168.1.20:48686") => ({ id, kind: "send-saved-token", appId: "192.168.1.50:48686", deviceName: "Desk phone", detail });
+
+  test("cd-11 the saved-token question names both addresses, Cancel has the focus, and Enter on Send token does nothing", async ({ page }) => {
+    const seen = answers(page);
+    await fire(page, "confirm:request", tokenRequest("t1"));
+    await expect(overlay(page)).toBeVisible();
+    await expect(page.locator("#confirm-title")).toHaveText("Send the saved token?");
+    await expect(page.locator("#confirm-lead")).toContainText("Desk phone");
+    await expect(page.locator("#confirm-app")).toHaveText("192.168.1.50:48686");
+    await expect(page.locator("#confirm-device")).toContainText("192.168.1.20:48686");
+    await expect(page.locator("#btn-confirm-cancel")).toBeFocused();
+    await expect(page.locator("#btn-confirm-danger")).toHaveText("Send token");
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled(); // armed after half a second
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#btn-confirm-danger")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(300);
+    await expect(overlay(page)).toBeVisible();
+    expect(seen).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["t1", false]);
+  });
+
+  test("cd-12 Send token cannot be pressed for the first half second, and a token saved without an address is worded as such", async ({ page }) => {
+    const seen = answers(page);
+    await fire(page, "confirm:request", tokenRequest("t2", ""));
+    await expect(page.locator("#btn-confirm-danger")).toBeDisabled();
+    await expect(page.locator("#confirm-lead")).toContainText("saved without an address");
+    await expect(page.locator("#confirm-lead")).not.toContainText("different address");
+    await page.waitForTimeout(100);
+    await page.locator("#btn-confirm-danger").click({ force: true }); // a click on a disabled button is not an answer
+    await page.waitForTimeout(200);
+    expect(seen).toEqual([]);
+    await expect(page.locator("#btn-confirm-danger")).toBeEnabled();
+    await page.locator("#btn-confirm-danger").click();
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["t2", true]);
+  });
 });
