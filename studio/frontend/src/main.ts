@@ -1410,7 +1410,7 @@ async function selectWiFiDevice(dev: WiFiDevice) {
   if (wifiSelected !== dev) return;
   $("wifi-selected-label").textContent =
     `Connecting to ${dev.name} (${dev.host}:${dev.port})` +
-    (saved ? " · a saved token is used if the field is blank" : "");
+    (saved ? " · a saved token is used if the field is blank (you are asked first if this address is not the one it was saved for)" : "");
   input.focus();
 }
 
