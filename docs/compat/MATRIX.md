@@ -183,6 +183,24 @@ Not covered by the screen: `PageView` (a swipe), dragging a `Scrollbar` thumb, a
 Not covered by the screen: iOS (a Cupertino dialog and sheet were run on Android only), a dialog with `barrierDismissible: false`, a dialog with a text field, a scrolling dialog, `showDatePicker` and `showTimePicker`, a persistent bottom sheet, a floating or queued snack bar, `PopupMenuButton`, `Drawer`, and native system dialogs (see `tools/system-dialogs`). The 9 variants of the suite that must fail
 (`probe-tests/negative/dialogs.probe.expect-fail`) were run: all 9 fail at their own step with the message in their comment (a snack bar and its action before `Save`, a dialog seen after Cancel, `tap "Delete"` taken for the button, a tap on a button that the dialog body covers counted, the wrong state, a sheet seen after an option, a state before its tap, the Cancel button after a tap on the barrier).
 
+### Progress indicators (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=progress`, `probe-tests/widgets/progress.probe`)
+
+Measured on Flutter 3.44.8 with the agent from main, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): the suite (4 tests) passed 3 of 3 runs on each device, and the 3 variants that must fail (`probe-tests/negative/progress.probe.expect-fail`) failed on both, each with the message in its comment; no restart failure (issue #823). The screen is its own family (`progress`) rather than part of `display`, so the display suite and its wait after a restart stay as they are.
+
+| Widget (fixture id) | Steps | Result |
+|---|---|---|
+| an indeterminate `CircularProgressIndicator` shown for 3 seconds after "Load", then "Loaded" (`wf_spinner`, `wf_loaded`) | `see #wf_spinner` while it runs, `wait until #wf_spinner disappears`, then `see "Loaded"`; or `wait until "Loaded" appears` | pass |
+| an indeterminate `CircularProgressIndicator` that never goes away (`wf_forever`) | `tap`, `see` and `see #wf_linear` while it animates | pass: an animation that never ends does not stall the steps |
+| the same, `wait until #wf_forever disappears within 5 seconds` | the variant N2 | fails with `Timed out waiting for "#wf_forever" to disappear` and the visible texts, after about 5 seconds |
+| a `LinearProgressIndicator` with `value: 0.4` (`wf_linear`) | `see #wf_linear` | pass (found by id; its value is not read) |
+
+**Findings.**
+- **Waiting for a spinner works both ways:** for the spinner to disappear, or for the result to appear. `see "Loaded"` straight after the tap fails (N1), as it should.
+- **An animation that never ends does not block the agent:** the steps after it answer at once. (The agent waits for the screen to settle after an action for at most 10 seconds and does not count an app's animations, `ProbeSync.waitForSettled`.)
+- **A wait for something that never happens ends with a clear timeout** that names the target and lists what is on screen.
+
+Not covered by the screen: reading a progress bar's value, `CupertinoActivityIndicator`, `RefreshIndicator` (pull to refresh), a spinner inside a button, a spinner on a route that is still being pushed. Flutter 3.50.0 was not run for this family.
+
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 
 An Android app with a `webview_flutter` 4.14.1 `WebViewWidget` that shows `assets/page.html` (the page of `native-test-apps/android-webview`, kept equal by a test) from the app's own assets, next to
