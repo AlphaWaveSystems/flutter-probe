@@ -41,14 +41,6 @@ export function staleWorkspaceSettings(settingsText: string, keys: readonly stri
   return keys.filter(k => new RegExp(`"flutterprobe\\.${k}"\\s*:`).test(settingsText));
 }
 
-// terminalAction decides whether a named terminal can be reused for a run: only when it is alive and was made with the same secrets,
-// since a terminal's environment is fixed when it is created.
-export function terminalAction(existing: { alive: boolean; fingerprint: string } | undefined, env: Record<string, string>): 'reuse' | 'replace' | 'create' {
-  if (!existing) { return 'create'; }
-  if (existing.alive && existing.fingerprint === envFingerprint(env)) { return 'reuse'; }
-  return existing.alive ? 'replace' : 'create';
-}
-
 // childEnv is the environment of a program the extension starts: VS Code's own environment, as every child inherits it (a ${NAME} in a
 // test reads any variable by design, so nothing else is removed), without the three secret variables unless the child is one meant to
 // receive them (allow), and with add on top. Only `probe test` is meant to: the device list, lint and the device view are not.
@@ -81,21 +73,4 @@ export function secretFlagIn(args: readonly string[]): string | undefined {
     if (flags.includes(name)) { return name; }
   }
   return undefined;
-}
-
-// envFingerprint is a stable text for an environment, so a terminal made with one set of secrets is not reused for another. It holds
-// each name, the value's length and a 32-bit hash of the value, not the value. A short secret could be found again from its hash by trying
-// every candidate, so the fingerprint stays in memory as a map key and is never printed, logged or stored.
-export function envFingerprint(env: Record<string, string>): string {
-  return Object.keys(env).sort().map(k => `${k}:${env[k].length}:${hash(env[k])}`).join(',');
-}
-
-// hash is a small non-cryptographic hash (FNV-1a), enough to tell two values apart without keeping either.
-function hash(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(16);
 }

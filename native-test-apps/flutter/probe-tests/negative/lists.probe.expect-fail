@@ -4,7 +4,7 @@
 #   cp probe-tests/negative/lists.probe.expect-fail /tmp/lists-negative.probe
 #   probe test /tmp/lists-negative.probe --device <serial> -y         # (the lists build, the same probe.yaml as for lists.probe)
 #
-# Expected: 0 passed, 9 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 10 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 # Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
 # waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
 
@@ -12,7 +12,7 @@ before each test
   restart the app
   # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
   # with an id (the last button of the screen).
-  wait until #wf_open_tiles appears
+  wait until #wf_open_scrollbar appears
 
 # Expected: see "Row 150": Expected to see "text("Row 150")" but it was not found (the row is not built before the list is scrolled to it)
 test "N1 a far row of a lazy list is not seen before a scroll"
@@ -62,3 +62,10 @@ test "N8 a long press by a name that the state text also holds"
 # Expected: see exactly 2 "Row 0": Expected exactly 2 "text("Row 0")" but found 1 (one Text is one match: with probe_agent 0.27.0 it was counted twice, issue #800)
 test "N9 one Text is not two matches"
   see exactly 2 "Row 0"
+
+# The same mechanism as N1 (a lazy list builds the top rows only): it shows that the page's list is lazy, nothing specific to the Scrollbar.
+# Expected: see "Bar row 90": Expected to see "text("Bar row 90")" but it was not found
+test "N10 a far row of the Scrollbar list seen before a scroll"
+  tap "Open scrollbar list"
+  wait until "Bar row 0" appears
+  see "Bar row 90"

@@ -5,7 +5,7 @@ before each test
   restart the app
   # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
   # with an id (the last button of the screen).
-  wait until #wf_open_tiles appears
+  wait until #wf_open_scrollbar appears
 
 # A lazy list builds the rows near the top only: a far row is not in the widget tree, so `see` does not find it.
 test "a lazy list: the first rows are seen and a far row is not"
@@ -102,3 +102,15 @@ test "tiles: a name that is also in a state text selects the state text"
   see "Long press: none"
   long press #wf_alice
   see "Long press: Alice"
+
+# A Scrollbar around a lazy list (its thumb always shown, one controller for both) is transparent: `scroll` moves the list's ScrollPosition
+# directly, so this passes the same with no Scrollbar. It pins that the page builds and that a Scrollbar does not get in the way; the thumb
+# itself is not a selector target.
+test "a list in a Scrollbar: scroll down to a far row, tap it, scroll back"
+  tap "Open scrollbar list"
+  wait until "Bar row 0" appears
+  don't see "Bar row 90"
+  scroll down until "Bar row 90" appears
+  tap "Bar row 90"
+  see "Tapped bar row: 90"
+  scroll up until "Bar row 0" appears
