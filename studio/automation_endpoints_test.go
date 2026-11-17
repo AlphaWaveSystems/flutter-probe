@@ -166,7 +166,8 @@ func TestEndpointTokenIsComparedWhole(t *testing.T) {
 		"no token after Bearer":   "Bearer ",
 		"another scheme":          "Basic " + good,
 		"a lower-case scheme":     "bearer " + good,
-		"nothing":                 "",
+		"nothing":                 "", "the bare token (no scheme)": good,
+		"the token with another scheme word": "Token " + good,
 	} {
 		hdr := map[string]string{}
 		if auth != "" {
@@ -200,7 +201,7 @@ func TestEndpointRefusesAnyOriginHeader(t *testing.T) {
 	}
 }
 
-// The body is read up to 1 MiB: a larger one is cut and then is not the JSON it was meant to be, so it is refused (400) and nothing is reached.
+// The body is read up to 1 MiB: a larger one is refused as too large (413) and nothing is reached, whatever the bytes after the limit are.
 func TestEndpointBodyIsLimitedToOneMebibyte(t *testing.T) {
 	s, fb, _ := startTest(t)
 	fb.connected = "dev-1"
@@ -208,11 +209,19 @@ func TestEndpointBodyIsLimitedToOneMebibyte(t *testing.T) {
 	// a valid request whose last bytes are beyond the limit: padding inside a JSON string, so only the cut makes it invalid
 	pad := strings.Repeat("x", (1<<20)+1000)
 	code, body := rpcRaw(t, s, `{"method":"disconnect","params":{"pad":"`+pad+`"}}`, auth)
-	if code != http.StatusBadRequest {
-		t.Errorf("a body over 1 MiB: %d %s, want 400", code, body)
+	if code != http.StatusRequestEntityTooLarge {
+		t.Errorf("a body over 1 MiB: %d %s, want 413", code, body)
 	}
 	if fb.connected != "dev-1" {
 		t.Error("a body over the limit reached the backend")
+	}
+	// a valid request followed by whitespace past the limit used to be served (the reader cut the whitespace): now the size is what is refused
+	ws := strings.Repeat(" ", (1<<20)+1000)
+	if code, body := rpcRaw(t, s, `{"method":"disconnect"}`+ws, auth); code != http.StatusRequestEntityTooLarge {
+		t.Errorf("a valid request with whitespace past the limit: %d %s, want 413", code, body)
+	}
+	if fb.connected != "dev-1" {
+		t.Error("a valid request with a body over the limit reached the backend")
 	}
 	// a body under the limit with the same shape is served
 	small := strings.Repeat("x", 100000)
