@@ -26,7 +26,7 @@ func (a *App) keepForExport(conn *connection, results []runner.TestResult, stopp
 	if a.afterExportCheck != nil {
 		a.afterExportCheck()
 	}
-	meta := runner.RunMetadata{DeviceName: conn.deviceName, DeviceID: conn.deviceID, Platform: string(conn.platform), ProbeVersion: Version}
+	meta := runner.RunMetadata{DeviceName: conn.deviceName, DeviceID: conn.deviceID, Platform: conn.platformName(), ProbeVersion: Version}
 	if conn.cfg != nil {
 		meta.AppID = conn.cfg.Project.App
 	}
