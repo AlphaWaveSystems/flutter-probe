@@ -112,9 +112,9 @@ func TestWaitAtOrAboveTheLimitFailsAtOnce(t *testing.T) {
 	}
 }
 
-// A wait below the limit waits, as it always did.
+// A wait below the limit waits, as it always did. The step timeout is far above the wait (see waitStepTimeout).
 func TestWaitBelowTheLimitStillWaits(t *testing.T) {
-	exec := NewExecutor(nil, nil, nil, time.Second, false)
+	exec := NewExecutor(nil, nil, nil, waitStepTimeout, false)
 	exec.testLimit = 2 * time.Second
 	_, w := parseOneTest(t, "test \"t\"\n  wait 1 seconds\n")
 
@@ -143,9 +143,13 @@ func TestWaitAtTheLimitThroughARunIsAPlainFailure(t *testing.T) {
 	}
 }
 
-// Without a limit a wait of any length is a wait, as before.
+// waitStepTimeout is the step timeout of the tests whose 1 second wait must run to its end. The step timeout is the step's own deadline, not
+// the test limit these tests are about; a step timeout equal to the wait made the wait race it under load.
+const waitStepTimeout = 30 * time.Second
+
+// Without a limit a wait of any length is a wait, as before. The step timeout is far above the wait (see waitStepTimeout).
 func TestWaitRuleIsOffWithoutALimit(t *testing.T) {
-	exec := NewExecutor(nil, nil, nil, time.Second, false)
+	exec := NewExecutor(nil, nil, nil, waitStepTimeout, false)
 	_, w := parseOneTest(t, "test \"t\"\n  wait 1 seconds\n")
 	if err := exec.RunBody(context.Background(), w.Body); err != nil {
 		t.Errorf("without a limit the wait must run: %v", err)

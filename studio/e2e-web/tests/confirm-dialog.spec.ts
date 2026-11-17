@@ -62,8 +62,8 @@ test.describe("Confirm before clear app data", () => {
     await expect(page.locator("#confirm-warning")).toContainText("cannot be undone");
     await expect(page.locator("#btn-confirm-cancel")).toBeFocused();
     await expect(page.locator("#btn-confirm-danger")).toHaveText("Clear data");
-    await expect(page.locator(".confirm-card")).toHaveAttribute("role", "alertdialog");
-    await expect(page.locator(".confirm-card")).toHaveAttribute("aria-modal", "true");
+    await expect(page.locator("#confirm-overlay .confirm-card")).toHaveAttribute("role", "alertdialog");
+    await expect(page.locator("#confirm-overlay .confirm-card")).toHaveAttribute("aria-modal", "true");
   });
 
   test("cd-02 Escape and Cancel say no; nothing says yes by itself", async ({ page }) => {
@@ -123,7 +123,7 @@ test.describe("Confirm before clear app data", () => {
     const seen = answers(page);
     await fire(page, "confirm:request", request("f", "<img src=x onerror=alert(1)>", "<b>dev</b>"));
     await expect(page.locator("#confirm-app")).toHaveText("<img src=x onerror=alert(1)>");
-    expect(await page.locator(".confirm-card img, .confirm-card b").count()).toBe(0);
+    expect(await page.locator("#confirm-overlay .confirm-card img, #confirm-overlay .confirm-card b").count()).toBe(0);
     await page.keyboard.press("Escape");
     await fire(page, "confirm:request", { id: "g", kind: "format-disk", appId: "a", deviceName: "d" });
     await expect(overlay(page)).toBeHidden();
@@ -241,5 +241,28 @@ test.describe("Confirm before clear app data", () => {
     await page.locator("#btn-confirm-danger").click();
     await expect.poll(() => seen.length).toBe(1);
     expect(seen[0]).toEqual(["t2", true]);
+  });
+
+  test("cd-13 while the question is open, the page behind it cannot be clicked: the Connect button is covered and a click on it is not an answer", async ({ page }) => {
+    const seen = answers(page);
+    await fire(page, "confirm:request", request("m"));
+    await expect(overlay(page)).toBeVisible();
+    // what is at the middle of the button is the dialog's overlay, not the button
+    const covered = await page.evaluate(() => {
+      const b = document.getElementById("btn-connect") as HTMLElement;
+      const r = b.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!top && document.getElementById("confirm-overlay")!.contains(top) && top !== b;
+    });
+    expect(covered).toBe(true);
+    const box = await page.locator("#btn-connect").boundingBox();
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.waitForTimeout(300);
+    await expect(overlay(page)).toBeVisible();
+    expect(seen).toEqual([]);
+    // the way out is the dialog's own: Escape says no
+    await page.keyboard.press("Escape");
+    await expect.poll(() => seen.length).toBe(1);
+    expect(seen[0]).toEqual(["m", false]);
   });
 });

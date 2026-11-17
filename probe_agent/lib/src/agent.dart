@@ -107,8 +107,8 @@ class ProbeAgent {
 
     // Record the size each frame is laid out at, so a request waits for a frame laid out at the view's real size (issue #793). The agent
     // never makes the binding: the app may install its own after start() (its own binding class, an error-reporting package's, an
-    // integration test's). attach only takes effect when a binding exists; else the executor attaches on its first request.
-    ViewReady.instance.attach();
+    // integration test's). It attaches only under the app's binding (not a test binding); else the executor attaches on its first request.
+    ViewReady.instance.attachToAppBinding();
 
     const relayUrl = String.fromEnvironment('PROBE_RELAY_URL', defaultValue: '');
     const relayToken = String.fromEnvironment('PROBE_RELAY_TOKEN', defaultValue: '');

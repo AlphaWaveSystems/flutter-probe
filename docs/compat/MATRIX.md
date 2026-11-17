@@ -9,12 +9,12 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 
 | Family | Examples | find | tap | type | scroll | read | fixture | device test |
 |---|---|---|---|---|---|---|---|---|
-| Text and display | `Text`, `RichText`, `Icon`, `Image` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Text and display | `Text`, `RichText`, `Icon`, `Image` | see below (`Text`, `RichText` only) | not assessed | n/a | not assessed | see below | `display` screen | `probe-tests/widgets/display.probe` |
 | Buttons | `ElevatedButton`, `TextButton`, `IconButton`, `CupertinoButton` | see below | see below | n/a | not assessed | see below | `buttons` screen | `probe-tests/widgets/buttons.probe` |
 | Text input | `TextField`, `TextFormField`, `CupertinoTextField` | see below | see below | see below | not assessed | see below | `textinput` screen | `probe-tests/widgets/textinput.probe` |
 | Selection controls | `Checkbox`, `Switch`, `Radio`, `Slider`, `CupertinoSwitch` | see below | see below | n/a | not assessed | see below | `selection` screen | `probe-tests/widgets/selection.probe` |
 | Pickers and menus | `DropdownButton`, `PopupMenuButton`, `DatePickerDialog`, `CupertinoPicker` | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
-| Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `PageView` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
+| Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `PageView` | see below (`PageView` not assessed) | see below | n/a | see below | see below | `lists` screen | `probe-tests/widgets/lists.probe` |
 | Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | not assessed | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
 | Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
@@ -96,6 +96,45 @@ Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulat
 - **During a pop, the leaving route is still matched.** Right after `go back`, `wait until "Inbox" appears` passes at once while the message route is still on screen in Material's page transition, and `don't see "From: Ada"` then finds it. Measured on both devices with those steps alone, 5 runs each: `Compat-Pixel-API35` 4 of 5 runs, `Compat-iPhone` 5 of 5. A test that checks a pop waits for the leaving route to go: `wait until "From: Ada" disappears`.
 
 Not covered by the screen: `NavigationBar`, `TabBar`, `Drawer`, a route that is not opaque (a dialog, a popup menu, a bottom sheet: the page under it stays matched by design; item 8 of `NEXT.md`), named routes and `go_router`, the Android system back key and the iOS edge swipe (`go back` pops in the app, it does not press either), a nested `Navigator`, and Cupertino routes (item 10 of `NEXT.md`). Flutter 3.50.0 was not run for this family.
+### Text and display: text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
+
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 9 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 9 of 9 on each, each with the message its comment states.
+
+| Widget (fixture id) | find | read | Result |
+|---|---|---|---|
+| `Text` (`wf_text`, `Order total: 42.00`) | pass (the whole text, a part of it, `#wf_text`) | pass (`see "Order total" contains "42.00"`; a value the text does not hold fails with the text it has) | pass |
+| `Text.rich` of two spans, `Hello ` and a bold `world` (`wf_rich`) | pass (`"Hello world"`: the spans are matched as one text; `"Hello"` and `"world"` as parts of it; `#wf_rich`) | pass (`see "Hello world" contains "world"`; the text read is the whole `Hello world`, as a failing `contains "earth"` shows) | pass |
+| `RichText` of two spans, `Painted ` and `rich text` (`wf_richtext`) | pass (`"Painted rich text"`, `"rich text"`, `#wf_richtext`) | pass (`see "Painted rich text" contains "rich text"`; `contains "plain text"` fails) | pass |
+| `Text` with `maxLines: 1` and `TextOverflow.ellipsis`, chosen longer than the screen is wide (an inference from its length; the agent does not report the painted width) (`wf_ellipsis`) | **the whole string is matched, the part that is not painted included** (`see "...United States of America"` passes; the painted, cut form with `…` does not); `#wf_ellipsis` | pass (`see "Shipping address" contains "United States of America"`: the text read is the whole string; `contains "Canada"` fails) | pass, with the finding below |
+
+**Findings.**
+- **A text selector matches the text the app gave the widget, not what is painted.** A `Text` cut with an ellipsis is found by its whole string, including the part a user cannot see, and not by the cut form shown on screen. A test that must show that a text is fully visible cannot rely on `see`.
+- **A text selector matches the whole text or any part of it, exactly:** case counts (`"hello world"` fails) and spaces count (`"Hello  world"` fails); the spans of a `Text.rich` or a `RichText` are matched as one text, joined as written.
+- **Right after `restart the app`, the screen can still be being built** (issue #793): on `Compat-Pixel-API35`, without a wait 3 of 10 runs failed, with a wait for the first item 1 of 10, and with a wait for the screen's last widget 10 of 10 passed. The suite waits for the last widget after the restart.
+
+Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` inside other widgets (buttons are their own family), text scale and `textScaler`, right-to-left and other scripts, a `Text` with `semanticsLabel` (item 3 asks how a semantic label is matched), soft wrapping without `maxLines`, and `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` (item 3). Flutter 3.50.0 was not run for this family.
+
+### Lists and scrolling (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=lists`, `probe-tests/widgets/lists.probe`)
+
+| Widget (fixture id) | find | tap | scroll | read | Result |
+|---|---|---|---|---|---|
+| `ListView.builder`, 200 rows (`wf_list`, rows `wf_row_N`) | pass (text; a row that is not built is absent) | pass (`tap "Row 150"` after a scroll; `tap` alone on an unbuilt row fails with "Widget not found") | pass (`scroll down until "Row 150" appears`, then `scroll up until "Row 0" appears`) | pass (state text `Tapped row: N`) | pass |
+| `GridView.count`, 60 cells (`wf_grid`, cells `wf_cell_N`) | pass (an unbuilt cell is absent) | pass | pass (`Cell 55`, and back to `Cell 0`) | pass (`Tapped cell: N`) | pass |
+| `CustomScrollView` with a `SliverList`, 200 items (`wf_sliver`, items `wf_item_N`) | pass (an unbuilt item is absent) | pass | pass (`Item 150`, and back to the header) | pass (`Tapped item: N`) | pass |
+| `SingleChildScrollView`, 40 lines and a button (`wf_scrollview`, `wf_bottom`) | pass (the button) | pass (`tap "Bottom button"` scrolls it into view by itself: every child is built) | pass (`scroll down until "Bottom button" appears`) | pass (`Tapped bottom: yes`) | pass (`see` does not find a line below the fold, though it is built) |
+| `Card` holding a `ListTile` with a title, a subtitle and a trailing icon (`wf_alice`, `wf_bob`) | pass (title and subtitle text) | pass (`tap` by the title; `long press #wf_alice`; `tap "Away" below "Bob"`) | n/a | pass (`Tapped: N`, `Long press: N`) | pass, with the findings below |
+| `CupertinoListTile` in a `CupertinoListSection` (`wf_carol`) | pass (title and subtitle text) | pass | n/a | pass | pass |
+
+**Findings.**
+- **A lazy list, grid or sliver list builds the rows near the top only, and `see` does not find the others.** `see "Row 150"` fails before a scroll, and so does `tap "Row 150"` ("Widget not found", with the texts that are on screen). `scroll down until "Row 150" appears` builds it and the next `tap` works; `scroll up until "Row 0" appears` comes back. The same holds for the grid and the sliver list.
+- **`scroll down until` a target that does not exist ends with a failure, it does not run on:** `scroll down until text("Row 999"): not found after scrolling` and the texts that are on screen, after about 3 seconds on a 200-row list.
+- **A `SingleChildScrollView` builds every child, so `tap "Bottom button"` finds and scrolls to a button far below with no scroll step.** `scroll down until "Bottom button" appears` also works. `see` is stricter than `tap`: `see "Line 39"` and `see "Bottom button"` fail before a scroll, because a widget that is built but below the fold is not on screen.
+- **A text selector takes the first widget whose text contains it, so a name that is also in a state text selects the state text.** After `tap "Alice"` the screen shows `Tapped: Alice`, and `long press "Alice"` lands on that text and not on the tile (`Long press: none`). The tile has to be named by id (`long press #wf_alice`), or the state text must not contain the name. The suite pins both.
+- **A tile's title is not a container of its tile.** `see "Online" in "Alice"` fails (`positional("Online")` not found): `in "Alice"` looks inside the `Alice` text. `"Online" below "Alice"` works and so does `tap "Online" below "Alice"`; `see "Online" above "Alice"` fails, as it should. `in #wf_alice` is not accepted: the line is read as a call of a recipe named `#wf_alice`.
+- **`see exactly 1 "Row 0"` fails with "found 2"** with `probe_agent` 0.27.0: `see exactly` reported 2 for a single visible `Text` (a row title, a state text, a button label: measured on all three) on Flutter 3.44.8 and 3.50.0, and `see exactly 2 "Row 0"` passed. The cause was the agent counting a `Text` and the `RichText` it builds (issue #800); it is fixed in the next `probe_agent` release, where one `Text` is 1. The negative variant N9 pins the 0.27.0 behaviour and changes with that release.
+
+Not covered by the screen: `PageView` (a swipe), `Scrollbar`, a horizontal list, two scrollables on one screen (which one `scroll` moves), `ListView.separated`, pull to refresh, a list inside a dialog or a sheet, a list under an open keyboard, scroll by an amount, and the iOS behavior of any of this. The 9 variants of the suite that must fail
+(`probe-tests/negative/lists.probe.expect-fail`) were run: all 9 fail at their own step with the message in their comment (a far row seen or tapped before a scroll, a scroll to a row that does not exist, a wrong tapped row, a far grid cell, a subtitle above its title, a subtitle `in` its title, a long press by a name that the state text also holds, and `see exactly 1`).
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 
@@ -128,6 +167,9 @@ accessibility services, other screen sizes or text scales.
 
 **Buttons** were run on a build by each Flutter (`--dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=buttons`; the 3.50.0 build in a scratch copy with a private SDK) on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `buttons.probe` 7 of 7 and the negative file 0 passed, 8 failed, on each.
 Not run: a physical device, another API level, TalkBack or other accessibility services, other screen sizes or text scales.
+
+**Lists and scrolling** were run on a build by each Flutter (`--dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=lists`; the 3.50.0 build in a scratch copy with a private SDK) on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `lists.probe` 10 of 10 on each build and the negative file 0 passed, 9 failed, on each; after the test of a line below the fold was added (and main merged), 11 of 11 and 0 of 9 again on the 3.44.8 build.
+In some earlier runs of small test files, the first test failed in `before each test` with "restart the app: reconnect with pre-shared token: agent not reachable within 20s" and the other tests of the file passed; it did not happen in the full-suite runs above. It is under investigation (a follow-up of issue #793). Not run: a physical device, another API level, iOS, TalkBack or other accessibility services, other screen sizes or text scales.
 
 **WebView content** was run separately: Flutter 3.44.8 and 3.50.0, each building `native-test-apps/flutter-webview` with `--dart-define=PROBE_AGENT=true`, `webview_flutter` and `webview_flutter_android` 4.14.1 (pinned; see
 `RELEASES.md`), on emulator-5600 (AVD `ProbeWebViewSpike`, Android 15, API 35): `webview.probe` 5 of 5 on each build (6 of 6 after the result-text test was added, run on the 3.44.8 build), and the negative file 0 passed, 9 failed. The 3.50.0 build was made in a scratch copy with a private SDK; its `pubspec.lock` differs from the committed one only in

@@ -13,6 +13,8 @@ const widgetFamilies = <String>[
   'textinput',
   'buttons',
   'navigation',
+  'display',
+  'lists',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -21,6 +23,8 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'textinput' => const TextInputFamilyScreen(),
   'buttons' => const ButtonsFamilyScreen(),
   'navigation' => const NavigationFamilyScreen(),
+  'display' => const DisplayFamilyScreen(),
+  'lists' => const ListsFamilyScreen(),
   _ => null,
 };
 
@@ -433,6 +437,362 @@ class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Text and display, the text part (docs/compat/NEXT.md, item 1): a plain `Text`, a one-line `Text` that is cut with an ellipsis, a
+/// `Text.rich` of two spans ("Hello " and a bold "world") and a `RichText` of two spans ("Painted " and "rich text"). Nothing is tapped;
+/// the screen asks what `see` matches.
+class DisplayFamilyScreen extends StatelessWidget {
+  const DisplayFamilyScreen({super.key});
+
+  /// The text of the ellipsis line: chosen to be longer than a phone screen is wide, so it is painted cut (an inference from its length on
+  /// the two devices used; the agent does not report the painted width).
+  static const longLine =
+      'Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Display')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _s('wf_text', (k) => Text('Order total: 42.00', key: k)),
+          _s(
+            'wf_ellipsis',
+            (k) => Text(
+              longLine,
+              key: k,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _s(
+            'wf_rich',
+            (k) => Text.rich(
+              key: k,
+              const TextSpan(
+                text: 'Hello ',
+                children: [
+                  TextSpan(
+                    text: 'world',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _s(
+            'wf_richtext',
+            (k) => RichText(
+              key: k,
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                text: 'Painted ',
+                children: const [TextSpan(text: 'rich text')],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lists and scrolling (docs/compat/NEXT.md, items 4 and 5). The first screen is a `ListView.builder` of 200 rows ("Row 0" to "Row 199"), so
+/// a far row is not built until the list is scrolled to it, with four buttons that push a page each: a `GridView.count` of 60 cells, a
+/// `CustomScrollView` with a `SliverList` of 200 items, a `SingleChildScrollView` of 40 lines (not lazy: every line is built), and tiles
+/// (`Card`s holding `ListTile`s, and a `CupertinoListTile`). Each page keeps its state text above the scrolling part, so it is on screen after
+/// a scroll. State texts: `Tapped row: N|none`, `Tapped cell: N|none`, `Tapped item: N|none`, `Tapped bottom: yes|no`, `Tapped: none|Alice|Bob|Carol`,
+/// `Long press: none|Alice|Bob`.
+class ListsFamilyScreen extends StatefulWidget {
+  const ListsFamilyScreen({super.key});
+
+  @override
+  State<ListsFamilyScreen> createState() => _ListsFamilyScreenState();
+}
+
+class _ListsFamilyScreenState extends State<ListsFamilyScreen> {
+  String _row = 'none';
+
+  void _open(String title, Widget body) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: body,
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Lists')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _state('wf_list_state', 'Tapped row: $_row'),
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              _s(
+                'wf_open_grid',
+                (k) => TextButton(
+                  key: k,
+                  onPressed: () => _open('Grid', const _GridPage()),
+                  child: const Text('Open grid'),
+                ),
+              ),
+              _s(
+                'wf_open_sliver',
+                (k) => TextButton(
+                  key: k,
+                  onPressed: () => _open('Sliver list', const _SliverPage()),
+                  child: const Text('Open sliver list'),
+                ),
+              ),
+              _s(
+                'wf_open_scrollview',
+                (k) => TextButton(
+                  key: k,
+                  onPressed: () =>
+                      _open('Scroll view', const _ScrollViewPage()),
+                  child: const Text('Open scroll view'),
+                ),
+              ),
+              _s(
+                'wf_open_tiles',
+                (k) => TextButton(
+                  key: k,
+                  onPressed: () => _open('Tiles', const _TilesPage()),
+                  child: const Text('Open tiles'),
+                ),
+              ),
+            ],
+          ),
+          Expanded(
+            child: _s(
+              'wf_list',
+              (k) => ListView.builder(
+                key: k,
+                itemCount: 200,
+                itemBuilder: (context, i) => _s(
+                  'wf_row_$i',
+                  (rk) => ListTile(
+                    key: rk,
+                    title: Text('Row $i'),
+                    onTap: () => setState(() => _row = '$i'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GridPage extends StatefulWidget {
+  const _GridPage();
+
+  @override
+  State<_GridPage> createState() => _GridPageState();
+}
+
+class _GridPageState extends State<_GridPage> {
+  String _cell = 'none';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _state('wf_grid_state', 'Tapped cell: $_cell'),
+        Expanded(
+          child: _s(
+            'wf_grid',
+            (k) => GridView.count(
+              key: k,
+              crossAxisCount: 3,
+              children: [
+                for (var i = 0; i < 60; i++)
+                  _s(
+                    'wf_cell_$i',
+                    (ck) => InkWell(
+                      key: ck,
+                      onTap: () => setState(() => _cell = '$i'),
+                      child: Center(child: Text('Cell $i')),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SliverPage extends StatefulWidget {
+  const _SliverPage();
+
+  @override
+  State<_SliverPage> createState() => _SliverPageState();
+}
+
+class _SliverPageState extends State<_SliverPage> {
+  String _item = 'none';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _state('wf_sliver_state', 'Tapped item: $_item'),
+        Expanded(
+          child: _s(
+            'wf_sliver',
+            (k) => CustomScrollView(
+              key: k,
+              slivers: [
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('Sliver header'),
+                  ),
+                ),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => _s(
+                      'wf_item_$i',
+                      (ik) => ListTile(
+                        key: ik,
+                        title: Text('Item $i'),
+                        onTap: () => setState(() => _item = '$i'),
+                      ),
+                    ),
+                    childCount: 200,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScrollViewPage extends StatefulWidget {
+  const _ScrollViewPage();
+
+  @override
+  State<_ScrollViewPage> createState() => _ScrollViewPageState();
+}
+
+class _ScrollViewPageState extends State<_ScrollViewPage> {
+  bool _bottom = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _state(
+          'wf_scrollview_state',
+          'Tapped bottom: ${_bottom ? 'yes' : 'no'}',
+        ),
+        Expanded(
+          child: _s(
+            'wf_scrollview',
+            (k) => SingleChildScrollView(
+              key: k,
+              child: Column(
+                children: [
+                  for (var i = 0; i < 40; i++)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text('Line $i'),
+                    ),
+                  _s(
+                    'wf_bottom',
+                    (bk) => ElevatedButton(
+                      key: bk,
+                      onPressed: () => setState(() => _bottom = true),
+                      child: const Text('Bottom button'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TilesPage extends StatefulWidget {
+  const _TilesPage();
+
+  @override
+  State<_TilesPage> createState() => _TilesPageState();
+}
+
+class _TilesPageState extends State<_TilesPage> {
+  String _tapped = 'none';
+  String _long = 'none';
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        _state('wf_tiles_tapped', 'Tapped: $_tapped'),
+        _state('wf_tiles_long', 'Long press: $_long'),
+        Card(
+          child: _s(
+            'wf_alice',
+            (k) => ListTile(
+              key: k,
+              title: const Text('Alice'),
+              subtitle: const Text('Online'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => setState(() => _tapped = 'Alice'),
+              onLongPress: () => setState(() => _long = 'Alice'),
+            ),
+          ),
+        ),
+        Card(
+          child: _s(
+            'wf_bob',
+            (k) => ListTile(
+              key: k,
+              title: const Text('Bob'),
+              subtitle: const Text('Away'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => setState(() => _tapped = 'Bob'),
+              onLongPress: () => setState(() => _long = 'Bob'),
+            ),
+          ),
+        ),
+        CupertinoListSection.insetGrouped(
+          children: [
+            _s(
+              'wf_carol',
+              (k) => CupertinoListTile(
+                key: k,
+                title: const Text('Carol'),
+                subtitle: const Text('Busy'),
+                trailing: const Icon(CupertinoIcons.chevron_right),
+                onTap: () => setState(() => _tapped = 'Carol'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
