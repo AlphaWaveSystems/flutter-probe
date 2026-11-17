@@ -790,7 +790,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if err != nil {
 					return fmt.Errorf("cloud upload: %w", err)
 				}
-				statusOK(statusW, "App uploaded: %s", appID)
+				statusOK(statusW, "App uploaded: %s", device.CleanOneLine(appID, 80)) // the id the provider returned
 
 				// Start cloud session (app launches on device)
 				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
@@ -860,7 +860,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if err != nil {
 					return fmt.Errorf("cloud upload: %w", err)
 				}
-				statusOK(statusW, "App uploaded: %s", appID)
+				statusOK(statusW, "App uploaded: %s", device.CleanOneLine(appID, 80)) // the id the provider returned
 
 				// Step 2: Start session
 				statusInfo(statusW, "Starting cloud session on %s (%s)...", targetDevice, provider.Name())
@@ -911,7 +911,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				if warning != "" {
 					printAgentWarning(statusW, warning)
 				}
-				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", targetDevice, provider.Name())
+				statusOK(statusW, "Connected to ProbeAgent on %s (%s)", device.CleanOneLine(targetDevice, 80), provider.Name())
 			}
 
 			// Use cloud device info as the "serial" for reporting
@@ -1101,7 +1101,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 			} else {
 				// Android: verify ADB is available and device is reachable,
 				// clean up stale port forwards
-				trace("android: ensuring adb + device %s reachable", deviceSerial)
+				trace("android: ensuring adb + device %s reachable", device.CleanOneLine(deviceSerial, 80))
 				if err := dm.EnsureADB(ctx, deviceSerial, cfg.Agent.Port); err != nil {
 					trace("android: EnsureADB failed: %v", err)
 					return fmt.Errorf("android setup: %w", err)
@@ -1201,7 +1201,7 @@ func runTests(cmd *cobra.Command, args []string) (retErr error) {
 				printAgentWarning(statusW, warning)
 			}
 			printAppIDWarning(statusW, handshake, cfg.Project.App, platform)
-			statusOK(statusW, "Connected to ProbeAgent on %s", deviceSerial)
+			statusOK(statusW, "Connected to ProbeAgent on %s", device.CleanOneLine(deviceSerial, 80)) // an auto-picked id is the device's own
 		}
 	}
 	_ = cloudSession // used by deferred StopSession above

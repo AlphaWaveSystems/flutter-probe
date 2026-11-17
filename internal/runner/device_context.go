@@ -502,17 +502,17 @@ func (dc *DeviceContext) validateIOSDataPath(dataPath string) error {
 
 	// Must be an absolute path
 	if !strings.HasPrefix(dataPath, "/") {
-		return fmt.Errorf("invalid data path (not absolute): %s", dataPath)
+		return fmt.Errorf("invalid data path (not absolute): %q", dataPath)
 	}
 
 	// Must contain CoreSimulator/Devices to be a legitimate simulator container
 	if !strings.Contains(dataPath, "CoreSimulator/Devices") {
-		return fmt.Errorf("data path does not look like a simulator container: %s", dataPath)
+		return fmt.Errorf("data path does not look like a simulator container: %q", dataPath)
 	}
 
 	// Must contain the simulator UDID
 	if !strings.Contains(dataPath, dc.Serial) {
-		return fmt.Errorf("data path does not belong to device %s: %s", dc.serialShown(), dataPath)
+		return fmt.Errorf("data path does not belong to device %s: %q", dc.serialShown(), dataPath)
 	}
 
 	// Must not be a root-level path (defense in depth)
