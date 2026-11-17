@@ -1,5 +1,6 @@
 import { expect, Page, test } from "@playwright/test";
 import { ChildProcess, spawn } from "node:child_process";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
@@ -22,7 +23,8 @@ async function freePort(): Promise<number> {
   });
 }
 
-async function startStudio(workspaceDir: string): Promise<{ url: string; stop: () => void }> {
+async function startStudio(workspaceDir: string): Promise<{ url: string; token: string; stop: () => void }> {
+  const token = crypto.randomBytes(32).toString("hex"); // this server's own token: the page is given it as a header, never by Studio
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "studio-first-run-"));
   const port = await freePort();
   const child: ChildProcess = spawn(bin, [], {
@@ -31,6 +33,7 @@ async function startStudio(workspaceDir: string): Promise<{ url: string; stop: (
       HOME: home,
       PROBE_STUDIO_HEADLESS: "1",
       PROBE_STUDIO_HEADLESS_PORT: String(port),
+      PROBE_STUDIO_HEADLESS_TOKEN: token,
       PROBE_STUDIO_WORKSPACE: workspaceDir,
       PROBE_STUDIO_KEYCHAIN: "memory",
       PROBE_STUDIO_SEED_RUN: "",
@@ -48,7 +51,7 @@ async function startStudio(workspaceDir: string): Promise<{ url: string; stop: (
     }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  return { url, stop: () => child.kill() };
+  return { url, token, stop: () => child.kill() };
 }
 
 const strip = (page: Page) => page.locator("#next-step");
@@ -73,6 +76,7 @@ test.describe("First-run guidance", () => {
   test("fr-01 with no workspace: the next step, a button for it, and a reason on every disabled button", async ({ page }) => {
     const studio = await startStudio("");
     try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       await expect(page.locator("#topbar")).toBeVisible();
       await expect(strip(page)).toContainText("Open your project folder");
@@ -97,6 +101,7 @@ test.describe("First-run guidance", () => {
         const m = /"method":"(\w+)"/.exec(r.postData() ?? "");
         if (m) calls.push(m[1]);
       });
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       const hint = page.locator("#btn-workspace-hint");
       await expect(hint).toBeVisible();
@@ -129,6 +134,7 @@ test.describe("First-run guidance", () => {
           if (step && !step.hidden && step.textContent) (window as any).__said.push("strip:" + step.textContent);
         }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
       });
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       await expect(page.locator("#topbar")).toBeVisible();
       await page.waitForTimeout(800); // long enough for a flash
@@ -149,6 +155,7 @@ test.describe("First-run guidance", () => {
     fs.writeFileSync(path.join(ws, "a.probe"), 'test "a"\n  see "x"\n');
     const studio = await startStudio(ws);
     try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       await expect(page.locator("#file-list li", { hasText: "a.probe" })).toBeVisible();
       await expect(page.locator("#file-list .pane-empty")).toHaveCount(0);
@@ -181,6 +188,7 @@ test.describe("First-run guidance", () => {
     try {
       // the window remembers the last workspace; the folder has since gone
       await page.addInitScript((p) => localStorage.setItem("fp.studio.workspace", p), gone);
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       await expect(page.locator("#file-list .pane-empty")).toContainText(/cannot be read|No \.probe files/);
       await expect(strip(page)).not.toContainText("Open a .probe file from the Workspace pane");
@@ -209,6 +217,7 @@ test.describe("First-run guidance", () => {
     fs.writeFileSync(path.join(ws, "x.probe"), 'test "a"\n  see "x"\n');
     const studio = await startStudio(ws);
     try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
       await page.goto(studio.url);
       await expect(page.locator("#next-step")).toContainText("Open a .probe file");
       expect(await page.locator("#next-step").evaluate((el) => el.children.length)).toBe(0); // text only, no element inside

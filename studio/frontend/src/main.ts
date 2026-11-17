@@ -13,6 +13,7 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { askDiscard, initDiscardDialog } from "./discard-dialog";
 import { progressText, signalNote, waitingLine } from "./still-waiting";
 import { deviceHasNoSignal } from "./device-stream";
 import { LintSession, toMarkers, type Problem } from "./lint-problems";
@@ -373,7 +374,7 @@ async function onFileClick(path: string, isDir: boolean) {
 // outside the workspace, with a .. segment, through a link out of it, and a file that is not there) and changes nothing until that has
 // worked. It returns whether the file is open now.
 async function openProbeFile(path: string): Promise<boolean> {
-  if (dirty && !confirm("Discard unsaved changes?")) return false;
+  if (dirty && !(await askDiscard())) return false;
   try {
     const content = await ReadFile(path);
     model.setValue(content);
@@ -553,6 +554,9 @@ async function openSettingsOverlay() {
     ($("settings-retry") as HTMLInputElement).value = s.retryFailedTests ? String(s.retryFailedTests) : "";
     ($("settings-implicit-wait") as HTMLInputElement).value = s.implicitWait ?? "";
     ($("settings-ios") as HTMLInputElement).value = s.iosDeviceId ?? "";
+    const iosProblem = $("settings-ios-problem");
+    iosProblem.textContent = s.iosDeviceIdProblem ?? ""; // text, never markup: it quotes the value from probe.yaml
+    iosProblem.hidden = !s.iosDeviceIdProblem;
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
     ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
     ($("settings-ai-widget-tree") as HTMLInputElement).checked = s.aiContextWidgetTree === true;
@@ -1410,7 +1414,7 @@ async function selectWiFiDevice(dev: WiFiDevice) {
   if (wifiSelected !== dev) return;
   $("wifi-selected-label").textContent =
     `Connecting to ${dev.name} (${dev.host}:${dev.port})` +
-    (saved ? " · a saved token is used if the field is blank" : "");
+    (saved ? " · a saved token is used if the field is blank (you are asked first if this address is not the one it was saved for)" : "");
   input.focus();
 }
 
@@ -1867,6 +1871,7 @@ if (inspectorSearch) {
 initResults();
 initNetworkPanel();
 initConfirmDialog();
+initDiscardDialog();
 // Save as step puts lines under the cursor of the open file, inside the test the cursor is in, at the indent of its steps (send-insert.ts).
 // Nothing is inserted when no file is open, when the editor is read-only, when the cursor is not inside a test, when the lines would add a
 // parse error, or when the file changed while that was being checked. The file is written by the editor's own save, not here.

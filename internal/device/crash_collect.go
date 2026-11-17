@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
@@ -507,13 +507,7 @@ func cleanDeviceText(s string) string {
 }
 
 // cutRunes keeps at most n runes, and marks a cut with an ellipsis (counted in n).
-func cutRunes(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:n-1]) + "…"
-}
+func cutRunes(s string, n int) string { return oneline.Cut(s, n) }
 
 // capBytes keeps at most n bytes, without cutting a character in half.
 func capBytes(s string, n int) string {
@@ -530,21 +524,4 @@ func capBytes(s string, n int) string {
 // CleanOneLine returns s as one line that is safe to print to a terminal or put in a report: every control character (escape, carriage return, new line, tab,
 // NUL), line and paragraph separator and every hidden character (hiddenRune) becomes a space, runs of whitespace collapse to one space, the ends are trimmed, and
 // at most maxRunes runes are kept (a cut is marked with an ellipsis). Visible text is unchanged.
-func CleanOneLine(s string, maxRunes int) string {
-	var b strings.Builder
-	space := true // so leading spaces are dropped
-	for len(s) > 0 {
-		r, n := utf8.DecodeRuneInString(s)
-		s = s[n:]
-		if hiddenRune(r) || unicode.IsSpace(r) {
-			if !space {
-				b.WriteByte(' ')
-				space = true
-			}
-			continue
-		}
-		b.WriteRune(r)
-		space = false
-	}
-	return cutRunes(strings.TrimRight(b.String(), " "), maxRunes)
-}
+func CleanOneLine(s string, maxRunes int) string { return oneline.Clean(s, maxRunes) }

@@ -4,7 +4,9 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/perf"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,7 +16,9 @@ import (
 	"time"
 
 	"github.com/alphawavesystems/flutter-probe/internal/config"
+	"github.com/alphawavesystems/flutter-probe/internal/confined"
 	"github.com/alphawavesystems/flutter-probe/internal/device"
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/probelink"
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
@@ -892,12 +896,37 @@ func CollectFiles(paths []string) ([]string, error) {
 // PullArtifacts copies on-device screenshot paths to localDir and rewrites
 // TestResult.Artifacts to local paths. For Android, uses `run-as` + cat to read
 // from the app's private cache. For iOS simulators, files are already on the host.
-func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext, localDir string) {
+func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext, localDir string, extraRoots ...string) {
 	if dc == nil || dc.Manager == nil {
 		return
 	}
+	// A host file is copied only from the folders the run writes to (localDir and the folders the caller adds: never a parent of them, which
+	// can be the working or the home folder) or a simulator's data folder, and a video is kept in place only in the run's folders. An
+	// artifact path can come from the agent, so it is never trusted to name another host file: the file is opened once, checked on the open
+	// file and read from it (internal/confined), so a link swapped in after the check is never followed. The roots are checked too
+	// (artifactRoot): a root that is a link, or as wide as a filesystem root, the working folder or the home folder, is not one.
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return
+	}
+	local, checked, ok := checkedArtifactRoot(localDir, true)
+	var out *os.Root
+	if ok {
+		out, ok = openArtifactDir(local, checked)
+	}
+	if !ok {
+		// The folder the copies would go to is a link, too wide, or changed while it was opened: nothing is copied into it, and no path
+		// the agent named is kept.
+		for i := range results {
+			results[i].Artifacts = nil
+		}
+		return
+	}
+	defer out.Close()
+	roots := []string{local}
+	for _, r := range extraRoots {
+		if rr, ok := artifactRoot(r, false); ok {
+			roots = append(roots, rr)
+		}
 	}
 	for i := range results {
 		var localPaths []string
@@ -905,34 +934,44 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 			// Skip video files that are already in the output directory
 			if filepath.IsAbs(remotePath) {
 				if _, err := os.Stat(remotePath); err == nil {
-					ext := filepath.Ext(remotePath)
-					if ext == ".mov" || ext == ".mp4" || ext == ".webm" {
-						localPaths = append(localPaths, remotePath)
+					if isVideo(remotePath) {
+						// Kept as the path it was given (the report shows it as before), once the open file is checked: not a link, a single
+						// name, really in the run's folders. A simulator's data folder is not one: an app controls it.
+						if _, err := confined.Check(remotePath, func(r string) bool { return underAnyRoot(roots, r) }); err == nil {
+							localPaths = append(localPaths, remotePath)
+						}
 						continue
 					}
 				}
 			}
-			// Copy screenshots to the local reports directory
-			localPath := filepath.Join(localDir, filepath.Base(remotePath))
+			// Copy screenshots to the local reports directory: by name only, into the folder opened once (out)
+			name := filepath.Base(remotePath)
+			if name == "." || name == ".." || name == string(filepath.Separator) {
+				continue
+			}
+			localPath := filepath.Join(localDir, name)
 			var pullErr error
+			// Android screenshots arrive as base64 in the RPC reply and are
+			// already saved on the host by the probelink client; such a path is
+			// that host path, not a device path. Re-reading it through
+			// `adb exec-out run-as ... cat` printed "No such file" on stdout
+			// and that text overwrote the good PNG (FP-19). A host path that is
+			// not one the run wrote goes on to the device branch, which reads
+			// only the app's private storage.
+			hostCopied := dc.Platform != device.PlatformIOS && filepath.IsAbs(remotePath) && fileExists(remotePath) &&
+				copyHostArtifact(remotePath, out, local, name, roots) == nil
 			switch {
 			case dc.Platform == device.PlatformIOS:
-				// iOS simulator: file is already on host, just copy it
-				pullErr = copyFileIfDifferent(remotePath, localPath)
-			case filepath.IsAbs(remotePath) && fileExists(remotePath):
-				// Android screenshots arrive as base64 in the RPC reply and are
-				// already saved on the host by the probelink client; this path is
-				// that host path, not a device path. Re-reading it through
-				// `adb exec-out run-as ... cat` printed "No such file" on stdout
-				// and that text overwrote the good PNG (FP-19).
-				pullErr = copyFileIfDifferent(remotePath, localPath)
+				// iOS simulator: the file is already on the host; it is copied only from a folder the run writes to or a simulator's data folder
+				pullErr = copyHostArtifact(remotePath, out, local, name, roots)
+			case hostCopied:
 			default:
 				// Android: screenshots are in the app's private cache dir,
 				// use run-as to read them since adb pull can't access private dirs
 				var data []byte
 				var err error
 				if !appPrivateFile(dc.AppID, remotePath) {
-					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.AppID)
+					err = fmt.Errorf("pulling %q: not a file in the private storage of %s", remotePath, dc.appShown())
 				} else {
 					data, err = dc.Manager.ADB().Run(ctx, dc.Serial,
 						"exec-out", "run-as", shellquote.Arg(dc.AppID), "cat", shellquote.Arg(remotePath))
@@ -946,7 +985,7 @@ func PullArtifacts(ctx context.Context, results []TestResult, dc *DeviceContext,
 					// out as an image.
 					pullErr = fmt.Errorf("pulling %s: not an image (%s)", remotePath, strings.TrimSpace(string(data[:min(len(data), 120)])))
 				default:
-					pullErr = os.WriteFile(localPath, data, 0644)
+					pullErr = writeInDir(out, name, data)
 				}
 			}
 			if pullErr == nil {
@@ -990,28 +1029,199 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// copyFileIfDifferent copies src to dst unless they are the same file (an
-// artifact already saved into the destination directory).
-func copyFileIfDifferent(src, dst string) error {
-	a, errA := filepath.Abs(src)
-	b, errB := filepath.Abs(dst)
-	if errA == nil && errB == nil && a == b {
-		return nil
-	}
-	return copyFile(src, dst)
-}
-
 // looksLikeImage reports whether data starts with a PNG or JPEG signature.
 func looksLikeImage(data []byte) bool {
 	return bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G'}) || bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF})
 }
 
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
+// copyHostArtifact copies the host file p into out (the folder opened once, whose real path is outPath) as name, when p is a regular file
+// with a single name in one of roots or in a simulator's data folder: it is opened once, checked on the open file and read from it
+// (confined.ReadFile), and the bytes are written with writeInDir. When p already is that file (an artifact saved into the destination
+// folder), nothing is written.
+func copyHostArtifact(p string, out *os.Root, outPath, name string, roots []string) error {
+	abs, err := filepath.Abs(p)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0644)
+	data, real, err := confined.ReadFile(abs, func(r string) bool { return allowedHostArtifact(r, roots) })
+	if errors.Is(err, confined.ErrTooLarge) {
+		return fmt.Errorf("pulling %q: %w", p, confined.ErrTooLarge)
+	}
+	if err != nil {
+		return fmt.Errorf("pulling %q: not a file this run wrote or a simulator's", p)
+	}
+	if real == filepath.Join(outPath, name) {
+		return nil
+	}
+	return writeInDir(out, name, data)
+}
+
+// openArtifactDir opens dir (a real path checkedArtifactRoot returned) once, and only when what was opened is the folder that was checked
+// (checked, what Lstat said of it before its real path was read): dir's last part is a folder, not a link, and both it and the opened
+// folder are that same folder. Every write goes through the returned root, so a
+// swap of the path after this (a link put in the folder's place) cannot redirect a write.
+func openArtifactDir(dir string, checked os.FileInfo) (*os.Root, bool) {
+	before, err := os.Lstat(dir) // a link is not a directory to Lstat
+	if err != nil || !before.IsDir() {
+		return nil, false
+	}
+	beforeOpenArtifactDir(dir)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, false
+	}
+	opened, err := root.Stat(".")
+	if err != nil || !os.SameFile(checked, opened) {
+		_ = root.Close()
+		return nil, false
+	}
+	return root, true
+}
+
+// beforeResolveArtifactRoot runs between the Lstat of a root and the reading of its real path; a test swaps the folder there.
+var beforeResolveArtifactRoot = func(string) {}
+
+// beforeOpenArtifactDir runs between the check of the folder and its opening; a test swaps the folder there.
+var beforeOpenArtifactDir = func(string) {}
+
+// writeInDir writes data to a new file in dir and renames it to name, so a link (or any file) already named name is replaced, never
+// written through; both steps go through dir, the folder opened once.
+func writeInDir(dir *os.Root, name string, data []byte) error {
+	var tmp string
+	var f *os.File
+	var err error
+	for i := 0; i < 10; i++ {
+		tmp = fmt.Sprintf(".probe-artifact-%d-%d", os.Getpid(), rand.Int64())
+		f, err = dir.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if !errors.Is(err, os.ErrExist) {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(data)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		_ = dir.Remove(tmp)
+		return werr
+	}
+	if err := dir.Rename(tmp, name); err != nil {
+		_ = dir.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// simulatorDataRoot is the folder that holds every simulator's data. A test replaces it.
+var simulatorDataRoot = func() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "Developer", "CoreSimulator", "Devices"), nil
+}
+
+// isVideo reports whether p names a video by its extension (.mov, .mp4, .webm, in any case).
+func isVideo(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".mov", ".mp4", ".webm":
+		return true
+	}
+	return false
+}
+
+// artifactRoot returns dir absolute and with links resolved when it may hold artifacts: it exists, its last part is not a link (a folder
+// planted as a link to a host folder would make that folder allowed), it is absolute unless relativeOK (localDir may be given relative to
+// the working folder; a caller's extra folder may not), and it is not as wide as a filesystem root, the working folder, the home folder or
+// a folder above either of them.
+func artifactRoot(dir string, relativeOK bool) (string, bool) {
+	real, _, ok := checkedArtifactRoot(dir, relativeOK)
+	return real, ok
+}
+
+// checkedArtifactRoot is artifactRoot, and also returns what Lstat said of dir: the folder that was checked. Its real path is read after
+// that, so a swap in between can make the real path name another folder; openArtifactDir compares the folder it opens with this one.
+func checkedArtifactRoot(dir string, relativeOK bool) (string, os.FileInfo, bool) {
+	if dir == "" || (!relativeOK && !filepath.IsAbs(dir)) {
+		return "", nil, false
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", nil, false
+	}
+	// Lstat does not follow a link: a link is not a directory to it, so a folder planted as a link is refused here.
+	info, err := os.Lstat(abs)
+	if err != nil || !info.IsDir() {
+		return "", nil, false
+	}
+	beforeResolveArtifactRoot(abs)
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil || filepath.Dir(real) == real {
+		return "", nil, false
+	}
+	for _, wide := range wideFolders() {
+		if isUnderDir(real, wide) { // real is wide itself or a folder above it
+			return "", nil, false
+		}
+	}
+	return real, info, true
+}
+
+// wideFolders are the working folder and the home folder, resolved: no artifact root may be one of them or a folder above them.
+var wideFolders = func() []string {
+	var out []string
+	if wd, err := os.Getwd(); err == nil {
+		out = append(out, wd)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		out = append(out, home)
+	}
+	for i, p := range out {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			out[i] = r
+		}
+	}
+	return out
+}
+
+// underAnyRoot reports whether real (a real path) is inside one of roots (resolved).
+func underAnyRoot(roots []string, real string) bool {
+	for _, r := range roots {
+		if isUnderDir(r, real) {
+			return true
+		}
+	}
+	return false
+}
+
+// allowedHostArtifact reports whether real, the real path of an opened file, is inside one of roots (resolved) or inside a simulator's
+// data folder (<simulators>/<UUID>/data/...).
+func allowedHostArtifact(real string, roots []string) bool {
+	if underAnyRoot(roots, real) {
+		return true
+	}
+	sims, err := simulatorDataRoot()
+	if err != nil {
+		return false
+	}
+	if rr, err := filepath.EvalSymlinks(sims); err == nil {
+		sims = rr
+	}
+	rel, err := filepath.Rel(sims, real)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	return len(parts) >= 3 && ios.ValidSimulatorUDID(parts[0]) && parts[1] == "data"
+}
+
+// isUnderDir reports whether p is dir or inside it.
+func isUnderDir(dir, p string) bool {
+	rel, err := filepath.Rel(dir, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 var nonAlphaNum = regexp.MustCompile(`[^a-zA-Z0-9]+`)

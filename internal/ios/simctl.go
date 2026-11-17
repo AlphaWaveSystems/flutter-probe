@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 )
 
 // Simulator represents an iOS simulator.
@@ -161,7 +163,7 @@ func (s *SimCtl) WaitForBoot(ctx context.Context, udid string, timeout, pollInte
 		}
 		time.Sleep(pollInterval)
 	}
-	return fmt.Errorf("simctl: simulator %s did not boot within %s", udid, timeout)
+	return fmt.Errorf("simctl: simulator %s did not boot within %s", oneline.Clean(udid, 80), timeout)
 }
 
 // Install installs an .app bundle on the simulator.
@@ -252,32 +254,20 @@ func (s *SimCtl) ResetPrefsDaemon(ctx context.Context, udid string) error {
 // bundleID is optional — if provided, the app container path is checked first
 // for faster token pickup.
 func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Duration, bundleID ...string) (string, error) {
+	// Only a simulator has a token file on the host: any other id (a physical device's, or one that is not an id) fails at once instead of
+	// polling until the timeout.
+	if !ValidSimulatorUDID(udid) {
+		return "", fmt.Errorf("ios: %q is not a simulator UDID, so there is no token file to read", udid)
+	}
 	tCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Build list of token file paths to check
-	var tokenPaths []string
-
-	// Primary: app container path (where the Dart agent actually writes)
-	if len(bundleID) > 0 && bundleID[0] != "" {
-		if containerPath := s.appContainerDataPath(tCtx, udid, bundleID[0]); containerPath != "" {
-			tokenPaths = append(tokenPaths, containerPath+"/tmp/probe/token")
-		}
+	app := ""
+	if len(bundleID) > 0 {
+		app = bundleID[0]
 	}
-
-	// Secondary: glob ALL data containers for this simulator — handles the case
-	// where multiple installs exist and get_app_container returns a stale container
-	// that doesn't match the one the currently running app is writing to.
-	allContainerGlob := filepath.Join(s.simDataPath(udid), "Containers", "Data", "Application", "*", "tmp", "probe", "token")
-	var globbed []string
-	if matches, err := filepath.Glob(allContainerGlob); err == nil {
-		globbed = matches
-		tokenPaths = append(tokenPaths, matches...)
-	}
-	noApp := len(bundleID) == 0 || bundleID[0] == ""
-
-	// Fallback: device-level tmp (legacy path)
-	tokenPaths = append(tokenPaths, s.simDataPath(udid)+"/tmp/probe/token")
+	tokenPaths, globbed := s.tokenFileCandidates(tCtx, udid, app)
+	noApp := app == ""
 
 	// Poll token file until timeout. Re-resolve the app container path
 	// periodically in case the container changed (e.g. after clear app data).
@@ -317,6 +307,28 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 		case <-time.After(1 * time.Second):
 		}
 	}
+}
+
+// tokenFileCandidates returns the token files to read for a simulator, in order: the app's container, every data container (globbed, also
+// returned on its own), and the legacy device-level file. Every path is built on the simulator's data folder, so with an id that is not a
+// simulator UDID there is none: nothing relative to the working directory, nothing in the shared /tmp.
+func (s *SimCtl) tokenFileCandidates(ctx context.Context, udid, app string) (paths, globbed []string) {
+	if app != "" {
+		if containerPath := s.appContainerDataPath(ctx, udid, app); containerPath != "" {
+			paths = append(paths, containerPath+"/tmp/probe/token")
+		}
+	}
+	dataPath := s.simDataPath(udid)
+	if dataPath == "" {
+		return paths, nil
+	}
+	allContainerGlob := filepath.Join(dataPath, "Containers", "Data", "Application", "*", "tmp", "probe", "token")
+	if matches, err := filepath.Glob(allContainerGlob); err == nil {
+		globbed = matches
+		paths = append(paths, matches...)
+	}
+	paths = append(paths, dataPath+"/tmp/probe/token")
+	return paths, globbed
 }
 
 // countValidTokens counts the files that hold a token (at least 16 characters).
@@ -399,7 +411,7 @@ func (s *SimCtl) AppBundlePath(ctx context.Context, udid, bundleID string) strin
 func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
 	app := s.AppBundlePath(ctx, udid, bundleID)
 	if app == "" {
-		return fmt.Errorf("reinstall: %s is not installed on %s", bundleID, udid)
+		return fmt.Errorf("reinstall: %s is not installed on %s", oneline.Clean(bundleID, 80), oneline.Clean(udid, 80))
 	}
 	tmp, err := os.MkdirTemp("", "probe-reinstall-*")
 	if err != nil {
@@ -421,8 +433,16 @@ func (s *SimCtl) Reinstall(ctx context.Context, udid, bundleID string) error {
 }
 
 // simDataPath returns the data directory for a simulator UDID.
+// It is "" for anything but a simulator UDID: the path is read from (and globbed), so an id with "..", a separator or a glob character
+// must not shape it.
 func (s *SimCtl) simDataPath(udid string) string {
-	home, _ := os.UserHomeDir()
+	if !ValidSimulatorUDID(udid) {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
 	return home + "/Library/Developer/CoreSimulator/Devices/" + udid + "/data"
 }
 
