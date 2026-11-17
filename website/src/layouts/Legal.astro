@@ -2,8 +2,10 @@
 interface Props {
   title: string;
   description: string;
+  updated?: string;
+  noindex?: boolean;
 }
-const { title, description } = Astro.props;
+const { title, description, updated = 'Last updated: 10 October 2026', noindex = false } = Astro.props;
 ---
 <html lang="en">
 <head>
@@ -11,6 +13,7 @@ const { title, description } = Astro.props;
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{title} - FlutterProbe</title>
   <meta name="description" content={description} />
+  {noindex && <meta name="robots" content="noindex" />}
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -49,7 +52,7 @@ const { title, description } = Astro.props;
   </nav>
   <main>
     <h1>{title}</h1>
-    <p class="updated">Last updated: 10 October 2026</p>
+    <p class="updated">{updated}</p>
     <div class="draft">Draft for review: this page is not final and does not take effect until it is confirmed.</div>
     <slot />
   </main>
