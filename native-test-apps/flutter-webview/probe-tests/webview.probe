@@ -20,6 +20,15 @@ test "type into a field, tap a button, wait for the result"
   wait until "Message sent" appears in webview
   see css:"#result" in webview
 
+# `see css:"#result" in webview` only shows that the element exists (it is there before the tap too, empty): the text it holds is read with `store text` and shown by the echo.
+test "the result text is read, not only found"
+  wait until "Page loaded" appears
+  tap "Contact support" in webview
+  wait until "Message sent" appears in webview
+  store text of css:"#result" in webview as result
+  type "<result>" into #echo_input
+  see "Echo: Message sent"
+
 test "stored text has its runs of spaces collapsed, and can be typed into a Flutter field"
   wait until "Page loaded" appears
   store text of css:"#total" in webview as total
